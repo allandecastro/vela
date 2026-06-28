@@ -6,15 +6,18 @@ All notable changes to Vela are documented here. The format is based on
 
 ## Versioning policy
 
-- The three packages — `Vela.Plugins`, `Vela.Cli` and `Vela.Testing` — are versioned **in lockstep**: a
-  release stamps the same version on all three so a given `vX.Y.Z` is a known-good, mutually compatible set.
+- Vela ships as **two independent release lines**:
+  - **Framework** — `Vela.Plugins` + `Vela.Testing`, versioned **together** (the test harness reuses the
+    runtime's internals via `InternalsVisibleTo`, so the two must stay in lockstep) and tagged `framework-vX.Y.Z`.
+  - **CLI** — `Vela.Cli`, versioned on its own cadence and tagged `cli-vX.Y.Z`.
 - **Pre-1.0 (`0.y.z`):** the public API is still settling. A **minor** bump (`0.y`) may contain breaking
   changes; a **patch** bump (`0.y.z`) is reserved for backwards-compatible fixes. Breaking changes are called
   out under a **Changed**/**Removed** heading in the entry.
 - **From 1.0 onward:** standard SemVer — **major** for breaking changes, **minor** for backwards-compatible
   features, **patch** for backwards-compatible fixes.
-- Each release is tagged `vX.Y.Z`; the **Unreleased** section below accumulates changes until the next tag,
-  at which point it is renamed to that version with a date.
+- A line is released by pushing its tag (`framework-vX.Y.Z` or `cli-vX.Y.Z`), which packs and publishes only
+  that line's package(s). The **Unreleased** section below accumulates changes until the next tag, at which
+  point it is renamed to that version with a date.
 
 ## [Unreleased]
 
