@@ -20,6 +20,13 @@
     <PackageReadmeFile>NUGET.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageTags>dataverse;dynamics365;power-platform;plugin;custom-api;xrm;cli</PackageTags>
+    <!-- Ship a debugger-friendly package: a .snupkg with portable symbols and SourceLink (bundled in the
+         .NET SDK; driven by PublishRepositoryUrl above). ContinuousIntegrationBuild makes the release
+         build deterministic and is only set on CI (GitHub Actions exports CI=true). -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
     <None Include="$(MSBuildThisFileDirectory)branding/png/icon.png" Pack="true" PackagePath="/" Visible="false" />
