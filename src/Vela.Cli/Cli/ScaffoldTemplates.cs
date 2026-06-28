@@ -1,0 +1,1997 @@
+using System;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace Vela.Cli;
+
+/// <summary>
+/// Pure file-content generators for the <c>vela init</c> command. Every method returns the text of a
+/// single generated file and performs no I/O, which keeps templates independently unit-testable.
+/// Raw interpolated string literals (<c>$$"""..."""</c>) are used so the emitted C# braces stay
+/// literal and only <c>{{token}}</c> placeholders interpolate.
+/// </summary>
+internal static class ScaffoldTemplates
+{
+    // Version of the Power Platform plugin MSBuild SDK package. Bump as new releases ship; this only
+    // affects newly generated solutions, not this repository.
+    public const string PluginSdkVersion = "1.41.1";
+
+    // Cross-platform Dataverse client used by the Shared (netstandard2.0) and ConsoleApp projects.
+    public const string DataverseClientVersion = "1.2.10";
+
+    // .NET Framework Dataverse SDK reference assemblies for plugin (net462) compilation.
+    public const string CrmCoreAssembliesVersion = "9.0.2.59";
+
+    // Test stack for the generated *.Plugins.Tests project. These come from nuget.org, which the generated
+    // nuget.config inherits (it only adds the local-packages feed, it does not clear nuget.org).
+    public const string TestSdkVersion = "17.12.0";
+    public const string XunitVersion = "2.9.2";
+    public const string XunitRunnerVersion = "2.8.2";
+
+    private const string CSharpProjectTypeGuid = "FAE04EC0-301F-11D3-BF4B-00C04F79EFBC";
+
+    /// <summary>A project to be listed in the generated solution file.</summary>
+    public sealed record ProjectEntry(string Name, string RelativePath, Guid ProjectGuid);
+
+    // The Custom API unique-name publisher prefix is derived from the namespace prefix (lower-cased,
+    // dots removed) so it is a valid Dataverse customization prefix.
+    public static string ApiPrefix(string prefix) =>
+        prefix.Replace(".", string.Empty).ToLowerInvariant();
+
+    // ---- Root files -------------------------------------------------------
+
+    public static string Gitignore() =>
+$$"""
+## .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+
+## Signing — never commit a code-signing certificate
+*.pfx
+""";
+
+    public static string DirectoryBuildProps() =>
+$$"""
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- Early-bound models and plugin code follow the classic non-nullable Dataverse conventions. -->
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+</Project>
+""";
+
+    // The plugin projects reference Vela.Plugins, which is consumed from a feed rather than
+    // nuget.org. nuget.org is inherited (not cleared) so the Microsoft SDK packages still resolve and any
+    // machine-level private feed keeps working.
+    public static string NuGetConfig() =>
+$$"""
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <!--
+      Vela.Plugins (and Vela.Testing, used by the test project) are not on nuget.org. Point this at your
+      private feed, or drop their .nupkg files into ./local-packages.
+    -->
+    <add key="local-packages" value="local-packages" />
+  </packageSources>
+</configuration>
+""";
+
+    public static string Solution(IReadOnlyList<ProjectEntry> projects)
+    {
+        StringBuilder sb = new();
+        sb.AppendLine("Microsoft Visual Studio Solution File, Format Version 12.00");
+        sb.AppendLine("# Visual Studio Version 17");
+        sb.AppendLine("VisualStudioVersion = 17.0.31903.59");
+        sb.AppendLine("MinimumVisualStudioVersion = 10.0.40219.1");
+
+        foreach (ProjectEntry project in projects)
+        {
+            sb.AppendLine($"Project(\"{{{CSharpProjectTypeGuid}}}\") = \"{project.Name}\", \"{project.RelativePath}\", \"{{{project.ProjectGuid.ToString().ToUpperInvariant()}}}\"");
+            sb.AppendLine("EndProject");
+        }
+
+        sb.AppendLine("Global");
+        sb.AppendLine("\tGlobalSection(SolutionConfigurationPlatforms) = preSolution");
+        sb.AppendLine("\t\tDebug|Any CPU = Debug|Any CPU");
+        sb.AppendLine("\t\tRelease|Any CPU = Release|Any CPU");
+        sb.AppendLine("\tEndGlobalSection");
+        sb.AppendLine("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution");
+        foreach (ProjectEntry project in projects)
+        {
+            string g = "{" + project.ProjectGuid.ToString().ToUpperInvariant() + "}";
+            sb.AppendLine($"\t\t{g}.Debug|Any CPU.ActiveCfg = Debug|Any CPU");
+            sb.AppendLine($"\t\t{g}.Debug|Any CPU.Build.0 = Debug|Any CPU");
+            sb.AppendLine($"\t\t{g}.Release|Any CPU.ActiveCfg = Release|Any CPU");
+            sb.AppendLine($"\t\t{g}.Release|Any CPU.Build.0 = Release|Any CPU");
+        }
+
+        sb.AppendLine("\tEndGlobalSection");
+        sb.AppendLine("\tGlobalSection(SolutionProperties) = preSolution");
+        sb.AppendLine("\t\tHideSolutionNode = FALSE");
+        sb.AppendLine("\tEndGlobalSection");
+        sb.AppendLine("EndGlobal");
+        return sb.ToString();
+    }
+
+    // Deterministic GUID from a name (MD5-derived) so re-running init produces a stable solution file.
+    public static Guid StableGuid(string name)
+    {
+        byte[] hash = MD5.HashData(Encoding.UTF8.GetBytes(name));
+        return new Guid(hash);
+    }
+
+    public static string RootReadme(ScaffoldOptions options)
+    {
+        string prefix = options.Prefix;
+        string integrationsLine = options.IncludeIntegrations
+            ? $"- `src/{prefix}.Integrations` — a second plugin package (same mechanics as Plugins; \"Integrations\" is a naming convention for integration-facing steps/APIs).\n"
+            : string.Empty;
+        string consoleLine = options.IncludeConsole
+            ? $"- `src/{prefix}.ConsoleApp` — a .NET 10 console app that connects to Dataverse with `ServiceClient` for ad-hoc/programmatic access.\n"
+            : string.Empty;
+        string integrationsTestsLine = options.IncludeTests && options.IncludeIntegrations
+            ? $"- `tests/{prefix}.Integrations.Tests` — unit tests for the Integrations sample Custom APIs using `Vela.Testing`.\n"
+            : string.Empty;
+        string testsLine = options.IncludeTests
+            ? $"- `tests/{prefix}.Plugins.Tests` — unit tests for the sample plugins/Custom APIs using `Vela.Testing` (no Dataverse connection).\n{integrationsTestsLine}"
+            : string.Empty;
+        string testsRestoreNote = options.IncludeTests
+            ? " The test project additionally uses `Vela.Testing`, which is distributed the same way."
+            : string.Empty;
+        string testsSection = options.IncludeTests ? TestsSection(prefix, options.IncludeIntegrations) : string.Empty;
+        string integrationsPack = options.IncludeIntegrations
+            ? $"dotnet pack src/{prefix}.Integrations -c Release -o artifacts\n"
+            : string.Empty;
+        string integrationsLayout = options.IncludeIntegrations
+            ? $"\nThe `{prefix}.Integrations` project follows the same by-table layout and conventions; it ships its own\nsamples (an account sync router with a bound account-reconcile Custom API, a contact sync plugin with a\nbound contact-export Custom API, and a global heartbeat Custom API) so you can compare a second plugin\npackage side by side.\n"
+            : string.Empty;
+        // Signing is an Integrations-only concern, so the whole section is omitted when that project is excluded.
+        string signingSection = !options.IncludeIntegrations
+            ? string.Empty
+            : options.ManagedIdentity ? SigningSectionEnabled(prefix) : SigningSectionDisabled(prefix);
+
+        return
+$$"""
+# {{options.SolutionName}}
+
+Dataverse plugin solution generated by `vela init`. It builds on
+`Vela.Plugins` (v{{options.CoreVersion}}) and is ready to register with `vela`.
+
+## Projects
+
+- `src/{{prefix}}.Shared` — early-bound entity models (`Account`, `Contact`) and shared services, referenced by the plugin projects.
+- `src/{{prefix}}.Plugins` — your plugin package. Builds a Dataverse plugin-package `.nupkg` (not a bare `.dll`).
+{{integrationsLine}}{{testsLine}}{{consoleLine}}
+> **Restore source:** the plugin projects reference `Vela.Plugins`, which is **not on nuget.org**.{{testsRestoreNote}}
+> `nuget.config` adds a `local-packages/` folder feed — point it at your private feed, or drop the
+> `.nupkg` file(s) into `local-packages/`. (nuget.org is inherited for the Microsoft SDK / test packages.)
+
+## Build the plugin package(s)
+
+```powershell
+dotnet build {{options.SolutionName}}.sln -c Release
+dotnet pack src/{{prefix}}.Plugins -c Release -o artifacts
+{{integrationsPack}}```
+
+Each pack produces a plugin-package `.nupkg` under `artifacts/` containing the plugin assembly plus its
+dependent assemblies (`{{prefix}}.Shared.dll`, `Vela.Plugins.dll`).
+
+{{testsSection}}{{signingSection}}
+
+## Register with Dataverse
+
+```powershell
+# Preview (read-only)
+vela plan --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
+
+# Apply (idempotent create/update/delete)
+vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --execute --verbose
+```
+
+## What's inside the plugin project
+
+Code is organised **by table** — each table gets a folder with `Plugins/`, `Services/` and/or
+`CustomApis/` subfolders; unbound (global) Custom APIs live under `GlobalCustomApis/`. Each file's
+namespace matches its folder (the .NET default), so e.g. `Account/Plugins/` is `{{prefix}}.Plugins.Account.Plugins`:
+
+```text
+{{prefix}}.Plugins/
+  Account/
+    Plugins/AccountPostCreatePlugin.cs          # single-step plugin: schedules a 7-day follow-up task + DI
+    Services/AccountFollowUpService.cs          # table-scoped service (only account plugins use it)
+    CustomApis/AccountEstimateValueCustomApi.cs # Custom API bound to the account table (typed request/response)
+  Contact/
+    Plugins/ContactRouterPlugin.cs              # multi-step "router" plugin (a handler method per step)
+    Services/ContactDuplicateService.cs         # table-scoped service: duplicate-by-email lookup (a read)
+    CustomApis/ContactValidateCustomApi.cs      # Custom API bound to the contact table (typed request/response)
+  GlobalCustomApis/PingCustomApi.cs             # global (unbound) Custom API, lightweight style
+```
+
+Add a new table by creating `<Table>/Plugins/`, `<Table>/Services/` and/or `<Table>/CustomApis/` folders —
+or let the CLI place a new file for you (it infers the namespace from the project):
+
+```powershell
+vela add plugin AccountValidatorPlugin --entity Account --message Update
+vela add customapi RecalculateTotals          # global (unbound) Custom API
+vela add customapi ExportContact --entity Contact   # Custom API bound to a table
+```
+{{integrationsLayout}}
+## Registering plugin steps
+
+A plugin derives from `EntityPluginBase<TEntity>` and declares its steps in the `RegisterPluginSteps()`
+override with the fluent `RegisterSteps()` builder — no step XML and no manual `pac` registration:
+
+```csharp
+protected override void RegisterPluginSteps()
+{
+    RegisterSteps().OnCreate()                       // message: OnCreate/OnUpdate/OnDelete/OnMessage("...")
+        .Stage(PluginStages.PostOperation)           // PreValidation | PreOperation | PostOperation
+        .Mode(ExecutionMode.Synchronous)             // Synchronous | Asynchronous
+        .FilteringAttributes(a => a.Name)            // (create/update) attributes that trigger the step
+        .Description("Runs after an account is created.")
+        .PostImage()                                 // snapshot after the operation...
+            .Attributes(a => a.Name);                // ...limited to these columns
+}
+```
+
+`vela plan` / `vela apply` read these definitions from the built assembly and create/update the matching SDK
+message-processing steps and images in Dataverse — the registration lives in code, next to the handler it
+configures.
+
+### Single-step vs multi-step
+
+- **Single-step** — register one step and override `Execute(ctx, target)`. See `AccountPostCreatePlugin`.
+- **Multi-step ("router")** — register several steps in one class, giving each a `.Handler(nameof(...))` bound
+  to a method; the framework dispatches to the right one. See `ContactRouterPlugin`. Every step in a
+  multi-step plugin **must** declare a handler — the build fails otherwise.
+
+```csharp
+RegisterSteps().OnUpdate()
+    .Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+    .FilteringAttributes(c => c.LastName)            // (update) fire only when these columns change
+    .Handler(nameof(OnLastNameChanged))
+    .PreImage().Attributes(c => c.LastName);         // before-snapshot for the handler
+```
+
+### Builder options
+
+| Builder call | What it does |
+| --- | --- |
+| `.OnCreate()` … `.OnUpdate()` … `.OnMessage("custom_action")` | The message the step listens to. |
+| `.Stage(...)` | Pipeline stage: `PreValidation`, `PreOperation`, `PostOperation`. |
+| `.Mode(...)` | `Synchronous` or `Asynchronous`. |
+| `.FilteringAttributes(...)` | (update) fire only when one of the listed columns changes. |
+| `.Handler(nameof(M))` | Method to dispatch to (required for multi-step). |
+| `.PreImage()` / `.PostImage()` + `.Attributes(...)` | Capture a before/after snapshot, scoped to named columns. |
+| `.ExecutionOrder(n)` | Step rank when several steps share a message + stage. |
+| `.ImpersonateUsing(...)` | Run as `CallingUser` or `PluginOwner`. |
+| `.Description(...)` | Step description shown in Dataverse. |
+
+Read images back in a handler with `ctx.GetPreImage<TEntity>()` / `ctx.GetPostImage<TEntity>()`.
+
+## Services & dependency injection
+
+Plugins and Custom APIs get a small per-execution dependency-injection container. Register your services in
+the optional `ConfigureServices(...)` override, then resolve them anywhere in the plugin with
+`ctx.GetRequiredService<T>()`. The container is rebuilt for every execution, so a service never leaks state
+between plugin runs.
+
+### Two kinds of service (both seeded)
+
+- **Cross-table** — lives in `{{prefix}}.Shared/Services` and can be referenced by any plugin project.
+  Example: `GreetingService` (no Dataverse dependency).
+- **Table-scoped** — lives next to the table under `{{prefix}}.Plugins/<Table>/Services` because only that
+  table's plugins use it. Two examples ship:
+  - `Account/Services/AccountFollowUpService.cs` — creates a follow-up `task` seven days after an account is
+    created (a Dataverse **write**); used by `AccountPostCreatePlugin`.
+  - `Contact/Services/ContactDuplicateService.cs` — looks up a possible duplicate by email (a Dataverse
+    **read**); used by `ContactRouterPlugin`, so router plugins get DI too.
+
+Promote a service from a table folder up to `Shared/Services` only once a second table needs it.
+
+### What you can inject out of the box
+
+These are pre-registered for every execution — request them from the resolver (`r`) or from `ctx`:
+
+| Service | Notes |
+| --- | --- |
+| `IOrganizationService` | Runs as the **initiating user**. For elevated access use `ctx.AsSystem()`. |
+| `ITracingService` | Plugin trace log (`ctx.Trace(...)` wraps it). |
+| `IPluginExecutionContext` | The raw execution context. |
+| `ILocalPluginContext` | The framework context itself. |
+| `ILogger` | Logging abstraction. |
+| `Func<Guid?, IOrganizationService>` | Factory: pass a user id, or `null` for the system user. |
+| `IPluginCacheService` | Cache that survives across executions. |
+
+### Registering services
+
+```csharp
+protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+{
+    // Register the interface, build the implementation. Pull dependencies from the resolver `r`.
+    services.AddScoped<IAccountFollowUpService>(r =>
+        new AccountFollowUpService(r.GetRequiredService<IOrganizationService>()));
+
+    // A service with no Dataverse dependency:
+    services.AddScoped<IGreetingService>(_ => new GreetingService());
+}
+```
+
+- `AddScoped<T>` — one shared instance per execution (the usual choice).
+- `AddTransient<T>` — a fresh instance every time it is resolved.
+
+### Resolving and using a service
+
+```csharp
+protected override void Execute(ILocalPluginContext ctx, Account target)
+{
+    IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
+    Guid taskId = followUp.CreateFollowUpTask(target.Id, target.Name);
+    ctx.Trace("Created follow-up task {0}.", taskId);
+}
+```
+
+`ctx.GetRequiredService<T>()` throws a clear error if the type was not registered; `ctx.GetService<T>()`
+returns `null` instead.
+
+### Best practices
+
+- **Depend on an interface, register the implementation** — keeps handlers thin and unit-testable.
+- **Keep services stateless.** The container is per-execution; never stash an `IOrganizationService` (or
+  anything request-specific) in a `static`/singleton field.
+- **Inject `IOrganizationService` through the constructor** (as the samples do) instead of reaching into the
+  context from deep in your code — it makes the dependency explicit and mockable.
+- **Mind the user context.** The injected `IOrganizationService` runs as the initiating user; for elevated
+  work use `ctx.AsSystem()` or the `Func<Guid?, IOrganizationService>` factory.
+- **Place logic by reach** — cross-table logic in `Shared/Services`, table-specific logic in
+  `<Table>/Services`.
+- **Do light work in constructors.** Services are built lazily on first resolve; keep queries and writes in
+  methods, not the constructor.
+
+## Early-bound models
+
+`{{prefix}}.Shared/Models` ships hand-written `Account` and `Contact` models so the solution builds with
+no Dataverse connection. To regenerate the full set from your environment later, use `vela models` (it reuses
+the same connection options as `vela plan`/`apply`):
+
+```powershell
+vela models `
+  --solution {{prefix}} `
+  --out ./src/{{prefix}}.Shared/Models/Generated `
+  --namespace {{prefix}}.Shared.Models.Generated
+```
+
+`vela models` emits `partial` classes with option-set enums, multi-select choices, alternate-key factories and
+DataAnnotations. For the few things it leaves out (relationship navigation properties / `OrganizationServiceContext`
+LINQ, localized multi-language labels, custom casing), use `pac modelbuilder` instead.
+""";
+    }
+
+    // README signing section when `vela init --managed-identity` wired the build-time signing target into Integrations.
+    private static string SigningSectionEnabled(string prefix) =>
+$$"""
+## Signing the plugin package
+
+This solution wires **opt-in** NuGet signing into the build of the **`{{prefix}}.Integrations`** project (the
+integration-facing package — the one most likely to call out using a managed identity). The signature is
+applied to the produced `.nupkg`, which is the artifact deployed to Dataverse.
+
+A `SignPluginPackage` MSBuild target runs after the Integrations package is packed and shells out to
+`vela sign` (which calls `dotnet nuget sign`). It is **inert until you configure a certificate source**, and
+**skipped inside CI** (GitHub Actions / Azure DevOps), which should own their own signing step — so there is
+never double-signing.
+
+> The target invokes the `vela` CLI, so it must be installed as a global .NET tool and on your `PATH`:
+> `dotnet tool install --global Vela.Cli`.
+
+### Configure one certificate source
+
+The target picks its method from MSBuild properties — set them on the `dotnet pack` command (or in
+`Directory.Build.props`). The fingerprint takes precedence if more than one is set.
+
+| Property | Method |
+| --- | --- |
+| `PluginSigningFingerprint` | SHA-256 fingerprint of a cert in `CurrentUser\My` — **recommended**, no secret on disk |
+| `PluginSigningCertificate` | path to a `.pfx` file (combine with one of the next two) |
+| `PluginSigningCredential` | a Windows Credential Manager entry holding the `.pfx` password — **preferred** over a plaintext password |
+| `PluginSigningPassword` | the `.pfx` password directly — avoid persisting it |
+
+### Method A — certificate store (recommended)
+
+1. Import your code-signing certificate into `CurrentUser\My` once (no secret left on disk).
+2. Get its **SHA-256 fingerprint** — `dotnet nuget sign` needs SHA-256, not the SHA-1 thumbprint shown in `certmgr`:
+
+```powershell
+$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -match 'YourCertName'
+[BitConverter]::ToString($cert.GetCertHash('SHA256')).Replace('-','')
+```
+
+3. Pack with that fingerprint:
+
+```powershell
+dotnet pack src/{{prefix}}.Integrations -c Release -o artifacts -p:PluginSigningFingerprint=<fingerprint>
+```
+
+### Method B — `.pfx` file
+
+Keep a `.pfx` file (gitignored) and store its password in Windows Credential Manager rather than in plaintext:
+
+```powershell
+# store the password once (DPAPI-encrypted, per-user); 'AcmeSigningCert' is the entry name you choose
+cmdkey /generic:AcmeSigningCert /user:plugin /pass:<pfxPassword>
+
+dotnet pack src/{{prefix}}.Integrations -c Release -o artifacts `
+  -p:PluginSigningCertificate=C:\certs\cert.pfx -p:PluginSigningCredential=AcmeSigningCert
+```
+
+### Manual / pipeline signing
+
+`vela sign` signs with an RFC-3161 timestamp (so the signature survives certificate expiry). Sign a packed
+`.nupkg` directly:
+
+```powershell
+vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg --fingerprint <fingerprint>
+vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg --pfx cert.pfx --pfx-credential AcmeSigningCert
+```
+
+In a **pipeline**, the build target stays inert (CI is detected); add an explicit sign step and pass the
+certificate as a base64 secret rather than a file:
+
+```powershell
+vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg `
+  --pfx-base64 $env:CODE_SIGN_PFX_BASE64 --pfx-password $env:CODE_SIGN_PFX_PASSWORD
+```
+
+> `vela sign` uses `dotnet nuget sign`, so it runs anywhere the .NET SDK does (Windows, Linux, macOS).
+
+""";
+
+    // README signing section when signing was not requested (but Integrations exists, so it is relevant).
+    private static string SigningSectionDisabled(string prefix) =>
+$$"""
+## Signing the plugin package
+
+The build does **not** sign the assembly. If the `{{prefix}}.Integrations` plugin uses a **managed identity**
+(and therefore needs publisher identity + tamper-evidence on the package), re-scaffold with
+`vela init <name> --managed-identity` to add an opt-in, CI-gated signing step to the Integrations build, or
+sign a packed `.nupkg` yourself:
+
+```powershell
+vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg --fingerprint <fingerprint>
+```
+
+""";
+
+    // README section describing the generated test project (only emitted when tests are included).
+    private static string TestsSection(string prefix, bool includeIntegrations)
+    {
+        string integrationsTests = includeIntegrations
+            ? $"\nThe `{prefix}.Integrations.Tests` project does the same for the Integrations package " +
+              $"(`AccountReconcile`, `ContactExport` and the global heartbeat Custom APIs):\n\n" +
+              $"```powershell\ndotnet test tests/{prefix}.Integrations.Tests -c Release\n```\n"
+            : string.Empty;
+
+        return
+$$"""
+## Test the plugins
+
+The `{{prefix}}.Plugins.Tests` project unit-tests the sample plugins and Custom APIs with
+[`Vela.Testing`](https://www.nuget.org/packages/Vela.Testing) — a fake execution context plus an in-memory
+Dataverse, so the tests run **without a connection and without a mocking library**:
+
+```powershell
+dotnet test tests/{{prefix}}.Plugins.Tests -c Release
+```
+
+What the samples show:
+
+- `Account/Plugins/AccountPostCreatePluginTests.cs` — runs `AccountPostCreatePlugin` against an
+  `InMemoryOrganizationService` and asserts the follow-up `task` it creates (subject + regarding object).
+- `Contact/Plugins/ContactRouterPluginTests.cs` — drives a specific step of the multi-step router and asserts
+  on the emitted traces via `TraceCapture`, seeding a duplicate contact first.
+- `Account/CustomApis/AccountEstimateValueCustomApiTests.cs` — invokes the typed, bound Custom API and checks
+  the mapped output parameter.
+- `Contact/CustomApis/ContactValidateCustomApiTests.cs` — invokes the typed, contact-bound Custom API.
+- `GlobalCustomApis/PingCustomApiTests.cs` — invokes the lightweight global Custom API.
+{{integrationsTests}}
+A plugin with a `(unsecureConfig, secureConfig)` constructor is run with `.Execute(new MyPlugin("", ""))`;
+the trigger is auto-derived from a single-step plugin's own registration, while a multi-step router needs the
+step stated explicitly (`OnCreate().Stage(...).Mode(...)`) to select the handler under test.
+
+
+""";
+    }
+
+    // ---- Shared project ---------------------------------------------------
+
+    public static string SharedCsproj(ScaffoldOptions options) =>
+$$"""
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net462 is consumed by the plugin projects; net10.0 by the ConsoleApp. -->
+    <TargetFrameworks>net462;net10.0</TargetFrameworks>
+    <RootNamespace>{{options.Prefix}}.Shared</RootNamespace>
+    <AssemblyName>{{options.Prefix}}.Shared</AssemblyName>
+  </PropertyGroup>
+
+  <!-- net462: the plugin sandbox provides the SDK, so these reference assemblies are PrivateAssets. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net462'">
+    <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="{{CrmCoreAssembliesVersion}}" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- net10.0: the cross-platform client supplies Microsoft.Xrm.Sdk for the ConsoleApp. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="{{DataverseClientVersion}}" />
+  </ItemGroup>
+
+</Project>
+""";
+
+    public static string AccountModel(string prefix) =>
+$$"""
+namespace {{prefix}}.Shared.Models
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Client;
+
+    /// <summary>Minimal early-bound model for the <c>account</c> table.</summary>
+    [EntityLogicalName(EntityLogicalNameValue)]
+    public sealed class Account : Entity
+    {
+        public const string EntityLogicalNameValue = "account";
+
+        public Account()
+            : base(EntityLogicalNameValue)
+        {
+        }
+
+        [AttributeLogicalName("accountid")]
+        public Guid? AccountId
+        {
+            get => GetAttributeValue<Guid?>("accountid");
+            set => SetAttributeValue("accountid", value);
+        }
+
+        [AttributeLogicalName("name")]
+        public string Name
+        {
+            get => GetAttributeValue<string>("name");
+            set => SetAttributeValue("name", value);
+        }
+
+        [AttributeLogicalName("telephone1")]
+        public string Telephone1
+        {
+            get => GetAttributeValue<string>("telephone1");
+            set => SetAttributeValue("telephone1", value);
+        }
+
+        [AttributeLogicalName("revenue")]
+        public Money Revenue
+        {
+            get => GetAttributeValue<Money>("revenue");
+            set => SetAttributeValue("revenue", value);
+        }
+    }
+}
+""";
+
+    public static string ContactModel(string prefix) =>
+$$"""
+namespace {{prefix}}.Shared.Models
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Client;
+
+    /// <summary>Minimal early-bound model for the <c>contact</c> table.</summary>
+    [EntityLogicalName(EntityLogicalNameValue)]
+    public sealed class Contact : Entity
+    {
+        public const string EntityLogicalNameValue = "contact";
+
+        public Contact()
+            : base(EntityLogicalNameValue)
+        {
+        }
+
+        [AttributeLogicalName("contactid")]
+        public Guid? ContactId
+        {
+            get => GetAttributeValue<Guid?>("contactid");
+            set => SetAttributeValue("contactid", value);
+        }
+
+        [AttributeLogicalName("firstname")]
+        public string FirstName
+        {
+            get => GetAttributeValue<string>("firstname");
+            set => SetAttributeValue("firstname", value);
+        }
+
+        [AttributeLogicalName("lastname")]
+        public string LastName
+        {
+            get => GetAttributeValue<string>("lastname");
+            set => SetAttributeValue("lastname", value);
+        }
+
+        [AttributeLogicalName("emailaddress1")]
+        public string EMailAddress1
+        {
+            get => GetAttributeValue<string>("emailaddress1");
+            set => SetAttributeValue("emailaddress1", value);
+        }
+
+        [AttributeLogicalName("parentcustomerid")]
+        public EntityReference ParentCustomerId
+        {
+            get => GetAttributeValue<EntityReference>("parentcustomerid");
+            set => SetAttributeValue("parentcustomerid", value);
+        }
+    }
+}
+""";
+
+    public static string GreetingServiceInterface(string prefix) =>
+$$"""
+namespace {{prefix}}.Shared.Services
+{
+    /// <summary>Example shared domain service resolved through the plugin dependency container.</summary>
+    public interface IGreetingService
+    {
+        string BuildGreeting(string name);
+    }
+}
+""";
+
+    public static string GreetingService(string prefix) =>
+$$"""
+namespace {{prefix}}.Shared.Services
+{
+    using System;
+
+    /// <inheritdoc />
+    public sealed class GreetingService : IGreetingService
+    {
+        public string BuildGreeting(string name)
+        {
+            return string.IsNullOrWhiteSpace(name)
+                ? "Hello from {{prefix}}!"
+                : "Hello, " + name + ", from {{prefix}}!";
+        }
+    }
+}
+""";
+
+    // ---- Table-scoped services (Plugins project) -------------------------
+
+    public static string AccountFollowUpService(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Account.Services
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+
+    /// <summary>
+    /// Account-scoped domain service: schedules follow-up activities for an account. Unlike the
+    /// cross-table <c>IGreetingService</c> in the Shared project, this service lives with the Account
+    /// table because only account plugins use it.
+    /// </summary>
+    public interface IAccountFollowUpService
+    {
+        Guid CreateFollowUpTask(Guid accountId, string accountName);
+    }
+
+    /// <inheritdoc />
+    public sealed class AccountFollowUpService : IAccountFollowUpService
+    {
+        // Business rule: chase a newly created account one week later.
+        private const int FollowUpDays = 7;
+
+        private readonly IOrganizationService _service;
+
+        public AccountFollowUpService(IOrganizationService service)
+        {
+            _service = service;
+        }
+
+        public Guid CreateFollowUpTask(Guid accountId, string accountName)
+        {
+            Entity task = new Entity("task")
+            {
+                ["subject"] = "Follow up with " + accountName,
+                ["description"] = "Auto-created " + FollowUpDays + " days after the account was created.",
+                ["scheduledend"] = DateTime.UtcNow.AddDays(FollowUpDays),
+                ["regardingobjectid"] = new EntityReference("account", accountId),
+            };
+
+            return _service.Create(task);
+        }
+    }
+}
+""";
+
+    public static string ContactDuplicateService(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Contact.Services
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Query;
+
+    /// <summary>
+    /// Contact-scoped domain service: finds a possible duplicate contact by email. A second
+    /// table-scoped service (the first being <c>IAccountFollowUpService</c>) that, in contrast, <b>reads</b>
+    /// from Dataverse rather than writing.
+    /// </summary>
+    public interface IContactDuplicateService
+    {
+        Guid? FindDuplicateByEmail(string email, Guid excludeContactId);
+    }
+
+    /// <inheritdoc />
+    public sealed class ContactDuplicateService : IContactDuplicateService
+    {
+        private readonly IOrganizationService _service;
+
+        public ContactDuplicateService(IOrganizationService service)
+        {
+            _service = service;
+        }
+
+        public Guid? FindDuplicateByEmail(string email, Guid excludeContactId)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return null;
+            }
+
+            QueryExpression query = new QueryExpression("contact")
+            {
+                ColumnSet = new ColumnSet(false),
+                TopCount = 1,
+            };
+            query.Criteria.AddCondition("emailaddress1", ConditionOperator.Equal, email);
+            query.Criteria.AddCondition("contactid", ConditionOperator.NotEqual, excludeContactId);
+
+            EntityCollection matches = _service.RetrieveMultiple(query);
+            return matches.Entities.Count > 0 ? matches.Entities[0].Id : (Guid?)null;
+        }
+    }
+}
+""";
+
+    // ---- Plugin / Integration project file -------------------------------
+
+    public static string PluginCsproj(string projectName, string sharedProjectName, string coreVersion, bool withSigningTarget = false)
+    {
+        string signingTarget = withSigningTarget ? SigningBuildTarget() : string.Empty;
+        return
+$$"""
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <RootNamespace>{{projectName}}</RootNamespace>
+    <AssemblyName>{{projectName}}</AssemblyName>
+    <PackageId>{{projectName}}</PackageId>
+    <Version>1.0.0</Version>
+    <!-- Auto-increment the assembly version on every build. Dataverse caches plugin assemblies by version, so
+         re-deploying changed code under the SAME version can serve a stale assembly and fail at runtime with
+         "The plug-in type could not be found in the plug-in assembly". The 1.0.* wildcard needs a
+         non-deterministic build. (vela apply also fails fast if you add a new plugin type without bumping this.) -->
+    <Deterministic>false</Deterministic>
+    <AssemblyVersion>1.0.*</AssemblyVersion>
+    <!-- The Power Platform plugin SDK packs the assembly + dependent assemblies into a plugin-package .nupkg. -->
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IsWorkflowActivity>false</IsWorkflowActivity>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="{{CrmCoreAssembliesVersion}}" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.PowerApps.MSBuild.Plugin" Version="{{PluginSdkVersion}}" PrivateAssets="all" />
+    <PackageReference Include="Vela.Plugins" Version="{{coreVersion}}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\{{sharedProjectName}}\{{sharedProjectName}}.csproj" />
+  </ItemGroup>
+{{signingTarget}}
+</Project>
+""";
+    }
+
+    // Opt-in MSBuild target that NuGet-signs the packed plugin package on a developer machine by shelling
+    // out to `vela sign`. Inert until a certificate source is configured, and suppressed inside CI (each CI
+    // system sets its own variable) so the pipeline owns its own signing step — no double-signing.
+    private static string SigningBuildTarget() =>
+$$"""
+
+  <!--
+    Opt-in local package signing (a trusted signature is needed when the plugin uses a managed identity).
+    Configure ONE certificate source and `dotnet pack` signs automatically; inert otherwise, and skipped
+    inside CI (GITHUB_ACTIONS / TF_BUILD), which should own their own signing step.
+    Requires the `vela` CLI on PATH: dotnet tool install -g Vela.Cli
+
+      PluginSigningFingerprint : SHA-256 fingerprint of a cert in CurrentUser\My (recommended; no secret on disk)
+      PluginSigningCertificate : path to a .pfx file, plus ONE of —
+        PluginSigningCredential : a Windows Credential Manager entry holding the password (preferred)
+        PluginSigningPassword   : the password directly (avoid persisting it)
+  -->
+  <Target Name="SignPluginPackage" AfterTargets="Pack"
+          Condition=" ('$(PluginSigningFingerprint)' != '' or '$(PluginSigningCertificate)' != '') and '$(GITHUB_ACTIONS)' != 'true' and '$(TF_BUILD)' != 'True' ">
+    <!-- EnsureTrailingSlash keeps the path correct whether or not PackageOutputPath already ends in a separator (e.g. `pack -o artifacts`). -->
+    <PropertyGroup>
+      <_SignPackage>$([MSBuild]::EnsureTrailingSlash('$(PackageOutputPath)'))$(PackageId).$(PackageVersion).nupkg</_SignPackage>
+    </PropertyGroup>
+    <!-- 1) Certificate store, by fingerprint (takes precedence). -->
+    <Exec Condition=" '$(PluginSigningFingerprint)' != '' "
+          Command="vela sign --package &quot;$(_SignPackage)&quot; --fingerprint $(PluginSigningFingerprint)" />
+    <!-- 2) .pfx file + password from Windows Credential Manager. -->
+    <Exec Condition=" '$(PluginSigningFingerprint)' == '' and '$(PluginSigningCertificate)' != '' and '$(PluginSigningCredential)' != '' "
+          Command="vela sign --package &quot;$(_SignPackage)&quot; --pfx &quot;$(PluginSigningCertificate)&quot; --pfx-credential $(PluginSigningCredential)" />
+    <!-- 3) .pfx file + password passed directly. -->
+    <Exec Condition=" '$(PluginSigningFingerprint)' == '' and '$(PluginSigningCertificate)' != '' and '$(PluginSigningCredential)' == '' "
+          Command="vela sign --package &quot;$(_SignPackage)&quot; --pfx &quot;$(PluginSigningCertificate)&quot; --pfx-password $(PluginSigningPassword)" />
+  </Target>
+""";
+
+    // ---- Plugin code (Plugins project) -----------------------------------
+
+    public static string AccountPostCreatePlugin(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Account.Plugins
+{
+    using System;
+    using Vela.Constants;
+    using Vela.Context;
+    using Vela.DI;
+    using Vela.Plugin;
+    using Vela.StepBuilder;
+    using Microsoft.Xrm.Sdk;
+    using {{prefix}}.Plugins.Account.Services;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Single-step plugin: after an account is created, schedules a follow-up task a week out.
+    /// Demonstrates dependency injection via <see cref="ConfigureServices"/> plus a table-scoped
+    /// service (<see cref="IAccountFollowUpService"/>) resolved with <c>ctx.GetRequiredService&lt;T&gt;()</c>.
+    /// </summary>
+    public sealed class AccountPostCreatePlugin : EntityPluginBase<Account>
+    {
+        public AccountPostCreatePlugin(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+        {
+            // The default registrations already expose the initiating-user IOrganizationService; hand it
+            // to the table-scoped service.
+            services.AddScoped<IAccountFollowUpService>(r => new AccountFollowUpService(r.GetRequiredService<IOrganizationService>()));
+        }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterSteps().OnCreate()
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .FilteringAttributes(a => a.Name)
+                .Description("Schedules a 7-day follow-up task after an account is created.")
+                .PostImage()
+                    .Attributes(a => a.Name);
+        }
+
+        protected override void Execute(ILocalPluginContext ctx, Account target)
+        {
+            Account postImage = ctx.GetPostImage<Account>();
+            IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
+
+            Guid taskId = followUp.CreateFollowUpTask(target.Id, postImage.Name);
+            ctx.Trace("Created follow-up task {0} for account '{1}'.", taskId, postImage.Name);
+        }
+    }
+}
+""";
+
+    public static string ContactRouterPlugin(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Contact.Plugins
+{
+    using System;
+    using Vela.Constants;
+    using Vela.Context;
+    using Vela.DI;
+    using Vela.Plugin;
+    using Vela.StepBuilder;
+    using Microsoft.Xrm.Sdk;
+    using {{prefix}}.Plugins.Contact.Services;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Multi-step "router" plugin: registers several steps in one class and binds each to a named
+    /// handler method. Every step in a multi-step plugin must declare a <c>Handler(...)</c>. Also shows a
+    /// router consuming a table-scoped service (<see cref="IContactDuplicateService"/>) via DI.
+    /// </summary>
+    public sealed class ContactRouterPlugin : EntityPluginBase<Contact>
+    {
+        public ContactRouterPlugin(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+        {
+            services.AddScoped<IContactDuplicateService>(r => new ContactDuplicateService(r.GetRequiredService<IOrganizationService>()));
+        }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterSteps().OnCreate()
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
+                .Handler(nameof(OnCreatePost))
+                .Description("Handles contact creation.")
+                .PostImage()
+                    .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
+
+            RegisterSteps().OnUpdate()
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .FilteringAttributes(c => c.LastName)
+                .Handler(nameof(OnUpdatePost))
+                .Description("Handles contact last-name changes.")
+                .PreImage()
+                    .Attributes(c => c.LastName);
+        }
+
+        private void OnCreatePost(ILocalPluginContext ctx, Contact target)
+        {
+            Contact postImage = ctx.GetPostImage<Contact>();
+            ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
+
+            IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
+            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, target.Id);
+            if (duplicateId.HasValue)
+            {
+                ctx.Trace("Possible duplicate of contact {0} (same email).", duplicateId.Value);
+            }
+        }
+
+        private void OnUpdatePost(ILocalPluginContext ctx, Contact target)
+        {
+            Contact preImage = ctx.GetPreImage<Contact>();
+            ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, target.LastName);
+        }
+    }
+}
+""";
+
+    public static string AccountEstimateValueCustomApi(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Account.CustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.CustomApi;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Custom API <b>bound</b> to the <c>account</c> table. Typed request/response models are mapped
+    /// automatically by the framework.
+    /// </summary>
+    public sealed class AccountEstimateValueCustomApi : CustomApiBase<EstimateValueRequest, EstimateValueResponse>
+    {
+        public AccountEstimateValueCustomApi(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{ApiPrefix(prefix)}}_AccountEstimateValue")
+                .DisplayName("Estimate Account Value")
+                .Description("Estimates a value for the bound account.")
+                .AsAction()
+                .BoundTo<Account>()
+                .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync)
+                .Request(r => r.Add(x => x.AccountId))
+                .Response(r => r.Add(x => x.EstimatedValue));
+        }
+
+        protected override EstimateValueResponse Execute(ILocalPluginContext ctx, EstimateValueRequest request)
+        {
+            ctx.Trace("Estimating value for account {0}", request.AccountId);
+
+            // Replace with real logic.
+            return new EstimateValueResponse { EstimatedValue = 1000m };
+        }
+    }
+
+    /// <summary>Request parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
+    public sealed class EstimateValueRequest
+    {
+        public Guid AccountId { get; set; }
+    }
+
+    /// <summary>Response parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
+    public sealed class EstimateValueResponse
+    {
+        public decimal EstimatedValue { get; set; }
+    }
+}
+""";
+
+    public static string ContactValidateCustomApi(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Contact.CustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.CustomApi;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Custom API <b>bound</b> to the <c>contact</c> table. Typed request/response models are mapped
+    /// automatically by the framework.
+    /// </summary>
+    public sealed class ContactValidateCustomApi : CustomApiBase<ContactValidateRequest, ContactValidateResponse>
+    {
+        public ContactValidateCustomApi(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{ApiPrefix(prefix)}}_ContactValidate")
+                .DisplayName("Validate Contact")
+                .Description("Validates the bound contact's email address.")
+                .AsAction()
+                .BoundTo<Contact>()
+                .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync)
+                .Request(r => r.Add(x => x.ContactId))
+                .Response(r => r.Add(x => x.IsValid));
+        }
+
+        protected override ContactValidateResponse Execute(ILocalPluginContext ctx, ContactValidateRequest request)
+        {
+            ctx.Trace("Validating contact {0}", request.ContactId);
+
+            // Replace with real validation logic.
+            return new ContactValidateResponse { IsValid = true };
+        }
+    }
+
+    /// <summary>Request parameters for <see cref="ContactValidateCustomApi"/>.</summary>
+    public sealed class ContactValidateRequest
+    {
+        public Guid ContactId { get; set; }
+    }
+
+    /// <summary>Response parameters for <see cref="ContactValidateCustomApi"/>.</summary>
+    public sealed class ContactValidateResponse
+    {
+        public bool IsValid { get; set; }
+    }
+}
+""";
+
+    public static string PingCustomApi(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.GlobalCustomApis
+{
+    using Vela.Context;
+    using Vela.CustomApi;
+
+    /// <summary>
+    /// <b>Global</b> (unbound) Custom API using the lightweight style — no dedicated request/response
+    /// models, parameters declared inline.
+    /// </summary>
+    public sealed class PingCustomApi : CustomApiBase
+    {
+        public PingCustomApi(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{ApiPrefix(prefix)}}_Ping", nameof(Handle))
+                .DisplayName("Ping")
+                .Description("Returns a pong message; useful for connectivity checks.")
+                .AsAction()
+                .RequestParameter<string>("Message", optional: true)
+                .ResponseParameter<string>("Pong");
+        }
+
+        private void Handle(ILocalPluginContext ctx)
+        {
+            string message = ctx.GetInputParameter<string>("Message");
+            ctx.SetOutputParameter("Pong", string.IsNullOrEmpty(message) ? "pong" : "pong: " + message);
+        }
+    }
+}
+""";
+
+    // ---- Tests project ----------------------------------------------------
+
+    public static string TestsCsproj(string testProjectName, string pluginsProjectName, string sharedProjectName, string coreVersion) =>
+$$"""
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Plugins target net462, so their tests do too (Vela.Testing is a net462 package). -->
+    <TargetFramework>net462</TargetFramework>
+    <RootNamespace>{{testProjectName}}</RootNamespace>
+    <AssemblyName>{{testProjectName}}</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="{{TestSdkVersion}}" />
+    <PackageReference Include="xunit" Version="{{XunitVersion}}" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="{{XunitRunnerVersion}}" />
+    <!-- The test host runs against the real SDK assemblies (not the sandbox), so they are copied to output. -->
+    <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="{{CrmCoreAssembliesVersion}}" />
+    <!-- Vela.Testing is consumed from the same feed as Vela.Plugins (see nuget.config / local-packages). -->
+    <PackageReference Include="Vela.Testing" Version="{{coreVersion}}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Test projects live under tests/; the projects under test are under src/. -->
+    <ProjectReference Include="..\..\src\{{pluginsProjectName}}\{{pluginsProjectName}}.csproj" />
+    <ProjectReference Include="..\..\src\{{sharedProjectName}}\{{sharedProjectName}}.csproj" />
+  </ItemGroup>
+
+</Project>
+""";
+
+    public static string AccountPostCreatePluginTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Tests.Account.Plugins
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Query;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Plugins.Account.Plugins;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Tests <see cref="AccountPostCreatePlugin"/> with <c>Vela.Testing</c>: an in-memory Dataverse plus a
+    /// fake execution context — no connection, no mocking library. Plugins are constructed with their
+    /// <c>(unsecureConfig, secureConfig)</c> constructor and run via <c>.Execute(plugin)</c>.
+    /// </summary>
+    public sealed class AccountPostCreatePluginTests
+    {
+        [Fact]
+        public void Schedules_A_Follow_Up_Task_For_The_New_Account()
+        {
+            // Arrange: an in-memory Dataverse the plugin's injected IOrganizationService writes to.
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            Guid accountId = Guid.NewGuid();
+            Account account = new Account { Id = accountId, Name = "Zava" };
+
+            // Act: run the plugin. The trigger (Create/PostOperation/Synchronous) is auto-derived from the
+            // plugin's own single registered step, so there is no need to restate OnCreate().Stage(...).Mode(...).
+            PluginContext.For<Account>()
+                .WithPrimaryEntity(Account.EntityLogicalNameValue, accountId)
+                .WithTarget(account)
+                .WithPostImage(account)
+                .WithOrganizationService(crm)
+                .Execute(new AccountPostCreatePlugin(string.Empty, string.Empty));
+
+            // Assert: retrieve the created task and check its fields (not just the count).
+            EntityCollection tasks = crm.RetrieveMultiple(
+                new QueryExpression("task") { ColumnSet = new ColumnSet(true) });
+            Entity task = Assert.Single(tasks.Entities);
+            Assert.Equal("Follow up with Zava", task.GetAttributeValue<string>("subject"));
+
+            EntityReference regarding = task.GetAttributeValue<EntityReference>("regardingobjectid");
+            Assert.Equal("account", regarding.LogicalName);
+            Assert.Equal(accountId, regarding.Id);
+        }
+    }
+}
+""";
+
+    public static string ContactRouterPluginTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Tests.Contact.Plugins
+{
+    using System;
+    using Vela.Constants;
+    using Vela.StepBuilder;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Plugins.Contact.Plugins;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Tests the multi-step "router" <see cref="ContactRouterPlugin"/>. Because a router registers several
+    /// steps, the trigger (message/stage/mode) must be stated explicitly so the right handler runs. Asserts
+    /// on the emitted traces via <c>TraceCapture</c>.
+    /// </summary>
+    public sealed class ContactRouterPluginTests
+    {
+        [Fact]
+        public void OnCreate_Flags_A_Possible_Duplicate_With_The_Same_Email()
+        {
+            // Seed an existing contact that shares the email of the one being created.
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            Guid existingId = crm.Create(new Contact
+            {
+                FirstName = "Jane",
+                LastName = "Doe",
+                EMailAddress1 = "jane@zava.com",
+            });
+
+            Guid newContactId = Guid.NewGuid();
+            Contact created = new Contact
+            {
+                Id = newContactId,
+                FirstName = "Janet",
+                LastName = "Doe",
+                EMailAddress1 = "jane@zava.com",
+            };
+
+            PluginContextBuilder<Contact> builder = PluginContext.For<Contact>()
+                .OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+                .WithPrimaryEntity(Contact.EntityLogicalNameValue, newContactId)
+                .WithTarget(created)
+                .WithPostImage(created)
+                .WithOrganizationService(crm);
+
+            builder.Execute(new ContactRouterPlugin(string.Empty, string.Empty));
+
+            Assert.Contains("Contact created: Janet Doe", builder.TraceCapture.Output);
+            Assert.Contains("Possible duplicate of contact " + existingId, builder.TraceCapture.Output);
+        }
+    }
+}
+""";
+
+    public static string AccountEstimateValueCustomApiTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Tests.Account.CustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Plugins.Account.CustomApis;
+
+    /// <summary>
+    /// Tests the typed, account-bound Custom API <see cref="AccountEstimateValueCustomApi"/>. The framework
+    /// maps input parameters to the request model and the response model back to output parameters.
+    /// </summary>
+    public sealed class AccountEstimateValueCustomApiTests
+    {
+        [Fact]
+        public void Returns_An_Estimated_Value_For_The_Bound_Account()
+        {
+            AccountEstimateValueCustomApi api = new AccountEstimateValueCustomApi(string.Empty, string.Empty);
+            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_AccountEstimateValue").Build();
+            context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
+
+            api.Execute(context.ServiceProvider);
+
+            Assert.Equal(1000m, context.PluginExecutionContext.OutputParameters["EstimatedValue"]);
+        }
+    }
+}
+""";
+
+    public static string ContactValidateCustomApiTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Tests.Contact.CustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Plugins.Contact.CustomApis;
+
+    /// <summary>
+    /// Tests the typed, contact-bound Custom API <see cref="ContactValidateCustomApi"/>. The framework maps
+    /// input parameters to the request model and the response model back to output parameters.
+    /// </summary>
+    public sealed class ContactValidateCustomApiTests
+    {
+        [Fact]
+        public void Reports_The_Bound_Contact_As_Valid()
+        {
+            ContactValidateCustomApi api = new ContactValidateCustomApi(string.Empty, string.Empty);
+            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_ContactValidate").Build();
+            context.PluginExecutionContext.InputParameters["ContactId"] = Guid.NewGuid();
+
+            api.Execute(context.ServiceProvider);
+
+            Assert.Equal(true, context.PluginExecutionContext.OutputParameters["IsValid"]);
+        }
+    }
+}
+""";
+
+    public static string PingCustomApiTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
+{
+    using Vela.Context;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Plugins.GlobalCustomApis;
+
+    /// <summary>
+    /// Tests the global (unbound), lightweight Custom API <see cref="PingCustomApi"/>: input parameters are
+    /// read with <c>ctx.GetInputParameter</c> and results written with <c>ctx.SetOutputParameter</c>.
+    /// </summary>
+    public sealed class PingCustomApiTests
+    {
+        [Fact]
+        public void Returns_Pong_With_The_Supplied_Message()
+        {
+            PingCustomApi api = new PingCustomApi(string.Empty, string.Empty);
+            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_Ping").Build();
+            context.PluginExecutionContext.InputParameters["Message"] = "hello";
+
+            api.Execute(context.ServiceProvider);
+
+            Assert.Equal("pong: hello", context.PluginExecutionContext.OutputParameters["Pong"]);
+        }
+    }
+}
+""";
+
+    // ---- Parameterized single-file templates (vela add) ------------------
+    // These differ from the example templates above: they emit ONE file with a user-supplied name into an
+    // existing project, following the same by-table conventions vela init uses.
+
+    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string filteringCall = "") =>
+$$"""
+namespace {{ns}}
+{
+    using Vela.Constants;
+    using Vela.Context;
+    using Vela.Plugin;
+    using Vela.StepBuilder;
+    using {{modelsNamespace}};
+
+    /// <summary>Single-step plugin generated by <c>vela add plugin</c>.</summary>
+    public sealed class {{className}} : EntityPluginBase<{{entityType}}>
+    {
+        public {{className}}(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterSteps().{{registrationCall}}
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous){{filteringCall}}
+                .Description("{{message}} {{entityType}} handler.");
+        }
+
+        protected override void Execute(ILocalPluginContext ctx, {{entityType}} target)
+        {
+            ctx.Trace("{{className}} executed for {0} '{1}'.", target.LogicalName, target.Id);
+
+            // TODO: implement your logic.
+        }
+    }
+}
+""";
+
+    public static string AddServiceFile(string ns, string interfaceName, string className, string entityType, string modelsNamespace) =>
+$$"""
+namespace {{ns}}
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using {{modelsNamespace}};
+
+    /// <summary>
+    /// Table-scoped domain service generated by <c>vela add service</c>. Following the by-table
+    /// convention of <c>vela init</c>, it lives next to the <c>{{entityType}}</c> plugins that use it.
+    /// Register it from a plugin's <c>ConfigureServices(...)</c> and resolve it with
+    /// <c>ctx.GetRequiredService&lt;{{interfaceName}}&gt;()</c>.
+    /// </summary>
+    public interface {{interfaceName}}
+    {
+        void Execute({{entityType}} target);
+    }
+
+    /// <inheritdoc />
+    public sealed class {{className}} : {{interfaceName}}
+    {
+        private readonly IOrganizationService _service;
+
+        public {{className}}(IOrganizationService service)
+        {
+            _service = service;
+        }
+
+        public void Execute({{entityType}} target)
+        {
+            // TODO: implement your domain logic using _service.
+        }
+    }
+}
+""";
+
+    public static string AddPluginTestFile(string ns, string pluginNamespace, string modelsNamespace, string testClass, string pluginType, string entityType) =>
+$$"""
+namespace {{ns}}
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Query;
+    using Vela.Testing;
+    using Xunit;
+    using {{pluginNamespace}};
+    using {{modelsNamespace}};
+
+    /// <summary>
+    /// Test for <see cref="{{pluginType}}"/>, generated by <c>vela add test</c>. Uses <c>Vela.Testing</c>'s
+    /// in-memory Dataverse and a fake execution context — no connection, no mocking library.
+    /// </summary>
+    public sealed class {{testClass}}
+    {
+        [Fact]
+        public void Executes()
+        {
+            // Arrange: an in-memory Dataverse the plugin's injected IOrganizationService writes to.
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            {{entityType}} target = new {{entityType}} { Id = Guid.NewGuid() };
+
+            // Act: a single-step plugin auto-derives its trigger (message/stage/mode) from its own
+            // registration. For a multi-step plugin, state it: .OnUpdate().Stage(...).Mode(...).
+            PluginContext.For<{{entityType}}>()
+                .WithTarget(target)
+                .WithOrganizationService(crm)
+                .Execute(new {{pluginType}}(string.Empty, string.Empty));
+
+            // Assert: retrieve the affected record(s) and check their fields (not just the count). For example:
+            // EntityCollection rows = crm.RetrieveMultiple(new QueryExpression("task") { ColumnSet = new ColumnSet(true) });
+            // Entity row = Assert.Single(rows.Entities);
+            // Assert.Equal("expected", row.GetAttributeValue<string>("subject"));
+        }
+    }
+}
+""";
+
+    public static string AddCustomApiTestFile(string ns, string apiNamespace, string testClass, string apiType, string uniqueName) =>
+$$"""
+namespace {{ns}}
+{
+    using System;
+    using Vela.Context;
+    using Vela.Testing;
+    using Xunit;
+    using {{apiNamespace}};
+
+    /// <summary>
+    /// Test for <see cref="{{apiType}}"/>, generated by <c>vela add test</c>. The framework maps input
+    /// parameters to the request and the response back to output parameters.
+    /// </summary>
+    public sealed class {{testClass}}
+    {
+        [Fact]
+        public void Executes()
+        {
+            {{apiType}} api = new {{apiType}}(string.Empty, string.Empty);
+            LocalPluginContext context = PluginContext.ForMessage("{{uniqueName}}").Build();
+
+            // TODO: set the input parameters this Custom API reads, e.g.:
+            // context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
+
+            api.Execute(context.ServiceProvider);
+
+            // TODO: assert the output parameters it writes, e.g.:
+            // Assert.Equal(1000m, context.PluginExecutionContext.OutputParameters["EstimatedValue"]);
+        }
+    }
+}
+""";
+
+    public static string AddGlobalCustomApiFile(string ns, string className, string uniqueName, string operation) =>
+$$"""
+namespace {{ns}}
+{
+    using Vela.Context;
+    using Vela.CustomApi;
+
+    /// <summary>Global (unbound), lightweight Custom API generated by <c>vela add customapi</c>.</summary>
+    public sealed class {{className}} : CustomApiBase
+    {
+        public {{className}}(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{uniqueName}}", nameof(Handle))
+                .DisplayName("{{className}}")
+                .Description("TODO: describe this Custom API.")
+                .{{operation}};
+        }
+
+        private void Handle(ILocalPluginContext ctx)
+        {
+            // TODO: read inputs with ctx.GetInputParameter<T>(...) and write results with ctx.SetOutputParameter(...).
+        }
+    }
+}
+""";
+
+    public static string AddBoundCustomApiFile(string ns, string className, string uniqueName, string entityType, string modelsNamespace, string operation) =>
+$$"""
+namespace {{ns}}
+{
+    using Vela.Context;
+    using Vela.CustomApi;
+    using {{modelsNamespace}};
+
+    /// <summary>Typed Custom API bound to <c>{{entityType}}</c>, generated by <c>vela add customapi</c>.</summary>
+    public sealed class {{className}} : CustomApiBase<{{className}}Request, {{className}}Response>
+    {
+        public {{className}}(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{uniqueName}}")
+                .DisplayName("{{className}}")
+                .Description("TODO: describe this Custom API.")
+                .{{operation}}
+                .BoundTo<{{entityType}}>()
+                .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync);
+        }
+
+        protected override {{className}}Response Execute(ILocalPluginContext ctx, {{className}}Request request)
+        {
+            // TODO: implement your logic. Add request/response properties below and map them with
+            // .Request(r => r.Add(x => x.Foo)) / .Response(r => r.Add(x => x.Bar)) in RegisterCustomApi().
+            return new {{className}}Response();
+        }
+    }
+
+    /// <summary>Request parameters for <see cref="{{className}}"/>.</summary>
+    public sealed class {{className}}Request
+    {
+    }
+
+    /// <summary>Response parameters for <see cref="{{className}}"/>.</summary>
+    public sealed class {{className}}Response
+    {
+    }
+}
+""";
+
+    // ---- Plugin code (Integrations project) ------------------------------
+
+    public static string ContactSyncPlugin(string prefix) =>
+$$"""
+namespace {{prefix}}.Integrations.Contact.Plugins
+{
+    using Vela.Constants;
+    using Vela.Context;
+    using Vela.DI;
+    using Vela.Plugin;
+    using Vela.StepBuilder;
+    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Services;
+
+    /// <summary>
+    /// Single-step integration plugin: runs asynchronously after a contact is created. Demonstrates
+    /// dependency injection of the cross-table <see cref="IGreetingService"/> in a second plugin package.
+    /// </summary>
+    public sealed class ContactSyncPlugin : EntityPluginBase<Contact>
+    {
+        public ContactSyncPlugin(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+        {
+            services.AddScoped<IGreetingService>(_ => new GreetingService());
+        }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterSteps().OnCreate()
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Asynchronous)
+                .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
+                .Description("Runs after a contact is created.")
+                .PostImage()
+                    .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
+        }
+
+        protected override void Execute(ILocalPluginContext ctx, Contact target)
+        {
+            IGreetingService greetings = ctx.GetRequiredService<IGreetingService>();
+            ctx.Trace(greetings.BuildGreeting(target.FirstName));
+        }
+    }
+}
+""";
+
+    public static string AccountSyncRouterPlugin(string prefix) =>
+$$"""
+namespace {{prefix}}.Integrations.Account.Plugins
+{
+    using Vela.Constants;
+    using Vela.Context;
+    using Vela.Plugin;
+    using Vela.StepBuilder;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Multi-step integration router: one class handling create and update of accounts, each bound to
+    /// a dedicated handler method.
+    /// </summary>
+    public sealed class AccountSyncRouterPlugin : EntityPluginBase<Account>
+    {
+        public AccountSyncRouterPlugin(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterSteps().OnCreate()
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Asynchronous)
+                .FilteringAttributes(a => a.Name)
+                .Handler(nameof(OnAccountCreated))
+                .Description("Pushes a newly created account downstream.")
+                .PostImage()
+                    .Attributes(a => a.Name);
+
+            RegisterSteps().OnUpdate()
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Asynchronous)
+                .FilteringAttributes(a => a.Name, a => a.Telephone1)
+                .Handler(nameof(OnAccountChanged))
+                .Description("Pushes account changes downstream.")
+                .PreImage()
+                    .Attributes(a => a.Name, a => a.Telephone1);
+        }
+
+        private void OnAccountCreated(ILocalPluginContext ctx, Account target)
+        {
+            Account postImage = ctx.GetPostImage<Account>();
+            ctx.Trace("Sync: account created '{0}'", postImage.Name);
+        }
+
+        private void OnAccountChanged(ILocalPluginContext ctx, Account target)
+        {
+            Account preImage = ctx.GetPreImage<Account>();
+            ctx.Trace("Sync: account '{0}' changed", preImage.Name);
+        }
+    }
+}
+""";
+
+    public static string ContactExportCustomApi(string prefix) =>
+$$"""
+namespace {{prefix}}.Integrations.Contact.CustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.CustomApi;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>Custom API <b>bound</b> to the <c>contact</c> table: exports a contact to an external system.</summary>
+    public sealed class ContactExportCustomApi : CustomApiBase<ContactExportRequest, ContactExportResponse>
+    {
+        public ContactExportCustomApi(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{ApiPrefix(prefix)}}_ContactExport")
+                .DisplayName("Export Contact")
+                .Description("Exports the bound contact to an external system.")
+                .AsAction()
+                .BoundTo<Contact>()
+                .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync)
+                .Request(r => r.Add(x => x.ContactId))
+                .Response(r => r.Add(x => x.ExternalId));
+        }
+
+        protected override ContactExportResponse Execute(ILocalPluginContext ctx, ContactExportRequest request)
+        {
+            ctx.Trace("Exporting contact {0}", request.ContactId);
+
+            // Replace with real integration logic.
+            return new ContactExportResponse { ExternalId = request.ContactId.ToString() };
+        }
+    }
+
+    /// <summary>Request parameters for <see cref="ContactExportCustomApi"/>.</summary>
+    public sealed class ContactExportRequest
+    {
+        public Guid ContactId { get; set; }
+    }
+
+    /// <summary>Response parameters for <see cref="ContactExportCustomApi"/>.</summary>
+    public sealed class ContactExportResponse
+    {
+        public string ExternalId { get; set; }
+    }
+}
+""";
+
+    public static string AccountReconcileCustomApi(string prefix) =>
+$$"""
+namespace {{prefix}}.Integrations.Account.CustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.CustomApi;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>Custom API <b>bound</b> to the <c>account</c> table: reconciles the account with an external system.</summary>
+    public sealed class AccountReconcileCustomApi : CustomApiBase<AccountReconcileRequest, AccountReconcileResponse>
+    {
+        public AccountReconcileCustomApi(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{ApiPrefix(prefix)}}_AccountReconcile")
+                .DisplayName("Reconcile Account")
+                .Description("Reconciles the bound account with an external system.")
+                .AsAction()
+                .BoundTo<Account>()
+                .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync)
+                .Request(r => r.Add(x => x.AccountId))
+                .Response(r => r.Add(x => x.Status));
+        }
+
+        protected override AccountReconcileResponse Execute(ILocalPluginContext ctx, AccountReconcileRequest request)
+        {
+            ctx.Trace("Reconciling account {0}", request.AccountId);
+
+            // Replace with real integration logic.
+            return new AccountReconcileResponse { Status = "Reconciled" };
+        }
+    }
+
+    /// <summary>Request parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
+    public sealed class AccountReconcileRequest
+    {
+        public Guid AccountId { get; set; }
+    }
+
+    /// <summary>Response parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
+    public sealed class AccountReconcileResponse
+    {
+        public string Status { get; set; }
+    }
+}
+""";
+
+    public static string IntegrationHeartbeatCustomApi(string prefix) =>
+$$"""
+namespace {{prefix}}.Integrations.GlobalCustomApis
+{
+    using Vela.Context;
+    using Vela.CustomApi;
+
+    /// <summary><b>Global</b> (unbound) Custom API that reports integration health.</summary>
+    public sealed class IntegrationHeartbeatCustomApi : CustomApiBase
+    {
+        public IntegrationHeartbeatCustomApi(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{ApiPrefix(prefix)}}_IntegrationHeartbeat", nameof(Handle))
+                .DisplayName("Integration Heartbeat")
+                .Description("Returns the integration status.")
+                .AsFunction()
+                .ResponseParameter<string>("Status");
+        }
+
+        private void Handle(ILocalPluginContext ctx)
+        {
+            ctx.SetOutputParameter("Status", "healthy");
+        }
+    }
+}
+""";
+
+    public static string AccountReconcileCustomApiTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Integrations.Tests.Account.CustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Integrations.Account.CustomApis;
+
+    /// <summary>Tests the typed, account-bound Custom API <see cref="AccountReconcileCustomApi"/>.</summary>
+    public sealed class AccountReconcileCustomApiTests
+    {
+        [Fact]
+        public void Returns_A_Reconciled_Status_For_The_Bound_Account()
+        {
+            AccountReconcileCustomApi api = new AccountReconcileCustomApi(string.Empty, string.Empty);
+            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_AccountReconcile").Build();
+            context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
+
+            api.Execute(context.ServiceProvider);
+
+            Assert.Equal("Reconciled", context.PluginExecutionContext.OutputParameters["Status"]);
+        }
+    }
+}
+""";
+
+    public static string ContactExportCustomApiTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Integrations.Tests.Contact.CustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Integrations.Contact.CustomApis;
+
+    /// <summary>Tests the typed, contact-bound Custom API <see cref="ContactExportCustomApi"/>.</summary>
+    public sealed class ContactExportCustomApiTests
+    {
+        [Fact]
+        public void Returns_The_Contact_Id_As_External_Id()
+        {
+            ContactExportCustomApi api = new ContactExportCustomApi(string.Empty, string.Empty);
+            Guid contactId = Guid.NewGuid();
+            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_ContactExport").Build();
+            context.PluginExecutionContext.InputParameters["ContactId"] = contactId;
+
+            api.Execute(context.ServiceProvider);
+
+            Assert.Equal(contactId.ToString(), context.PluginExecutionContext.OutputParameters["ExternalId"]);
+        }
+    }
+}
+""";
+
+    public static string IntegrationHeartbeatCustomApiTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Integrations.Tests.GlobalCustomApis
+{
+    using Vela.Context;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Integrations.GlobalCustomApis;
+
+    /// <summary>Tests the global (unbound), lightweight Custom API <see cref="IntegrationHeartbeatCustomApi"/>.</summary>
+    public sealed class IntegrationHeartbeatCustomApiTests
+    {
+        [Fact]
+        public void Reports_A_Healthy_Status()
+        {
+            IntegrationHeartbeatCustomApi api = new IntegrationHeartbeatCustomApi(string.Empty, string.Empty);
+            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_IntegrationHeartbeat").Build();
+
+            api.Execute(context.ServiceProvider);
+
+            Assert.Equal("healthy", context.PluginExecutionContext.OutputParameters["Status"]);
+        }
+    }
+}
+""";
+
+    // ---- ConsoleApp project ----------------------------------------------
+
+    public static string ConsoleCsproj(ScaffoldOptions options) =>
+$$"""
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>{{options.Prefix}}.ConsoleApp</RootNamespace>
+    <AssemblyName>{{options.Prefix}}.ConsoleApp</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="{{DataverseClientVersion}}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\{{options.Prefix}}.Shared\{{options.Prefix}}.Shared.csproj" />
+  </ItemGroup>
+
+</Project>
+""";
+
+    public static string ConsoleProgram(string prefix) =>
+$$"""
+using Microsoft.Crm.Sdk.Messages;
+using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
+using {{prefix}}.Shared.Models;
+
+// Interactive (browser) sign-in to Dataverse. Pass the environment URL as the first argument,
+// or enter it when prompted; a browser window opens for Microsoft login.
+string? url = args.Length > 0 ? args[0] : null;
+if (string.IsNullOrWhiteSpace(url))
+{
+    Console.Write("Dataverse environment URL (https://org.crm.dynamics.com): ");
+    url = Console.ReadLine();
+}
+
+if (string.IsNullOrWhiteSpace(url))
+{
+    Console.Error.WriteLine("An environment URL is required.");
+    return 1;
+}
+
+// Well-known Microsoft public client registered for interactive Dataverse sign-in.
+const string publicAppId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
+const string redirectUri = "app://58145B91-0C36-4500-8554-080854F2AC97";
+string connectionString =
+    $"AuthType=OAuth;Url={url};AppId={publicAppId};RedirectUri={redirectUri};LoginPrompt=Auto";
+
+using var service = new ServiceClient(connectionString);
+if (!service.IsReady)
+{
+    Console.Error.WriteLine($"Failed to connect: {service.LastError}");
+    return 1;
+}
+
+var whoAmI = (WhoAmIResponse)service.Execute(new WhoAmIRequest());
+Console.WriteLine($"Connected as user {whoAmI.UserId}.");
+
+// Retrieve the five most recent accounts using the shared early-bound model.
+var query = new QueryExpression(Account.EntityLogicalNameValue)
+{
+    ColumnSet = new ColumnSet("name"),
+    TopCount = 5,
+};
+
+EntityCollection result = service.RetrieveMultiple(query);
+Console.WriteLine($"Found {result.Entities.Count} account(s):");
+foreach (Account account in result.Entities.Select(e => e.ToEntity<Account>()))
+{
+    Console.WriteLine($"  - {account.Name}");
+}
+
+return 0;
+""";
+}

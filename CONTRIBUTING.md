@@ -1,0 +1,86 @@
+# Contributing to Vela
+
+This guide is for people who want to **build, test, or contribute to the Vela framework itself**. If you
+just want to *use* Vela to build Dataverse plugins and Custom APIs, see the [README](README.md) — you do
+not need to clone this repository.
+
+Looking for something to work on? See the [backlog](BACKLOG.md) for planned and candidate work.
+
+## Solution layout
+
+```text
+Vela.sln
+src/
+  Vela.Plugins/   # Framework runtime, contracts, primitives, and shared definitions
+  Vela.Cli/       # CLI (command `vela`) for manifests and Dataverse sync
+  Vela.Testing/   # Test harness package
+tests/
+  Vela.Tests/     # Unit tests
+.github/workflows/ci.yml
+```
+
+## Architecture rules
+
+Keep these rules in mind when adding new code:
+
+1. **Core** (`Vela.Plugins`) contains framework-level runtime code, contracts, primitives, and generic immutable definitions.
+2. **Tools** (`Vela.Cli`) contains the shared CLI used locally and in CI.
+3. Generated early-bound model code belongs to the **consumer/plugin repo**, not this framework repo.
+4. Use the framework APIs to build plugins and metadata generators; do not keep sample app code in the release path.
+5. Keep registration metadata and runtime execution concerns separate.
+
+## Build and test
+
+```powershell
+dotnet build Vela.sln -c Release
+dotnet test Vela.sln -c Release
+```
+
+### Test stack and coverage
+
+The test project uses:
+
+1. `xUnit` for unit tests
+2. `Moq` for mocks
+3. `Microsoft.NET.Test.Sdk` for `dotnet test`
+4. `coverlet.collector` for code coverage
+
+Run coverage (Cobertura) with:
+
+```powershell
+dotnet test .\tests\Vela.Tests\Vela.Tests.csproj `
+  -c Release `
+  --collect:"XPlat Code Coverage"
+```
+
+CI enforces a **branch-coverage gate** (via `coverlet.msbuild`) on the two areas where edge-case coverage matters
+most — the **diff engine** (plan/apply idempotence) and the **in-memory harness**. The run fails if branch
+coverage drops below the threshold. Reproduce a gate locally, e.g. the diff engine:
+
+```bash
+dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release \
+  -p:CollectCoverage=true -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=88 \
+  -p:Include="[Vela.Cli]Vela.Cli.DiffEngine%2c[Vela.Cli]Vela.Cli.DefinitionNormalizer"
+```
+
+Thresholds are set just below current coverage to catch regressions without churn; raise them as coverage improves.
+
+The tools tests include an **opt-in build smoke test** (`Generate_ThenDotnetBuild_Succeeds`) that packs
+`Vela.Plugins`, scaffolds a solution via `vela init`, and runs `dotnet build` on it — the only test that
+actually compiles the generated C#. It is skipped unless enabled (it restores/builds, so it needs the SDK
+and the Microsoft packages):
+
+```powershell
+$env:VELA_BUILD_SMOKE = "1"
+dotnet test .\tests\Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
+```
+
+## Release
+
+Release artifacts are produced by the release pipeline and should include only the framework packages
+(`Vela.Plugins`, `Vela.Testing`) and the shared CLI tool (`Vela.Cli`).
+
+The three packages are versioned **in lockstep** and follow [Semantic Versioning](https://semver.org/). Record
+every notable change in [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** as you merge it; cutting a release
+means renaming that section to the new `vX.Y.Z` (with a date) and tagging the commit. See the changelog's
+*Versioning policy* section for the pre-1.0 rules.

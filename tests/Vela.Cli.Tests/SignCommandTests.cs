@@ -1,0 +1,121 @@
+using Vela.Cli;
+using Xunit;
+using static Vela.Cli.CliExitCodes;
+
+namespace Vela.Cli.Tests;
+
+public class SignCommandTests
+{
+    [Fact]
+    public void TryParseOptions_Fingerprint_IsValid_AndDefaultsTimestamp()
+    {
+        bool ok = SignCommand.TryParseOptions(
+            ["--package", "Zava.Integrations.1.0.0.nupkg", "--fingerprint", "ABC123"],
+            out SignOptions options,
+            out int exitCode);
+
+        Assert.True(ok);
+        Assert.Equal(ExitSuccess, exitCode);
+        Assert.Equal("Zava.Integrations.1.0.0.nupkg", options.PackagePath);
+        Assert.Equal("ABC123", options.Fingerprint);
+        Assert.Equal(SignOptions.DefaultTimestampUrl, options.TimestampUrl);
+    }
+
+    [Fact]
+    public void TryParseOptions_Pfx_WithPassword_IsValid()
+    {
+        bool ok = SignCommand.TryParseOptions(
+            ["--package", "a.nupkg", "--pfx", "cert.pfx", "--pfx-password", "secret"],
+            out SignOptions options,
+            out _);
+
+        Assert.True(ok);
+        Assert.Equal("cert.pfx", options.PfxPath);
+        Assert.Equal("secret", options.PfxPassword);
+    }
+
+    [Fact]
+    public void TryParseOptions_Fails_WhenAssemblyMissing()
+    {
+        bool ok = SignCommand.TryParseOptions(["--fingerprint", "ABC"], out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParseOptions_PfxBase64_WithPassword_IsValid()
+    {
+        bool ok = SignCommand.TryParseOptions(
+            ["--package", "a.nupkg", "--pfx-base64", "QkFTRTY0", "--pfx-password", "secret"],
+            out SignOptions options,
+            out _);
+
+        Assert.True(ok);
+        Assert.Equal("QkFTRTY0", options.PfxBase64);
+        Assert.Equal("secret", options.PfxPassword);
+    }
+
+    [Fact]
+    public void TryParseOptions_PfxBase64_WithoutPassword_Fails()
+    {
+        bool ok = SignCommand.TryParseOptions(["--package", "a.nupkg", "--pfx-base64", "QkFTRTY0"], out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParseOptions_Fails_WhenMultipleCertificateSources()
+    {
+        bool ok = SignCommand.TryParseOptions(
+            ["--package", "a.nupkg", "--fingerprint", "ABC", "--pfx-base64", "QkFTRTY0", "--pfx-password", "x"],
+            out _,
+            out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParseOptions_Fails_WhenNoCertificateSource()
+    {
+        bool ok = SignCommand.TryParseOptions(["--package", "a.nupkg"], out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParseOptions_Fails_WhenPfxWithoutPasswordOrCredential()
+    {
+        bool ok = SignCommand.TryParseOptions(["--package", "a.nupkg", "--pfx", "cert.pfx"], out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParseOptions_Fails_WhenBothFingerprintAndPfx()
+    {
+        bool ok = SignCommand.TryParseOptions(
+            ["--package", "a.nupkg", "--fingerprint", "ABC", "--pfx", "cert.pfx", "--pfx-password", "x"],
+            out _,
+            out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParseOptions_AcceptsCredentialTarget_InsteadOfPassword()
+    {
+        bool ok = SignCommand.TryParseOptions(
+            ["--package", "a.nupkg", "--pfx", "cert.pfx", "--pfx-credential", "MyCert"],
+            out SignOptions options,
+            out _);
+
+        Assert.True(ok);
+        Assert.Equal("MyCert", options.PfxCredentialTarget);
+    }
+}

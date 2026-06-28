@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Vela.Cli</AssemblyName>
+    <RootNamespace>Vela.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>vela</ToolCommandName>
+    <!-- Let the net10.0 tool roll forward onto any newer installed runtime instead of requiring 10.x exactly. -->
+    <RollForward>Major</RollForward>
+    <PackageId>Vela.Cli</PackageId>
+    <Version>1.0.0</Version>
+    <Title>Vela CLI — Build Dataverse with confidence</Title>
+    <Description>Vela command-line tool (command: vela). Plan/apply, scaffolding and package signing for Microsoft Dataverse plugins and Custom APIs.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" />
+    <PackageReference Include="Spectre.Console" />
+    <!-- Direct ref to override the vulnerable System.Security.Cryptography.Xml 8.0.2 pulled transitively by the
+         Dataverse client (NU1903). Version comes from Directory.Packages.props. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" />
+  </ItemGroup>
+
+  <!-- Single source of truth for pipeline stages: link the public enum (Vela.Plugins, net462)
+       into the net10 CLI as source so SdkConstants.PipelineStage can derive from it and the two
+       can't drift. A ProjectReference is avoided to keep the CrmSdk (net462) out of the CLI. -->
+  <ItemGroup>
+    <Compile Include="..\Vela.Plugins\Constants\PluginStages.cs" Link="Shared\PluginStages.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Vela.Cli.Tests" />
+  </ItemGroup>
+</Project>

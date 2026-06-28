@@ -1,0 +1,56 @@
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+TestResults/
+
+# NuGet and packaging outputs
+artifacts/*
+!artifacts/.gitkeep
+*.nupkg
+*.snupkg
+*.nuspec
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Logs and transient files
+*.log
+*.tmp
+*.temp
+*.cache
+
+# Coverage and diagnostics
+*.coverage
+*.coveragexml
+*.cobertura.xml
+coverage.json
+coverage/
+
+# Generated metadata from local tooling
+*.generated.cs
+*.g.cs
+*.g.i.cs
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Local coverage measurement artifacts
+tests/**/cov-*.json
+tests/**/cov-*.xml
+tests/**/coverage.cobertura.xml
+tests/**/plugins-coverage.json
+tests/**/plugins-merged.xml
+
+# Mutation testing (Stryker) local output
+StrykerOutput/

@@ -1,0 +1,29 @@
+<Project>
+  <!-- Central Package Management: every PackageReference resolves its version from here, so shared packages
+       (xunit, coverlet, Moq, …) are pinned once instead of duplicated across each project. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Runtime / CLI -->
+    <PackageVersion Include="Microsoft.CrmSdk.CoreAssemblies" Version="9.0.2.59" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="System.ComponentModel.Annotations" Version="5.0.0" />
+    <PackageVersion Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.2.10" />
+    <PackageVersion Include="Spectre.Console" Version="0.49.1" />
+    <!-- Pins the patched System.Security.Cryptography.Xml over the vulnerable 8.0.2 pulled transitively by the
+         Dataverse client (advisories GHSA-37gx-xxp4-5rgx / GHSA-w3x6-4m5h-cxqf, NU1903). -->
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="8.0.3" />
+
+    <!-- Test stack (shared by every *.Tests project) -->
+    <PackageVersion Include="Moq" Version="4.20.72" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.5.7" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
+    <PackageVersion Include="coverlet.msbuild" Version="6.0.2" />
+  </ItemGroup>
+</Project>

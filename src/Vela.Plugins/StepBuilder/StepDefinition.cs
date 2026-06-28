@@ -1,0 +1,76 @@
+using Vela.Constants;
+
+namespace Vela.StepBuilder;
+
+/// <summary>
+/// Represents the complete configuration for a plugin step registration.
+/// Used for generating registration manifests and scripts.
+/// </summary>
+public sealed class StepDefinition
+{
+    /// <summary>The plugin type full name.</summary>
+    public string PluginTypeName { get; set; } = string.Empty;
+
+    /// <summary>The entity logical name.</summary>
+    public string EntityLogicalName { get; set; } = string.Empty;
+
+    /// <summary>The SDK message name (Create, Update, Delete, etc.).</summary>
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>The plugin execution stage.</summary>
+    public PluginStages Stage { get; set; }
+
+    /// <summary>The execution mode (sync or async).</summary>
+    public ExecutionMode Mode { get; set; }
+
+    /// <summary>The filtering attributes (triggers plugin only when these change).</summary>
+    public string[] FilteringAttributes { get; set; } = [];
+
+    /// <summary>The execution order for this step.</summary>
+    public int ExecutionOrder { get; set; } = 1;
+
+    /// <summary>Stable explicit key used to correlate this step across deployments.</summary>
+    public string StepKey { get; set; } = string.Empty;
+
+    /// <summary>A description for this step.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>The plugin method name to invoke for this step.</summary>
+    public string HandlerMethodName { get; set; } = string.Empty;
+
+    /// <summary>The impersonation source.</summary>
+    public ImpersonationSource ImpersonationSource { get; set; }
+
+    /// <summary>The supported deployment type.</summary>
+    public SupportedDeployment SupportedDeployment { get; set; }
+
+    /// <summary>The pre-image configurations.</summary>
+    public ImageDefinition[] PreImages { get; set; } = [];
+
+    /// <summary>The post-image configurations.</summary>
+    public ImageDefinition[] PostImages { get; set; } = [];
+
+    /// <summary>
+    /// Whether the step is enabled (active) once registered. Defaults to <c>true</c>; mark a step
+    /// disabled with <c>.Disabled()</c> to register it as a dormant kill-switch / phased rollout.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>The unsecure configuration string passed to the plugin constructor.</summary>
+    public string UnsecureConfig { get; set; } = string.Empty;
+
+    /// <summary>The secure configuration string passed to the plugin constructor.</summary>
+    public string SecureConfig { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Represents the configuration for a plugin image registration.
+/// </summary>
+public sealed class ImageDefinition
+{
+    /// <summary>The image alias name.</summary>
+    public string Alias { get; set; } = string.Empty;
+
+    /// <summary>The attributes to include in the image.</summary>
+    public string[] Attributes { get; set; } = [];
+}

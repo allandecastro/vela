@@ -1,0 +1,118 @@
+using System;
+using System.Diagnostics;
+using Vela.Context;
+using Vela.DI;
+using Vela.Retry;
+using Microsoft.Xrm.Sdk;
+
+namespace Vela.Plugin
+{
+    /// <summary>
+    /// Base Dataverse plugin implementation with standard pipeline safety and diagnostics.
+    /// </summary>
+    /// <remarks>
+    /// Initializes a new instance of the <see cref="PluginBase"/> class.
+    /// </remarks>
+    /// <param name="unsecureConfig">Unsecure JSON configuration.</param>
+    /// <param name="secureConfig">Secure JSON configuration.</param>
+    /// <param name="maxDepth">Depth guard threshold.</param>
+    public abstract class PluginBase(string unsecureConfig, string secureConfig, int maxDepth = 8) : IPlugin
+    {
+        /// <summary>
+        /// Gets unsecure configuration.
+        /// </summary>
+        protected string UnsecureConfig { get; } = unsecureConfig ?? string.Empty;
+
+        /// <summary>
+        /// Gets secure configuration.
+        /// </summary>
+        protected string SecureConfig { get; } = secureConfig ?? string.Empty;
+
+        /// <summary>
+        /// Gets max execution depth threshold.
+        /// </summary>
+        protected int MaxDepth { get; } = maxDepth < 1 ? 1 : maxDepth;
+
+        /// <summary>
+        /// Main plugin entry point.
+        /// </summary>
+        /// <param name="serviceProvider">Runtime service provider.</param>
+        public void Execute(IServiceProvider serviceProvider)
+        {
+            LocalPluginContext localContext = new LocalPluginContext(serviceProvider ?? throw new InvalidPluginExecutionException(nameof(serviceProvider)));
+            ConfigureServices(localContext.Resolver, localContext);
+
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            localContext.Trace(
+                "Executing {0}. Message={1}, Stage={2}, Mode={3}, Depth={4}",
+                GetType().FullName,
+                localContext.MessageName,
+                localContext.Stage,
+                localContext.Mode,
+                localContext.Depth);
+            localContext.TraceExecutionSnapshot("start");
+
+            try
+            {
+                EnforceDepth(localContext);
+                ExecuteDataversePlugin(localContext);
+                localContext.Trace("Execution completed in {0} ms.", stopwatch.ElapsedMilliseconds);
+                localContext.TraceExecutionSnapshot("success");
+            }
+            catch (InvalidPluginExecutionException)
+            {
+                localContext.TraceExecutionSnapshot("invalid-plugin-exception");
+                throw;
+            }
+            catch (PluginBusinessException businessException)
+            {
+                localContext.Trace("Business exception: {0}", businessException.Message);
+                localContext.TraceExecutionSnapshot("business-exception");
+                throw new InvalidPluginExecutionException(businessException.Message);
+            }
+            catch (Exception ex)
+            {
+                localContext.Trace("Unhandled exception: {0}", ex);
+                localContext.TraceExecutionSnapshot("unhandled-exception");
+                throw new InvalidPluginExecutionException("An unexpected error occurred while executing the plugin.", ex);
+            }
+        }
+
+        /// <summary>
+        /// Allows derived plugins to register custom services.
+        /// </summary>
+        /// <param name="services">Execution resolver.</param>
+        /// <param name="context">Execution context.</param>
+        protected virtual void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+        {
+        }
+
+        /// <summary>
+        /// Optional sandbox-safe retry wrapper for organization service operations.
+        /// </summary>
+        /// <typeparam name="T">Result type.</typeparam>
+        /// <param name="operation">Operation to execute.</param>
+        /// <returns>Operation result.</returns>
+        protected static T ExecuteWithRetry<T>(Func<T> operation)
+        {
+            return RetryPolicy.Execute(operation);
+        }
+
+        /// <summary>
+        /// Executes plugin business logic.
+        /// </summary>
+        /// <param name="ctx">Local plugin context.</param>
+        protected abstract void ExecuteDataversePlugin(ILocalPluginContext ctx);
+
+        private void EnforceDepth(ILocalPluginContext context)
+        {
+            if (context.Depth <= MaxDepth)
+            {
+                return;
+            }
+
+            context.Trace("Depth guard triggered. Depth={0}, MaxDepth={1}", context.Depth, MaxDepth);
+            throw new InvalidPluginExecutionException("Plugin execution stopped to prevent recursion.");
+        }
+    }
+}

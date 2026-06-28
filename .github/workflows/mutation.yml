@@ -1,0 +1,72 @@
+name: mutation
+
+# Mutation testing (Stryker.NET) is much slower than the unit suite, so it does NOT run on every PR — it runs
+# weekly and on demand. Each job mutates a correctness core and publishes the rendered report to the run
+# summary + an HTML artifact. NOTE: Stryker cannot build .NET Framework (net462) projects off Windows, so these
+# only run on windows-latest (the harness is net462; the CLI is net10).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1' # Mondays 04:00 UTC
+
+jobs:
+  diff-engine:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Stryker
+        run: dotnet tool install -g dotnet-stryker
+      - name: Mutation test — diff engine + normalizer
+        shell: bash
+        working-directory: tests/Vela.Cli.Tests
+        run: >
+          dotnet-stryker
+          --mutate "**/DiffEngine.cs" --mutate "**/DefinitionNormalizer.cs"
+          --reporter cleartext --reporter markdown --reporter html
+          --threshold-break 85
+      - name: Publish report to job summary
+        if: always()
+        shell: bash
+        run: cat tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-diff-engine
+          path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
+          if-no-files-found: ignore
+
+  harness:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Stryker
+        run: dotnet tool install -g dotnet-stryker
+      # The harness query core (operators, value comparison, FetchXML parsing). The break threshold is 0 until
+      # the first CI run establishes the baseline (Stryker can't build net462 off Windows, so it can't be
+      # measured locally) — raise --threshold-break to just below the reported score after the first green run.
+      - name: Mutation test — in-memory harness query core
+        shell: bash
+        working-directory: tests/Vela.Testing.Tests
+        run: >
+          dotnet-stryker
+          --mutate "**/InMemoryQueryEngine.cs" --mutate "**/FetchXmlParser.cs" --mutate "**/EntityValues.cs"
+          --reporter cleartext --reporter markdown --reporter html
+          --threshold-break 0
+      - name: Publish report to job summary
+        if: always()
+        shell: bash
+        run: cat tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-harness
+          path: tests/Vela.Testing.Tests/StrykerOutput/**/reports/mutation-report.html
+          if-no-files-found: ignore
