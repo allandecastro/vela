@@ -1,4 +1,4 @@
-name: mutation
+name: Mutation Testing
 
 # Mutation testing (Stryker.NET) is much slower than the unit suite, so it does NOT run on every PR — it runs
 # weekly and on demand. Each job mutates a correctness core and publishes the rendered report to the run
