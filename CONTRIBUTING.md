@@ -80,7 +80,8 @@ dotnet test .\tests\Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
 Release artifacts are produced by the release pipeline and should include only the framework packages
 (`Vela.Plugins`, `Vela.Testing`) and the shared CLI tool (`Vela.Cli`).
 
-The three packages are versioned **in lockstep** and follow [Semantic Versioning](https://semver.org/). Record
-every notable change in [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** as you merge it; cutting a release
-means renaming that section to the new `vX.Y.Z` (with a date) and tagging the commit. See the changelog's
-*Versioning policy* section for the pre-1.0 rules.
+The packages follow [Semantic Versioning](https://semver.org/) and ship as two independent release lines: the
+**framework** (`Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
+notable change in [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** as you merge it; cutting a release means
+renaming that section (with a date) and pushing the line's tag — `framework-vX.Y.Z` or `cli-vX.Y.Z` — which
+packs and publishes only that line. See the changelog's *Versioning policy* section for the pre-1.0 rules.

@@ -42,7 +42,7 @@ Vela is a framework (`Vela.Plugins`), a CLI (`Vela.Cli`, command `vela`) and a n
 | `Vela.Cli` (command `vela`) | .NET 10.0 | Plan/apply, scaffolding and package signing for plugins and Custom APIs. |
 | `Vela.Testing` | .NET Framework 4.6.2 | Test harness: fake execution context + in-memory `IOrganizationService`, fluent strongly-typed builder. |
 
-> **Status** — Pre-1.0 and actively developed. Build from source or consume via a local feed; the packages are **not yet published to NuGet.org**. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped and the versioning policy.
+> **Status** — Pre-1.0 and actively developed; **not yet on NuGet.org**, so build from source or consume via a local feed for now. Publishing is automated over two release lines — pushing a `framework-vX.Y.Z` tag publishes `Vela.Plugins` + `Vela.Testing`, and `cli-vX.Y.Z` publishes `Vela.Cli`. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped and the versioning policy.
 
 ## Table of contents
 
