@@ -5,6 +5,12 @@ on:
     tags:
       - "v*"
 
+permissions:
+  # id-token: OIDC token exchange for NuGet Trusted Publishing (no long-lived API key).
+  # contents: gh release create needs write access to publish the GitHub Release.
+  id-token: write
+  contents: write
+
 jobs:
   pack-and-publish:
     runs-on: windows-latest
@@ -14,29 +20,49 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Resolve version from tag
+        # Tag "v1.2.0" -> package version "1.2.0". This is the single source of truth for the release;
+        # the <Version> in each .csproj is only the local-dev default.
+        shell: pwsh
+        run: echo "VERSION=$('${{ github.ref_name }}'.TrimStart('v'))" >> $env:GITHUB_ENV
+
       - name: Restore
         run: dotnet restore Vela.sln
 
       - name: Build
-        run: dotnet build Vela.sln -c Release --no-restore
+        run: dotnet build Vela.sln -c Release --no-restore -p:Version=${{ env.VERSION }}
 
       - name: Test
         run: dotnet test Vela.sln -c Release --no-build
 
       - name: Pack plugins
-        run: dotnet pack .\src\Vela.Plugins\Vela.Plugins.csproj -c Release -o .\artifacts\plugins --no-build
+        run: dotnet pack .\src\Vela.Plugins\Vela.Plugins.csproj -c Release -o .\artifacts\plugins --no-build -p:Version=${{ env.VERSION }}
 
       - name: Pack cli
-        run: dotnet pack .\src\Vela.Cli\Vela.Cli.csproj -c Release -o .\artifacts\cli --no-build
+        run: dotnet pack .\src\Vela.Cli\Vela.Cli.csproj -c Release -o .\artifacts\cli --no-build -p:Version=${{ env.VERSION }}
 
       - name: Pack testing
-        run: dotnet pack .\src\Vela.Testing\Vela.Testing.csproj -c Release -o .\artifacts\testing --no-build
+        run: dotnet pack .\src\Vela.Testing\Vela.Testing.csproj -c Release -o .\artifacts\testing --no-build -p:Version=${{ env.VERSION }}
 
       - name: Publish artifacts
         uses: actions/upload-artifact@v4
         with:
           name: vela-release
           path: artifacts\**
+
+      - name: Authenticate to NuGet.org (Trusted Publishing)
+        # OIDC token exchange -> short-lived API key. No stored secret. Requires a Trusted Publishing policy
+        # on nuget.org bound to this repo + workflow. 'user' must match the policy's package-owner account.
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: AllanDeCastro
+
+      - name: Push to NuGet.org
+        # Pushes every .nupkg and its matching .snupkg symbol package, using the temporary key from the
+        # login step. --skip-duplicate keeps a re-run of the same tag idempotent.
+        shell: pwsh
+        run: dotnet nuget push "artifacts\**\*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create GitHub Release with packages
         env:
