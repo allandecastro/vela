@@ -27,6 +27,39 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   harness break threshold after the first run, and act on its survivors. Remaining diff-engine survivors are
   equivalent mutants (match-key field lookups consistent on both diff sides, functionally-identical literals).
 
+## Test harness (Vela.Testing)
+
+- **P3 — Derive numeric Range in `FakeEntityMetadata.From<TEntity>()`** — `vela models` already emits `[Range(lo,
+  hi)]`, and `From<T>()` knows each property's CLR type, so the min/max *can* be recovered (the earlier
+  "int/double round-trips ambiguously" was wrong — the property type, not the annotation's constructor, is the
+  source of truth). Remaining work is the per-metadata-type coercion: `IntegerAttributeMetadata.MinValue` is
+  `int?`, `DecimalAttributeMetadata` is `decimal?`, `Money`/`Double` are `double?` — read the `[Range]` values
+  and `SetSealed` them coerced to the attribute's value type. Modest; mirrors the `[StringLength]` → `MaxLength`
+  recovery already shipped.
+- **Required level + lookup Targets stay override-only (by design)** — not auto-derived, for two distinct
+  reasons. **Required:** Dataverse `RequiredLevel` has four values (None/Recommended/ApplicationRequired/
+  SystemRequired); `[Required]` is boolean, so emitting it from `vela models` would be lossy and drag in
+  validation semantics — keep it `On(...).Required(...)`-only. **Lookup Targets:** there is no standard
+  DataAnnotation for a lookup's target table, so carrying it would require a Vela-specific custom attribute on
+  the generated models, coupling them to the framework — which `vela models` deliberately avoids (models stay
+  dependency-light: partial classes + SDK + `System.ComponentModel.DataAnnotations` only). Revisit only if we
+  ever accept that coupling (Targets) or the lossiness (Required).
+- **P3 — Security model in the harness (roles, privileges, business units)** — XrmMockup can test security
+  roles / BU setup; Vela's harness deliberately has none (see LIMITATIONS). Reconsider a *minimal, opt-in*
+  privilege model so plugins that branch on access rights (`RetrievePrincipalAccess`/`CheckAccess`, or
+  privilege-denied paths) can be exercised. Must stay off by default — most plugin tests should not need it,
+  and a full security simulation is a large surface. Scope carefully before committing; currently listed under
+  "Won't do" — moving it here means it is up for reconsideration, not yet accepted.
+
+## Developer experience
+
+- **P2 — Remote debugging of cloud plugins** — let a developer step through a *real* Dataverse plugin
+  execution from their machine. XrmFramework does this via an Azure Relay round-trip (client + generated
+  proxy assembly). **We can likely do simpler:** explore a lighter mechanism (e.g. a relay/forwarder the
+  plugin calls into only when a debug flag/shared-variable is set, or capturing the execution context to
+  replay it locally against the in-memory harness) before committing to the full Azure Relay approach.
+  Keep it opt-in and off by default so it never affects production registrations.
+
 ## Project hygiene
 
 - **P2 — nuget.org publishing path** — the packages are not yet published; document/automate the release.
@@ -42,11 +75,12 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   has no such value), so nothing to implement.
 - CLI managing solutions, security roles, web resources, environment variables — out of scope (solution
   tooling's job).
-- **Security & identity model** — sharing (`GrantAccess`/`ModifyAccess`/`RevokeAccess`), access checks
-  (`RetrievePrincipalAccess`/`RetrieveAccessRights`/`CheckAccess`), column-level security (`IsSecured`/field
-  security profiles), security-role templates, and Entra ID group teams. The in-memory harness has no
-  privilege/security model on purpose, so these can't be meaningfully simulated and aren't plugin-authoring
-  concerns. (`AssignRequest` ownership is supported as a plain `ownerid` update.)
+- **Security & identity model** — sharing (`GrantAccess`/`ModifyAccess`/`RevokeAccess`), column-level security
+  (`IsSecured`/field security profiles), security-role templates, and Entra ID group teams. The in-memory harness
+  has no privilege/security model on purpose, so these can't be meaningfully simulated and aren't plugin-authoring
+  concerns. (`AssignRequest` ownership is supported as a plain `ownerid` update.) **Note:** a *minimal, opt-in*
+  privilege model for the harness (roles/privileges/BU + access checks) is now up for reconsideration — see the
+  P3 item under "Test harness" above. The broader sharing/FLS/role-template surface stays out of scope.
 - **`vela models`**: relationship navigation properties + `OrganizationServiceContext`/LINQ (lazy loading +
   change tracking don't fit the plugin sandbox — use `Query.For<T>()`), localized multi-language labels, and
   custom class/property casing. For those, use `pac modelbuilder`.
