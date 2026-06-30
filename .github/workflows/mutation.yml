@@ -25,6 +25,7 @@ jobs:
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
+          --solution ../../Vela.sln
           --mutate "**/DiffEngine.cs" --mutate "**/DefinitionNormalizer.cs"
           --reporter cleartext --reporter markdown --reporter html
           --break-at 85 --threshold-low 85 --threshold-high 90
@@ -60,6 +61,7 @@ jobs:
         working-directory: tests/Vela.Testing.Tests
         run: >
           dotnet-stryker
+          --solution ../../Vela.sln
           --mutate "**/InMemoryQueryEngine.cs" --mutate "**/FetchXmlParser.cs" --mutate "**/EntityValues.cs"
           --reporter cleartext --reporter markdown --reporter html
           --break-at 0
