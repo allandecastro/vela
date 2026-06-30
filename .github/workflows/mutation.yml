@@ -4,11 +4,10 @@ name: Mutation Testing
 # weekly and on demand. Each job mutates a correctness core and publishes the rendered report to the run summary
 # + an HTML artifact.
 #
-# Runner split:
-#   harness (net462)  -> self-hosted Windows runner. Stryker cannot build .NET Framework off Windows.
-#   diff-engine (net10) -> GitHub-hosted windows-latest. The self-hosted runner is arm64; Stryker's VsTest runs as
-#                          x64 and would need an x64 net10 test host, which isn't installed there ("did not report
-#                          any test"). The CLI is plain net10, so a hosted x64 runner runs it cleanly.
+# Both jobs run on the self-hosted Windows runner: GitHub-hosted runners are unavailable (the account's Actions
+# budget is exhausted), and the self-hosted runner is free. The harness (net462) needs Windows anyway. The
+# diff-engine (net10) only needs x64: the runner is arm64, but Stryker's VsTest launches an x64 test host, so that
+# job installs the x64 .NET runtime and points DOTNET_ROOT_X64 at it (otherwise: "did not report any test").
 on:
   workflow_dispatch:
   schedule:
@@ -16,12 +15,20 @@ on:
 
 jobs:
   diff-engine:
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Install x64 .NET runtime for the VsTest test host
+        # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime so it can start
+        # and expose it via DOTNET_ROOT_X64 (the arch-specific lookup the x64 apphost uses).
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\dotnet-x64"
+          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
+          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
         run: dotnet tool install -g dotnet-stryker || dotnet tool update -g dotnet-stryker
       # net10-only project: no --solution, so Stryker builds just the CLI test project (+ its referenced Vela.Cli)
