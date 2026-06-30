@@ -1,9 +1,13 @@
 name: Mutation Testing
 
 # Mutation testing (Stryker.NET) is much slower than the unit suite, so it does NOT run on every PR — it runs
-# weekly and on demand. Each job mutates a correctness core and publishes the rendered report to the run
-# summary + an HTML artifact. NOTE: Stryker cannot build .NET Framework (net462) projects off Windows, so these
-# only run on the self-hosted Windows runner (the harness is net462; the CLI is net10).
+# weekly and on demand. Each job mutates a correctness core and publishes the rendered report to the run summary
+# + an HTML artifact.
+#
+# Both jobs run on the self-hosted Windows runner: GitHub-hosted runners are unavailable (the account's Actions
+# budget is exhausted), and the self-hosted runner is free. The harness (net462) needs Windows anyway. The
+# diff-engine (net10) only needs x64: the runner is arm64, but Stryker's VsTest launches an x64 test host, so that
+# job installs the x64 .NET runtime and points DOTNET_ROOT_X64 at it (otherwise: "did not report any test").
 on:
   workflow_dispatch:
   schedule:
@@ -17,17 +21,25 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Install x64 .NET runtime for the VsTest test host
+        # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime so it can start
+        # and expose it via DOTNET_ROOT_X64 (the arch-specific lookup the x64 apphost uses).
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\dotnet-x64"
+          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
+          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
-        # Idempotent: the self-hosted runner persists the global tool between runs, so a plain
-        # `tool install` would fail on the second run once it is already present.
         run: dotnet tool install -g dotnet-stryker || dotnet tool update -g dotnet-stryker
+      # net10-only project: no --solution, so Stryker builds just the CLI test project (+ its referenced Vela.Cli)
+      # and never drags the net462 projects into the build.
       - name: Mutation test — diff engine + normalizer
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
           --mutate "**/DiffEngine.cs" --mutate "**/DefinitionNormalizer.cs"
           --reporter cleartext --reporter markdown --reporter html
-          --threshold-break 85
+          --break-at 85 --threshold-low 85 --threshold-high 90
       - name: Publish report to job summary
         if: always()
         run: >
@@ -35,6 +47,7 @@ jobs:
           | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
       - name: Upload HTML report
         if: always()
+        continue-on-error: true # artifact storage quota must not fail the mutation gate; the report is also in the summary
         uses: actions/upload-artifact@v4
         with:
           name: mutation-report-diff-engine
@@ -52,16 +65,17 @@ jobs:
         # Idempotent: the self-hosted runner persists the global tool between runs, so a plain
         # `tool install` would fail on the second run once it is already present.
         run: dotnet tool install -g dotnet-stryker || dotnet tool update -g dotnet-stryker
-      # The harness query core (operators, value comparison, FetchXML parsing). The break threshold is 0 until
-      # the first CI run establishes the baseline (Stryker can't build net462 off Windows, so it can't be
-      # measured locally) — raise --threshold-break to just below the reported score after the first green run.
+      # The harness query core (operators, value comparison, FetchXML parsing). --solution lets Stryker build the
+      # net462 projects through the solution. Baseline established at ~80.6%; --break-at is set ~2pts below it.
+      # Emulated net462 on the arm64 runner can vary slightly run-to-run, so loosen the break if it flakes red.
       - name: Mutation test — in-memory harness query core
         working-directory: tests/Vela.Testing.Tests
         run: >
           dotnet-stryker
+          --solution ../../Vela.sln
           --mutate "**/InMemoryQueryEngine.cs" --mutate "**/FetchXmlParser.cs" --mutate "**/EntityValues.cs"
           --reporter cleartext --reporter markdown --reporter html
-          --threshold-break 0
+          --break-at 78 --threshold-low 78 --threshold-high 85
       - name: Publish report to job summary
         if: always()
         run: >
@@ -69,6 +83,7 @@ jobs:
           | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
       - name: Upload HTML report
         if: always()
+        continue-on-error: true # artifact storage quota must not fail the mutation gate; the report is also in the summary
         uses: actions/upload-artifact@v4
         with:
           name: mutation-report-harness
