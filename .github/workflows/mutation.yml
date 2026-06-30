@@ -27,7 +27,7 @@ jobs:
           dotnet-stryker
           --mutate "**/DiffEngine.cs" --mutate "**/DefinitionNormalizer.cs"
           --reporter cleartext --reporter markdown --reporter html
-          --threshold-break 85
+          --break-at 85 --threshold-low 85 --threshold-high 90
       - name: Publish report to job summary
         if: always()
         run: >
@@ -54,14 +54,15 @@ jobs:
         run: dotnet tool install -g dotnet-stryker || dotnet tool update -g dotnet-stryker
       # The harness query core (operators, value comparison, FetchXML parsing). The break threshold is 0 until
       # the first CI run establishes the baseline (Stryker can't build net462 off Windows, so it can't be
-      # measured locally) — raise --threshold-break to just below the reported score after the first green run.
+      # measured locally) — raise --break-at to just below the reported score after the first green run (and
+      # bump --threshold-low/high to match, since Stryker requires break-at <= threshold-low).
       - name: Mutation test — in-memory harness query core
         working-directory: tests/Vela.Testing.Tests
         run: >
           dotnet-stryker
           --mutate "**/InMemoryQueryEngine.cs" --mutate "**/FetchXmlParser.cs" --mutate "**/EntityValues.cs"
           --reporter cleartext --reporter markdown --reporter html
-          --threshold-break 0
+          --break-at 0
       - name: Publish report to job summary
         if: always()
         run: >
