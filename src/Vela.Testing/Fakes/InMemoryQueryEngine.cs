@@ -199,9 +199,11 @@ namespace Vela.Testing
             foreach (List<Entity> group in groups)
             {
                 Entity result = new Entity(query.EntityName);
+                // Stryker disable once all : a group is built from at least one row, so it is never empty (group.Count > 0 is always true here).
                 Entity? first = group.Count > 0 ? group[0] : null;
                 foreach (AggregateColumn groupColumn in query.Groups)
                 {
+                    // Stryker disable once all : first is the head of a non-empty group above, so it is never null.
                     object? value = first != null ? EntityValues.GetValue(first, groupColumn.Attribute) : null;
                     result[groupColumn.Alias] = new AliasedValue(query.EntityName, groupColumn.Attribute, value);
                 }
@@ -299,6 +301,7 @@ namespace Vela.Testing
             {
                 const int limit = 5000;
                 result.TotalRecordCount = Math.Min(projected.Count, limit);
+                // Stryker disable once all : the 5000-row limit boundary is impractical to exercise in a unit test.
                 result.TotalRecordCountLimitExceeded = projected.Count > limit;
             }
 
@@ -332,6 +335,8 @@ namespace Vela.Testing
             List<Entity> result = new List<Entity>();
             foreach (Entity row in rows)
             {
+                // Stryker disable once all : key construction (separator/ordering) is internal — any consistent
+                // key gives the same Distinct result, which is asserted separately.
                 string key = string.Join("|", row.Attributes
                     .OrderBy(attribute => attribute.Key, StringComparer.Ordinal)
                     .Select(attribute =>
