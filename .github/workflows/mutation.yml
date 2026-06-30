@@ -66,9 +66,9 @@ jobs:
         # `tool install` would fail on the second run once it is already present.
         run: dotnet tool install -g dotnet-stryker || dotnet tool update -g dotnet-stryker
       # The harness query core (operators, value comparison, FetchXML parsing). --solution lets Stryker build the
-      # net462 projects through the solution. Measured at ~80.6% (stable across runs); --break-at is the project's
-      # 80% mutation floor. The margin is thin, so if a run dips below, kill a surviving mutant to lift the score
-      # rather than lowering the floor.
+      # net462 projects through the solution. Measured at ~83.3%; --break-at is ratcheted to 81 (~2pts below),
+      # comfortably above the project's 80% floor. The "List surviving mutants" step below dumps the remaining
+      # survivors so the next round can keep killing them rather than lowering the gate.
       - name: Mutation test — in-memory harness query core
         working-directory: tests/Vela.Testing.Tests
         run: >
@@ -76,7 +76,7 @@ jobs:
           --solution ../../Vela.sln
           --mutate "**/InMemoryQueryEngine.cs" --mutate "**/FetchXmlParser.cs" --mutate "**/EntityValues.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 80 --threshold-low 80 --threshold-high 85
+          --break-at 81 --threshold-low 81 --threshold-high 85
       - name: List surviving mutants
         if: always()
         shell: pwsh
