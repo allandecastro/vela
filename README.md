@@ -11,6 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License: MIT" />
   <a href="https://github.com/allandecastro/vela/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/allandecastro/vela/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+  <a href="https://github.com/allandecastro/vela/actions/workflows/mutation.yml"><img src="https://github.com/allandecastro/vela/actions/workflows/mutation.yml/badge.svg" alt="Mutation Testing" /></a>
   <a href="https://github.com/allandecastro/vela/actions/workflows/release.yml"><img src="https://github.com/allandecastro/vela/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
 </p>
 
