@@ -22,7 +22,6 @@ jobs:
         # `tool install` would fail on the second run once it is already present.
         run: dotnet tool install -g dotnet-stryker || dotnet tool update -g dotnet-stryker
       - name: Mutation test — diff engine + normalizer
-        shell: bash
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
@@ -31,8 +30,9 @@ jobs:
           --threshold-break 85
       - name: Publish report to job summary
         if: always()
-        shell: bash
-        run: cat tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md >> "$GITHUB_STEP_SUMMARY" || true
+        run: >
+          Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
+          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,7 +56,6 @@ jobs:
       # the first CI run establishes the baseline (Stryker can't build net462 off Windows, so it can't be
       # measured locally) — raise --threshold-break to just below the reported score after the first green run.
       - name: Mutation test — in-memory harness query core
-        shell: bash
         working-directory: tests/Vela.Testing.Tests
         run: >
           dotnet-stryker
@@ -65,8 +64,9 @@ jobs:
           --threshold-break 0
       - name: Publish report to job summary
         if: always()
-        shell: bash
-        run: cat tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.md >> "$GITHUB_STEP_SUMMARY" || true
+        run: >
+          Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
+          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
