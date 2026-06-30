@@ -13,6 +13,7 @@ jobs:
     # GitHub-hosted runner if they ever need validating).
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20 # build+test is fast; cap a hung run on the self-hosted (personal) machine
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
