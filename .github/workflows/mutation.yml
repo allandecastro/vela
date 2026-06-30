@@ -16,6 +16,7 @@ on:
 jobs:
   diff-engine:
     runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30 # a normal run is ~12min; cap a hung restore/build (the runner is a personal machine that can sleep)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -56,6 +57,7 @@ jobs:
 
   harness:
     runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30 # a normal run is ~12min; cap a hung restore/build (the runner is a personal machine that can sleep)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
