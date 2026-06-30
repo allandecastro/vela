@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="266" height="108" viewBox="0 0 266 108">
+<defs>
+
+<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22D3EE"></stop><stop offset="1" stop-color="#6366F1"></stop></linearGradient>
+</defs>
+<rect x="0" y="0" width="266" height="108" rx="20" fill="#fff"></rect>
+<rect x="9" y="9" width="248" height="90" rx="13" fill="#0B1120"></rect>
+<path d="M32 8 L54 50 L40 50 L32 32 L24 50 L10 50 Z" fill="url(#g)" transform="translate(32.52 23.62) scale(1.0476)"></path>
+<text font-family="Inter, &#39;Segoe UI&#39;, Helvetica, Arial, sans-serif" x="103" y="55" font-size="54" font-weight="700" fill="#fff" letter-spacing="2" text-anchor="start" dominant-baseline="central">vela</text>
+</svg>
