@@ -42,7 +42,10 @@ namespace Vela.Testing.Tests
                 set => SetAttributeValue("name", value);
             }
 
+            // [Range] is what `vela models` emits for a numeric column's MinValue/MaxValue. Whole-number bounds
+            // pick the int constructor (Integer here); fractional bounds pick the double one (Weight/Ratio below).
             [AttributeLogicalName("vela_quantity")]
+            [Range(1, 1000)]
             public int? Quantity
             {
                 get => GetAttributeValue<int?>("vela_quantity");
@@ -50,10 +53,27 @@ namespace Vela.Testing.Tests
             }
 
             [AttributeLogicalName("vela_total")]
+            [Range(0, 1000000)]
             public Money Total
             {
                 get => GetAttributeValue<Money>("vela_total");
                 set => SetAttributeValue("vela_total", value);
+            }
+
+            [AttributeLogicalName("vela_weight")]
+            [Range(0.5, 99.5)]
+            public decimal? Weight
+            {
+                get => GetAttributeValue<decimal?>("vela_weight");
+                set => SetAttributeValue("vela_weight", value);
+            }
+
+            [AttributeLogicalName("vela_ratio")]
+            [Range(-1.5, 1.5)]
+            public double? Ratio
+            {
+                get => GetAttributeValue<double?>("vela_ratio");
+                set => SetAttributeValue("vela_ratio", value);
             }
 
             [AttributeLogicalName("vela_isrush")]
@@ -154,6 +174,38 @@ namespace Vela.Testing.Tests
         {
             StringAttributeMetadata name = Assert.IsType<StringAttributeMetadata>(Attr(Derived(), "name"));
             Assert.Equal(160, name.MaxLength);
+        }
+
+        [Fact]
+        public void Recovers_integer_range_as_int_from_the_Range_annotation()
+        {
+            IntegerAttributeMetadata quantity = Assert.IsType<IntegerAttributeMetadata>(Attr(Derived(), "vela_quantity"));
+            Assert.Equal(1, quantity.MinValue);
+            Assert.Equal(1000, quantity.MaxValue);
+        }
+
+        [Fact]
+        public void Recovers_money_range_as_double_from_the_Range_annotation()
+        {
+            MoneyAttributeMetadata total = Assert.IsType<MoneyAttributeMetadata>(Attr(Derived(), "vela_total"));
+            Assert.Equal(0d, total.MinValue);
+            Assert.Equal(1000000d, total.MaxValue);
+        }
+
+        [Fact]
+        public void Recovers_decimal_range_as_decimal_from_the_Range_annotation()
+        {
+            DecimalAttributeMetadata weight = Assert.IsType<DecimalAttributeMetadata>(Attr(Derived(), "vela_weight"));
+            Assert.Equal(0.5m, weight.MinValue);
+            Assert.Equal(99.5m, weight.MaxValue);
+        }
+
+        [Fact]
+        public void Recovers_double_range_as_double_from_the_Range_annotation()
+        {
+            DoubleAttributeMetadata ratio = Assert.IsType<DoubleAttributeMetadata>(Attr(Derived(), "vela_ratio"));
+            Assert.Equal(-1.5d, ratio.MinValue);
+            Assert.Equal(1.5d, ratio.MaxValue);
         }
 
         [Fact]

@@ -39,10 +39,10 @@ namespace Vela.Testing
         /// each property carrying an <see cref="AttributeLogicalNameAttribute"/> becomes an attribute, its CLR
         /// type maps to an <see cref="AttributeTypeCode"/>, generated option-set enums become picklists, the
         /// conventional <c>{logicalname}id</c> column becomes the primary id, a <c>name</c> column becomes the
-        /// primary name, ownership is inferred from the presence of an <c>ownerid</c> column, and max length is
-        /// recovered from the generated <c>[StringLength]</c> annotation. This is the zero-connection,
-        /// no-hand-written path. It returns the same builder, so chain <c>On(...)</c> + the facet setters to
-        /// override anything the early-bound type cannot carry — required level, lookup targets, numeric range, a
+        /// primary name, ownership is inferred from the presence of an <c>ownerid</c> column, and max length and
+        /// numeric range are recovered from the generated <c>[StringLength]</c> / <c>[Range]</c> annotations. This
+        /// is the zero-connection, no-hand-written path. It returns the same builder, so chain <c>On(...)</c> + the
+        /// facet setters to override anything the early-bound type cannot carry — required level, lookup targets, a
         /// non-conventional primary-name column, or multi-select/file/image/partylist columns (which are skipped
         /// here because they have no faithful single mapping).
         /// </summary>
@@ -103,8 +103,8 @@ namespace Vela.Testing
                     }
                 }
 
-                // The generated property carries some facets as DataAnnotations ([StringLength] → max length);
-                // recover them onto the attribute we just added (now the selected one).
+                // The generated property carries some facets as DataAnnotations ([StringLength] → max length,
+                // [Range] → numeric min/max); recover them onto the attribute we just added (now the selected one).
                 ApplyDataAnnotations(meta, property);
             }
 
@@ -281,24 +281,57 @@ namespace Vela.Testing
         }
 
         // Recovers facets the generated property carries as System.ComponentModel.DataAnnotations onto the
-        // selected attribute: [StringLength] → max length. Read by attribute type name so Vela.Testing needs no
-        // DataAnnotations assembly reference. ([Range] is also emitted, but its int/double constructor is chosen
-        // by whether the value has decimals rather than the attribute's type, so it round-trips ambiguously and
-        // stays override-only.)
+        // selected attribute: [StringLength] → max length, [Range] → numeric min/max. Read by attribute type name
+        // so Vela.Testing needs no DataAnnotations assembly reference. The [Range] constructor (int vs double) the
+        // generator picks is incidental — the selected attribute's own value type is the source of truth, so the
+        // range is coerced to it (see SetRangeFromAnnotation).
         private static void ApplyDataAnnotations(FakeEntityMetadata meta, PropertyInfo property)
         {
             foreach (Attribute annotation in property.GetCustomAttributes())
             {
-                if (annotation.GetType().FullName != "System.ComponentModel.DataAnnotations.StringLengthAttribute")
-                {
-                    continue;
-                }
+                string? annotationType = annotation.GetType().FullName;
 
-                object? max = annotation.GetType().GetProperty("MaximumLength")?.GetValue(annotation);
-                if (max is int maxLength && maxLength > 0)
+                if (annotationType == "System.ComponentModel.DataAnnotations.StringLengthAttribute")
                 {
-                    meta.MaxLength(maxLength);
+                    object? max = annotation.GetType().GetProperty("MaximumLength")?.GetValue(annotation);
+                    if (max is int maxLength && maxLength > 0)
+                    {
+                        meta.MaxLength(maxLength);
+                    }
                 }
+                else if (annotationType == "System.ComponentModel.DataAnnotations.RangeAttribute")
+                {
+                    Type rangeType = annotation.GetType();
+                    object? min = rangeType.GetProperty("Minimum")?.GetValue(annotation);
+                    object? max = rangeType.GetProperty("Maximum")?.GetValue(annotation);
+                    if (min != null && max != null)
+                    {
+                        meta.SetRangeFromAnnotation(Convert.ToDouble(min), Convert.ToDouble(max));
+                    }
+                }
+            }
+        }
+
+        // [Range(lo, hi)] → the selected numeric attribute's MinValue/MaxValue, coerced to that attribute's value
+        // type (Integer → int, Decimal → decimal, Double/Money → double). Only those four types carry a Range
+        // (BigInt and the rest never get [Range] from vela models), so any other selected attribute is a no-op.
+        private void SetRangeFromAnnotation(double min, double max)
+        {
+            switch (Current)
+            {
+                case IntegerAttributeMetadata _:
+                    SetSealed(Current, "MinValue", (int)Math.Round(min));
+                    SetSealed(Current, "MaxValue", (int)Math.Round(max));
+                    break;
+                case DecimalAttributeMetadata _:
+                    SetSealed(Current, "MinValue", (decimal)min);
+                    SetSealed(Current, "MaxValue", (decimal)max);
+                    break;
+                case DoubleAttributeMetadata _:
+                case MoneyAttributeMetadata _:
+                    SetSealed(Current, "MinValue", min);
+                    SetSealed(Current, "MaxValue", max);
+                    break;
             }
         }
 

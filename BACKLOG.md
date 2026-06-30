@@ -8,16 +8,6 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Quality & maintainability
 
-- **Branch-coverage gates — at terminal point (was P1)** — CI enforces branch coverage (via `coverlet.msbuild`)
-  on the diff engine (**90%**, actual ~92%), the in-memory harness (**87%**, actual ~89%) and the plugin runtime
-  `Vela.Plugins` (**83%**, actual ~85%; line/method ~92%). The `Vela.Plugins` gate merges coverage from both
-  `Vela.Tests` and `Vela.Testing.Tests` (collect one to JSON, `MergeWith` the other, threshold the combined
-  result). All three are at their sensible terminal level — the practical, well-asserted branches are covered and
-  the gates are tightened to ~2 pts below actual. **Parked residual (P3, low ROI):** the last few points to 90%
-  branch on `Vela.Plugins` are a long tail of intricate/semi-unreachable paths — Custom API execution edge cases
-  (`CustomApiBase`), `LocalPluginContext` reflection (telemetry logger, bulk-image type variants), runtime
-  branches of `PluginContextExtensions`/`.Changes`, plus `EarlyBound` (~56%, internal). Only worth chasing if a
-  hard 90% is required; otherwise these would test for the number, not robustness.
 - **Mutation testing (Stryker.NET)** — **live via the weekly/on-demand `mutation.yml` workflow** (report in the
   run summary + HTML artifact). Diff engine (`DiffEngine` + `DefinitionNormalizer`) is at **~90%** mutation score
   (`--threshold-break 85`): the runs surfaced + fixed the unasserted diff ordering and pinned every normalized
@@ -29,13 +19,6 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Test harness (Vela.Testing)
 
-- **P3 — Derive numeric Range in `FakeEntityMetadata.From<TEntity>()`** — `vela models` already emits `[Range(lo,
-  hi)]`, and `From<T>()` knows each property's CLR type, so the min/max *can* be recovered (the earlier
-  "int/double round-trips ambiguously" was wrong — the property type, not the annotation's constructor, is the
-  source of truth). Remaining work is the per-metadata-type coercion: `IntegerAttributeMetadata.MinValue` is
-  `int?`, `DecimalAttributeMetadata` is `decimal?`, `Money`/`Double` are `double?` — read the `[Range]` values
-  and `SetSealed` them coerced to the attribute's value type. Modest; mirrors the `[StringLength]` → `MaxLength`
-  recovery already shipped.
 - **Required level + lookup Targets stay override-only (by design)** — not auto-derived, for two distinct
   reasons. **Required:** Dataverse `RequiredLevel` has four values (None/Recommended/ApplicationRequired/
   SystemRequired); `[Required]` is boolean, so emitting it from `vela models` would be lossy and drag in
