@@ -65,6 +65,21 @@ dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release \
 
 Thresholds are set just below current coverage to catch regressions without churn; raise them as coverage improves.
 
+### Quality gates
+
+Two gate families guard the correctness-critical cores, and both follow the same policy:
+
+- **Branch coverage** (`ci.yml`) — diff engine, in-memory harness, and the plugin runtime (`Vela.Plugins`).
+- **Mutation score** (`mutation.yml`, Stryker.NET) — the diff engine + normalizer, and the harness query core.
+
+**Policy — 80% floor, ratcheted above it.** Every gated core stays at **≥ 80%** on *both* metrics; `80` is a hard
+minimum, never to be lowered below. On top of that floor the enforced threshold is **ratcheted to just under the
+current measured value** (≈2 pts), so it catches regressions without flaking — and is tightened as the score rises.
+Branch coverage is the easier metric (currently ~85–92%); mutation score is stricter (a surviving mutant means a
+test passed even though the code was broken), so it sits lower (~80% harness, ~90% diff engine). Treat the gate as
+a *regression detector*, not a target to write tests for: if a run dips under the floor, **kill a surviving
+mutant** (or add the missing test) to lift the score rather than relaxing the gate.
+
 The tools tests include an **opt-in build smoke test** (`Generate_ThenDotnetBuild_Succeeds`) that packs
 `Vela.Plugins`, scaffolds a solution via `vela init`, and runs `dotnet build` on it — the only test that
 actually compiles the generated C#. It is skipped unless enabled (it restores/builds, so it needs the SDK
