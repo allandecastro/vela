@@ -30,14 +30,12 @@ jobs:
       # run if branch coverage drops below the threshold. Thresholds are set below current coverage so they
       # catch regressions without churn; raise them as coverage improves.
       - name: Coverage gate (branch) — diff engine
-        shell: bash
         run: >
           dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
           -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=90
           -p:Include="[Vela.Cli]Vela.Cli.DiffEngine%2c[Vela.Cli]Vela.Cli.DefinitionNormalizer"
       - name: Coverage gate (branch) — test harness
-        shell: bash
         run: >
           dotnet test tests/Vela.Testing.Tests/Vela.Testing.Tests.csproj -c Release
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
@@ -48,16 +46,14 @@ jobs:
       # coverage is the merge of the two: collect the first run to JSON, then merge the second over it and
       # apply the branch threshold to the combined result.
       - name: Coverage (collect) — plugin runtime
-        shell: bash
         run: >
           dotnet test tests/Vela.Tests/Vela.Tests.csproj -c Release
           -p:CollectCoverage=true -p:CoverletOutputFormat=json
           -p:Include="[Vela.Plugins]*" -p:CoverletOutput=./plugins-coverage.json
       - name: Coverage gate (branch) — plugin runtime
-        shell: bash
         run: >
           dotnet test tests/Vela.Testing.Tests/Vela.Testing.Tests.csproj -c Release
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
-          -p:MergeWith="$(pwd)/tests/Vela.Tests/plugins-coverage.json"
+          -p:MergeWith="${{ github.workspace }}/tests/Vela.Tests/plugins-coverage.json"
           -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=83
           -p:Include="[Vela.Plugins]*" -p:CoverletOutput=./plugins-merged.xml
