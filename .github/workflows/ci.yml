@@ -7,7 +7,12 @@ on:
 
 jobs:
   build-test-pack:
-    runs-on: windows-latest
+    # Self-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run there.
+    # Security guard: never run untrusted fork-PR code on the self-hosted runner. Only same-repo branches
+    # (head repo == base repo) and pushes to main reach it; fork PRs are skipped (run them on a
+    # GitHub-hosted runner if they ever need validating).
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

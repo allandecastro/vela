@@ -17,7 +17,8 @@ permissions:
 
 jobs:
   pack-and-publish:
-    runs-on: windows-latest
+    # Self-hosted Windows runner: net462 (the harness) only builds on Windows, so packing must run there.
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
