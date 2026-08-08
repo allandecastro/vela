@@ -542,62 +542,30 @@ namespace Vela.Testing
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
-            InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId);
-            EntityCollection result;
-            bool aggregate = false;
+            // With security on, the read filter is applied inside the engine to the primary rows BEFORE paging, so
+            // pages are drawn from the readable set (not trimmed afterwards). Aggregates are not filtered yet.
+            InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId, ReadFilter());
             switch (query)
             {
                 case QueryExpression qe:
-                    // A grouped/aggregate QueryExpression carries column aggregate expressions instead of plain columns.
-                    aggregate = qe.ColumnSet?.AttributeExpressions?.Count > 0;
-                    result = engine.ExecuteQueryExpression(qe);
-                    break;
+                    return engine.ExecuteQueryExpression(qe);
                 case QueryByAttribute qba:
-                    result = engine.ExecuteQueryByAttribute(qba);
-                    break;
+                    return engine.ExecuteQueryByAttribute(qba);
                 case FetchExpression fetch:
-                    aggregate = FetchXmlParser.IsAggregate(fetch.Query);
-                    result = aggregate
+                    return FetchXmlParser.IsAggregate(fetch.Query)
                         ? engine.ExecuteAggregate(FetchXmlParser.ParseAggregate(fetch.Query))
                         : engine.ExecuteQueryExpression(FetchXmlParser.Parse(fetch.Query));
-                    break;
                 default:
                     throw new NotSupportedException(
                         $"InMemoryOrganizationService supports QueryExpression, QueryByAttribute and FetchExpression. " +
                         $"{query.GetType().Name} is not supported yet.");
             }
-
-            return FilterReadable(result, aggregate);
         }
 
-        // With security on, RetrieveMultiple returns only records the current user may read — like the platform,
-        // which silently omits records the caller cannot see rather than faulting. Off: the collection is returned
-        // unchanged.
-        private EntityCollection FilterReadable(EntityCollection collection, bool aggregate)
-        {
-            // Aggregate rows are computed over the whole store and carry no owner to check; security-filtering the
-            // underlying records before aggregation is out of scope, so aggregate results are returned as-is.
-            if (_security == null || aggregate)
-            {
-                return collection;
-            }
-
-            List<Entity> removed = collection.Entities
-                .Where(e => !_security.IsGranted(_currentUserId, e.LogicalName, Privilege.Read, BackingRecord(e)))
-                .ToList();
-            foreach (Entity entity in removed)
-            {
-                collection.Entities.Remove(entity);
-            }
-
-            return collection;
-        }
-
-        // Read access is decided from the stored record's owner columns, not the projected result, so a query that
-        // does not select ownerid/owningbusinessunit still filters correctly. Falls back to the row itself if the
-        // record is not in the store (e.g. link-entity synthetic rows).
-        private Entity BackingRecord(Entity row) =>
-            Table(row.LogicalName).TryGetValue(row.Id, out Entity? stored) ? stored : row;
+        // The predicate the query engine uses to keep only rows the current user may read (null = no security).
+        // It reads the stored record's own owner columns, so filtering is correct regardless of the query's ColumnSet.
+        private Func<Entity, bool>? ReadFilter() =>
+            _security == null ? null : row => _security.IsGranted(_currentUserId, row.LogicalName, Privilege.Read, row);
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {

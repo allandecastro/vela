@@ -109,6 +109,37 @@ namespace Vela.Testing.Tests
             Assert.Equal(aliceRecord, Assert.Single(visible.Entities).Id);
         }
 
+        [Fact]
+        public void Read_filtering_happens_before_paging()
+        {
+            Entity Named(Guid owner, string name) => new Entity("account", Guid.NewGuid())
+            {
+                ["ownerid"] = new EntityReference("systemuser", owner),
+                ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+                ["name"] = name,
+            };
+
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .User(Alice, SalesBu, "author"))
+                // Bob's records sort first by name; a naive page-then-filter would return an empty first page.
+                .Seed(Named(Bob, "a1"), Named(Bob, "a2"), Named(Alice, "b1"), Named(Alice, "b2"));
+
+            EntityCollection page = svc.RetrieveMultiple(new QueryExpression("account")
+            {
+                ColumnSet = new ColumnSet(true),
+                Orders = { new OrderExpression("name", OrderType.Ascending) },
+                PageInfo = new PagingInfo { Count = 2, PageNumber = 1 },
+            });
+
+            // The page is drawn from Alice's readable records, not filtered after paging over Bob's.
+            Assert.Equal(2, page.Entities.Count);
+            Assert.All(page.Entities, e => Assert.Equal(Alice, e.GetAttributeValue<EntityReference>("ownerid").Id));
+        }
+
         // --- Read depth: BusinessUnit -------------------------------------------------------------------
 
         [Fact]
