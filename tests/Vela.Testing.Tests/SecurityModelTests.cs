@@ -830,5 +830,54 @@ namespace Vela.Testing.Tests
                 "account", accountId, new Relationship("account_contacts"),
                 new EntityReferenceCollection { new EntityReference("contact", contactId) }));
         }
+
+        // --- G1: setting a lookup needs Append (on the record) + AppendTo (on the target) ----------------
+
+        private static Entity ContactOwnedBy(Guid id, Guid owner) => new Entity("contact", id)
+        {
+            ["ownerid"] = new EntityReference("systemuser", owner),
+            ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+        };
+
+        [Fact]
+        public void Setting_a_lookup_requires_append_and_appendto()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("editor", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write)
+                        .Grant("contact", Privilege.Read, AccessLevel.Organization))
+                    .User(Alice, SalesBu, "editor")) // can write the account but has no Append/AppendTo
+                .Seed(AccountOwnedBy(account, Alice, SalesBu), ContactOwnedBy(contact, Alice));
+
+            // Pointing account.primarycontactid at the contact relates the two records.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Update(
+                new Entity("account", account) { ["primarycontactid"] = new EntityReference("contact", contact) }));
+        }
+
+        [Fact]
+        public void Setting_a_lookup_succeeds_with_append_and_appendto()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("editor", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write, Privilege.Append)
+                        .Grant("contact", AccessLevel.Organization, Privilege.Read, Privilege.AppendTo))
+                    .User(Alice, SalesBu, "editor"))
+                .Seed(AccountOwnedBy(account, Alice, SalesBu), ContactOwnedBy(contact, Alice));
+
+            svc.Update(new Entity("account", account) { ["primarycontactid"] = new EntityReference("contact", contact) });
+
+            Assert.Equal(contact, svc.Retrieve("account", account, new ColumnSet(true))
+                .GetAttributeValue<EntityReference>("primarycontactid").Id);
+        }
     }
 }

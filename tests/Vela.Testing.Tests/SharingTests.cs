@@ -269,6 +269,31 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void GrantAccess_cannot_grant_more_rights_than_the_sharer_holds()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Sharer)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("sharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share)) // no Write
+                    .User(Sharer, SalesBu, "sharer")
+                    .User(Alice, SalesBu))
+                .Seed(AccountOwnedBy(record, Sharer));
+
+            // The sharer asks to grant Read+Write, but holds no Write, so Write is clamped out of the grant.
+            svc.Execute(new GrantAccessRequest
+            {
+                Target = Account(record),
+                PrincipalAccess = new PrincipalAccess { Principal = User(Alice), AccessMask = AccessRights.ReadAccess | AccessRights.WriteAccess },
+            });
+
+            AccessRights alice = AliceAccess(svc, record);
+            Assert.True(alice.HasFlag(AccessRights.ReadAccess));
+            Assert.False(alice.HasFlag(AccessRights.WriteAccess));
+        }
+
+        [Fact]
         public void RetrievePrincipalAccess_on_a_missing_record_reports_no_access()
         {
             Guid missing = Guid.NewGuid();

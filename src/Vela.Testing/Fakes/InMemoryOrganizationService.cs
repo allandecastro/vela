@@ -352,6 +352,7 @@ namespace Vela.Testing
 
             EnsureWritable(entity.LogicalName);
             DemandCreate(entity);
+            DemandLookupAppends(entity, null);
 
             Entity stored = EntityValues.Clone(entity);
             if (stored.Id == Guid.Empty)
@@ -406,6 +407,8 @@ namespace Vela.Testing
             {
                 DemandAccess(entity.LogicalName, Privilege.Assign, stored);
             }
+
+            DemandLookupAppends(entity, stored);
 
             // Validate the would-be merged record before committing so a duplicate-key throw leaves the store intact.
             Entity candidate = EntityValues.Clone(stored);
@@ -521,6 +524,35 @@ namespace Vela.Testing
         private Entity? StoredOrNull(string entityName, Guid id) =>
             Table(entityName).TryGetValue(id, out Entity? stored) ? stored : null;
 
+        // System owner/audit references are not relationship lookups: ownership is governed by Assign, and the
+        // audit columns are server-set — none of them go through Append/AppendTo.
+        private static readonly HashSet<string> SystemReferenceColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            SystemFieldApplier.OwnerId, SystemFieldApplier.OwningUser, SystemFieldApplier.OwningTeam,
+            SystemFieldApplier.OwningBusinessUnit, SystemFieldApplier.CreatedBy, SystemFieldApplier.ModifiedBy,
+            SystemFieldApplier.OrganizationId,
+        };
+
+        // Setting a lookup relates two records, which needs Append on the record carrying the lookup and AppendTo on
+        // the lookup's target record (Dataverse). No-op when security is off. <paramref name="self"/> is the record
+        // carrying the lookup (the stored row on Update; null on Create, where it does not exist yet).
+        private void DemandLookupAppends(Entity entity, Entity? self)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, object> attribute in entity.Attributes)
+            {
+                if (attribute.Value is EntityReference target && !SystemReferenceColumns.Contains(attribute.Key))
+                {
+                    DemandAccess(entity.LogicalName, Privilege.Append, self);
+                    DemandAccess(target.LogicalName, Privilege.AppendTo, StoredOrNull(target.LogicalName, target.Id));
+                }
+            }
+        }
+
         // The effective rights a principal holds on a record (roles + ownership + sharing). With no security model
         // everyone has full record access, so every shareable right is reported.
         private AccessRights EffectiveAccess(EntityReference principal, EntityReference target)
@@ -539,6 +571,20 @@ namespace Vela.Testing
             }
 
             return _security.EffectiveAccess(principal.Id, target.LogicalName, stored);
+        }
+
+        // A user can only share rights they themselves hold on the record (Dataverse: "you can't give rights you
+        // don't have"), so a runtime GrantAccess/ModifyAccess is clamped to the sharer's effective rights. Off: no clamp.
+        private PrincipalAccess ClampToSharerRights(EntityReference target, PrincipalAccess access)
+        {
+            if (_security == null)
+            {
+                return access;
+            }
+
+            Entity record = StoredOrNull(target.LogicalName, target.Id) ?? new Entity(target.LogicalName, target.Id);
+            AccessRights sharerRights = _security.EffectiveAccess(_currentUserId, target.LogicalName, record);
+            return new PrincipalAccess { Principal = access.Principal, AccessMask = access.AccessMask & sharerRights };
         }
 
         private long NextVersion() => ++_version;
@@ -710,14 +756,14 @@ namespace Vela.Testing
                 case GrantAccessRequest grant:
                 {
                     DemandAccess(grant.Target.LogicalName, Privilege.Share, StoredOrNull(grant.Target.LogicalName, grant.Target.Id));
-                    _sharing.Grant(grant.Target, grant.PrincipalAccess);
+                    _sharing.Grant(grant.Target, ClampToSharerRights(grant.Target, grant.PrincipalAccess));
                     return new GrantAccessResponse();
                 }
 
                 case ModifyAccessRequest modify:
                 {
                     DemandAccess(modify.Target.LogicalName, Privilege.Share, StoredOrNull(modify.Target.LogicalName, modify.Target.Id));
-                    _sharing.Modify(modify.Target, modify.PrincipalAccess);
+                    _sharing.Modify(modify.Target, ClampToSharerRights(modify.Target, modify.PrincipalAccess));
                     return new ModifyAccessResponse();
                 }
 
