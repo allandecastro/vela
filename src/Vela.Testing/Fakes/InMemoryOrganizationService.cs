@@ -361,7 +361,11 @@ namespace Vela.Testing
             return Project(stored, columnSet);
         }
 
-        public void Update(Entity entity)
+        public void Update(Entity entity) => UpdateCore(entity, Privilege.Write);
+
+        // Shared by Update (needs Write) and Assign (needs Assign): both merge attributes onto the stored record,
+        // differing only in the privilege the caller must hold.
+        private void UpdateCore(Entity entity, Privilege privilege)
         {
             if (entity == null)
             {
@@ -374,7 +378,7 @@ namespace Vela.Testing
                 throw new InvalidOperationException($"{entity.LogicalName} with id {entity.Id} does not exist in the in-memory store.");
             }
 
-            DemandAccess(entity.LogicalName, Privilege.Write, stored);
+            DemandAccess(entity.LogicalName, privilege, stored);
 
             // Validate the would-be merged record before committing so a duplicate-key throw leaves the store intact.
             Entity candidate = EntityValues.Clone(stored);
@@ -415,6 +419,25 @@ namespace Vela.Testing
         // Enforces a privilege for the current user when security is configured; a no-op otherwise (default-off).
         private void DemandAccess(string entityName, Privilege privilege, Entity? record) =>
             _security?.Demand(_currentUserId, entityName, privilege, record);
+
+        // Relating records needs AppendTo on the record being related to and Append on each record related to it,
+        // mirroring the platform. Off (or nothing configured) is a no-op.
+        private void DemandAssociationAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            DemandAccess(entityName, Privilege.AppendTo, StoredOrNull(entityName, entityId));
+            foreach (EntityReference related in relatedEntities)
+            {
+                DemandAccess(related.LogicalName, Privilege.Append, StoredOrNull(related.LogicalName, related.Id));
+            }
+        }
+
+        private Entity? StoredOrNull(string entityName, Guid id) =>
+            Table(entityName).TryGetValue(id, out Entity? stored) ? stored : null;
 
         private long NextVersion() => ++_version;
 
@@ -555,7 +578,8 @@ namespace Vela.Testing
                 case AssignRequest assign:
                 {
                     // Modern Dataverse models assignment as an ownerid Update, which re-derives the owning columns.
-                    Update(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee });
+                    // The privilege required is Assign (not Write), so it is demanded explicitly here.
+                    UpdateCore(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee }, Privilege.Assign);
                     return new AssignResponse();
                 }
 
@@ -778,6 +802,7 @@ namespace Vela.Testing
 
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
+            DemandAssociationAccess(entityName, entityId, relatedEntities);
             RelationshipRegistry.ManyToMany rel = ResolveManyToMany(relationship.SchemaName);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
@@ -808,6 +833,7 @@ namespace Vela.Testing
         /// </summary>
         public void Disassociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
+            DemandAssociationAccess(entityName, entityId, relatedEntities);
             RelationshipRegistry.ManyToMany rel = ResolveManyToMany(relationship.SchemaName);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);

@@ -560,5 +560,114 @@ namespace Vela.Testing.Tests
 
             Assert.Contains(SalesTeam.ToString(), ex.Message);
         }
+
+        // --- Assign requires the Assign privilege, not Write ---------------------------------------------
+
+        [Fact]
+        public void Assign_requires_the_assign_privilege_not_write()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("editor", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write))
+                    .User(Alice, SalesBu, "editor")) // has Write, not Assign
+                .Seed(AccountOwnedBy(record, Bob, SalesBu));
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Execute(new AssignRequest
+            {
+                Target = new EntityReference("account", record),
+                Assignee = new EntityReference("systemuser", Alice),
+            }));
+        }
+
+        [Fact]
+        public void Assign_succeeds_with_the_assign_privilege()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("assigner", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Assign))
+                    .User(Alice, SalesBu, "assigner"))
+                .Seed(AccountOwnedBy(record, Bob, SalesBu));
+
+            svc.Execute(new AssignRequest
+            {
+                Target = new EntityReference("account", record),
+                Assignee = new EntityReference("systemuser", Alice),
+            });
+
+            Assert.Equal(Alice, Assert.Single(svc.GetAll("account")).GetAttributeValue<EntityReference>("ownerid").Id);
+        }
+
+        // --- Associate / Disassociate need Append (related) + AppendTo (primary) -------------------------
+
+        private static InMemoryOrganizationService WithAccountContactM2M(Guid accountId, Guid contactId, Action<SecurityConfiguration> security) =>
+            new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid")
+                .WithSecurity(security)
+                .Seed(
+                    AccountOwnedBy(accountId, Alice, SalesBu),
+                    new Entity("contact", contactId)
+                    {
+                        ["ownerid"] = new EntityReference("systemuser", Alice),
+                        ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+                    });
+
+        [Fact]
+        public void Associate_is_denied_without_append_and_appendto()
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, s => s
+                .BusinessUnit(SalesBu)
+                .Role("reader", r => r
+                    .Grant("account", Privilege.Read, AccessLevel.Organization)
+                    .Grant("contact", Privilege.Read, AccessLevel.Organization))
+                .User(Alice, SalesBu, "reader"));
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Associate(
+                "account", accountId, new Relationship("account_contacts"),
+                new EntityReferenceCollection { new EntityReference("contact", contactId) }));
+        }
+
+        [Fact]
+        public void Associate_succeeds_with_append_and_appendto()
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, s => s
+                .BusinessUnit(SalesBu)
+                .Role("linker", r => r
+                    .Grant("account", Privilege.AppendTo, AccessLevel.Organization)
+                    .Grant("contact", Privilege.Append, AccessLevel.Organization))
+                .User(Alice, SalesBu, "linker"));
+
+            svc.Associate("account", accountId, new Relationship("account_contacts"),
+                new EntityReferenceCollection { new EntityReference("contact", contactId) });
+
+            Assert.Single(svc.GetAll("account_contact"));
+        }
+
+        [Fact]
+        public void Disassociate_is_denied_without_append_and_appendto()
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, s => s
+                .BusinessUnit(SalesBu)
+                .Role("reader", r => r
+                    .Grant("account", Privilege.Read, AccessLevel.Organization)
+                    .Grant("contact", Privilege.Read, AccessLevel.Organization))
+                .User(Alice, SalesBu, "reader"));
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Disassociate(
+                "account", accountId, new Relationship("account_contacts"),
+                new EntityReferenceCollection { new EntityReference("contact", contactId) }));
+        }
     }
 }
