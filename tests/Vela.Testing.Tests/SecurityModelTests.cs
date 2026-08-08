@@ -662,13 +662,55 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("account", Privilege.Create, AccessLevel.User))
-                    .User(Alice, SalesBu, "author")); // Create but not Assign
+                    .BusinessUnit(OtherBu)
+                    .Role("author", r => r.Grant("account", Privilege.Create, AccessLevel.Organization)) // depth covers any owner
+                    .User(Alice, SalesBu, "author")   // ...but no Assign
+                    .User(Bob, OtherBu));
 
             svc.Create(new Entity("account")); // owned by the caller: fine
 
+            // Create depth is satisfied, so this isolates the missing Assign privilege.
             Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+        }
+
+        [Fact]
+        public void Create_depth_restricts_the_new_records_owner_scope()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(OtherBu)
+                    // User-level Create only covers records Alice will own; Assign is present so this isolates depth.
+                    .Role("author", r => r
+                        .Grant("account", Privilege.Create, AccessLevel.User)
+                        .Grant("account", Privilege.Assign, AccessLevel.Organization))
+                    .User(Alice, SalesBu, "author")
+                    .User(Bob, OtherBu));
+
+            svc.Create(new Entity("account")); // Alice's own: User-level Create covers it
+
+            // Bob is in another BU; a User-level Create does not reach a record that will be owned by him.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+        }
+
+        [Fact]
+        public void Create_with_organization_depth_can_create_for_another_owner()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(OtherBu)
+                    .Role("admin", r => r.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Assign))
+                    .User(Alice, SalesBu, "admin")
+                    .User(Bob, OtherBu));
+
+            Guid id = svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) });
+
+            Assert.NotEqual(Guid.Empty, id);
         }
 
         [Fact]

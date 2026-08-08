@@ -351,16 +351,7 @@ namespace Vela.Testing
             }
 
             EnsureWritable(entity.LogicalName);
-            DemandAccess(entity.LogicalName, Privilege.Create, null);
-
-            // Creating a record owned by someone other than the caller (another user or a team) is a create plus an
-            // assignment, so it also needs the Assign privilege — matching Dataverse.
-            if (entity.Contains(SystemFieldApplier.OwnerId) &&
-                entity[SystemFieldApplier.OwnerId] is EntityReference owner &&
-                !(string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId))
-            {
-                DemandAccess(entity.LogicalName, Privilege.Assign, null);
-            }
+            DemandCreate(entity);
 
             Entity stored = EntityValues.Clone(entity);
             if (stored.Id == Guid.Empty)
@@ -478,6 +469,38 @@ namespace Vela.Testing
         // Enforces a privilege for the current user when security is configured; a no-op otherwise (default-off).
         private void DemandAccess(string entityName, Privilege privilege, Entity? record) =>
             _security?.Demand(_currentUserId, entityName, privilege, record);
+
+        // Create is checked at depth against the record's PROSPECTIVE owner/BU, exactly like Read/Write/Delete are
+        // checked against an existing record — so a User-level Create only covers records the caller will own, a
+        // BusinessUnit-level Create covers the caller's BU, etc. Creating for another principal is also an
+        // assignment, so it additionally needs Assign. No-op when security is off.
+        private void DemandCreate(Entity entity)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            EntityReference owner =
+                entity.Contains(SystemFieldApplier.OwnerId) && entity[SystemFieldApplier.OwnerId] is EntityReference explicitOwner
+                    ? explicitOwner
+                    : new EntityReference("systemuser", _currentUserId);
+
+            Entity prospective = new Entity(entity.LogicalName) { [SystemFieldApplier.OwnerId] = owner };
+            Guid ownerBusinessUnit = _security.BusinessUnitOfPrincipal(owner);
+            if (ownerBusinessUnit != Guid.Empty)
+            {
+                prospective[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", ownerBusinessUnit);
+            }
+
+            _security.Demand(_currentUserId, entity.LogicalName, Privilege.Create, prospective);
+
+            bool ownedByCaller = string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId;
+            if (!ownedByCaller)
+            {
+                _security.Demand(_currentUserId, entity.LogicalName, Privilege.Assign, null);
+            }
+        }
 
         // Relating records needs AppendTo on the record being related to and Append on each record related to it,
         // mirroring the platform. Off (or nothing configured) is a no-op.
