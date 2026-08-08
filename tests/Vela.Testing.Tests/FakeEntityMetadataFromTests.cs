@@ -18,6 +18,25 @@ namespace Vela.Testing.Tests
             Closed = 7,
         }
 
+        // Mirror the facet attributes `vela models` emits for what no standard annotation expresses. In real output
+        // these live in the generated namespace; From<T>() matches them by simple type name, so a test-local copy
+        // exercises the same recovery path.
+        [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
+        public sealed class RequiredLevelAttribute : Attribute
+        {
+            public RequiredLevelAttribute(AttributeRequiredLevel level) => this.Level = level;
+
+            public AttributeRequiredLevel Level { get; }
+        }
+
+        [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
+        public sealed class LookupTargetsAttribute : Attribute
+        {
+            public LookupTargetsAttribute(params string[] targets) => this.Targets = targets ?? Array.Empty<string>();
+
+            public string[] Targets { get; }
+        }
+
         // Mirrors how `vela models` emits an early-bound table: [EntityLogicalName] on the class, every column a
         // property carrying [AttributeLogicalName], picklists as nullable generated enums, lookups as
         // EntityReference, money as Money, partylists as EntityCollection.
@@ -33,9 +52,11 @@ namespace Vela.Testing.Tests
                 set => SetAttributeValue("vela_orderid", value);
             }
 
-            // [StringLength] is what `vela models` emits for a String column's MaxLength.
+            // [StringLength] is what `vela models` emits for a String column's MaxLength; [RequiredLevel] preserves
+            // the full four-value required level.
             [AttributeLogicalName("name")]
             [StringLength(160)]
+            [RequiredLevel(AttributeRequiredLevel.ApplicationRequired)]
             public string Name
             {
                 get => GetAttributeValue<string>("name");
@@ -90,7 +111,9 @@ namespace Vela.Testing.Tests
                 set => SetAttributeValue("vela_due", value);
             }
 
+            // [LookupTargets] carries a Customer/polymorphic lookup's several target tables.
             [AttributeLogicalName("vela_customerid")]
+            [LookupTargets("account", "contact")]
             public EntityReference CustomerId
             {
                 get => GetAttributeValue<EntityReference>("vela_customerid");
@@ -206,6 +229,21 @@ namespace Vela.Testing.Tests
             DoubleAttributeMetadata ratio = Assert.IsType<DoubleAttributeMetadata>(Attr(Derived(), "vela_ratio"));
             Assert.Equal(-1.5d, ratio.MinValue);
             Assert.Equal(1.5d, ratio.MaxValue);
+        }
+
+        [Fact]
+        public void Recovers_required_level_from_the_RequiredLevel_annotation()
+        {
+            // The full four-value level round-trips — not a lossy boolean.
+            StringAttributeMetadata name = Assert.IsType<StringAttributeMetadata>(Attr(Derived(), "name"));
+            Assert.Equal(AttributeRequiredLevel.ApplicationRequired, name.RequiredLevel.Value);
+        }
+
+        [Fact]
+        public void Recovers_lookup_targets_from_the_LookupTargets_annotation()
+        {
+            LookupAttributeMetadata customer = Assert.IsType<LookupAttributeMetadata>(Attr(Derived(), "vela_customerid"));
+            Assert.Equal(new[] { "account", "contact" }, customer.Targets);
         }
 
         [Fact]

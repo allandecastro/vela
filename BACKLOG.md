@@ -10,23 +10,16 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 - **Mutation testing (Stryker.NET)** — **live via the weekly/on-demand `mutation.yml` workflow** (report in the
   run summary + HTML artifact). Diff engine (`DiffEngine` + `DefinitionNormalizer`) is at **~90%** mutation score
-  (`--threshold-break 85`): the runs surfaced + fixed the unasserted diff ordering and pinned every normalized
+  (`--break-at 85`): the runs surfaced + fixed the unasserted diff ordering and pinned every normalized
   field value. A second job mutates the **in-memory harness query core** (`InMemoryQueryEngine`, `FetchXmlParser`,
-  `EntityValues`) — `--threshold-break 0` until the first CI run sets the baseline (Stryker can't build net462 off
-  Windows, so the harness can't be measured locally; both jobs run on `windows-latest`). **Next (P2):** raise the
-  harness break threshold after the first run, and act on its survivors. Remaining diff-engine survivors are
+  `EntityValues`) at **~86.2%**, with `--break-at 84` (ratcheted ~2pts below the measured score, comfortably above
+  the project's 80% floor). Stryker can't build net462 off Windows, so the harness can't be measured locally; both
+  jobs run on the self-hosted Windows runner. **Next (P3):** keep killing the harness survivors dumped by the
+  "List surviving mutants" step and ratchet the gate as the score climbs. Remaining diff-engine survivors are
   equivalent mutants (match-key field lookups consistent on both diff sides, functionally-identical literals).
 
 ## Test harness (Vela.Testing)
 
-- **Required level + lookup Targets stay override-only (by design)** — not auto-derived, for two distinct
-  reasons. **Required:** Dataverse `RequiredLevel` has four values (None/Recommended/ApplicationRequired/
-  SystemRequired); `[Required]` is boolean, so emitting it from `vela models` would be lossy and drag in
-  validation semantics — keep it `On(...).Required(...)`-only. **Lookup Targets:** there is no standard
-  DataAnnotation for a lookup's target table, so carrying it would require a Vela-specific custom attribute on
-  the generated models, coupling them to the framework — which `vela models` deliberately avoids (models stay
-  dependency-light: partial classes + SDK + `System.ComponentModel.DataAnnotations` only). Revisit only if we
-  ever accept that coupling (Targets) or the lossiness (Required).
 - **P3 — Security model in the harness (roles, privileges, business units)** — XrmMockup can test security
   roles / BU setup; Vela's harness deliberately has none (see LIMITATIONS). Reconsider a *minimal, opt-in*
   privilege model so plugins that branch on access rights (`RetrievePrincipalAccess`/`CheckAccess`, or

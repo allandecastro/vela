@@ -45,11 +45,12 @@ public static class ModelGenerator
         }
 
         Dictionary<string, OptionSetMetadata> globals = new Dictionary<string, OptionSetMetadata>(StringComparer.Ordinal);
+        HashSet<string> features = new HashSet<string>(StringComparer.Ordinal);
 
         List<GeneratedModel> files = entities
             .Where(e => !string.IsNullOrWhiteSpace(e?.LogicalName))
             .OrderBy(e => e.LogicalName, StringComparer.Ordinal)
-            .Select(e => new GeneratedModel($"{ClassName(e)}.cs", GenerateOne(e, options, globals)))
+            .Select(e => new GeneratedModel($"{ClassName(e)}.cs", GenerateOne(e, options, globals, features)))
             .ToList();
 
         // Global option sets are shared across tables → one standalone enum file each.
@@ -58,10 +59,25 @@ public static class ModelGenerator
             files.Add(new GeneratedModel($"{global.Key.TrimStart('@')}.cs", GenerateGlobalEnumFile(global.Key, global.Value, options.Namespace)));
         }
 
+        // Self-contained support attributes, emitted only when a property actually uses them, so the generated
+        // models stay dependency-light (SDK + generated code) yet carry facets no standard annotation can express.
+        if (features.Contains(RequiredLevelFeature))
+        {
+            files.Add(new GeneratedModel("RequiredLevelAttribute.cs", GenerateRequiredLevelAttributeFile(options.Namespace)));
+        }
+
+        if (features.Contains(LookupTargetsFeature))
+        {
+            files.Add(new GeneratedModel("LookupTargetsAttribute.cs", GenerateLookupTargetsAttributeFile(options.Namespace)));
+        }
+
         return files;
     }
 
-    private static string GenerateOne(EntityMetadata entity, ModelGenOptions options, IDictionary<string, OptionSetMetadata> globals)
+    private const string RequiredLevelFeature = "requiredLevel";
+    private const string LookupTargetsFeature = "lookupTargets";
+
+    private static string GenerateOne(EntityMetadata entity, ModelGenOptions options, IDictionary<string, OptionSetMetadata> globals, ISet<string> features)
     {
         string className = ClassName(entity);
         string logicalName = entity.LogicalName;
@@ -111,7 +127,7 @@ public static class ModelGenerator
         List<(string Name, OptionSetMetadata OptionSet)> localEnums = new List<(string, OptionSetMetadata)>();
         foreach (AttributeMetadata attribute in attributes)
         {
-            AppendProperty(sb, attribute, primaryId, options, usedNames, localEnums, globals);
+            AppendProperty(sb, attribute, primaryId, options, usedNames, localEnums, globals, features);
         }
 
         AppendAlternateKeys(sb, entity, usedNames);
@@ -132,7 +148,7 @@ public static class ModelGenerator
         return sb.ToString();
     }
 
-    private static void AppendProperty(StringBuilder sb, AttributeMetadata attribute, string primaryId, ModelGenOptions options, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals)
+    private static void AppendProperty(StringBuilder sb, AttributeMetadata attribute, string primaryId, ModelGenOptions options, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals, ISet<string> features)
     {
         string logical = attribute.LogicalName;
         string name = UniqueName(PropertyName(attribute), usedNames);
@@ -146,6 +162,7 @@ public static class ModelGenerator
             sb.AppendLine();
             sb.AppendLine($"        /// <summary>{XmlEscape(AttributeDoc(attribute))}</summary>");
             sb.AppendLine($"        [AttributeLogicalName(\"{logical}\")]");
+            AppendFacetAttributes(sb, attribute, features);
             sb.AppendLine($"        public System.Collections.Generic.IList<{msEnum}> {name}");
             sb.AppendLine("        {");
             sb.AppendLine("            get");
@@ -173,6 +190,7 @@ public static class ModelGenerator
         sb.AppendLine();
         sb.AppendLine($"        /// <summary>{XmlEscape(AttributeDoc(attribute))}</summary>");
         sb.AppendLine($"        [AttributeLogicalName(\"{logical}\")]");
+        AppendFacetAttributes(sb, attribute, features);
         if (options.DataAnnotations)
         {
             foreach (string annotation in DataAnnotations(attribute))
@@ -352,6 +370,114 @@ public static class ModelGenerator
             AttributeTypeCode.PartyList => "EntityCollection",
             _ => "object",
         };
+    }
+
+    // Emits the Vela-generated facet attributes ([RequiredLevel], [LookupTargets]) a property carries. These are
+    // not System.ComponentModel annotations — they preserve facets no standard annotation expresses (the full
+    // four-value required level; a lookup's target tables) so FakeEntityMetadata.From<T>() can recover them by
+    // reflection. Emitted regardless of --no-annotations; each records its feature so the support file is emitted.
+    private static void AppendFacetAttributes(StringBuilder sb, AttributeMetadata attribute, ISet<string> features)
+    {
+        string? requiredLevel = RequiredLevelAnnotation(attribute);
+        if (requiredLevel != null)
+        {
+            sb.AppendLine($"        {requiredLevel}");
+            features.Add(RequiredLevelFeature);
+        }
+
+        string? lookupTargets = LookupTargetsAnnotation(attribute);
+        if (lookupTargets != null)
+        {
+            sb.AppendLine($"        {lookupTargets}");
+            features.Add(LookupTargetsFeature);
+        }
+    }
+
+    private static string? RequiredLevelAnnotation(AttributeMetadata attribute)
+    {
+        if (attribute.RequiredLevel?.Value is AttributeRequiredLevel level && level != AttributeRequiredLevel.None)
+        {
+            return $"[RequiredLevel(Microsoft.Xrm.Sdk.Metadata.AttributeRequiredLevel.{level})]";
+        }
+
+        return null;
+    }
+
+    private static string? LookupTargetsAnnotation(AttributeMetadata attribute)
+    {
+        // Only EntityReference-typed lookups: Lookup, Customer and Owner. A polymorphic lookup is simply a lookup
+        // with several targets, so it needs no special case. PartyList is a LookupAttributeMetadata too, but maps to
+        // EntityCollection and its metadata targets are just "activityparty" (the real party targets live on
+        // activityparty.partyid) — so it stays override-only, matching From<T>() skipping partylists.
+        if (attribute.AttributeType is not (AttributeTypeCode.Lookup or AttributeTypeCode.Customer or AttributeTypeCode.Owner))
+        {
+            return null;
+        }
+
+        if (attribute is not LookupAttributeMetadata lookup || lookup.Targets is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        string targets = string.Join(", ", lookup.Targets.Select(t => $"\"{t}\""));
+        return $"[LookupTargets({targets})]";
+    }
+
+    private static string GenerateRequiredLevelAttributeFile(string ns)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated/>");
+        sb.AppendLine($"namespace {ns}");
+        sb.AppendLine("{");
+        sb.AppendLine("    using System;");
+        sb.AppendLine("    using Microsoft.Xrm.Sdk.Metadata;");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Records a column's full Dataverse <see cref=\"AttributeRequiredLevel\"/> (None/Recommended/");
+        sb.AppendLine("    /// ApplicationRequired/SystemRequired) on the generated property, preserving the exact level");
+        sb.AppendLine("    /// rather than a lossy boolean. Informational: it carries the level for tooling and for");
+        sb.AppendLine("    /// <c>FakeEntityMetadata.From&lt;T&gt;()</c> recovery; it does not itself enforce validation.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]");
+        sb.AppendLine("    public sealed class RequiredLevelAttribute : Attribute");
+        sb.AppendLine("    {");
+        sb.AppendLine("        public RequiredLevelAttribute(AttributeRequiredLevel level)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            this.Level = level;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        public AttributeRequiredLevel Level { get; }");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private static string GenerateLookupTargetsAttributeFile(string ns)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated/>");
+        sb.AppendLine($"namespace {ns}");
+        sb.AppendLine("{");
+        sb.AppendLine("    using System;");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Records the target tables of a lookup / Customer / polymorphic column on the generated");
+        sb.AppendLine("    /// property (a single-target lookup carries one; Customer and polymorphic lookups several).");
+        sb.AppendLine("    /// Informational: it carries the targets for tooling and for <c>FakeEntityMetadata.From&lt;T&gt;()</c>");
+        sb.AppendLine("    /// recovery, since no standard annotation expresses a lookup's targets.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]");
+        sb.AppendLine("    public sealed class LookupTargetsAttribute : Attribute");
+        sb.AppendLine("    {");
+        sb.AppendLine("        public LookupTargetsAttribute(params string[] targets)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            this.Targets = targets ?? Array.Empty<string>();");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        public string[] Targets { get; }");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
     }
 
     private static IEnumerable<string> DataAnnotations(AttributeMetadata attribute)

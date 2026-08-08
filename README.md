@@ -1037,8 +1037,12 @@ vela models --custom-apis zava_Recalculate --interactive
 ```
 
 Generated classes are `partial` (extend them in a sibling file), keep the primary id synced with `Entity.Id`,
-carry XML doc (display name / description / constraints / lookup targets) and DataAnnotations
-(`[StringLength]`/`[Range]`, omit with `--no-annotations`), turn choices into enums (local choices nested in
+carry XML doc (display name / description / constraints / lookup targets), DataAnnotations
+(`[StringLength]`/`[Range]`, omit with `--no-annotations`) and two self-contained facet attributes that no
+standard annotation can express — `[RequiredLevel(...)]` (the full four-value Dataverse required level, not a
+lossy boolean) and `[LookupTargets(...)]` (a lookup / Customer / polymorphic column's target tables). The test
+harness's `FakeEntityMetadata.From<T>()` recovers all of these by reflection, so a derived fake metadata carries
+required level and lookup targets with no hand-written overrides. `vela models` turns choices into enums (local choices nested in
 the table, global option sets as shared enums; multi-select choices become an `IList<Enum>`), type **File**
 columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail), and expose alternate keys as typed factories
 (`Account.ByAccountNumberKey("A-001")` → a key-based `EntityReference`). `--custom-apis` instead generates typed

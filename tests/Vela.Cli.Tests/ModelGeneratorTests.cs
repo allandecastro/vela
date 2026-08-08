@@ -16,14 +16,15 @@ public class ModelGeneratorTests
             .Lookup("primarycontactid", "PrimaryContactId", "contact")
             .Build();
 
+    // Account carries a lookup, so generation also emits the LookupTargetsAttribute support file — select the table.
     private static string GenerateAccount(bool dataAnnotations = true) =>
         ModelGenerator.Generate(new[] { Account() }, new ModelGenOptions("Acme.Shared.Models.Generated", dataAnnotations))
-            .Single().Code;
+            .Single(m => m.FileName == "Account.cs").Code;
 
     [Fact]
     public void Generates_PartialClass_WithVelaConventions()
     {
-        GeneratedModel model = ModelGenerator.Generate(new[] { Account() }, new ModelGenOptions("Acme.Shared.Models.Generated")).Single();
+        GeneratedModel model = ModelGenerator.Generate(new[] { Account() }, new ModelGenOptions("Acme.Shared.Models.Generated")).Single(m => m.FileName == "Account.cs");
 
         Assert.Equal("Account.cs", model.FileName);
         Assert.Contains("namespace Acme.Shared.Models.Generated", model.Code);
@@ -107,7 +108,7 @@ public class ModelGeneratorTests
             .Customer("customerid", "CustomerId", "account", "contact")
             .Build();
 
-        string code = ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Shared.Models.Generated")).Single().Code;
+        string code = ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Shared.Models.Generated")).Single(m => m.FileName == "Opportunity.cs").Code;
 
         Assert.Contains("public EntityReference CustomerId", code);
     }
@@ -217,5 +218,106 @@ public class ModelGeneratorTests
         Assert.Contains("public enum New_colorset", global.Code);
         Assert.Contains("Red = 1,", global.Code);
         Assert.Contains("Green = 2,", global.Code);
+    }
+
+    [Fact]
+    public void RequiredLevel_EmittedWithFullLevel_AndSupportFile()
+    {
+        // The full four-value level is preserved (not a lossy boolean), and the self-contained attribute is emitted.
+        System.Collections.Generic.IReadOnlyList<GeneratedModel> models = ModelGenerator.Generate(
+            new[]
+            {
+                MetadataFactory.Entity("account", "Account")
+                    .PrimaryId("accountid", "AccountId")
+                    .String("name", "Name", maxLength: 160).Required(AttributeRequiredLevel.ApplicationRequired)
+                    .Build(),
+            },
+            new ModelGenOptions("Acme.Shared.Models.Generated"));
+
+        Assert.Contains("[RequiredLevel(Microsoft.Xrm.Sdk.Metadata.AttributeRequiredLevel.ApplicationRequired)]", models.Single(m => m.FileName == "Account.cs").Code);
+
+        GeneratedModel support = models.Single(m => m.FileName == "RequiredLevelAttribute.cs");
+        Assert.Contains("public sealed class RequiredLevelAttribute : Attribute", support.Code);
+        Assert.Contains("public AttributeRequiredLevel Level", support.Code);
+    }
+
+    [Fact]
+    public void RequiredLevel_NotEmittedForNoneLevel()
+    {
+        // The default level is None -> no attribute, and no support file.
+        System.Collections.Generic.IReadOnlyList<GeneratedModel> models = ModelGenerator.Generate(
+            new[]
+            {
+                MetadataFactory.Entity("account", "Account")
+                    .PrimaryId("accountid", "AccountId")
+                    .String("name", "Name")
+                    .Build(),
+            },
+            new ModelGenOptions("Acme.Shared.Models.Generated"));
+
+        Assert.DoesNotContain("[RequiredLevel", models.Single(m => m.FileName == "Account.cs").Code);
+        Assert.DoesNotContain(models, m => m.FileName == "RequiredLevelAttribute.cs");
+    }
+
+    [Fact]
+    public void LookupTargets_EmittedForLookup_AndSupportFile()
+    {
+        System.Collections.Generic.IReadOnlyList<GeneratedModel> models =
+            ModelGenerator.Generate(new[] { Account() }, new ModelGenOptions("Acme.Shared.Models.Generated"));
+
+        Assert.Contains("[LookupTargets(\"contact\")]", models.Single(m => m.FileName == "Account.cs").Code);
+
+        GeneratedModel support = models.Single(m => m.FileName == "LookupTargetsAttribute.cs");
+        Assert.Contains("public sealed class LookupTargetsAttribute : Attribute", support.Code);
+        Assert.Contains("public string[] Targets", support.Code);
+    }
+
+    [Fact]
+    public void LookupTargets_MultiTarget_ForCustomerAndPolymorphicLookups()
+    {
+        // Customer (and any polymorphic lookup) is simply a lookup with several targets -> no special case.
+        EntityMetadata md = MetadataFactory.Entity("opportunity", "Opportunity")
+            .PrimaryId("opportunityid", "OpportunityId")
+            .Customer("customerid", "CustomerId", "account", "contact")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Shared.Models.Generated"))
+            .Single(m => m.FileName == "Opportunity.cs").Code;
+
+        Assert.Contains("[LookupTargets(\"account\", \"contact\")]", code);
+    }
+
+    [Fact]
+    public void LookupTargets_NotEmittedForPartyList()
+    {
+        // A partylist maps to EntityCollection and its real targets live on activityparty.partyid -> stays override-only.
+        EntityMetadata md = MetadataFactory.Entity("email", "Email")
+            .PrimaryId("activityid", "ActivityId")
+            .PartyList("to", "To")
+            .Build();
+
+        System.Collections.Generic.IReadOnlyList<GeneratedModel> models =
+            ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Shared.Models.Generated"));
+
+        Assert.DoesNotContain("[LookupTargets", models.Single(m => m.FileName == "Email.cs").Code);
+        Assert.DoesNotContain(models, m => m.FileName == "LookupTargetsAttribute.cs");
+    }
+
+    [Fact]
+    public void FacetAttributes_EmittedEvenWithoutDataAnnotations()
+    {
+        // [RequiredLevel]/[LookupTargets] are not System.ComponentModel annotations, so --no-annotations keeps them.
+        EntityMetadata md = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .String("name", "Name", maxLength: 160).Required(AttributeRequiredLevel.SystemRequired)
+            .Lookup("primarycontactid", "PrimaryContactId", "contact")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Shared.Models.Generated", DataAnnotations: false))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.DoesNotContain("[StringLength(", code);
+        Assert.Contains("[RequiredLevel(Microsoft.Xrm.Sdk.Metadata.AttributeRequiredLevel.SystemRequired)]", code);
+        Assert.Contains("[LookupTargets(\"contact\")]", code);
     }
 }

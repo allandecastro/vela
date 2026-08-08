@@ -39,12 +39,12 @@ namespace Vela.Testing
         /// each property carrying an <see cref="AttributeLogicalNameAttribute"/> becomes an attribute, its CLR
         /// type maps to an <see cref="AttributeTypeCode"/>, generated option-set enums become picklists, the
         /// conventional <c>{logicalname}id</c> column becomes the primary id, a <c>name</c> column becomes the
-        /// primary name, ownership is inferred from the presence of an <c>ownerid</c> column, and max length and
-        /// numeric range are recovered from the generated <c>[StringLength]</c> / <c>[Range]</c> annotations. This
-        /// is the zero-connection, no-hand-written path. It returns the same builder, so chain <c>On(...)</c> + the
-        /// facet setters to override anything the early-bound type cannot carry — required level, lookup targets, a
-        /// non-conventional primary-name column, or multi-select/file/image/partylist columns (which are skipped
-        /// here because they have no faithful single mapping).
+        /// primary name, ownership is inferred from the presence of an <c>ownerid</c> column, and max length, numeric
+        /// range, required level and lookup targets are recovered from the generated <c>[StringLength]</c> /
+        /// <c>[Range]</c> / <c>[RequiredLevel]</c> / <c>[LookupTargets]</c> annotations. This is the zero-connection,
+        /// no-hand-written path. It returns the same builder, so chain <c>On(...)</c> + the facet setters to override
+        /// anything the early-bound type cannot carry — a non-conventional primary-name column, or multi-select/file/
+        /// image/partylist columns (which are skipped here because they have no faithful single mapping).
         /// </summary>
         public static FakeEntityMetadata From<TEntity>() where TEntity : Entity
         {
@@ -103,9 +103,10 @@ namespace Vela.Testing
                     }
                 }
 
-                // The generated property carries some facets as DataAnnotations ([StringLength] → max length,
-                // [Range] → numeric min/max); recover them onto the attribute we just added (now the selected one).
-                ApplyDataAnnotations(meta, property);
+                // The generated property carries some facets as annotations ([StringLength] → max length, [Range] →
+                // numeric min/max, [RequiredLevel] → required level, [LookupTargets] → lookup targets); recover them
+                // onto the attribute we just added (now the selected one).
+                ApplyGeneratedFacets(meta, property);
             }
 
             if (ownerSeen)
@@ -280,33 +281,52 @@ namespace Vela.Testing
             return _entity;
         }
 
-        // Recovers facets the generated property carries as System.ComponentModel.DataAnnotations onto the
-        // selected attribute: [StringLength] → max length, [Range] → numeric min/max. Read by attribute type name
-        // so Vela.Testing needs no DataAnnotations assembly reference. The [Range] constructor (int vs double) the
+        // Recovers facets the generated property carries onto the selected attribute: [StringLength] → max length,
+        // [Range] → numeric min/max (both System.ComponentModel annotations), plus the Vela-generated [RequiredLevel]
+        // → required level and [LookupTargets] → lookup targets. The DataAnnotations are read by full type name so
+        // Vela.Testing needs no DataAnnotations assembly reference; the Vela-generated attributes live in the
+        // caller's namespace, so they are matched by simple type name. The [Range] constructor (int vs double) the
         // generator picks is incidental — the selected attribute's own value type is the source of truth, so the
         // range is coerced to it (see SetRangeFromAnnotation).
-        private static void ApplyDataAnnotations(FakeEntityMetadata meta, PropertyInfo property)
+        private static void ApplyGeneratedFacets(FakeEntityMetadata meta, PropertyInfo property)
         {
             foreach (Attribute annotation in property.GetCustomAttributes())
             {
-                string? annotationType = annotation.GetType().FullName;
+                Type type = annotation.GetType();
 
-                if (annotationType == "System.ComponentModel.DataAnnotations.StringLengthAttribute")
+                if (type.FullName == "System.ComponentModel.DataAnnotations.StringLengthAttribute")
                 {
-                    object? max = annotation.GetType().GetProperty("MaximumLength")?.GetValue(annotation);
+                    object? max = type.GetProperty("MaximumLength")?.GetValue(annotation);
                     if (max is int maxLength && maxLength > 0)
                     {
                         meta.MaxLength(maxLength);
                     }
                 }
-                else if (annotationType == "System.ComponentModel.DataAnnotations.RangeAttribute")
+                else if (type.FullName == "System.ComponentModel.DataAnnotations.RangeAttribute")
                 {
-                    Type rangeType = annotation.GetType();
-                    object? min = rangeType.GetProperty("Minimum")?.GetValue(annotation);
-                    object? max = rangeType.GetProperty("Maximum")?.GetValue(annotation);
+                    object? min = type.GetProperty("Minimum")?.GetValue(annotation);
+                    object? max = type.GetProperty("Maximum")?.GetValue(annotation);
                     if (min != null && max != null)
                     {
                         meta.SetRangeFromAnnotation(Convert.ToDouble(min), Convert.ToDouble(max));
+                    }
+                }
+                else if (type.Name == "RequiredLevelAttribute")
+                {
+                    if (type.GetProperty("Level")?.GetValue(annotation) is AttributeRequiredLevel level)
+                    {
+                        meta.Required(level);
+                    }
+                }
+                else if (type.Name == "LookupTargetsAttribute")
+                {
+                    // Only meaningful on a lookup; From<T>() maps every EntityReference column to a Lookup, so the
+                    // selected attribute is a LookupAttributeMetadata for the columns that carry this annotation.
+                    if (type.GetProperty("Targets")?.GetValue(annotation) is string[] targets
+                        && targets.Length > 0
+                        && meta.Current is LookupAttributeMetadata)
+                    {
+                        meta.Targets(targets);
                     }
                 }
             }

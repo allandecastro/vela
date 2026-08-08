@@ -136,6 +136,12 @@ internal sealed class MetadataFactory
         return this;
     }
 
+    public MetadataFactory Required(AttributeRequiredLevel level)
+    {
+        Set(_last!, nameof(AttributeMetadata.RequiredLevel), new AttributeRequiredLevelManagedProperty(level));
+        return this;
+    }
+
     public MetadataFactory Key(string logicalName, string schemaName, params string[] keyAttributes)
     {
         EntityKeyMetadata key = new EntityKeyMetadata();
