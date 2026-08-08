@@ -220,6 +220,35 @@ namespace Vela.Testing.Tests
             Assert.Contains(response.PrincipalAccesses, p => p.Principal.Id == Bob && p.AccessMask == (AccessRights.ReadAccess | AccessRights.WriteAccess));
         }
 
+        [Fact]
+        public void GrantAccess_accumulates_rights_across_grants()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = NoRoleForAlice(record, Bob)
+                .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess)
+                .WithSharedRecord(Account(record), User(Alice), AccessRights.WriteAccess); // second grant adds, not replaces
+
+            AccessRights rights = AliceAccess(svc, record);
+            Assert.True(rights.HasFlag(AccessRights.ReadAccess));
+            Assert.True(rights.HasFlag(AccessRights.WriteAccess));
+        }
+
+        [Fact]
+        public void ModifyAccess_to_none_revokes_the_share()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = SharerCanShare(record)
+                .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess);
+
+            svc.Execute(new ModifyAccessRequest
+            {
+                Target = Account(record),
+                PrincipalAccess = new PrincipalAccess { Principal = User(Alice), AccessMask = AccessRights.None },
+            });
+
+            Assert.Equal(AccessRights.None, AliceAccess(svc, record));
+        }
+
         [Theory]
         [InlineData(AccessRights.ReadAccess)]
         [InlineData(AccessRights.WriteAccess)]
@@ -237,6 +266,24 @@ namespace Vela.Testing.Tests
             // Alice holds no role, so her effective mask must equal exactly the single shared right — this pins the
             // Privilege <-> AccessRights mapping and the per-principal rights union.
             Assert.Equal(right, AliceAccess(svc, record));
+        }
+
+        [Fact]
+        public void RetrievePrincipalAccess_on_a_missing_record_reports_no_access()
+        {
+            Guid missing = Guid.NewGuid();
+            InMemoryOrganizationService withSecurity = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu));
+            InMemoryOrganizationService withoutSecurity = new InMemoryOrganizationService();
+
+            // A record that does not exist confers no access — the same answer whether or not security is on.
+            foreach (InMemoryOrganizationService svc in new[] { withSecurity, withoutSecurity })
+            {
+                RetrievePrincipalAccessResponse response = (RetrievePrincipalAccessResponse)svc.Execute(
+                    new RetrievePrincipalAccessRequest { Target = Account(missing), Principal = User(Alice) });
+                Assert.Equal(AccessRights.None, response.AccessRights);
+            }
         }
 
         [Fact]

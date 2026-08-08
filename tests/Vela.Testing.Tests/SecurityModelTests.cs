@@ -603,6 +603,92 @@ namespace Vela.Testing.Tests
             Assert.Equal(Alice, Assert.Single(svc.GetAll("account")).GetAttributeValue<EntityReference>("ownerid").Id);
         }
 
+        [Fact]
+        public void Updating_ownerid_needs_assign_while_updating_fields_needs_write()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("editor", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write))
+                    .User(Alice, SalesBu, "editor")) // Write but not Assign
+                .Seed(AccountOwnedBy(record, Bob, SalesBu));
+
+            svc.Update(new Entity("account", record) { ["name"] = "ok" }); // field change: Write covers it
+
+            // A plain Update that changes ownerid is an assignment, so it needs Assign — not just Write.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Update(new Entity("account", record) { ["ownerid"] = new EntityReference("systemuser", Alice) }));
+        }
+
+        [Fact]
+        public void Creating_a_record_owned_by_another_principal_requires_assign()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("author", r => r.Grant("account", Privilege.Create, AccessLevel.User))
+                    .User(Alice, SalesBu, "author")); // Create but not Assign
+
+            svc.Create(new Entity("account")); // owned by the caller: fine
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+        }
+
+        [Fact]
+        public void Creating_on_behalf_stamps_the_owners_business_unit_not_the_callers()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)   // Alice's BU
+                    .BusinessUnit(OtherBu)   // Bob's BU
+                    .Role("admin", r => r.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Assign))
+                    .User(Alice, SalesBu, "admin")
+                    .User(Bob, OtherBu));
+
+            svc.Create(new Entity("account", record) { ["ownerid"] = new EntityReference("systemuser", Bob) });
+
+            Entity stored = Assert.Single(svc.GetAll("account"));
+            Assert.Equal(Bob, stored.GetAttributeValue<EntityReference>("ownerid").Id);
+            // owningbusinessunit is Bob's BU (the owner), not Alice's (the acting user).
+            Assert.Equal(OtherBu, stored.GetAttributeValue<EntityReference>("owningbusinessunit").Id);
+        }
+
+        [Fact]
+        public void Assigning_across_business_units_moves_the_owning_business_unit()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(OtherBu)
+                    .BusinessUnit(SalesBu)
+                    .Role("mover", r => r
+                        .Grant("account", Privilege.Assign, AccessLevel.Organization)
+                        .Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .User(Alice, SalesBu, "mover")) // Alice lives in SalesBu
+                .Seed(AccountOwnedBy(record, Bob, OtherBu)); // record starts in OtherBu
+
+            // Alice's BusinessUnit-level read does not reach a record owned in another BU.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Retrieve("account", record, new ColumnSet(true)));
+
+            svc.Execute(new AssignRequest
+            {
+                Target = new EntityReference("account", record),
+                Assignee = new EntityReference("systemuser", Alice),
+            });
+
+            // owningbusinessunit followed the new owner to SalesBu, so the depth check now covers the record.
+            Assert.Equal(SalesBu, Assert.Single(svc.GetAll("account")).GetAttributeValue<EntityReference>("owningbusinessunit").Id);
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
         // --- Associate / Disassociate need Append (related) + AppendTo (primary) -------------------------
 
         private static InMemoryOrganizationService WithAccountContactM2M(Guid accountId, Guid contactId, Action<SecurityConfiguration> security) =>

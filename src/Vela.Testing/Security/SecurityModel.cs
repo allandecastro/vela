@@ -287,6 +287,25 @@ namespace Vela.Testing.Security
             _users.TryGetValue(userId, out Principal user) ? user.BusinessUnit : Guid.Empty;
 
         /// <summary>
+        /// The business unit of an owning principal (user or team), or <see cref="Guid.Empty"/> if unknown. Used to
+        /// keep <c>owningbusinessunit</c> aligned with the owner after a record is (re)assigned.
+        /// </summary>
+        public Guid BusinessUnitOfPrincipal(EntityReference principal)
+        {
+            if (principal == null)
+            {
+                return Guid.Empty;
+            }
+
+            if (string.Equals(principal.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
+            {
+                return _teams.TryGetValue(principal.Id, out Principal team) ? team.BusinessUnit : Guid.Empty;
+            }
+
+            return BusinessUnitOf(principal.Id);
+        }
+
+        /// <summary>
         /// Throws <see cref="FaultException{OrganizationServiceFault}"/> (PrincipalPrivilegeDenied) when
         /// <paramref name="userId"/> may not perform <paramref name="privilege"/> on <paramref name="record"/>.
         /// </summary>

@@ -352,6 +352,16 @@ namespace Vela.Testing
 
             EnsureWritable(entity.LogicalName);
             DemandAccess(entity.LogicalName, Privilege.Create, null);
+
+            // Creating a record owned by someone other than the caller (another user or a team) is a create plus an
+            // assignment, so it also needs the Assign privilege — matching Dataverse.
+            if (entity.Contains(SystemFieldApplier.OwnerId) &&
+                entity[SystemFieldApplier.OwnerId] is EntityReference owner &&
+                !(string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId))
+            {
+                DemandAccess(entity.LogicalName, Privilege.Assign, null);
+            }
+
             Entity stored = EntityValues.Clone(entity);
             if (stored.Id == Guid.Empty)
             {
@@ -360,6 +370,7 @@ namespace Vela.Testing
 
             _autoNumbers.Apply(stored);
             _systemFields.ApplyOnCreate(entity, stored, Actor(), _clock(), NextVersion());
+            RealignOwningBusinessUnit(stored);
             _alternateKeys.Enforce(stored, Table(stored.LogicalName).Values);
             Table(stored.LogicalName)[stored.Id] = stored;
             return stored.Id;
@@ -376,11 +387,12 @@ namespace Vela.Testing
             return Project(stored, columnSet);
         }
 
-        public void Update(Entity entity) => UpdateCore(entity, Privilege.Write);
+        public void Update(Entity entity) => UpdateCore(entity);
 
-        // Shared by Update (needs Write) and Assign (needs Assign): both merge attributes onto the stored record,
-        // differing only in the privilege the caller must hold.
-        private void UpdateCore(Entity entity, Privilege privilege)
+        // Shared by Update and Assign (assignment is an ownerid update): the required privilege follows the
+        // content — Write for field changes, Assign for an ownership change — so both message paths enforce the
+        // same rules (mirroring Dataverse, where setting ownerid needs prvAssign, not Write).
+        private void UpdateCore(Entity entity)
         {
             if (entity == null)
             {
@@ -393,7 +405,16 @@ namespace Vela.Testing
                 throw new InvalidOperationException($"{entity.LogicalName} with id {entity.Id} does not exist in the in-memory store.");
             }
 
-            DemandAccess(entity.LogicalName, privilege, stored);
+            bool changesOwner = entity.Contains(SystemFieldApplier.OwnerId);
+            if (entity.Attributes.Keys.Any(key => !string.Equals(key, SystemFieldApplier.OwnerId, StringComparison.OrdinalIgnoreCase)))
+            {
+                DemandAccess(entity.LogicalName, Privilege.Write, stored);
+            }
+
+            if (changesOwner)
+            {
+                DemandAccess(entity.LogicalName, Privilege.Assign, stored);
+            }
 
             // Validate the would-be merged record before committing so a duplicate-key throw leaves the store intact.
             Entity candidate = EntityValues.Clone(stored);
@@ -412,6 +433,29 @@ namespace Vela.Testing
             }
 
             _systemFields.ApplyOnUpdate(entity, stored, Actor(), _clock(), NextVersion());
+            if (changesOwner)
+            {
+                RealignOwningBusinessUnit(stored);
+            }
+        }
+
+        // owningbusinessunit tracks the record's owner: after the owner is stamped (on create, or on an ownership
+        // change), realign it to the OWNER's business unit — not the acting user's — so BU/Deep depth checks are
+        // correct even when a record is created for, or assigned to, a principal in another BU. Security-on only
+        // (it supplies the owner's BU); with security off the store's existing stamping is unchanged.
+        private void RealignOwningBusinessUnit(Entity stored)
+        {
+            if (_security == null || !stored.Contains(SystemFieldApplier.OwnerId) ||
+                stored[SystemFieldApplier.OwnerId] is not EntityReference owner)
+            {
+                return;
+            }
+
+            Guid ownerBusinessUnit = _security.BusinessUnitOfPrincipal(owner);
+            if (ownerBusinessUnit != Guid.Empty)
+            {
+                stored[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", ownerBusinessUnit);
+            }
         }
 
         private SystemActor Actor()
@@ -458,14 +502,20 @@ namespace Vela.Testing
         // everyone has full record access, so every shareable right is reported.
         private AccessRights EffectiveAccess(EntityReference principal, EntityReference target)
         {
+            // A record that does not exist confers no access, whether or not security is on (consistent answer).
+            Entity? stored = StoredOrNull(target.LogicalName, target.Id);
+            if (stored == null)
+            {
+                return AccessRights.None;
+            }
+
             if (_security == null)
             {
                 return AccessRights.ReadAccess | AccessRights.WriteAccess | AccessRights.DeleteAccess |
                        AccessRights.AppendAccess | AccessRights.AppendToAccess | AccessRights.AssignAccess | AccessRights.ShareAccess;
             }
 
-            Entity? stored = StoredOrNull(target.LogicalName, target.Id);
-            return stored == null ? AccessRights.None : _security.EffectiveAccess(principal.Id, target.LogicalName, stored);
+            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored);
         }
 
         private long NextVersion() => ++_version;
@@ -606,9 +656,9 @@ namespace Vela.Testing
 
                 case AssignRequest assign:
                 {
-                    // Modern Dataverse models assignment as an ownerid Update, which re-derives the owning columns.
-                    // The privilege required is Assign (not Write), so it is demanded explicitly here.
-                    UpdateCore(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee }, Privilege.Assign);
+                    // Modern Dataverse models assignment as an ownerid Update; UpdateCore infers the Assign
+                    // privilege from the ownerid change, so both paths enforce identically.
+                    UpdateCore(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee });
                     return new AssignResponse();
                 }
 
