@@ -64,6 +64,10 @@ namespace Vela.Testing
         // behave exactly as before (full access). Set via WithSecurity.
         private SecurityModel? _security;
 
+        // Record-level shares (PoA). Always present so Grant/RetrievePrincipalAccess work with or without a
+        // security model; only consulted for enforcement when _security is set.
+        private readonly SharingTable _sharing = new SharingTable();
+
         private Func<DateTime> _clock = () => DateTime.UtcNow;
 
         private Func<Guid> _idSequence = () => Guid.NewGuid();
@@ -121,7 +125,18 @@ namespace Vela.Testing
 
             SecurityConfiguration configuration = new SecurityConfiguration();
             configure(configuration);
-            _security = configuration.Build();
+            _security = configuration.Build(_sharing);
+            return this;
+        }
+
+        /// <summary>
+        /// Pre-shares a record with a principal (arrange helper, like <see cref="Seed"/>): grants the principal
+        /// (a user or team) the given <paramref name="rights"/> on the target, without going through the
+        /// GrantAccess message or its Share-privilege check. Only takes effect once <see cref="WithSecurity"/> is set.
+        /// </summary>
+        public InMemoryOrganizationService WithSharedRecord(EntityReference target, EntityReference principal, AccessRights rights)
+        {
+            _sharing.Grant(target, new PrincipalAccess { Principal = principal, AccessMask = rights });
             return this;
         }
 
@@ -439,6 +454,20 @@ namespace Vela.Testing
         private Entity? StoredOrNull(string entityName, Guid id) =>
             Table(entityName).TryGetValue(id, out Entity? stored) ? stored : null;
 
+        // The effective rights a principal holds on a record (roles + ownership + sharing). With no security model
+        // everyone has full record access, so every shareable right is reported.
+        private AccessRights EffectiveAccess(EntityReference principal, EntityReference target)
+        {
+            if (_security == null)
+            {
+                return AccessRights.ReadAccess | AccessRights.WriteAccess | AccessRights.DeleteAccess |
+                       AccessRights.AppendAccess | AccessRights.AppendToAccess | AccessRights.AssignAccess | AccessRights.ShareAccess;
+            }
+
+            Entity? stored = StoredOrNull(target.LogicalName, target.Id);
+            return stored == null ? AccessRights.None : _security.EffectiveAccess(principal.Id, target.LogicalName, stored);
+        }
+
         private long NextVersion() => ++_version;
 
         private void EnsureWritable(string logicalName)
@@ -634,6 +663,41 @@ namespace Vela.Testing
                     response.Results["UserId"] = actor.UserId;
                     response.Results["BusinessUnitId"] = actor.BusinessUnitId;
                     response.Results["OrganizationId"] = actor.OrganizationId;
+                    return response;
+                }
+
+                case GrantAccessRequest grant:
+                {
+                    DemandAccess(grant.Target.LogicalName, Privilege.Share, StoredOrNull(grant.Target.LogicalName, grant.Target.Id));
+                    _sharing.Grant(grant.Target, grant.PrincipalAccess);
+                    return new GrantAccessResponse();
+                }
+
+                case ModifyAccessRequest modify:
+                {
+                    DemandAccess(modify.Target.LogicalName, Privilege.Share, StoredOrNull(modify.Target.LogicalName, modify.Target.Id));
+                    _sharing.Modify(modify.Target, modify.PrincipalAccess);
+                    return new ModifyAccessResponse();
+                }
+
+                case RevokeAccessRequest revoke:
+                {
+                    DemandAccess(revoke.Target.LogicalName, Privilege.Share, StoredOrNull(revoke.Target.LogicalName, revoke.Target.Id));
+                    _sharing.Revoke(revoke.Target, revoke.Revokee);
+                    return new RevokeAccessResponse();
+                }
+
+                case RetrievePrincipalAccessRequest principalAccess:
+                {
+                    RetrievePrincipalAccessResponse response = new RetrievePrincipalAccessResponse();
+                    response.Results["AccessRights"] = EffectiveAccess(principalAccess.Principal, principalAccess.Target);
+                    return response;
+                }
+
+                case RetrieveSharedPrincipalsAndAccessRequest sharedPrincipals:
+                {
+                    RetrieveSharedPrincipalsAndAccessResponse response = new RetrieveSharedPrincipalsAndAccessResponse();
+                    response.Results["PrincipalAccesses"] = _sharing.SharesOf(sharedPrincipals.Target);
                     return response;
                 }
 
