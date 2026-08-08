@@ -27,6 +27,17 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   and a full security simulation is a large surface. Scope carefully before committing; currently listed under
   "Won't do" — moving it here means it is up for reconsideration, not yet accepted.
 
+  Known enforcement gaps to close in the opt-in security model (found by cross-checking against the Dataverse
+  "how record access is determined" / access-rights docs):
+    - **G1 — Append/AppendTo on lookups.** Setting a lookup (a Create/Update whose attribute is an
+      `EntityReference` other than `ownerid`) must demand **Append** on the record and **AppendTo** on the lookup
+      **target** record, like N:N Associate already does. Today only Create/Write is checked.
+    - **G2 — sharing can't exceed the sharer's own rights.** `GrantAccess`/`ModifyAccess` must clamp the granted
+      `AccessRights` to the rights the **sharer** effectively holds on the record (Dataverse: "you can't give
+      rights you don't have"). Today the mask is stored unclamped after only the Share-privilege check.
+    - Smaller: org-wide sharing ("share with the entire organization"), and team **Member's privilege
+      inheritance** mode (Team-privileges-only vs Basic) are not yet modelled.
+
 ## Developer experience
 
 - **P2 — Remote debugging of cloud plugins** — let a developer step through a *real* Dataverse plugin
