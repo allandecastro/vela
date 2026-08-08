@@ -446,6 +446,8 @@ namespace Vela.Testing
             }
 
             bool changesOwner = entity.Contains(SystemFieldApplier.OwnerId);
+            // Captured before the merge: needed for the UserOwned cascade scope (children owned by the same user).
+            EntityReference? previousOwner = changesOwner ? stored.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) : null;
             if (entity.Attributes.Keys.Any(key => !string.Equals(key, SystemFieldApplier.OwnerId, StringComparison.OrdinalIgnoreCase)))
             {
                 DemandAccess(entity.LogicalName, Privilege.Write, stored);
@@ -478,6 +480,11 @@ namespace Vela.Testing
             if (changesOwner)
             {
                 RealignOwningBusinessUnit(stored);
+                EntityReference? newOwner = stored.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+                if (newOwner != null)
+                {
+                    CascadeAssign(entity.LogicalName, entity.Id, previousOwner, newOwner, new HashSet<Guid>());
+                }
             }
         }
 
@@ -706,6 +713,77 @@ namespace Vela.Testing
         private IEnumerable<Entity> Children(OneToManyRegistry.OneToMany relationship, Guid parentId) =>
             Table(relationship.ReferencingEntity).Values
                 .Where(child => child.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute)?.Id == parentId);
+
+        // Cascades an ownership change from a parent to its children per each relationship's Assign behaviour:
+        // Cascade = all children, Active = only active children, UserOwned = only children owned by the same user as
+        // the parent was. The child's owning business unit follows the new owner (when security supplies it), and the
+        // cascade recurses down the hierarchy.
+        private void CascadeAssign(string entityName, Guid id, EntityReference? previousOwner, EntityReference newOwner, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Assign ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (mode == CascadeType.Active && !IsActive(child))
+                    {
+                        continue;
+                    }
+
+                    if (mode == CascadeType.UserOwned && !OwnedBySamePrincipal(child, previousOwner))
+                    {
+                        continue;
+                    }
+
+                    EntityReference? childPreviousOwner = child.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+                    ApplyCascadedOwner(child, newOwner);
+                    CascadeAssign(relationship.ReferencingEntity, child.Id, childPreviousOwner, newOwner, visited);
+                }
+            }
+        }
+
+        // Active state is state code 0 for most tables (the common case the harness models); a missing state is active.
+        private static bool IsActive(Entity record) =>
+            (record.GetAttributeValue<OptionSetValue>("statecode")?.Value ?? 0) == 0;
+
+        private static bool OwnedBySamePrincipal(Entity record, EntityReference? owner) =>
+            owner != null && record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId)?.Id == owner.Id;
+
+        // Sets the owner columns on a cascaded child: ownerid + owninguser/owningteam, and owningbusinessunit from the
+        // new owner's business unit when security supplies it (owner move follows the owner into their BU).
+        private void ApplyCascadedOwner(Entity child, EntityReference newOwner)
+        {
+            child[SystemFieldApplier.OwnerId] = newOwner;
+            if (string.Equals(newOwner.LogicalName, "team", StringComparison.OrdinalIgnoreCase))
+            {
+                child[SystemFieldApplier.OwningTeam] = new EntityReference("team", newOwner.Id);
+                child.Attributes.Remove(SystemFieldApplier.OwningUser);
+            }
+            else
+            {
+                child[SystemFieldApplier.OwningUser] = new EntityReference("systemuser", newOwner.Id);
+                child.Attributes.Remove(SystemFieldApplier.OwningTeam);
+            }
+
+            if (_security != null)
+            {
+                Guid businessUnit = _security.BusinessUnitOfPrincipal(newOwner);
+                if (businessUnit != Guid.Empty)
+                {
+                    child[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", businessUnit);
+                }
+            }
+        }
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
