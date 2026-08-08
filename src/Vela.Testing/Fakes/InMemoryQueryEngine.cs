@@ -19,9 +19,9 @@ namespace Vela.Testing
         private readonly Func<string, IEnumerable<Entity>> _table;
         private readonly Guid _currentUserId;
 
-        // Optional read-access predicate applied to primary rows BEFORE paging (so pages are drawn from the
-        // records the caller may read, not trimmed afterwards). Null = no security filtering. Not applied to
-        // aggregates yet — that carve-out is decided separately.
+        // Optional read-access predicate applied to primary rows BEFORE paging and BEFORE aggregation, so pages
+        // and aggregate values are drawn from the records the caller may read (not trimmed afterwards). Null = no
+        // security filtering.
         private readonly Func<Entity, bool>? _canRead;
 
         public InMemoryQueryEngine(Func<string, IEnumerable<Entity>> tableAccessor, Guid currentUserId, Func<Entity, bool>? canRead = null)
@@ -176,9 +176,10 @@ namespace Vela.Testing
         }
 
         // Aggregate FetchXML: group rows, compute aggregates, expose group/aggregate values as aliased columns.
+        // Aggregates are computed over the rows the caller may read (security-trimmed), like the platform.
         public EntityCollection ExecuteAggregate(AggregateQuery query)
         {
-            List<Entity> rows = _table(query.EntityName).Where(entity => EvaluateFilter(entity, query.Criteria)).ToList();
+            List<Entity> rows = ReadableRows(query.EntityName).Where(entity => EvaluateFilter(entity, query.Criteria)).ToList();
 
             List<List<Entity>> groups = new List<List<Entity>>();
             if (query.Groups.Count == 0)
