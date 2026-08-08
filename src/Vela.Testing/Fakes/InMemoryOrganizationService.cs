@@ -45,6 +45,8 @@ namespace Vela.Testing
 
         private readonly RelationshipRegistry _relationships = new RelationshipRegistry();
 
+        private readonly OneToManyRegistry _oneToMany = new OneToManyRegistry();
+
         private readonly Dictionary<string, EntityMetadata> _metadata =
             new Dictionary<string, EntityMetadata>(StringComparer.OrdinalIgnoreCase);
 
@@ -262,6 +264,52 @@ namespace Vela.Testing
                 EarlyBound.EntityLogicalName<TSecond>(),
                 EarlyBound.AttributeLogicalName(secondAttribute));
         }
+
+        /// <summary>
+        /// Declares a one-to-many (1:N) relationship and its cascade behaviour, so Delete (and later Assign/Share)
+        /// cascade from the parent (<paramref name="referencedEntity"/>) to the children
+        /// (<paramref name="referencingEntity"/> rows whose <paramref name="referencingAttribute"/> lookup points at
+        /// the parent). Use <see cref="WithParentalRelationship"/>/<see cref="WithReferentialRelationship"/> for the
+        /// common presets.
+        /// </summary>
+        public InMemoryOrganizationService WithRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, CascadeConfiguration cascade)
+        {
+            if (string.IsNullOrWhiteSpace(referencedEntity) || string.IsNullOrWhiteSpace(referencingEntity) || string.IsNullOrWhiteSpace(referencingAttribute))
+            {
+                throw new ArgumentException("Referenced/referencing entity and the referencing attribute are required.");
+            }
+
+            _oneToMany.Add(new OneToManyRegistry.OneToMany(
+                $"{referencedEntity}_{referencingEntity}", referencedEntity, referencingEntity, referencingAttribute, cascade));
+            return this;
+        }
+
+        /// <summary>Declares a <b>parental</b> 1:N relationship: every action (incl. Delete) cascades to children.</summary>
+        public InMemoryOrganizationService WithParentalRelationship(string referencedEntity, string referencingEntity, string referencingAttribute) =>
+            WithRelationship(referencedEntity, referencingEntity, referencingAttribute, new CascadeConfiguration
+            {
+                Assign = CascadeType.Cascade,
+                Delete = CascadeType.Cascade,
+                Merge = CascadeType.Cascade,
+                Reparent = CascadeType.Cascade,
+                Share = CascadeType.Cascade,
+                Unshare = CascadeType.Cascade,
+            });
+
+        /// <summary>
+        /// Declares a <b>referential</b> 1:N relationship: nothing cascades except Delete, which removes the child's
+        /// link. Set <paramref name="restrictDelete"/> to block deleting the parent while children exist.
+        /// </summary>
+        public InMemoryOrganizationService WithReferentialRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, bool restrictDelete = false) =>
+            WithRelationship(referencedEntity, referencingEntity, referencingAttribute, new CascadeConfiguration
+            {
+                Assign = CascadeType.NoCascade,
+                Delete = restrictDelete ? CascadeType.Restrict : CascadeType.RemoveLink,
+                Merge = CascadeType.NoCascade,
+                Reparent = CascadeType.NoCascade,
+                Share = CascadeType.NoCascade,
+                Unshare = CascadeType.NoCascade,
+            });
 
         /// <summary>
         /// Registers table metadata so plugins can read it with <c>RetrieveEntityRequest</c>,
@@ -606,8 +654,58 @@ namespace Vela.Testing
                 DemandAccess(entityName, Privilege.Delete, stored);
             }
 
+            CascadeDelete(entityName, id, new HashSet<Guid>());
+        }
+
+        // Deletes the record and applies each child 1:N relationship's Delete cascade: Cascade deletes the children
+        // (recursively), RemoveLink clears their lookup, Restrict blocks the delete while any child exists. Cascaded
+        // child deletes are system operations — they do NOT re-check the caller's Delete privilege (matching the
+        // platform, where only the parent's Delete privilege is validated). The visited set guards against cycles.
+        private void CascadeDelete(string entityName, Guid id, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            List<OneToManyRegistry.OneToMany> childRelationships = _oneToMany.ChildRelationshipsOf(entityName).ToList();
+
+            // Restrict is evaluated first: a single restricting child blocks the whole delete.
+            foreach (OneToManyRegistry.OneToMany relationship in childRelationships)
+            {
+                if (relationship.Cascade.Delete == CascadeType.Restrict && Children(relationship, id).Any())
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot delete {entityName} {id}: related {relationship.ReferencingEntity} records exist and the relationship's Delete behaviour is Restrict.");
+                }
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in childRelationships)
+            {
+                List<Entity> children = Children(relationship, id).ToList();
+                if (relationship.Cascade.Delete == CascadeType.Cascade)
+                {
+                    foreach (Entity child in children)
+                    {
+                        CascadeDelete(relationship.ReferencingEntity, child.Id, visited);
+                    }
+                }
+                else if (relationship.Cascade.Delete == CascadeType.RemoveLink)
+                {
+                    foreach (Entity child in children)
+                    {
+                        child.Attributes.Remove(relationship.ReferencingAttribute);
+                    }
+                }
+            }
+
             Table(entityName).Remove(id);
         }
+
+        // The child records whose lookup points at the given parent id.
+        private IEnumerable<Entity> Children(OneToManyRegistry.OneToMany relationship, Guid parentId) =>
+            Table(relationship.ReferencingEntity).Values
+                .Where(child => child.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute)?.Id == parentId);
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
