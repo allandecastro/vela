@@ -20,17 +20,21 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Test harness (Vela.Testing)
 
-- **P3 — Security model in the harness (roles, privileges, business units)** — XrmMockup can test security
-  roles / BU setup; Vela's harness deliberately has none (see LIMITATIONS). Reconsider a *minimal, opt-in*
-  privilege model so plugins that branch on access rights (`RetrievePrincipalAccess`/`CheckAccess`, or
-  privilege-denied paths) can be exercised. Must stay off by default — most plugin tests should not need it,
-  and a full security simulation is a large surface. Scope carefully before committing; currently listed under
-  "Won't do" — moving it here means it is up for reconsideration, not yet accepted.
+- **Security model in the harness — SHIPPED** (opt-in, off by default): roles/privileges at the four access
+  levels, business units, users and teams (incl. Member's privilege-inheritance mode), record sharing (PoA),
+  1:N relationship cascades (delete/assign/share/reparent) and inherited access. Still **deferred by decision**:
+  **hierarchy security** (manager/position), **access teams** (team templates), and **field-level security**
+  (column security profiles). Known gaps: cascaded child deletes are store-level for direct callers (they fire the
+  child plugins through `PluginPipeline`).
 
-  Enforcement gaps still open in the opt-in security model (from cross-checking the Dataverse "how record access
-  is determined" / access-rights docs): **org-wide sharing** ("share with the entire organization") and team
-  **Member's privilege inheritance** mode (Team-privileges-only vs Basic) are not yet modelled. (Append/AppendTo
-  on lookups and clamping a share to the sharer's own rights are done.)
+- **P3 — Generate security roles in `vela models`** — generate the solution's (or explicitly named) roles into the
+  **test project** so tests use the REAL role privilege config + role GUIDs instead of hand-declared grants.
+  Dedup to the **root role** (roles are duplicated per BU; keep `roleid == parentrootroleid`). Map
+  `roleprivileges` depth mask → `AccessLevel` (Basic/Local/Deep/Global → User/BU/ParentChild/Org) and the verb →
+  `Privilege`. Emit a `Roles` class with each role's **GUID** (plugin logic uses role ids) + a configurator reusing
+  `Role(name, Action<RoleBuilder>)`. Skip non-entity/miscellaneous privileges (TODO, low value). Part B: model
+  user↔role assignments + a "does user have role R?" service (mirror `RetrieveUserRoles`). Full plan in
+  `.context/security-model-analysis.md`.
 
 ## Developer experience
 
