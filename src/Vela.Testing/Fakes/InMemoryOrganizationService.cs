@@ -784,12 +784,7 @@ namespace Vela.Testing
 
                 foreach (Entity child in Children(relationship, id).ToList())
                 {
-                    if (mode == CascadeType.Active && !IsActive(child))
-                    {
-                        continue;
-                    }
-
-                    if (mode == CascadeType.UserOwned && !OwnedBySamePrincipal(child, previousOwner))
+                    if (!MatchesCascadeScope(child, mode, previousOwner))
                     {
                         continue;
                     }
@@ -797,6 +792,79 @@ namespace Vela.Testing
                     EntityReference? childPreviousOwner = child.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
                     ApplyCascadedOwner(child, newOwner);
                     CascadeAssign(relationship.ReferencingEntity, child.Id, childPreviousOwner, newOwner, visited);
+                }
+            }
+        }
+
+        // Whether a child is in scope for a cascade of the given mode: Cascade = always, Active = only active
+        // children, UserOwned = only children owned by the same principal as the referenced (parent) record.
+        private static bool MatchesCascadeScope(Entity child, CascadeType mode, EntityReference? referencedOwner)
+        {
+            switch (mode)
+            {
+                case CascadeType.Active: return IsActive(child);
+                case CascadeType.UserOwned: return OwnedBySamePrincipal(child, referencedOwner);
+                default: return true;
+            }
+        }
+
+        // Cascades a share (GrantAccess/ModifyAccess) from a parent to its children per the Share cascade mode, then
+        // recurses down the hierarchy. The sharer already has inherited share rights on the children (parental).
+        private void CascadeShare(string entityName, Guid id, PrincipalAccess access, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            EntityReference? owner = StoredOrNull(entityName, id)?.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Share ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (!MatchesCascadeScope(child, mode, owner))
+                    {
+                        continue;
+                    }
+
+                    _sharing.Grant(new EntityReference(relationship.ReferencingEntity, child.Id), access);
+                    CascadeShare(relationship.ReferencingEntity, child.Id, access, visited);
+                }
+            }
+        }
+
+        // Cascades an unshare (RevokeAccess) from a parent to its children per the Unshare cascade mode.
+        private void CascadeUnshare(string entityName, Guid id, EntityReference principal, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            EntityReference? owner = StoredOrNull(entityName, id)?.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Unshare ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (!MatchesCascadeScope(child, mode, owner))
+                    {
+                        continue;
+                    }
+
+                    _sharing.Revoke(new EntityReference(relationship.ReferencingEntity, child.Id), principal);
+                    CascadeUnshare(relationship.ReferencingEntity, child.Id, principal, visited);
                 }
             }
         }
@@ -982,14 +1050,18 @@ namespace Vela.Testing
                 case GrantAccessRequest grant:
                 {
                     DemandAccess(grant.Target.LogicalName, Privilege.Share, StoredOrNull(grant.Target.LogicalName, grant.Target.Id));
-                    _sharing.Grant(grant.Target, ClampToSharerRights(grant.Target, grant.PrincipalAccess));
+                    PrincipalAccess granted = ClampToSharerRights(grant.Target, grant.PrincipalAccess);
+                    _sharing.Grant(grant.Target, granted);
+                    CascadeShare(grant.Target.LogicalName, grant.Target.Id, granted, new HashSet<Guid>());
                     return new GrantAccessResponse();
                 }
 
                 case ModifyAccessRequest modify:
                 {
                     DemandAccess(modify.Target.LogicalName, Privilege.Share, StoredOrNull(modify.Target.LogicalName, modify.Target.Id));
-                    _sharing.Modify(modify.Target, ClampToSharerRights(modify.Target, modify.PrincipalAccess));
+                    PrincipalAccess modified = ClampToSharerRights(modify.Target, modify.PrincipalAccess);
+                    _sharing.Modify(modify.Target, modified);
+                    CascadeShare(modify.Target.LogicalName, modify.Target.Id, modified, new HashSet<Guid>());
                     return new ModifyAccessResponse();
                 }
 
@@ -997,6 +1069,7 @@ namespace Vela.Testing
                 {
                     DemandAccess(revoke.Target.LogicalName, Privilege.Share, StoredOrNull(revoke.Target.LogicalName, revoke.Target.Id));
                     _sharing.Revoke(revoke.Target, revoke.Revokee);
+                    CascadeUnshare(revoke.Target.LogicalName, revoke.Target.Id, revoke.Revokee, new HashSet<Guid>());
                     return new RevokeAccessResponse();
                 }
 
