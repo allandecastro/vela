@@ -20,6 +20,10 @@ namespace Vela.Testing
         public IEnumerable<OneToMany> ChildRelationshipsOf(string referencedEntity) =>
             _relationships.Where(r => string.Equals(r.ReferencedEntity, referencedEntity, StringComparison.OrdinalIgnoreCase));
 
+        /// <summary>The relationships in which <paramref name="referencingEntity"/> is the child (referencing) table.</summary>
+        public IEnumerable<OneToMany> ParentRelationshipsOf(string referencingEntity) =>
+            _relationships.Where(r => string.Equals(r.ReferencingEntity, referencingEntity, StringComparison.OrdinalIgnoreCase));
+
         /// <summary>A 1:N relationship: a lookup (<see cref="ReferencingAttribute"/>) on the child pointing at the parent.</summary>
         internal sealed class OneToMany
         {

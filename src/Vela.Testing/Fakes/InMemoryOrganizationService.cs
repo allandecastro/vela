@@ -525,8 +525,57 @@ namespace Vela.Testing
         }
 
         // Enforces a privilege for the current user when security is configured; a no-op otherwise (default-off).
-        private void DemandAccess(string entityName, Privilege privilege, Entity? record) =>
-            _security?.Demand(_currentUserId, entityName, privilege, record);
+        // Access is the union of role access, sharing (both in the SecurityModel) and inherited access from a
+        // parental parent record — so a user who can act on the parent can act on the child.
+        private void DemandAccess(string entityName, Privilege privilege, Entity? record)
+        {
+            if (_security == null || CanAccess(entityName, privilege, record))
+            {
+                return;
+            }
+
+            throw _security.PrivilegeDenied(_currentUserId, privilege, entityName);
+        }
+
+        // The full access decision for the current user: role + shared access, or access inherited from the record's
+        // parent in a parental relationship. Assumes security is configured.
+        private bool CanAccess(string entityName, Privilege privilege, Entity? record) =>
+            _security!.IsGranted(_currentUserId, entityName, privilege, record) ||
+            HasInheritedAccess(entityName, privilege, record, new HashSet<Guid>());
+
+        // Inherited access: in a parental relationship (one that cascades Reparent), a child inherits the access the
+        // user has on its parent — for every privilege except Create. Walks up the hierarchy, guarding against cycles.
+        private bool HasInheritedAccess(string entityName, Privilege privilege, Entity? record, HashSet<Guid> visited)
+        {
+            if (_security == null || record == null || privilege == Privilege.Create || !visited.Add(record.Id))
+            {
+                return false;
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ParentRelationshipsOf(entityName))
+            {
+                if (!ConfersInheritedAccess(relationship) ||
+                    record.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute) is not EntityReference parentRef)
+                {
+                    continue;
+                }
+
+                Entity? parent = StoredOrNull(parentRef.LogicalName, parentRef.Id);
+                if (parent != null &&
+                    (_security.IsGranted(_currentUserId, parentRef.LogicalName, privilege, parent) ||
+                     HasInheritedAccess(parentRef.LogicalName, privilege, parent, visited)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // A relationship confers inherited access when it cascades the Reparent action (the parental behaviour that
+        // re-derives inherited rights); a purely referential relationship (Reparent = NoCascade) does not.
+        private static bool ConfersInheritedAccess(OneToManyRegistry.OneToMany relationship) =>
+            relationship.Cascade.Reparent is CascadeType reparent && reparent != CascadeType.NoCascade;
 
         // Create is checked at depth against the record's PROSPECTIVE owner/BU, exactly like Read/Write/Delete are
         // checked against an existing record — so a User-level Create only covers records the caller will own, a
@@ -808,9 +857,10 @@ namespace Vela.Testing
         }
 
         // The predicate the query engine uses to keep only rows the current user may read (null = no security).
-        // It reads the stored record's own owner columns, so filtering is correct regardless of the query's ColumnSet.
+        // Includes access inherited from a parental parent, and reads the stored record's own owner columns so
+        // filtering is correct regardless of the query's ColumnSet.
         private Func<Entity, bool>? ReadFilter() =>
-            _security == null ? null : row => _security.IsGranted(_currentUserId, row.LogicalName, Privilege.Read, row);
+            _security == null ? null : row => CanAccess(row.LogicalName, Privilege.Read, row);
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {

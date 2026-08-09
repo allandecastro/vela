@@ -311,11 +311,15 @@ namespace Vela.Testing.Security
         /// </summary>
         public void Demand(Guid userId, string entity, Privilege privilege, Entity? record)
         {
-            if (IsGranted(userId, entity, privilege, record))
+            if (!IsGranted(userId, entity, privilege, record))
             {
-                return;
+                throw PrivilegeDenied(userId, privilege, entity);
             }
+        }
 
+        /// <summary>Builds the PrincipalPrivilegeDenied fault, so callers that add extra access checks can throw it.</summary>
+        public FaultException<OrganizationServiceFault> PrivilegeDenied(Guid userId, Privilege privilege, string entity)
+        {
             string message = $"Principal user ({userId}) is missing the {privilege} privilege on '{entity}'.";
             OrganizationServiceFault fault = new OrganizationServiceFault
             {
@@ -323,7 +327,7 @@ namespace Vela.Testing.Security
                 Message = message,
             };
 
-            throw new FaultException<OrganizationServiceFault>(fault, new FaultReason(message));
+            return new FaultException<OrganizationServiceFault>(fault, new FaultReason(message));
         }
 
         /// <summary>
