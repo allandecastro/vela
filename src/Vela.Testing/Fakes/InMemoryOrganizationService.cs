@@ -45,6 +45,8 @@ namespace Vela.Testing
 
         private readonly RelationshipRegistry _relationships = new RelationshipRegistry();
 
+        private readonly OneToManyRegistry _oneToMany = new OneToManyRegistry();
+
         private readonly Dictionary<string, EntityMetadata> _metadata =
             new Dictionary<string, EntityMetadata>(StringComparer.OrdinalIgnoreCase);
 
@@ -264,6 +266,52 @@ namespace Vela.Testing
         }
 
         /// <summary>
+        /// Declares a one-to-many (1:N) relationship and its cascade behaviour, so Delete (and later Assign/Share)
+        /// cascade from the parent (<paramref name="referencedEntity"/>) to the children
+        /// (<paramref name="referencingEntity"/> rows whose <paramref name="referencingAttribute"/> lookup points at
+        /// the parent). Use <see cref="WithParentalRelationship"/>/<see cref="WithReferentialRelationship"/> for the
+        /// common presets.
+        /// </summary>
+        public InMemoryOrganizationService WithRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, CascadeConfiguration cascade)
+        {
+            if (string.IsNullOrWhiteSpace(referencedEntity) || string.IsNullOrWhiteSpace(referencingEntity) || string.IsNullOrWhiteSpace(referencingAttribute))
+            {
+                throw new ArgumentException("Referenced/referencing entity and the referencing attribute are required.");
+            }
+
+            _oneToMany.Add(new OneToManyRegistry.OneToMany(
+                $"{referencedEntity}_{referencingEntity}", referencedEntity, referencingEntity, referencingAttribute, cascade));
+            return this;
+        }
+
+        /// <summary>Declares a <b>parental</b> 1:N relationship: every action (incl. Delete) cascades to children.</summary>
+        public InMemoryOrganizationService WithParentalRelationship(string referencedEntity, string referencingEntity, string referencingAttribute) =>
+            WithRelationship(referencedEntity, referencingEntity, referencingAttribute, new CascadeConfiguration
+            {
+                Assign = CascadeType.Cascade,
+                Delete = CascadeType.Cascade,
+                Merge = CascadeType.Cascade,
+                Reparent = CascadeType.Cascade,
+                Share = CascadeType.Cascade,
+                Unshare = CascadeType.Cascade,
+            });
+
+        /// <summary>
+        /// Declares a <b>referential</b> 1:N relationship: nothing cascades except Delete, which removes the child's
+        /// link. Set <paramref name="restrictDelete"/> to block deleting the parent while children exist.
+        /// </summary>
+        public InMemoryOrganizationService WithReferentialRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, bool restrictDelete = false) =>
+            WithRelationship(referencedEntity, referencingEntity, referencingAttribute, new CascadeConfiguration
+            {
+                Assign = CascadeType.NoCascade,
+                Delete = restrictDelete ? CascadeType.Restrict : CascadeType.RemoveLink,
+                Merge = CascadeType.NoCascade,
+                Reparent = CascadeType.NoCascade,
+                Share = CascadeType.NoCascade,
+                Unshare = CascadeType.NoCascade,
+            });
+
+        /// <summary>
         /// Registers table metadata so plugins can read it with <c>RetrieveEntityRequest</c>,
         /// <c>RetrieveAllEntitiesRequest</c> and <c>RetrieveAttributeRequest</c>. Build metadata easily with
         /// <see cref="FakeEntityMetadata"/>. The in-memory store has no metadata of its own, so only what you
@@ -398,6 +446,8 @@ namespace Vela.Testing
             }
 
             bool changesOwner = entity.Contains(SystemFieldApplier.OwnerId);
+            // Captured before the merge: needed for the UserOwned cascade scope (children owned by the same user).
+            EntityReference? previousOwner = changesOwner ? stored.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) : null;
             if (entity.Attributes.Keys.Any(key => !string.Equals(key, SystemFieldApplier.OwnerId, StringComparison.OrdinalIgnoreCase)))
             {
                 DemandAccess(entity.LogicalName, Privilege.Write, stored);
@@ -430,6 +480,11 @@ namespace Vela.Testing
             if (changesOwner)
             {
                 RealignOwningBusinessUnit(stored);
+                EntityReference? newOwner = stored.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+                if (newOwner != null)
+                {
+                    CascadeAssign(entity.LogicalName, entity.Id, previousOwner, newOwner, new HashSet<Guid>());
+                }
             }
         }
 
@@ -470,8 +525,57 @@ namespace Vela.Testing
         }
 
         // Enforces a privilege for the current user when security is configured; a no-op otherwise (default-off).
-        private void DemandAccess(string entityName, Privilege privilege, Entity? record) =>
-            _security?.Demand(_currentUserId, entityName, privilege, record);
+        // Access is the union of role access, sharing (both in the SecurityModel) and inherited access from a
+        // parental parent record — so a user who can act on the parent can act on the child.
+        private void DemandAccess(string entityName, Privilege privilege, Entity? record)
+        {
+            if (_security == null || CanAccess(entityName, privilege, record))
+            {
+                return;
+            }
+
+            throw _security.PrivilegeDenied(_currentUserId, privilege, entityName);
+        }
+
+        // The full access decision for the current user: role + shared access, or access inherited from the record's
+        // parent in a parental relationship. Assumes security is configured.
+        private bool CanAccess(string entityName, Privilege privilege, Entity? record) =>
+            _security!.IsGranted(_currentUserId, entityName, privilege, record) ||
+            HasInheritedAccess(entityName, privilege, record, new HashSet<Guid>());
+
+        // Inherited access: in a parental relationship (one that cascades Reparent), a child inherits the access the
+        // user has on its parent — for every privilege except Create. Walks up the hierarchy, guarding against cycles.
+        private bool HasInheritedAccess(string entityName, Privilege privilege, Entity? record, HashSet<Guid> visited)
+        {
+            if (_security == null || record == null || privilege == Privilege.Create || !visited.Add(record.Id))
+            {
+                return false;
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ParentRelationshipsOf(entityName))
+            {
+                if (!ConfersInheritedAccess(relationship) ||
+                    record.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute) is not EntityReference parentRef)
+                {
+                    continue;
+                }
+
+                Entity? parent = StoredOrNull(parentRef.LogicalName, parentRef.Id);
+                if (parent != null &&
+                    (_security.IsGranted(_currentUserId, parentRef.LogicalName, privilege, parent) ||
+                     HasInheritedAccess(parentRef.LogicalName, privilege, parent, visited)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // A relationship confers inherited access when it cascades the Reparent action (the parental behaviour that
+        // re-derives inherited rights); a purely referential relationship (Reparent = NoCascade) does not.
+        private static bool ConfersInheritedAccess(OneToManyRegistry.OneToMany relationship) =>
+            relationship.Cascade.Reparent is CascadeType reparent && reparent != CascadeType.NoCascade;
 
         // Create is checked at depth against the record's PROSPECTIVE owner/BU, exactly like Read/Write/Delete are
         // checked against an existing record — so a User-level Create only covers records the caller will own, a
@@ -606,7 +710,196 @@ namespace Vela.Testing
                 DemandAccess(entityName, Privilege.Delete, stored);
             }
 
+            CascadeDelete(entityName, id, new HashSet<Guid>());
+        }
+
+        // Deletes the record and applies each child 1:N relationship's Delete cascade: Cascade deletes the children
+        // (recursively), RemoveLink clears their lookup, Restrict blocks the delete while any child exists. Cascaded
+        // child deletes are system operations — they do NOT re-check the caller's Delete privilege (matching the
+        // platform, where only the parent's Delete privilege is validated). The visited set guards against cycles.
+        private void CascadeDelete(string entityName, Guid id, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            List<OneToManyRegistry.OneToMany> childRelationships = _oneToMany.ChildRelationshipsOf(entityName).ToList();
+
+            // Restrict is evaluated first: a single restricting child blocks the whole delete.
+            foreach (OneToManyRegistry.OneToMany relationship in childRelationships)
+            {
+                if (relationship.Cascade.Delete == CascadeType.Restrict && Children(relationship, id).Any())
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot delete {entityName} {id}: related {relationship.ReferencingEntity} records exist and the relationship's Delete behaviour is Restrict.");
+                }
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in childRelationships)
+            {
+                List<Entity> children = Children(relationship, id).ToList();
+                if (relationship.Cascade.Delete == CascadeType.Cascade)
+                {
+                    foreach (Entity child in children)
+                    {
+                        CascadeDelete(relationship.ReferencingEntity, child.Id, visited);
+                    }
+                }
+                else if (relationship.Cascade.Delete == CascadeType.RemoveLink)
+                {
+                    foreach (Entity child in children)
+                    {
+                        child.Attributes.Remove(relationship.ReferencingAttribute);
+                    }
+                }
+            }
+
             Table(entityName).Remove(id);
+        }
+
+        // The child records whose lookup points at the given parent id.
+        private IEnumerable<Entity> Children(OneToManyRegistry.OneToMany relationship, Guid parentId) =>
+            Table(relationship.ReferencingEntity).Values
+                .Where(child => child.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute)?.Id == parentId);
+
+        // Cascades an ownership change from a parent to its children per each relationship's Assign behaviour:
+        // Cascade = all children, Active = only active children, UserOwned = only children owned by the same user as
+        // the parent was. The child's owning business unit follows the new owner (when security supplies it), and the
+        // cascade recurses down the hierarchy.
+        private void CascadeAssign(string entityName, Guid id, EntityReference? previousOwner, EntityReference newOwner, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Assign ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (!MatchesCascadeScope(child, mode, previousOwner))
+                    {
+                        continue;
+                    }
+
+                    EntityReference? childPreviousOwner = child.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+                    ApplyCascadedOwner(child, newOwner);
+                    CascadeAssign(relationship.ReferencingEntity, child.Id, childPreviousOwner, newOwner, visited);
+                }
+            }
+        }
+
+        // Whether a child is in scope for a cascade of the given mode: Cascade = always, Active = only active
+        // children, UserOwned = only children owned by the same principal as the referenced (parent) record.
+        private static bool MatchesCascadeScope(Entity child, CascadeType mode, EntityReference? referencedOwner)
+        {
+            switch (mode)
+            {
+                case CascadeType.Active: return IsActive(child);
+                case CascadeType.UserOwned: return OwnedBySamePrincipal(child, referencedOwner);
+                default: return true;
+            }
+        }
+
+        // Cascades a share (GrantAccess/ModifyAccess) from a parent to its children per the Share cascade mode, then
+        // recurses down the hierarchy. The sharer already has inherited share rights on the children (parental).
+        private void CascadeShare(string entityName, Guid id, PrincipalAccess access, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            EntityReference? owner = StoredOrNull(entityName, id)?.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Share ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (!MatchesCascadeScope(child, mode, owner))
+                    {
+                        continue;
+                    }
+
+                    _sharing.Grant(new EntityReference(relationship.ReferencingEntity, child.Id), access);
+                    CascadeShare(relationship.ReferencingEntity, child.Id, access, visited);
+                }
+            }
+        }
+
+        // Cascades an unshare (RevokeAccess) from a parent to its children per the Unshare cascade mode.
+        private void CascadeUnshare(string entityName, Guid id, EntityReference principal, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            EntityReference? owner = StoredOrNull(entityName, id)?.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Unshare ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (!MatchesCascadeScope(child, mode, owner))
+                    {
+                        continue;
+                    }
+
+                    _sharing.Revoke(new EntityReference(relationship.ReferencingEntity, child.Id), principal);
+                    CascadeUnshare(relationship.ReferencingEntity, child.Id, principal, visited);
+                }
+            }
+        }
+
+        // Active state is state code 0 for most tables (the common case the harness models); a missing state is active.
+        private static bool IsActive(Entity record) =>
+            (record.GetAttributeValue<OptionSetValue>("statecode")?.Value ?? 0) == 0;
+
+        private static bool OwnedBySamePrincipal(Entity record, EntityReference? owner) =>
+            owner != null && record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId)?.Id == owner.Id;
+
+        // Sets the owner columns on a cascaded child: ownerid + owninguser/owningteam, and owningbusinessunit from the
+        // new owner's business unit when security supplies it (owner move follows the owner into their BU).
+        private void ApplyCascadedOwner(Entity child, EntityReference newOwner)
+        {
+            child[SystemFieldApplier.OwnerId] = newOwner;
+            if (string.Equals(newOwner.LogicalName, "team", StringComparison.OrdinalIgnoreCase))
+            {
+                child[SystemFieldApplier.OwningTeam] = new EntityReference("team", newOwner.Id);
+                child.Attributes.Remove(SystemFieldApplier.OwningUser);
+            }
+            else
+            {
+                child[SystemFieldApplier.OwningUser] = new EntityReference("systemuser", newOwner.Id);
+                child.Attributes.Remove(SystemFieldApplier.OwningTeam);
+            }
+
+            if (_security != null)
+            {
+                Guid businessUnit = _security.BusinessUnitOfPrincipal(newOwner);
+                if (businessUnit != Guid.Empty)
+                {
+                    child[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", businessUnit);
+                }
+            }
         }
 
         public EntityCollection RetrieveMultiple(QueryBase query)
@@ -632,9 +925,10 @@ namespace Vela.Testing
         }
 
         // The predicate the query engine uses to keep only rows the current user may read (null = no security).
-        // It reads the stored record's own owner columns, so filtering is correct regardless of the query's ColumnSet.
+        // Includes access inherited from a parental parent, and reads the stored record's own owner columns so
+        // filtering is correct regardless of the query's ColumnSet.
         private Func<Entity, bool>? ReadFilter() =>
-            _security == null ? null : row => _security.IsGranted(_currentUserId, row.LogicalName, Privilege.Read, row);
+            _security == null ? null : row => CanAccess(row.LogicalName, Privilege.Read, row);
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {
@@ -756,14 +1050,18 @@ namespace Vela.Testing
                 case GrantAccessRequest grant:
                 {
                     DemandAccess(grant.Target.LogicalName, Privilege.Share, StoredOrNull(grant.Target.LogicalName, grant.Target.Id));
-                    _sharing.Grant(grant.Target, ClampToSharerRights(grant.Target, grant.PrincipalAccess));
+                    PrincipalAccess granted = ClampToSharerRights(grant.Target, grant.PrincipalAccess);
+                    _sharing.Grant(grant.Target, granted);
+                    CascadeShare(grant.Target.LogicalName, grant.Target.Id, granted, new HashSet<Guid>());
                     return new GrantAccessResponse();
                 }
 
                 case ModifyAccessRequest modify:
                 {
                     DemandAccess(modify.Target.LogicalName, Privilege.Share, StoredOrNull(modify.Target.LogicalName, modify.Target.Id));
-                    _sharing.Modify(modify.Target, ClampToSharerRights(modify.Target, modify.PrincipalAccess));
+                    PrincipalAccess modified = ClampToSharerRights(modify.Target, modify.PrincipalAccess);
+                    _sharing.Modify(modify.Target, modified);
+                    CascadeShare(modify.Target.LogicalName, modify.Target.Id, modified, new HashSet<Guid>());
                     return new ModifyAccessResponse();
                 }
 
@@ -771,6 +1069,7 @@ namespace Vela.Testing
                 {
                     DemandAccess(revoke.Target.LogicalName, Privilege.Share, StoredOrNull(revoke.Target.LogicalName, revoke.Target.Id));
                     _sharing.Revoke(revoke.Target, revoke.Revokee);
+                    CascadeUnshare(revoke.Target.LogicalName, revoke.Target.Id, revoke.Revokee, new HashSet<Guid>());
                     return new RevokeAccessResponse();
                 }
 

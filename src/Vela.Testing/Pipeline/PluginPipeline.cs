@@ -186,6 +186,27 @@ namespace Vela.Testing
             return this;
         }
 
+        /// <summary>Declares a 1:N relationship and its cascade behaviour (see the store's <c>WithRelationship</c>).</summary>
+        public PluginPipeline WithRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, Microsoft.Xrm.Sdk.Metadata.CascadeConfiguration cascade)
+        {
+            _store.WithRelationship(referencedEntity, referencingEntity, referencingAttribute, cascade);
+            return this;
+        }
+
+        /// <summary>Declares a parental 1:N relationship (every action, incl. Delete, cascades to children).</summary>
+        public PluginPipeline WithParentalRelationship(string referencedEntity, string referencingEntity, string referencingAttribute)
+        {
+            _store.WithParentalRelationship(referencedEntity, referencingEntity, referencingAttribute);
+            return this;
+        }
+
+        /// <summary>Declares a referential 1:N relationship (Delete removes the child link, or Restrict blocks it).</summary>
+        public PluginPipeline WithReferentialRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, bool restrictDelete = false)
+        {
+            _store.WithReferentialRelationship(referencedEntity, referencingEntity, referencingAttribute, restrictDelete);
+            return this;
+        }
+
         /// <summary>Registers table metadata readable via RetrieveEntity/RetrieveAllEntities/RetrieveAttribute.</summary>
         public PluginPipeline WithEntityMetadata(params Microsoft.Xrm.Sdk.Metadata.EntityMetadata[] metadata)
         {
