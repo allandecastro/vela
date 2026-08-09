@@ -7,6 +7,7 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
+using Vela.Testing.Security;
 
 namespace Vela.Testing
 {
@@ -59,6 +60,10 @@ namespace Vela.Testing
 
         private Guid _currentOrganizationId = Guid.Empty;
 
+        // Opt-in security model. Null means no enforcement: Create/Retrieve/Update/Delete and RetrieveMultiple
+        // behave exactly as before (full access). Set via WithSecurity.
+        private SecurityModel? _security;
+
         private Func<DateTime> _clock = () => DateTime.UtcNow;
 
         private Func<Guid> _idSequence = () => Guid.NewGuid();
@@ -95,6 +100,28 @@ namespace Vela.Testing
         public InMemoryOrganizationService WithOrganizationId(Guid organizationId)
         {
             _currentOrganizationId = organizationId;
+            return this;
+        }
+
+        /// <summary>
+        /// Enables opt-in security enforcement. Configure business units, named roles, users, teams and team
+        /// membership; the service then enforces table privileges on Create/Retrieve/Update/Delete (throwing
+        /// <c>FaultException&lt;OrganizationServiceFault&gt;</c> with the PrincipalPrivilegeDenied code when the
+        /// current user lacks a privilege) and filters RetrieveMultiple to records the user may read. The current
+        /// user is the one set by <see cref="WithCurrentUser"/>; its business unit (for depth checks and
+        /// <c>owningbusinessunit</c> stamping) comes from its <c>User(...)</c> registration. Without this call there
+        /// is no enforcement — full access, as before.
+        /// </summary>
+        public InMemoryOrganizationService WithSecurity(Action<SecurityConfiguration> configure)
+        {
+            if (configure == null)
+            {
+                throw new ArgumentNullException(nameof(configure));
+            }
+
+            SecurityConfiguration configuration = new SecurityConfiguration();
+            configure(configuration);
+            _security = configuration.Build();
             return this;
         }
 
@@ -309,6 +336,7 @@ namespace Vela.Testing
             }
 
             EnsureWritable(entity.LogicalName);
+            DemandAccess(entity.LogicalName, Privilege.Create, null);
             Entity stored = EntityValues.Clone(entity);
             if (stored.Id == Guid.Empty)
             {
@@ -329,10 +357,15 @@ namespace Vela.Testing
                 throw new InvalidOperationException($"{entityName} with id {id} does not exist in the in-memory store.");
             }
 
+            DemandAccess(entityName, Privilege.Read, stored);
             return Project(stored, columnSet);
         }
 
-        public void Update(Entity entity)
+        public void Update(Entity entity) => UpdateCore(entity, Privilege.Write);
+
+        // Shared by Update (needs Write) and Assign (needs Assign): both merge attributes onto the stored record,
+        // differing only in the privilege the caller must hold.
+        private void UpdateCore(Entity entity, Privilege privilege)
         {
             if (entity == null)
             {
@@ -344,6 +377,8 @@ namespace Vela.Testing
             {
                 throw new InvalidOperationException($"{entity.LogicalName} with id {entity.Id} does not exist in the in-memory store.");
             }
+
+            DemandAccess(entity.LogicalName, privilege, stored);
 
             // Validate the would-be merged record before committing so a duplicate-key throw leaves the store intact.
             Entity candidate = EntityValues.Clone(stored);
@@ -364,7 +399,45 @@ namespace Vela.Testing
             _systemFields.ApplyOnUpdate(entity, stored, Actor(), _clock(), NextVersion());
         }
 
-        private SystemActor Actor() => new SystemActor(_currentUserId, _currentBusinessUnitId, _currentOrganizationId);
+        private SystemActor Actor()
+        {
+            // When security is on, the acting user's business unit comes from its registration, so records the
+            // user creates are stamped with the BU that depth checks resolve against. Off: unchanged behaviour.
+            Guid businessUnit = _currentBusinessUnitId;
+            if (_security != null)
+            {
+                Guid registered = _security.BusinessUnitOf(_currentUserId);
+                if (registered != Guid.Empty)
+                {
+                    businessUnit = registered;
+                }
+            }
+
+            return new SystemActor(_currentUserId, businessUnit, _currentOrganizationId);
+        }
+
+        // Enforces a privilege for the current user when security is configured; a no-op otherwise (default-off).
+        private void DemandAccess(string entityName, Privilege privilege, Entity? record) =>
+            _security?.Demand(_currentUserId, entityName, privilege, record);
+
+        // Relating records needs AppendTo on the record being related to and Append on each record related to it,
+        // mirroring the platform. Off (or nothing configured) is a no-op.
+        private void DemandAssociationAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            DemandAccess(entityName, Privilege.AppendTo, StoredOrNull(entityName, entityId));
+            foreach (EntityReference related in relatedEntities)
+            {
+                DemandAccess(related.LogicalName, Privilege.Append, StoredOrNull(related.LogicalName, related.Id));
+            }
+        }
+
+        private Entity? StoredOrNull(string entityName, Guid id) =>
+            Table(entityName).TryGetValue(id, out Entity? stored) ? stored : null;
 
         private long NextVersion() => ++_version;
 
@@ -380,28 +453,72 @@ namespace Vela.Testing
         public void Delete(string entityName, Guid id)
         {
             EnsureWritable(entityName);
+            if (_security != null && Table(entityName).TryGetValue(id, out Entity? stored))
+            {
+                DemandAccess(entityName, Privilege.Delete, stored);
+            }
+
             Table(entityName).Remove(id);
         }
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
             InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId);
+            EntityCollection result;
+            bool aggregate = false;
             switch (query)
             {
                 case QueryExpression qe:
-                    return engine.ExecuteQueryExpression(qe);
+                    // A grouped/aggregate QueryExpression carries column aggregate expressions instead of plain columns.
+                    aggregate = qe.ColumnSet?.AttributeExpressions?.Count > 0;
+                    result = engine.ExecuteQueryExpression(qe);
+                    break;
                 case QueryByAttribute qba:
-                    return engine.ExecuteQueryByAttribute(qba);
+                    result = engine.ExecuteQueryByAttribute(qba);
+                    break;
                 case FetchExpression fetch:
-                    return FetchXmlParser.IsAggregate(fetch.Query)
+                    aggregate = FetchXmlParser.IsAggregate(fetch.Query);
+                    result = aggregate
                         ? engine.ExecuteAggregate(FetchXmlParser.ParseAggregate(fetch.Query))
                         : engine.ExecuteQueryExpression(FetchXmlParser.Parse(fetch.Query));
+                    break;
                 default:
                     throw new NotSupportedException(
                         $"InMemoryOrganizationService supports QueryExpression, QueryByAttribute and FetchExpression. " +
                         $"{query.GetType().Name} is not supported yet.");
             }
+
+            return FilterReadable(result, aggregate);
         }
+
+        // With security on, RetrieveMultiple returns only records the current user may read — like the platform,
+        // which silently omits records the caller cannot see rather than faulting. Off: the collection is returned
+        // unchanged.
+        private EntityCollection FilterReadable(EntityCollection collection, bool aggregate)
+        {
+            // Aggregate rows are computed over the whole store and carry no owner to check; security-filtering the
+            // underlying records before aggregation is out of scope, so aggregate results are returned as-is.
+            if (_security == null || aggregate)
+            {
+                return collection;
+            }
+
+            List<Entity> removed = collection.Entities
+                .Where(e => !_security.IsGranted(_currentUserId, e.LogicalName, Privilege.Read, BackingRecord(e)))
+                .ToList();
+            foreach (Entity entity in removed)
+            {
+                collection.Entities.Remove(entity);
+            }
+
+            return collection;
+        }
+
+        // Read access is decided from the stored record's owner columns, not the projected result, so a query that
+        // does not select ownerid/owningbusinessunit still filters correctly. Falls back to the row itself if the
+        // record is not in the store (e.g. link-entity synthetic rows).
+        private Entity BackingRecord(Entity row) =>
+            Table(row.LogicalName).TryGetValue(row.Id, out Entity? stored) ? stored : row;
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {
@@ -461,7 +578,8 @@ namespace Vela.Testing
                 case AssignRequest assign:
                 {
                     // Modern Dataverse models assignment as an ownerid Update, which re-derives the owning columns.
-                    Update(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee });
+                    // The privilege required is Assign (not Write), so it is demanded explicitly here.
+                    UpdateCore(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee }, Privilege.Assign);
                     return new AssignResponse();
                 }
 
@@ -506,6 +624,16 @@ namespace Vela.Testing
 
                     RetrieveAttributeResponse response = new RetrieveAttributeResponse();
                     response.Results["AttributeMetadata"] = attribute;
+                    return response;
+                }
+
+                case WhoAmIRequest:
+                {
+                    SystemActor actor = Actor();
+                    WhoAmIResponse response = new WhoAmIResponse();
+                    response.Results["UserId"] = actor.UserId;
+                    response.Results["BusinessUnitId"] = actor.BusinessUnitId;
+                    response.Results["OrganizationId"] = actor.OrganizationId;
                     return response;
                 }
 
@@ -674,6 +802,7 @@ namespace Vela.Testing
 
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
+            DemandAssociationAccess(entityName, entityId, relatedEntities);
             RelationshipRegistry.ManyToMany rel = ResolveManyToMany(relationship.SchemaName);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
@@ -704,6 +833,7 @@ namespace Vela.Testing
         /// </summary>
         public void Disassociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
+            DemandAssociationAccess(entityName, entityId, relatedEntities);
             RelationshipRegistry.ManyToMany rel = ResolveManyToMany(relationship.SchemaName);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);

@@ -10,6 +10,7 @@ using Vela.Constants;
 using Vela.CustomApi;
 using Vela.Manifest;
 using Vela.StepBuilder;
+using Vela.Testing.Security;
 
 namespace Vela.Testing
 {
@@ -221,6 +222,18 @@ namespace Vela.Testing
         public PluginPipeline WithOrganizationId(Guid organizationId)
         {
             _store.WithOrganizationId(organizationId);
+            return this;
+        }
+
+        /// <summary>
+        /// Enables opt-in security enforcement for the scenario (see <c>InMemoryOrganizationService.WithSecurity</c>).
+        /// Every write the pipeline drives and every read plugins issue through <see cref="Service"/> is then checked
+        /// against the current user's roles; a denied write throws PrincipalPrivilegeDenied and rolls the operation
+        /// back. Off by default. Set the current user with <see cref="WithCurrentUser"/>.
+        /// </summary>
+        public PluginPipeline WithSecurity(Action<SecurityConfiguration> configure)
+        {
+            _store.WithSecurity(configure);
             return this;
         }
 
