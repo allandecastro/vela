@@ -489,22 +489,31 @@ namespace Vela.Testing
         {
             RunOperation<object?>(asyncQueue =>
             {
-                _store.TryGet(entityName, id, out Entity? pre);
-                EntityReference target = new EntityReference(entityName, id);
-
-                StageInvocation Make(PluginStages stage)
-                {
-                    StageInvocation invocation = NewInvocation(PluginMessages.Delete, stage, entityName, id, target);
-                    invocation.PreState = pre;
-                    return invocation;
-                }
-
-                FireStage(Make(PluginStages.PreValidation), asyncQueue);
-                FireStage(Make(PluginStages.PreOperation), asyncQueue);
-                _store.Delete(entityName, id);
-                FireStage(Make(PluginStages.PostOperation), asyncQueue);
+                // The store owns the cascade traversal (Restrict/RemoveLink/recursion) but delegates each actual
+                // record removal to us, so the Delete plugins fire for the parent AND every cascaded child.
+                _store.DeleteInternal(entityName, id, (name, recordId) => FireDeleteAndRemove(name, recordId, asyncQueue));
                 return null;
             }, sharedVariables);
+        }
+
+        // Fires one record's Delete pre-stages, removes just that record (the store handles cascade around this),
+        // then fires its post-stages — the same pre/remove/post a top-level Delete runs, applied per cascaded record.
+        private void FireDeleteAndRemove(string entityName, Guid id, List<Action> asyncQueue)
+        {
+            _store.TryGet(entityName, id, out Entity? pre);
+            EntityReference target = new EntityReference(entityName, id);
+
+            StageInvocation Make(PluginStages stage)
+            {
+                StageInvocation invocation = NewInvocation(PluginMessages.Delete, stage, entityName, id, target);
+                invocation.PreState = pre;
+                return invocation;
+            }
+
+            FireStage(Make(PluginStages.PreValidation), asyncQueue);
+            FireStage(Make(PluginStages.PreOperation), asyncQueue);
+            _store.RemoveRecordDirect(entityName, id);
+            FireStage(Make(PluginStages.PostOperation), asyncQueue);
         }
 
         internal void ExecuteAssociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities, ParameterCollection? sharedVariables = null)

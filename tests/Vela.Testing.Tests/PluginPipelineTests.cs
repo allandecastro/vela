@@ -12,6 +12,24 @@ namespace Vela.Testing.Tests
     public sealed class PluginPipelineTests
     {
         [Fact]
+        public void Cascade_delete_fires_the_childrens_delete_plugins()
+        {
+            Guid account = Guid.NewGuid();
+            Guid task = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .Register<OnTaskDelete>()
+                .WithParentalRelationship("account", "task", "regardingobjectid")
+                .Seed(
+                    new Entity("account", account),
+                    new Entity("task", task) { ["regardingobjectid"] = new EntityReference("account", account) });
+
+            pipeline.Service.Delete("account", account);
+
+            Assert.Empty(pipeline.GetAll("task")); // cascaded away with the parent
+            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("OnTaskDelete")); // child Delete plugin ran
+        }
+
+        [Fact]
         public void SystemColumns_AreStampedOnRecordsWrittenThroughThePipeline()
         {
             Guid user = Guid.NewGuid();

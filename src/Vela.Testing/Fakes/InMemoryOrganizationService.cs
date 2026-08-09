@@ -703,7 +703,12 @@ namespace Vela.Testing
             }
         }
 
-        public void Delete(string entityName, Guid id)
+        public void Delete(string entityName, Guid id) => DeleteInternal(entityName, id, RemoveRecordDirect);
+
+        // Delete driven by a caller-supplied per-record remover: direct callers remove the row straight from the
+        // store, while the pipeline passes a remover that fires each record's Delete plugins. The store still owns
+        // the cascade TRAVERSAL, so there is one cascade implementation regardless of who removes the rows.
+        internal void DeleteInternal(string entityName, Guid id, Action<string, Guid> removeRecord)
         {
             EnsureWritable(entityName);
             if (_security != null && Table(entityName).TryGetValue(id, out Entity? stored))
@@ -711,14 +716,18 @@ namespace Vela.Testing
                 DemandAccess(entityName, Privilege.Delete, stored);
             }
 
-            CascadeDelete(entityName, id, new HashSet<Guid>());
+            CascadeDelete(entityName, id, new HashSet<Guid>(), removeRecord);
         }
 
-        // Deletes the record and applies each child 1:N relationship's Delete cascade: Cascade deletes the children
-        // (recursively), RemoveLink clears their lookup, Restrict blocks the delete while any child exists. Cascaded
-        // child deletes are system operations — they do NOT re-check the caller's Delete privilege (matching the
-        // platform, where only the parent's Delete privilege is validated). The visited set guards against cycles.
-        private void CascadeDelete(string entityName, Guid id, HashSet<Guid> visited)
+        // Removes a single record from the store with no cascade — the default remover, and the primitive the
+        // pipeline's remover ends with after firing the record's Delete plugins.
+        internal void RemoveRecordDirect(string entityName, Guid id) => Table(entityName).Remove(id);
+
+        // Applies each child 1:N relationship's Delete cascade, then removes the record via <paramref name="removeRecord"/>:
+        // Cascade deletes the children (recursively), RemoveLink clears their lookup, Restrict blocks the delete while
+        // any child exists. Cascaded child deletes are system operations — they do NOT re-check the caller's Delete
+        // privilege (only the parent's is validated). The visited set guards against cycles.
+        private void CascadeDelete(string entityName, Guid id, HashSet<Guid> visited, Action<string, Guid> removeRecord)
         {
             if (!visited.Add(id))
             {
@@ -744,7 +753,7 @@ namespace Vela.Testing
                 {
                     foreach (Entity child in children)
                     {
-                        CascadeDelete(relationship.ReferencingEntity, child.Id, visited);
+                        CascadeDelete(relationship.ReferencingEntity, child.Id, visited, removeRecord);
                     }
                 }
                 else if (relationship.Cascade.Delete == CascadeType.RemoveLink)
@@ -756,7 +765,7 @@ namespace Vela.Testing
                 }
             }
 
-            Table(entityName).Remove(id);
+            removeRecord(entityName, id);
         }
 
         // The child records whose lookup points at the given parent id.
