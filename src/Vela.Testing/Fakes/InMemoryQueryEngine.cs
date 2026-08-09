@@ -19,10 +19,23 @@ namespace Vela.Testing
         private readonly Func<string, IEnumerable<Entity>> _table;
         private readonly Guid _currentUserId;
 
-        public InMemoryQueryEngine(Func<string, IEnumerable<Entity>> tableAccessor, Guid currentUserId)
+        // Optional read-access predicate applied to primary rows BEFORE paging and BEFORE aggregation, so pages
+        // and aggregate values are drawn from the records the caller may read (not trimmed afterwards). Null = no
+        // security filtering.
+        private readonly Func<Entity, bool>? _canRead;
+
+        public InMemoryQueryEngine(Func<string, IEnumerable<Entity>> tableAccessor, Guid currentUserId, Func<Entity, bool>? canRead = null)
         {
             _table = tableAccessor;
             _currentUserId = currentUserId;
+            _canRead = canRead;
+        }
+
+        // The primary rows of a table the caller may read (all of them when no security filter is set).
+        private IEnumerable<Entity> ReadableRows(string entityName)
+        {
+            IEnumerable<Entity> rows = _table(entityName);
+            return _canRead == null ? rows : rows.Where(_canRead);
         }
 
         public EntityCollection ExecuteQueryExpression(QueryExpression query)
@@ -34,7 +47,7 @@ namespace Vela.Testing
             }
 
             List<Entity> rows = new List<Entity>();
-            foreach (Entity baseRow in _table(query.EntityName))
+            foreach (Entity baseRow in ReadableRows(query.EntityName))
             {
                 IEnumerable<Entity> expanded = new[] { EntityValues.Clone(baseRow) };
                 foreach (LinkEntity link in query.LinkEntities)
@@ -54,7 +67,7 @@ namespace Vela.Testing
 
         public EntityCollection ExecuteQueryByAttribute(QueryByAttribute query)
         {
-            IEnumerable<Entity> matches = _table(query.EntityName).Where(entity =>
+            IEnumerable<Entity> matches = ReadableRows(query.EntityName).Where(entity =>
             {
                 for (int i = 0; i < query.Attributes.Count; i++)
                 {
@@ -163,9 +176,10 @@ namespace Vela.Testing
         }
 
         // Aggregate FetchXML: group rows, compute aggregates, expose group/aggregate values as aliased columns.
+        // Aggregates are computed over the rows the caller may read (security-trimmed), like the platform.
         public EntityCollection ExecuteAggregate(AggregateQuery query)
         {
-            List<Entity> rows = _table(query.EntityName).Where(entity => EvaluateFilter(entity, query.Criteria)).ToList();
+            List<Entity> rows = ReadableRows(query.EntityName).Where(entity => EvaluateFilter(entity, query.Criteria)).ToList();
 
             List<List<Entity>> groups = new List<List<Entity>>();
             if (query.Groups.Count == 0)

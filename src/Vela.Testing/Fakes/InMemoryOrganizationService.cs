@@ -64,6 +64,10 @@ namespace Vela.Testing
         // behave exactly as before (full access). Set via WithSecurity.
         private SecurityModel? _security;
 
+        // Record-level shares (PoA). Always present so Grant/RetrievePrincipalAccess work with or without a
+        // security model; only consulted for enforcement when _security is set.
+        private readonly SharingTable _sharing = new SharingTable();
+
         private Func<DateTime> _clock = () => DateTime.UtcNow;
 
         private Func<Guid> _idSequence = () => Guid.NewGuid();
@@ -121,7 +125,18 @@ namespace Vela.Testing
 
             SecurityConfiguration configuration = new SecurityConfiguration();
             configure(configuration);
-            _security = configuration.Build();
+            _security = configuration.Build(_sharing);
+            return this;
+        }
+
+        /// <summary>
+        /// Pre-shares a record with a principal (arrange helper, like <see cref="Seed"/>): grants the principal
+        /// (a user or team) the given <paramref name="rights"/> on the target, without going through the
+        /// GrantAccess message or its Share-privilege check. Only takes effect once <see cref="WithSecurity"/> is set.
+        /// </summary>
+        public InMemoryOrganizationService WithSharedRecord(EntityReference target, EntityReference principal, AccessRights rights)
+        {
+            _sharing.Grant(target, new PrincipalAccess { Principal = principal, AccessMask = rights });
             return this;
         }
 
@@ -336,7 +351,9 @@ namespace Vela.Testing
             }
 
             EnsureWritable(entity.LogicalName);
-            DemandAccess(entity.LogicalName, Privilege.Create, null);
+            DemandCreate(entity);
+            DemandLookupAppends(entity, null);
+
             Entity stored = EntityValues.Clone(entity);
             if (stored.Id == Guid.Empty)
             {
@@ -345,6 +362,7 @@ namespace Vela.Testing
 
             _autoNumbers.Apply(stored);
             _systemFields.ApplyOnCreate(entity, stored, Actor(), _clock(), NextVersion());
+            RealignOwningBusinessUnit(stored);
             _alternateKeys.Enforce(stored, Table(stored.LogicalName).Values);
             Table(stored.LogicalName)[stored.Id] = stored;
             return stored.Id;
@@ -361,11 +379,12 @@ namespace Vela.Testing
             return Project(stored, columnSet);
         }
 
-        public void Update(Entity entity) => UpdateCore(entity, Privilege.Write);
+        public void Update(Entity entity) => UpdateCore(entity);
 
-        // Shared by Update (needs Write) and Assign (needs Assign): both merge attributes onto the stored record,
-        // differing only in the privilege the caller must hold.
-        private void UpdateCore(Entity entity, Privilege privilege)
+        // Shared by Update and Assign (assignment is an ownerid update): the required privilege follows the
+        // content — Write for field changes, Assign for an ownership change — so both message paths enforce the
+        // same rules (mirroring Dataverse, where setting ownerid needs prvAssign, not Write).
+        private void UpdateCore(Entity entity)
         {
             if (entity == null)
             {
@@ -378,7 +397,18 @@ namespace Vela.Testing
                 throw new InvalidOperationException($"{entity.LogicalName} with id {entity.Id} does not exist in the in-memory store.");
             }
 
-            DemandAccess(entity.LogicalName, privilege, stored);
+            bool changesOwner = entity.Contains(SystemFieldApplier.OwnerId);
+            if (entity.Attributes.Keys.Any(key => !string.Equals(key, SystemFieldApplier.OwnerId, StringComparison.OrdinalIgnoreCase)))
+            {
+                DemandAccess(entity.LogicalName, Privilege.Write, stored);
+            }
+
+            if (changesOwner)
+            {
+                DemandAccess(entity.LogicalName, Privilege.Assign, stored);
+            }
+
+            DemandLookupAppends(entity, stored);
 
             // Validate the would-be merged record before committing so a duplicate-key throw leaves the store intact.
             Entity candidate = EntityValues.Clone(stored);
@@ -397,6 +427,29 @@ namespace Vela.Testing
             }
 
             _systemFields.ApplyOnUpdate(entity, stored, Actor(), _clock(), NextVersion());
+            if (changesOwner)
+            {
+                RealignOwningBusinessUnit(stored);
+            }
+        }
+
+        // owningbusinessunit tracks the record's owner: after the owner is stamped (on create, or on an ownership
+        // change), realign it to the OWNER's business unit — not the acting user's — so BU/Deep depth checks are
+        // correct even when a record is created for, or assigned to, a principal in another BU. Security-on only
+        // (it supplies the owner's BU); with security off the store's existing stamping is unchanged.
+        private void RealignOwningBusinessUnit(Entity stored)
+        {
+            if (_security == null || !stored.Contains(SystemFieldApplier.OwnerId) ||
+                stored[SystemFieldApplier.OwnerId] is not EntityReference owner)
+            {
+                return;
+            }
+
+            Guid ownerBusinessUnit = _security.BusinessUnitOfPrincipal(owner);
+            if (ownerBusinessUnit != Guid.Empty)
+            {
+                stored[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", ownerBusinessUnit);
+            }
         }
 
         private SystemActor Actor()
@@ -420,6 +473,38 @@ namespace Vela.Testing
         private void DemandAccess(string entityName, Privilege privilege, Entity? record) =>
             _security?.Demand(_currentUserId, entityName, privilege, record);
 
+        // Create is checked at depth against the record's PROSPECTIVE owner/BU, exactly like Read/Write/Delete are
+        // checked against an existing record — so a User-level Create only covers records the caller will own, a
+        // BusinessUnit-level Create covers the caller's BU, etc. Creating for another principal is also an
+        // assignment, so it additionally needs Assign. No-op when security is off.
+        private void DemandCreate(Entity entity)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            EntityReference owner =
+                entity.Contains(SystemFieldApplier.OwnerId) && entity[SystemFieldApplier.OwnerId] is EntityReference explicitOwner
+                    ? explicitOwner
+                    : new EntityReference("systemuser", _currentUserId);
+
+            Entity prospective = new Entity(entity.LogicalName) { [SystemFieldApplier.OwnerId] = owner };
+            Guid ownerBusinessUnit = _security.BusinessUnitOfPrincipal(owner);
+            if (ownerBusinessUnit != Guid.Empty)
+            {
+                prospective[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", ownerBusinessUnit);
+            }
+
+            _security.Demand(_currentUserId, entity.LogicalName, Privilege.Create, prospective);
+
+            bool ownedByCaller = string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId;
+            if (!ownedByCaller)
+            {
+                _security.Demand(_currentUserId, entity.LogicalName, Privilege.Assign, null);
+            }
+        }
+
         // Relating records needs AppendTo on the record being related to and Append on each record related to it,
         // mirroring the platform. Off (or nothing configured) is a no-op.
         private void DemandAssociationAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
@@ -438,6 +523,69 @@ namespace Vela.Testing
 
         private Entity? StoredOrNull(string entityName, Guid id) =>
             Table(entityName).TryGetValue(id, out Entity? stored) ? stored : null;
+
+        // System owner/audit references are not relationship lookups: ownership is governed by Assign, and the
+        // audit columns are server-set — none of them go through Append/AppendTo.
+        private static readonly HashSet<string> SystemReferenceColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            SystemFieldApplier.OwnerId, SystemFieldApplier.OwningUser, SystemFieldApplier.OwningTeam,
+            SystemFieldApplier.OwningBusinessUnit, SystemFieldApplier.CreatedBy, SystemFieldApplier.ModifiedBy,
+            SystemFieldApplier.OrganizationId,
+        };
+
+        // Setting a lookup relates two records, which needs Append on the record carrying the lookup and AppendTo on
+        // the lookup's target record (Dataverse). No-op when security is off. <paramref name="self"/> is the record
+        // carrying the lookup (the stored row on Update; null on Create, where it does not exist yet).
+        private void DemandLookupAppends(Entity entity, Entity? self)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, object> attribute in entity.Attributes)
+            {
+                if (attribute.Value is EntityReference target && !SystemReferenceColumns.Contains(attribute.Key))
+                {
+                    DemandAccess(entity.LogicalName, Privilege.Append, self);
+                    DemandAccess(target.LogicalName, Privilege.AppendTo, StoredOrNull(target.LogicalName, target.Id));
+                }
+            }
+        }
+
+        // The effective rights a principal holds on a record (roles + ownership + sharing). With no security model
+        // everyone has full record access, so every shareable right is reported.
+        private AccessRights EffectiveAccess(EntityReference principal, EntityReference target)
+        {
+            // A record that does not exist confers no access, whether or not security is on (consistent answer).
+            Entity? stored = StoredOrNull(target.LogicalName, target.Id);
+            if (stored == null)
+            {
+                return AccessRights.None;
+            }
+
+            if (_security == null)
+            {
+                return AccessRights.ReadAccess | AccessRights.WriteAccess | AccessRights.DeleteAccess |
+                       AccessRights.AppendAccess | AccessRights.AppendToAccess | AccessRights.AssignAccess | AccessRights.ShareAccess;
+            }
+
+            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored);
+        }
+
+        // A user can only share rights they themselves hold on the record (Dataverse: "you can't give rights you
+        // don't have"), so a runtime GrantAccess/ModifyAccess is clamped to the sharer's effective rights. Off: no clamp.
+        private PrincipalAccess ClampToSharerRights(EntityReference target, PrincipalAccess access)
+        {
+            if (_security == null)
+            {
+                return access;
+            }
+
+            Entity record = StoredOrNull(target.LogicalName, target.Id) ?? new Entity(target.LogicalName, target.Id);
+            AccessRights sharerRights = _security.EffectiveAccess(_currentUserId, target.LogicalName, record);
+            return new PrincipalAccess { Principal = access.Principal, AccessMask = access.AccessMask & sharerRights };
+        }
 
         private long NextVersion() => ++_version;
 
@@ -463,62 +611,30 @@ namespace Vela.Testing
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
-            InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId);
-            EntityCollection result;
-            bool aggregate = false;
+            // With security on, the read filter is applied inside the engine to the primary rows BEFORE paging, so
+            // pages are drawn from the readable set (not trimmed afterwards). Aggregates are not filtered yet.
+            InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId, ReadFilter());
             switch (query)
             {
                 case QueryExpression qe:
-                    // A grouped/aggregate QueryExpression carries column aggregate expressions instead of plain columns.
-                    aggregate = qe.ColumnSet?.AttributeExpressions?.Count > 0;
-                    result = engine.ExecuteQueryExpression(qe);
-                    break;
+                    return engine.ExecuteQueryExpression(qe);
                 case QueryByAttribute qba:
-                    result = engine.ExecuteQueryByAttribute(qba);
-                    break;
+                    return engine.ExecuteQueryByAttribute(qba);
                 case FetchExpression fetch:
-                    aggregate = FetchXmlParser.IsAggregate(fetch.Query);
-                    result = aggregate
+                    return FetchXmlParser.IsAggregate(fetch.Query)
                         ? engine.ExecuteAggregate(FetchXmlParser.ParseAggregate(fetch.Query))
                         : engine.ExecuteQueryExpression(FetchXmlParser.Parse(fetch.Query));
-                    break;
                 default:
                     throw new NotSupportedException(
                         $"InMemoryOrganizationService supports QueryExpression, QueryByAttribute and FetchExpression. " +
                         $"{query.GetType().Name} is not supported yet.");
             }
-
-            return FilterReadable(result, aggregate);
         }
 
-        // With security on, RetrieveMultiple returns only records the current user may read — like the platform,
-        // which silently omits records the caller cannot see rather than faulting. Off: the collection is returned
-        // unchanged.
-        private EntityCollection FilterReadable(EntityCollection collection, bool aggregate)
-        {
-            // Aggregate rows are computed over the whole store and carry no owner to check; security-filtering the
-            // underlying records before aggregation is out of scope, so aggregate results are returned as-is.
-            if (_security == null || aggregate)
-            {
-                return collection;
-            }
-
-            List<Entity> removed = collection.Entities
-                .Where(e => !_security.IsGranted(_currentUserId, e.LogicalName, Privilege.Read, BackingRecord(e)))
-                .ToList();
-            foreach (Entity entity in removed)
-            {
-                collection.Entities.Remove(entity);
-            }
-
-            return collection;
-        }
-
-        // Read access is decided from the stored record's owner columns, not the projected result, so a query that
-        // does not select ownerid/owningbusinessunit still filters correctly. Falls back to the row itself if the
-        // record is not in the store (e.g. link-entity synthetic rows).
-        private Entity BackingRecord(Entity row) =>
-            Table(row.LogicalName).TryGetValue(row.Id, out Entity? stored) ? stored : row;
+        // The predicate the query engine uses to keep only rows the current user may read (null = no security).
+        // It reads the stored record's own owner columns, so filtering is correct regardless of the query's ColumnSet.
+        private Func<Entity, bool>? ReadFilter() =>
+            _security == null ? null : row => _security.IsGranted(_currentUserId, row.LogicalName, Privilege.Read, row);
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {
@@ -577,9 +693,9 @@ namespace Vela.Testing
 
                 case AssignRequest assign:
                 {
-                    // Modern Dataverse models assignment as an ownerid Update, which re-derives the owning columns.
-                    // The privilege required is Assign (not Write), so it is demanded explicitly here.
-                    UpdateCore(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee }, Privilege.Assign);
+                    // Modern Dataverse models assignment as an ownerid Update; UpdateCore infers the Assign
+                    // privilege from the ownerid change, so both paths enforce identically.
+                    UpdateCore(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee });
                     return new AssignResponse();
                 }
 
@@ -634,6 +750,41 @@ namespace Vela.Testing
                     response.Results["UserId"] = actor.UserId;
                     response.Results["BusinessUnitId"] = actor.BusinessUnitId;
                     response.Results["OrganizationId"] = actor.OrganizationId;
+                    return response;
+                }
+
+                case GrantAccessRequest grant:
+                {
+                    DemandAccess(grant.Target.LogicalName, Privilege.Share, StoredOrNull(grant.Target.LogicalName, grant.Target.Id));
+                    _sharing.Grant(grant.Target, ClampToSharerRights(grant.Target, grant.PrincipalAccess));
+                    return new GrantAccessResponse();
+                }
+
+                case ModifyAccessRequest modify:
+                {
+                    DemandAccess(modify.Target.LogicalName, Privilege.Share, StoredOrNull(modify.Target.LogicalName, modify.Target.Id));
+                    _sharing.Modify(modify.Target, ClampToSharerRights(modify.Target, modify.PrincipalAccess));
+                    return new ModifyAccessResponse();
+                }
+
+                case RevokeAccessRequest revoke:
+                {
+                    DemandAccess(revoke.Target.LogicalName, Privilege.Share, StoredOrNull(revoke.Target.LogicalName, revoke.Target.Id));
+                    _sharing.Revoke(revoke.Target, revoke.Revokee);
+                    return new RevokeAccessResponse();
+                }
+
+                case RetrievePrincipalAccessRequest principalAccess:
+                {
+                    RetrievePrincipalAccessResponse response = new RetrievePrincipalAccessResponse();
+                    response.Results["AccessRights"] = EffectiveAccess(principalAccess.Principal, principalAccess.Target);
+                    return response;
+                }
+
+                case RetrieveSharedPrincipalsAndAccessRequest sharedPrincipals:
+                {
+                    RetrieveSharedPrincipalsAndAccessResponse response = new RetrieveSharedPrincipalsAndAccessResponse();
+                    response.Results["PrincipalAccesses"] = _sharing.SharesOf(sharedPrincipals.Target);
                     return response;
                 }
 

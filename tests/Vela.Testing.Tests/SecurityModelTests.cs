@@ -109,6 +109,37 @@ namespace Vela.Testing.Tests
             Assert.Equal(aliceRecord, Assert.Single(visible.Entities).Id);
         }
 
+        [Fact]
+        public void Read_filtering_happens_before_paging()
+        {
+            Entity Named(Guid owner, string name) => new Entity("account", Guid.NewGuid())
+            {
+                ["ownerid"] = new EntityReference("systemuser", owner),
+                ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+                ["name"] = name,
+            };
+
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .User(Alice, SalesBu, "author"))
+                // Bob's records sort first by name; a naive page-then-filter would return an empty first page.
+                .Seed(Named(Bob, "a1"), Named(Bob, "a2"), Named(Alice, "b1"), Named(Alice, "b2"));
+
+            EntityCollection page = svc.RetrieveMultiple(new QueryExpression("account")
+            {
+                ColumnSet = new ColumnSet(true),
+                Orders = { new OrderExpression("name", OrderType.Ascending) },
+                PageInfo = new PagingInfo { Count = 2, PageNumber = 1 },
+            });
+
+            // The page is drawn from Alice's readable records, not filtered after paging over Bob's.
+            Assert.Equal(2, page.Entities.Count);
+            Assert.All(page.Entities, e => Assert.Equal(Alice, e.GetAttributeValue<EntityReference>("ownerid").Id));
+        }
+
         // --- Read depth: BusinessUnit -------------------------------------------------------------------
 
         [Fact]
@@ -328,10 +359,10 @@ namespace Vela.Testing.Tests
             Assert.Equal(aliceRecord, Assert.Single(visible.Entities).Id);
         }
 
-        // --- Aggregates are not filtered (computed over the whole store) ---------------------------------
+        // --- Aggregates are security-trimmed (count only readable records) -------------------------------
 
         [Fact]
-        public void Aggregate_results_are_not_filtered_by_read_access()
+        public void Aggregates_count_only_readable_records()
         {
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
@@ -339,14 +370,15 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
                     .User(Alice, SalesBu, "author"))
-                .Seed(AccountOwnedBy(Guid.NewGuid(), Bob, OtherBu))
-                .Seed(AccountOwnedBy(Guid.NewGuid(), Carol, OtherBu));
+                .Seed(AccountOwnedBy(Guid.NewGuid(), Bob, OtherBu))    // not readable by Alice
+                .Seed(AccountOwnedBy(Guid.NewGuid(), Carol, OtherBu))  // not readable by Alice
+                .Seed(AccountOwnedBy(Guid.NewGuid(), Alice, SalesBu)); // readable (owned by Alice)
 
-            // None of the records are readable at User level, but a count aggregate still sees all of them.
+            // The count reflects only the record Alice may read, like the platform.
             EntityCollection result = svc.RetrieveMultiple(new FetchExpression(
                 "<fetch aggregate='true'><entity name='account'><attribute name='accountid' alias='n' aggregate='count'/></entity></fetch>"));
 
-            Assert.Equal(2, Assert.Single(result.Entities).GetAttributeValue<AliasedValue>("n").Value);
+            Assert.Equal(1, Assert.Single(result.Entities).GetAttributeValue<AliasedValue>("n").Value);
         }
 
         // --- Business-unit stamping feeds depth checks --------------------------------------------------
@@ -477,10 +509,10 @@ namespace Vela.Testing.Tests
                 () => svc.Retrieve("account", record, new ColumnSet(true)));
         }
 
-        // --- Aggregates via QueryExpression are also left unfiltered -------------------------------------
+        // --- Aggregates via QueryExpression are also security-trimmed -----------------------------------
 
         [Fact]
-        public void Aggregate_query_expressions_are_not_filtered_by_read_access()
+        public void Aggregate_query_expressions_count_only_readable_records()
         {
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
@@ -488,8 +520,9 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
                     .User(Alice, SalesBu, "author"))
-                .Seed(AccountOwnedBy(Guid.NewGuid(), Bob, OtherBu))
-                .Seed(AccountOwnedBy(Guid.NewGuid(), Carol, OtherBu));
+                .Seed(AccountOwnedBy(Guid.NewGuid(), Bob, OtherBu))    // not readable
+                .Seed(AccountOwnedBy(Guid.NewGuid(), Alice, SalesBu))  // readable
+                .Seed(AccountOwnedBy(Guid.NewGuid(), Alice, SalesBu)); // readable
 
             QueryExpression query = new QueryExpression("account");
             query.ColumnSet.AddColumn("accountid");
@@ -603,6 +636,134 @@ namespace Vela.Testing.Tests
             Assert.Equal(Alice, Assert.Single(svc.GetAll("account")).GetAttributeValue<EntityReference>("ownerid").Id);
         }
 
+        [Fact]
+        public void Updating_ownerid_needs_assign_while_updating_fields_needs_write()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("editor", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write))
+                    .User(Alice, SalesBu, "editor")) // Write but not Assign
+                .Seed(AccountOwnedBy(record, Bob, SalesBu));
+
+            svc.Update(new Entity("account", record) { ["name"] = "ok" }); // field change: Write covers it
+
+            // A plain Update that changes ownerid is an assignment, so it needs Assign — not just Write.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Update(new Entity("account", record) { ["ownerid"] = new EntityReference("systemuser", Alice) }));
+        }
+
+        [Fact]
+        public void Creating_a_record_owned_by_another_principal_requires_assign()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(OtherBu)
+                    .Role("author", r => r.Grant("account", Privilege.Create, AccessLevel.Organization)) // depth covers any owner
+                    .User(Alice, SalesBu, "author")   // ...but no Assign
+                    .User(Bob, OtherBu));
+
+            svc.Create(new Entity("account")); // owned by the caller: fine
+
+            // Create depth is satisfied, so this isolates the missing Assign privilege.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+        }
+
+        [Fact]
+        public void Create_depth_restricts_the_new_records_owner_scope()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(OtherBu)
+                    // User-level Create only covers records Alice will own; Assign is present so this isolates depth.
+                    .Role("author", r => r
+                        .Grant("account", Privilege.Create, AccessLevel.User)
+                        .Grant("account", Privilege.Assign, AccessLevel.Organization))
+                    .User(Alice, SalesBu, "author")
+                    .User(Bob, OtherBu));
+
+            svc.Create(new Entity("account")); // Alice's own: User-level Create covers it
+
+            // Bob is in another BU; a User-level Create does not reach a record that will be owned by him.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+        }
+
+        [Fact]
+        public void Create_with_organization_depth_can_create_for_another_owner()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(OtherBu)
+                    .Role("admin", r => r.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Assign))
+                    .User(Alice, SalesBu, "admin")
+                    .User(Bob, OtherBu));
+
+            Guid id = svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) });
+
+            Assert.NotEqual(Guid.Empty, id);
+        }
+
+        [Fact]
+        public void Creating_on_behalf_stamps_the_owners_business_unit_not_the_callers()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)   // Alice's BU
+                    .BusinessUnit(OtherBu)   // Bob's BU
+                    .Role("admin", r => r.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Assign))
+                    .User(Alice, SalesBu, "admin")
+                    .User(Bob, OtherBu));
+
+            svc.Create(new Entity("account", record) { ["ownerid"] = new EntityReference("systemuser", Bob) });
+
+            Entity stored = Assert.Single(svc.GetAll("account"));
+            Assert.Equal(Bob, stored.GetAttributeValue<EntityReference>("ownerid").Id);
+            // owningbusinessunit is Bob's BU (the owner), not Alice's (the acting user).
+            Assert.Equal(OtherBu, stored.GetAttributeValue<EntityReference>("owningbusinessunit").Id);
+        }
+
+        [Fact]
+        public void Assigning_across_business_units_moves_the_owning_business_unit()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(OtherBu)
+                    .BusinessUnit(SalesBu)
+                    .Role("mover", r => r
+                        .Grant("account", Privilege.Assign, AccessLevel.Organization)
+                        .Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .User(Alice, SalesBu, "mover")) // Alice lives in SalesBu
+                .Seed(AccountOwnedBy(record, Bob, OtherBu)); // record starts in OtherBu
+
+            // Alice's BusinessUnit-level read does not reach a record owned in another BU.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Retrieve("account", record, new ColumnSet(true)));
+
+            svc.Execute(new AssignRequest
+            {
+                Target = new EntityReference("account", record),
+                Assignee = new EntityReference("systemuser", Alice),
+            });
+
+            // owningbusinessunit followed the new owner to SalesBu, so the depth check now covers the record.
+            Assert.Equal(SalesBu, Assert.Single(svc.GetAll("account")).GetAttributeValue<EntityReference>("owningbusinessunit").Id);
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
         // --- Associate / Disassociate need Append (related) + AppendTo (primary) -------------------------
 
         private static InMemoryOrganizationService WithAccountContactM2M(Guid accountId, Guid contactId, Action<SecurityConfiguration> security) =>
@@ -668,6 +829,55 @@ namespace Vela.Testing.Tests
             Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Disassociate(
                 "account", accountId, new Relationship("account_contacts"),
                 new EntityReferenceCollection { new EntityReference("contact", contactId) }));
+        }
+
+        // --- G1: setting a lookup needs Append (on the record) + AppendTo (on the target) ----------------
+
+        private static Entity ContactOwnedBy(Guid id, Guid owner) => new Entity("contact", id)
+        {
+            ["ownerid"] = new EntityReference("systemuser", owner),
+            ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+        };
+
+        [Fact]
+        public void Setting_a_lookup_requires_append_and_appendto()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("editor", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write)
+                        .Grant("contact", Privilege.Read, AccessLevel.Organization))
+                    .User(Alice, SalesBu, "editor")) // can write the account but has no Append/AppendTo
+                .Seed(AccountOwnedBy(account, Alice, SalesBu), ContactOwnedBy(contact, Alice));
+
+            // Pointing account.primarycontactid at the contact relates the two records.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Update(
+                new Entity("account", account) { ["primarycontactid"] = new EntityReference("contact", contact) }));
+        }
+
+        [Fact]
+        public void Setting_a_lookup_succeeds_with_append_and_appendto()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("editor", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write, Privilege.Append)
+                        .Grant("contact", AccessLevel.Organization, Privilege.Read, Privilege.AppendTo))
+                    .User(Alice, SalesBu, "editor"))
+                .Seed(AccountOwnedBy(account, Alice, SalesBu), ContactOwnedBy(contact, Alice));
+
+            svc.Update(new Entity("account", account) { ["primarycontactid"] = new EntityReference("contact", contact) });
+
+            Assert.Equal(contact, svc.Retrieve("account", account, new ColumnSet(true))
+                .GetAttributeValue<EntityReference>("primarycontactid").Id);
         }
     }
 }

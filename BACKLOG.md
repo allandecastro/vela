@@ -27,6 +27,11 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   and a full security simulation is a large surface. Scope carefully before committing; currently listed under
   "Won't do" — moving it here means it is up for reconsideration, not yet accepted.
 
+  Enforcement gaps still open in the opt-in security model (from cross-checking the Dataverse "how record access
+  is determined" / access-rights docs): **org-wide sharing** ("share with the entire organization") and team
+  **Member's privilege inheritance** mode (Team-privileges-only vs Basic) are not yet modelled. (Append/AppendTo
+  on lookups and clamping a share to the sharer's own rights are done.)
+
 ## Developer experience
 
 - **P2 — Remote debugging of cloud plugins** — let a developer step through a *real* Dataverse plugin

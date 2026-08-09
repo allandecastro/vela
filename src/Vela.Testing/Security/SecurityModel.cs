@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.ServiceModel;
+using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.Testing.Security
@@ -176,7 +177,7 @@ namespace Vela.Testing.Security
             return this;
         }
 
-        internal SecurityModel Build()
+        internal SecurityModel Build(SharingTable sharing)
         {
             // Flatten each role's grants once; resolve role references eagerly so an unknown role name fails fast.
             var roles = _roles.ToDictionary(r => r.Key, r => r.Value.Grants, StringComparer.OrdinalIgnoreCase);
@@ -217,7 +218,7 @@ namespace Vela.Testing.Security
                 }
             }
 
-            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships);
+            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing);
         }
     }
 
@@ -256,24 +257,53 @@ namespace Vela.Testing.Security
         private readonly Dictionary<Guid, Principal> _users;
         private readonly Dictionary<Guid, Principal> _teams;
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships;
+        private readonly SharingTable _sharing;
+
+        // The privileges that can also be granted per-record via sharing (PoA). Create is not shareable.
+        private static readonly Privilege[] ShareablePrivileges =
+        {
+            Privilege.Read, Privilege.Write, Privilege.Delete,
+            Privilege.Append, Privilege.AppendTo, Privilege.Assign, Privilege.Share,
+        };
 
         internal SecurityModel(
             Dictionary<Guid, Guid> businessUnitParents,
             Dictionary<string, Dictionary<(string Entity, Privilege Privilege), AccessLevel>> roles,
             Dictionary<Guid, Principal> users,
             Dictionary<Guid, Principal> teams,
-            Dictionary<Guid, HashSet<Guid>> memberships)
+            Dictionary<Guid, HashSet<Guid>> memberships,
+            SharingTable sharing)
         {
             _businessUnitParents = businessUnitParents;
             _roles = roles;
             _users = users;
             _teams = teams;
             _memberships = memberships;
+            _sharing = sharing;
         }
 
         /// <summary>The business unit the user belongs to, or <see cref="Guid.Empty"/> if the user is unknown.</summary>
         public Guid BusinessUnitOf(Guid userId) =>
             _users.TryGetValue(userId, out Principal user) ? user.BusinessUnit : Guid.Empty;
+
+        /// <summary>
+        /// The business unit of an owning principal (user or team), or <see cref="Guid.Empty"/> if unknown. Used to
+        /// keep <c>owningbusinessunit</c> aligned with the owner after a record is (re)assigned.
+        /// </summary>
+        public Guid BusinessUnitOfPrincipal(EntityReference principal)
+        {
+            if (principal == null)
+            {
+                return Guid.Empty;
+            }
+
+            if (string.Equals(principal.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
+            {
+                return _teams.TryGetValue(principal.Id, out Principal team) ? team.BusinessUnit : Guid.Empty;
+            }
+
+            return BusinessUnitOf(principal.Id);
+        }
 
         /// <summary>
         /// Throws <see cref="FaultException{OrganizationServiceFault}"/> (PrincipalPrivilegeDenied) when
@@ -314,7 +344,65 @@ namespace Vela.Testing.Security
                 }
             }
 
+            // Shared access (PoA) is unioned with role access: a record-level grant to the user or any of its
+            // teams also confers the privilege. Create is never shareable, so only record-scoped verbs apply.
+            AccessRights right = ToAccessRight(privilege);
+            if (record != null && right != AccessRights.None)
+            {
+                if ((_sharing.RightsFor(table, record.Id, PrincipalIds(userId)) & right) == right)
+                {
+                    return true;
+                }
+            }
+
             return false;
+        }
+
+        /// <summary>
+        /// The effective <see cref="AccessRights"/> mask the user holds on the record — the union of role access,
+        /// ownership and sharing — used to answer RetrievePrincipalAccess.
+        /// </summary>
+        public AccessRights EffectiveAccess(Guid userId, string entity, Entity record)
+        {
+            AccessRights rights = AccessRights.None;
+            foreach (Privilege privilege in ShareablePrivileges)
+            {
+                if (IsGranted(userId, entity, privilege, record))
+                {
+                    rights |= ToAccessRight(privilege);
+                }
+            }
+
+            return rights;
+        }
+
+        // The user itself plus every team it belongs to — the set of principals a PoA grant can target.
+        private IEnumerable<Guid> PrincipalIds(Guid userId)
+        {
+            yield return userId;
+            if (_memberships.TryGetValue(userId, out HashSet<Guid>? teams))
+            {
+                foreach (Guid teamId in teams)
+                {
+                    yield return teamId;
+                }
+            }
+        }
+
+        // Maps a table privilege to the record-level access right sharing uses. Create has no shareable right.
+        private static AccessRights ToAccessRight(Privilege privilege)
+        {
+            switch (privilege)
+            {
+                case Privilege.Read: return AccessRights.ReadAccess;
+                case Privilege.Write: return AccessRights.WriteAccess;
+                case Privilege.Delete: return AccessRights.DeleteAccess;
+                case Privilege.Append: return AccessRights.AppendAccess;
+                case Privilege.AppendTo: return AccessRights.AppendToAccess;
+                case Privilege.Assign: return AccessRights.AssignAccess;
+                case Privilege.Share: return AccessRights.ShareAccess;
+                default: return AccessRights.None;
+            }
         }
 
         private IEnumerable<AccessLevel> GrantedLevels(Guid userId, string table, Privilege privilege)
