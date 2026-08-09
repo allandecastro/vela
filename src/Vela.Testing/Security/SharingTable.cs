@@ -61,10 +61,12 @@ namespace Vela.Testing.Security
                 return AccessRights.None;
             }
 
+            HashSet<Guid> principals = new HashSet<Guid>(principalIds);
             AccessRights rights = AccessRights.None;
-            foreach (Guid principalId in principalIds)
+            foreach (PrincipalAccess access in record.Values)
             {
-                if (record.TryGetValue(principalId, out PrincipalAccess access))
+                // A grant applies to the caller if it targets the user/one of their teams, or the whole organization.
+                if (principals.Contains(access.Principal.Id) || IsOrganization(access.Principal))
                 {
                     rights |= access.AccessMask;
                 }
@@ -72,6 +74,9 @@ namespace Vela.Testing.Security
 
             return rights;
         }
+
+        private static bool IsOrganization(EntityReference principal) =>
+            string.Equals(principal.LogicalName, "organization", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Every principal the record is shared with, and their rights (RetrieveSharedPrincipalsAndAccess).</summary>
         public PrincipalAccess[] SharesOf(EntityReference target)

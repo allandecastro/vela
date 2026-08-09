@@ -294,6 +294,19 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void A_record_shared_with_the_whole_organization_is_readable_by_any_user()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu)) // Alice holds no role
+                .Seed(AccountOwnedBy(record, Bob))
+                .WithSharedRecord(Account(record), new EntityReference("organization", Guid.NewGuid()), AccessRights.ReadAccess);
+
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true))); // org-wide share reaches everyone
+        }
+
+        [Fact]
         public void RetrievePrincipalAccess_on_a_missing_record_reports_no_access()
         {
             Guid missing = Guid.NewGuid();

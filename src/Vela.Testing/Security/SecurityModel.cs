@@ -366,12 +366,12 @@ namespace Vela.Testing.Security
         /// The effective <see cref="AccessRights"/> mask the user holds on the record — the union of role access,
         /// ownership and sharing — used to answer RetrievePrincipalAccess.
         /// </summary>
-        public AccessRights EffectiveAccess(Guid userId, string entity, Entity record)
+        public AccessRights EffectiveAccess(Guid userId, string entity, Entity record, Func<Privilege, bool>? inherited = null)
         {
             AccessRights rights = AccessRights.None;
             foreach (Privilege privilege in ShareablePrivileges)
             {
-                if (IsGranted(userId, entity, privilege, record))
+                if (IsGranted(userId, entity, privilege, record) || (inherited?.Invoke(privilege) ?? false))
                 {
                     rights |= ToAccessRight(privilege);
                 }

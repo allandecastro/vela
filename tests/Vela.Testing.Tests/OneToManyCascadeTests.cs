@@ -226,6 +226,31 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void RetrievePrincipalAccess_reflects_access_inherited_from_the_parent()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithParentalRelationship("account", "contact", "parentcustomerid")
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("acctreader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization)) // nothing on contact
+                    .User(Alice, SalesBu, "acctreader"))
+                .Seed(AccountOwned(account, Bob), ContactOf(contact, account));
+
+            RetrievePrincipalAccessResponse response = (RetrievePrincipalAccessResponse)svc.Execute(
+                new RetrievePrincipalAccessRequest
+                {
+                    Target = new EntityReference("contact", contact),
+                    Principal = new EntityReference("systemuser", Alice),
+                });
+
+            // Alice holds no role on contact but inherits Read from the parent account she can read.
+            Assert.True(response.AccessRights.HasFlag(AccessRights.ReadAccess));
+        }
+
+        [Fact]
         public void Cascade_assign_moves_the_childs_business_unit_to_the_new_owner()
         {
             Guid account = Guid.NewGuid();

@@ -541,11 +541,11 @@ namespace Vela.Testing
         // parent in a parental relationship. Assumes security is configured.
         private bool CanAccess(string entityName, Privilege privilege, Entity? record) =>
             _security!.IsGranted(_currentUserId, entityName, privilege, record) ||
-            HasInheritedAccess(entityName, privilege, record, new HashSet<Guid>());
+            HasInheritedAccess(_currentUserId, entityName, privilege, record, new HashSet<Guid>());
 
         // Inherited access: in a parental relationship (one that cascades Reparent), a child inherits the access the
         // user has on its parent — for every privilege except Create. Walks up the hierarchy, guarding against cycles.
-        private bool HasInheritedAccess(string entityName, Privilege privilege, Entity? record, HashSet<Guid> visited)
+        private bool HasInheritedAccess(Guid userId, string entityName, Privilege privilege, Entity? record, HashSet<Guid> visited)
         {
             if (_security == null || record == null || privilege == Privilege.Create || !visited.Add(record.Id))
             {
@@ -562,8 +562,8 @@ namespace Vela.Testing
 
                 Entity? parent = StoredOrNull(parentRef.LogicalName, parentRef.Id);
                 if (parent != null &&
-                    (_security.IsGranted(_currentUserId, parentRef.LogicalName, privilege, parent) ||
-                     HasInheritedAccess(parentRef.LogicalName, privilege, parent, visited)))
+                    (_security.IsGranted(userId, parentRef.LogicalName, privilege, parent) ||
+                     HasInheritedAccess(userId, parentRef.LogicalName, privilege, parent, visited)))
                 {
                     return true;
                 }
@@ -674,7 +674,8 @@ namespace Vela.Testing
                        AccessRights.AppendAccess | AccessRights.AppendToAccess | AccessRights.AssignAccess | AccessRights.ShareAccess;
             }
 
-            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored);
+            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored,
+                privilege => HasInheritedAccess(principal.Id, target.LogicalName, privilege, stored, new HashSet<Guid>()));
         }
 
         // A user can only share rights they themselves hold on the record (Dataverse: "you can't give rights you
