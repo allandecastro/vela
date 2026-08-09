@@ -109,6 +109,19 @@ initial release.
   fire once with the whole `Targets` collection (and per-row pre/post image collections). The merge runs both
   ways — a bulk step also fires for a plain `Create`/`Update` (a one-row batch). `UpdateMultiple` filtering is
   evaluated per row for single steps and "any row matches" for a bulk step.
+- **Opt-in security model** — `WithSecurity(...)` declares business units (with hierarchy), named roles, users,
+  teams and membership; the service then enforces the table privileges (Create/Read/Write/Delete/Assign/Append/
+  AppendTo/Share) at **User/BusinessUnit/ParentChild/Organization** depth over the user and every team they belong
+  to. A denied write throws `FaultException<OrganizationServiceFault>` (`PrincipalPrivilegeDenied`), and
+  `RetrieveMultiple` — including aggregates — is security-trimmed before paging. Record **sharing** (PoA) via
+  `GrantAccess`/`ModifyAccess`/`RevokeAccess` (clamped to the sharer's own rights), with `RetrievePrincipalAccess` /
+  `RetrieveSharedPrincipalsAndAccess` and a `WithSharedRecord(...)` arrange helper. Changing `ownerid` (Assign or a
+  plain Update) needs the **Assign** privilege and moves the owning business unit; setting a lookup needs
+  **Append/AppendTo**. **1:N relationship cascades** via `WithParentalRelationship(...)` /
+  `WithReferentialRelationship(..., restrictDelete:)`: cascade **Delete** (Cascade/RemoveLink/Restrict), cascade
+  **Assign**, cascade **Share/Unshare**, and **inherited access** (in a parental relationship a child inherits the
+  caller's access to its parent). **Off by default** — tests that never call `WithSecurity(...)` behave exactly as
+  before (full access). (#17, #18, #19)
 
 **Docs**
 

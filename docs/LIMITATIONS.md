@@ -117,10 +117,15 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
 - **Virtual tables.** `AsVirtual(...)` suppresses all system-column population; `AsVirtual(name, readOnly: true)`
   also rejects Create/Update/Delete (read-only external provider). A non-read-only virtual table still stores
   rows and lets you read/write them — full external-data-provider semantics aren't modelled.
-- **Metadata is opt-in; there is no security model.** Table metadata is returned only for what you register
-  with `WithEntityMetadata(...)` (build it with `FakeEntityMetadata`); `RetrieveEntity`/`RetrieveAllEntities`/
-  `RetrieveAttribute` read it back. There are no privilege/security-role checks, and alternate keys and
-  auto-numbers only behave as you declare them (`WithAlternateKey` / `WithAutoNumber`).
+- **Metadata is opt-in.** Table metadata is returned only for what you register with `WithEntityMetadata(...)`
+  (build it with `FakeEntityMetadata`); `RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute` read it back.
+  Alternate keys and auto-numbers only behave as you declare them (`WithAlternateKey` / `WithAutoNumber`).
+- **The security model is opt-in and off by default.** With no `WithSecurity(...)` call there are no
+  privilege/access checks (full access), exactly as before. When enabled it models security roles, privileges at
+  the four access levels, business units, teams, record sharing (PoA) and 1:N relationship cascades — but not
+  hierarchy (manager/position) security, access-team templates, org-wide sharing, team privilege-inheritance
+  modes, or field-level (column) security. `RetrievePrincipalAccess` reflects role, ownership and sharing but not
+  inherited access, and cascaded child deletes don't fire the children's Delete plugins in `PluginPipeline`.
 
 ---
 
