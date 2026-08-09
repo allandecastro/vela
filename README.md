@@ -33,7 +33,7 @@ Vela is a framework (`Vela.Plugins`), a CLI (`Vela.Cli`, command `vela`) and a n
 - **Typed context helpers** — strongly-typed target/images, framework tracing, lightweight DI, and a TTL cache.
 - **`vela` CLI** — preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), and package signing.
 - **Idempotent apply** — safe upsert/delete of steps, Custom APIs, and images against a live environment.
-- **No-connection testing** — run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency.
+- **No-connection testing** — run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency, with an **opt-in security model** (roles, privileges, business units, teams, sharing and relationship cascades) when you need it.
 
 ## Packages
 
@@ -830,6 +830,49 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   live relationship metadata otherwise.
 
 > **Full guide with examples:** [`docs/Vela.Testing.md`](docs/Vela.Testing.md).
+
+### Security model (roles, privileges, business units, sharing, cascades)
+
+By default the in-memory service grants **full access** — most plugin tests don't need security. Opt in with
+`WithSecurity(...)` to exercise plugins that branch on access rights (privilege-denied paths,
+`RetrievePrincipalAccess`, sharing). You declare business units, named roles, users and teams; the service then
+enforces the table privileges (Create/Read/Write/Delete/Assign/Append/AppendTo/Share) at
+**User / BusinessUnit / ParentChild / Organization** depth, over the user and every team they belong to. A denied
+write throws `FaultException<OrganizationServiceFault>` with the `PrincipalPrivilegeDenied` code; `RetrieveMultiple`
+silently filters to the records the user may read.
+
+```csharp
+using Vela.Testing.Security;
+
+var crm = new InMemoryOrganizationService()
+    .WithCurrentUser(aliceId)
+    .WithSecurity(s => s
+        .BusinessUnit(salesBu)
+        .Role("salesperson", r => r
+            .Grant("account", AccessLevel.BusinessUnit, Privilege.Create, Privilege.Read, Privilege.Write)
+            .Grant("contact", Privilege.Read, AccessLevel.Organization))
+        .User(aliceId, salesBu, "salesperson")
+        .Team(salesTeam, salesBu, "salesperson")   // roles work on teams too
+        .Member(aliceId, salesTeam))                // ...and members inherit the team's roles
+    .Seed(/* records */);
+
+// Alice reads/writes accounts in her business unit; records she cannot see are filtered out of
+// RetrieveMultiple, and a write she lacks the privilege for throws PrincipalPrivilegeDenied.
+```
+
+- **Sharing (PoA).** `GrantAccess`/`ModifyAccess`/`RevokeAccess` share a specific record with a user or team —
+  unioned with role access (a share only ever *adds* access, and can't exceed the sharer's own rights).
+  `RetrievePrincipalAccess` returns the effective rights, `RetrieveSharedPrincipalsAndAccess` lists a record's
+  shares, and `WithSharedRecord(record, principal, AccessRights.ReadAccess)` pre-shares in arrange.
+- **Ownership & assignment.** Owning a record (directly or via a team) satisfies the User depth; changing `ownerid`
+  (through `AssignRequest` or a plain Update) needs the **Assign** privilege, and the owning business unit follows
+  the new owner.
+- **Relationship cascades.** Declare 1:N relationships with `WithParentalRelationship(...)` /
+  `WithReferentialRelationship(..., restrictDelete: true)`. Deleting a parent then cascades per the relationship —
+  **Cascade** deletes the children, **RemoveLink** clears their lookup, **Restrict** blocks the delete while
+  children exist. Assign and Share cascade the same way, and in a parental relationship a child **inherits** the
+  caller's access to its parent (re-derived automatically when the child is re-parented).
+- **Off by default** — any test that never calls `WithSecurity(...)` behaves exactly as before (full access).
 
 ## End-to-end example
 
