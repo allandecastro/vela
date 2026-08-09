@@ -61,6 +61,21 @@ namespace Vela.Testing.Security
     }
 
     /// <summary>
+    /// How a team's members inherit its roles (the team's "Member's privilege inheritance" setting).
+    /// </summary>
+    public enum TeamPrivilegeInheritance
+    {
+        /// <summary>Team and user privileges: members use the team's roles as their own (the default).</summary>
+        MemberAndTeam,
+
+        /// <summary>
+        /// Team privileges only: a member can use the team's <see cref="AccessLevel.User"/>-level grants only for
+        /// records owned by the team, not for their own records. Higher levels are unaffected.
+        /// </summary>
+        TeamOnly,
+    }
+
+    /// <summary>
     /// Fluent builder for a named security role: a bag of (table, privilege, level) grants that can be
     /// assigned to users and teams via <see cref="SecurityConfiguration"/>.
     /// </summary>
@@ -158,9 +173,17 @@ namespace Vela.Testing.Security
         }
 
         /// <summary>Registers a team in <paramref name="businessUnit"/> holding the named <paramref name="roles"/>.</summary>
-        public SecurityConfiguration Team(Guid id, Guid businessUnit, params string[] roles)
+        public SecurityConfiguration Team(Guid id, Guid businessUnit, params string[] roles) =>
+            Team(id, businessUnit, TeamPrivilegeInheritance.MemberAndTeam, roles);
+
+        /// <summary>
+        /// Registers a team with an explicit <paramref name="inheritance"/> mode. With
+        /// <see cref="TeamPrivilegeInheritance.TeamOnly"/>, members use the team's Basic-level grants only for
+        /// records owned by the team.
+        /// </summary>
+        public SecurityConfiguration Team(Guid id, Guid businessUnit, TeamPrivilegeInheritance inheritance, params string[] roles)
         {
-            _teams[id] = new Principal(id, businessUnit, roles ?? Array.Empty<string>());
+            _teams[id] = new Principal(id, businessUnit, roles ?? Array.Empty<string>(), inheritance);
             return this;
         }
 
@@ -225,11 +248,12 @@ namespace Vela.Testing.Security
     /// <summary>A registered user or team: its id, business unit and the names of the roles it holds.</summary>
     internal readonly struct Principal
     {
-        public Principal(Guid id, Guid businessUnit, IReadOnlyList<string> roles)
+        public Principal(Guid id, Guid businessUnit, IReadOnlyList<string> roles, TeamPrivilegeInheritance inheritance = TeamPrivilegeInheritance.MemberAndTeam)
         {
             Id = id;
             BusinessUnit = businessUnit;
             Roles = roles;
+            Inheritance = inheritance;
         }
 
         public Guid Id { get; }
@@ -237,6 +261,9 @@ namespace Vela.Testing.Security
         public Guid BusinessUnit { get; }
 
         public IReadOnlyList<string> Roles { get; }
+
+        /// <summary>For teams: how members inherit its roles. Ignored for users.</summary>
+        public TeamPrivilegeInheritance Inheritance { get; }
     }
 
     /// <summary>
@@ -340,9 +367,17 @@ namespace Vela.Testing.Security
             string table = entity.ToLowerInvariant();
 
             // The user's effective grants = its own role grants plus those of every team it belongs to.
-            foreach (AccessLevel level in GrantedLevels(userId, table, privilege))
+            foreach ((AccessLevel level, Guid? restrictToTeamOwned) in GrantedLevels(userId, table, privilege))
             {
-                if (Covers(level, userId, userBu, record))
+                if (restrictToTeamOwned is Guid teamId)
+                {
+                    // A Basic-level grant from a "Team privileges only" team covers only the team's own records.
+                    if (OwnedByTeam(record, teamId))
+                    {
+                        return true;
+                    }
+                }
+                else if (Covers(level, userId, userBu, record))
                 {
                     return true;
                 }
@@ -409,13 +444,15 @@ namespace Vela.Testing.Security
             }
         }
 
-        private IEnumerable<AccessLevel> GrantedLevels(Guid userId, string table, Privilege privilege)
+        // Each granted level, tagged with the team it must be scoped to (non-null only for a Basic/User-level grant
+        // from a "Team privileges only" team, which then covers only that team's records).
+        private IEnumerable<(AccessLevel Level, Guid? RestrictToTeamOwned)> GrantedLevels(Guid userId, string table, Privilege privilege)
         {
             if (_users.TryGetValue(userId, out Principal user))
             {
                 foreach (AccessLevel level in LevelsFor(user.Roles, table, privilege))
                 {
-                    yield return level;
+                    yield return (level, null);
                 }
             }
 
@@ -425,9 +462,10 @@ namespace Vela.Testing.Security
                 {
                     if (_teams.TryGetValue(teamId, out Principal team))
                     {
+                        bool teamOnly = team.Inheritance == TeamPrivilegeInheritance.TeamOnly;
                         foreach (AccessLevel level in LevelsFor(team.Roles, table, privilege))
                         {
-                            yield return level;
+                            yield return (level, teamOnly && level == AccessLevel.User ? teamId : (Guid?)null);
                         }
                     }
                 }
@@ -492,6 +530,11 @@ namespace Vela.Testing.Security
 
             return false;
         }
+
+        // True when the record is owned by the given team specifically (used by the Team-privileges-only scope).
+        private static bool OwnedByTeam(Entity? record, Guid teamId) =>
+            record?.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) is EntityReference owner &&
+            string.Equals(owner.LogicalName, Team, StringComparison.OrdinalIgnoreCase) && owner.Id == teamId;
 
         private static Guid OwningBusinessUnit(Entity record) =>
             record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwningBusinessUnit)?.Id ?? Guid.Empty;
