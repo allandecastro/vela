@@ -541,11 +541,11 @@ namespace Vela.Testing
         // parent in a parental relationship. Assumes security is configured.
         private bool CanAccess(string entityName, Privilege privilege, Entity? record) =>
             _security!.IsGranted(_currentUserId, entityName, privilege, record) ||
-            HasInheritedAccess(entityName, privilege, record, new HashSet<Guid>());
+            HasInheritedAccess(_currentUserId, entityName, privilege, record, new HashSet<Guid>());
 
         // Inherited access: in a parental relationship (one that cascades Reparent), a child inherits the access the
         // user has on its parent — for every privilege except Create. Walks up the hierarchy, guarding against cycles.
-        private bool HasInheritedAccess(string entityName, Privilege privilege, Entity? record, HashSet<Guid> visited)
+        private bool HasInheritedAccess(Guid userId, string entityName, Privilege privilege, Entity? record, HashSet<Guid> visited)
         {
             if (_security == null || record == null || privilege == Privilege.Create || !visited.Add(record.Id))
             {
@@ -562,8 +562,8 @@ namespace Vela.Testing
 
                 Entity? parent = StoredOrNull(parentRef.LogicalName, parentRef.Id);
                 if (parent != null &&
-                    (_security.IsGranted(_currentUserId, parentRef.LogicalName, privilege, parent) ||
-                     HasInheritedAccess(parentRef.LogicalName, privilege, parent, visited)))
+                    (_security.IsGranted(userId, parentRef.LogicalName, privilege, parent) ||
+                     HasInheritedAccess(userId, parentRef.LogicalName, privilege, parent, visited)))
                 {
                     return true;
                 }
@@ -674,7 +674,8 @@ namespace Vela.Testing
                        AccessRights.AppendAccess | AccessRights.AppendToAccess | AccessRights.AssignAccess | AccessRights.ShareAccess;
             }
 
-            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored);
+            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored,
+                privilege => HasInheritedAccess(principal.Id, target.LogicalName, privilege, stored, new HashSet<Guid>()));
         }
 
         // A user can only share rights they themselves hold on the record (Dataverse: "you can't give rights you
@@ -702,7 +703,12 @@ namespace Vela.Testing
             }
         }
 
-        public void Delete(string entityName, Guid id)
+        public void Delete(string entityName, Guid id) => DeleteInternal(entityName, id, RemoveRecordDirect);
+
+        // Delete driven by a caller-supplied per-record remover: direct callers remove the row straight from the
+        // store, while the pipeline passes a remover that fires each record's Delete plugins. The store still owns
+        // the cascade TRAVERSAL, so there is one cascade implementation regardless of who removes the rows.
+        internal void DeleteInternal(string entityName, Guid id, Action<string, Guid> removeRecord)
         {
             EnsureWritable(entityName);
             if (_security != null && Table(entityName).TryGetValue(id, out Entity? stored))
@@ -710,14 +716,18 @@ namespace Vela.Testing
                 DemandAccess(entityName, Privilege.Delete, stored);
             }
 
-            CascadeDelete(entityName, id, new HashSet<Guid>());
+            CascadeDelete(entityName, id, new HashSet<Guid>(), removeRecord);
         }
 
-        // Deletes the record and applies each child 1:N relationship's Delete cascade: Cascade deletes the children
-        // (recursively), RemoveLink clears their lookup, Restrict blocks the delete while any child exists. Cascaded
-        // child deletes are system operations — they do NOT re-check the caller's Delete privilege (matching the
-        // platform, where only the parent's Delete privilege is validated). The visited set guards against cycles.
-        private void CascadeDelete(string entityName, Guid id, HashSet<Guid> visited)
+        // Removes a single record from the store with no cascade — the default remover, and the primitive the
+        // pipeline's remover ends with after firing the record's Delete plugins.
+        internal void RemoveRecordDirect(string entityName, Guid id) => Table(entityName).Remove(id);
+
+        // Applies each child 1:N relationship's Delete cascade, then removes the record via <paramref name="removeRecord"/>:
+        // Cascade deletes the children (recursively), RemoveLink clears their lookup, Restrict blocks the delete while
+        // any child exists. Cascaded child deletes are system operations — they do NOT re-check the caller's Delete
+        // privilege (only the parent's is validated). The visited set guards against cycles.
+        private void CascadeDelete(string entityName, Guid id, HashSet<Guid> visited, Action<string, Guid> removeRecord)
         {
             if (!visited.Add(id))
             {
@@ -743,7 +753,7 @@ namespace Vela.Testing
                 {
                     foreach (Entity child in children)
                     {
-                        CascadeDelete(relationship.ReferencingEntity, child.Id, visited);
+                        CascadeDelete(relationship.ReferencingEntity, child.Id, visited, removeRecord);
                     }
                 }
                 else if (relationship.Cascade.Delete == CascadeType.RemoveLink)
@@ -755,7 +765,7 @@ namespace Vela.Testing
                 }
             }
 
-            Table(entityName).Remove(id);
+            removeRecord(entityName, id);
         }
 
         // The child records whose lookup points at the given parent id.

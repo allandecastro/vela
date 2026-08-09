@@ -49,6 +49,20 @@ namespace Vela.Testing.Tests
             => ctx.SystemService.Create(new Entity("annotation") { ["subject"] = "auto-note" });
     }
 
+    // Fires on task delete — proves a cascaded child delete runs the child's Delete plugins (firing is observable
+    // via the pipeline ExecutionLog).
+    public sealed class OnTaskDelete : EntityPluginBase<FakeTask>
+    {
+        public OnTaskDelete(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterSteps().OnDelete().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous);
+
+        protected override void Execute(ILocalPluginContext ctx, FakeTask target)
+        {
+        }
+    }
+
     // Fires only when 'name' changes (filtering attributes).
     public sealed class OnNameChange : EntityPluginBase<FakeAccount>
     {

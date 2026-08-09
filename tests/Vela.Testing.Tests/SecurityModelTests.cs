@@ -594,6 +594,86 @@ namespace Vela.Testing.Tests
             Assert.Contains(SalesTeam.ToString(), ex.Message);
         }
 
+        // --- Team privilege-inheritance mode (Member's privilege inheritance) ---------------------------
+
+        private static Entity AccountOwnedByTeam(Guid id, Guid team) => new Entity("account", id)
+        {
+            ["ownerid"] = new EntityReference("team", team),
+            ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+        };
+
+        [Fact]
+        public void Default_team_inheritance_lets_a_member_use_a_basic_team_grant_on_their_own_record()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .User(Alice, SalesBu)                       // Alice holds no role of her own
+                    .Team(SalesTeam, SalesBu, "reader")         // default inheritance (Team and user privileges)
+                    .Member(Alice, SalesTeam))
+                .Seed(AccountOwnedBy(record, Alice, SalesBu));  // owned by the member
+
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
+        [Fact]
+        public void Team_only_inheritance_scopes_a_basic_team_grant_to_team_owned_records()
+        {
+            Guid ownRecord = Guid.NewGuid();
+            Guid teamRecord = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .User(Alice, SalesBu)
+                    .Team(SalesTeam, SalesBu, TeamPrivilegeInheritance.TeamOnly, "reader")
+                    .Member(Alice, SalesTeam))
+                .Seed(AccountOwnedBy(ownRecord, Alice, SalesBu), AccountOwnedByTeam(teamRecord, SalesTeam));
+
+            Assert.NotNull(svc.Retrieve("account", teamRecord, new ColumnSet(true))); // team-owned: allowed
+            Assert.Throws<FaultException<OrganizationServiceFault>>(                    // member-owned: denied
+                () => svc.Retrieve("account", ownRecord, new ColumnSet(true)));
+        }
+
+        [Fact]
+        public void Team_only_inheritance_does_not_restrict_a_higher_level_team_grant()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("bureader", r => r.Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .User(Alice, SalesBu)
+                    .Team(SalesTeam, SalesBu, TeamPrivilegeInheritance.TeamOnly, "bureader")
+                    .Member(Alice, SalesTeam))
+                .Seed(AccountOwnedBy(record, Bob, SalesBu)); // another user's record in the BU
+
+            // A BusinessUnit-level grant is scope-based, so the Team-only mode doesn't restrict it.
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
+        [Fact]
+        public void A_members_own_role_still_covers_their_records_alongside_a_team_only_team()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .User(Alice, SalesBu, "reader")             // Alice's OWN User-level Read
+                    .Team(SalesTeam, SalesBu, TeamPrivilegeInheritance.TeamOnly, "reader")
+                    .Member(Alice, SalesTeam))
+                .Seed(AccountOwnedBy(record, Alice, SalesBu));
+
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
         // --- Assign requires the Assign privilege, not Write ---------------------------------------------
 
         [Fact]
