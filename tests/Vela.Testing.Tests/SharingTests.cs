@@ -294,6 +294,40 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void A_sharer_can_share_rights_they_hold_only_by_inheritance()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Sharer)
+                .WithParentalRelationship("account", "contact", "parentcustomerid")
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("acctsharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share))
+                    .User(Sharer, SalesBu, "acctsharer")  // Share+Read on account only — nothing on contact directly
+                    .User(Alice, SalesBu))
+                .Seed(
+                    AccountOwnedBy(account, Sharer),
+                    new Entity("contact", contact)
+                    {
+                        ["parentcustomerid"] = new EntityReference("account", account),
+                        ["ownerid"] = new EntityReference("systemuser", Sharer),
+                        ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+                    });
+
+            // The sharer's Share/Read on the contact is inherited from the parent account; the grant must honour it.
+            svc.Execute(new GrantAccessRequest
+            {
+                Target = new EntityReference("contact", contact),
+                PrincipalAccess = new PrincipalAccess { Principal = User(Alice), AccessMask = AccessRights.ReadAccess },
+            });
+
+            RetrievePrincipalAccessResponse alice = (RetrievePrincipalAccessResponse)svc.Execute(
+                new RetrievePrincipalAccessRequest { Target = new EntityReference("contact", contact), Principal = User(Alice) });
+            Assert.True(alice.AccessRights.HasFlag(AccessRights.ReadAccess)); // share succeeded (would be clamped to None without the fix)
+        }
+
+        [Fact]
         public void A_record_shared_with_the_whole_organization_is_readable_by_any_user()
         {
             Guid record = Guid.NewGuid();

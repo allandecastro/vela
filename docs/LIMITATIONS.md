@@ -122,10 +122,12 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   Alternate keys and auto-numbers only behave as you declare them (`WithAlternateKey` / `WithAutoNumber`).
 - **The security model is opt-in and off by default.** With no `WithSecurity(...)` call there are no
   privilege/access checks (full access), exactly as before. When enabled it models security roles, privileges at
-  the four access levels, business units, teams, record sharing (PoA) and 1:N relationship cascades — but not
-  hierarchy (manager/position) security, access-team templates, org-wide sharing, team privilege-inheritance
-  modes, or field-level (column) security. `RetrievePrincipalAccess` reflects role, ownership and sharing but not
-  inherited access, and cascaded child deletes don't fire the children's Delete plugins in `PluginPipeline`.
+  the four access levels, business units, teams (incl. the Member's-privilege-inheritance mode), record sharing
+  (PoA, incl. org-wide), inherited access from parental relationships, and 1:N relationship cascades — but not
+  hierarchy (manager/position) security, access-team templates, or field-level (column) security. Two behavioural
+  notes: a parent's Delete plugins fire **after** its cascaded children are removed (the children's Delete plugins
+  run first), rather than the parent's pre-stage seeing its children; and `RetrievePrincipalAccess` for a **team**
+  principal reflects only that team's own roles and shares (not its members').
 
 ---
 

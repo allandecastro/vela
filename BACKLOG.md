@@ -60,12 +60,11 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   has no such value), so nothing to implement.
 - CLI managing solutions, security roles, web resources, environment variables — out of scope (solution
   tooling's job).
-- **Security & identity model** — sharing (`GrantAccess`/`ModifyAccess`/`RevokeAccess`), column-level security
-  (`IsSecured`/field security profiles), security-role templates, and Entra ID group teams. The in-memory harness
-  has no privilege/security model on purpose, so these can't be meaningfully simulated and aren't plugin-authoring
-  concerns. (`AssignRequest` ownership is supported as a plain `ownerid` update.) **Note:** a *minimal, opt-in*
-  privilege model for the harness (roles/privileges/BU + access checks) is now up for reconsideration — see the
-  P3 item under "Test harness" above. The broader sharing/FLS/role-template surface stays out of scope.
+- **Field-level (column) security** (`IsSecured` + field security profiles), **hierarchy security**
+  (manager/position), **access-team templates**, and **Entra ID group teams** — still out of scope for the harness
+  security model (which now covers roles/privileges/BU/teams, sharing and 1:N cascades — see the "Test harness"
+  section above). CLI **management** of security-role templates (create/update roles in an environment) also stays
+  out of scope — that's solution-tooling's job; `vela models` only *reads* roles for the test-project generator.
 - **`vela models`**: relationship navigation properties + `OrganizationServiceContext`/LINQ (lazy loading +
   change tracking don't fit the plugin sandbox — use `Query.For<T>()`), localized multi-language labels, and
   custom class/property casing. For those, use `pac modelbuilder`.
