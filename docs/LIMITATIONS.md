@@ -125,8 +125,10 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
 - **The security model is opt-in and off by default.** With no `WithSecurity(...)` call there are no
   privilege/access checks (full access), exactly as before. When enabled it models security roles, privileges at
   the four access levels, business units, teams (incl. the Member's-privilege-inheritance mode), record sharing
-  (PoA, incl. org-wide), inherited access from parental relationships, and 1:N relationship cascades — but not
-  hierarchy (manager/position) security, access-team templates, or field-level (column) security. Two behavioural
+  (PoA, incl. org-wide), inherited access from parental relationships, 1:N relationship cascades, access teams,
+  **manager**-hierarchy security, and field-level (column) security. Out of scope / known gaps: **position**
+  hierarchy (only manager hierarchy is modelled); an aggregate *over* a field-secured column isn't masked (it
+  carries an alias, not the column name); and `AddUserToRecordTeam` isn't gated on a privilege. Two behavioural
   notes: a parent's Delete plugins fire **after** its cascaded children are removed (the children's Delete plugins
   run first), rather than the parent's pre-stage seeing its children; and `RetrievePrincipalAccess` for a **team**
   principal reflects only that team's own roles and shares (not its members').

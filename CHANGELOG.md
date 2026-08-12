@@ -133,6 +133,11 @@ initial release.
   user's roles the way it does against Dataverse (`RetrieveMultiple` over `systemuserroles`, or a join to `role`).
   `Role(name, id, RoleBuilder)` carries the role's real id (e.g. a generated `Roles.XId`); these tables are always
   readable. Pairs with `vela models --roles` for real, generated role configurations. (#26)
+- **Access teams, hierarchy and field-level security** — `WithAccessTeamTemplate(...)` + `AddUserToRecordTeam` /
+  `RemoveUserFromRecordTeam` grant a template's rights on a record; `ManagerHierarchy(depth)` + `Manager(...)` give
+  a manager read/write on a direct report's records and read-only deeper (within depth), gated on BU/Deep role
+  access and the report's business unit or its parent; `SecureColumn(...)` + `FieldPermission(...)` hide a
+  field-secured column on read and reject it on write without permission (user or team). (#28, #29, #30)
 
 **Docs**
 
