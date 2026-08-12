@@ -133,6 +133,7 @@ namespace Vela.Testing.Security
         private readonly Dictionary<Guid, Principal> _users = new Dictionary<Guid, Principal>();
         private readonly Dictionary<Guid, Principal> _teams = new Dictionary<Guid, Principal>();
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships = new Dictionary<Guid, HashSet<Guid>>();
+        private readonly Dictionary<string, Guid> _roleIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Declares a business unit, optionally as a child of <paramref name="parent"/> (a BU hierarchy).</summary>
         public SecurityConfiguration BusinessUnit(Guid id, Guid parent = default)
@@ -147,7 +148,14 @@ namespace Vela.Testing.Security
         }
 
         /// <summary>Defines a named role from a set of grants. Assign it to users/teams by name.</summary>
-        public SecurityConfiguration Role(string name, Action<RoleBuilder> configure)
+        public SecurityConfiguration Role(string name, Action<RoleBuilder> configure) =>
+            Role(name, DeterministicGuid.From("role", name), configure);
+
+        /// <summary>
+        /// Defines a named role with an explicit <paramref name="id"/> (e.g. a generated <c>Roles.XId</c>), so
+        /// <c>systemuserroles</c>/<c>teamroles</c> queries return that id. Without an id one is derived from the name.
+        /// </summary>
+        public SecurityConfiguration Role(string name, Guid id, Action<RoleBuilder> configure)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -162,6 +170,7 @@ namespace Vela.Testing.Security
             RoleBuilder builder = new RoleBuilder();
             configure(builder);
             _roles[name] = builder;
+            _roleIds[name] = id;
             return this;
         }
 
@@ -241,7 +250,7 @@ namespace Vela.Testing.Security
                 }
             }
 
-            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing);
+            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, _roleIds);
         }
     }
 
@@ -285,6 +294,7 @@ namespace Vela.Testing.Security
         private readonly Dictionary<Guid, Principal> _teams;
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships;
         private readonly SharingTable _sharing;
+        private readonly Dictionary<string, Guid> _roleIds;
 
         // The privileges that can also be granted per-record via sharing (PoA). Create is not shareable.
         private static readonly Privilege[] ShareablePrivileges =
@@ -299,7 +309,8 @@ namespace Vela.Testing.Security
             Dictionary<Guid, Principal> users,
             Dictionary<Guid, Principal> teams,
             Dictionary<Guid, HashSet<Guid>> memberships,
-            SharingTable sharing)
+            SharingTable sharing,
+            Dictionary<string, Guid> roleIds)
         {
             _businessUnitParents = businessUnitParents;
             _roles = roles;
@@ -307,7 +318,63 @@ namespace Vela.Testing.Security
             _teams = teams;
             _memberships = memberships;
             _sharing = sharing;
+            _roleIds = roleIds;
         }
+
+        /// <summary>
+        /// The security-membership intersect rows to seed into the store so plugins can query role membership like
+        /// the platform: <c>role</c> (id + name), <c>systemuserroles</c> (a user's direct roles), <c>teamroles</c>
+        /// (a team's roles) and <c>teammembership</c> (a user's teams).
+        /// </summary>
+        public IEnumerable<Entity> MaterializeMembershipTables()
+        {
+            foreach (KeyValuePair<string, Guid> role in _roleIds)
+            {
+                yield return new Entity("role", role.Value) { ["roleid"] = role.Value, ["name"] = role.Key };
+            }
+
+            foreach (Principal user in _users.Values)
+            {
+                foreach (Guid roleId in RoleIds(user.Roles))
+                {
+                    yield return Intersect("systemuserroles", "systemuserid", user.Id, "roleid", roleId);
+                }
+            }
+
+            foreach (Principal team in _teams.Values)
+            {
+                foreach (Guid roleId in RoleIds(team.Roles))
+                {
+                    yield return Intersect("teamroles", "teamid", team.Id, "roleid", roleId);
+                }
+            }
+
+            foreach (KeyValuePair<Guid, HashSet<Guid>> membership in _memberships)
+            {
+                foreach (Guid teamId in membership.Value)
+                {
+                    yield return Intersect("teammembership", "systemuserid", membership.Key, "teamid", teamId);
+                }
+            }
+        }
+
+        private IEnumerable<Guid> RoleIds(IReadOnlyList<string> roleNames)
+        {
+            foreach (string name in roleNames)
+            {
+                if (_roleIds.TryGetValue(name, out Guid id))
+                {
+                    yield return id;
+                }
+            }
+        }
+
+        private static Entity Intersect(string table, string firstColumn, Guid firstId, string secondColumn, Guid secondId) =>
+            new Entity(table, DeterministicGuid.From(table, firstId, secondId))
+            {
+                [firstColumn] = firstId,
+                [secondColumn] = secondId,
+            };
 
         /// <summary>The business unit the user belongs to, or <see cref="Guid.Empty"/> if the user is unknown.</summary>
         public Guid BusinessUnitOf(Guid userId) =>

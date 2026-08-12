@@ -128,7 +128,35 @@ namespace Vela.Testing
             SecurityConfiguration configuration = new SecurityConfiguration();
             configure(configuration);
             _security = configuration.Build(_sharing);
+            MaterializeSecurityTables();
             return this;
+        }
+
+        // The platform's security-membership tables plugins query to resolve roles. Seeded from the security model
+        // (below) and always readable (global read on these is the platform default) — see ReadFilter / Retrieve.
+        private static readonly HashSet<string> SecurityInfraTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "role", "systemuserroles", "teamroles", "teammembership",
+        };
+
+        // Rebuild the role/systemuserroles/teamroles/teammembership rows from the security model, so a plugin can
+        // query role membership like the platform (e.g. RetrieveMultiple over systemuserroles, or a join to role).
+        private void MaterializeSecurityTables()
+        {
+            foreach (string table in SecurityInfraTables)
+            {
+                _store.Remove(table);
+            }
+
+            if (_security == null)
+            {
+                return;
+            }
+
+            foreach (Entity row in _security.MaterializeMembershipTables())
+            {
+                Table(row.LogicalName)[row.Id] = row;
+            }
         }
 
         /// <summary>
@@ -423,7 +451,11 @@ namespace Vela.Testing
                 throw new InvalidOperationException($"{entityName} with id {id} does not exist in the in-memory store.");
             }
 
-            DemandAccess(entityName, Privilege.Read, stored);
+            if (!SecurityInfraTables.Contains(entityName))
+            {
+                DemandAccess(entityName, Privilege.Read, stored);
+            }
+
             return Project(stored, columnSet);
         }
 
@@ -935,7 +967,7 @@ namespace Vela.Testing
         // Includes access inherited from a parental parent, and reads the stored record's own owner columns so
         // filtering is correct regardless of the query's ColumnSet.
         private Func<Entity, bool>? ReadFilter() =>
-            _security == null ? null : row => CanAccess(row.LogicalName, Privilege.Read, row);
+            _security == null ? null : row => SecurityInfraTables.Contains(row.LogicalName) || CanAccess(row.LogicalName, Privilege.Read, row);
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {
