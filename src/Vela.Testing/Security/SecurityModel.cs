@@ -209,7 +209,7 @@ namespace Vela.Testing.Security
             return this;
         }
 
-        internal SecurityModel Build(SharingTable sharing)
+        internal SecurityModel Build(SharingTable sharing, AccessTeamGrants accessTeams)
         {
             // Flatten each role's grants once; resolve role references eagerly so an unknown role name fails fast.
             var roles = _roles.ToDictionary(r => r.Key, r => r.Value.Grants, StringComparer.OrdinalIgnoreCase);
@@ -250,7 +250,7 @@ namespace Vela.Testing.Security
                 }
             }
 
-            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, _roleIds);
+            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds);
         }
     }
 
@@ -294,6 +294,7 @@ namespace Vela.Testing.Security
         private readonly Dictionary<Guid, Principal> _teams;
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships;
         private readonly SharingTable _sharing;
+        private readonly AccessTeamGrants _accessTeams;
         private readonly Dictionary<string, Guid> _roleIds;
 
         // The privileges that can also be granted per-record via sharing (PoA). Create is not shareable.
@@ -310,6 +311,7 @@ namespace Vela.Testing.Security
             Dictionary<Guid, Principal> teams,
             Dictionary<Guid, HashSet<Guid>> memberships,
             SharingTable sharing,
+            AccessTeamGrants accessTeams,
             Dictionary<string, Guid> roleIds)
         {
             _businessUnitParents = businessUnitParents;
@@ -318,6 +320,7 @@ namespace Vela.Testing.Security
             _teams = teams;
             _memberships = memberships;
             _sharing = sharing;
+            _accessTeams = accessTeams;
             _roleIds = roleIds;
         }
 
@@ -450,12 +453,14 @@ namespace Vela.Testing.Security
                 }
             }
 
-            // Shared access (PoA) is unioned with role access: a record-level grant to the user or any of its
-            // teams also confers the privilege. Create is never shareable, so only record-scoped verbs apply.
+            // Shared access is unioned with role access: an explicit record share (PoA, to the user or any of its
+            // teams) or an access-team grant (to the user) also confers the privilege. Create is never record-scoped.
             AccessRights right = ToAccessRight(privilege);
             if (record != null && right != AccessRights.None)
             {
-                if ((_sharing.RightsFor(table, record.Id, PrincipalIds(userId)) & right) == right)
+                AccessRights shared = _sharing.RightsFor(table, record.Id, PrincipalIds(userId))
+                    | _accessTeams.RightsFor(table, record.Id, userId);
+                if ((shared & right) == right)
                 {
                     return true;
                 }

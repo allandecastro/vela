@@ -70,6 +70,10 @@ namespace Vela.Testing
         // security model; only consulted for enforcement when _security is set.
         private readonly SharingTable _sharing = new SharingTable();
 
+        // Access-team grants (AddUserToRecordTeam) and the registered team templates (template id -> rights).
+        private readonly AccessTeamGrants _accessTeams = new AccessTeamGrants();
+        private readonly Dictionary<Guid, AccessRights> _accessTeamTemplates = new Dictionary<Guid, AccessRights>();
+
         private Func<DateTime> _clock = () => DateTime.UtcNow;
 
         private Func<Guid> _idSequence = () => Guid.NewGuid();
@@ -127,8 +131,20 @@ namespace Vela.Testing
 
             SecurityConfiguration configuration = new SecurityConfiguration();
             configure(configuration);
-            _security = configuration.Build(_sharing);
+            _security = configuration.Build(_sharing, _accessTeams);
             MaterializeSecurityTables();
+            return this;
+        }
+
+        /// <summary>
+        /// Registers an access-team template and the <paramref name="rights"/> it grants. A plugin then adds a user
+        /// to a record's access team with <c>AddUserToRecordTeamRequest</c> (and removes them with
+        /// <c>RemoveUserFromRecordTeamRequest</c>), giving that user the template's rights on that record — unioned
+        /// with role and shared access. Only enforced once <see cref="WithSecurity"/> is set.
+        /// </summary>
+        public InMemoryOrganizationService WithAccessTeamTemplate(Guid templateId, AccessRights rights)
+        {
+            _accessTeamTemplates[templateId] = rights;
             return this;
         }
 
@@ -1124,6 +1140,26 @@ namespace Vela.Testing
                     RetrieveSharedPrincipalsAndAccessResponse response = new RetrieveSharedPrincipalsAndAccessResponse();
                     response.Results["PrincipalAccesses"] = _sharing.SharesOf(sharedPrincipals.Target);
                     return response;
+                }
+
+                case AddUserToRecordTeamRequest addToTeam:
+                {
+                    if (!_accessTeamTemplates.TryGetValue(addToTeam.TeamTemplateId, out AccessRights rights))
+                    {
+                        throw new InvalidOperationException(
+                            $"Access-team template {addToTeam.TeamTemplateId} is not registered. Declare it with WithAccessTeamTemplate(...).");
+                    }
+
+                    _accessTeams.Add(addToTeam.Record, addToTeam.SystemUserId, addToTeam.TeamTemplateId, rights);
+                    AddUserToRecordTeamResponse addResponse = new AddUserToRecordTeamResponse();
+                    addResponse.Results["AccessTeamId"] = DeterministicGuid.From("accessteam", addToTeam.Record.Id, addToTeam.TeamTemplateId);
+                    return addResponse;
+                }
+
+                case RemoveUserFromRecordTeamRequest removeFromTeam:
+                {
+                    _accessTeams.Remove(removeFromTeam.Record, removeFromTeam.SystemUserId, removeFromTeam.TeamTemplateId);
+                    return new RemoveUserFromRecordTeamResponse();
                 }
 
                 case ExecuteMultipleRequest executeMultiple:
