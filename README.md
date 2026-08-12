@@ -872,6 +872,19 @@ var crm = new InMemoryOrganizationService()
   **Cascade** deletes the children, **RemoveLink** clears their lookup, **Restrict** blocks the delete while
   children exist. Assign and Share cascade the same way, and in a parental relationship a child **inherits** the
   caller's access to its parent (re-derived automatically when the child is re-parented).
+- **Access teams.** `WithAccessTeamTemplate(templateId, rights)` registers a template's rights; a plugin then
+  grants a user those rights on a record with `AddUserToRecordTeamRequest` (and removes them with
+  `RemoveUserFromRecordTeamRequest`) — unioned with role and shared access.
+- **Hierarchy security.** `ManagerHierarchy(depth)` + `Manager(userId, managerId)` let a manager reach a report's
+  records up the reporting chain: read/write on a direct report, read-only deeper (within depth), provided they
+  hold BusinessUnit/Deep role access and are in the report's business unit or its parent.
+- **Field-level security.** `SecureColumn(entity, column)` marks a column secured; `FieldPermission(principal,
+  entity, column, read:, update:)` grants it. A secured column is hidden on read and rejected on write without
+  permission — independent of record access.
+- **Role membership.** With security configured, the platform's membership tables (`role`, `systemuserroles`,
+  `teamroles`, `teammembership`) are queryable, so a plugin can resolve a user's roles as it does against
+  Dataverse. Generate a `Roles` class with the **real** role privileges + ids from your environment with
+  [`vela models --roles`](#early-bound-generation-vela-models), then `Role(Roles.XName, Roles.XId, Roles.X)`.
 - **Off by default** — any test that never calls `WithSecurity(...)` behaves exactly as before (full access).
 
 ## End-to-end example
@@ -1077,6 +1090,10 @@ vela models --entities account,contact --namespace Zava.Shared.Models.Generated 
 
 # typed Request/Response message classes for Custom APIs
 vela models --custom-apis zava_Recalculate --interactive
+
+# security roles → a Roles class for the test project (real privileges + root role id)
+vela models --roles "Salesperson,Sales Manager" --namespace Zava.Tests.Roles --out tests/Zava.Tests/Roles
+vela models --solution ZavaSales --solution-roles --namespace Zava.Tests.Roles --out tests/Zava.Tests/Roles
 ```
 
 Generated classes are `partial` (extend them in a sibling file), keep the primary id synced with `Entity.Id`,
@@ -1090,6 +1107,9 @@ the table, global option sets as shared enums; multi-select choices become an `I
 columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail), and expose alternate keys as typed factories
 (`Account.ByAccountNumberKey("A-001")` → a key-based `EntityReference`). `--custom-apis` instead generates typed
 `OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`).
+`--roles` (explicit names) / `--solution-roles` (every role in a solution) instead generate a `Roles` class **for the
+test project** — each role's `Name`, root `Id` and a configurator carrying its real privileges — so tests drive the
+[security model](#security-model-roles-privileges-business-units-sharing-cascades) with the actual role configuration.
 Connection flags are the same as `plan`/`apply`
 (`--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or `--interactive`).
 
