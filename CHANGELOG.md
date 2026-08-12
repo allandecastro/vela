@@ -58,6 +58,11 @@ initial release.
   `[LookupTargets(...)]` (a lookup / Customer / polymorphic column's target tables) facet attributes, option-set
   enums (local nested + global shared), multi-select choices as `IList<Enum>`, and alternate-key reference
   factories; `--custom-apis` generates typed `OrganizationRequest`/`OrganizationResponse` message classes. (#51–#56)
+- **`vela models --roles`/`--solution-roles`** — generates a `Roles` class (for the **test project**) from the
+  environment's security roles: per role, its `Name`, root `Id` (roles are duplicated per business unit — the root
+  role's id) and a configurator that reuses the harness `Role(name, id, RoleBuilder)` API. Maps each role
+  privilege's depth mask → `AccessLevel` and verb → `Privilege`, deduping to the root role and skipping non-table
+  privileges, so tests configure the harness with the **real** role privilege configuration. (#24, #25, #26)
 
 - **Stale-assembly-version guard** — `vela apply` fails fast when an apply would register a **new plugin type**
   under an **unchanged assembly version**, which Dataverse would silently break at runtime with *"The plug-in type
@@ -121,7 +126,13 @@ initial release.
   `WithReferentialRelationship(..., restrictDelete:)`: cascade **Delete** (Cascade/RemoveLink/Restrict), cascade
   **Assign**, cascade **Share/Unshare**, and **inherited access** (in a parental relationship a child inherits the
   caller's access to its parent). **Off by default** — tests that never call `WithSecurity(...)` behave exactly as
-  before (full access). (#17, #18, #19)
+  before (full access). (#17, #18, #19, #21, #23) Team **Member's-privilege-inheritance** mode via
+  `Team(id, bu, TeamPrivilegeInheritance.TeamOnly, roles)`.
+- **Role membership is queryable** — with security configured, the model materializes the platform's membership
+  tables (`role`, `systemuserroles`, `teamroles`, `teammembership`) into the store, so a plugin can resolve a
+  user's roles the way it does against Dataverse (`RetrieveMultiple` over `systemuserroles`, or a join to `role`).
+  `Role(name, id, RoleBuilder)` carries the role's real id (e.g. a generated `Roles.XId`); these tables are always
+  readable. Pairs with `vela models --roles` for real, generated role configurations. (#26)
 
 **Docs**
 
