@@ -134,6 +134,8 @@ namespace Vela.Testing.Security
         private readonly Dictionary<Guid, Principal> _teams = new Dictionary<Guid, Principal>();
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships = new Dictionary<Guid, HashSet<Guid>>();
         private readonly Dictionary<string, Guid> _roleIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<Guid, Guid> _managers = new Dictionary<Guid, Guid>();
+        private int _hierarchyDepth;
 
         /// <summary>Declares a business unit, optionally as a child of <paramref name="parent"/> (a BU hierarchy).</summary>
         public SecurityConfiguration BusinessUnit(Guid id, Guid parent = default)
@@ -196,6 +198,24 @@ namespace Vela.Testing.Security
             return this;
         }
 
+        /// <summary>
+        /// Enables **manager hierarchy** security to <paramref name="depth"/> levels. A manager gets read/write on a
+        /// direct report's records and read-only on deeper reports' records (up to depth), provided the manager is in
+        /// the report's business unit or its parent. Set the reporting links with <see cref="Manager"/>.
+        /// </summary>
+        public SecurityConfiguration ManagerHierarchy(int depth = 1)
+        {
+            _hierarchyDepth = depth < 0 ? 0 : depth;
+            return this;
+        }
+
+        /// <summary>Declares that <paramref name="userId"/> reports to <paramref name="managerId"/> (manager hierarchy).</summary>
+        public SecurityConfiguration Manager(Guid userId, Guid managerId)
+        {
+            _managers[userId] = managerId;
+            return this;
+        }
+
         /// <summary>Adds <paramref name="userId"/> to <paramref name="teamId"/>; the user inherits the team's roles.</summary>
         public SecurityConfiguration Member(Guid userId, Guid teamId)
         {
@@ -250,7 +270,7 @@ namespace Vela.Testing.Security
                 }
             }
 
-            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds);
+            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _managers, _hierarchyDepth);
         }
     }
 
@@ -296,6 +316,8 @@ namespace Vela.Testing.Security
         private readonly SharingTable _sharing;
         private readonly AccessTeamGrants _accessTeams;
         private readonly Dictionary<string, Guid> _roleIds;
+        private readonly Dictionary<Guid, Guid> _managers;
+        private readonly int _hierarchyDepth;
 
         // The privileges that can also be granted per-record via sharing (PoA). Create is not shareable.
         private static readonly Privilege[] ShareablePrivileges =
@@ -312,7 +334,9 @@ namespace Vela.Testing.Security
             Dictionary<Guid, HashSet<Guid>> memberships,
             SharingTable sharing,
             AccessTeamGrants accessTeams,
-            Dictionary<string, Guid> roleIds)
+            Dictionary<string, Guid> roleIds,
+            Dictionary<Guid, Guid> managers,
+            int hierarchyDepth)
         {
             _businessUnitParents = businessUnitParents;
             _roles = roles;
@@ -322,6 +346,8 @@ namespace Vela.Testing.Security
             _sharing = sharing;
             _accessTeams = accessTeams;
             _roleIds = roleIds;
+            _managers = managers;
+            _hierarchyDepth = hierarchyDepth;
         }
 
         /// <summary>
@@ -464,6 +490,71 @@ namespace Vela.Testing.Security
                 {
                     return true;
                 }
+            }
+
+            // Manager-hierarchy access: a manager reaches a report's records up the reporting chain.
+            if (record != null && HasHierarchyAccess(userId, table, privilege, record))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        // Manager hierarchy: a manager gets Read on any report within the configured depth, and Write/Append/AppendTo
+        // on a direct report (level 1) only — never Delete/Assign/Share. It only extends a manager who ALREADY holds
+        // the privilege at BusinessUnit/ParentChild level through a role, and who is in the report's business unit or
+        // its parent. The record's owning user is the report; we walk up the reporting chain from it.
+        private bool HasHierarchyAccess(Guid userId, string table, Privilege privilege, Entity record)
+        {
+            if (_hierarchyDepth <= 0)
+            {
+                return false;
+            }
+
+            bool wantsWrite = privilege == Privilege.Write || privilege == Privilege.Append || privilege == Privilege.AppendTo;
+            if (privilege != Privilege.Read && !wantsWrite)
+            {
+                return false; // Delete/Assign/Share/Create are never conferred by the hierarchy
+            }
+
+            // Precondition: the manager must have a role granting this privilege at BusinessUnit or ParentChild depth
+            // (a BU/Deep grant is never team-restricted, so the restriction tag is irrelevant here).
+            if (!GrantedLevels(userId, table, privilege).Any(l => l.Level == AccessLevel.BusinessUnit || l.Level == AccessLevel.ParentChild))
+            {
+                return false;
+            }
+
+            if (record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) is not EntityReference owner ||
+                !string.Equals(owner.LogicalName, SystemUser, StringComparison.OrdinalIgnoreCase))
+            {
+                return false; // user-owned records only
+            }
+
+            Guid managerBu = BusinessUnitOf(userId);
+            Guid reportBu = OwningBusinessUnit(record);
+            bool businessUnitOk = managerBu != Guid.Empty &&
+                (managerBu == reportBu || (_businessUnitParents.TryGetValue(reportBu, out Guid parent) && managerBu == parent));
+            if (!businessUnitOk)
+            {
+                return false;
+            }
+
+            Guid current = owner.Id;
+            HashSet<Guid> seen = new HashSet<Guid> { current };
+            for (int level = 1; level <= _hierarchyDepth; level++)
+            {
+                if (!_managers.TryGetValue(current, out Guid manager) || !seen.Add(manager))
+                {
+                    break;
+                }
+
+                if (manager == userId)
+                {
+                    return privilege == Privilege.Read || level == 1; // write-type only for a direct report
+                }
+
+                current = manager;
             }
 
             return false;
