@@ -136,6 +136,9 @@ namespace Vela.Testing.Security
         private readonly Dictionary<string, Guid> _roleIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<Guid, Guid> _managers = new Dictionary<Guid, Guid>();
         private int _hierarchyDepth;
+        private readonly HashSet<(string Entity, string Column)> _securedColumns = new HashSet<(string, string)>();
+        private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldRead = new HashSet<(Guid, string, string)>();
+        private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldUpdate = new HashSet<(Guid, string, string)>();
 
         /// <summary>Declares a business unit, optionally as a child of <paramref name="parent"/> (a BU hierarchy).</summary>
         public SecurityConfiguration BusinessUnit(Guid id, Guid parent = default)
@@ -216,6 +219,35 @@ namespace Vela.Testing.Security
             return this;
         }
 
+        /// <summary>
+        /// Marks a column as **field-secured**: even with record access, it is hidden on read and rejected on write
+        /// unless a <see cref="FieldPermission"/> grants it. (Field-level security.)
+        /// </summary>
+        public SecurityConfiguration SecureColumn(string entity, string column)
+        {
+            _securedColumns.Add((Norm(entity), Norm(column)));
+            return this;
+        }
+
+        /// <summary>Grants a principal (user or team) read and/or update on a field-secured <paramref name="column"/>.</summary>
+        public SecurityConfiguration FieldPermission(Guid principal, string entity, string column, bool read = true, bool update = false)
+        {
+            (Guid, string, string) key = (principal, Norm(entity), Norm(column));
+            if (read)
+            {
+                _fieldRead.Add(key);
+            }
+
+            if (update)
+            {
+                _fieldUpdate.Add(key);
+            }
+
+            return this;
+        }
+
+        private static string Norm(string value) => value?.ToLowerInvariant() ?? string.Empty;
+
         /// <summary>Adds <paramref name="userId"/> to <paramref name="teamId"/>; the user inherits the team's roles.</summary>
         public SecurityConfiguration Member(Guid userId, Guid teamId)
         {
@@ -270,7 +302,7 @@ namespace Vela.Testing.Security
                 }
             }
 
-            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _managers, _hierarchyDepth);
+            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _managers, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate);
         }
     }
 
@@ -318,6 +350,9 @@ namespace Vela.Testing.Security
         private readonly Dictionary<string, Guid> _roleIds;
         private readonly Dictionary<Guid, Guid> _managers;
         private readonly int _hierarchyDepth;
+        private readonly HashSet<(string Entity, string Column)> _securedColumns;
+        private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldRead;
+        private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldUpdate;
 
         // The privileges that can also be granted per-record via sharing (PoA). Create is not shareable.
         private static readonly Privilege[] ShareablePrivileges =
@@ -336,7 +371,10 @@ namespace Vela.Testing.Security
             AccessTeamGrants accessTeams,
             Dictionary<string, Guid> roleIds,
             Dictionary<Guid, Guid> managers,
-            int hierarchyDepth)
+            int hierarchyDepth,
+            HashSet<(string Entity, string Column)> securedColumns,
+            HashSet<(Guid Principal, string Entity, string Column)> fieldRead,
+            HashSet<(Guid Principal, string Entity, string Column)> fieldUpdate)
         {
             _businessUnitParents = businessUnitParents;
             _roles = roles;
@@ -348,6 +386,42 @@ namespace Vela.Testing.Security
             _roleIds = roleIds;
             _managers = managers;
             _hierarchyDepth = hierarchyDepth;
+            _securedColumns = securedColumns;
+            _fieldRead = fieldRead;
+            _fieldUpdate = fieldUpdate;
+        }
+
+        /// <summary>Whether a column is field-secured (hidden/blocked unless a field permission grants it).</summary>
+        public bool IsSecuredColumn(string entity, string column) =>
+            _securedColumns.Count > 0 && _securedColumns.Contains((entity.ToLowerInvariant(), column.ToLowerInvariant()));
+
+        /// <summary>Whether the user may read a field-secured column (directly or via a team).</summary>
+        public bool CanReadColumn(Guid userId, string entity, string column) => FieldAllowed(_fieldRead, userId, entity, column);
+
+        /// <summary>Whether the user may write a field-secured column (directly or via a team).</summary>
+        public bool CanWriteColumn(Guid userId, string entity, string column) => FieldAllowed(_fieldUpdate, userId, entity, column);
+
+        private bool FieldAllowed(HashSet<(Guid Principal, string Entity, string Column)> permissions, Guid userId, string entity, string column)
+        {
+            string e = entity.ToLowerInvariant();
+            string c = column.ToLowerInvariant();
+            if (permissions.Contains((userId, e, c)))
+            {
+                return true;
+            }
+
+            if (_memberships.TryGetValue(userId, out HashSet<Guid>? teams))
+            {
+                foreach (Guid teamId in teams)
+                {
+                    if (permissions.Contains((teamId, e, c)))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
