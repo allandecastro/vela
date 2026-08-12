@@ -445,6 +445,7 @@ namespace Vela.Testing
             EnsureWritable(entity.LogicalName);
             DemandCreate(entity);
             DemandLookupAppends(entity, null);
+            DemandSecuredColumnWrites(entity);
 
             Entity stored = EntityValues.Clone(entity);
             if (stored.Id == Guid.Empty)
@@ -472,7 +473,9 @@ namespace Vela.Testing
                 DemandAccess(entityName, Privilege.Read, stored);
             }
 
-            return Project(stored, columnSet);
+            Entity projected = Project(stored, columnSet);
+            MaskSecuredColumns(projected);
+            return projected;
         }
 
         public void Update(Entity entity) => UpdateCore(entity);
@@ -507,6 +510,7 @@ namespace Vela.Testing
             }
 
             DemandLookupAppends(entity, stored);
+            DemandSecuredColumnWrites(entity);
 
             // Validate the would-be merged record before committing so a duplicate-key throw leaves the store intact.
             Entity candidate = EntityValues.Clone(stored);
@@ -570,6 +574,40 @@ namespace Vela.Testing
             }
 
             return new SystemActor(_currentUserId, businessUnit, _currentOrganizationId);
+        }
+
+        // Field-level security: drop field-secured columns the current user may not read from a returned record.
+        private void MaskSecuredColumns(Entity entity)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            List<string> hidden = entity.Attributes.Keys
+                .Where(column => _security.IsSecuredColumn(entity.LogicalName, column) && !_security.CanReadColumn(_currentUserId, entity.LogicalName, column))
+                .ToList();
+            foreach (string column in hidden)
+            {
+                entity.Attributes.Remove(column);
+            }
+        }
+
+        // Field-level security: reject a Create/Update that sets a field-secured column the caller can't write.
+        private void DemandSecuredColumnWrites(Entity entity)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            foreach (string column in entity.Attributes.Keys)
+            {
+                if (_security.IsSecuredColumn(entity.LogicalName, column) && !_security.CanWriteColumn(_currentUserId, entity.LogicalName, column))
+                {
+                    throw _security.PrivilegeDenied(_currentUserId, Privilege.Write, $"{entity.LogicalName}.{column}");
+                }
+            }
         }
 
         // Enforces a privilege for the current user when security is configured; a no-op otherwise (default-off).
@@ -962,21 +1000,36 @@ namespace Vela.Testing
             // With security on, the read filter is applied inside the engine to the primary rows BEFORE paging, so
             // pages are drawn from the readable set (not trimmed afterwards). Aggregates are not filtered yet.
             InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId, ReadFilter());
+            EntityCollection result;
             switch (query)
             {
                 case QueryExpression qe:
-                    return engine.ExecuteQueryExpression(qe);
+                    result = engine.ExecuteQueryExpression(qe);
+                    break;
                 case QueryByAttribute qba:
-                    return engine.ExecuteQueryByAttribute(qba);
+                    result = engine.ExecuteQueryByAttribute(qba);
+                    break;
                 case FetchExpression fetch:
-                    return FetchXmlParser.IsAggregate(fetch.Query)
+                    result = FetchXmlParser.IsAggregate(fetch.Query)
                         ? engine.ExecuteAggregate(FetchXmlParser.ParseAggregate(fetch.Query))
                         : engine.ExecuteQueryExpression(FetchXmlParser.Parse(fetch.Query));
+                    break;
                 default:
                     throw new NotSupportedException(
                         $"InMemoryOrganizationService supports QueryExpression, QueryByAttribute and FetchExpression. " +
                         $"{query.GetType().Name} is not supported yet.");
             }
+
+            // Field-level security masks field-secured columns the caller can't read from each returned record.
+            if (_security != null)
+            {
+                foreach (Entity row in result.Entities)
+                {
+                    MaskSecuredColumns(row);
+                }
+            }
+
+            return result;
         }
 
         // The predicate the query engine uses to keep only rows the current user may read (null = no security).
