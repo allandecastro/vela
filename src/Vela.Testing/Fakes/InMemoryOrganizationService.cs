@@ -682,13 +682,10 @@ namespace Vela.Testing
         // don't have"), so a runtime GrantAccess/ModifyAccess is clamped to the sharer's effective rights. Off: no clamp.
         private PrincipalAccess ClampToSharerRights(EntityReference target, PrincipalAccess access)
         {
-            if (_security == null)
-            {
-                return access;
-            }
-
-            Entity record = StoredOrNull(target.LogicalName, target.Id) ?? new Entity(target.LogicalName, target.Id);
-            AccessRights sharerRights = _security.EffectiveAccess(_currentUserId, target.LogicalName, record);
+            // The sharer's effective rights include role, ownership, sharing AND inherited access — reuse the same
+            // computation RetrievePrincipalAccess uses. With security off this returns full rights, so the clamp is a
+            // no-op (unchanged behaviour).
+            AccessRights sharerRights = EffectiveAccess(new EntityReference("systemuser", _currentUserId), target);
             return new PrincipalAccess { Principal = access.Principal, AccessMask = access.AccessMask & sharerRights };
         }
 
