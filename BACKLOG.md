@@ -27,14 +27,6 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   (column security profiles). Known gaps: cascaded child deletes are store-level for direct callers (they fire the
   child plugins through `PluginPipeline`).
 
-- **P3 — Generate security roles in `vela models`** — generate the solution's (or explicitly named) roles into the
-  **test project** so tests use the REAL role privilege config + role GUIDs instead of hand-declared grants.
-  Dedup to the **root role** (roles are duplicated per BU; keep `roleid == parentrootroleid`). Map
-  `roleprivileges` depth mask → `AccessLevel` (Basic/Local/Deep/Global → User/BU/ParentChild/Org) and the verb →
-  `Privilege`. Emit a `Roles` class with each role's **GUID** (plugin logic uses role ids) + a configurator reusing
-  `Role(name, Action<RoleBuilder>)`. Skip non-entity/miscellaneous privileges (TODO, low value). Part B: model
-  user↔role assignments + a "does user have role R?" service (mirror `RetrieveUserRoles`). Full plan in
-  `.context/security-model-analysis.md`.
 
 ## Developer experience
 

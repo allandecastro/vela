@@ -82,10 +82,12 @@ untouched.
   early-bound model type (`--entity`).
 - **`vela models`** generates entity classes (typed properties, primary-id sync, XML doc, DataAnnotations,
   option-set enums local/global, multi-select as `IList<Enum>`, alternate-key reference factories) scoped by
-  `--solution`/`--entities`, plus Custom API message classes via `--custom-apis`. **Out of scope:** relationship
+  `--solution`/`--entities`, Custom API message classes via `--custom-apis`, and a `Roles` class (real role
+  privileges + root role id, for the test project) via `--roles`/`--solution-roles`. **Out of scope:** relationship
   navigation properties + `OrganizationServiceContext`/LINQ (lazy loading/change-tracking don't fit the plugin
   sandbox — use `Query.For<T>()`), localized multi-language labels, and custom class/property casing — use
-  `pac modelbuilder` if you need those.
+  `pac modelbuilder` if you need those. Role generation covers **table** privileges only — non-entity /
+  miscellaneous privileges (Export to Excel, Act on Behalf of Another User, etc.) are deliberately skipped.
 - **`vela sign`** accepts a cert by fingerprint (`CurrentUser\My`), `.pfx` (+ password/credential) or
   base64 `.pfx`, and delegates to `dotnet nuget sign`. `--pfx-credential` (Windows Credential Manager) is
   Windows-only; Key Vault / HSM signing is out of scope.
