@@ -48,9 +48,17 @@ internal static class ModelsCommand
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && roles.Length == 0)
+        // --solution-roles pulls every security role in --solution (like --solution does for tables).
+        bool solutionRoles = HasFlag(args, "--solution-roles");
+
+        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && roles.Length == 0 && !solutionRoles)
         {
-            return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis <a,b,c> and/or --roles <a,b,c>. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
+            return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis <a,b,c>, --roles <a,b,c> and/or --solution-roles. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (solutionRoles && string.IsNullOrWhiteSpace(solution))
+        {
+            return Fail("--solution-roles requires --solution <uniquename>.", ExitInvalidArguments, includeUsage: false);
         }
 
         string? ns = ResolveNamespace(args);
@@ -103,10 +111,13 @@ internal static class ModelsCommand
                 models.AddRange(CustomApiMessageGenerator.Generate(messages, ns!));
             }
 
-            if (roles.Length > 0)
+            if (roles.Length > 0 || solutionRoles)
             {
-                IReadOnlyList<RoleModel> roleModels = ReadRoles(service, roles);
-                models.Add(RoleGenerator.Generate(roleModels, new RoleGenOptions(ns!)));
+                IReadOnlyList<RoleModel> roleModels = ReadRoles(service, roles, solutionRoles ? solution : null);
+                if (roleModels.Count > 0)
+                {
+                    models.Add(RoleGenerator.Generate(roleModels, new RoleGenOptions(ns!)));
+                }
             }
 
             if (models.Count == 0)
@@ -237,18 +248,54 @@ internal static class ModelsCommand
             .ToList();
     }
 
-    private static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames)
+    private static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames, string? solution)
     {
-        IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> privileges = BuildPrivilegeMap(service);
-        List<RoleModel> models = new List<RoleModel>();
+        // Resolve to unique root roles (id -> name), merging explicit names and the solution's role components so a
+        // role listed both ways is generated once.
+        Dictionary<Guid, string> roots = new Dictionary<Guid, string>();
+
         foreach (string name in roleNames)
         {
             Entity root = ReadRootRole(service, name);
-            IReadOnlyList<RoleGrantModel> grants = RolePrivilegeMapper.ToGrants(ReadRolePrivileges(service, root.Id), privileges);
-            models.Add(new RoleModel(name, root.Id, grants));
+            roots[root.Id] = root.GetAttributeValue<string>("name") ?? name;
         }
 
-        return models;
+        if (!string.IsNullOrWhiteSpace(solution))
+        {
+            foreach (Entity role in RolesInSolution(service, solution!))
+            {
+                roots[role.Id] = role.GetAttributeValue<string>("name") ?? role.Id.ToString();
+            }
+        }
+
+        IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> privileges = BuildPrivilegeMap(service);
+        return roots
+            .OrderBy(r => r.Value, StringComparer.Ordinal)
+            .Select(r => new RoleModel(r.Value, r.Key, RolePrivilegeMapper.ToGrants(ReadRolePrivileges(service, r.Key), privileges)))
+            .ToList();
+    }
+
+    // Every security role in a solution (solutioncomponent componenttype 20). Solution components reference the
+    // root role, so the object ids are the stable root ids.
+    private static IEnumerable<Entity> RolesInSolution(IOrganizationService service, string uniqueName)
+    {
+        QueryExpression solutionQuery = new QueryExpression("solution") { ColumnSet = new ColumnSet("solutionid"), TopCount = 1 };
+        solutionQuery.Criteria.AddCondition("uniquename", ConditionOperator.Equal, uniqueName);
+        Entity solutionRecord = service.RetrieveMultiple(solutionQuery).Entities.FirstOrDefault()
+            ?? throw new InvalidOperationException($"Solution '{uniqueName}' was not found.");
+
+        QueryExpression componentQuery = new QueryExpression("solutioncomponent") { ColumnSet = new ColumnSet("objectid") };
+        componentQuery.Criteria.AddCondition("solutionid", ConditionOperator.Equal, solutionRecord.Id);
+        componentQuery.Criteria.AddCondition("componenttype", ConditionOperator.Equal, 20); // 20 = Role
+        List<Guid> roleIds = service.RetrieveAll(componentQuery)
+            .Select(e => e.GetAttributeValue<Guid>("objectid"))
+            .Distinct()
+            .ToList();
+
+        foreach (Guid roleId in roleIds)
+        {
+            yield return service.Retrieve("role", roleId, new ColumnSet("roleid", "name", "parentrootroleid"));
+        }
     }
 
     // The root (template) role for a name. Roles are duplicated per business unit; the root is the one whose
@@ -354,6 +401,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
         Console.WriteLine("  --roles <a,b,c>           security role names → a Roles class (root role id + privileges) for the test project");
+        Console.WriteLine("  --solution-roles          also generate every security role in --solution");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
         Console.WriteLine("  --no-annotations          omit DataAnnotations ([StringLength]/[Range])");
