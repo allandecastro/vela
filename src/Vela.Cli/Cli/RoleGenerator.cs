@@ -55,8 +55,9 @@ public static class RoleGenerator
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// Security roles generated from the environment. Configure the harness with a role's real");
-        sb.AppendLine("    /// privileges via <c>WithSecurity(s =&gt; s.Role(Roles.XName, Roles.X).User(userId, buId, Roles.XName))</c>,");
-        sb.AppendLine("    /// and use <c>Roles.XId</c> where plugin logic checks the role's id.");
+        sb.AppendLine("    /// privileges via <c>WithSecurity(s =&gt; s.Role(Roles.XName, Roles.XId, Roles.X).User(userId, buId, Roles.XName))</c>");
+        sb.AppendLine("    /// — passing <c>Roles.XId</c> makes systemuserroles/teamroles queries return the real role id, which");
+        sb.AppendLine("    /// plugin logic also uses.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine("    public static class Roles");
         sb.AppendLine("    {");
