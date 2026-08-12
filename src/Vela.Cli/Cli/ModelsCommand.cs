@@ -41,9 +41,16 @@ internal static class ModelsCommand
             .Where(x => x.Length > 0)
             .ToArray();
 
-        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0)
+        string[] roles = (TryReadOption(args, "--roles") ?? string.Empty)
+            .Split([','], StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && roles.Length == 0)
         {
-            return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c> and/or --custom-apis <a,b,c>. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
+            return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis <a,b,c> and/or --roles <a,b,c>. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
         }
 
         string? ns = ResolveNamespace(args);
@@ -94,6 +101,12 @@ internal static class ModelsCommand
             {
                 CustomApiMessage[] messages = customApis.Select(name => ReadCustomApi(service, name)).ToArray();
                 models.AddRange(CustomApiMessageGenerator.Generate(messages, ns!));
+            }
+
+            if (roles.Length > 0)
+            {
+                IReadOnlyList<RoleModel> roleModels = ReadRoles(service, roles);
+                models.Add(RoleGenerator.Generate(roleModels, new RoleGenOptions(ns!)));
             }
 
             if (models.Count == 0)
@@ -224,6 +237,66 @@ internal static class ModelsCommand
             .ToList();
     }
 
+    private static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames)
+    {
+        IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> privileges = BuildPrivilegeMap(service);
+        List<RoleModel> models = new List<RoleModel>();
+        foreach (string name in roleNames)
+        {
+            Entity root = ReadRootRole(service, name);
+            IReadOnlyList<RoleGrantModel> grants = RolePrivilegeMapper.ToGrants(ReadRolePrivileges(service, root.Id), privileges);
+            models.Add(new RoleModel(name, root.Id, grants));
+        }
+
+        return models;
+    }
+
+    // The root (template) role for a name. Roles are duplicated per business unit; the root is the one whose
+    // parentrootroleid points at itself, and its id is the stable id plugin logic uses.
+    private static Entity ReadRootRole(IOrganizationService service, string name)
+    {
+        QueryExpression query = new QueryExpression("role") { ColumnSet = new ColumnSet("roleid", "name", "parentrootroleid") };
+        query.Criteria.AddCondition("name", ConditionOperator.Equal, name);
+        List<Entity> matches = service.RetrieveAll(query).ToList();
+
+        return matches.FirstOrDefault(r => r.GetAttributeValue<EntityReference>("parentrootroleid")?.Id == r.Id)
+            ?? matches.FirstOrDefault()
+            ?? throw new InvalidOperationException($"Security role '{name}' was not found in the connected environment.");
+    }
+
+    private static IEnumerable<(Guid PrivilegeId, int DepthMask)> ReadRolePrivileges(IOrganizationService service, Guid roleId)
+    {
+        QueryExpression query = new QueryExpression("roleprivileges") { ColumnSet = new ColumnSet("privilegeid", "privilegedepthmask") };
+        query.Criteria.AddCondition("roleid", ConditionOperator.Equal, roleId);
+        return service.RetrieveAll(query)
+            .Select(e => (e.GetAttributeValue<Guid>("privilegeid"), e.GetAttributeValue<int>("privilegedepthmask")))
+            .ToList();
+    }
+
+    // privilegeId -> (owning table, privilege type), from every table's Privileges metadata. Miscellaneous
+    // (non-table) privileges aren't in any table's collection, so they're naturally excluded from generation.
+    private static IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> BuildPrivilegeMap(IOrganizationService service)
+    {
+        RetrieveAllEntitiesResponse response = (RetrieveAllEntitiesResponse)service.Execute(
+            new RetrieveAllEntitiesRequest { EntityFilters = EntityFilters.Entity | EntityFilters.Privileges, RetrieveAsIfPublished = true });
+
+        Dictionary<Guid, (string, PrivilegeType)> map = new Dictionary<Guid, (string, PrivilegeType)>();
+        foreach (EntityMetadata entity in response.EntityMetadata)
+        {
+            if (entity.Privileges == null || string.IsNullOrWhiteSpace(entity.LogicalName))
+            {
+                continue;
+            }
+
+            foreach (SecurityPrivilegeMetadata privilege in entity.Privileges)
+            {
+                map[privilege.PrivilegeId] = (entity.LogicalName, privilege.PrivilegeType);
+            }
+        }
+
+        return map;
+    }
+
     private static string? ResolveNamespace(string[] args)
     {
         string? explicitNs = TryReadOption(args, "--namespace");
@@ -274,11 +347,13 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --solution <uniquename> [connection options]");
         Console.WriteLine("  vela models --entities account,contact [connection options]");
         Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
+        Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
         Console.WriteLine();
         Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
         Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
+        Console.WriteLine("  --roles <a,b,c>           security role names → a Roles class (root role id + privileges) for the test project");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
         Console.WriteLine("  --no-annotations          omit DataAnnotations ([StringLength]/[Range])");
