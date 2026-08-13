@@ -133,9 +133,10 @@ jobs:
       - name: Install Stryker
         run: dotnet tool install -g dotnet-stryker || dotnet tool update -g dotnet-stryker
       # The opt-in security model's decision logic (roles/privileges/depth/sharing/access-teams/hierarchy/FLS,
-      # 1:N cascade config). --break-at 0 for the first run: it MEASURES + dumps survivors without failing the gate;
-      # ratchet it up once the survivors below are killed. (The enforcement wiring in InMemoryOrganizationService is
-      # exercised by the security tests but is a whole-file surface, so it is a separate follow-up pass.)
+      # 1:N cascade config). Measured at ~86.2% after killing the real survivors; --break-at is ratcheted to 84
+      # (~2pts below), the remaining survivors being equivalents (exception-message strings, comparer internals,
+      # cycle guards). The enforcement wiring in InMemoryOrganizationService is a whole-file surface, left for a
+      # separate pass. The "List surviving mutants" step dumps what remains.
       - name: Mutation test — harness security model
         working-directory: tests/Vela.Testing.Tests
         run: >
@@ -144,7 +145,7 @@ jobs:
           --mutate "**/Security/SecurityModel.cs" --mutate "**/Security/SharingTable.cs"
           --mutate "**/Security/AccessTeamGrants.cs" --mutate "**/Fakes/OneToManyRegistry.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 0 --threshold-low 80 --threshold-high 90
+          --break-at 84 --threshold-low 84 --threshold-high 90
       - name: List surviving mutants
         if: always()
         shell: pwsh
@@ -198,15 +199,16 @@ jobs:
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
         run: dotnet tool install -g dotnet-stryker || dotnet tool update -g dotnet-stryker
-      # Role generation (net10, CLI): the pure metadata->code generator and the privilege mapper. --break-at 0 to
-      # measure first, then ratchet.
+      # Role generation (net10, CLI): the pure metadata->code generator and the privilege mapper. A full-output
+      # snapshot test pins the generator's emitted strings; --break-at is ratcheted to 80 (the remaining survivors
+      # are equivalent whitespace/statement mutations of the generated text).
       - name: Mutation test — role generation
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
           --mutate "**/RoleGenerator.cs" --mutate "**/RolePrivilegeMapper.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 0 --threshold-low 80 --threshold-high 90
+          --break-at 80 --threshold-low 80 --threshold-high 90
       - name: List surviving mutants
         if: always()
         shell: pwsh
