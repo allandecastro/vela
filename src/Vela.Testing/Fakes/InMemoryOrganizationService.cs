@@ -593,6 +593,45 @@ namespace Vela.Testing
             }
         }
 
+        // Field-level security: reject a RetrieveMultiple that aggregates or groups by a field-secured column the
+        // caller can't read (the aggregate value would otherwise leak it).
+        private void DemandAggregateColumnReads(QueryBase query)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            if (query is QueryExpression qe && qe.ColumnSet?.AttributeExpressions != null)
+            {
+                foreach (XrmAttributeExpression expression in qe.ColumnSet.AttributeExpressions)
+                {
+                    DemandSecuredAggregateColumn(qe.EntityName, expression.AttributeName);
+                }
+            }
+            else if (query is FetchExpression fetch && FetchXmlParser.IsAggregate(fetch.Query))
+            {
+                AggregateQuery aggregate = FetchXmlParser.ParseAggregate(fetch.Query);
+                foreach (AggregateColumn column in aggregate.Aggregates)
+                {
+                    DemandSecuredAggregateColumn(aggregate.EntityName, column.Attribute);
+                }
+
+                foreach (AggregateColumn column in aggregate.Groups)
+                {
+                    DemandSecuredAggregateColumn(aggregate.EntityName, column.Attribute);
+                }
+            }
+        }
+
+        private void DemandSecuredAggregateColumn(string entity, string column)
+        {
+            if (!string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
+            {
+                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
+            }
+        }
+
         // Field-level security: reject a Create/Update that sets a field-secured column the caller can't write.
         private void DemandSecuredColumnWrites(Entity entity)
         {
@@ -997,8 +1036,12 @@ namespace Vela.Testing
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
+            // Field-level security: an aggregate/group-by over a field-secured column the caller can't read would
+            // otherwise leak it through the aggregate value, so reject the query up front.
+            DemandAggregateColumnReads(query);
+
             // With security on, the read filter is applied inside the engine to the primary rows BEFORE paging, so
-            // pages are drawn from the readable set (not trimmed afterwards). Aggregates are not filtered yet.
+            // pages are drawn from the readable set (not trimmed afterwards).
             InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId, ReadFilter());
             EntityCollection result;
             switch (query)
@@ -1203,6 +1246,8 @@ namespace Vela.Testing
                             $"Access-team template {addToTeam.TeamTemplateId} is not registered. Declare it with WithAccessTeamTemplate(...).");
                     }
 
+                    // Managing a record's access team needs AppendTo on the record, like relating to it.
+                    DemandAccess(addToTeam.Record.LogicalName, Privilege.AppendTo, StoredOrNull(addToTeam.Record.LogicalName, addToTeam.Record.Id));
                     _accessTeams.Add(addToTeam.Record, addToTeam.SystemUserId, addToTeam.TeamTemplateId, rights);
                     AddUserToRecordTeamResponse addResponse = new AddUserToRecordTeamResponse();
                     addResponse.Results["AccessTeamId"] = DeterministicGuid.From("accessteam", addToTeam.Record.Id, addToTeam.TeamTemplateId);
@@ -1211,6 +1256,7 @@ namespace Vela.Testing
 
                 case RemoveUserFromRecordTeamRequest removeFromTeam:
                 {
+                    DemandAccess(removeFromTeam.Record.LogicalName, Privilege.AppendTo, StoredOrNull(removeFromTeam.Record.LogicalName, removeFromTeam.Record.Id));
                     _accessTeams.Remove(removeFromTeam.Record, removeFromTeam.SystemUserId, removeFromTeam.TeamTemplateId);
                     return new RemoveUserFromRecordTeamResponse();
                 }
