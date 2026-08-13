@@ -118,6 +118,31 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Hierarchy_precondition_needs_any_bu_or_deep_grant_not_all()
+        {
+            Guid record = Guid.NewGuid();
+            Guid team = new Guid("7ea11000-0000-0000-0000-0000000009f1");
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(SubBu, SalesBu)
+                    // Alice holds account Read at User (own role) AND BusinessUnit (team role) — mixed levels.
+                    .Role("ownUser", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("teamBu", r => r.Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .User(Alice, SalesBu, "ownUser")
+                    .Team(team, SalesBu, "teamBu")
+                    .Member(Alice, team)
+                    .User(Bob, SubBu)
+                    .Manager(Bob, Alice)
+                    .ManagerHierarchy(1))
+                .Seed(AccountOwnedBy(record, Bob, SubBu));
+
+            // The precondition is satisfied by ANY BU/Deep grant, so the User-level grant must not veto it.
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
+        [Fact]
         public void Hierarchy_never_confers_delete()
         {
             Guid record = Guid.NewGuid();

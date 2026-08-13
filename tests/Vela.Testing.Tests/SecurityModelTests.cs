@@ -603,6 +603,23 @@ namespace Vela.Testing.Tests
         };
 
         [Fact]
+        public void User_with_no_team_membership_is_denied_a_team_owned_record()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .User(Alice, SalesBu, "reader")) // Alice belongs to no team
+                .Seed(AccountOwnedByTeam(record, SalesTeam)); // owned by a team Alice is not in
+
+            // User-level ownership check must short-circuit cleanly (no membership) and deny — not blow up.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
+        [Fact]
         public void Default_team_inheritance_lets_a_member_use_a_basic_team_grant_on_their_own_record()
         {
             Guid record = Guid.NewGuid();
