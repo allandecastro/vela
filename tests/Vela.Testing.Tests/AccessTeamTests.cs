@@ -38,7 +38,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess | AccessRights.WriteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu)) // Alice holds no role
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", Privilege.AppendTo, AccessLevel.Organization)).User(Alice, SalesBu, "appender")) // Alice holds no role
                 .Seed(AccountOwnedBy(record, Bob));
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(
@@ -58,7 +58,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", Privilege.AppendTo, AccessLevel.Organization)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
             AddToTeam(svc, record, Alice, template);
             Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
@@ -84,7 +84,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(readTemplate, AccessRights.ReadAccess)
                 .WithAccessTeamTemplate(writeTemplate, AccessRights.WriteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", Privilege.AppendTo, AccessLevel.Organization)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
             AddToTeam(svc, record, Alice, readTemplate);
             AddToTeam(svc, record, Alice, writeTemplate);
@@ -111,7 +111,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess | AccessRights.DeleteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", Privilege.AppendTo, AccessLevel.Organization)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
             AddToTeam(svc, record, Alice, template);
 
@@ -133,10 +133,24 @@ namespace Vela.Testing.Tests
             Guid record = Guid.NewGuid();
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", Privilege.AppendTo, AccessLevel.Organization)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
 
             Assert.Throws<InvalidOperationException>(() => AddToTeam(svc, record, Alice, Guid.NewGuid()));
+        }
+
+        [Fact]
+        public void Managing_a_record_access_team_requires_appendto_on_the_record()
+        {
+            Guid record = Guid.NewGuid();
+            Guid template = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithAccessTeamTemplate(template, AccessRights.ReadAccess)
+                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu)) // Alice has no AppendTo on account
+                .Seed(AccountOwnedBy(record, Bob));
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => AddToTeam(svc, record, Alice, template));
         }
 
         [Fact]
@@ -147,7 +161,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", Privilege.AppendTo, AccessLevel.Organization)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
 
             Guid first = ((AddUserToRecordTeamResponse)svc.Execute(new AddUserToRecordTeamRequest

@@ -121,6 +121,49 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Aggregating_a_secured_column_is_rejected_without_field_read()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => Base(s)) // Alice can read the records, but not the secured column
+                .Seed(Account(Guid.NewGuid()), Account(Guid.NewGuid()));
+
+            FetchExpression fetch = new FetchExpression(
+                "<fetch aggregate='true'><entity name='account'><attribute name='creditlimit' alias='total' aggregate='sum'/></entity></fetch>");
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.RetrieveMultiple(fetch));
+        }
+
+        [Fact]
+        public void Aggregating_a_secured_column_is_allowed_with_field_read()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Bob)
+                .WithSecurity(s => Base(s).FieldPermission(Bob, "account", "creditlimit", read: true))
+                .Seed(Account(Guid.NewGuid()), Account(Guid.NewGuid()));
+
+            FetchExpression fetch = new FetchExpression(
+                "<fetch aggregate='true'><entity name='account'><attribute name='creditlimit' alias='total' aggregate='sum'/></entity></fetch>");
+
+            Entity row = Assert.Single(svc.RetrieveMultiple(fetch).Entities);
+            Assert.Equal(100000m, Convert.ToDecimal(row.GetAttributeValue<AliasedValue>("total").Value));
+        }
+
+        [Fact]
+        public void Aggregating_a_non_secured_column_is_unaffected()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => Base(s))
+                .Seed(Account(Guid.NewGuid()), Account(Guid.NewGuid()));
+
+            FetchExpression fetch = new FetchExpression(
+                "<fetch aggregate='true'><entity name='account'><attribute name='accountid' alias='n' aggregate='count'/></entity></fetch>");
+
+            Assert.Equal(2, svc.RetrieveMultiple(fetch).Entities[0].GetAttributeValue<AliasedValue>("n").Value);
+        }
+
+        [Fact]
         public void Retrieve_multiple_masks_secured_columns()
         {
             Guid id = Guid.NewGuid();
