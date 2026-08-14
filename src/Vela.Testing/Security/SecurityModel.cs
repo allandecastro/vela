@@ -479,9 +479,14 @@ namespace Vela.Testing.Security
                 [secondColumn] = secondId,
             };
 
-        /// <summary>The business unit the user belongs to, or <see cref="Guid.Empty"/> if the user is unknown.</summary>
-        public Guid BusinessUnitOf(Guid userId) =>
-            _users.TryGetValue(userId, out Principal user) ? user.BusinessUnit : Guid.Empty;
+        /// <summary>
+        /// The business unit a principal belongs to, or <see cref="Guid.Empty"/> if unknown. Resolves users and
+        /// teams (a team principal has its own BU) so depth checks work when the "principal" is a team.
+        /// </summary>
+        public Guid BusinessUnitOf(Guid principalId) =>
+            _users.TryGetValue(principalId, out Principal user) ? user.BusinessUnit
+            : _teams.TryGetValue(principalId, out Principal team) ? team.BusinessUnit
+            : Guid.Empty;
 
         /// <summary>
         /// The business unit of an owning principal (user or team), or <see cref="Guid.Empty"/> if unknown. Used to
@@ -541,7 +546,8 @@ namespace Vela.Testing.Security
             {
                 if (restrictToTeamOwned is Guid teamId)
                 {
-                    // A Basic-level grant from a "Team privileges only" team covers only the team's own records.
+                    // A Basic-level grant from a "Team privileges only" team covers only the team's own records
+                    // (including a Create whose prospective owner is that team).
                     if (OwnedByTeam(record, teamId))
                     {
                         return true;
@@ -693,6 +699,15 @@ namespace Vela.Testing.Security
                 }
             }
 
+            // When the principal is itself a team (e.g. RetrievePrincipalAccess for a team), use the team's own roles.
+            if (_teams.TryGetValue(userId, out Principal selfTeam))
+            {
+                foreach (AccessLevel level in LevelsFor(selfTeam.Roles, table, privilege))
+                {
+                    yield return (level, null);
+                }
+            }
+
             if (_memberships.TryGetValue(userId, out HashSet<Guid>? teamIds))
             {
                 foreach (Guid teamId in teamIds)
@@ -762,7 +777,9 @@ namespace Vela.Testing.Security
 
             if (string.Equals(owner.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
             {
-                return _memberships.TryGetValue(userId, out HashSet<Guid>? teams) && teams.Contains(owner.Id);
+                // The principal owns the record if it IS the owning team, or is a member of it.
+                return owner.Id == userId ||
+                       (_memberships.TryGetValue(userId, out HashSet<Guid>? teams) && teams.Contains(owner.Id));
             }
 
             return false;

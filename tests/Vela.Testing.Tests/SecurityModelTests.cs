@@ -594,6 +594,28 @@ namespace Vela.Testing.Tests
             Assert.Contains(SalesTeam.ToString(), ex.Message);
         }
 
+        [Fact]
+        public void RetrievePrincipalAccess_for_a_team_reflects_the_teams_own_roles()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .User(Alice, SalesBu)
+                    .Team(SalesTeam, SalesBu, "reader")) // the team holds account Read at Organization
+                .Seed(AccountOwnedBy(record, Bob, SalesBu));
+
+            RetrievePrincipalAccessResponse access = (RetrievePrincipalAccessResponse)svc.Execute(new RetrievePrincipalAccessRequest
+            {
+                Target = new EntityReference("account", record),
+                Principal = new EntityReference("team", SalesTeam), // a TEAM principal
+            });
+
+            Assert.True(access.AccessRights.HasFlag(AccessRights.ReadAccess)); // resolved from the team's own role
+        }
+
         // --- Team privilege-inheritance mode (Member's privilege inheritance) ---------------------------
 
         private static Entity AccountOwnedByTeam(Guid id, Guid team) => new Entity("account", id)
