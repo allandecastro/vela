@@ -226,7 +226,8 @@ namespace Vela.Testing.Tests
             Guid record = Guid.NewGuid();
             InMemoryOrganizationService svc = NoRoleForAlice(record, Bob)
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess)
-                .WithSharedRecord(Account(record), User(Alice), AccessRights.WriteAccess); // second grant adds, not replaces
+                // A second grant that OVERLAPS the first (Read again + Write): a union keeps Read, an XOR would drop it.
+                .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess | AccessRights.WriteAccess);
 
             AccessRights rights = AliceAccess(svc, record);
             Assert.True(rights.HasFlag(AccessRights.ReadAccess));

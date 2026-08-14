@@ -90,15 +90,18 @@ public class RolePrivilegeMapperTests
     {
         Guid a = Guid.NewGuid();
         Guid b = Guid.NewGuid();
+        Guid c = Guid.NewGuid();
         var privileges = new Dictionary<Guid, (string, PrivilegeType)>
         {
             [a] = ("contact", PrivilegeType.Read),
-            [b] = ("account", PrivilegeType.Write),
+            [b] = ("account", PrivilegeType.Write),   // same entity as c, later verb
+            [c] = ("account", PrivilegeType.Create),  // same entity as b, earlier verb
         };
 
-        var grants = RolePrivilegeMapper.ToGrants(new[] { (a, 8), (b, 8) }, privileges).ToList();
+        var grants = RolePrivilegeMapper.ToGrants(new[] { (a, 8), (b, 8), (c, 8) }, privileges).ToList();
 
-        Assert.Equal("account", grants[0].Entity);
-        Assert.Equal("contact", grants[1].Entity);
+        Assert.Equal(("account", "Create"), (grants[0].Entity, grants[0].Privilege)); // entity, then verb ascending
+        Assert.Equal(("account", "Write"), (grants[1].Entity, grants[1].Privilege));
+        Assert.Equal("contact", grants[2].Entity);
     }
 }

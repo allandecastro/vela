@@ -594,6 +594,28 @@ namespace Vela.Testing.Tests
             Assert.Contains(SalesTeam.ToString(), ex.Message);
         }
 
+        [Fact]
+        public void RetrievePrincipalAccess_for_a_team_reflects_the_teams_own_roles()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .User(Alice, SalesBu)
+                    .Team(SalesTeam, SalesBu, "reader")) // the team holds account Read at Organization
+                .Seed(AccountOwnedBy(record, Bob, SalesBu));
+
+            RetrievePrincipalAccessResponse access = (RetrievePrincipalAccessResponse)svc.Execute(new RetrievePrincipalAccessRequest
+            {
+                Target = new EntityReference("account", record),
+                Principal = new EntityReference("team", SalesTeam), // a TEAM principal
+            });
+
+            Assert.True(access.AccessRights.HasFlag(AccessRights.ReadAccess)); // resolved from the team's own role
+        }
+
         // --- Team privilege-inheritance mode (Member's privilege inheritance) ---------------------------
 
         private static Entity AccountOwnedByTeam(Guid id, Guid team) => new Entity("account", id)
@@ -601,6 +623,23 @@ namespace Vela.Testing.Tests
             ["ownerid"] = new EntityReference("team", team),
             ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
         };
+
+        [Fact]
+        public void User_with_no_team_membership_is_denied_a_team_owned_record()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .User(Alice, SalesBu, "reader")) // Alice belongs to no team
+                .Seed(AccountOwnedByTeam(record, SalesTeam)); // owned by a team Alice is not in
+
+            // User-level ownership check must short-circuit cleanly (no membership) and deny — not blow up.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Retrieve("account", record, new ColumnSet(true)));
+        }
 
         [Fact]
         public void Default_team_inheritance_lets_a_member_use_a_basic_team_grant_on_their_own_record()

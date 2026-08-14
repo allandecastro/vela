@@ -128,6 +128,33 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Overlapping_access_team_rights_are_unioned_not_xored()
+        {
+            Guid record = Guid.NewGuid();
+            Guid readWrite = Guid.NewGuid();
+            Guid readDelete = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithAccessTeamTemplate(readWrite, AccessRights.ReadAccess | AccessRights.WriteAccess)
+                .WithAccessTeamTemplate(readDelete, AccessRights.ReadAccess | AccessRights.DeleteAccess)
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", Privilege.AppendTo, AccessLevel.Organization)).User(Alice, SalesBu, "appender"))
+                .Seed(AccountOwnedBy(record, Bob));
+            AddToTeam(svc, record, Alice, readWrite);
+            AddToTeam(svc, record, Alice, readDelete);
+
+            RetrievePrincipalAccessResponse access = (RetrievePrincipalAccessResponse)svc.Execute(new RetrievePrincipalAccessRequest
+            {
+                Target = new EntityReference("account", record),
+                Principal = new EntityReference("systemuser", Alice),
+            });
+
+            // The two teams both grant Read: a union keeps it, an XOR would cancel it out.
+            Assert.True(access.AccessRights.HasFlag(AccessRights.ReadAccess));
+            Assert.True(access.AccessRights.HasFlag(AccessRights.WriteAccess));
+            Assert.True(access.AccessRights.HasFlag(AccessRights.DeleteAccess));
+        }
+
+        [Fact]
         public void Adding_to_an_unregistered_template_fails_fast()
         {
             Guid record = Guid.NewGuid();
