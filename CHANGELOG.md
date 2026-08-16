@@ -134,10 +134,12 @@ initial release.
   `Role(name, id, RoleBuilder)` carries the role's real id (e.g. a generated `Roles.XId`); these tables are always
   readable. Pairs with `vela models --roles` for real, generated role configurations. (#26)
 - **Access teams, hierarchy and field-level security** — `WithAccessTeamTemplate(...)` + `AddUserToRecordTeam` /
-  `RemoveUserFromRecordTeam` grant a template's rights on a record; `ManagerHierarchy(depth)` + `Manager(...)` give
-  a manager read/write on a direct report's records and read-only deeper (within depth), gated on BU/Deep role
-  access and the report's business unit or its parent; `SecureColumn(...)` + `FieldPermission(...)` hide a
-  field-secured column on read and reject it on write without permission (user or team). (#28, #29, #30)
+  `RemoveUserFromRecordTeam` grant a template's rights on a record; `ManagerHierarchy(depth)` + `Manager(...)` and
+  `PositionHierarchy(depth)` + `Position(...)` / `PositionParent(...)` give a higher user read/write on a direct
+  report's records and read-only deeper (within depth) — the manager model within the report's BU or its parent,
+  the position model across business units — reaching a report whether it owns the record, its team owns it, or the
+  record is shared to it; `SecureColumn(...)` + `FieldPermission(...)` hide a field-secured column on read and
+  reject it on write without permission (user or team). (#28, #29, #30)
 
 **Docs**
 

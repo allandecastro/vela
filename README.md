@@ -877,7 +877,11 @@ var crm = new InMemoryOrganizationService()
   `RemoveUserFromRecordTeamRequest`) — unioned with role and shared access.
 - **Hierarchy security.** `ManagerHierarchy(depth)` + `Manager(userId, managerId)` let a manager reach a report's
   records up the reporting chain: read/write on a direct report, read-only deeper (within depth), provided they
-  hold BusinessUnit/Deep role access and are in the report's business unit or its parent.
+  already hold at least User-level access for that privilege and are in the report's business unit or its parent.
+  `PositionHierarchy(depth)` + `Position(userId, positionId)` / `PositionParent(positionId, parentId)` model the
+  position hierarchy instead — the same read/write-vs-read-only rule, but keyed on positions and **across business
+  units** (no BU constraint). A "report" is reached whether it owns the record, its team owns it, or it's shared to
+  the report.
 - **Field-level security.** `SecureColumn(entity, column)` marks a column secured; `FieldPermission(principal,
   entity, column, read:, update:)` grants it. A secured column is hidden on read and rejected on write without
   permission — independent of record access.

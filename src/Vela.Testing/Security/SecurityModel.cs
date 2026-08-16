@@ -135,6 +135,8 @@ namespace Vela.Testing.Security
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships = new Dictionary<Guid, HashSet<Guid>>();
         private readonly Dictionary<string, Guid> _roleIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<Guid, Guid> _managers = new Dictionary<Guid, Guid>();
+        private readonly Dictionary<Guid, Guid> _positions = new Dictionary<Guid, Guid>();
+        private readonly Dictionary<Guid, Guid> _positionParents = new Dictionary<Guid, Guid>();
         private int _hierarchyDepth;
         private readonly HashSet<(string Entity, string Column)> _securedColumns = new HashSet<(string, string)>();
         private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldRead = new HashSet<(Guid, string, string)>();
@@ -216,6 +218,33 @@ namespace Vela.Testing.Security
         public SecurityConfiguration Manager(Guid userId, Guid managerId)
         {
             _managers[userId] = managerId;
+            return this;
+        }
+
+        /// <summary>
+        /// Enables **position hierarchy** security to <paramref name="depth"/> levels. Unlike the manager hierarchy,
+        /// a higher position reaches lower positions' records in the direct ancestor path <b>across business units</b>
+        /// (no BU constraint). A direct-higher position gets read/write; non-direct higher positions get read-only.
+        /// Tag users with <see cref="Position"/> and shape the position tree with <see cref="PositionParent"/>.
+        /// (Dataverse enables either the manager or the position model; the harness lets you configure either.)
+        /// </summary>
+        public SecurityConfiguration PositionHierarchy(int depth = 1)
+        {
+            _hierarchyDepth = depth < 0 ? 0 : depth;
+            return this;
+        }
+
+        /// <summary>Tags <paramref name="userId"/> with <paramref name="positionId"/> (a user holds one position).</summary>
+        public SecurityConfiguration Position(Guid userId, Guid positionId)
+        {
+            _positions[userId] = positionId;
+            return this;
+        }
+
+        /// <summary>Sets <paramref name="parentPositionId"/> as the parent of <paramref name="positionId"/> in the position tree.</summary>
+        public SecurityConfiguration PositionParent(Guid positionId, Guid parentPositionId)
+        {
+            _positionParents[positionId] = parentPositionId;
             return this;
         }
 
@@ -302,7 +331,7 @@ namespace Vela.Testing.Security
                 }
             }
 
-            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _managers, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate);
+            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _managers, _positions, _positionParents, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate);
         }
     }
 
@@ -349,6 +378,8 @@ namespace Vela.Testing.Security
         private readonly AccessTeamGrants _accessTeams;
         private readonly Dictionary<string, Guid> _roleIds;
         private readonly Dictionary<Guid, Guid> _managers;
+        private readonly Dictionary<Guid, Guid> _positions;
+        private readonly Dictionary<Guid, Guid> _positionParents;
         private readonly int _hierarchyDepth;
         private readonly HashSet<(string Entity, string Column)> _securedColumns;
         private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldRead;
@@ -371,6 +402,8 @@ namespace Vela.Testing.Security
             AccessTeamGrants accessTeams,
             Dictionary<string, Guid> roleIds,
             Dictionary<Guid, Guid> managers,
+            Dictionary<Guid, Guid> positions,
+            Dictionary<Guid, Guid> positionParents,
             int hierarchyDepth,
             HashSet<(string Entity, string Column)> securedColumns,
             HashSet<(Guid Principal, string Entity, string Column)> fieldRead,
@@ -385,6 +418,8 @@ namespace Vela.Testing.Security
             _accessTeams = accessTeams;
             _roleIds = roleIds;
             _managers = managers;
+            _positions = positions;
+            _positionParents = positionParents;
             _hierarchyDepth = hierarchyDepth;
             _securedColumns = securedColumns;
             _fieldRead = fieldRead;
@@ -572,7 +607,7 @@ namespace Vela.Testing.Security
                 }
             }
 
-            // Manager-hierarchy access: a manager reaches a report's records up the reporting chain.
+            // Hierarchy access (manager and/or position): a higher user reaches a report's records up the chain.
             if (record != null && HasHierarchyAccess(userId, table, privilege, record))
             {
                 return true;
@@ -581,10 +616,18 @@ namespace Vela.Testing.Security
             return false;
         }
 
-        // Manager hierarchy: a manager gets Read on any report within the configured depth, and Write/Append/AppendTo
-        // on a direct report (level 1) only — never Delete/Assign/Share. It only extends a manager who ALREADY holds
-        // the privilege at BusinessUnit/ParentChild level through a role, and who is in the report's business unit or
-        // its parent. The record's owning user is the report; we walk up the reporting chain from it.
+        // The record-level rights the hierarchy can extend from a report onto a higher user. Delete/Assign/Share are
+        // never conferred by hierarchy, so an owner is treated as holding only these on their own records for the walk.
+        private const AccessRights HierarchyRights =
+            AccessRights.ReadAccess | AccessRights.WriteAccess | AccessRights.AppendAccess | AccessRights.AppendToAccess;
+
+        // Hierarchy security: a higher user (manager or position) gets Read on any report's record within the configured
+        // depth, and Write/Append/AppendTo on a DIRECT report (distance 1) only — never Delete/Assign/Share. It extends
+        // a user who ALREADY holds the requested privilege at at least User level (per MS: "at least the user level Read
+        // privilege to see the reports' data" — applied per verb). A "report" is any user with access to the record:
+        // its owning user, a member of its owning team, or a user the record is shared to (PoA), directly or via a team.
+        // The manager model requires the higher user to be in the report's BU or its parent; the position model does not
+        // (it spans business units).
         private bool HasHierarchyAccess(Guid userId, string table, Privilege privilege, Entity record)
         {
             if (_hierarchyDepth <= 0)
@@ -598,29 +641,129 @@ namespace Vela.Testing.Security
                 return false; // Delete/Assign/Share/Create are never conferred by the hierarchy
             }
 
-            // Precondition: the manager must have a role granting this privilege at BusinessUnit or ParentChild depth
-            // (a BU/Deep grant is never team-restricted, so the restriction tag is irrelevant here).
-            if (!GrantedLevels(userId, table, privilege).Any(l => l.Level == AccessLevel.BusinessUnit || l.Level == AccessLevel.ParentChild))
+            // Precondition: the higher user must already hold the requested privilege at at least User level.
+            if (!GrantedLevels(userId, table, privilege).Any())
             {
                 return false;
             }
 
-            if (record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) is not EntityReference owner ||
-                !string.Equals(owner.LogicalName, SystemUser, StringComparison.OrdinalIgnoreCase))
+            AccessRights required = ToAccessRight(privilege);
+            foreach ((Guid report, AccessRights held) in ReportsWithAccess(table, record))
             {
-                return false; // user-owned records only
+                if (report == userId || (held & required) != required)
+                {
+                    continue; // the report doesn't itself hold the requested right on this record
+                }
+
+                int distance = HierarchyDistance(report, userId);
+                if (distance == 0)
+                {
+                    continue; // userId is not a higher manager/position of this report within depth
+                }
+
+                if (privilege == Privilege.Read || distance == 1)
+                {
+                    return true; // read at any depth; write-type only for a direct (distance-1) report
+                }
             }
 
-            Guid managerBu = BusinessUnitOf(userId);
-            Guid reportBu = OwningBusinessUnit(record);
-            bool businessUnitOk = managerBu != Guid.Empty &&
-                (managerBu == reportBu || (_businessUnitParents.TryGetValue(reportBu, out Guid parent) && managerBu == parent));
+            return false;
+        }
+
+        // Every user that has direct access to the record, tagged with the rights they hold: the owning user (all
+        // hierarchy rights), each member of the owning team (all), and each user a PoA share reaches — directly or via a
+        // team it belongs to — with the shared mask. This is the set of "reports" whose access the hierarchy extends up.
+        private IEnumerable<(Guid User, AccessRights Held)> ReportsWithAccess(string table, Entity record)
+        {
+            Dictionary<Guid, AccessRights> access = new Dictionary<Guid, AccessRights>();
+            void Add(Guid user, AccessRights rights)
+            {
+                access[user] = (access.TryGetValue(user, out AccessRights existing) ? existing : AccessRights.None) | rights;
+            }
+
+            if (record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) is EntityReference owner)
+            {
+                if (string.Equals(owner.LogicalName, SystemUser, StringComparison.OrdinalIgnoreCase))
+                {
+                    Add(owner.Id, HierarchyRights);
+                }
+                else if (string.Equals(owner.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (Guid member in MembersOf(owner.Id))
+                    {
+                        Add(member, HierarchyRights);
+                    }
+                }
+            }
+
+            foreach (PrincipalAccess share in _sharing.SharesOf(new EntityReference(table, record.Id)))
+            {
+                if (share.Principal == null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(share.Principal.LogicalName, SystemUser, StringComparison.OrdinalIgnoreCase))
+                {
+                    Add(share.Principal.Id, share.AccessMask);
+                }
+                else if (string.Equals(share.Principal.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (Guid member in MembersOf(share.Principal.Id))
+                    {
+                        Add(member, share.AccessMask);
+                    }
+                }
+            }
+
+            return access.Select(entry => (entry.Key, entry.Value));
+        }
+
+        // The users that are members of a team (inverse of the user -> teams membership map).
+        private IEnumerable<Guid> MembersOf(Guid teamId)
+        {
+            foreach (KeyValuePair<Guid, HashSet<Guid>> membership in _memberships)
+            {
+                if (membership.Value.Contains(teamId))
+                {
+                    yield return membership.Key;
+                }
+            }
+        }
+
+        // How many hierarchy levels separate a report from a higher user (1 = direct), via the manager chain or the
+        // position tree, or 0 if the higher user is neither above the report within depth. The nearer of the two wins.
+        private int HierarchyDistance(Guid report, Guid higher)
+        {
+            int manager = ManagerDistance(report, higher);
+            int position = PositionDistance(report, higher);
+            if (manager == 0)
+            {
+                return position;
+            }
+
+            return position == 0 ? manager : Math.Min(manager, position);
+        }
+
+        // Distance up the manager chain (report -> ... -> higher), bounded by depth, subject to the manager-model BU
+        // rule: the higher user must be in the report's business unit or its parent. 0 if not reachable.
+        private int ManagerDistance(Guid report, Guid higher)
+        {
+            if (_managers.Count == 0)
+            {
+                return 0;
+            }
+
+            Guid higherBu = BusinessUnitOf(higher);
+            Guid reportBu = BusinessUnitOf(report);
+            bool businessUnitOk = higherBu != Guid.Empty &&
+                (higherBu == reportBu || (_businessUnitParents.TryGetValue(reportBu, out Guid parent) && higherBu == parent));
             if (!businessUnitOk)
             {
-                return false;
+                return 0;
             }
 
-            Guid current = owner.Id;
+            Guid current = report;
             HashSet<Guid> seen = new HashSet<Guid> { current };
             for (int level = 1; level <= _hierarchyDepth; level++)
             {
@@ -629,15 +772,46 @@ namespace Vela.Testing.Security
                     break;
                 }
 
-                if (manager == userId)
+                if (manager == higher)
                 {
-                    return privilege == Privilege.Read || level == 1; // write-type only for a direct report
+                    return level;
                 }
 
                 current = manager;
             }
 
-            return false;
+            return 0;
+        }
+
+        // Distance up the position tree: the report's position must be a strict descendant of the higher user's
+        // position within depth. Position hierarchy spans business units, so no BU rule applies. 0 if not reachable.
+        private int PositionDistance(Guid report, Guid higher)
+        {
+            if (!_positions.TryGetValue(report, out Guid reportPosition) ||
+                !_positions.TryGetValue(higher, out Guid higherPosition) ||
+                reportPosition == higherPosition)
+            {
+                return 0; // no positions, or peers sharing a position (not "higher")
+            }
+
+            Guid current = reportPosition;
+            HashSet<Guid> seen = new HashSet<Guid> { current };
+            for (int level = 1; level <= _hierarchyDepth; level++)
+            {
+                if (!_positionParents.TryGetValue(current, out Guid parent) || !seen.Add(parent))
+                {
+                    break;
+                }
+
+                if (parent == higherPosition)
+                {
+                    return level;
+                }
+
+                current = parent;
+            }
+
+            return 0;
         }
 
         /// <summary>
