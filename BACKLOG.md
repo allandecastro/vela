@@ -15,10 +15,11 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   `EntityValues`) at **~91.6%**, with `--break-at 89` (ratcheted ~2pts below the measured score). A third job gates
   the **security enforcement wiring** (`InMemoryOrganizationService.Security.cs`) at **~84.8%** (`--break-at 82`),
   and a fourth the **security model** decision logic. Stryker can't build net462 off Windows, so the harness can't
-  be measured locally; all jobs run on the self-hosted Windows runner. **Next (P3, low value):** the harness/
-  security survivors that remain are largely equivalent mutants (exception-message strings, never-null/never-empty
-  edges) — ratchet the gate as any real ones are killed rather than chasing message-text assertions. Remaining
-  diff-engine survivors are equivalent mutants (match-key field lookups consistent on both diff sides, literals).
+  be measured locally; all jobs run on the self-hosted Windows runner. **Next (P1):** extend mutation coverage to
+  the untested CLI cores (`ApplyEngine`, `PackageScanner`, `DataverseRegistrationReader` — today only branch-covered)
+  and keep ratcheting the gates. The harness/security survivors that remain are mostly equivalent mutants
+  (exception-message strings, never-null/never-empty edges) — kill the real ones, don't chase message-text
+  assertions. Remaining diff-engine survivors are equivalent (match-key lookups consistent on both diff sides).
 
 ## Test harness (Vela.Testing)
 
@@ -35,7 +36,7 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Developer experience
 
-- **P2 — Remote debugging of cloud plugins** — let a developer step through a *real* Dataverse plugin
+- **P3 — Remote debugging of cloud plugins** — let a developer step through a *real* Dataverse plugin
   execution from their machine. XrmFramework does this via an Azure Relay round-trip (client + generated
   proxy assembly). **We can likely do simpler:** explore a lighter mechanism (e.g. a relay/forwarder the
   plugin calls into only when a debug flag/shared-variable is set, or capturing the execution context to
@@ -46,7 +47,7 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   etc.). Add [PolySharp](https://github.com/Sergio0694/PolySharp) (source-generated polyfills for the missing
   runtime attributes) to `vela init`'s scaffolded plugin projects so authors can use modern C# without runtime
   risk. Off the hot path (compile-time only), no effect on the produced assembly. (Idea seen in rezanid/xrmtools.)
-- **P3 — Typed FetchXML builder (`Fetch.For<T>()`).** Author FetchXML in C# with compile-time IntelliSense and
+- **P1 — Typed FetchXML builder (`Fetch.For<T>()`).** Author FetchXML in C# with compile-time IntelliSense and
   typo-safety (lambdas over the early-bound model), the counterpart to `Query.For<T>()` — which explicitly does
   NOT author FetchXML. Fills the aggregate/group-by gap QueryExpression covers awkwardly, editor-agnostic (no IDE
   extension, unlike xrmtools' VS-only FetchXML IntelliSense). MVP = attributes/filters/order/link; Phase 2 =
@@ -54,17 +55,17 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   Pairs with a small tracing improvement: `TracingOrganizationService` should log the FetchXML string (today it
   only logs the type name for non-`QueryExpression` queries).
 
-- **P2 — nuget.org publishing path** — the packages are not yet published; document/automate the release.
-- **P2 — A proper documentation wiki / site.** Grow beyond the (large) README into a navigable wiki with
+- **P3 — nuget.org publishing path** — the packages are not yet published; document/automate the release.
+- **P3 — A proper documentation wiki / site.** Grow beyond the (large) README into a navigable wiki with
   progressive complexity, mirroring what rezanid/xrmtools does well: **Getting started** (install, quickstart,
   first plugin), **Guides** (plugins, Custom APIs, `vela add`, DI, caching, testing with `Vela.Testing`, the
   security model, `vela models`/roles, `plan`/`apply`, signing), **Configuration** (auth, secrets, environments),
   **Advanced** (security-model deep dive, mutation testing, FetchXML builder once it lands), plus a **FAQ**. The
   existing README, `docs/LIMITATIONS.md`, `docs/Vela.Testing.md` and `CONTRIBUTING.md` are a strong base to split
   and expand. Decide the host (GitHub Wiki vs a docs site like DocFX/Docusaurus in `docs/`).
-- **P3 — Optional real-Dataverse integration test tier** (beyond the generate-then-build smoke test) to
+- **P2 — Optional real-Dataverse integration test tier** (beyond the generate-then-build smoke test) to
   catch CLI regressions against a live dev org.
-- **P3 — Review the logo / branding.** Revisit the brand assets in `branding/` (chevron, wordmark, lockups,
+- **P2 — Review the logo / branding.** Revisit the brand assets in `branding/` (chevron, wordmark, lockups,
   cards, slogan banners, favicon/tile) and `branding/DESIGN_SYSTEM.md` for consistency, quality and fit — and
   check every place they're surfaced (README header, NuGet package icon, docs) uses the right variant.
 
