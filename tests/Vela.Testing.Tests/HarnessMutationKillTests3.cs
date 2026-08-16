@@ -90,6 +90,38 @@ namespace Vela.Testing.Tests
             Assert.Equal("low", match.GetAttributeValue<string>("subject")); // the boundary row (100) is excluded
         }
 
+        // NotBetween's UPPER bound is inclusive too: a value equal to the upper bound IS "between", so it is
+        // excluded (kills relaxing the upper `<=` to `<`, which the lower-boundary test above doesn't cover).
+        [Fact]
+        public void NotBetween_excludes_a_value_on_the_upper_boundary()
+        {
+            InMemoryOrganizationService crm = Crm(
+                new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "high", ["actualdurationminutes"] = 300 },
+                new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "onupper", ["actualdurationminutes"] = 200 });
+
+            QueryExpression query = new QueryExpression("task") { ColumnSet = new ColumnSet("subject") };
+            query.Criteria.AddCondition("actualdurationminutes", ConditionOperator.NotBetween, 100, 200);
+
+            Entity match = Assert.Single(crm.RetrieveMultiple(query).Entities);
+            Assert.Equal("high", match.GetAttributeValue<string>("subject")); // the upper-boundary row (200) is excluded
+        }
+
+        // A FetchXML <attribute name='...'/> projects exactly the named columns (kills forcing the empty
+        // ColumnSet(false) branch instead of ColumnSet(names)).
+        [Fact]
+        public void FetchXml_projects_only_the_named_attributes()
+        {
+            InMemoryOrganizationService crm = Crm(
+                new Entity("account") { Id = Guid.NewGuid(), ["name"] = "Zava", ["numberofemployees"] = 50 });
+
+            FetchExpression fetch = new FetchExpression(
+                "<fetch><entity name='account'><attribute name='name' /></entity></fetch>");
+
+            Entity row = Assert.Single(crm.RetrieveMultiple(fetch).Entities);
+            Assert.Equal("Zava", row.GetAttributeValue<string>("name")); // the named column IS projected
+            Assert.False(row.Contains("numberofemployees"));             // ...and only that one (not all attributes)
+        }
+
         // A link-entity Order is collected and applied under the link's alias (kills dropping the
         // CollectLinkOrders call, the OrderSpec initializer, and the alias selection).
         [Fact]
