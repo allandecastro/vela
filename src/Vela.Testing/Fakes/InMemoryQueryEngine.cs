@@ -370,12 +370,18 @@ namespace Vela.Testing
         // Joins a single LinkEntity: matches LinkFrom (on the source) == LinkTo (on the linked rows), applies
         // LinkCriteria, appends aliased columns, and recurses into nested links. Inner drops unmatched rows;
         // LeftOuter/Natural keep them. Yields one result row per matched linked record.
+        //
+        // Security trims the linked rows the same way it trims primary rows (via _canRead): a linked record the
+        // caller can't read is not a match, so an INNER join drops the primary row while a LEFT-OUTER join keeps it
+        // without the linked columns — exactly like Dataverse. Because ExpandNested recurses through ApplyLink, the
+        // trim applies at every level of a nested join. No-op when security is off (_canRead == null).
         private IEnumerable<Entity> ApplyLink(Entity resultRow, Entity source, LinkEntity link)
         {
             object? fromValue = EntityValues.GetValue(source, link.LinkFromAttributeName);
             List<Entity> matched = _table(link.LinkToEntityName)
                 .Where(target => EntityValues.AreEqual(fromValue, EntityValues.GetValue(target, link.LinkToAttributeName)))
                 .Where(target => EvaluateFilter(target, link.LinkCriteria))
+                .Where(target => _canRead == null || _canRead(target))
                 .ToList();
 
             switch (link.JoinOperator)
@@ -571,6 +577,7 @@ namespace Vela.Testing
             object? fromValue = EntityValues.GetValue(parent, link.LinkFromAttributeName);
             List<Entity> linked = _table(link.LinkToEntityName)
                 .Where(target => EntityValues.AreEqual(fromValue, EntityValues.GetValue(target, link.LinkToAttributeName)))
+                .Where(target => _canRead == null || _canRead(target)) // an Any/All is evaluated over readable related records
                 .ToList();
             bool anySatisfies = linked.Any(target => EvaluateFilter(target, link.LinkCriteria));
 

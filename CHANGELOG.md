@@ -140,6 +140,10 @@ initial release.
   the position model across business units — reaching a report whether it owns the record, its team owns it, or the
   record is shared to it; `SecureColumn(...)` + `FieldPermission(...)` hide a field-secured column on read and
   reject it on write without permission (user or team). (#28, #29, #30)
+- **Link-entity read-trimming** — a `RetrieveMultiple` that joins (`LinkEntity`) to a record the caller can't read
+  now trims the join like Dataverse: an **inner** join drops the primary row, a **left-outer** join keeps it but
+  omits the linked columns, applied recursively through nested joins (and to `Any`/`All` related-record filters).
+  Only active when security is configured.
 
 **Docs**
 
