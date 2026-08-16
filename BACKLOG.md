@@ -55,6 +55,13 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   only logs the type name for non-`QueryExpression` queries).
 
 - **P2 — nuget.org publishing path** — the packages are not yet published; document/automate the release.
+- **P2 — A proper documentation wiki / site.** Grow beyond the (large) README into a navigable wiki with
+  progressive complexity, mirroring what rezanid/xrmtools does well: **Getting started** (install, quickstart,
+  first plugin), **Guides** (plugins, Custom APIs, `vela add`, DI, caching, testing with `Vela.Testing`, the
+  security model, `vela models`/roles, `plan`/`apply`, signing), **Configuration** (auth, secrets, environments),
+  **Advanced** (security-model deep dive, mutation testing, FetchXML builder once it lands), plus a **FAQ**. The
+  existing README, `docs/LIMITATIONS.md`, `docs/Vela.Testing.md` and `CONTRIBUTING.md` are a strong base to split
+  and expand. Decide the host (GitHub Wiki vs a docs site like DocFX/Docusaurus in `docs/`).
 - **P3 — Optional real-Dataverse integration test tier** (beyond the generate-then-build smoke test) to
   catch CLI regressions against a live dev org.
 - **P3 — Review the logo / branding.** Revisit the brand assets in `branding/` (chevron, wordmark, lockups,
