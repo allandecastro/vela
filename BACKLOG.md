@@ -12,11 +12,13 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   run summary + HTML artifact). Diff engine (`DiffEngine` + `DefinitionNormalizer`) is at **~90%** mutation score
   (`--break-at 85`): the runs surfaced + fixed the unasserted diff ordering and pinned every normalized
   field value. A second job mutates the **in-memory harness query core** (`InMemoryQueryEngine`, `FetchXmlParser`,
-  `EntityValues`) at **~86.2%**, with `--break-at 84` (ratcheted ~2pts below the measured score, comfortably above
-  the project's 80% floor). Stryker can't build net462 off Windows, so the harness can't be measured locally; both
-  jobs run on the self-hosted Windows runner. **Next (P3):** keep killing the harness survivors dumped by the
-  "List surviving mutants" step and ratchet the gate as the score climbs. Remaining diff-engine survivors are
-  equivalent mutants (match-key field lookups consistent on both diff sides, functionally-identical literals).
+  `EntityValues`) at **~91.6%**, with `--break-at 89` (ratcheted ~2pts below the measured score). A third job gates
+  the **security enforcement wiring** (`InMemoryOrganizationService.Security.cs`) at **~84.8%** (`--break-at 82`),
+  and a fourth the **security model** decision logic. Stryker can't build net462 off Windows, so the harness can't
+  be measured locally; all jobs run on the self-hosted Windows runner. **Next (P3, low value):** the harness/
+  security survivors that remain are largely equivalent mutants (exception-message strings, never-null/never-empty
+  edges) — ratchet the gate as any real ones are killed rather than chasing message-text assertions. Remaining
+  diff-engine survivors are equivalent mutants (match-key field lookups consistent on both diff sides, literals).
 
 ## Test harness (Vela.Testing)
 
