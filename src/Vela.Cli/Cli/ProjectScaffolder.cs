@@ -113,6 +113,7 @@ internal static class ProjectScaffolder
         {
             AddProject(testsName, "tests");
             Write(Path.Combine("tests", testsName, $"{testsName}.csproj"), TestsCsproj(testsName, pluginsName, sharedName, options.CoreVersion));
+            Write(Path.Combine("tests", testsName, "Security", "SecurityExampleTests.cs"), SecurityExampleTests(prefix));
             Write(Path.Combine("tests", testsName, "Account", "Plugins", "AccountPostCreatePluginTests.cs"), AccountPostCreatePluginTests(prefix));
             Write(Path.Combine("tests", testsName, "Account", "CustomApis", "AccountEstimateValueCustomApiTests.cs"), AccountEstimateValueCustomApiTests(prefix));
             Write(Path.Combine("tests", testsName, "Contact", "Plugins", "ContactRouterPluginTests.cs"), ContactRouterPluginTests(prefix));

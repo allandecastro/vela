@@ -22,10 +22,17 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 - **Security model in the harness — SHIPPED** (opt-in, off by default): roles/privileges at the four access
   levels, business units, users and teams (incl. Member's privilege-inheritance mode), record sharing (PoA),
-  1:N relationship cascades (delete/assign/share/reparent) and inherited access. Still **deferred by decision**:
-  **hierarchy security** (manager/position), **access teams** (team templates), and **field-level security**
-  (column security profiles). Known gaps: cascaded child deletes are store-level for direct callers (they fire the
-  child plugins through `PluginPipeline`).
+  1:N relationship cascades (delete/assign/share/reparent) and inherited access, **access teams** (team templates),
+  **hierarchy security** (manager **and** position), and **field-level security** (column security profiles). The
+  enforcement wiring is isolated in `InMemoryOrganizationService.Security.cs` and mutation-gated (`--break-at 82`).
+  Known gaps: cascaded child deletes are store-level for direct callers (they fire the child plugins through
+  `PluginPipeline`).
+  - **P3 — Link-entity (joined-table) read-trimming.** A `RetrieveMultiple` that joins (`LinkEntity`) to a table
+    the caller can't read is filtered on the **primary** entity but **not** on the joined side: an inner join
+    should drop the primary row when the joined record isn't readable, and an outer join should mask the joined
+    columns — the harness does neither today (documented in `docs/LIMITATIONS.md`). Deferred: low frequency in
+    plugin tests, and the inner/outer-join security semantics need validating before implementing (push the
+    `CanAccess` read predicate into the query engine's link expansion in `InMemoryQueryEngine`).
 
 
 ## Developer experience

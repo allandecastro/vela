@@ -501,6 +501,10 @@ What the samples show:
   the mapped output parameter.
 - `Contact/CustomApis/ContactValidateCustomApiTests.cs` — invokes the typed, contact-bound Custom API.
 - `GlobalCustomApis/PingCustomApiTests.cs` — invokes the lightweight global Custom API.
+- `Security/SecurityExampleTests.cs` — shows the harness's opt-in **security model**: `WithSecurity(...)` declares
+  business units, roles and users, `WithCurrentUser(...)` picks who is acting, and the service then enforces table
+  privileges (a denied Retrieve throws) and trims `RetrieveMultiple` to the caller's readable records. Off by
+  default, so the other tests keep full access.
 {{integrationsTests}}
 A plugin with a `(unsecureConfig, secureConfig)` constructor is run with `.Execute(new MyPlugin("", ""))`;
 the trigger is auto-derived from a single-step plugin's own registration, while a multi-step router needs the
@@ -1157,6 +1161,95 @@ $$"""
   </ItemGroup>
 
 </Project>
+""";
+
+    public static string SecurityExampleTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Tests.Security
+{
+    using System;
+    using System.ServiceModel;
+    using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Query;
+    using Vela.Testing;
+    using Vela.Testing.Security;
+    using Xunit;
+
+    /// <summary>
+    /// Example: exercising the harness's opt-in SECURITY MODEL. Security is OFF by default — with no
+    /// <c>WithSecurity(...)</c> call the in-memory service grants full access (which is what the other tests rely
+    /// on). Declare business units, named roles and users with <c>WithSecurity(...)</c>, pick who is acting with
+    /// <c>WithCurrentUser(...)</c>, and the service then enforces table privileges on Create/Retrieve/Update/Delete
+    /// and trims <c>RetrieveMultiple</c> to the records the caller may read — exactly like Dataverse. A denied
+    /// operation throws <see cref="FaultException{OrganizationServiceFault}"/>, the same fault a live plugin sees.
+    /// <c>Seed(...)</c> writes rows straight to the store (bypassing the checks) so you can arrange the world, then
+    /// act as a specific user to assert what they can and cannot do.
+    /// </summary>
+    public sealed class SecurityExampleTests
+    {
+        private static readonly Guid SalesBusinessUnit = new Guid("00000000-0000-0000-0000-0000000b0001");
+        private static readonly Guid Salesperson = new Guid("00000000-0000-0000-0000-0000000a0001");
+        private static readonly Guid OutsideUser = new Guid("00000000-0000-0000-0000-0000000a0002");
+
+        // A small scenario: one business unit and a "salesrep" role that can create/read/write accounts across the
+        // whole organization. Salesperson holds it; OutsideUser holds no role at all (so: no access to anything).
+        private static SecurityConfiguration Scenario(SecurityConfiguration security) => security
+            .BusinessUnit(SalesBusinessUnit)
+            .Role("salesrep", role => role.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Read, Privilege.Write))
+            .User(Salesperson, SalesBusinessUnit, "salesrep")
+            .User(OutsideUser, SalesBusinessUnit);
+
+        [Fact]
+        public void A_user_with_the_role_can_create_and_read()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithCurrentUser(Salesperson)
+                .WithSecurity(security => Scenario(security));
+
+            Guid id = crm.Create(new Entity("account") { ["name"] = "Zava" }); // salesrep grants Create
+            Entity account = crm.Retrieve("account", id, new ColumnSet(true));  // ...and Read
+
+            Assert.Equal("Zava", account.GetAttributeValue<string>("name"));
+        }
+
+        [Fact]
+        public void A_user_without_any_privilege_is_denied()
+        {
+            Guid id = Guid.NewGuid();
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithCurrentUser(OutsideUser)
+                .WithSecurity(security => Scenario(security))
+                .Seed(new Entity("account", id) { ["name"] = "Zava" }); // Seed bypasses security to arrange the row
+
+            // OutsideUser has no Read privilege on account, so Retrieve throws the platform fault a plugin would see.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => crm.Retrieve("account", id, new ColumnSet(true)));
+        }
+
+        [Fact]
+        public void RetrieveMultiple_returns_only_the_records_the_user_can_read()
+        {
+            Guid mine = Guid.NewGuid();
+            Guid theirs = Guid.NewGuid();
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithCurrentUser(Salesperson)
+                .WithSecurity(security => security
+                    .BusinessUnit(SalesBusinessUnit)
+                    // User-level Read: the caller sees only records they own, not the whole table.
+                    .Role("ownrecords", role => role.Grant("account", Privilege.Read, AccessLevel.User))
+                    .User(Salesperson, SalesBusinessUnit, "ownrecords")
+                    .User(OutsideUser, SalesBusinessUnit, "ownrecords"))
+                .Seed(
+                    new Entity("account", mine) { ["name"] = "Mine", ["ownerid"] = new EntityReference("systemuser", Salesperson) },
+                    new Entity("account", theirs) { ["name"] = "Theirs", ["ownerid"] = new EntityReference("systemuser", OutsideUser) });
+
+            EntityCollection result = crm.RetrieveMultiple(new QueryExpression("account") { ColumnSet = new ColumnSet(true) });
+
+            Entity onlyMine = Assert.Single(result.Entities); // User-level Read trims the record owned by someone else
+            Assert.Equal(mine, onlyMine.Id);
+        }
+    }
+}
 """;
 
     public static string AccountPostCreatePluginTests(string prefix) =>
