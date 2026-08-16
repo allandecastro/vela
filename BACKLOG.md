@@ -47,6 +47,9 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 - **P2 — nuget.org publishing path** — the packages are not yet published; document/automate the release.
 - **P3 — Optional real-Dataverse integration test tier** (beyond the generate-then-build smoke test) to
   catch CLI regressions against a live dev org.
+- **P3 — Review the logo / branding.** Revisit the brand assets in `branding/` (chevron, wordmark, lockups,
+  cards, slogan banners, favicon/tile) and `branding/DESIGN_SYSTEM.md` for consistency, quality and fit — and
+  check every place they're surfaced (README header, NuGet package icon, docs) uses the right variant.
 
 ## Won't do (by design — see LIMITATIONS.md)
 
