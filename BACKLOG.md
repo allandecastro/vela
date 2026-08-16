@@ -41,8 +41,18 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   plugin calls into only when a debug flag/shared-variable is set, or capturing the execution context to
   replay it locally against the in-memory harness) before committing to the full Azure Relay approach.
   Keep it opt-in and off by default so it never affects production registrations.
-
-## Project hygiene
+- **P3 — Modern C# in net462 plugin projects via PolySharp.** Plugins target .NET Framework 4.6.2, so the
+  compiler blocks newer language features (records, `required`, init-only, file-scoped namespaces sometimes,
+  etc.). Add [PolySharp](https://github.com/Sergio0694/PolySharp) (source-generated polyfills for the missing
+  runtime attributes) to `vela init`'s scaffolded plugin projects so authors can use modern C# without runtime
+  risk. Off the hot path (compile-time only), no effect on the produced assembly. (Idea seen in rezanid/xrmtools.)
+- **P3 — Typed FetchXML builder (`Fetch.For<T>()`).** Author FetchXML in C# with compile-time IntelliSense and
+  typo-safety (lambdas over the early-bound model), the counterpart to `Query.For<T>()` — which explicitly does
+  NOT author FetchXML. Fills the aggregate/group-by gap QueryExpression covers awkwardly, editor-agnostic (no IDE
+  extension, unlike xrmtools' VS-only FetchXML IntelliSense). MVP = attributes/filters/order/link; Phase 2 =
+  aggregate + group-by + date-grouping; Phase 3 = date-relative/user/hierarchy/multi-select operators, paging.
+  Pairs with a small tracing improvement: `TracingOrganizationService` should log the FetchXML string (today it
+  only logs the type name for non-`QueryExpression` queries).
 
 - **P2 — nuget.org publishing path** — the packages are not yet published; document/automate the release.
 - **P3 — Optional real-Dataverse integration test tier** (beyond the generate-then-build smoke test) to
