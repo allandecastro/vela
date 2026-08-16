@@ -5,6 +5,12 @@ on:
     branches: [ main ]
   pull_request:
 
+# Use Windows PowerShell 5.1 (always present) rather than pwsh: the self-hosted runner's pwsh is the
+# WindowsApps stub, which the service account can't execute ("EACCES ... pwsh.EXE").
+defaults:
+  run:
+    shell: powershell
+
 jobs:
   build-test-pack:
     # Self-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run there.
@@ -14,6 +20,10 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 20 # build+test is fast; cap a hung run on the self-hosted (personal) machine
+    env:
+      # The service account can't write to the default install root 'C:\Program Files\dotnet', so setup-dotnet
+      # installs into the workspace instead (it adds this to PATH for the run steps).
+      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
