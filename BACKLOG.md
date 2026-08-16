@@ -22,10 +22,23 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 - **Security model in the harness — SHIPPED** (opt-in, off by default): roles/privileges at the four access
   levels, business units, users and teams (incl. Member's privilege-inheritance mode), record sharing (PoA),
-  1:N relationship cascades (delete/assign/share/reparent) and inherited access. Still **deferred by decision**:
-  **hierarchy security** (manager/position), **access teams** (team templates), and **field-level security**
-  (column security profiles). Known gaps: cascaded child deletes are store-level for direct callers (they fire the
-  child plugins through `PluginPipeline`).
+  1:N relationship cascades (delete/assign/share/reparent) and inherited access, **access teams** (team templates),
+  **hierarchy security** (manager **and** position), and **field-level security** (column security profiles). The
+  enforcement wiring is isolated in `InMemoryOrganizationService.Security.cs` and mutation-gated (`--break-at 82`).
+  Known gaps: cascaded child deletes are store-level for direct callers (they fire the child plugins through
+  `PluginPipeline`).
+  - **P3 — Link-entity (joined-table) read-trimming.** A `RetrieveMultiple` that joins (`LinkEntity`) to a table
+    the caller can't read is filtered on the **primary** entity but **not** on the joined side (documented in
+    `docs/LIMITATIONS.md`). Design, once picked up:
+    - **Semantics depend on the join operator.** For an **inner** join, an unreadable linked record is not a match,
+      so the **primary row is dropped**. For a **left-outer** join, the primary row is **kept** but the linked
+      columns are omitted. "Unreadable" covers both no Read privilege on the linked *table* and no access to that
+      specific linked *record* (owned by someone else) — treat both as "no match".
+    - **Depth applies recursively** — a link nested inside a link is trimmed at each level.
+    - **Open question (test first):** how a `where`/filter on a column of an unreadable linked table should behave —
+      validate against real Dataverse before implementing.
+    - Implementation: push the `CanAccess` read predicate into the query engine's link expansion in
+      `InMemoryQueryEngine`. Deferred: low frequency in plugin tests.
 
 
 ## Developer experience
@@ -52,11 +65,11 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   has no such value), so nothing to implement.
 - CLI managing solutions, security roles, web resources, environment variables — out of scope (solution
   tooling's job).
-- **Field-level (column) security** (`IsSecured` + field security profiles), **hierarchy security**
-  (manager/position), **access-team templates**, and **Entra ID group teams** — still out of scope for the harness
-  security model (which now covers roles/privileges/BU/teams, sharing and 1:N cascades — see the "Test harness"
-  section above). CLI **management** of security-role templates (create/update roles in an environment) also stays
-  out of scope — that's solution-tooling's job; `vela models` only *reads* roles for the test-project generator.
+- **Entra ID (Azure AD) group teams** — out of scope for the harness security model (which now covers
+  roles/privileges/BU/teams, sharing, 1:N cascades, access teams, manager **and** position hierarchy, and
+  field-level security — see the "Test harness" section above). CLI **management** of security-role templates
+  (create/update roles in an environment) also stays out of scope — that's solution-tooling's job; `vela models`
+  only *reads* roles for the test-project generator.
 - **`vela models`**: relationship navigation properties + `OrganizationServiceContext`/LINQ (lazy loading +
   change tracking don't fit the plugin sandbox — use `Query.For<T>()`), localized multi-language labels, and
   custom class/property casing. For those, use `pac modelbuilder`.
