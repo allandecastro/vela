@@ -1,0 +1,512 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using Microsoft.Crm.Sdk.Messages;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
+using Microsoft.Xrm.Sdk.Query;
+using Vela.Testing.Security;
+
+namespace Vela.Testing
+{
+    // Security enforcement wiring for InMemoryOrganizationService: privilege demands, field-level masking, inherited
+    // access, share clamping, owner/BU stamping, relationship cascades, the read filter and the membership tables.
+    // Split into its own partial so mutation testing can target the enforcement surface in isolation.
+    public sealed partial class InMemoryOrganizationService
+    {
+        // The platform's security-membership tables plugins query to resolve roles. Seeded from the security model
+        // (below) and always readable (global read on these is the platform default) — see ReadFilter / Retrieve.
+        private static readonly HashSet<string> SecurityInfraTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "role", "systemuserroles", "teamroles", "teammembership",
+        };
+
+        // Rebuild the role/systemuserroles/teamroles/teammembership rows from the security model, so a plugin can
+        // query role membership like the platform (e.g. RetrieveMultiple over systemuserroles, or a join to role).
+        private void MaterializeSecurityTables()
+        {
+            foreach (string table in SecurityInfraTables)
+            {
+                _store.Remove(table);
+            }
+
+            if (_security == null)
+            {
+                return;
+            }
+
+            foreach (Entity row in _security.MaterializeMembershipTables())
+            {
+                Table(row.LogicalName)[row.Id] = row;
+            }
+        }
+        // owningbusinessunit tracks the record's owner: after the owner is stamped (on create, or on an ownership
+        // change), realign it to the OWNER's business unit — not the acting user's — so BU/Deep depth checks are
+        // correct even when a record is created for, or assigned to, a principal in another BU. Security-on only
+        // (it supplies the owner's BU); with security off the store's existing stamping is unchanged.
+        private void RealignOwningBusinessUnit(Entity stored)
+        {
+            if (_security == null || !stored.Contains(SystemFieldApplier.OwnerId) ||
+                stored[SystemFieldApplier.OwnerId] is not EntityReference owner)
+            {
+                return;
+            }
+
+            Guid ownerBusinessUnit = _security.BusinessUnitOfPrincipal(owner);
+            if (ownerBusinessUnit != Guid.Empty)
+            {
+                stored[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", ownerBusinessUnit);
+            }
+        }
+
+        private SystemActor Actor()
+        {
+            // When security is on, the acting user's business unit comes from its registration, so records the
+            // user creates are stamped with the BU that depth checks resolve against. Off: unchanged behaviour.
+            Guid businessUnit = _currentBusinessUnitId;
+            if (_security != null)
+            {
+                Guid registered = _security.BusinessUnitOf(_currentUserId);
+                if (registered != Guid.Empty)
+                {
+                    businessUnit = registered;
+                }
+            }
+
+            return new SystemActor(_currentUserId, businessUnit, _currentOrganizationId);
+        }
+
+        // Field-level security: drop field-secured columns the current user may not read from a returned record.
+        private void MaskSecuredColumns(Entity entity)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            List<string> hidden = entity.Attributes.Keys
+                .Where(column => _security.IsSecuredColumn(entity.LogicalName, column) && !_security.CanReadColumn(_currentUserId, entity.LogicalName, column))
+                .ToList();
+            foreach (string column in hidden)
+            {
+                entity.Attributes.Remove(column);
+            }
+        }
+
+        // Field-level security: reject a RetrieveMultiple that aggregates or groups by a field-secured column the
+        // caller can't read (the aggregate value would otherwise leak it).
+        private void DemandAggregateColumnReads(QueryBase query)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            if (query is QueryExpression qe && qe.ColumnSet?.AttributeExpressions != null)
+            {
+                foreach (XrmAttributeExpression expression in qe.ColumnSet.AttributeExpressions)
+                {
+                    DemandSecuredAggregateColumn(qe.EntityName, expression.AttributeName);
+                }
+            }
+            else if (query is FetchExpression fetch && FetchXmlParser.IsAggregate(fetch.Query))
+            {
+                AggregateQuery aggregate = FetchXmlParser.ParseAggregate(fetch.Query);
+                foreach (AggregateColumn column in aggregate.Aggregates)
+                {
+                    DemandSecuredAggregateColumn(aggregate.EntityName, column.Attribute);
+                }
+
+                foreach (AggregateColumn column in aggregate.Groups)
+                {
+                    DemandSecuredAggregateColumn(aggregate.EntityName, column.Attribute);
+                }
+            }
+        }
+
+        private void DemandSecuredAggregateColumn(string entity, string column)
+        {
+            if (!string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
+            {
+                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
+            }
+        }
+
+        // Field-level security: reject a Create/Update that sets a field-secured column the caller can't write.
+        private void DemandSecuredColumnWrites(Entity entity)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            foreach (string column in entity.Attributes.Keys)
+            {
+                if (_security.IsSecuredColumn(entity.LogicalName, column) && !_security.CanWriteColumn(_currentUserId, entity.LogicalName, column))
+                {
+                    throw _security.PrivilegeDenied(_currentUserId, Privilege.Write, $"{entity.LogicalName}.{column}");
+                }
+            }
+        }
+
+        // Enforces a privilege for the current user when security is configured; a no-op otherwise (default-off).
+        // Access is the union of role access, sharing (both in the SecurityModel) and inherited access from a
+        // parental parent record — so a user who can act on the parent can act on the child.
+        private void DemandAccess(string entityName, Privilege privilege, Entity? record)
+        {
+            if (_security == null || CanAccess(entityName, privilege, record))
+            {
+                return;
+            }
+
+            throw _security.PrivilegeDenied(_currentUserId, privilege, entityName);
+        }
+
+        // The full access decision for the current user: role + shared access, or access inherited from the record's
+        // parent in a parental relationship. Assumes security is configured.
+        private bool CanAccess(string entityName, Privilege privilege, Entity? record) =>
+            _security!.IsGranted(_currentUserId, entityName, privilege, record) ||
+            HasInheritedAccess(_currentUserId, entityName, privilege, record, new HashSet<Guid>());
+
+        // Inherited access: in a parental relationship (one that cascades Reparent), a child inherits the access the
+        // user has on its parent — for every privilege except Create. Walks up the hierarchy, guarding against cycles.
+        private bool HasInheritedAccess(Guid userId, string entityName, Privilege privilege, Entity? record, HashSet<Guid> visited)
+        {
+            if (_security == null || record == null || privilege == Privilege.Create || !visited.Add(record.Id))
+            {
+                return false;
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ParentRelationshipsOf(entityName))
+            {
+                if (!ConfersInheritedAccess(relationship) ||
+                    record.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute) is not EntityReference parentRef)
+                {
+                    continue;
+                }
+
+                Entity? parent = StoredOrNull(parentRef.LogicalName, parentRef.Id);
+                if (parent != null &&
+                    (_security.IsGranted(userId, parentRef.LogicalName, privilege, parent) ||
+                     HasInheritedAccess(userId, parentRef.LogicalName, privilege, parent, visited)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // A relationship confers inherited access when it cascades the Reparent action (the parental behaviour that
+        // re-derives inherited rights); a purely referential relationship (Reparent = NoCascade) does not.
+        private static bool ConfersInheritedAccess(OneToManyRegistry.OneToMany relationship) =>
+            relationship.Cascade.Reparent is CascadeType reparent && reparent != CascadeType.NoCascade;
+
+        // Create is checked at depth against the record's PROSPECTIVE owner/BU, exactly like Read/Write/Delete are
+        // checked against an existing record — so a User-level Create only covers records the caller will own, a
+        // BusinessUnit-level Create covers the caller's BU, etc. Creating for another principal is also an
+        // assignment, so it additionally needs Assign. No-op when security is off.
+        private void DemandCreate(Entity entity)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            EntityReference owner =
+                entity.Contains(SystemFieldApplier.OwnerId) && entity[SystemFieldApplier.OwnerId] is EntityReference explicitOwner
+                    ? explicitOwner
+                    : new EntityReference("systemuser", _currentUserId);
+
+            Entity prospective = new Entity(entity.LogicalName) { [SystemFieldApplier.OwnerId] = owner };
+            Guid ownerBusinessUnit = _security.BusinessUnitOfPrincipal(owner);
+            if (ownerBusinessUnit != Guid.Empty)
+            {
+                prospective[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", ownerBusinessUnit);
+            }
+
+            _security.Demand(_currentUserId, entity.LogicalName, Privilege.Create, prospective);
+
+            bool ownedByCaller = string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId;
+            if (!ownedByCaller)
+            {
+                _security.Demand(_currentUserId, entity.LogicalName, Privilege.Assign, null);
+            }
+        }
+
+        // Relating records needs AppendTo on the record being related to and Append on each record related to it,
+        // mirroring the platform. Off (or nothing configured) is a no-op.
+        private void DemandAssociationAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            DemandAccess(entityName, Privilege.AppendTo, StoredOrNull(entityName, entityId));
+            foreach (EntityReference related in relatedEntities)
+            {
+                DemandAccess(related.LogicalName, Privilege.Append, StoredOrNull(related.LogicalName, related.Id));
+            }
+        }
+
+        private Entity? StoredOrNull(string entityName, Guid id) =>
+            Table(entityName).TryGetValue(id, out Entity? stored) ? stored : null;
+
+        // System owner/audit references are not relationship lookups: ownership is governed by Assign, and the
+        // audit columns are server-set — none of them go through Append/AppendTo.
+        private static readonly HashSet<string> SystemReferenceColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            SystemFieldApplier.OwnerId, SystemFieldApplier.OwningUser, SystemFieldApplier.OwningTeam,
+            SystemFieldApplier.OwningBusinessUnit, SystemFieldApplier.CreatedBy, SystemFieldApplier.ModifiedBy,
+            SystemFieldApplier.OrganizationId,
+        };
+
+        // Setting a lookup relates two records, which needs Append on the record carrying the lookup and AppendTo on
+        // the lookup's target record (Dataverse). No-op when security is off. <paramref name="self"/> is the record
+        // carrying the lookup (the stored row on Update; null on Create, where it does not exist yet).
+        private void DemandLookupAppends(Entity entity, Entity? self)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, object> attribute in entity.Attributes)
+            {
+                if (attribute.Value is EntityReference target && !SystemReferenceColumns.Contains(attribute.Key))
+                {
+                    DemandAccess(entity.LogicalName, Privilege.Append, self);
+                    DemandAccess(target.LogicalName, Privilege.AppendTo, StoredOrNull(target.LogicalName, target.Id));
+                }
+            }
+        }
+
+        // The effective rights a principal holds on a record (roles + ownership + sharing). With no security model
+        // everyone has full record access, so every shareable right is reported.
+        private AccessRights EffectiveAccess(EntityReference principal, EntityReference target)
+        {
+            // A record that does not exist confers no access, whether or not security is on (consistent answer).
+            Entity? stored = StoredOrNull(target.LogicalName, target.Id);
+            if (stored == null)
+            {
+                return AccessRights.None;
+            }
+
+            if (_security == null)
+            {
+                return AccessRights.ReadAccess | AccessRights.WriteAccess | AccessRights.DeleteAccess |
+                       AccessRights.AppendAccess | AccessRights.AppendToAccess | AccessRights.AssignAccess | AccessRights.ShareAccess;
+            }
+
+            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored,
+                privilege => HasInheritedAccess(principal.Id, target.LogicalName, privilege, stored, new HashSet<Guid>()));
+        }
+
+        // A user can only share rights they themselves hold on the record (Dataverse: "you can't give rights you
+        // don't have"), so a runtime GrantAccess/ModifyAccess is clamped to the sharer's effective rights. Off: no clamp.
+        private PrincipalAccess ClampToSharerRights(EntityReference target, PrincipalAccess access)
+        {
+            // The sharer's effective rights include role, ownership, sharing AND inherited access — reuse the same
+            // computation RetrievePrincipalAccess uses. With security off this returns full rights, so the clamp is a
+            // no-op (unchanged behaviour).
+            AccessRights sharerRights = EffectiveAccess(new EntityReference("systemuser", _currentUserId), target);
+            return new PrincipalAccess { Principal = access.Principal, AccessMask = access.AccessMask & sharerRights };
+        }
+        // Applies each child 1:N relationship's Delete cascade, then removes the record via <paramref name="removeRecord"/>:
+        // Cascade deletes the children (recursively), RemoveLink clears their lookup, Restrict blocks the delete while
+        // any child exists. Cascaded child deletes are system operations — they do NOT re-check the caller's Delete
+        // privilege (only the parent's is validated). The visited set guards against cycles.
+        private void CascadeDelete(string entityName, Guid id, HashSet<Guid> visited, Action<string, Guid> removeRecord)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            List<OneToManyRegistry.OneToMany> childRelationships = _oneToMany.ChildRelationshipsOf(entityName).ToList();
+
+            // Restrict is evaluated first: a single restricting child blocks the whole delete.
+            foreach (OneToManyRegistry.OneToMany relationship in childRelationships)
+            {
+                if (relationship.Cascade.Delete == CascadeType.Restrict && Children(relationship, id).Any())
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot delete {entityName} {id}: related {relationship.ReferencingEntity} records exist and the relationship's Delete behaviour is Restrict.");
+                }
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in childRelationships)
+            {
+                List<Entity> children = Children(relationship, id).ToList();
+                if (relationship.Cascade.Delete == CascadeType.Cascade)
+                {
+                    foreach (Entity child in children)
+                    {
+                        CascadeDelete(relationship.ReferencingEntity, child.Id, visited, removeRecord);
+                    }
+                }
+                else if (relationship.Cascade.Delete == CascadeType.RemoveLink)
+                {
+                    foreach (Entity child in children)
+                    {
+                        child.Attributes.Remove(relationship.ReferencingAttribute);
+                    }
+                }
+            }
+
+            removeRecord(entityName, id);
+        }
+
+        // The child records whose lookup points at the given parent id.
+        private IEnumerable<Entity> Children(OneToManyRegistry.OneToMany relationship, Guid parentId) =>
+            Table(relationship.ReferencingEntity).Values
+                .Where(child => child.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute)?.Id == parentId);
+
+        // Cascades an ownership change from a parent to its children per each relationship's Assign behaviour:
+        // Cascade = all children, Active = only active children, UserOwned = only children owned by the same user as
+        // the parent was. The child's owning business unit follows the new owner (when security supplies it), and the
+        // cascade recurses down the hierarchy.
+        private void CascadeAssign(string entityName, Guid id, EntityReference? previousOwner, EntityReference newOwner, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Assign ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (!MatchesCascadeScope(child, mode, previousOwner))
+                    {
+                        continue;
+                    }
+
+                    EntityReference? childPreviousOwner = child.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+                    ApplyCascadedOwner(child, newOwner);
+                    CascadeAssign(relationship.ReferencingEntity, child.Id, childPreviousOwner, newOwner, visited);
+                }
+            }
+        }
+
+        // Whether a child is in scope for a cascade of the given mode: Cascade = always, Active = only active
+        // children, UserOwned = only children owned by the same principal as the referenced (parent) record.
+        private static bool MatchesCascadeScope(Entity child, CascadeType mode, EntityReference? referencedOwner)
+        {
+            switch (mode)
+            {
+                case CascadeType.Active: return IsActive(child);
+                case CascadeType.UserOwned: return OwnedBySamePrincipal(child, referencedOwner);
+                default: return true;
+            }
+        }
+
+        // Cascades a share (GrantAccess/ModifyAccess) from a parent to its children per the Share cascade mode, then
+        // recurses down the hierarchy. The sharer already has inherited share rights on the children (parental).
+        private void CascadeShare(string entityName, Guid id, PrincipalAccess access, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            EntityReference? owner = StoredOrNull(entityName, id)?.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Share ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (!MatchesCascadeScope(child, mode, owner))
+                    {
+                        continue;
+                    }
+
+                    _sharing.Grant(new EntityReference(relationship.ReferencingEntity, child.Id), access);
+                    CascadeShare(relationship.ReferencingEntity, child.Id, access, visited);
+                }
+            }
+        }
+
+        // Cascades an unshare (RevokeAccess) from a parent to its children per the Unshare cascade mode.
+        private void CascadeUnshare(string entityName, Guid id, EntityReference principal, HashSet<Guid> visited)
+        {
+            if (!visited.Add(id))
+            {
+                return;
+            }
+
+            EntityReference? owner = StoredOrNull(entityName, id)?.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entityName))
+            {
+                CascadeType mode = relationship.Cascade.Unshare ?? CascadeType.NoCascade;
+                if (mode == CascadeType.NoCascade)
+                {
+                    continue;
+                }
+
+                foreach (Entity child in Children(relationship, id).ToList())
+                {
+                    if (!MatchesCascadeScope(child, mode, owner))
+                    {
+                        continue;
+                    }
+
+                    _sharing.Revoke(new EntityReference(relationship.ReferencingEntity, child.Id), principal);
+                    CascadeUnshare(relationship.ReferencingEntity, child.Id, principal, visited);
+                }
+            }
+        }
+
+        // Active state is state code 0 for most tables (the common case the harness models); a missing state is active.
+        private static bool IsActive(Entity record) =>
+            (record.GetAttributeValue<OptionSetValue>("statecode")?.Value ?? 0) == 0;
+
+        private static bool OwnedBySamePrincipal(Entity record, EntityReference? owner) =>
+            owner != null && record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId)?.Id == owner.Id;
+
+        // Sets the owner columns on a cascaded child: ownerid + owninguser/owningteam, and owningbusinessunit from the
+        // new owner's business unit when security supplies it (owner move follows the owner into their BU).
+        private void ApplyCascadedOwner(Entity child, EntityReference newOwner)
+        {
+            child[SystemFieldApplier.OwnerId] = newOwner;
+            if (string.Equals(newOwner.LogicalName, "team", StringComparison.OrdinalIgnoreCase))
+            {
+                child[SystemFieldApplier.OwningTeam] = new EntityReference("team", newOwner.Id);
+                child.Attributes.Remove(SystemFieldApplier.OwningUser);
+            }
+            else
+            {
+                child[SystemFieldApplier.OwningUser] = new EntityReference("systemuser", newOwner.Id);
+                child.Attributes.Remove(SystemFieldApplier.OwningTeam);
+            }
+
+            if (_security != null)
+            {
+                Guid businessUnit = _security.BusinessUnitOfPrincipal(newOwner);
+                if (businessUnit != Guid.Empty)
+                {
+                    child[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", businessUnit);
+                }
+            }
+        }
+        // The predicate the query engine uses to keep only rows the current user may read (null = no security).
+        // Includes access inherited from a parental parent, and reads the stored record's own owner columns so
+        // filtering is correct regardless of the query's ColumnSet.
+        private Func<Entity, bool>? ReadFilter() =>
+            _security == null ? null : row => SecurityInfraTables.Contains(row.LogicalName) || CanAccess(row.LogicalName, Privilege.Read, row);
+    }
+}

@@ -248,3 +248,63 @@ jobs:
           name: mutation-report-security-cli
           path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
           if-no-files-found: ignore
+
+  security-enforcement:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    env:
+      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Stryker
+        run: dotnet tool update -g dotnet-stryker
+      # The security ENFORCEMENT wiring (DemandAccess/CanAccess, cascade delete/assign/share, FLS masking + write
+      # rejection, inherited access, share clamping, owner-BU realign, the read filter and the membership tables) is
+      # isolated in the InMemoryOrganizationService.Security.cs partial, so the gate measures only that surface — not
+      # the store's query/versioning/seed code. --break-at 0 measures first; the "List surviving mutants" step dumps
+      # survivors so they can be killed, then the gate is ratcheted from 0.
+      - name: Mutation test — enforcement wiring (InMemoryOrganizationService.Security)
+        working-directory: tests/Vela.Testing.Tests
+        run: >
+          dotnet-stryker
+          --solution ../../Vela.sln
+          --mutate "**/Fakes/InMemoryOrganizationService.Security.cs"
+          --reporter cleartext --reporter markdown --reporter html --reporter json
+          --break-at 0 --threshold-low 70 --threshold-high 85
+      - name: List surviving mutants
+        if: always()
+        shell: powershell
+        run: |
+          $f = Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $f) { Write-Host 'no json report'; exit 0 }
+          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
+          $n = 0
+          foreach ($p in $j.files.PSObject.Properties) {
+            $short = Split-Path $p.Name -Leaf
+            foreach ($m in $p.Value.mutants) {
+              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
+                $n++
+                $repl = ($m.replacement -replace '\s+', ' ')
+                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
+                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
+              }
+            }
+          }
+          Write-Host "TOTAL survivors/no-coverage: $n"
+      - name: Publish report to job summary
+        if: always()
+        shell: powershell
+        run: >
+          Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
+          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+      - name: Upload HTML report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-security-enforcement
+          path: tests/Vela.Testing.Tests/StrykerOutput/**/reports/mutation-report.html
+          if-no-files-found: ignore
