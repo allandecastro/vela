@@ -28,11 +28,17 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   Known gaps: cascaded child deletes are store-level for direct callers (they fire the child plugins through
   `PluginPipeline`).
   - **P3 — Link-entity (joined-table) read-trimming.** A `RetrieveMultiple` that joins (`LinkEntity`) to a table
-    the caller can't read is filtered on the **primary** entity but **not** on the joined side: an inner join
-    should drop the primary row when the joined record isn't readable, and an outer join should mask the joined
-    columns — the harness does neither today (documented in `docs/LIMITATIONS.md`). Deferred: low frequency in
-    plugin tests, and the inner/outer-join security semantics need validating before implementing (push the
-    `CanAccess` read predicate into the query engine's link expansion in `InMemoryQueryEngine`).
+    the caller can't read is filtered on the **primary** entity but **not** on the joined side (documented in
+    `docs/LIMITATIONS.md`). Design, once picked up:
+    - **Semantics depend on the join operator.** For an **inner** join, an unreadable linked record is not a match,
+      so the **primary row is dropped**. For a **left-outer** join, the primary row is **kept** but the linked
+      columns are omitted. "Unreadable" covers both no Read privilege on the linked *table* and no access to that
+      specific linked *record* (owned by someone else) — treat both as "no match".
+    - **Depth applies recursively** — a link nested inside a link is trimmed at each level.
+    - **Open question (test first):** how a `where`/filter on a column of an unreadable linked table should behave —
+      validate against real Dataverse before implementing.
+    - Implementation: push the `CanAccess` read predicate into the query engine's link expansion in
+      `InMemoryQueryEngine`. Deferred: low frequency in plugin tests.
 
 
 ## Developer experience

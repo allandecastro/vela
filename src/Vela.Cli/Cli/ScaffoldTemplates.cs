@@ -1193,6 +1193,11 @@ namespace {{prefix}}.Plugins.Tests.Security
 
         // A small scenario: one business unit and a "salesrep" role that can create/read/write accounts across the
         // whole organization. Salesperson holds it; OutsideUser holds no role at all (so: no access to anything).
+        //
+        // Roles are declared inline (by name) here so the example is self-contained. To mirror your REAL environment,
+        // generate a strongly-typed `Roles` class from its security roles with `vela models --roles` (or
+        // `--solution-roles`) and configure the harness with the actual privileges via
+        // `Role(Roles.Salesrep.Name, Roles.SalesrepId, Roles.Salesrep)` instead of the string name below.
         private static SecurityConfiguration Scenario(SecurityConfiguration security) => security
             .BusinessUnit(SalesBusinessUnit)
             .Role("salesrep", role => role.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Read, Privilege.Write))
