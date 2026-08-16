@@ -850,7 +850,7 @@ var crm = new InMemoryOrganizationService()
         .BusinessUnit(salesBu)
         .Role("salesperson", r => r
             .Grant("account", AccessLevel.BusinessUnit, Privilege.Create, Privilege.Read, Privilege.Write)
-            .Grant("contact", Privilege.Read, AccessLevel.Organization))
+            .Grant("contact", AccessLevel.Organization, Privilege.Read))
         .User(aliceId, salesBu, "salesperson")
         .Team(salesTeam, salesBu, "salesperson")   // roles work on teams too
         .Member(aliceId, salesTeam))                // ...and members inherit the team's roles

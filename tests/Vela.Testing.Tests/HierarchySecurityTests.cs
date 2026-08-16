@@ -90,7 +90,7 @@ namespace Vela.Testing.Tests
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(SubBu, SalesBu)
-                    .Role("basic", r => r.Grant("account", Privilege.Read, AccessLevel.User)) // only User-level Read
+                    .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // only User-level Read
                     .User(Alice, SalesBu, "basic")
                     .User(Bob, SubBu)
                     .Manager(Bob, Alice)
@@ -112,7 +112,7 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(SubBu, SalesBu)
                     // Alice can read contacts, but has NO read grant on account at all — hierarchy can't extend nothing.
-                    .Role("other", r => r.Grant("contact", Privilege.Read, AccessLevel.Organization))
+                    .Role("other", r => r.Grant("contact", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "other")
                     .User(Bob, SubBu)
                     .Manager(Bob, Alice)
@@ -124,7 +124,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Hierarchy_write_on_a_direct_report_needs_a_user_level_write_grant()
+        public void Hierarchy_confers_direct_report_write_from_only_a_user_level_read_grant()
         {
             Guid record = Guid.NewGuid();
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
@@ -132,16 +132,17 @@ namespace Vela.Testing.Tests
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(SubBu, SalesBu)
-                    .Role("readonly", r => r.Grant("account", Privilege.Read, AccessLevel.User)) // Read only, no Write
+                    .Role("readonly", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // Read only, no Write
                     .User(Alice, SalesBu, "readonly")
                     .User(Bob, SubBu)
                     .Manager(Bob, Alice)
                     .ManagerHierarchy(1))
                 .Seed(AccountOwnedBy(record, Bob, SubBu));
 
-            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true))); // read via hierarchy
-            Assert.Throws<FaultException<OrganizationServiceFault>>(              // ...but no Write grant to extend
-                () => svc.Update(new Entity("account", record) { ["name"] = "no" }));
+            // Per MS hierarchy security, User-level Read is the only gate: the model then confers the direct-report
+            // write set (Write/Append/AppendTo), even though Alice holds no Write privilege of her own.
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+            svc.Update(new Entity("account", record) { ["name"] = "edited by manager" }); // direct report: write conferred
         }
 
         [Fact]
@@ -154,7 +155,7 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(SubBu, SalesBu)
                     .BusinessUnit(OtherBu)
-                    .Role("mgr", r => r.Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .Role("mgr", r => r.Grant("account", AccessLevel.BusinessUnit, Privilege.Read))
                     .User(Alice, OtherBu, "mgr") // Alice is in an unrelated BU
                     .User(Bob, SubBu)
                     .Manager(Bob, Alice)
@@ -176,8 +177,8 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(SubBu, SalesBu)
                     // Alice holds account Read at User (own role) AND BusinessUnit (team role) — mixed levels.
-                    .Role("ownUser", r => r.Grant("account", Privilege.Read, AccessLevel.User))
-                    .Role("teamBu", r => r.Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .Role("ownUser", r => r.Grant("account", AccessLevel.User, Privilege.Read))
+                    .Role("teamBu", r => r.Grant("account", AccessLevel.BusinessUnit, Privilege.Read))
                     .User(Alice, SalesBu, "ownUser")
                     .Team(team, SalesBu, "teamBu")
                     .Member(Alice, team)
@@ -233,7 +234,7 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(SubBu, SalesBu)
                     .BusinessUnit(OtherBu)
-                    .Role("mgr", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("mgr", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "mgr")
                     .User(Bob, SubBu)
                     .User(stranger, OtherBu)
@@ -283,7 +284,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("r", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("r", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "r")
                     .User(Bob, SalesBu)
                     .Position(Alice, CeoPos)
@@ -306,7 +307,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("r", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("r", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "r")
                     .User(Bob, SalesBu)
                     .Position(Alice, SalesPos)
@@ -316,6 +317,17 @@ namespace Vela.Testing.Tests
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
+        [Fact]
+        public void Configuring_both_hierarchy_models_throws()
+        {
+            // Dataverse activates only one hierarchy model at a time; the harness fails fast rather than run a hybrid.
+            Assert.Throws<InvalidOperationException>(() =>
+                new InMemoryOrganizationService().WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .ManagerHierarchy(1)
+                    .PositionHierarchy(2)));
         }
     }
 }

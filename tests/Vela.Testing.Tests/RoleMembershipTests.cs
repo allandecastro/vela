@@ -32,7 +32,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "Salesperson"));
 
             Entity row = Assert.Single(Query(svc, "systemuserroles", "systemuserid", Alice).Entities);
@@ -44,7 +44,7 @@ namespace Vela.Testing.Tests
         {
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithSecurity(s => s
-                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", Privilege.Read, AccessLevel.Organization)));
+                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", AccessLevel.Organization, Privilege.Read)));
 
             Entity role = Assert.Single(Query(svc, "role", "roleid", SalesRoleId).Entities);
             Assert.Equal("Salesperson", role.GetAttributeValue<string>("name"));
@@ -73,7 +73,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu)
                     .Team(SalesTeam, SalesBu, "Salesperson")
                     .Member(Alice, SalesTeam));
@@ -89,7 +89,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "Salesperson"));
 
             QueryExpression query = new QueryExpression("systemuserroles")
@@ -116,7 +116,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService Build() => new InMemoryOrganizationService()
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("Salesperson", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("Salesperson", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "Salesperson"));
 
             Guid first = Assert.Single(Query(Build(), "systemuserroles", "systemuserid", Alice).Entities).Id;

@@ -1241,7 +1241,7 @@ namespace {{prefix}}.Plugins.Tests.Security
                 .WithSecurity(security => security
                     .BusinessUnit(SalesBusinessUnit)
                     // User-level Read: the caller sees only records they own, not the whole table.
-                    .Role("ownrecords", role => role.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("ownrecords", role => role.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Salesperson, SalesBusinessUnit, "ownrecords")
                     .User(OutsideUser, SalesBusinessUnit, "ownrecords"))
                 .Seed(

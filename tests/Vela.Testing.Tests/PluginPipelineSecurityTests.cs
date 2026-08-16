@@ -40,7 +40,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "reader")); // no Create privilege
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(
@@ -73,7 +73,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("author", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "author"))
                 .Seed(AccountOwnedBy(bobRecord, Bob), AccountOwnedBy(aliceRecord, Alice));
 

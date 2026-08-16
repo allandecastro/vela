@@ -60,7 +60,7 @@ namespace Vela.Testing.Tests
                 .WithReferentialRelationship("account", "contact", "parentcustomerid") // Reparent = NoCascade
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("acct", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("acct", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "acct"))
                 .Seed(AccountOwnedBy(account, Bob), ContactUnder(contact, account, Bob));
 
@@ -92,7 +92,7 @@ namespace Vela.Testing.Tests
                 .WithParentalRelationship("contact", "task", "regardingobjectid")
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("acct", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("acct", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "acct"))
                 .Seed(
                     AccountOwnedBy(account, Bob),

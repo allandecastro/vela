@@ -59,7 +59,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "reader"));
 
             FaultException<OrganizationServiceFault> ex =
@@ -123,7 +123,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("author", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "author"))
                 // Bob's records sort first by name; a naive page-then-filter would return an empty first page.
                 .Seed(Named(Bob, "a1"), Named(Bob, "a2"), Named(Alice, "b1"), Named(Alice, "b2"));
@@ -152,7 +152,7 @@ namespace Vela.Testing.Tests
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(OtherBu)
-                    .Role("bu-reader", r => r.Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .Role("bu-reader", r => r.Grant("account", AccessLevel.BusinessUnit, Privilege.Read))
                     .User(Alice, SalesBu, "bu-reader"))
                 .Seed(AccountOwnedBy(sameBu, Bob, SalesBu))
                 .Seed(AccountOwnedBy(otherBu, Carol, OtherBu));
@@ -175,7 +175,7 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(RootBu)
                     .BusinessUnit(SalesBu, parent: RootBu)
                     .BusinessUnit(SubSalesBu, parent: SalesBu)
-                    .Role("deep-reader", r => r.Grant("account", Privilege.Read, AccessLevel.ParentChild))
+                    .Role("deep-reader", r => r.Grant("account", AccessLevel.ParentChild, Privilege.Read))
                     .User(Alice, SalesBu, "deep-reader"))
                 .Seed(AccountOwnedBy(childRecord, Bob, SubSalesBu))
                 .Seed(AccountOwnedBy(parentRecord, Carol, RootBu));
@@ -195,7 +195,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("org-reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("org-reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu)                 // Alice holds no role of her own
                     .Team(SalesTeam, SalesBu, "org-reader")
                     .Member(Alice, SalesTeam))            // ...but inherits the team's role
@@ -212,7 +212,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("author", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "author")
                     .Team(SalesTeam, SalesBu)
                     .Member(Alice, SalesTeam))
@@ -235,7 +235,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "reader"))
                 .Seed(AccountOwnedBy(record, Alice, SalesBu));
 
@@ -272,7 +272,7 @@ namespace Vela.Testing.Tests
                 .WithOrganizationId(new Guid("06000000-0000-0000-0000-0000000000aa"))
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "reader"));
 
             WhoAmIResponse response = (WhoAmIResponse)svc.Execute(new WhoAmIRequest());
@@ -323,11 +323,11 @@ namespace Vela.Testing.Tests
                     {
                         if (organizationFirst)
                         {
-                            r.Grant("account", Privilege.Read, AccessLevel.Organization).Grant("account", Privilege.Read, AccessLevel.User);
+                            r.Grant("account", AccessLevel.Organization, Privilege.Read).Grant("account", AccessLevel.User, Privilege.Read);
                         }
                         else
                         {
-                            r.Grant("account", Privilege.Read, AccessLevel.User).Grant("account", Privilege.Read, AccessLevel.Organization);
+                            r.Grant("account", AccessLevel.User, Privilege.Read).Grant("account", AccessLevel.Organization, Privilege.Read);
                         }
                     })
                     .User(Alice, SalesBu, "dual"))
@@ -368,7 +368,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("author", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "author"))
                 .Seed(AccountOwnedBy(Guid.NewGuid(), Bob, OtherBu))    // not readable by Alice
                 .Seed(AccountOwnedBy(Guid.NewGuid(), Carol, OtherBu))  // not readable by Alice
@@ -390,7 +390,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("account", Privilege.Create, AccessLevel.User))
+                    .Role("author", r => r.Grant("account", AccessLevel.User, Privilege.Create))
                     .User(Alice, SalesBu, "author"));
 
             svc.Create(new Entity("account"));
@@ -411,7 +411,7 @@ namespace Vela.Testing.Tests
                 .WithSecurity(s => s
                     .BusinessUnit(RootBu)
                     .BusinessUnit(SalesBu, parent: RootBu)
-                    .Role("deep-reader", r => r.Grant("account", Privilege.Read, AccessLevel.ParentChild))
+                    .Role("deep-reader", r => r.Grant("account", AccessLevel.ParentChild, Privilege.Read))
                     .User(Alice, SalesBu, "deep-reader"))
                 .Seed(AccountOwnedBy(sameBuRecord, Bob, SalesBu));
 
@@ -427,7 +427,7 @@ namespace Vela.Testing.Tests
                 .WithSecurity(s => s
                     .BusinessUnit(RootBu)
                     .BusinessUnit(SalesBu, parent: RootBu)
-                    .Role("deep-reader", r => r.Grant("account", Privilege.Read, AccessLevel.ParentChild))
+                    .Role("deep-reader", r => r.Grant("account", AccessLevel.ParentChild, Privilege.Read))
                     .User(Alice, SalesBu, "deep-reader"))
                 .Seed(AccountOwnedBy(strayRecord, Bob, OtherBu)); // OtherBu is never declared
 
@@ -444,7 +444,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
-                    .Role("bu-reader", r => r.Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .Role("bu-reader", r => r.Grant("account", AccessLevel.BusinessUnit, Privilege.Read))
                     .User(Alice, Guid.Empty, "bu-reader"))    // user with no business unit
                 .Seed(new Entity("account", record) { ["ownerid"] = new EntityReference("systemuser", Bob) }); // no owningbusinessunit
 
@@ -481,7 +481,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "reader"));
 
             FaultException<OrganizationServiceFault> ex =
@@ -501,7 +501,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("author", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "author"))
                 .Seed(new Entity("account", record) { ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu) });
 
@@ -518,7 +518,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("author", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "author"))
                 .Seed(AccountOwnedBy(Guid.NewGuid(), Bob, OtherBu))    // not readable
                 .Seed(AccountOwnedBy(Guid.NewGuid(), Alice, SalesBu))  // readable
@@ -542,7 +542,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("author", r => r.Grant("Account", Privilege.Create, AccessLevel.User)) // capitalized grant
+                    .Role("author", r => r.Grant("Account", AccessLevel.User, Privilege.Create)) // capitalized grant
                     .User(Alice, SalesBu, "author"));
 
             Guid id = svc.Create(new Entity("account")); // lower-case query still resolves the grant
@@ -560,7 +560,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("deep-reader", r => r.Grant("account", Privilege.Read, AccessLevel.ParentChild))
+                    .Role("deep-reader", r => r.Grant("account", AccessLevel.ParentChild, Privilege.Read))
                     .User(Alice, SalesBu, "deep-reader"))
                 .Seed(new Entity("account", record) { ["ownerid"] = new EntityReference("systemuser", Bob) });
 
@@ -579,7 +579,7 @@ namespace Vela.Testing.Tests
             Assert.Throws<ArgumentNullException>(() => new SecurityConfiguration().Role("r", null!));
             // The entity guard on Grant surfaces through the Role(...) configuration callback.
             Assert.Throws<ArgumentException>(
-                () => new SecurityConfiguration().Role("r", r => r.Grant("", Privilege.Read, AccessLevel.User)));
+                () => new SecurityConfiguration().Role("r", r => r.Grant("", AccessLevel.User, Privilege.Read)));
         }
 
         [Fact]
@@ -602,7 +602,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu)
                     .Team(SalesTeam, SalesBu, "reader")) // the team holds account Read at Organization
                 .Seed(AccountOwnedBy(record, Bob, SalesBu));
@@ -632,7 +632,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "reader")) // Alice belongs to no team
                 .Seed(AccountOwnedByTeam(record, SalesTeam)); // owned by a team Alice is not in
 
@@ -649,7 +649,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu)                       // Alice holds no role of her own
                     .Team(SalesTeam, SalesBu, "reader")         // default inheritance (Team and user privileges)
                     .Member(Alice, SalesTeam))
@@ -667,7 +667,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu)
                     .Team(SalesTeam, SalesBu, TeamPrivilegeInheritance.TeamOnly, "reader")
                     .Member(Alice, SalesTeam))
@@ -686,7 +686,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("bureader", r => r.Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                    .Role("bureader", r => r.Grant("account", AccessLevel.BusinessUnit, Privilege.Read))
                     .User(Alice, SalesBu)
                     .Team(SalesTeam, SalesBu, TeamPrivilegeInheritance.TeamOnly, "bureader")
                     .Member(Alice, SalesTeam))
@@ -704,7 +704,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.User))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read))
                     .User(Alice, SalesBu, "reader")             // Alice's OWN User-level Read
                     .Team(SalesTeam, SalesBu, TeamPrivilegeInheritance.TeamOnly, "reader")
                     .Member(Alice, SalesTeam))
@@ -782,7 +782,7 @@ namespace Vela.Testing.Tests
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(OtherBu)
-                    .Role("author", r => r.Grant("account", Privilege.Create, AccessLevel.Organization)) // depth covers any owner
+                    .Role("author", r => r.Grant("account", AccessLevel.Organization, Privilege.Create)) // depth covers any owner
                     .User(Alice, SalesBu, "author")   // ...but no Assign
                     .User(Bob, OtherBu));
 
@@ -803,8 +803,8 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(OtherBu)
                     // User-level Create only covers records Alice will own; Assign is present so this isolates depth.
                     .Role("author", r => r
-                        .Grant("account", Privilege.Create, AccessLevel.User)
-                        .Grant("account", Privilege.Assign, AccessLevel.Organization))
+                        .Grant("account", AccessLevel.User, Privilege.Create)
+                        .Grant("account", AccessLevel.Organization, Privilege.Assign))
                     .User(Alice, SalesBu, "author")
                     .User(Bob, OtherBu));
 
@@ -863,8 +863,8 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(OtherBu)
                     .BusinessUnit(SalesBu)
                     .Role("mover", r => r
-                        .Grant("account", Privilege.Assign, AccessLevel.Organization)
-                        .Grant("account", Privilege.Read, AccessLevel.BusinessUnit))
+                        .Grant("account", AccessLevel.Organization, Privilege.Assign)
+                        .Grant("account", AccessLevel.BusinessUnit, Privilege.Read))
                     .User(Alice, SalesBu, "mover")) // Alice lives in SalesBu
                 .Seed(AccountOwnedBy(record, Bob, OtherBu)); // record starts in OtherBu
 
@@ -906,8 +906,8 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, s => s
                 .BusinessUnit(SalesBu)
                 .Role("reader", r => r
-                    .Grant("account", Privilege.Read, AccessLevel.Organization)
-                    .Grant("contact", Privilege.Read, AccessLevel.Organization))
+                    .Grant("account", AccessLevel.Organization, Privilege.Read)
+                    .Grant("contact", AccessLevel.Organization, Privilege.Read))
                 .User(Alice, SalesBu, "reader"));
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Associate(
@@ -923,8 +923,8 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, s => s
                 .BusinessUnit(SalesBu)
                 .Role("linker", r => r
-                    .Grant("account", Privilege.AppendTo, AccessLevel.Organization)
-                    .Grant("contact", Privilege.Append, AccessLevel.Organization))
+                    .Grant("account", AccessLevel.Organization, Privilege.AppendTo)
+                    .Grant("contact", AccessLevel.Organization, Privilege.Append))
                 .User(Alice, SalesBu, "linker"));
 
             svc.Associate("account", accountId, new Relationship("account_contacts"),
@@ -941,8 +941,8 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, s => s
                 .BusinessUnit(SalesBu)
                 .Role("reader", r => r
-                    .Grant("account", Privilege.Read, AccessLevel.Organization)
-                    .Grant("contact", Privilege.Read, AccessLevel.Organization))
+                    .Grant("account", AccessLevel.Organization, Privilege.Read)
+                    .Grant("contact", AccessLevel.Organization, Privilege.Read))
                 .User(Alice, SalesBu, "reader"));
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Disassociate(
@@ -969,7 +969,7 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("editor", r => r
                         .Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write)
-                        .Grant("contact", Privilege.Read, AccessLevel.Organization))
+                        .Grant("contact", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "editor")) // can write the account but has no Append/AppendTo
                 .Seed(AccountOwnedBy(account, Alice, SalesBu), ContactOwnedBy(contact, Alice));
 

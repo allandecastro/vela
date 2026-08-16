@@ -115,8 +115,8 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     // Alice owns account A (User-read reaches it), can move the contact's lookup, but has no contact Read.
                     .Role("reparenter", r => r
-                        .Grant("account", Privilege.Read, AccessLevel.User)
-                        .Grant("account", Privilege.AppendTo, AccessLevel.Organization)
+                        .Grant("account", AccessLevel.User, Privilege.Read)
+                        .Grant("account", AccessLevel.Organization, Privilege.AppendTo)
                         .Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append))
                     .User(Alice, SalesBu, "reparenter"))
                 .Seed(

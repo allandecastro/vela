@@ -35,7 +35,7 @@ public class RoleGeneratorTests
         Assert.Contains("public const string SalespersonName = \"Salesperson\";", code);
         Assert.Contains($"public static readonly Guid SalespersonId = new Guid(\"{SalesId:D}\");", code);
         Assert.Contains("public static void Salesperson(RoleBuilder r)", code);
-        Assert.Contains("r.Grant(\"account\", Privilege.Read, AccessLevel.Organization);", code);
+        Assert.Contains("r.Grant(\"account\", AccessLevel.Organization, Privilege.Read);", code);
     }
 
     [Fact]
@@ -46,9 +46,9 @@ public class RoleGeneratorTests
             new RoleGrantModel("account", "Write", "BusinessUnit"),
             new RoleGrantModel("account", "Create", "User")));
 
-        int account = code.IndexOf("r.Grant(\"account\", Privilege.Create", StringComparison.Ordinal);
-        int accountWrite = code.IndexOf("r.Grant(\"account\", Privilege.Write", StringComparison.Ordinal);
-        int contact = code.IndexOf("r.Grant(\"contact\", Privilege.Read", StringComparison.Ordinal);
+        int account = code.IndexOf("r.Grant(\"account\", AccessLevel.User, Privilege.Create", StringComparison.Ordinal);
+        int accountWrite = code.IndexOf("r.Grant(\"account\", AccessLevel.BusinessUnit, Privilege.Write", StringComparison.Ordinal);
+        int contact = code.IndexOf("r.Grant(\"contact\", AccessLevel.Organization, Privilege.Read", StringComparison.Ordinal);
 
         Assert.True(account < accountWrite, "account grants ordered by privilege");
         Assert.True(accountWrite < contact, "account grants precede contact grants");
@@ -176,7 +176,7 @@ public class RoleGeneratorTests
             "        /// <summary>Applies the privileges of the \"Salesperson\" role to a role builder.</summary>",
             "        public static void Salesperson(RoleBuilder r)",
             "        {",
-            "            r.Grant(\"account\", Privilege.Read, AccessLevel.BusinessUnit);",
+            "            r.Grant(\"account\", AccessLevel.BusinessUnit, Privilege.Read);",
             "        }",
             "    }",
             "}",
