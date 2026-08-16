@@ -385,5 +385,161 @@ namespace Vela.Testing.Tests
             // The grandchild (task under contact under account) is reassigned too — the cascade recurses down levels.
             Assert.Equal(Alice, svc.Retrieve("task", task, new ColumnSet(true)).GetAttributeValue<EntityReference>("ownerid").Id);
         }
+
+        // --- Cascade Share / Unshare --------------------------------------------------------------------
+        // Security is ON so RetrievePrincipalAccess reflects the real PoA share: Alice owns the records and can share;
+        // Bob holds NO role, so his only access to a record is a share. The relationships set Reparent = NoCascade, so
+        // Bob gets NO inherited access from the parent — that isolates the cascade share/unshare from inherited access.
+
+        private static readonly Guid ShareBu = new Guid("b0000000-0000-0000-0000-0000000003b2");
+
+        private static SecurityConfiguration Sharer(SecurityConfiguration s) => s
+            .BusinessUnit(ShareBu)
+            .Role("sharer", r => r
+                .Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share)
+                .Grant("contact", AccessLevel.Organization, Privilege.Read, Privilege.Share)
+                .Grant("task", AccessLevel.Organization, Privilege.Read, Privilege.Share))
+            .User(Alice, ShareBu, "sharer")
+            .User(Bob, ShareBu); // no role: access comes only from a share
+
+        private static CascadeConfiguration ShareCascade(CascadeType share, CascadeType unshare) => new CascadeConfiguration
+        {
+            Reparent = CascadeType.NoCascade, // no inherited access — isolates the cascade share/unshare effect
+            Share = share,
+            Unshare = unshare,
+        };
+
+        private static Entity Owned(string entity, Guid id, string? lookup, string? parentEntity, Guid parent, int? state = null)
+        {
+            Entity e = new Entity(entity, id) { ["ownerid"] = new EntityReference("systemuser", Alice) };
+            if (lookup != null) e[lookup] = new EntityReference(parentEntity, parent);
+            if (state.HasValue) e["statecode"] = new OptionSetValue(state.Value);
+            return e;
+        }
+
+        private static bool BobCanRead(InMemoryOrganizationService svc, string entity, Guid id) =>
+            ((RetrievePrincipalAccessResponse)svc.Execute(new RetrievePrincipalAccessRequest
+            {
+                Target = new EntityReference(entity, id),
+                Principal = new EntityReference("systemuser", Bob),
+            })).AccessRights.HasFlag(AccessRights.ReadAccess);
+
+        private static void ShareWithBob(InMemoryOrganizationService svc, string entity, Guid id) =>
+            svc.Execute(new GrantAccessRequest
+            {
+                Target = new EntityReference(entity, id),
+                PrincipalAccess = new PrincipalAccess { Principal = new EntityReference("systemuser", Bob), AccessMask = AccessRights.ReadAccess },
+            });
+
+        private static void RevokeFromBob(InMemoryOrganizationService svc, string entity, Guid id) =>
+            svc.Execute(new RevokeAccessRequest
+            {
+                Target = new EntityReference(entity, id),
+                Revokee = new EntityReference("systemuser", Bob),
+            });
+
+        [Fact]
+        public void Cascade_share_recurses_to_grandchildren()
+        {
+            Guid account = Guid.NewGuid(), contact = Guid.NewGuid(), task = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithRelationship("account", "contact", "parentcustomerid", ShareCascade(CascadeType.Cascade, CascadeType.Cascade))
+                .WithRelationship("contact", "task", "regardingcontactid", ShareCascade(CascadeType.Cascade, CascadeType.Cascade))
+                .WithSecurity(s => Sharer(s))
+                .Seed(
+                    Owned("account", account, null, null, Guid.Empty),
+                    Owned("contact", contact, "parentcustomerid", "account", account),
+                    Owned("task", task, "regardingcontactid", "contact", contact));
+
+            ShareWithBob(svc, "account", account);
+
+            Assert.True(BobCanRead(svc, "contact", contact)); // shared to the child
+            Assert.True(BobCanRead(svc, "task", task));       // ...and to the grandchild (recursion)
+        }
+
+        [Fact]
+        public void Cascade_share_with_active_scope_skips_inactive_children()
+        {
+            Guid account = Guid.NewGuid(), active = Guid.NewGuid(), inactive = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithRelationship("account", "contact", "parentcustomerid", ShareCascade(CascadeType.Active, CascadeType.Cascade))
+                .WithSecurity(s => Sharer(s))
+                .Seed(
+                    Owned("account", account, null, null, Guid.Empty),
+                    Owned("contact", active, "parentcustomerid", "account", account),
+                    Owned("contact", inactive, "parentcustomerid", "account", account, state: 1));
+
+            ShareWithBob(svc, "account", account);
+
+            Assert.True(BobCanRead(svc, "contact", active));    // active child shared
+            Assert.False(BobCanRead(svc, "contact", inactive)); // inactive child skipped (Active scope)
+        }
+
+        [Fact]
+        public void Cascade_unshare_recurses_to_grandchildren()
+        {
+            Guid account = Guid.NewGuid(), contact = Guid.NewGuid(), task = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithRelationship("account", "contact", "parentcustomerid", ShareCascade(CascadeType.Cascade, CascadeType.Cascade))
+                .WithRelationship("contact", "task", "regardingcontactid", ShareCascade(CascadeType.Cascade, CascadeType.Cascade))
+                .WithSecurity(s => Sharer(s))
+                .Seed(
+                    Owned("account", account, null, null, Guid.Empty),
+                    Owned("contact", contact, "parentcustomerid", "account", account),
+                    Owned("task", task, "regardingcontactid", "contact", contact));
+
+            ShareWithBob(svc, "account", account);
+            Assert.True(BobCanRead(svc, "task", task)); // precondition: the grandchild was shared
+
+            RevokeFromBob(svc, "account", account);
+
+            Assert.False(BobCanRead(svc, "task", task)); // grandchild unshared too (recursion)
+        }
+
+        [Fact]
+        public void Cascade_unshare_leaves_a_no_cascade_childs_own_share_intact()
+        {
+            Guid account = Guid.NewGuid(), contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithRelationship("account", "contact", "parentcustomerid", ShareCascade(CascadeType.NoCascade, CascadeType.NoCascade))
+                .WithSecurity(s => Sharer(s))
+                .Seed(
+                    Owned("account", account, null, null, Guid.Empty),
+                    Owned("contact", contact, "parentcustomerid", "account", account));
+
+            ShareWithBob(svc, "account", account);
+            ShareWithBob(svc, "contact", contact); // the child has its OWN independent share
+
+            RevokeFromBob(svc, "account", account); // Unshare = NoCascade: must not touch the child
+
+            Assert.True(BobCanRead(svc, "contact", contact)); // the child keeps its own share
+        }
+
+        [Fact]
+        public void Cascade_unshare_with_active_scope_skips_inactive_children()
+        {
+            Guid account = Guid.NewGuid(), active = Guid.NewGuid(), inactive = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithRelationship("account", "contact", "parentcustomerid", ShareCascade(CascadeType.Cascade, CascadeType.Active))
+                .WithSecurity(s => Sharer(s))
+                .Seed(
+                    Owned("account", account, null, null, Guid.Empty),
+                    Owned("contact", active, "parentcustomerid", "account", account),
+                    Owned("contact", inactive, "parentcustomerid", "account", account, state: 1));
+
+            ShareWithBob(svc, "account", account); // Share = Cascade shares BOTH children
+            Assert.True(BobCanRead(svc, "contact", active));
+            Assert.True(BobCanRead(svc, "contact", inactive));
+
+            RevokeFromBob(svc, "account", account); // Unshare = Active: only the active child is unshared
+
+            Assert.False(BobCanRead(svc, "contact", active));  // active child unshared
+            Assert.True(BobCanRead(svc, "contact", inactive)); // inactive child keeps its share (Active scope skip)
+        }
     }
 }
