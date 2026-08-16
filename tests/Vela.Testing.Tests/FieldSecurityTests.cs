@@ -176,5 +176,35 @@ namespace Vela.Testing.Tests
             Assert.True(row.Contains("name"));
             Assert.False(row.Contains("creditlimit"));
         }
+
+        [Fact]
+        public void Aggregating_a_secured_column_via_QueryExpression_is_rejected()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => Base(s)) // Alice reads the records but not creditlimit
+                .Seed(Account(Guid.NewGuid()), Account(Guid.NewGuid()));
+
+            QueryExpression qe = new QueryExpression("account") { ColumnSet = new ColumnSet() };
+            qe.ColumnSet.AttributeExpressions.Add(new XrmAttributeExpression("creditlimit", XrmAggregateType.Sum, "total"));
+
+            // The QueryExpression aggregate path must reject a secured column just like the FetchXML path does.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.RetrieveMultiple(qe));
+        }
+
+        [Fact]
+        public void Grouping_by_a_secured_column_is_rejected_without_field_read()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => Base(s))
+                .Seed(Account(Guid.NewGuid()), Account(Guid.NewGuid()));
+
+            // Group-by leaks the secured column's distinct values, so it is rejected just like an aggregate over it.
+            FetchExpression fetch = new FetchExpression(
+                "<fetch aggregate='true'><entity name='account'><attribute name='creditlimit' alias='cl' groupby='true'/></entity></fetch>");
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.RetrieveMultiple(fetch));
+        }
     }
 }
