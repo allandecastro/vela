@@ -126,11 +126,11 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   privilege/access checks (full access), exactly as before. When enabled it models security roles, privileges at
   the four access levels, business units, teams (incl. the Member's-privilege-inheritance mode), record sharing
   (PoA, incl. org-wide), inherited access from parental relationships, 1:N relationship cascades, access teams,
-  **manager and position** hierarchy security, and field-level (column) security. Out of scope: link-entity
-  (joined-table) read-trimming (a query joining a table the caller can't read isn't trimmed on the joined side).
-  Behavioural note: a parent's Delete plugins fire **after** its
-  cascaded children are removed (the children's Delete plugins run first), rather than the parent's pre-stage
-  seeing its children.
+  **manager and position** hierarchy security, field-level (column) security, and link-entity (joined-table)
+  read-trimming (a join to a record the caller can't read drops the primary row on an inner join, or omits the
+  linked columns on a left-outer join, recursively through nested joins). Behavioural note: a parent's Delete
+  plugins fire **after** its cascaded children are removed (the children's Delete plugins run first), rather than
+  the parent's pre-stage seeing its children.
 
 ---
 
