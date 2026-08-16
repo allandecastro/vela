@@ -130,5 +130,33 @@ namespace Vela.Testing.Tests
             Entity only = Assert.Single(crm.RetrieveMultiple(query).Entities);
             Assert.Equal("T-Mine", only.GetAttributeValue<string>("subject")); // the task whose grandchild account is unreadable is dropped
         }
+
+        [Fact]
+        public void Any_related_record_filter_only_counts_readable_records()
+        {
+            Guid hasReadable = Guid.NewGuid(), hasUnreadable = Guid.NewGuid();
+            Guid readableContact = Guid.NewGuid(), unreadableContact = Guid.NewGuid();
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(Bu)
+                    .Role("reader", r => r
+                        .Grant("account", Privilege.Read, AccessLevel.Organization)
+                        .Grant("contact", Privilege.Read, AccessLevel.User)) // only her own contacts
+                    .User(Alice, Bu, "reader")
+                    .User(Bob, Bu, "reader"))
+                .Seed(
+                    new Entity("account", hasReadable) { ["name"] = "HasReadable" },
+                    new Entity("account", hasUnreadable) { ["name"] = "HasUnreadable" },
+                    new Entity("contact", readableContact) { ["parentcustomerid"] = new EntityReference("account", hasReadable), ["ownerid"] = new EntityReference("systemuser", Alice) },
+                    new Entity("contact", unreadableContact) { ["parentcustomerid"] = new EntityReference("account", hasUnreadable), ["ownerid"] = new EntityReference("systemuser", Bob) });
+
+            // "accounts that have ANY contact" — but the Any is evaluated over the contacts the caller can read.
+            QueryExpression query = new QueryExpression("account") { ColumnSet = new ColumnSet("name") };
+            query.Criteria.AnyAllFilterLinkEntity = new LinkEntity("account", "contact", "accountid", "parentcustomerid", JoinOperator.Any);
+
+            Entity only = Assert.Single(crm.RetrieveMultiple(query).Entities);
+            Assert.Equal("HasReadable", only.GetAttributeValue<string>("name")); // the account whose only contact is unreadable doesn't match
+        }
     }
 }
