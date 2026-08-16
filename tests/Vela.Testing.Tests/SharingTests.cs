@@ -158,7 +158,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Sharer)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Sharer, SalesBu, "reader")   // can read, cannot share
                     .User(Alice, SalesBu))
                 .Seed(AccountOwnedBy(record, Sharer));
@@ -191,7 +191,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization))
+                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Alice, SalesBu, "reader"))
                 .Seed(AccountOwnedBy(record, Bob))
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.WriteAccess); // shared write on top of role read

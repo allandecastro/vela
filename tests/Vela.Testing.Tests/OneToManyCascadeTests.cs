@@ -235,7 +235,7 @@ namespace Vela.Testing.Tests
                 .WithParentalRelationship("account", "contact", "parentcustomerid")
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("acctreader", r => r.Grant("account", Privilege.Read, AccessLevel.Organization)) // nothing on contact
+                    .Role("acctreader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read)) // nothing on contact
                     .User(Alice, SalesBu, "acctreader"))
                 .Seed(AccountOwned(account, Bob), ContactOf(contact, account));
 

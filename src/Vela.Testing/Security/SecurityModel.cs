@@ -89,30 +89,25 @@ namespace Vela.Testing.Security
         internal Dictionary<(string Entity, Privilege Privilege), AccessLevel> Grants { get; } =
             new Dictionary<(string, Privilege), AccessLevel>();
 
-        /// <summary>Grants a single <paramref name="privilege"/> on <paramref name="entity"/> at <paramref name="level"/>.</summary>
-        public RoleBuilder Grant(string entity, Privilege privilege, AccessLevel level)
+        /// <summary>
+        /// Grants one or more <paramref name="privileges"/> on <paramref name="entity"/> at <paramref name="level"/>.
+        /// Argument order is always (entity, level, privileges) — e.g. <c>Grant("account", AccessLevel.User, Privilege.Read)</c>.
+        /// </summary>
+        public RoleBuilder Grant(string entity, AccessLevel level, params Privilege[] privileges)
         {
             if (string.IsNullOrWhiteSpace(entity))
             {
                 throw new ArgumentException("Entity logical name is required.", nameof(entity));
             }
 
-            // Entity logical names are case-insensitive across the harness, so normalize the key to match.
-            var key = (entity.ToLowerInvariant(), privilege);
-            if (!Grants.TryGetValue(key, out AccessLevel existing) || level > existing)
-            {
-                Grants[key] = level;
-            }
-
-            return this;
-        }
-
-        /// <summary>Grants several privileges on <paramref name="entity"/> at the same <paramref name="level"/>.</summary>
-        public RoleBuilder Grant(string entity, AccessLevel level, params Privilege[] privileges)
-        {
             foreach (Privilege privilege in privileges ?? Array.Empty<Privilege>())
             {
-                Grant(entity, privilege, level);
+                // Entity logical names are case-insensitive across the harness, so normalize the key to match.
+                var key = (entity.ToLowerInvariant(), privilege);
+                if (!Grants.TryGetValue(key, out AccessLevel existing) || level > existing)
+                {
+                    Grants[key] = level;
+                }
             }
 
             return this;
@@ -138,6 +133,8 @@ namespace Vela.Testing.Security
         private readonly Dictionary<Guid, Guid> _positions = new Dictionary<Guid, Guid>();
         private readonly Dictionary<Guid, Guid> _positionParents = new Dictionary<Guid, Guid>();
         private int _hierarchyDepth;
+        private bool _managerHierarchy;
+        private bool _positionHierarchy;
         private readonly HashSet<(string Entity, string Column)> _securedColumns = new HashSet<(string, string)>();
         private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldRead = new HashSet<(Guid, string, string)>();
         private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldUpdate = new HashSet<(Guid, string, string)>();
@@ -210,6 +207,7 @@ namespace Vela.Testing.Security
         /// </summary>
         public SecurityConfiguration ManagerHierarchy(int depth = 1)
         {
+            _managerHierarchy = true;
             _hierarchyDepth = depth < 0 ? 0 : depth;
             return this;
         }
@@ -226,10 +224,12 @@ namespace Vela.Testing.Security
         /// a higher position reaches lower positions' records in the direct ancestor path <b>across business units</b>
         /// (no BU constraint). A direct-higher position gets read/write; non-direct higher positions get read-only.
         /// Tag users with <see cref="Position"/> and shape the position tree with <see cref="PositionParent"/>.
-        /// (Dataverse enables either the manager or the position model; the harness lets you configure either.)
+        /// Dataverse activates only one hierarchy model at a time, so configuring both this and
+        /// <see cref="ManagerHierarchy"/> throws when the configuration is built.
         /// </summary>
         public SecurityConfiguration PositionHierarchy(int depth = 1)
         {
+            _positionHierarchy = true;
             _hierarchyDepth = depth < 0 ? 0 : depth;
             return this;
         }
@@ -292,6 +292,14 @@ namespace Vela.Testing.Security
 
         internal SecurityModel Build(SharingTable sharing, AccessTeamGrants accessTeams)
         {
+            // Dataverse activates only one hierarchy model org-wide; configuring both would silently share a single
+            // depth and produce a hybrid the platform can't. Fail fast rather than model something unreal.
+            if (_managerHierarchy && _positionHierarchy)
+            {
+                throw new InvalidOperationException(
+                    "Configure either ManagerHierarchy or PositionHierarchy, not both — Dataverse activates only one hierarchy model at a time.");
+            }
+
             // Flatten each role's grants once; resolve role references eagerly so an unknown role name fails fast.
             var roles = _roles.ToDictionary(r => r.Key, r => r.Value.Grants, StringComparer.OrdinalIgnoreCase);
 
@@ -622,10 +630,11 @@ namespace Vela.Testing.Security
             AccessRights.ReadAccess | AccessRights.WriteAccess | AccessRights.AppendAccess | AccessRights.AppendToAccess;
 
         // Hierarchy security: a higher user (manager or position) gets Read on any report's record within the configured
-        // depth, and Write/Append/AppendTo on a DIRECT report (distance 1) only — never Delete/Assign/Share. It extends
-        // a user who ALREADY holds the requested privilege at at least User level (per MS: "at least the user level Read
-        // privilege to see the reports' data" — applied per verb). A "report" is any user with access to the record:
-        // its owning user, a member of its owning team, or a user the record is shared to (PoA), directly or via a team.
+        // depth, and Write/Append/AppendTo on a DIRECT report (distance 1) only — never Delete/Assign/Share. The gate is
+        // at least User-level READ on the table (per MS: "a manager must have at least the user level Read privilege to
+        // see the reports' data") — once read is held the model confers the direct-report write set regardless of the
+        // higher user's own write privilege. A "report" is any user with access to the record: its owning user, a member
+        // of its owning team, or a user the record is shared to (PoA), directly or via a team.
         // The manager model requires the higher user to be in the report's BU or its parent; the position model does not
         // (it spans business units).
         private bool HasHierarchyAccess(Guid userId, string table, Privilege privilege, Entity record)
@@ -641,8 +650,9 @@ namespace Vela.Testing.Security
                 return false; // Delete/Assign/Share/Create are never conferred by the hierarchy
             }
 
-            // Precondition: the higher user must already hold the requested privilege at at least User level.
-            if (!GrantedLevels(userId, table, privilege).Any())
+            // Precondition (MS hierarchy security): the higher user must hold at least User-level Read on the table —
+            // that is the single gate; the direct-report write set is then conferred by the model itself.
+            if (!GrantedLevels(userId, table, Privilege.Read).Any())
             {
                 return false;
             }

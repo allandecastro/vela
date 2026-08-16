@@ -21,8 +21,8 @@ namespace Vela.Testing.Tests
         private static SecurityConfiguration Scenario(SecurityConfiguration s) => s
             .BusinessUnit(Bu)
             .Role("reader", r => r
-                .Grant("contact", Privilege.Read, AccessLevel.Organization)
-                .Grant("account", Privilege.Read, AccessLevel.User))
+                .Grant("contact", AccessLevel.Organization, Privilege.Read)
+                .Grant("account", AccessLevel.User, Privilege.Read))
             .User(Alice, Bu, "reader")
             .User(Bob, Bu, "reader");
 
@@ -86,7 +86,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(Bu)
-                    .Role("contactonly", r => r.Grant("contact", Privilege.Read, AccessLevel.Organization)) // no account read at all
+                    .Role("contactonly", r => r.Grant("contact", AccessLevel.Organization, Privilege.Read)) // no account read at all
                     .User(Alice, Bu, "contactonly"))
                 .Seed(
                     new Entity("account", account) { ["name"] = "Zava", ["ownerid"] = new EntityReference("systemuser", Bob) },
@@ -109,9 +109,9 @@ namespace Vela.Testing.Tests
                 .WithSecurity(s => s
                     .BusinessUnit(Bu)
                     .Role("reader", r => r
-                        .Grant("task", Privilege.Read, AccessLevel.Organization)
-                        .Grant("contact", Privilege.Read, AccessLevel.Organization)
-                        .Grant("account", Privilege.Read, AccessLevel.User)) // only her own accounts
+                        .Grant("task", AccessLevel.Organization, Privilege.Read)
+                        .Grant("contact", AccessLevel.Organization, Privilege.Read)
+                        .Grant("account", AccessLevel.User, Privilege.Read)) // only her own accounts
                     .User(Alice, Bu, "reader")
                     .User(Bob, Bu, "reader"))
                 .Seed(
@@ -141,8 +141,8 @@ namespace Vela.Testing.Tests
                 .WithSecurity(s => s
                     .BusinessUnit(Bu)
                     .Role("reader", r => r
-                        .Grant("account", Privilege.Read, AccessLevel.Organization)
-                        .Grant("contact", Privilege.Read, AccessLevel.User)) // only her own contacts
+                        .Grant("account", AccessLevel.Organization, Privilege.Read)
+                        .Grant("contact", AccessLevel.User, Privilege.Read)) // only her own contacts
                     .User(Alice, Bu, "reader")
                     .User(Bob, Bu, "reader"))
                 .Seed(

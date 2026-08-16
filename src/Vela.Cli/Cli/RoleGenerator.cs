@@ -92,7 +92,7 @@ public static class RoleGenerator
             .OrderBy(g => g.Entity, StringComparer.Ordinal)
             .ThenBy(g => g.Privilege, StringComparer.Ordinal))
         {
-            sb.AppendLine($"            r.Grant(\"{Escape(grant.Entity)}\", Privilege.{grant.Privilege}, AccessLevel.{grant.AccessLevel});");
+            sb.AppendLine($"            r.Grant(\"{Escape(grant.Entity)}\", AccessLevel.{grant.AccessLevel}, Privilege.{grant.Privilege});");
         }
 
         sb.AppendLine("        }");
