@@ -277,5 +277,113 @@ namespace Vela.Testing.Tests
             Assert.Equal(Alice, child.GetAttributeValue<EntityReference>("ownerid").Id);
             Assert.Equal(SalesBu, child.GetAttributeValue<EntityReference>("owningbusinessunit").Id); // followed the new owner
         }
+
+        [Fact]
+        public void Cascaded_assign_to_a_team_stamps_owning_team_columns_on_children()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            Guid team = new Guid("7ea11000-0000-0000-0000-000000000305");
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithParentalRelationship("account", "contact", "parentcustomerid")
+                .Seed(AccountOwned(account, Bob), ContactOwned(contact, account, Bob)); // child starts user-owned
+
+            svc.Execute(new AssignRequest
+            {
+                Target = new EntityReference("account", account),
+                Assignee = new EntityReference("team", team),
+            });
+
+            Entity child = Assert.Single(svc.GetAll("contact"));
+            EntityReference owningTeam = child.GetAttributeValue<EntityReference>("owningteam");
+            Assert.Equal(team, owningTeam.Id);
+            Assert.Equal("team", owningTeam.LogicalName); // team branch of the owner stamping, not the systemuser branch
+            Assert.False(child.Contains("owninguser"));   // the user column is cleared on a team reassignment
+        }
+
+        [Fact]
+        public void Cascaded_assign_to_a_user_stamps_owning_user_columns_on_children()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            Guid team = new Guid("7ea11000-0000-0000-0000-000000000306");
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithParentalRelationship("account", "contact", "parentcustomerid")
+                .Seed(
+                    AccountOwned(account, Bob),
+                    new Entity("contact", contact)
+                    {
+                        ["parentcustomerid"] = new EntityReference("account", account),
+                        ["ownerid"] = new EntityReference("team", team), // child starts team-owned
+                    });
+
+            svc.Execute(new AssignRequest
+            {
+                Target = new EntityReference("account", account),
+                Assignee = new EntityReference("systemuser", Alice),
+            });
+
+            Entity child = Assert.Single(svc.GetAll("contact"));
+            EntityReference owningUser = child.GetAttributeValue<EntityReference>("owninguser");
+            Assert.Equal(Alice, owningUser.Id);
+            Assert.Equal("systemuser", owningUser.LogicalName); // user branch of the owner stamping
+            Assert.False(child.Contains("owningteam"));         // the team column is cleared on a user reassignment
+        }
+
+        [Fact]
+        public void Active_scope_assign_cascades_only_active_children()
+        {
+            Guid account = Guid.NewGuid();
+            Guid activeChild = Guid.NewGuid();
+            Guid inactiveChild = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithRelationship("account", "contact", "parentcustomerid", new CascadeConfiguration { Assign = CascadeType.Active })
+                .Seed(
+                    AccountOwned(account, Bob),
+                    ContactOwned(activeChild, account, Bob), // no statecode -> active
+                    new Entity("contact", inactiveChild)
+                    {
+                        ["parentcustomerid"] = new EntityReference("account", account),
+                        ["ownerid"] = new EntityReference("systemuser", Bob),
+                        ["statecode"] = new OptionSetValue(1), // inactive
+                    });
+
+            svc.Execute(new AssignRequest
+            {
+                Target = new EntityReference("account", account),
+                Assignee = new EntityReference("systemuser", Alice),
+            });
+
+            Assert.Equal(Alice, OwnerOf(svc, activeChild));  // active child cascaded
+            Assert.Equal(Bob, OwnerOf(svc, inactiveChild));  // inactive child left alone (Active scope)
+        }
+
+        [Fact]
+        public void Parental_assign_cascades_through_multiple_levels()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            Guid task = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithParentalRelationship("account", "contact", "parentcustomerid")
+                .WithParentalRelationship("contact", "task", "regardingcontactid")
+                .Seed(
+                    AccountOwned(account, Bob),
+                    ContactOwned(contact, account, Bob),
+                    new Entity("task", task)
+                    {
+                        ["regardingcontactid"] = new EntityReference("contact", contact),
+                        ["ownerid"] = new EntityReference("systemuser", Bob),
+                    });
+
+            svc.Execute(new AssignRequest
+            {
+                Target = new EntityReference("account", account),
+                Assignee = new EntityReference("systemuser", Alice),
+            });
+
+            // The grandchild (task under contact under account) is reassigned too — the cascade recurses down levels.
+            Assert.Equal(Alice, svc.Retrieve("task", task, new ColumnSet(true)).GetAttributeValue<EntityReference>("ownerid").Id);
+        }
     }
 }

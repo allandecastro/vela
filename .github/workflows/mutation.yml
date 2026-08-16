@@ -264,8 +264,10 @@ jobs:
       # The security ENFORCEMENT wiring (DemandAccess/CanAccess, cascade delete/assign/share, FLS masking + write
       # rejection, inherited access, share clamping, owner-BU realign, the read filter and the membership tables) is
       # isolated in the InMemoryOrganizationService.Security.cs partial, so the gate measures only that surface — not
-      # the store's query/versioning/seed code. --break-at 0 measures first; the "List surviving mutants" step dumps
-      # survivors so they can be killed, then the gate is ratcheted from 0.
+      # the store's query/versioning/seed code. Measured at ~81.4% after killing the real survivors; --break-at is
+      # ratcheted to 79 (~2pts below). Remaining survivors are mostly equivalent (guard-clause early returns whose
+      # downstream also guards, fault-message strings, owner-column removals the system field applier re-derives) plus
+      # the cascade share/unshare recursion; the "List surviving mutants" step dumps them for future triage.
       - name: Mutation test — enforcement wiring (InMemoryOrganizationService.Security)
         working-directory: tests/Vela.Testing.Tests
         run: >
@@ -273,7 +275,7 @@ jobs:
           --solution ../../Vela.sln
           --mutate "**/Fakes/InMemoryOrganizationService.Security.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 0 --threshold-low 70 --threshold-high 85
+          --break-at 79 --threshold-low 79 --threshold-high 90
       - name: List surviving mutants
         if: always()
         shell: powershell
