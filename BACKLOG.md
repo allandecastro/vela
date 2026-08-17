@@ -16,14 +16,17 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   the **security enforcement wiring** (`InMemoryOrganizationService.Security.cs`) at **~84.8%** (`--break-at 82`),
   and a fourth the **security model** decision logic. A fifth job (`cli-apply`) gates the **CLI apply
   reconciliation** (`DataverseRegistration.Apply.cs` — package/assembly/type sync, resume report, stale-version
-  guard) at **~64.7%** (`--break-at 62`), covered by driving every reconcile helper through the
+  guard) at **~64.7%** (`--break-at 62`), and a sixth (`cli-customapi`) the **CLI Custom API reconciliation**
+  (`DataverseRegistration.CustomApi.cs` — customapi entity build, request/response parameter create/update/delete,
+  type-code resolver) at **~82.7%** (`--break-at 80`) — both covered by driving every reconcile helper through the
   `IOrganizationService` seam / real nupkg+assembly fixtures. Stryker can't build net462 off Windows, so the harness
   can't be measured locally, but the net10 CLI cores **can** (`dotnet-stryker --mutate "**/<file>.cs"` from
   `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows runner. **Next (P1), spread out — one CLI core
-  per slice:** the Custom-API orchestration branches in `ApplyDiff` (paired with `DataverseRegistration.CustomApi.cs`),
-  then `DataverseRegistration.cs`/`.Steps.cs` (the reader) and `PackageScanner.cs` — each gets its own `mutation.yml`
-  job and ratcheted gate as coverage lands. The apply survivors left behind are equivalent (`LogOperation` arg
-  strings, `?? "1.0.0.0"`/culture fallbacks, polling-loop `<`/`All`→`Any` bounds that need a 30s timeout to observe).
+  per slice:** the reader (`DataverseRegistration.cs`/`.Steps.cs`), then `PackageScanner.cs`, and the Custom-API
+  orchestration branches still `NoCoverage` in `ApplyDiff` — each gets its own `mutation.yml` job and ratcheted
+  gate as coverage lands. The apply/custom-api survivors left behind are equivalent (`LogOperation` arg strings,
+  `?? "1.0.0.0"`/culture fallbacks, static `ParameterSyncSpec` record literals, read-only `ColumnSet` columns,
+  polling-loop `<`/`All`→`Any` bounds that need a 30s timeout to observe).
   The harness/security survivors that remain are mostly equivalent mutants
   (exception-message strings, never-null/never-empty edges) — kill the real ones, don't chase message-text
   assertions. Remaining diff-engine survivors are equivalent (match-key lookups consistent on both diff sides).
