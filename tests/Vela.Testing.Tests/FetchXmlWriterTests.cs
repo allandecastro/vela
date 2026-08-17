@@ -203,5 +203,167 @@ namespace Vela.Testing.Tests
             string xml = query.ToFetchXml();
             Assert.Contains("<attribute name=\"createdon\" alias=\"m\" groupby=\"true\" dategrouping=\"month\"", xml);
         }
+
+        // ---- branch coverage: every switch arm (operators, link types, aggregates, date groupings, value types) ----
+
+        [Fact]
+        public void Emits_every_aggregate_function()
+        {
+            QueryExpression query = new QueryExpression("account") { ColumnSet = new ColumnSet() };
+            foreach ((string alias, XrmAggregateType type) in new[]
+            {
+                ("s", XrmAggregateType.Sum), ("c", XrmAggregateType.Count), ("cc", XrmAggregateType.CountColumn),
+                ("a", XrmAggregateType.Avg), ("mn", XrmAggregateType.Min), ("mx", XrmAggregateType.Max),
+            })
+            {
+                query.ColumnSet.AttributeExpressions.Add(new XrmAttributeExpression { AttributeName = "revenue", Alias = alias, AggregateType = type });
+            }
+
+            string xml = query.ToFetchXml();
+            foreach (string fn in new[] { "sum", "count", "countcolumn", "avg", "min", "max" })
+            {
+                Assert.Contains($"aggregate=\"{fn}\"", xml);
+            }
+        }
+
+        [Fact]
+        public void Emits_every_date_grouping()
+        {
+            QueryExpression query = new QueryExpression("account") { ColumnSet = new ColumnSet() };
+            foreach (XrmDateTimeGrouping grouping in new[]
+            {
+                XrmDateTimeGrouping.Day, XrmDateTimeGrouping.Week, XrmDateTimeGrouping.Month, XrmDateTimeGrouping.Quarter,
+                XrmDateTimeGrouping.Year, XrmDateTimeGrouping.FiscalPeriod, XrmDateTimeGrouping.FiscalYear,
+            })
+            {
+                query.ColumnSet.AttributeExpressions.Add(new XrmAttributeExpression { AttributeName = "createdon", Alias = grouping.ToString(), HasGroupBy = true, DateTimeGrouping = grouping });
+            }
+
+            string xml = query.ToFetchXml();
+            foreach (string g in new[] { "day", "week", "month", "quarter", "year", "fiscal-period", "fiscal-year" })
+            {
+                Assert.Contains($"dategrouping=\"{g}\"", xml);
+            }
+        }
+
+        [Fact]
+        public void Emits_every_link_type()
+        {
+            QueryExpression query = new QueryExpression("account");
+            foreach (JoinOperator op in new[]
+            {
+                JoinOperator.LeftOuter, JoinOperator.Natural, JoinOperator.Exists, JoinOperator.In,
+                JoinOperator.MatchFirstRowUsingCrossApply, JoinOperator.Any, JoinOperator.NotAny, JoinOperator.All, JoinOperator.NotAll,
+            })
+            {
+                query.LinkEntities.Add(new LinkEntity("account", "contact", "accountid", "parentcustomerid", op));
+            }
+            // Inner has no link-type attribute (FetchXML default).
+            query.LinkEntities.Add(new LinkEntity("account", "contact", "accountid", "parentcustomerid", JoinOperator.Inner) { Columns = new ColumnSet(true) });
+
+            string xml = query.ToFetchXml();
+            foreach (string lt in new[] { "outer", "natural", "exists", "in", "matchfirstrowusingcrossapply", "any", "not any", "all", "not all" })
+            {
+                Assert.Contains($"link-type=\"{lt}\"", xml);
+            }
+            Assert.Contains("<all-attributes />", xml); // the inner link projects all columns
+        }
+
+        [Fact]
+        public void Emits_kebab_cased_operator_and_entityname()
+        {
+            QueryExpression query = new QueryExpression("account");
+            query.Criteria.AddCondition(new ConditionExpression("acct", "createdon", ConditionOperator.OnOrAfter, new DateTime(2024, 1, 15)));
+
+            string xml = query.ToFetchXml();
+            Assert.Contains("operator=\"on-or-after\"", xml);                 // kebab-case fallback for a date operator
+            Assert.Contains("entityname=\"acct\"", xml);                       // condition targets a linked alias
+            Assert.Contains("value=\"2024-01-15T00:00:00\"", xml);             // DateTime formatting
+        }
+
+        [Fact]
+        public void Emits_bool_value_all_attributes_and_paging()
+        {
+            QueryExpression query = new QueryExpression("account")
+            {
+                ColumnSet = new ColumnSet(true),
+                PageInfo = new PagingInfo { PageNumber = 2, Count = 50, PagingCookie = "<cookie/>", ReturnTotalRecordCount = true },
+            };
+            query.Criteria.AddCondition("donotemail", ConditionOperator.Equal, true);
+
+            string xml = query.ToFetchXml();
+            Assert.Contains("<all-attributes />", xml);
+            Assert.Contains("count=\"50\"", xml);
+            Assert.Contains("page=\"2\"", xml);
+            Assert.Contains("returntotalrecordcount=\"true\"", xml);
+            Assert.Contains("value=\"true\"", xml); // bool formatting
+        }
+
+        [Fact]
+        public void Emits_a_minimal_query_with_no_criteria()
+        {
+            string xml = new QueryExpression("account").ToFetchXml();
+            Assert.Contains("<fetch><entity name=\"account\"", xml);
+            Assert.DoesNotContain("<filter", xml);
+            Assert.DoesNotContain("<order", xml);
+        }
+
+        [Fact]
+        public void Emits_the_full_comparison_operator_map()
+        {
+            (ConditionOperator Op, string Fetch)[] operators =
+            {
+                (ConditionOperator.Equal, "eq"), (ConditionOperator.NotEqual, "ne"),
+                (ConditionOperator.GreaterThan, "gt"), (ConditionOperator.GreaterEqual, "ge"),
+                (ConditionOperator.LessThan, "lt"), (ConditionOperator.LessEqual, "le"),
+                (ConditionOperator.Like, "like"), (ConditionOperator.NotLike, "not-like"),
+                (ConditionOperator.BeginsWith, "begins-with"), (ConditionOperator.DoesNotBeginWith, "not-begin-with"),
+                (ConditionOperator.EndsWith, "ends-with"), (ConditionOperator.DoesNotEndWith, "not-end-with"),
+            };
+
+            QueryExpression query = new QueryExpression("account");
+            foreach ((ConditionOperator op, string _) in operators)
+            {
+                query.Criteria.AddCondition("name", op, "x");
+            }
+
+            string xml = query.ToFetchXml();
+            foreach ((ConditionOperator _, string fetch) in operators)
+            {
+                Assert.Contains($"operator=\"{fetch}\"", xml);
+            }
+        }
+
+        [Fact]
+        public void Emits_any_all_related_filter_and_null_value()
+        {
+            QueryExpression query = new QueryExpression("account");
+            LinkEntity anyAll = new LinkEntity("account", "contact", "accountid", "parentcustomerid", JoinOperator.Any);
+            anyAll.LinkCriteria.AddCondition("firstname", ConditionOperator.Equal, "Jane");
+            query.Criteria.AnyAllFilterLinkEntity = anyAll; // "accounts that have any contact named Jane"
+            query.Criteria.AddCondition(new ConditionExpression("name", ConditionOperator.Equal, new object[] { null }));
+
+            string xml = query.ToFetchXml();
+            Assert.Contains("link-type=\"any\"", xml);        // Any/All related-record filter emitted inside the filter
+            Assert.Contains("operator=\"eq\" value=\"\"", xml); // a null condition value formats to empty
+        }
+
+        [Fact]
+        public void Emits_set_and_null_operators()
+        {
+            QueryExpression query = new QueryExpression("account");
+            query.Criteria.AddCondition("name", ConditionOperator.In, "a", "b");
+            query.Criteria.AddCondition("name", ConditionOperator.NotIn, "c", "d");
+            query.Criteria.AddCondition("numberofemployees", ConditionOperator.Between, 1, 9);
+            query.Criteria.AddCondition("numberofemployees", ConditionOperator.NotBetween, 1, 9);
+            query.Criteria.AddCondition("name", ConditionOperator.Null);
+            query.Criteria.AddCondition("name", ConditionOperator.NotNull);
+
+            string xml = query.ToFetchXml();
+            foreach (string op in new[] { "in", "not-in", "between", "not-between", "null", "not-null" })
+            {
+                Assert.Contains($"operator=\"{op}\"", xml);
+            }
+        }
     }
 }
