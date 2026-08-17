@@ -495,6 +495,9 @@ What the samples show:
 
 - `Account/Plugins/AccountPostCreatePluginTests.cs` — runs `AccountPostCreatePlugin` against an
   `InMemoryOrganizationService` and asserts the follow-up `task` it creates (subject + regarding object).
+- `Account/Plugins/AccountRelatedContactsPluginTests.cs` — runs `AccountRelatedContactsPlugin`, which counts an
+  account's related contacts with the **typed FetchXML builder** (`Query.For<Contact>().ToFetchXml()`, checked at
+  compile time), and asserts the traced count.
 - `Contact/Plugins/ContactRouterPluginTests.cs` — drives a specific step of the multi-step router and asserts
   on the emitted traces via `TraceCapture`, seeding a duplicate contact first.
 - `Account/CustomApis/AccountEstimateValueCustomApiTests.cs` — invokes the typed, bound Custom API and checks
@@ -852,6 +855,98 @@ $$"""
 """;
 
     // ---- Plugin code (Plugins project) -----------------------------------
+
+    public static string AccountRelatedContactsPlugin(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Account.Plugins
+{
+    using Vela.Constants;
+    using Vela.Context;
+    using Vela.Plugin;
+    using Vela.Querying;
+    using Vela.StepBuilder;
+    using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Query;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Single-step plugin: after an account is updated, counts the contacts that reference it. The query is authored
+    /// with the TYPED FetchXML builder — <c>Query.For&lt;Contact&gt;()</c> — so table and column names are checked at
+    /// compile time (a typo won't build), then emitted as FetchXML with <c>ToFetchXml()</c> and executed. It's the
+    /// same FetchXML you'd paste from FetchXML Builder, but refactor-safe.
+    /// </summary>
+    public sealed class AccountRelatedContactsPlugin : EntityPluginBase<Account>
+    {
+        public AccountRelatedContactsPlugin(string unsecureConfig, string secureConfig)
+            : base(unsecureConfig, secureConfig)
+        {
+        }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterSteps().OnUpdate()
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .FilteringAttributes(a => a.Name)
+                .Description("Counts the contacts related to an account after it is updated.");
+        }
+
+        protected override void Execute(ILocalPluginContext ctx, Account target)
+        {
+            string fetchXml = Query.For<Contact>()
+                .Select(c => c.FirstName, c => c.LastName)
+                .Where(c => c.ParentCustomerId, ConditionOperator.Equal, target.Id)
+                .ToFetchXml();
+
+            EntityCollection contacts = ctx.UserService.RetrieveMultiple(new FetchExpression(fetchXml));
+            ctx.Trace("Account {0} has {1} related contact(s).", target.Id, contacts.Entities.Count);
+        }
+    }
+}
+""";
+
+    public static string AccountRelatedContactsPluginTests(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Tests.Account.Plugins
+{
+    using System;
+    using Vela.Constants;
+    using Vela.StepBuilder;
+    using Vela.Testing;
+    using Microsoft.Xrm.Sdk;
+    using Xunit;
+    using {{prefix}}.Plugins.Account.Plugins;
+    using {{prefix}}.Shared.Models;
+
+    /// <summary>
+    /// Tests <see cref="AccountRelatedContactsPlugin"/> against an in-memory Dataverse: seeds an account with two
+    /// contacts and asserts the plugin's typed FetchXML query counts them (the query runs through the harness's real
+    /// FetchXML path, so the emitted string is exercised end to end).
+    /// </summary>
+    public sealed class AccountRelatedContactsPluginTests
+    {
+        [Fact]
+        public void Counts_the_related_contacts_via_the_typed_fetchxml_builder()
+        {
+            Guid accountId = Guid.NewGuid();
+            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
+                new Account { Id = accountId, Name = "Zava" },
+                new Contact { Id = Guid.NewGuid(), FirstName = "Jane", ParentCustomerId = new EntityReference(Account.EntityLogicalNameValue, accountId) },
+                new Contact { Id = Guid.NewGuid(), FirstName = "John", ParentCustomerId = new EntityReference(Account.EntityLogicalNameValue, accountId) });
+
+            PluginContextBuilder<Account> builder = PluginContext.For<Account>()
+                .OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+                .WithPrimaryEntity(Account.EntityLogicalNameValue, accountId)
+                .WithTarget(new Account { Id = accountId, Name = "Zava (renamed)" })
+                .WithOrganizationService(crm);
+
+            builder.Execute(new AccountRelatedContactsPlugin(string.Empty, string.Empty));
+
+            Assert.Contains("has 2 related contact", builder.TraceCapture.Output);
+        }
+    }
+}
+""";
 
     public static string AccountPostCreatePlugin(string prefix) =>
 $$"""

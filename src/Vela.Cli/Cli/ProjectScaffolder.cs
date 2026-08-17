@@ -87,6 +87,7 @@ internal static class ProjectScaffolder
         AddProject(pluginsName, "src");
         Write(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion));
         Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountPostCreatePlugin.cs"), AccountPostCreatePlugin(prefix));
+        Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountRelatedContactsPlugin.cs"), AccountRelatedContactsPlugin(prefix));
         Write(Path.Combine("src", pluginsName, "Account", "Services", "AccountFollowUpService.cs"), AccountFollowUpService(prefix));
         Write(Path.Combine("src", pluginsName, "Account", "CustomApis", "AccountEstimateValueCustomApi.cs"), AccountEstimateValueCustomApi(prefix));
         Write(Path.Combine("src", pluginsName, "Contact", "Plugins", "ContactRouterPlugin.cs"), ContactRouterPlugin(prefix));
@@ -115,6 +116,7 @@ internal static class ProjectScaffolder
             Write(Path.Combine("tests", testsName, $"{testsName}.csproj"), TestsCsproj(testsName, pluginsName, sharedName, options.CoreVersion));
             Write(Path.Combine("tests", testsName, "Security", "SecurityExampleTests.cs"), SecurityExampleTests(prefix));
             Write(Path.Combine("tests", testsName, "Account", "Plugins", "AccountPostCreatePluginTests.cs"), AccountPostCreatePluginTests(prefix));
+            Write(Path.Combine("tests", testsName, "Account", "Plugins", "AccountRelatedContactsPluginTests.cs"), AccountRelatedContactsPluginTests(prefix));
             Write(Path.Combine("tests", testsName, "Account", "CustomApis", "AccountEstimateValueCustomApiTests.cs"), AccountEstimateValueCustomApiTests(prefix));
             Write(Path.Combine("tests", testsName, "Contact", "Plugins", "ContactRouterPluginTests.cs"), ContactRouterPluginTests(prefix));
             Write(Path.Combine("tests", testsName, "Contact", "CustomApis", "ContactValidateCustomApiTests.cs"), ContactValidateCustomApiTests(prefix));

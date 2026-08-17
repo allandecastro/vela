@@ -572,6 +572,22 @@ Also available on the builder: `Distinct()`, `Page(n, count)`, `WithTotalRecordC
 `WhereRelated<TTo>(…, JoinOperator.Any/All/NotAny/NotAll, …)`, and aggregates
 `GroupBy(…)/Count/Sum/Average/Min/Max(…, alias)`.
 
+Need **FetchXML** (for the messages/tools that require the string — Rollup, saved queries, pasting from FetchXML
+Builder)? Author it typed and emit it with `ToFetchXml()` — the same query, checked at compile time, no IDE
+extension needed:
+
+```csharp
+string fetchXml = Query.For<Contact>()
+    .Select(c => c.FullName)
+    .Where(c => c.ParentCustomerId, ConditionOperator.Equal, accountId)
+    .OrderBy(c => c.FullName)
+    .ToFetchXml();
+// FetchXML-only extras QueryExpression can't hold: .LateMaterialize(), .AggregateLimit(n)
+```
+
+`ToFetchXml()` is also an extension on a plain `QueryExpression`. A table/column typo is a build error, not a
+runtime `FaultException`.
+
 ## Write a Custom API
 
 For Custom APIs, use `CustomApiBase<TRequest, TResponse>` and the fluent registration hook:

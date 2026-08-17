@@ -60,9 +60,13 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
     /// <inheritdoc />
     public EntityCollection RetrieveMultiple(QueryBase query)
     {
-        string details = query is QueryExpression expression
-            ? $"query=QueryExpression; entity={expression.EntityName}; top={expression.TopCount?.ToString() ?? "null"}"
-            : $"query={query?.GetType().Name ?? "null"}";
+        string details = query switch
+        {
+            QueryExpression expression => $"query=QueryExpression; entity={expression.EntityName}; top={expression.TopCount?.ToString() ?? "null"}",
+            FetchExpression fetch => $"query=FetchExpression; fetchxml={fetch.Query}",
+            QueryByAttribute byAttribute => $"query=QueryByAttribute; entity={byAttribute.EntityName}",
+            _ => $"query={query?.GetType().Name ?? "null"}"
+        };
         return Trace("RetrieveMultiple", details, () => _innerService.RetrieveMultiple(query));
     }
 

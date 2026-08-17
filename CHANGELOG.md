@@ -34,6 +34,11 @@ initial release.
   `.SecureConfig(...)`, all reconciled by `vela plan`/`apply` (statecode transition + configuration). (#40)
 - **Typed attribute/context helpers** — `Contains`/`ContainsAny` (attribute presence), `HasChanged`/
   `HasAnyChanged` (Target vs registered pre-image), and `GetFormattedValue`. (#49, #50)
+- **Typed FetchXML** — `Query.For<T>()` (and any `QueryExpression`) now serializes to a FetchXML string with
+  `ToFetchXml()`, for the messages/tools that require FetchXML (Rollup, saved queries, pasting from FetchXML
+  Builder). The query is authored typed (compile-time IntelliSense + typo-safety, editor-agnostic), so a
+  table/column typo is a build error. FetchXML-only extras via `FetchXmlOptions` / `LateMaterialize()` /
+  `AggregateLimit(n)`. `TracingOrganizationService` now logs the FetchXML string of a `FetchExpression`.
 - **Shared-variable helpers** — `ctx.Tag`, `ctx.GetSharedVariable(key)` and `ctx.TryGetSharedVariable<T>(...)`
   read the client-supplied `tag`, a value set by an earlier plugin, or one inherited from the parent context.
 - **File/Image column helpers** — `IOrganizationService.UploadFile(...)`, `DownloadFile(...)` and `DeleteFile(...)`
