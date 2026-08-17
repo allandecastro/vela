@@ -14,10 +14,17 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   field value. A second job mutates the **in-memory harness query core** (`InMemoryQueryEngine`, `FetchXmlParser`,
   `EntityValues`) at **~91.6%**, with `--break-at 89` (ratcheted ~2pts below the measured score). A third job gates
   the **security enforcement wiring** (`InMemoryOrganizationService.Security.cs`) at **~84.8%** (`--break-at 82`),
-  and a fourth the **security model** decision logic. Stryker can't build net462 off Windows, so the harness can't
-  be measured locally; all jobs run on the self-hosted Windows runner. **Next (P1):** extend mutation coverage to
-  the untested CLI cores (`ApplyEngine`, `PackageScanner`, `DataverseRegistrationReader` — today only branch-covered)
-  and keep ratcheting the gates. The harness/security survivors that remain are mostly equivalent mutants
+  and a fourth the **security model** decision logic. A fifth job (`cli-apply`) gates the **CLI apply
+  reconciliation** (`DataverseRegistration.Apply.cs` — package/assembly/type sync, resume report, stale-version
+  guard) at **~64.7%** (`--break-at 62`), covered by driving every reconcile helper through the
+  `IOrganizationService` seam / real nupkg+assembly fixtures. Stryker can't build net462 off Windows, so the harness
+  can't be measured locally, but the net10 CLI cores **can** (`dotnet-stryker --mutate "**/<file>.cs"` from
+  `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows runner. **Next (P1), spread out — one CLI core
+  per slice:** the Custom-API orchestration branches in `ApplyDiff` (paired with `DataverseRegistration.CustomApi.cs`),
+  then `DataverseRegistration.cs`/`.Steps.cs` (the reader) and `PackageScanner.cs` — each gets its own `mutation.yml`
+  job and ratcheted gate as coverage lands. The apply survivors left behind are equivalent (`LogOperation` arg
+  strings, `?? "1.0.0.0"`/culture fallbacks, polling-loop `<`/`All`→`Any` bounds that need a 30s timeout to observe).
+  The harness/security survivors that remain are mostly equivalent mutants
   (exception-message strings, never-null/never-empty edges) — kill the real ones, don't chase message-text
   assertions. Remaining diff-engine survivors are equivalent (match-key lookups consistent on both diff sides).
 

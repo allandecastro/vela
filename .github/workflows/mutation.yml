@@ -313,9 +313,9 @@ jobs:
           path: tests/Vela.Testing.Tests/StrykerOutput/**/reports/mutation-report.html
           if-no-files-found: ignore
 
-  cli-cores:
+  cli-apply:
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 60 # apply/reader/scanner are a large net10 surface; measure-first
+    timeout-minutes: 60 # apply reconciliation is a large net10 surface
     env:
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
     steps:
@@ -332,20 +332,21 @@ jobs:
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
         run: dotnet tool update -g dotnet-stryker
-      # The CLI plan/apply cores: the DataverseRegistration reconciliation (reading registrations + applying plugin
-      # steps and Custom APIs) and the plugin-package scanner. net10-only, so no --solution. --break-at 0 measures
-      # first; the "List surviving mutants" step below dumps survivors so the real ones can be killed, then the gate
-      # is ratcheted from 0.
-      - name: Mutation test — CLI plan/apply cores
+      # The apply reconciliation core (DataverseRegistration.Apply): package/assembly/type sync, the resume report,
+      # and the stale-assembly-version guard, all driven through the IOrganizationService seam. net10-only, so no
+      # --solution. Measured at ~64.7% after covering the reconcile helpers (the remaining survivors are equivalent
+      # log-arg/culture/version fallbacks and the polling-loop bounds, plus the Custom-API orchestration branches
+      # which are covered as a later slice with DataverseRegistration.CustomApi.cs); --break-at is ratcheted to 62.
+      # The other CLI cores (DataverseRegistration.cs/.Steps/.CustomApi, PackageScanner) get their own jobs as
+      # coverage lands — see BACKLOG.
+      - name: Mutation test — CLI apply reconciliation
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
-          --mutate "**/DataverseRegistration.cs" --mutate "**/DataverseRegistration.Apply.cs"
-          --mutate "**/DataverseRegistration.Steps.cs" --mutate "**/DataverseRegistration.CustomApi.cs"
-          --mutate "**/PackageScanner.cs"
+          --mutate "**/DataverseRegistration.Apply.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 0 --threshold-low 70 --threshold-high 85
-      - name: List surviving mutants
+          --break-at 62 --threshold-low 62 --threshold-high 80
+      - name: List surviving mutants (apply)
         if: always()
         shell: powershell
         run: |
@@ -376,6 +377,6 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: mutation-report-cli-cores
+          name: mutation-report-cli-apply
           path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
           if-no-files-found: ignore
