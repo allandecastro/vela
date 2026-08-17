@@ -51,11 +51,13 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   `ToFetchXml()` (no new builder — `TypedQuery` already had the full typed fluent API, so this is just the
   `FetchXmlWriter` serializer + the FetchXML-only emit knobs `LateMaterialize()`/`AggregateLimit(n)`).
   `TracingOrganizationService` now logs the FetchXML string; `vela init` ships an example plugin + harness test.
-  **Deferred (P3, small emit-only follow-ups):** `countcolumn distinct`, `usertimezone` (UTC date grouping),
-  `rowaggregate` (hierarchical), `useraworderby`, SQL `options`, `datasource='retained'`, order-by-aggregate-alias.
+- **P1 — FetchXML long-tail (emit-only knobs).** Round out `ToFetchXml()` with the remaining FetchXML-only settings
+  QueryExpression can't hold, each a small emit-only knob on the builder + writer: `countcolumn distinct`,
+  `usertimezone` (UTC date grouping), `rowaggregate` (hierarchical), `useraworderby`, SQL `options`,
+  `datasource='retained'`, and order-by-aggregate-alias. Snapshot-tested (they don't round-trip through the harness).
 
 - **P3 — nuget.org publishing path** — the packages are not yet published; document/automate the release.
-- **P3 — A proper documentation wiki / site.** Grow beyond the (large) README into a navigable wiki with
+- **P1 — A proper documentation wiki / site.** Grow beyond the (large) README into a navigable wiki with
   progressive complexity, mirroring what rezanid/xrmtools does well: **Getting started** (install, quickstart,
   first plugin), **Guides** (plugins, Custom APIs, `vela add`, DI, caching, testing with `Vela.Testing`, the
   security model, `vela models`/roles, `plan`/`apply`, signing), **Configuration** (auth, secrets, environments),
@@ -75,8 +77,9 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 - `MainOperation` reserved for Custom APIs; plugin stage/image rules — platform constraints.
 - Multi-select option set as a Custom API parameter type — **not supported by Dataverse** (`customapifieldtype`
   has no such value), so nothing to implement.
-- CLI managing solutions, security roles, web resources, environment variables — out of scope (solution
-  tooling's job).
+- CLI **managing** (create/update/delete) solutions, security roles, web resources, environment variables — out of
+  scope (solution tooling's job). Note: **reading** roles to generate a test-project `Roles` class (`vela models
+  --roles`) is different and already shipped.
 - **Entra ID (Azure AD) group teams** — out of scope for the harness security model (which now covers
   roles/privileges/BU/teams, sharing, 1:N cascades, access teams, manager **and** position hierarchy, and
   field-level security — see the "Test harness" section above). CLI **management** of security-role templates
