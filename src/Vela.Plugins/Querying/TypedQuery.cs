@@ -211,6 +211,37 @@ public sealed class TypedQuery<TEntity>
         return this;
     }
 
+    /// <summary>
+    /// Emit <c>latematerialize='true'</c> in <see cref="ToFetchXml"/> (a FetchXML-only performance hint). Has no
+    /// effect when the query runs as a <see cref="QueryExpression"/>.
+    /// </summary>
+    public TypedQuery<TEntity> LateMaterialize()
+    {
+        FetchOptions.LateMaterialize = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Emit a custom <c>aggregatelimit</c> in <see cref="ToFetchXml"/> (FetchXML-only). Has no effect when the query
+    /// runs as a <see cref="QueryExpression"/>.
+    /// </summary>
+    public TypedQuery<TEntity> AggregateLimit(int limit)
+    {
+        FetchOptions.AggregateLimit = limit;
+        return this;
+    }
+
+    /// <summary>
+    /// Serializes this query to a FetchXML string — the same query authored with compile-time type safety, emitted
+    /// for the messages/tools that require FetchXML. FetchXML-only settings (<see cref="LateMaterialize"/>,
+    /// <see cref="AggregateLimit"/>) are included; everything else comes from the underlying query.
+    /// </summary>
+    public string ToFetchXml() => FetchXmlWriter.Write(Expression, _fetchOptions);
+
+    private FetchXmlOptions FetchOptions => _fetchOptions ??= new FetchXmlOptions();
+
+    private FetchXmlOptions? _fetchOptions;
+
     /// <summary>Returns the underlying <see cref="QueryExpression"/>.</summary>
     public QueryExpression Build()
     {

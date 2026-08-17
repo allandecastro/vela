@@ -141,6 +141,14 @@ public static class QueryExpressionExtensions
 
         return link;
     }
+
+    /// <summary>
+    /// Serializes this <see cref="QueryExpression"/> to a FetchXML string (offline, no connection) — for the
+    /// messages and tools that require FetchXML. See <see cref="FetchXmlWriter"/>. Optional
+    /// <paramref name="options"/> add FetchXML-only settings QueryExpression can't represent.
+    /// </summary>
+    public static string ToFetchXml(this QueryExpression query, FetchXmlOptions? options = null)
+        => FetchXmlWriter.Write(query ?? throw new ArgumentNullException(nameof(query)), options);
 }
 
 /// <summary>
