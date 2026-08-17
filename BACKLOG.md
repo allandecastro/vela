@@ -18,15 +18,18 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   reconciliation** (`DataverseRegistration.Apply.cs` — package/assembly/type sync, resume report, stale-version
   guard) at **~64.7%** (`--break-at 62`), and a sixth (`cli-customapi`) the **CLI Custom API reconciliation**
   (`DataverseRegistration.CustomApi.cs` — customapi entity build, request/response parameter create/update/delete,
-  type-code resolver) at **~82.7%** (`--break-at 80`) — both covered by driving every reconcile helper through the
-  `IOrganizationService` seam / real nupkg+assembly fixtures. Stryker can't build net462 off Windows, so the harness
-  can't be measured locally, but the net10 CLI cores **can** (`dotnet-stryker --mutate "**/<file>.cs"` from
-  `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows runner. **Next (P1), spread out — one CLI core
-  per slice:** the reader (`DataverseRegistration.cs`/`.Steps.cs`), then `PackageScanner.cs`, and the Custom-API
-  orchestration branches still `NoCoverage` in `ApplyDiff` — each gets its own `mutation.yml` job and ratcheted
-  gate as coverage lands. The apply/custom-api survivors left behind are equivalent (`LogOperation` arg strings,
-  `?? "1.0.0.0"`/culture fallbacks, static `ParameterSyncSpec` record literals, read-only `ColumnSet` columns,
-  polling-loop `<`/`All`→`Any` bounds that need a 30s timeout to observe).
+  type-code resolver) at **~82.7%** (`--break-at 80`), and a seventh (`cli-reader`) the **CLI plan reader**
+  (`DataverseRegistration.cs` — reads assemblies/types/steps/Custom APIs out of Dataverse and maps them to the diff
+  shape) at **~85.3%** (`--break-at 83`; the live-connection methods carry a `// Stryker disable all` block since a
+  real `ServiceClient` can't run offline) — all covered by driving every helper through the `IOrganizationService`
+  seam / real nupkg+assembly fixtures. Stryker can't build net462 off Windows, so the harness can't be measured
+  locally, but the net10 CLI cores **can** (`dotnet-stryker --mutate "**/<file>.cs"` from `tests/Vela.Cli.Tests`);
+  all jobs run on the self-hosted Windows runner. **Next (P1), spread out — one CLI core per slice:** the step
+  reader (`DataverseRegistration.Steps.cs`), then `PackageScanner.cs`, and the Custom-API orchestration branches
+  still `NoCoverage` in `ApplyDiff` — each gets its own `mutation.yml` job and ratcheted gate as coverage lands.
+  The apply/custom-api/reader survivors left behind are equivalent (`LogOperation` arg strings, `?? "1.0.0.0"`/
+  culture fallbacks, static `ParameterSyncSpec` record literals, read-only `ColumnSet` columns, polling-loop
+  `<`/`All`→`Any` bounds that need a 30s timeout to observe).
   The harness/security survivors that remain are mostly equivalent mutants
   (exception-message strings, never-null/never-empty edges) — kill the real ones, don't chase message-text
   assertions. Remaining diff-engine survivors are equivalent (match-key lookups consistent on both diff sides).

@@ -22,6 +22,10 @@ namespace Vela.Cli;
 /// <summary> Reads live Dataverse registration state (assemblies, types, steps, custom APIs). </summary>
 internal static partial class DataverseRegistration
 {
+    // Stryker disable all : these three methods construct/consume a live Dataverse ServiceClient (network I/O)
+    // and cannot be exercised by an offline unit test — mutating them only yields NoCoverage noise. The reader
+    // helpers they orchestrate (GetPluginAssembly/GetPluginTypes/GetStepItems/GetCustomApiItems) are covered
+    // directly through the IOrganizationService seam.
     internal static RegistrationState BuildDataverseState(string[] sourceAssemblies, SharedOptions options, JsonSerializerOptions jsonOptions)
 {
     using ServiceClient client = CreateDataverseClient(options);
@@ -91,6 +95,7 @@ internal static partial class DataverseRegistration
 
     return client;
 }
+    // Stryker restore all
 
     internal static Entity? GetPluginAssembly(IOrganizationService service, string assemblyName)
 {
