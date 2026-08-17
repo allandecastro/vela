@@ -18,6 +18,37 @@ public sealed class FetchXmlOptions
 
     /// <summary>Emit a custom <c>aggregatelimit</c> (FetchXML-only) below the 50,000 aggregate limit.</summary>
     public int? AggregateLimit { get; set; }
+
+    /// <summary>Emit <c>options='...'</c> — SQL Server hints (FetchXML-only; use only when MS support recommends).</summary>
+    public string? SqlOptions { get; set; }
+
+    /// <summary>Emit <c>datasource='retained'</c> — query long-term-retained rows only (FetchXML-only).</summary>
+    public bool RetainedDataSource { get; set; }
+
+    /// <summary>Emit <c>useraworderby='true'</c> — sort choice columns by integer value, not label (FetchXML-only).</summary>
+    public bool RawChoiceOrder { get; set; }
+
+    /// <summary>Emit <c>usertimezone='false'</c> on date-grouping attributes — group by UTC, not the user's zone.</summary>
+    public bool UtcDateGrouping { get; set; }
+
+    /// <summary>Aggregate aliases to emit with <c>distinct='true'</c> (a distinct <c>countcolumn</c>; FetchXML-only).</summary>
+    public HashSet<string> DistinctAggregateAliases { get; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>Row aggregates (hierarchical) to emit as <c>&lt;attribute rowaggregate='...'/&gt;</c> (FetchXML-only).</summary>
+    public List<RowAggregate> RowAggregates { get; } = new List<RowAggregate>();
+}
+
+/// <summary>A FetchXML-only hierarchical row aggregate: emits <c>&lt;attribute name alias rowaggregate/&gt;</c>.</summary>
+public sealed class RowAggregate
+{
+    /// <summary>The lookup column of the hierarchical relationship.</summary>
+    public string Attribute { get; set; } = string.Empty;
+
+    /// <summary>The result column alias.</summary>
+    public string Alias { get; set; } = string.Empty;
+
+    /// <summary>The row-aggregate function name (e.g. <c>CountChildren</c>).</summary>
+    public string Function { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -87,8 +118,23 @@ public static class FetchXmlWriter
             fetch.SetAttributeValue("aggregatelimit", Int(aggregateLimit));
         }
 
+        if (!string.IsNullOrEmpty(options?.SqlOptions))
+        {
+            fetch.SetAttributeValue("options", options!.SqlOptions);
+        }
+
+        if (options?.RetainedDataSource == true)
+        {
+            fetch.SetAttributeValue("datasource", "retained");
+        }
+
+        if (options?.RawChoiceOrder == true)
+        {
+            fetch.SetAttributeValue("useraworderby", "true");
+        }
+
         XElement entity = new XElement("entity", new XAttribute("name", query.EntityName ?? string.Empty));
-        WriteColumns(entity, columns);
+        WriteColumns(entity, columns, options);
 
         XElement? criteria = WriteFilter(query.Criteria);
         if (criteria != null)
@@ -110,7 +156,9 @@ public static class FetchXmlWriter
         return fetch.ToString(SaveOptions.DisableFormatting);
     }
 
-    private static void WriteColumns(XElement parent, ColumnSet columns)
+    // options apply only to the root entity's attributes (aggregate distinct, UTC date grouping, row aggregates);
+    // links pass null.
+    private static void WriteColumns(XElement parent, ColumnSet columns, FetchXmlOptions? options = null)
     {
         if (columns == null)
         {
@@ -129,6 +177,15 @@ public static class FetchXmlWriter
             }
         }
 
+        foreach (RowAggregate rowAggregate in options?.RowAggregates ?? Enumerable.Empty<RowAggregate>())
+        {
+            parent.Add(new XElement(
+                "attribute",
+                new XAttribute("name", rowAggregate.Attribute ?? string.Empty),
+                new XAttribute("alias", rowAggregate.Alias ?? string.Empty),
+                new XAttribute("rowaggregate", rowAggregate.Function ?? string.Empty)));
+        }
+
         foreach (XrmAttributeExpression expression in columns.AttributeExpressions ?? Enumerable.Empty<XrmAttributeExpression>())
         {
             XElement attribute = new XElement("attribute", new XAttribute("name", expression.AttributeName ?? string.Empty));
@@ -143,11 +200,19 @@ public static class FetchXmlWriter
                 if (expression.DateTimeGrouping != XrmDateTimeGrouping.None)
                 {
                     attribute.SetAttributeValue("dategrouping", DateGrouping(expression.DateTimeGrouping));
+                    if (options?.UtcDateGrouping == true)
+                    {
+                        attribute.SetAttributeValue("usertimezone", "false");
+                    }
                 }
             }
             else if (expression.AggregateType != XrmAggregateType.None)
             {
                 attribute.SetAttributeValue("aggregate", AggregateName(expression.AggregateType));
+                if (!string.IsNullOrEmpty(expression.Alias) && options != null && options.DistinctAggregateAliases.Contains(expression.Alias))
+                {
+                    attribute.SetAttributeValue("distinct", "true");
+                }
             }
 
             parent.Add(attribute);
@@ -230,7 +295,10 @@ public static class FetchXmlWriter
 
     private static XElement WriteOrder(OrderExpression order)
     {
-        XElement element = new XElement("order", new XAttribute("attribute", order.AttributeName ?? string.Empty));
+        // An aggregate/group-by query orders by the result alias (<order alias='...'/>), not by an attribute.
+        XElement element = string.IsNullOrEmpty(order.Alias)
+            ? new XElement("order", new XAttribute("attribute", order.AttributeName ?? string.Empty))
+            : new XElement("order", new XAttribute("alias", order.Alias));
         if (order.OrderType == OrderType.Descending)
         {
             element.SetAttributeValue("descending", "true");

@@ -582,7 +582,9 @@ string fetchXml = Query.For<Contact>()
     .Where(c => c.ParentCustomerId, ConditionOperator.Equal, accountId)
     .OrderBy(c => c.FullName)
     .ToFetchXml();
-// FetchXML-only extras QueryExpression can't hold: .LateMaterialize(), .AggregateLimit(n)
+// FetchXML-only extras QueryExpression can't hold (emit-only): .LateMaterialize(), .AggregateLimit(n),
+// .CountColumnDistinct(col, alias), .OrderByAggregate(alias), .UtcDateGrouping(), .RowAggregate(...),
+// .RawChoiceOrder(), .FromRetainedData(), .SqlOptions("…")
 ```
 
 `ToFetchXml()` is also an extension on a plain `QueryExpression`. A table/column typo is a build error, not a

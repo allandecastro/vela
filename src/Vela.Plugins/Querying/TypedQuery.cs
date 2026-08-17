@@ -231,6 +231,61 @@ public sealed class TypedQuery<TEntity>
         return this;
     }
 
+    /// <summary>Adds a <b>distinct</b> <c>countcolumn</c> aggregate — the count of unique values (FetchXML-only).</summary>
+    public TypedQuery<TEntity> CountColumnDistinct(Expression<Func<TEntity, object?>> column, string alias)
+    {
+        AddAggregate(column, alias, XrmAggregateType.CountColumn);
+        FetchOptions.DistinctAggregateAliases.Add(alias);
+        return this;
+    }
+
+    /// <summary>Adds a hierarchical <b>row aggregate</b> on a lookup column (FetchXML-only; e.g. count of children).</summary>
+    public TypedQuery<TEntity> RowAggregate(Expression<Func<TEntity, object?>> column, string alias, string function)
+    {
+        FetchOptions.RowAggregates.Add(new RowAggregate
+        {
+            Attribute = TypedQueryNames.GetAttributeLogicalName(column),
+            Alias = alias,
+            Function = function,
+        });
+        return this;
+    }
+
+    /// <summary>Orders an aggregate/group-by query by a result <paramref name="alias"/> (<c>&lt;order alias='...'/&gt;</c>).</summary>
+    public TypedQuery<TEntity> OrderByAggregate(string alias, bool descending = false)
+    {
+        Expression.Orders.Add(new OrderExpression { Alias = alias, OrderType = descending ? OrderType.Descending : OrderType.Ascending });
+        return this;
+    }
+
+    /// <summary>Group date columns by UTC instead of the user's time zone (emits <c>usertimezone='false'</c>; FetchXML-only).</summary>
+    public TypedQuery<TEntity> UtcDateGrouping()
+    {
+        FetchOptions.UtcDateGrouping = true;
+        return this;
+    }
+
+    /// <summary>Sort choice columns by integer value, not label (emits <c>useraworderby='true'</c>; FetchXML-only).</summary>
+    public TypedQuery<TEntity> RawChoiceOrder()
+    {
+        FetchOptions.RawChoiceOrder = true;
+        return this;
+    }
+
+    /// <summary>Query long-term-retained rows only (emits <c>datasource='retained'</c>; FetchXML-only).</summary>
+    public TypedQuery<TEntity> FromRetainedData()
+    {
+        FetchOptions.RetainedDataSource = true;
+        return this;
+    }
+
+    /// <summary>Apply SQL Server query hints (emits <c>options='...'</c>; FetchXML-only, use only when MS support advises).</summary>
+    public TypedQuery<TEntity> SqlOptions(string options)
+    {
+        FetchOptions.SqlOptions = options;
+        return this;
+    }
+
     /// <summary>
     /// Serializes this query to a FetchXML string — the same query authored with compile-time type safety, emitted
     /// for the messages/tools that require FetchXML. FetchXML-only settings (<see cref="LateMaterialize"/>,

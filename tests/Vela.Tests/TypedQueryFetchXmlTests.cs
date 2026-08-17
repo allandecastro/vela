@@ -32,4 +32,25 @@ public sealed class TypedQueryFetchXmlTests
         string xml = Query.For<TestAccount>().Select(a => a.Name).LateMaterialize().ToFetchXml();
         Assert.Contains("latematerialize=\"true\"", xml);
     }
+
+    [Fact]
+    public void Fetchxml_only_long_tail_knobs_emit()
+    {
+        string xml = Query.For<TestAccount>()
+            .CountColumnDistinct(a => a.AccountId, "u")
+            .OrderByAggregate("u", descending: true)
+            .SqlOptions("HashJoin")
+            .FromRetainedData()
+            .RawChoiceOrder()
+            .UtcDateGrouping()
+            .RowAggregate(a => a.AccountId, "kids", "CountChildren")
+            .ToFetchXml();
+
+        Assert.Contains("distinct=\"true\"", xml);
+        Assert.Contains("options=\"HashJoin\"", xml);
+        Assert.Contains("datasource=\"retained\"", xml);
+        Assert.Contains("useraworderby=\"true\"", xml);
+        Assert.Contains("rowaggregate=\"CountChildren\"", xml);
+        Assert.Contains("<order alias=\"u\" descending=\"true\"", xml);
+    }
 }

@@ -309,6 +309,34 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Emits_the_fetchxml_only_long_tail_options()
+        {
+            QueryExpression query = new QueryExpression("account") { ColumnSet = new ColumnSet() };
+            query.ColumnSet.AttributeExpressions.Add(new XrmAttributeExpression { AttributeName = "numberofemployees", Alias = "u", AggregateType = XrmAggregateType.CountColumn });
+            query.ColumnSet.AttributeExpressions.Add(new XrmAttributeExpression { AttributeName = "createdon", Alias = "m", HasGroupBy = true, DateTimeGrouping = XrmDateTimeGrouping.Month });
+            query.Orders.Add(new OrderExpression { Alias = "m", OrderType = OrderType.Descending });
+
+            FetchXmlOptions options = new FetchXmlOptions
+            {
+                SqlOptions = "HashJoin",
+                RetainedDataSource = true,
+                RawChoiceOrder = true,
+                UtcDateGrouping = true,
+            };
+            options.DistinctAggregateAliases.Add("u");
+            options.RowAggregates.Add(new RowAggregate { Attribute = "accountid", Alias = "kids", Function = "CountChildren" });
+
+            string xml = query.ToFetchXml(options);
+            Assert.Contains("options=\"HashJoin\"", xml);
+            Assert.Contains("datasource=\"retained\"", xml);
+            Assert.Contains("useraworderby=\"true\"", xml);
+            Assert.Contains("usertimezone=\"false\"", xml);                       // UTC date grouping on the month attribute
+            Assert.Contains("aggregate=\"countcolumn\" distinct=\"true\"", xml);  // distinct countcolumn
+            Assert.Contains("rowaggregate=\"CountChildren\"", xml);              // hierarchical row aggregate
+            Assert.Contains("<order alias=\"m\" descending=\"true\"", xml);      // order by aggregate alias
+        }
+
+        [Fact]
         public void Emits_the_full_comparison_operator_map()
         {
             (ConditionOperator Op, string Fetch)[] operators =
