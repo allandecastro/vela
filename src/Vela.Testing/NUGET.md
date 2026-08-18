@@ -72,5 +72,5 @@ Custom APIs and message-only plugins use `PluginContext.ForMessage("vela_DoThing
 
 ## Documentation
 
-Full guide with examples: **[docs/Vela.Testing.md](https://github.com/allandecastro/vela/blob/main/docs/Vela.Testing.md)** —
+Full guide with examples: **[Testing with Vela.Testing](https://allandecastro.github.io/vela/guides/testing.html)** —
 or the repo: **https://github.com/allandecastro/vela**

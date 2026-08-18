@@ -6,9 +6,7 @@
         "exclude": [
           "_site/**",
           "obj/**",
-          "templates/**",
-          "LIMITATIONS.md",
-          "Vela.Testing.md"
+          "templates/**"
         ]
       }
     ],

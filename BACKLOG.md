@@ -2,7 +2,7 @@
 
 Planned and candidate work for Vela, grouped by area and rough priority. This is a living list — keep it in
 sync by removing items once they ship (the [`CHANGELOG.md`](CHANGELOG.md) records what shipped) or reconsidering
-them. For what is intentionally *out of scope*, see [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+them. For what is intentionally *out of scope*, see the [Limitations reference](https://allandecastro.github.io/vela/reference/limitations.html).
 
 Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** nice-to-have polish.
 
@@ -78,20 +78,18 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   `RowAggregate(…)`, `RawChoiceOrder()`, `FromRetainedData()`, `SqlOptions("…")`.
 
 - **P3 — nuget.org publishing path** — the packages are not yet published; document/automate the release.
-- **P1 — A proper documentation wiki / site.** Grow beyond the (large) README into a navigable wiki with
-  progressive complexity, mirroring what rezanid/xrmtools does well: **Getting started** (install, quickstart,
-  first plugin), **Guides** (plugins, Custom APIs, `vela add`, DI, caching, testing with `Vela.Testing`, the
-  security model, `vela models`/roles, `plan`/`apply`, signing), **Configuration** (auth, secrets, environments),
-  **Advanced** (security-model deep dive, mutation testing, FetchXML builder once it lands), plus a **FAQ**. The
-  existing README, `docs/LIMITATIONS.md`, `docs/Vela.Testing.md` and `CONTRIBUTING.md` are a strong base to split
-  and expand. Decide the host (GitHub Wiki vs a docs site like DocFX/Docusaurus in `docs/`).
+- **Documentation site — SHIPPED**: a DocFX site under `docs/` (modern base + a custom Vela template overlay),
+  published to GitHub Pages at <https://allandecastro.github.io/vela/>. ~26 pages across Getting started, Guides,
+  Configuration, Advanced (architecture, mutation testing), Reference (limitations, FAQ) and Contributing, migrated
+  from the README / `docs` / `CONTRIBUTING`. The README was slimmed to a shopfront pointing at the site, and the old
+  `docs/LIMITATIONS.md` / `docs/Vela.Testing.md` were folded into `reference/limitations` and `guides/testing`.
 - **P2 — Optional real-Dataverse integration test tier** (beyond the generate-then-build smoke test) to
   catch CLI regressions against a live dev org.
 - **P2 — Review the logo / branding.** Revisit the brand assets in `branding/` (chevron, wordmark, lockups,
   cards, slogan banners, favicon/tile) and `branding/DESIGN_SYSTEM.md` for consistency, quality and fit — and
   check every place they're surfaced (README header, NuGet package icon, docs) uses the right variant.
 
-## Won't do (by design — see LIMITATIONS.md)
+## Won't do (by design — see the [Limitations reference](https://allandecastro.github.io/vela/reference/limitations.html))
 
 - Synchronous-only cache, no singleton DI lifetime, no runtime tracing-verbosity switch — Dataverse sandbox
   constraints.

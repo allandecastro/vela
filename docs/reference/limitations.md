@@ -130,4 +130,4 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
 
 ---
 
-See also the testing deep-dive `Vela.Testing.md` and the main README.
+See also the [Testing guide](../guides/testing.md).
