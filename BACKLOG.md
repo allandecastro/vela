@@ -21,12 +21,14 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   type-code resolver) at **~82.7%** (`--break-at 80`), and a seventh (`cli-reader`) the **CLI plan reader**
   (`DataverseRegistration.cs` — reads assemblies/types/steps/Custom APIs out of Dataverse and maps them to the diff
   shape) at **~85.3%** (`--break-at 83`; the live-connection methods carry a `// Stryker disable all` block since a
-  real `ServiceClient` can't run offline) — all covered by driving every helper through the `IOrganizationService`
-  seam / real nupkg+assembly fixtures. Stryker can't build net462 off Windows, so the harness can't be measured
-  locally, but the net10 CLI cores **can** (`dotnet-stryker --mutate "**/<file>.cs"` from `tests/Vela.Cli.Tests`);
-  all jobs run on the self-hosted Windows runner. **Next (P1), spread out — one CLI core per slice:** the step
-  reader (`DataverseRegistration.Steps.cs`), then `PackageScanner.cs`, and the Custom-API orchestration branches
-  still `NoCoverage` in `ApplyDiff` — each gets its own `mutation.yml` job and ratcheted gate as coverage lands.
+  real `ServiceClient` can't run offline), and an eighth (`cli-steps`) the **CLI step reconciliation**
+  (`DataverseRegistration.Steps.cs` — step entity build, lookup by key/signature, message/filter resolution,
+  secure-config + state + image reconcile, stage/rank/name normalizers) at **~89.4%** (`--break-at 87`) — all
+  covered by driving every helper through the `IOrganizationService` seam / real nupkg+assembly fixtures. Stryker
+  can't build net462 off Windows, so the harness can't be measured locally, but the net10 CLI cores **can**
+  (`dotnet-stryker --mutate "**/<file>.cs"` from `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows
+  runner. **Next (P1), spread out — one CLI core per slice:** `PackageScanner.cs`, then the Custom-API orchestration
+  branches still `NoCoverage` in `ApplyDiff` — each gets its own `mutation.yml` job and ratcheted gate as coverage lands.
   The apply/custom-api/reader survivors left behind are equivalent (`LogOperation` arg strings, `?? "1.0.0.0"`/
   culture fallbacks, static `ParameterSyncSpec` record literals, read-only `ColumnSet` columns, polling-loop
   `<`/`All`→`Any` bounds that need a 30s timeout to observe).
