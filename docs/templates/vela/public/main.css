@@ -249,6 +249,10 @@ main.container-xxl > .content:only-child > article > h2 {
 .vela-hero { text-align: center; padding: 2.75rem 0 1.25rem; }
 .vela-hero p { text-align: center; }   /* beat the article-p justify rule */
 .vela-hero-logo { height: 88px; width: auto; margin-bottom: 1.1rem; }
+/* Ink lockup (black "vela") on light; white lockup on dark so it stays visible. */
+.dark-only { display: none; }
+[data-bs-theme='dark'] .light-only { display: none; }
+[data-bs-theme='dark'] .dark-only { display: inline; }
 .vela-hero-tagline { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.45rem; color: var(--vela-ink); }
 .vela-hero-sub { max-width: 40rem; margin: 0 auto 1.5rem; color: var(--vela-muted); text-align: center; }
 .vela-hero-actions { margin: 0; text-align: center; }
