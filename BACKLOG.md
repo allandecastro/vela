@@ -32,10 +32,10 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   `IOrganizationService` seam / crafted `.nupkg`+stub-type fixtures. This completes the five CLI cores from the
   original measure-first run (the 752-survivor baseline). Stryker can't build net462 off Windows, so the harness
   can't be measured locally, but the net10 CLI cores **can** (`dotnet-stryker --mutate "**/<file>.cs"` from
-  `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows runner. **TODO (P1) - every mutation gate at
-  ≥ 80%:** the target is a minimum `--break-at 80` on all cores. The outlier today is `cli-apply` at **67%** (its
-  remaining survivors need a package-payload / partial-type-resolution path - see the P2 fixture note below);
-  double-check the security/harness cores stay ≥ 80 when re-measured. **Remaining (P2), optional:** a
+  `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows runner. **Every mutation core now measures
+  ≥ 80%** (the former outlier `cli-apply` reached **80.1%** by covering the package-publish/type-wait path,
+  partial type resolution via assembly sync, and the resume-report done++ boundaries); each gate sits ~2pts
+  below its measured score as a regression margin. **Remaining (P2), optional:** a
   compiled-plugin-fixture integration test would cover `BuildLocalStateFromPackages` (scanner) and the
   package-payload / partial-type-resolution branches in `ApplyDiff` end-to-end. The survivors left behind are equivalent
   (`LogOperation` arg strings, `?? "1.0.0.0"`/culture fallbacks, static `ParameterSyncSpec` record literals,
