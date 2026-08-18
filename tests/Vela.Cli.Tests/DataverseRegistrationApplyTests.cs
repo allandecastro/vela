@@ -432,6 +432,9 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         Entity updated = Assert.Single(svc.Updated);
         Assert.Equal(existingId, updated.Id);
+        Assert.Equal(Convert.ToBase64String(File.ReadAllBytes(dll)), updated.GetAttributeValue<string>("content"));
+        Assert.Equal(ExpectedVersion(dll), updated.GetAttributeValue<string>("version"));
+        Assert.Equal("neutral", updated.GetAttributeValue<string>("culture"));
         Assert.Equal(ExpectedToken(dll), updated.GetAttributeValue<string>("publickeytoken"));
         Assert.NotEqual("null", updated.GetAttributeValue<string>("publickeytoken"));
         // Update must NOT re-stamp sourcetype/isolationmode (only set on create).
@@ -495,11 +498,13 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var ex = Assert.Throws<InvalidOperationException>(
             () => DataverseRegistration.GuardAgainstStaleAssemblyVersion(svc, new AssemblyPayload("Vela.Cli", dll), ["Vela.Cli.NewType"]));
         // Each concatenated segment of the guidance message must survive (mutating any one to "" is caught).
+        Assert.Contains("registers new plugin type", ex.Message);
         Assert.Contains("version is unchanged", ex.Message);
         Assert.Contains("Vela.Cli.NewType", ex.Message);
         Assert.Contains("Dataverse caches plugin assemblies by version", ex.Message);
         Assert.Contains("could not be", ex.Message);
         Assert.Contains("Bump the assembly version", ex.Message);
+        Assert.Contains("scaffolds an auto-incrementing", ex.Message);
     }
 
     // ---- CreatePluginType -----------------------------------------------------------------------
@@ -926,6 +931,116 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         }
 
         Assert.Contains("skipping custom API delete", captured.ToString());
+    }
+
+    [Fact]
+    public void ApplyDiff_midrun_failure_at_changed_step_counts_completed_creates()
+    {
+        // Removed step + two added steps (succeed) + one changed step whose message does not resolve (fails).
+        // The completed count must include the two creates, proving each create's done++ landed.
+        const string plugin = "Zava.Plugins.AccountPlugin";
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                // Removed-step delete looks up by name; added/changed FindStepId filters by eventhandler.
+                "sdkmessageprocessingstep" => q.Criteria.Conditions.Any(c => c.AttributeName == "name")
+                    ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", Guid.NewGuid()))
+                    : new EntityCollection(),
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = plugin }),
+                // "Update" resolves; the changed step's "Delete" message does not → ResolveMessageId throws.
+                "sdkmessage" => (string)q.Criteria.Conditions.Single().Values.Single() == "Update"
+                    ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid()))
+                    : new EntityCollection(),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+        };
+
+        JsonElement removed = Json(new { pluginTypeName = plugin, message = "Update", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-old", name = "OldStep" });
+        JsonElement add1 = Json(new { pluginTypeName = plugin, message = "Update", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-1", enabled = true });
+        JsonElement add2 = Json(new { pluginTypeName = plugin, message = "Update", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-2", enabled = true });
+        JsonElement changed = Json(new { pluginTypeName = plugin, message = "Delete", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-3", enabled = true });
+        var diff = new RegistrationDiff(
+            LocalAssemblies: ["Zava.Plugins"],
+            CurrentAssemblies: ["Zava.Plugins"],
+            Added: [new RegistrationItem("step", plugin, add1), new RegistrationItem("step", plugin, add2)],
+            Removed: [new RegistrationItem("step", plugin, removed)],
+            Changed: [new RegistrationChange("step", plugin, changed, changed)],
+            LocalItems: [],
+            CurrentItems: []);
+
+        TextWriter originalError = Console.Error;
+        var captured = new StringWriter();
+        Console.SetError(captured);
+        try
+        {
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        string stderr = captured.ToString();
+        // delete + publish + two creates completed; failure is on the changed step's update.
+        Assert.Contains("completed (4):", stderr);
+        Assert.Contains($"+ create step {plugin}", stderr);
+        Assert.Contains($"failed at: update step {plugin}", stderr);
+    }
+
+    [Fact]
+    public void ApplyDiff_publishes_package_waits_for_types_then_creates_step()
+    {
+        // The package branch: a plugin package is published, the required plugin type is initially absent (so
+        // apply waits), then it materializes and the step is created. Exercises EnsurePluginPackages + the
+        // packagePayloads-present wait path + the step upsert end-to-end.
+        const string plugin = "Zava.Plugins.AccountPlugin";
+        string nupkg = NewTempFile(Encoding.UTF8.GetBytes("pkg-bytes"));
+        int pluginTypeCalls = 0;
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q =>
+            {
+                switch (q.EntityName)
+                {
+                    case "pluginpackage": return new EntityCollection();            // no existing package → create
+                    case "pluginassembly": return TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid()));
+                    case "plugintype":
+                        pluginTypeCalls++;
+                        return pluginTypeCalls == 1
+                            ? new EntityCollection()                                 // absent initially → drives the wait
+                            : TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = plugin });
+                    case "sdkmessage": return TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid()));
+                    default: return new EntityCollection();                          // FindStepId + images empty
+                }
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),                            // secure-config reconcile: none
+        };
+
+        JsonElement step = Json(new { pluginTypeName = plugin, message = "Update", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-1", enabled = true });
+        var diff = new RegistrationDiff(
+            LocalAssemblies: ["Zava.Plugins"],
+            CurrentAssemblies: ["Zava.Plugins"],
+            Added: [new RegistrationItem("step", plugin, step)],
+            Removed: [],
+            Changed: [],
+            LocalItems: [],
+            CurrentItems: []);
+        var packages = new[] { new PluginPackagePayload("Zava.Plugins.Package", "1.0.0", nupkg) };
+
+        DataverseRegistration.ApplyDiff(svc, diff, [], packages, solutionUniqueName: null, new List<string>(), verbose: false);
+
+        // The package was published with its name/version/content...
+        Entity pkg = svc.Created.Single(e => e.LogicalName == "pluginpackage");
+        Assert.Equal("Zava.Plugins.Package", pkg.GetAttributeValue<string>("name"));
+        Assert.Equal("1.0.0", pkg.GetAttributeValue<string>("version"));
+        Assert.Equal(Convert.ToBase64String(Encoding.UTF8.GetBytes("pkg-bytes")), pkg.GetAttributeValue<string>("content"));
+        // ...and, once the type resolved, the step was created bound to it.
+        Entity createdStep = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstep");
+        Assert.NotEqual(Guid.Empty, createdStep.GetAttributeValue<EntityReference>("eventhandler").Id);
+        Assert.Contains("dv-1", createdStep.GetAttributeValue<string>("name"));
     }
 
     // ---- fixtures --------------------------------------------------------------------------------

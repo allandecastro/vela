@@ -335,16 +335,17 @@ jobs:
       # The apply reconciliation core (DataverseRegistration.Apply): package/assembly/type sync, the resume report,
       # the stale-assembly-version guard, and the ApplyDiff step/Custom-API orchestration (create/update/delete +
       # the ignorable-stage-fault skip), all driven through the IOrganizationService seam. net10-only, so no
-      # --solution. Measured at ~69.5%; --break-at is ratcheted to 67. Remaining survivors are equivalent
-      # (log-arg/culture/version fallbacks, done++ counters, polling-loop bounds, and the package-payload/
-      # partial-type-resolution branches that need a published .nupkg to exercise).
+      # --solution. Measured at ~72.5% after covering the package-publish/type-wait path and the resume-report
+      # done++ boundaries; --break-at is ratcheted to 70. Climbing to the 80% target (see BACKLOG) needs the
+      # remaining assembly-sync prefix / partial-type-resolution / custom-api done++ internals; the rest of the
+      # survivors are equivalent (log-arg/culture/version fallbacks, polling-loop timing bounds, columnsets).
       - name: Mutation test — CLI apply reconciliation
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
           --mutate "**/DataverseRegistration.Apply.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 67 --threshold-low 67 --threshold-high 82
+          --break-at 70 --threshold-low 70 --threshold-high 82
       - name: List surviving mutants (apply)
         if: always()
         shell: powershell
