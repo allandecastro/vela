@@ -53,20 +53,12 @@ chevron, no inner fold or shading, identical across every size and asset.
 
 | Asset | File | Use |
 | --- | --- | --- |
-| Symbol — gradient | [`vela-chevron.svg`](./vela-chevron.svg) | primary mark |
-| Symbol — mono black | [`vela-chevron-black.svg`](./vela-chevron-black.svg) | on light backgrounds (`#0F172A`) |
-| Symbol — mono white | [`vela-chevron-white.svg`](./vela-chevron-white.svg) | on dark / colored backgrounds |
-| App tile | [`vela-tile.svg`](./vela-tile.svg) | GitHub org avatar, NuGet icon |
-| Favicon | [`vela-favicon.svg`](./vela-favicon.svg) | browser tab (legible at 16px) |
-
-**Sticker / die-cut variants** carry a white knock-out border for print and physical
-stickers — use the clean symbols above for digital surfaces:
-
-| Asset | File |
-| --- | --- |
-| Chevron — gradient, die-cut | [`vela-chevron-diecut.svg`](./vela-chevron-diecut.svg) |
-| Chevron — mono ink, die-cut | [`vela-chevron-black-diecut.svg`](./vela-chevron-black-diecut.svg) |
-| App tile — die-cut | [`vela-tile-diecut.svg`](./vela-tile-diecut.svg) |
+| Symbol - gradient | [`symbol/vela-chevron.svg`](./symbol/vela-chevron.svg) | primary mark |
+| Symbol - mono black | [`symbol/vela-chevron-black.svg`](./symbol/vela-chevron-black.svg) | on light backgrounds |
+| Symbol - mono white | [`symbol/vela-chevron-white.svg`](./symbol/vela-chevron-white.svg) | on dark / colored backgrounds |
+| Symbol - mono badge | [`symbol/vela-chevron-mono.svg`](./symbol/vela-chevron-mono.svg) | single-color outline badge |
+| App tile | [`symbol/vela-tile.svg`](./symbol/vela-tile.svg) | GitHub org avatar, NuGet icon |
+| Favicon | [`symbol/vela-favicon.svg`](./symbol/vela-favicon.svg) | browser tab (legible at 16px) |
 
 ### Wordmark
 
@@ -74,39 +66,31 @@ The logotype **vela** (lowercase). Pick the fill that fits the background:
 
 | Asset | File | Use |
 | --- | --- | --- |
-| Wordmark — gradient | [`vela-wordmark-gradient.svg`](./vela-wordmark-gradient.svg) | on white / light |
-| Wordmark — indigo | [`vela-wordmark-indigo.svg`](./vela-wordmark-indigo.svg) | on white / light |
-| Wordmark — ink | [`vela-wordmark-ink.svg`](./vela-wordmark-ink.svg) | on white / light, neutral |
-| Wordmark — white on night | [`vela-wordmark-white-on-night.svg`](./vela-wordmark-white-on-night.svg) | on dark surfaces |
-| Wordmark — pill | [`vela-wordmark-pill.svg`](./vela-wordmark-pill.svg) | dark pill badge, e.g. avatars |
+| Wordmark - gradient | [`wordmark/vela-wordmark-gradient.svg`](./wordmark/vela-wordmark-gradient.svg) | on white / light |
+| Wordmark - indigo | [`wordmark/vela-wordmark-indigo.svg`](./wordmark/vela-wordmark-indigo.svg) | on white / light |
+| Wordmark - ink | [`wordmark/vela-wordmark-ink.svg`](./wordmark/vela-wordmark-ink.svg) | on white / light, neutral |
+| Wordmark - white | [`wordmark/vela-wordmark-white.svg`](./wordmark/vela-wordmark-white.svg) | on dark surfaces |
 
 ### Lockup
 
-Symbol stacked above the wordmark — the formal logo for cards, splash and docs headers:
+Symbol beside the wordmark - the formal logo for cards, splash and docs headers:
 
 | Asset | File | Use |
 | --- | --- | --- |
-| Lockup — gradient | [`vela-lockup-gradient.svg`](./vela-lockup-gradient.svg) | on white / light |
-| Lockup — indigo | [`vela-lockup-indigo.svg`](./vela-lockup-indigo.svg) | on white / light |
-| Lockup — ink | [`vela-lockup-ink.svg`](./vela-lockup-ink.svg) | on white / light, neutral |
-| Lockup — white on night | [`vela-lockup-white-on-night.svg`](./vela-lockup-white-on-night.svg) | on dark surfaces |
+| Lockup - gradient | [`lockup/vela-lockup-gradient.svg`](./lockup/vela-lockup-gradient.svg) | on white / light (primary) |
+| Lockup - indigo | [`lockup/vela-lockup-indigo.svg`](./lockup/vela-lockup-indigo.svg) | on white / light |
+| Lockup - ink | [`lockup/vela-lockup-ink.svg`](./lockup/vela-lockup-ink.svg) | on white / light, neutral |
+| Lockup - white | [`lockup/vela-lockup-white.svg`](./lockup/vela-lockup-white.svg) | on dark surfaces |
 
-### Slogan & cards
+### Stickers (die-cut, print)
 
-Tagline treatments and social/share cards built from the marks above:
+Print-ready die-cut variants - symbols, wordmark, lockup, slogan strips and share cards -
+live in [`stickers/`](./stickers/) (19 SVGs, numbered by family). See
+[`stickers/README.txt`](./stickers/README.txt) for the full list and print notes (3 mm bleed,
+outline the type or supply Inter 700).
 
-| Asset | File | Use |
-| --- | --- | --- |
-| Slogan — badge | [`vela-slogan-badge.svg`](./vela-slogan-badge.svg) | round "set your course" badge |
-| Slogan — banner, dark | [`vela-slogan-banner-dark.svg`](./vela-slogan-banner-dark.svg) | tagline strip on night |
-| Slogan — banner, gradient | [`vela-slogan-banner-gradient.svg`](./vela-slogan-banner-gradient.svg) | tagline strip on gradient |
-| Slogan — banner, white | [`vela-slogan-white.svg`](./vela-slogan-white.svg) | tagline strip on white |
-| Card — dark | [`vela-card-dark.svg`](./vela-card-dark.svg) | share / OG card on night |
-| Card — white | [`vela-card-white.svg`](./vela-card-white.svg) | share / OG card on white |
-| Card — gradient | [`vela-card-gradient.svg`](./vela-card-gradient.svg) | share / OG card on gradient |
-
-PNG renders of the referenced web/app assets live in [`./png/`](./png/) — open them to
-preview.
+PNG renders for web/app icons live in [`png/`](./png/): `icon.png` (the NuGet / avatar app
+tile) and `vela-chevron.svg.png` (the chevron raster used in package READMEs).
 
 ### Clear space & sizing
 - Keep clear space around the symbol equal to **half the chevron height**.
@@ -157,29 +141,13 @@ Vela sails through. Use it for the symbol and accent details, never for large su
 
 ```
 branding/
-  DESIGN_SYSTEM.md      ← this file
+  DESIGN_SYSTEM.md   this file
 
-  # symbol (clean, for digital)
-  vela-chevron.svg        vela-chevron-black.svg   vela-chevron-white.svg
-  vela-tile.svg           vela-favicon.svg
-
-  # symbol (die-cut, for stickers / print)
-  vela-chevron-diecut.svg vela-chevron-black-diecut.svg  vela-tile-diecut.svg
-
-  # wordmark
-  vela-wordmark-gradient.svg   vela-wordmark-indigo.svg   vela-wordmark-ink.svg
-  vela-wordmark-white-on-night.svg   vela-wordmark-pill.svg
-
-  # lockup (symbol + wordmark)
-  vela-lockup-gradient.svg  vela-lockup-indigo.svg
-  vela-lockup-ink.svg       vela-lockup-white-on-night.svg
-
-  # slogan & cards
-  vela-slogan-badge.svg          vela-slogan-banner-dark.svg
-  vela-slogan-banner-gradient.svg  vela-slogan-white.svg
-  vela-card-dark.svg   vela-card-white.svg   vela-card-gradient.svg
-
-  png/                  ← PNG renders of the referenced web/app assets
+  symbol/            chevron (gradient / black / white / mono), tile, favicon
+  wordmark/          vela logotype (gradient / indigo / ink / white)
+  lockup/            symbol + wordmark (gradient / indigo / ink / white)
+  stickers/          19 die-cut SVGs for print (symbols, wordmark, lockup, slogan, cards)
+  png/               icon.png (NuGet / avatar tile) + vela-chevron.svg.png (README raster)
 ```
 
 All marks share one canonical chevron path (`M32 8 L54 50 L40 50 L32 32 L24 50 L10 50 Z`)

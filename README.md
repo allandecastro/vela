@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="branding/vela-chevron.svg" alt="Vela" width="120" height="120" />
+  <img src="branding/symbol/vela-chevron.svg" alt="Vela" width="120" height="120" />
 </p>
 
 <h1 align="center">Vela</h1>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Vela app tile">
+  <defs>
+    <linearGradient id="tileBg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366F1"></stop>
+      <stop offset="1" stop-color="#22D3EE"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#tileBg)"></rect>
+  
+  <g transform="translate(16,24.64) scale(1.5)">
+    <path d="M32 50 L54 8 L40 8 L32 26 L24 8 L10 8 Z" fill="#fff"></path>
+  </g>
+</svg>
