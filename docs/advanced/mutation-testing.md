@@ -8,7 +8,7 @@ workflow gates, the measure-first approach, what you can run locally, and the cu
 gated cores.
 
 For the companion branch-coverage gate and the test stack, see
-[Architecture](architecture.md).
+[Contributing](../contributing/index.md); for the project layout, see [Architecture](architecture.md).
 
 ## What `mutation.yml` gates
 
@@ -61,7 +61,7 @@ All jobs run on the self-hosted Windows runner.
 | diff engine | `DiffEngine` + `DefinitionNormalizer` | ~90% | 85 |
 | harness query core | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | ~91.6% | 89 |
 | security enforcement wiring | `InMemoryOrganizationService.Security.cs` | ~84.8% | 82 |
-| security model | decision logic | - | - |
+| security model | `Security/SecurityModel.cs` (+ sharing, access teams, 1:N) | ~86% | 84 |
 | `cli-apply` | `DataverseRegistration.Apply.cs` | ~80.1% | 78 |
 | `cli-customapi` | `DataverseRegistration.CustomApi.cs` | ~82.7% | 80 |
 | `cli-reader` | `DataverseRegistration.cs` | ~85.3% | 83 |

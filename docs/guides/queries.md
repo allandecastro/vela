@@ -54,3 +54,8 @@ string fetchXml = Query.For<Contact>()
 
 `ToFetchXml()` is also an extension on a plain `QueryExpression`. A table/column typo is a build error, not a
 runtime `FaultException`.
+
+## See also
+
+- [Write a plugin](plugins.md) - where these queries run.
+- [Testing with Vela.Testing](testing.md) - the in-memory service executes the same queries.

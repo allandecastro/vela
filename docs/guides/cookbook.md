@@ -1,12 +1,52 @@
 # Cookbook (common recipes)
 
-1. **Single-step update plugin**
-   - `RegisterPluginSteps()` + `RegisterSteps().OnUpdate().Stage(...).Mode(...).FilteringAttributes(...)`
-2. **Multi-step router plugin**
-   - `RegisterPluginSteps()` + repeated `RegisterSteps().On...().Handler(...)`
-3. **Bound Custom API**
-   - `RegisterCustomApi("...", Handler).AsAction().BoundTo<TEntity>()`
-4. **Unbound typed Custom API**
-   - `RegisterCustomApi("...").Request(...).Response(...)` + typed `Execute(...)`
-5. **DI in handlers**
-   - register in `ConfigureServices(...)`, consume via `ctx.GetRequiredService<T>()`, cache shared data with `IPluginCacheService`
+Quick sketches for the patterns you'll reach for most. Each links to the full guide.
+
+## Single-step update plugin
+
+Declare one step in `RegisterPluginSteps()`. See [Write a plugin](plugins.md).
+
+```csharp
+public class AccountPostUpdate : EntityPluginBase<Account>
+{
+    protected override void RegisterPluginSteps() =>
+        RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(a => a.Name);
+
+    protected override void Execute(ILocalPluginContext ctx, Account target) { /* ... */ }
+}
+```
+
+## Multi-step router plugin
+
+Register several steps on one class and route each to its handler. See [Write a plugin](plugins.md).
+
+```csharp
+protected override void RegisterPluginSteps()
+{
+    RegisterSteps().OnCreate().PostOperation().Handler(OnCreate);
+    RegisterSteps().OnUpdate().PostOperation().Handler(OnUpdate);
+}
+```
+
+## Bound / unbound Custom API
+
+See [Write a Custom API](custom-apis.md).
+
+```csharp
+protected override void RegisterCustomApi() =>
+    RegisterCustomApi("zava_Recalculate", Handler).AsAction().BoundTo<Account>();
+```
+
+## Dependency injection + caching in a handler
+
+Register in `ConfigureServices`, resolve via `ctx.GetRequiredService<T>()`, cache shared data with the
+built-in TTL cache. See [Dependency injection](dependency-injection.md) and [Caching](caching.md).
+
+```csharp
+protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext ctx) =>
+    services.AddScoped<IPricingService>(_ => new PricingService(ctx.UserService));
+```
+
+## Test any of the above without a connection
+
+See [Testing with Vela.Testing](testing.md).

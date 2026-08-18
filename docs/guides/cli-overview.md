@@ -1,21 +1,8 @@
 # The vela CLI
 
-`Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command.
-
-Install from your NuGet feed:
-
-```powershell
-dotnet tool install --global Vela.Cli
-```
-
-Or install from a locally built package:
-
-```powershell
-dotnet pack .\src\Vela.Cli -c Release -o .\artifacts\cli
-dotnet tool install --global --add-source .\artifacts\cli Vela.Cli
-```
-
-Then run it (update later with `dotnet tool update --global Vela.Cli`):
+`Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command. See
+[Install](../getting-started/install.md) to get it (it is not on nuget.org yet - install from a
+local feed for now). Then run, for example:
 
 ```powershell
 vela plan --packages-dir .\artifacts --interactive
@@ -32,8 +19,8 @@ Core commands:
 | `vela apply --execute` | Apply those operations (idempotent upsert/delete). See [CLI automation](plan-apply.md). |
 | `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
 
-> [!NOTE]
-> prefer the `DATAVERSE_CLIENT_SECRET` environment variable or `--client-secret-stdin`
+> [!TIP]
+> **Secrets:** prefer the `DATAVERSE_CLIENT_SECRET` environment variable or `--client-secret-stdin`
 > over `--client-secret`, which is exposed to shell history and process listings (the CLI warns when
 > you use it). For sovereign clouds / custom app registrations under `--interactive`, override the
 > MSAL login with `--auth-client-id` and `--authority`. Add `--verbose` for human-readable summaries

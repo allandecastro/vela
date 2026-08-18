@@ -398,4 +398,4 @@ rows once the relationship is declared (`WithManyToMany(...)` or registered meta
 modelled by `Update`-ing the lookup column. For anything else, inject your own `IOrganizationService`.
 
 For the full picture across the whole framework (runtime, CLI and this test harness), see
-[`LIMITATIONS.md`](../reference/limitations.md).
+[Limitations](../reference/limitations.md).
