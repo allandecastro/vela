@@ -81,8 +81,8 @@ Custom APIs, dependency injection, caching, testing with `Vela.Testing`, and the
 ## Limitations
 
 Vela makes deliberate trade-offs (plugin-sandbox safety, a preview-first `plan`/`apply` scope, and a
-faithful-but-partial test double). What is intentionally out of scope is collected in
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) (also in the [Reference](https://allandecastro.github.io/vela/reference/limitations.html)).
+faithful-but-partial test double). What is intentionally out of scope is collected in the
+[Reference → Limitations](https://allandecastro.github.io/vela/reference/limitations.html).
 
 ## Contributing
 

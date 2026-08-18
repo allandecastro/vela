@@ -247,4 +247,4 @@ initial release.
   `.pfx` bytes from memory after writing the temp certificate.
 - Pinned a patched `System.Security.Cryptography.Xml` over the vulnerable transitive version (NU1903).
 - Documented that `plan`/`apply` **run code from the scanned package** (plugin types are instantiated to read
-  their definitions) — only scan packages you build or trust. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+  their definitions) — only scan packages you build or trust. See the [Limitations reference](https://allandecastro.github.io/vela/reference/limitations.html).
