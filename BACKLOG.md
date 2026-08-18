@@ -23,15 +23,19 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   shape) at **~85.3%** (`--break-at 83`; the live-connection methods carry a `// Stryker disable all` block since a
   real `ServiceClient` can't run offline), and an eighth (`cli-steps`) the **CLI step reconciliation**
   (`DataverseRegistration.Steps.cs` — step entity build, lookup by key/signature, message/filter resolution,
-  secure-config + state + image reconcile, stage/rank/name normalizers) at **~89.4%** (`--break-at 87`) — all
-  covered by driving every helper through the `IOrganizationService` seam / real nupkg+assembly fixtures. Stryker
-  can't build net462 off Windows, so the harness can't be measured locally, but the net10 CLI cores **can**
-  (`dotnet-stryker --mutate "**/<file>.cs"` from `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows
-  runner. **Next (P1), spread out — one CLI core per slice:** `PackageScanner.cs`, then the Custom-API orchestration
-  branches still `NoCoverage` in `ApplyDiff` — each gets its own `mutation.yml` job and ratcheted gate as coverage lands.
-  The apply/custom-api/reader survivors left behind are equivalent (`LogOperation` arg strings, `?? "1.0.0.0"`/
-  culture fallbacks, static `ParameterSyncSpec` record literals, read-only `ColumnSet` columns, polling-loop
-  `<`/`All`→`Any` bounds that need a 30s timeout to observe).
+  secure-config + state + image reconcile, stage/rank/name normalizers) at **~89.4%** (`--break-at 87`), and a
+  ninth (`cli-scanner`) the **CLI package scanner** (`PackageScanner.cs` — extracts plugin `.nupkg`s, reads nuspec
+  id/version, reflects over plugin/Custom-API types for their definitions) at **~82.6%** (`--break-at 80`;
+  `BuildLocalStateFromPackages` carries a `// Stryker disable all` block — it `Assembly.LoadFrom`s and executes
+  package code, so it needs a compiled plugin-assembly fixture) — all covered by driving every helper through the
+  `IOrganizationService` seam / crafted `.nupkg`+stub-type fixtures. This completes the five CLI cores from the
+  original measure-first run (the 752-survivor baseline). Stryker can't build net462 off Windows, so the harness
+  can't be measured locally, but the net10 CLI cores **can** (`dotnet-stryker --mutate "**/<file>.cs"` from
+  `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows runner. **Remaining (P2), optional:** the
+  Custom-API orchestration branches still `NoCoverage` in `ApplyDiff` (a compiled-plugin-fixture integration test
+  would also cover `BuildLocalStateFromPackages` end-to-end). The survivors left behind are equivalent
+  (`LogOperation` arg strings, `?? "1.0.0.0"`/culture fallbacks, static `ParameterSyncSpec` record literals,
+  read-only `ColumnSet` columns, polling-loop `<`/`All`→`Any` bounds that need a 30s timeout to observe).
   The harness/security survivors that remain are mostly equivalent mutants
   (exception-message strings, never-null/never-empty edges) — kill the real ones, don't chase message-text
   assertions. Remaining diff-engine survivors are equivalent (match-key lookups consistent on both diff sides).

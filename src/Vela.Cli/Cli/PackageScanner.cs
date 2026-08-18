@@ -27,6 +27,11 @@ namespace Vela.Cli;
 /// </summary>
 internal static class PackageScanner
 {
+    // Stryker disable all : this orchestrator does Assembly.LoadFrom + instantiates and invokes the package's
+    // plugin types (see the class SECURITY note), so exercising it needs a compiled plugin-assembly fixture inside
+    // a real .nupkg — out of reach of an offline unit test. Every helper it composes (ExtractPackage,
+    // ReadPluginPackagePayload, GetLoadableTypes, IsPluginType, TryGetDefinitions/TryGetDefinition) is covered
+    // directly, and BuildIntrospectionFailure is only reachable from here.
     internal static RegistrationState BuildLocalStateFromPackages(SharedOptions options, JsonSerializerOptions jsonOptions, List<string> tempDirectories)
 {
     List<RegistrationItem> items = [];
@@ -103,6 +108,7 @@ internal static class PackageScanner
     return $"Failed to read {what} from '{type.FullName ?? type.Name}' in package '{Path.GetFileName(packagePath)}': {error} " +
         "Fix the plugin so it can be read — refusing to continue, since otherwise its existing registrations could be deleted.";
 }
+    // Stryker restore all
 
     internal static PluginPackagePayload ReadPluginPackagePayload(string packagePath)
 {
