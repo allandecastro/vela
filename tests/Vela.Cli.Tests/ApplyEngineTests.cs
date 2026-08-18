@@ -13,6 +13,7 @@ using static Vela.Cli.Tests.TestSupport.RegistrationFactory;
 
 namespace Vela.Cli.Tests;
 
+[Collection("ConsoleRedirect")]
 public class ApplyEngineTests
 {
     private const string PluginType = "Zava.Plugins.AccountPlugin";

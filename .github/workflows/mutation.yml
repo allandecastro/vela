@@ -333,19 +333,18 @@ jobs:
       - name: Install Stryker
         run: dotnet tool update -g dotnet-stryker
       # The apply reconciliation core (DataverseRegistration.Apply): package/assembly/type sync, the resume report,
-      # and the stale-assembly-version guard, all driven through the IOrganizationService seam. net10-only, so no
-      # --solution. Measured at ~64.7% after covering the reconcile helpers (the remaining survivors are equivalent
-      # log-arg/culture/version fallbacks and the polling-loop bounds, plus the Custom-API orchestration branches
-      # which are covered as a later slice with DataverseRegistration.CustomApi.cs); --break-at is ratcheted to 62.
-      # The other CLI cores (DataverseRegistration.cs/.Steps/.CustomApi, PackageScanner) get their own jobs as
-      # coverage lands — see BACKLOG.
+      # the stale-assembly-version guard, and the ApplyDiff step/Custom-API orchestration (create/update/delete +
+      # the ignorable-stage-fault skip), all driven through the IOrganizationService seam. net10-only, so no
+      # --solution. Measured at ~69.5%; --break-at is ratcheted to 67. Remaining survivors are equivalent
+      # (log-arg/culture/version fallbacks, done++ counters, polling-loop bounds, and the package-payload/
+      # partial-type-resolution branches that need a published .nupkg to exercise).
       - name: Mutation test — CLI apply reconciliation
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
           --mutate "**/DataverseRegistration.Apply.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 62 --threshold-low 62 --threshold-high 80
+          --break-at 67 --threshold-low 67 --threshold-high 82
       - name: List surviving mutants (apply)
         if: always()
         shell: powershell

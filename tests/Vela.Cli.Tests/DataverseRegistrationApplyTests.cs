@@ -23,6 +23,7 @@ namespace Vela.Cli.Tests;
 /// asserting the exact queries, written attributes and thrown messages — enough to kill the mutants those
 /// lines carried (query attribute/entity names, object initializers, guard branches, exception text).
 /// </summary>
+[Collection("ConsoleRedirect")]
 public sealed class DataverseRegistrationApplyTests : IDisposable
 {
     private readonly List<string> _tempPaths = new();
@@ -764,6 +765,167 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
         Assert.Contains("not applied (2):", stderr);
         Assert.Contains($"- update step {plugin}", stderr);
+    }
+
+    // ---- ApplyDiff: Custom API orchestration ----------------------------------------------------
+
+    [Fact]
+    public void ApplyDiff_deletes_adds_and_updates_custom_apis()
+    {
+        const string apiType = "Zava.Plugins.MyApi";
+        var removedApiId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = apiType }),
+                // The removed API exists (→ delete); the added/changed ones don't (→ create).
+                "customapi" => (string)q.Criteria.Conditions.Single().Values.Single() == "zava_Removed"
+                    ? TestSupport.FakeOrgService.Collection(new Entity("customapi", removedApiId))
+                    : new EntityCollection(),
+                _ => new EntityCollection(),
+            },
+        };
+
+        JsonElement removed = Json(new { pluginTypeName = apiType, uniqueName = "zava_Removed" });
+        JsonElement added = Json(new { pluginTypeName = apiType, uniqueName = "zava_Added" });
+        JsonElement changed = Json(new { pluginTypeName = apiType, uniqueName = "zava_Changed" });
+        var diff = new RegistrationDiff(
+            LocalAssemblies: ["Zava.Plugins"],
+            CurrentAssemblies: ["Zava.Plugins"],
+            Added: [new RegistrationItem("custom-api", apiType, added)],
+            Removed: [new RegistrationItem("custom-api", apiType, removed)],
+            Changed: [new RegistrationChange("custom-api", apiType, changed, changed)],
+            LocalItems: [],
+            CurrentItems: []);
+
+        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
+
+        // Removed API deleted through the seam.
+        Assert.Contains(("customapi", removedApiId), svc.Deleted);
+        // Added + changed APIs created (upsert with no existing row → create).
+        Assert.Contains(svc.Created, e => e.LogicalName == "customapi" && e.GetAttributeValue<string>("uniquename") == "zava_Added");
+        Assert.Contains(svc.Created, e => e.LogicalName == "customapi" && e.GetAttributeValue<string>("uniquename") == "zava_Changed");
+    }
+
+    [Fact]
+    public void ApplyDiff_resume_report_labels_custom_api_operations()
+    {
+        const string apiType = "Zava.Plugins.MyApi";
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = apiType }),
+                "customapi" => (string)q.Criteria.Conditions.Single().Values.Single() == "zava_Removed"
+                    ? TestSupport.FakeOrgService.Collection(new Entity("customapi", Guid.NewGuid()))
+                    : new EntityCollection(),
+                _ => new EntityCollection(),
+            },
+            OnCreate = e => e.LogicalName == "customapi" ? throw new InvalidOperationException("boom-creating-api") : Guid.NewGuid(),
+        };
+
+        JsonElement removed = Json(new { pluginTypeName = apiType, uniqueName = "zava_Removed" });
+        JsonElement added = Json(new { pluginTypeName = apiType, uniqueName = "zava_Added" });
+        var diff = new RegistrationDiff(
+            LocalAssemblies: ["Zava.Plugins"],
+            CurrentAssemblies: ["Zava.Plugins"],
+            Added: [new RegistrationItem("custom-api", apiType, added)],
+            Removed: [new RegistrationItem("custom-api", apiType, removed)],
+            Changed: [],
+            LocalItems: [],
+            CurrentItems: []);
+
+        TextWriter originalError = Console.Error;
+        var captured = new StringWriter();
+        Console.SetError(captured);
+        try
+        {
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        string stderr = captured.ToString();
+        Assert.Contains($"failed at: create custom-api {apiType}", stderr);
+        // The removed-API delete and the publish/resolve completed before the failure.
+        Assert.Contains("+ delete custom-api zava_Removed", stderr);
+        Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
+    }
+
+    [Fact]
+    public void ApplyDiff_skips_step_delete_on_ignorable_stage_fault_and_continues()
+    {
+        // Deleting a step that the platform manages (custom-API main operation) raises an "Invalid plug-in
+        // registration stage" fault. Apply must warn and carry on, not abort the whole run.
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep"
+                ? throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Invalid plug-in registration stage.")
+                : new EntityCollection(),
+        };
+        JsonElement removed = Json(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "ManagedStep" });
+        var diff = new RegistrationDiff(
+            LocalAssemblies: ["Zava.Plugins"],
+            CurrentAssemblies: ["Zava.Plugins"],
+            Added: [],
+            Removed: [new RegistrationItem("step", "Zava.Plugins.AccountPlugin", removed)],
+            Changed: [],
+            LocalItems: [],
+            CurrentItems: []);
+
+        TextWriter originalError = Console.Error;
+        var captured = new StringWriter();
+        Console.SetError(captured);
+        try
+        {
+            DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false); // must NOT throw
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        Assert.Contains("skipping step delete", captured.ToString());
+    }
+
+    [Fact]
+    public void ApplyDiff_skips_custom_api_delete_on_ignorable_stage_fault_and_continues()
+    {
+        const string apiType = "Zava.Plugins.MyApi";
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "customapi"
+                ? throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Invalid plug-in registration stage.")
+                : new EntityCollection(),
+        };
+        JsonElement removed = Json(new { pluginTypeName = apiType, uniqueName = "zava_Managed" });
+        var diff = new RegistrationDiff(
+            LocalAssemblies: ["Zava.Plugins"],
+            CurrentAssemblies: ["Zava.Plugins"],
+            Added: [],
+            Removed: [new RegistrationItem("custom-api", apiType, removed)],
+            Changed: [],
+            LocalItems: [],
+            CurrentItems: []);
+
+        TextWriter originalError = Console.Error;
+        var captured = new StringWriter();
+        Console.SetError(captured);
+        try
+        {
+            DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false); // must NOT throw
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        Assert.Contains("skipping custom API delete", captured.ToString());
     }
 
     // ---- fixtures --------------------------------------------------------------------------------

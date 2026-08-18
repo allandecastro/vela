@@ -16,7 +16,8 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   the **security enforcement wiring** (`InMemoryOrganizationService.Security.cs`) at **~84.8%** (`--break-at 82`),
   and a fourth the **security model** decision logic. A fifth job (`cli-apply`) gates the **CLI apply
   reconciliation** (`DataverseRegistration.Apply.cs` — package/assembly/type sync, resume report, stale-version
-  guard) at **~64.7%** (`--break-at 62`), and a sixth (`cli-customapi`) the **CLI Custom API reconciliation**
+  guard, and the `ApplyDiff` step/Custom-API orchestration incl. the ignorable-stage-fault skip) at **~69.5%**
+  (`--break-at 67`), and a sixth (`cli-customapi`) the **CLI Custom API reconciliation**
   (`DataverseRegistration.CustomApi.cs` — customapi entity build, request/response parameter create/update/delete,
   type-code resolver) at **~82.7%** (`--break-at 80`), and a seventh (`cli-reader`) the **CLI plan reader**
   (`DataverseRegistration.cs` — reads assemblies/types/steps/Custom APIs out of Dataverse and maps them to the diff
@@ -31,9 +32,9 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   `IOrganizationService` seam / crafted `.nupkg`+stub-type fixtures. This completes the five CLI cores from the
   original measure-first run (the 752-survivor baseline). Stryker can't build net462 off Windows, so the harness
   can't be measured locally, but the net10 CLI cores **can** (`dotnet-stryker --mutate "**/<file>.cs"` from
-  `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows runner. **Remaining (P2), optional:** the
-  Custom-API orchestration branches still `NoCoverage` in `ApplyDiff` (a compiled-plugin-fixture integration test
-  would also cover `BuildLocalStateFromPackages` end-to-end). The survivors left behind are equivalent
+  `tests/Vela.Cli.Tests`); all jobs run on the self-hosted Windows runner. **Remaining (P2), optional:** a
+  compiled-plugin-fixture integration test would cover `BuildLocalStateFromPackages` (scanner) and the
+  package-payload / partial-type-resolution branches in `ApplyDiff` end-to-end. The survivors left behind are equivalent
   (`LogOperation` arg strings, `?? "1.0.0.0"`/culture fallbacks, static `ParameterSyncSpec` record literals,
   read-only `ColumnSet` columns, polling-loop `<`/`All`→`Any` bounds that need a 30s timeout to observe).
   The harness/security survivors that remain are mostly equivalent mutants
