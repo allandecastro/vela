@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a problem with the runtime, CLI or test harness.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. Please fill in the details below so it can be reproduced.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Vela.Plugins (runtime)
+        - Vela.Cli (vela command)
+        - Vela.Testing (harness)
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which Vela.Plugins / Vela.Cli / Vela.Testing version, or the commit SHA?
+      placeholder: e.g. Vela.Cli 1.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps or a code snippet. Include the exact vela command if relevant.
+      render: shell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Paste any error output. For the CLI, re-run with --verbose.
+      render: text
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, .NET SDK version, and Dataverse type (online / on-prem) if relevant.
