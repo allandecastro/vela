@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="branding/vela-chevron.svg" alt="Vela" width="120" height="120" />
+  <img src="branding/symbol/vela-chevron.svg" alt="Vela" width="120" height="120" />
 </p>
 
 <h1 align="center">Vela</h1>
@@ -90,10 +90,16 @@ Want to build or contribute to the Vela framework itself (not just use it)? See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the repository layout, architecture rules, and how to build and
 test from source.
 
-## License
-
-Released under the [MIT License](LICENSE).
-
 ## Acknowledgments
 
 Built on the Microsoft Dataverse SDK (`Microsoft.Xrm.Sdk`, `Microsoft.PowerPlatform.Dataverse.Client`).
+
+---
+
+<p align="center">
+  Crafted with ❤️ and AI by Allan De Castro
+</p>
+
+<p align="center">
+  License: <a href="LICENSE">MIT</a>
+</p>

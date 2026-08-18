@@ -20,7 +20,7 @@ An app-registration login needs a client secret. Supply it one of three ways:
 The unattended `plan` / `apply` invocations take the same connection flags:
 
 ```powershell
-# 1) Compare local package(s) with live Dataverse state (client id / client secret)
+# Compare local package(s) with live Dataverse state (client id / client secret)
 vela plan `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `
@@ -28,7 +28,7 @@ vela plan `
   --client-id <app-id> `
   --client-secret <client-secret>
 
-# 3b) Execute apply operations (idempotent upsert/delete)
+# Execute apply operations (idempotent upsert/delete)
 vela apply `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `
@@ -43,7 +43,7 @@ vela apply `
 In CI, add `--strict` to make the run fail when scanner/metadata diagnostics exist:
 
 ```powershell
-# 5) CI strict mode (fail if scanner/metadata diagnostics exist)
+# CI strict mode (fail if scanner/metadata diagnostics exist)
 vela plan `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `

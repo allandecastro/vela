@@ -40,3 +40,8 @@ Key design tips:
 - Build stable keys with tenant/org + business identifier.
 - Keep TTL explicit per use case (short for volatile data, longer for reference data).
 - Cache pure/read-only results; avoid caching mutable workflow state.
+
+## See also
+
+- [Write a plugin](plugins.md) - `IPluginCacheService` is a built-in context service.
+- [Dependency injection](dependency-injection.md).

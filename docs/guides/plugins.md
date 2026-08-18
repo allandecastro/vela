@@ -180,15 +180,13 @@ own phase label - a checkpoint around a risky step. (The framework already cover
 point re-emitting `start` yourself.) Use the lighter `TraceMethod(...)` when you don't need the full payload:
 
 ```csharp
-protected override void ExecuteDataversePlugin(ILocalPluginContext ctx)
+protected override void Execute(ILocalPluginContext ctx, Account target)
 {
-    var account = ctx.GetTarget<Account>();
-
     ctx.TraceMethod("computing credit limit");       // lightweight: method/message/stage/depth, no payload
-    var limit = ComputeCreditLimit(account);
+    var limit = ComputeCreditLimit(target);
 
     ctx.TraceExecutionSnapshot("after-credit-calc"); // full snapshot at this exact point, your own label
-    ctx.UserService.Update(account);
+    ctx.UserService.Update(target);
 }
 ```
 
@@ -280,3 +278,9 @@ Notes:
   handling sensitive data (snapshots dump attribute values - see the warning above).
 - Keep your own handler traces business-focused (decisions and key values); rely on the framework for the
   infra / snapshot / Dataverse-operation tracing.
+
+## See also
+
+- [Typed queries](queries.md) - strongly-typed `QueryExpression` and `ToFetchXml()`.
+- [Dependency injection](dependency-injection.md) and [Caching](caching.md).
+- [Testing with Vela.Testing](testing.md) - run this plugin with no connection.

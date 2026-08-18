@@ -88,6 +88,12 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 - **P2 — Review the logo / branding.** Revisit the brand assets in `branding/` (chevron, wordmark, lockups,
   cards, slogan banners, favicon/tile) and `branding/DESIGN_SYSTEM.md` for consistency, quality and fit — and
   check every place they're surfaced (README header, NuGet package icon, docs) uses the right variant.
+- **P2 — Split the generated `Roles` so the ids are usable in dev + tests.** Today `vela models --roles`
+  emits one `Roles` class that references `Vela.Testing.Security` (a test-only assembly), so it must live in the
+  test project. Split it: a dependency-light `Roles` (role `Name` + real root `Guid`) into
+  `<prefix>.Shared.Models.Generated` (usable by runtime plugin code *and* tests), and the harness
+  security-configurator part (privileges via `RoleBuilder`) into a separate class in the test project. Update
+  `RoleGenerator`, `ModelsCommand`, the snapshot tests, and `docs/guides/models.md`.
 
 ## Won't do (by design — see the [Limitations reference](https://allandecastro.github.io/vela/reference/limitations.html))
 

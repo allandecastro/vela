@@ -22,7 +22,7 @@
       "_appFaviconPath": "images/vela-favicon.svg",
       "_enableSearch": true,
       "_disableContribution": true,
-      "_appFooter": "<span>Vela &middot; Build Dataverse with confidence &middot; <a href=\"https://github.com/allandecastro/vela\">GitHub</a> &middot; <a href=\"https://github.com/allandecastro/vela/issues/new/choose\">Report an issue</a></span>",
+      "_appFooter": "<span>Vela &middot; Build Dataverse with confidence &middot; <a href=\"https://github.com/allandecastro/vela/releases\">Releases</a> &middot; <a href=\"https://github.com/allandecastro/vela\">GitHub</a> &middot; <a href=\"https://github.com/allandecastro/vela/issues/new/choose\">Report an issue</a></span>",
       "pdf": false
     },
     "markdownEngineName": "markdig"

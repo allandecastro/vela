@@ -1,4 +1,4 @@
-# Plan and apply
+# Plan & Apply
 
 ```powershell
 # 1) Compare local package(s) with live Dataverse state (client id / client secret)

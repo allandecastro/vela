@@ -41,3 +41,8 @@ vela add --interactive
   `RegisterSteps().On<Message>()…Handler(nameof(Handle<Message>))` registration and a matching handler method
   (`--message`, optional `--handler <Method>`). It refuses single-step plugins (those using the `Execute(...)`
   override) and any file it can't parse cleanly, so it never corrupts source.
+
+## See also
+
+- [Write a plugin](plugins.md) / [Write a Custom API](custom-apis.md) - flesh out the generated file.
+- [Testing with Vela.Testing](testing.md) - the generated test scaffolds a no-connection test.

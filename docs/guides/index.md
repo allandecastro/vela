@@ -17,7 +17,7 @@ Task-focused guides for building, testing and shipping Dataverse plugins and Cus
   <a class="vela-card" href="caching.md"><span class="t">Caching</span><span class="d">TTL cache with refresh for plugin data.</span></a>
   <a class="vela-card" href="testing.md"><span class="t">Testing</span><span class="d">Run plugins against an in-memory Dataverse, no connection.</span></a>
   <a class="vela-card" href="security-model.md"><span class="t">Security model in tests</span><span class="d">Roles, privileges, business units, sharing and cascades.</span></a>
-  <a class="vela-card" href="plan-apply.md"><span class="t">Plan & apply</span><span class="d">Preview then apply registrations against a live environment.</span></a>
+  <a class="vela-card" href="plan-apply.md"><span class="t">Plan & Apply</span><span class="d">Preview then apply registrations against a live environment.</span></a>
   <a class="vela-card" href="models.md"><span class="t">Early-bound models</span><span class="d">Generate early-bound classes with vela models.</span></a>
   <a class="vela-card" href="signing.md"><span class="t">Signing</span><span class="d">Sign a plugin package for managed-identity plugins.</span></a>
   <a class="vela-card" href="end-to-end.md"><span class="t">End-to-end example</span><span class="d">A full walkthrough from code to a running step.</span></a>

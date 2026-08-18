@@ -62,6 +62,18 @@ Use the generic base when you want typed request/response models and automatic p
 
 Both modes support the same direct pattern with `RegisterCustomApi(...)` as the registration entry point.
 
+## Invoke and test
+
+Call a Custom API through `IOrganizationService.Execute`. Generate typed request/response classes with
+[`vela models --custom-apis`](models.md) so the call is strongly typed:
+
+```csharp
+var response = (zava_RecalculateResponse)service.Execute(new zava_RecalculateRequest { Target = accountRef });
+```
+
+Run the handler with no connection using the [test harness](testing.md) - the same `Execute` call works
+against the in-memory `IOrganizationService`.
+
 ## Do / Don't (Custom APIs)
 
 **Do**
