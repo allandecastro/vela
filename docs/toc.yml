@@ -1,0 +1,12 @@
+- name: Getting started
+  href: getting-started/
+- name: Guides
+  href: guides/
+- name: Configuration
+  href: configuration/
+- name: Advanced
+  href: advanced/
+- name: Reference
+  href: reference/
+- name: Contributing
+  href: contributing/

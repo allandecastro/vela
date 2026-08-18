@@ -1,0 +1,4 @@
+- name: Contributing
+  href: index.md
+- name: Architecture
+  href: ../advanced/architecture.md

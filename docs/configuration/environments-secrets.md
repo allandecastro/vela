@@ -1,0 +1,76 @@
+# Environments & CI
+
+This page covers running the `vela` CLI unattended: how to pass secrets safely, how to
+make a run fail the build on diagnostics (strict mode), and the `--verbose` flag. For
+the full set of connection options, see [Authentication](authentication.md).
+
+## Passing secrets: environment variable vs flag
+
+An app-registration login needs a client secret. Supply it one of three ways:
+
+- `DATAVERSE_CLIENT_SECRET` environment variable - preferred,
+- `--client-secret-stdin` - preferred (pipe the value in),
+- `--client-secret <client-secret>` - discouraged.
+
+> [!WARNING]
+> Prefer the `DATAVERSE_CLIENT_SECRET` environment variable or `--client-secret-stdin`
+> over `--client-secret`, which is exposed to shell history and process listings (the
+> CLI warns when you use it).
+
+The unattended `plan` / `apply` invocations take the same connection flags:
+
+```powershell
+# 1) Compare local package(s) with live Dataverse state (client id / client secret)
+vela plan `
+  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
+  --url https://zava.crm.dynamics.com `
+  --tenant-id <tenant-id> `
+  --client-id <app-id> `
+  --client-secret <client-secret>
+
+# 3b) Execute apply operations (idempotent upsert/delete)
+vela apply `
+  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
+  --url https://zava.crm.dynamics.com `
+  --tenant-id <tenant-id> `
+  --client-id <app-id> `
+  --client-secret <client-secret> `
+  --execute
+```
+
+## CI strict mode
+
+In CI, add `--strict` to make the run fail when scanner/metadata diagnostics exist:
+
+```powershell
+# 5) CI strict mode (fail if scanner/metadata diagnostics exist)
+vela plan `
+  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
+  --url https://zava.crm.dynamics.com `
+  --tenant-id <tenant-id> `
+  --client-id <app-id> `
+  --client-secret <client-secret> `
+  --strict
+```
+
+The same strictness is available at the scanner level. `FrameworkManifestScanner`
+takes a `Strict = true` option so scanner diagnostics fail the build:
+
+```csharp
+var manifest = FrameworkManifestScanner.Scan(
+    typeof(AccountPostUpdate).Assembly,
+    new FrameworkManifestScanOptions { Strict = true });
+```
+
+## Verbose output
+
+Add `--verbose` for human-readable summaries and full exception stack traces on
+failure:
+
+```powershell
+vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --verbose
+```
+
+```powershell
+vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --execute --verbose
+```

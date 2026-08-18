@@ -54,3 +54,7 @@ tests/**/plugins-merged.xml
 
 # Mutation testing (Stryker) local output
 StrykerOutput/
+
+# DocFX local build output
+docs/_site/
+docs/obj/

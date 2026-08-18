@@ -1,0 +1,262 @@
+/* Vela docs theme - restrained/editorial. Brand accent (indigo #6366F1) used sparingly:
+   links, active nav, focus. No gradients on content, no tinted decoration. The craft is in
+   typography, spacing and hierarchy. Palette: branding/DESIGN_SYSTEM.md. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --vela-accent: #2563eb;      /* clean blue (blue-600), not violet - AA on white */
+  --vela-accent-soft: #eaf1ff;
+  --vela-ink: #14213a;         /* near-black body text */
+  --vela-muted: #475569;       /* slate-600 - legible secondary, not washed out */
+  --vela-line: #e2e5eb;
+
+  --bs-primary: var(--vela-accent);
+  --bs-primary-rgb: 79, 70, 229;
+  --bs-link-color: var(--vela-accent);
+  --bs-link-color-rgb: 79, 70, 229;
+  --bs-link-hover-color: var(--vela-accent);
+  --bs-body-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bs-body-color: var(--vela-ink);
+  --bs-border-color: var(--vela-line);
+  --bs-emphasis-color: var(--vela-ink);
+}
+
+[data-bs-theme='dark'] {
+  --vela-ink: #e8e8ea;         /* neutral off-white, no blue tint */
+  --vela-muted: #9a9aa2;       /* neutral gray */
+  --vela-line: #2a2a2e;        /* neutral hairline */
+  --vela-accent: #6ea8ff;      /* soft blue, links only */
+  --vela-accent-soft: #16233b;
+  --bs-body-bg: #131316;       /* near-black neutral, not "night blue" */
+  --bs-body-color: var(--vela-ink);
+  --bs-border-color: var(--vela-line);
+  --bs-link-color: var(--vela-accent);
+  --bs-link-hover-color: #ccd2ff;
+}
+
+/* --- Base typography: the actual design work --- */
+body {
+  font-family: var(--bs-body-font-family);
+  -webkit-font-smoothing: antialiased;
+}
+article {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+main .container-xxl,
+.content {
+  max-width: 46rem;   /* a measured column, not full-bleed */
+}
+article h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.25rem;
+}
+article h2 {
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-top: 2.75rem;
+  padding-top: 0;
+  border: 0;
+}
+article h3 {
+  font-size: 1.12rem;
+  font-weight: 600;
+  margin-top: 2rem;
+}
+article p,
+article li {
+  color: var(--vela-ink);
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: none;           /* justify by spacing, never break words */
+}
+
+/* --- Links: understated, underline on hover only --- */
+article a {
+  color: var(--vela-accent);
+  text-decoration: none;
+}
+article a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --- Top navbar: quiet, one hairline --- */
+.navbar {
+  border-bottom: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+}
+.navbar-brand {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+/* Active top-nav section: same blue as the selected chapter on the left */
+.navbar .navbar-nav .nav-link.active {
+  color: var(--vela-accent) !important;
+  font-weight: 600;
+}
+.navbar .navbar-nav .nav-link:hover {
+  color: var(--vela-accent) !important;
+}
+/* Breadcrumb above the page title uses the same accent */
+.breadcrumb a,
+.breadcrumb-item a {
+  color: var(--vela-accent);
+}
+.navbar-brand img {
+  height: 1.35rem;
+  width: auto;
+  margin-right: 0.45rem;
+}
+
+/* --- Left nav: text-first, thin active marker --- */
+nav#toc li > a,
+.toc li > a {
+  color: var(--vela-muted);
+  font-size: 0.9rem;
+  padding: 0.28rem 0.75rem 0.28rem 1.15rem;   /* room between the active bar and the label (even a thin "i") */
+  border-radius: 5px;
+}
+nav#toc li > a:hover,
+.toc li > a:hover {
+  color: var(--vela-ink);
+  background: transparent;
+}
+nav#toc li.active > a,
+.toc .active > a {
+  color: var(--vela-accent);
+  font-weight: 600;
+  background: transparent;
+  border-radius: 0;                                /* keep the marker a clean straight bar, not a rounded nub */
+  box-shadow: inset 3px 0 0 var(--vela-accent);
+}
+
+/* --- Right "in this article" affix --- */
+.affix ul > li > a {
+  color: var(--vela-muted);
+  font-size: 0.85rem;
+}
+.affix ul > li.active > a {
+  color: var(--vela-ink);
+  font-weight: 600;
+}
+
+/* --- Code: neutral, no colored rails --- */
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.86em;
+}
+article pre {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  background: #fbfbfd;
+}
+[data-bs-theme='dark'] article pre {
+  background: #1a1a1e;   /* neutral, matches near-black bg */
+}
+:not(pre) > code {
+  color: var(--vela-ink);
+  background: rgba(100, 116, 139, 0.12);
+  padding: 0.1em 0.36em;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* --- Tables: rules only, no fills --- */
+article table {
+  border-collapse: collapse;
+  font-size: 0.94rem;
+}
+article table th,
+article table td {
+  border: 0;
+  border-bottom: 1px solid var(--bs-border-color);
+  padding: 0.5rem 0.9rem 0.5rem 0;
+}
+article table thead th {
+  color: var(--vela-muted);
+  font-weight: 600;
+  border-bottom: 1.5px solid var(--bs-border-color);
+}
+
+/* --- Callouts: minimal bordered card (uniform neutral border, no fill, no side
+       rail). Only the title carries the type color. --- */
+.NOTE, .TIP, .IMPORTANT, .WARNING, .CAUTION {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 8px;
+  background: var(--bs-body-bg);
+}
+.NOTE > h5, .TIP > h5, .IMPORTANT > h5, .WARNING > h5, .CAUTION > h5 {
+  font-weight: 600;
+}
+.NOTE > h5      { color: #2563eb; }
+.TIP > h5       { color: #16a34a; }
+.IMPORTANT > h5 { color: #7c3aed; }
+.WARNING > h5   { color: #d97706; }
+.CAUTION > h5   { color: #dc2626; }
+
+/* --- Focus states --- */
+input:focus,
+#search-query:focus {
+  border-color: var(--vela-accent);
+  box-shadow: 0 0 0 3px var(--vela-accent-soft);
+}
+
+/* --- Cards (section landings + hero) --- */
+.vela-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.85rem;
+  margin: 1.6rem 0;
+}
+.vela-card {
+  display: block;
+  padding: 0.95rem 1.05rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 10px;
+  text-decoration: none !important;
+  background: var(--bs-body-bg);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.vela-card:hover {
+  border-color: var(--vela-accent);
+  transform: translateY(-2px);
+}
+.vela-card .t { display: block; font-weight: 600; color: var(--vela-ink); }
+.vela-card .d { display: block; margin-top: 0.25rem; color: var(--vela-muted); font-size: 0.88rem; line-height: 1.5; text-align: left; }
+
+/* Center the reading column on pages with no left sidebar (the home hero).
+   The modern template gives .content `margin: 0 3rem`, so override explicitly. */
+main.container-xxl > .content:only-child {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  max-width: 54rem;
+  align-self: center;   /* in case .content is a flex item */
+}
+/* On the landing (sole column), center the section headings too. */
+main.container-xxl > .content:only-child > article > h2 {
+  text-align: center;
+  margin-top: 3rem;
+}
+
+/* --- Hero (home) --- */
+.vela-hero { text-align: center; padding: 2.75rem 0 1.25rem; }
+.vela-hero p { text-align: center; }   /* beat the article-p justify rule */
+.vela-hero-logo { height: 88px; width: auto; margin-bottom: 1.1rem; }
+.vela-hero-tagline { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.45rem; color: var(--vela-ink); }
+.vela-hero-sub { max-width: 40rem; margin: 0 auto 1.5rem; color: var(--vela-muted); text-align: center; }
+.vela-hero-actions { margin: 0; text-align: center; }
+.vela-btn, .vela-btn-ghost {
+  display: inline-block; padding: 0.55rem 1.15rem; border-radius: 8px; font-weight: 600;
+  text-decoration: none !important; margin: 0.25rem;
+}
+.vela-btn { background: var(--vela-accent); color: #fff !important; }
+.vela-btn:hover { filter: brightness(1.06); }
+.vela-btn-ghost { border: 1px solid var(--bs-border-color); color: var(--vela-ink) !important; }
+.vela-btn-ghost:hover { border-color: var(--vela-accent); }

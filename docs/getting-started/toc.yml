@@ -1,0 +1,6 @@
+- name: Install
+  href: install.md
+- name: Quickstart
+  href: quickstart.md
+- name: Initialize a solution
+  href: initialize-a-solution.md
