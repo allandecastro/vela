@@ -5,7 +5,8 @@ _disableBreadcrumb: true
 ---
 
 <div class="vela-hero">
-  <img class="vela-hero-logo" src="images/vela-lockup.svg" alt="Vela" />
+  <img class="vela-hero-logo light-only" src="images/vela-lockup.svg" alt="Vela" />
+  <img class="vela-hero-logo dark-only" src="images/vela-lockup-dark.svg" alt="Vela" />
   <p class="vela-hero-tagline">Build Dataverse with confidence.</p>
   <p class="vela-hero-sub">A framework and CLI for Microsoft Dataverse and Dynamics 365 plugins and Custom APIs: a lightweight plugin runtime, a scriptable <code>vela</code> CLI, and a connection-free in-memory test harness.</p>
   <p class="vela-hero-actions">
