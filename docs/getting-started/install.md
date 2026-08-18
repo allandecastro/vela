@@ -2,7 +2,7 @@
 
 `Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command.
 
-## From your NuGet feed (once published)
+## From your NuGet feed
 
 ```powershell
 dotnet tool install --global Vela.Cli
@@ -39,4 +39,3 @@ vela plan --packages-dir .\artifacts --interactive
 > MSAL login with `--auth-client-id` and `--authority`. Add `--verbose` for human-readable summaries
 > and full exception stack traces on failure.
 
-Next: **[Quickstart](quickstart.md)**.

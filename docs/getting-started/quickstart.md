@@ -33,4 +33,3 @@ plugins, Custom APIs, services and a no-connection test project. From there:
 > (a `pac plugin init` project) references your domain/model projects, which in turn use the framework
 > abstractions through the NuGet dependency.
 
-Next: **[Initialize a solution](initialize-a-solution.md)**.

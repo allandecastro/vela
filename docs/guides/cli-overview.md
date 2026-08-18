@@ -2,7 +2,7 @@
 
 `Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command.
 
-Install from your NuGet feed (once published):
+Install from your NuGet feed:
 
 ```powershell
 dotnet tool install --global Vela.Cli
