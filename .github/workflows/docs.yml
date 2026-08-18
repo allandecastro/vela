@@ -38,9 +38,19 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
-      - uses: actions/upload-pages-artifact@v3
+      # actions/upload-pages-artifact shells out to `bash`+`tar`, which the self-hosted Windows runner
+      # doesn't have on PATH. Build the Pages artifact (a `github-pages` artifact containing `artifact.tar`)
+      # ourselves with the native Windows tar.exe, then let deploy-pages consume it.
+      - name: Archive the Pages artifact (Windows tar)
+        shell: powershell
+        run: |
+          New-Item -ItemType File -Path docs\_site\.nojekyll -Force | Out-Null
+          tar --directory docs\_site -cvf "$env:RUNNER_TEMP\artifact.tar" --exclude=.git --exclude=.github .
+      - uses: actions/upload-artifact@v4
         with:
-          path: docs/_site
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
