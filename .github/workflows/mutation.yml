@@ -42,11 +42,13 @@ jobs:
       - name: Install Stryker
         run: dotnet tool update -g dotnet-stryker
       # net10-only project: no --solution, so Stryker builds just the CLI test project (+ its referenced Vela.Cli)
-      # and never drags the net462 projects into the build.
+      # and never drags the net462 projects into the build. --project disambiguates the mutation target: the CLI test
+      # project also references the compiled plugin fixtures (Sample/BrokenPluginFixture), so Stryker can't auto-pick.
       - name: Mutation test — diff engine + normalizer
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
+          --project Vela.Cli.csproj
           --mutate "**/DiffEngine.cs" --mutate "**/DefinitionNormalizer.cs"
           --reporter cleartext --reporter markdown --reporter html
           --break-at 85 --threshold-low 85 --threshold-high 90
@@ -213,6 +215,7 @@ jobs:
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
+          --project Vela.Cli.csproj
           --mutate "**/RoleGenerator.cs" --mutate "**/RolePrivilegeMapper.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
           --break-at 80 --threshold-low 80 --threshold-high 90
@@ -343,6 +346,7 @@ jobs:
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
+          --project Vela.Cli.csproj
           --mutate "**/DataverseRegistration.Apply.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
           --break-at 78 --threshold-low 78 --threshold-high 88
@@ -409,6 +413,7 @@ jobs:
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
+          --project Vela.Cli.csproj
           --mutate "**/DataverseRegistration.CustomApi.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
           --break-at 80 --threshold-low 80 --threshold-high 90
@@ -475,6 +480,7 @@ jobs:
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
+          --project Vela.Cli.csproj
           --mutate "**/DataverseRegistration.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
           --break-at 83 --threshold-low 83 --threshold-high 92
@@ -542,6 +548,7 @@ jobs:
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
+          --project Vela.Cli.csproj
           --mutate "**/DataverseRegistration.Steps.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
           --break-at 87 --threshold-low 87 --threshold-high 94
@@ -601,14 +608,14 @@ jobs:
         run: dotnet tool update -g dotnet-stryker
       # The package scanner (PackageScanner.cs): extracts plugin .nupkg packages (lib/*.dll selection, primary
       # pick, registrable filtering), reads nuspec id/version, and reflects over plugin/Custom-API types to read
-      # their definitions. Driven with crafted .nupkg fixtures + stub plugin types. Measured at ~82.6%; --break-at
-      # is ratcheted to 80. BuildLocalStateFromPackages carries a `// Stryker disable all` block — it does
-      # Assembly.LoadFrom and executes package code (see the class SECURITY note), so it needs a compiled
-      # plugin-assembly fixture; every helper it composes is covered directly.
+      # their definitions. Driven with crafted .nupkg fixtures + stub plugin types, plus PackageScannerBuildStateTests
+      # which runs BuildLocalStateFromPackages end-to-end on a real compiled plugin fixture (Sample/BrokenPluginFixture),
+      # so the former `// Stryker disable all` block is gone. Measured at ~81.6%; --break-at is ratcheted to 80.
       - name: Mutation test — CLI package scanner
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
+          --project Vela.Cli.csproj
           --mutate "**/PackageScanner.cs"
           --reporter cleartext --reporter markdown --reporter html --reporter json
           --break-at 80 --threshold-low 80 --threshold-high 90

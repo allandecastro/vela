@@ -32,5 +32,7 @@
          so PackageScanner can Assembly.LoadFrom a real compiled plugin (PackageScannerBuildStateTests). Its types are
          not used from test code. -->
     <ProjectReference Include="..\SamplePluginFixture\SamplePluginFixture.csproj" />
+    <!-- Its counterpart: a non-introspectable plugin assembly, to cover the BuildIntrospectionFailure path. -->
+    <ProjectReference Include="..\BrokenPluginFixture\BrokenPluginFixture.csproj" />
   </ItemGroup>
 </Project>

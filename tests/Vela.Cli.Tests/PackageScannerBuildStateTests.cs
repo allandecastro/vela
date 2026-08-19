@@ -10,50 +10,75 @@ using Xunit;
 
 namespace Vela.Cli.Tests;
 
-// End-to-end coverage for PackageScanner.BuildLocalStateFromPackages — the one path that carries
-// `// Stryker disable all` because it Assembly.LoadFrom's a REAL compiled plugin assembly out of a .nupkg,
-// instantiates each plugin type and invokes its definition method. The fixture (SamplePluginFixture) is a
-// dependency-free netstandard2.0 DLL whose base type names match PackageScanner's name-prefix rule, so it loads
-// cleanly in the net10 test host without any Vela.Plugins / Xrm resolution. This exercises the full orchestration
-// the unit tests over the helpers can't: extract -> load -> reflect both plugin kinds -> normalize -> assemble.
+// End-to-end coverage for PackageScanner.BuildLocalStateFromPackages — the orchestration that Assembly.LoadFrom's a
+// REAL compiled plugin assembly out of a .nupkg, instantiates each plugin type and invokes its definition method.
+// The fixtures (SamplePluginFixture / BrokenPluginFixture) are dependency-free netstandard2.0 DLLs whose base type
+// names match PackageScanner's name-prefix rule, so they load cleanly in the net10 test host without any
+// Vela.Plugins / Xrm resolution and with no extra NuGet dependency. Between them they exercise the happy path, the
+// introspection-failure path, and the dedup/ordering of the assembled RegistrationState.
 public sealed class PackageScannerBuildStateTests : IDisposable
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     private readonly List<string> _temps = new();
-    private readonly string _nupkg;
-
-    public PackageScannerBuildStateTests()
-    {
-        _nupkg = BuildFixtureNupkg();
-    }
+    private readonly List<string> _nupkgs = new();
 
     [Fact]
     public void Builds_local_state_from_a_real_compiled_plugin_package()
     {
-        SharedOptions options = OptionsFor(_nupkg);
+        string nupkg = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture");
 
-        RegistrationState state = PackageScanner.BuildLocalStateFromPackages(options, Web, _temps);
+        RegistrationState state = PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg), Web, _temps);
 
         // The fixture assembly is discovered and recorded as a source assembly and a package payload.
-        Assert.Contains("SamplePluginFixture", state.SourceAssemblies);
+        Assert.Equal(new[] { "SamplePluginFixture" }, state.SourceAssemblies);
         Assert.Contains(state.PackagePayloads, p => p.PackageName == "SamplePluginFixture");
         Assert.Contains(state.SourceAssemblyPayloads, a => a.AssemblyName == "SamplePluginFixture");
 
-        // The step plugin was instantiated, its GetStepDefinitions() invoked, and the result normalized.
+        // Both plugin kinds were instantiated, their definition methods invoked, and the results normalized —
+        // ordered by kind then type, so "custom-api" precedes "step".
+        Assert.Equal(new[] { "custom-api", "step" }, state.Items.Select(i => i.Kind).ToArray());
+
         RegistrationItem step = Assert.Single(state.Items.Where(i => i.Kind == "step"));
         Assert.Equal("SamplePluginFixture.SampleAccountPlugin", step.Type);
         Assert.Equal("Create", step.Definition.GetProperty("message").GetString());
         Assert.Equal("account", step.Definition.GetProperty("entityLogicalName").GetString());
 
-        // The Custom API plugin was instantiated, its GetCustomApiDefinition() invoked, and the result normalized.
         RegistrationItem api = Assert.Single(state.Items.Where(i => i.Kind == "custom-api"));
         Assert.Equal("SamplePluginFixture.SampleCustomApi", api.Type);
         Assert.Equal("sample_DoThing", api.Definition.GetProperty("uniqueName").GetString());
     }
 
-    private static SharedOptions OptionsFor(string nupkg) => new SharedOptions(
-        PackagePaths: new[] { nupkg },
+    [Fact]
+    public void A_plugin_that_cannot_be_introspected_fails_loudly()
+    {
+        string nupkg = BuildNupkg("BrokenPluginFixture.dll", "BrokenPluginFixture");
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg), Web, _temps));
+
+        // BuildIntrospectionFailure names the type, what it was reading, and the underlying reason.
+        Assert.Contains("BrokenPluginFixture.BrokenStepPlugin", ex.Message);
+        Assert.Contains("steps", ex.Message);
+        Assert.Contains("Missing (string, string) constructor.", ex.Message);
+        Assert.Contains("refusing to continue", ex.Message);
+    }
+
+    [Fact]
+    public void Duplicate_packages_are_deduplicated_in_the_assembled_state()
+    {
+        // The same package passed twice: the state dedups source assemblies and package payloads.
+        string nupkg = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture");
+
+        RegistrationState state = PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg, nupkg), Web, _temps);
+
+        Assert.Equal(new[] { "SamplePluginFixture" }, state.SourceAssemblies);
+        Assert.Single(state.PackagePayloads);
+        Assert.Single(state.SourceAssemblyPayloads);
+    }
+
+    private static SharedOptions OptionsFor(params string[] nupkgs) => new SharedOptions(
+        PackagePaths: nupkgs,
         PackageAssembly: null,
         ConnectionString: null,
         OAuthUrl: null,
@@ -66,26 +91,27 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         Strict: false,
         Verbose: false);
 
-    // Zips the compiled fixture DLL (copied next to the test binaries via the project reference) into a minimal
-    // plugin .nupkg — a .nuspec plus lib/netstandard2.0/SamplePluginFixture.dll — that the scanner can read.
-    private string BuildFixtureNupkg()
+    // Zips a compiled fixture DLL (copied next to the test binaries via its project reference) into a minimal
+    // plugin .nupkg — a .nuspec plus lib/netstandard2.0/<dll> — that the scanner can read.
+    private string BuildNupkg(string dllFileName, string packageId)
     {
-        string fixtureDll = Path.Combine(AppContext.BaseDirectory, "SamplePluginFixture.dll");
-        Assert.True(File.Exists(fixtureDll), $"fixture assembly not found next to the tests: {fixtureDll}");
+        string dll = Path.Combine(AppContext.BaseDirectory, dllFileName);
+        Assert.True(File.Exists(dll), $"fixture assembly not found next to the tests: {dll}");
 
-        string nupkg = Path.Combine(Path.GetTempPath(), $"SamplePluginFixture.{Guid.NewGuid():N}.nupkg");
+        string nupkg = Path.Combine(Path.GetTempPath(), $"{packageId}.{Guid.NewGuid():N}.nupkg");
+        _nupkgs.Add(nupkg);
         using (FileStream fs = new(nupkg, FileMode.CreateNew))
         using (ZipArchive zip = new(fs, ZipArchiveMode.Create))
         {
-            ZipArchiveEntry nuspec = zip.CreateEntry("SamplePluginFixture.nuspec");
+            ZipArchiveEntry nuspec = zip.CreateEntry($"{packageId}.nuspec");
             using (Stream s = nuspec.Open())
             {
                 byte[] xml = Encoding.UTF8.GetBytes(
-                    "<?xml version=\"1.0\"?><package><metadata><id>SamplePluginFixture</id><version>1.0.0</version></metadata></package>");
+                    $"<?xml version=\"1.0\"?><package><metadata><id>{packageId}</id><version>1.0.0</version></metadata></package>");
                 s.Write(xml, 0, xml.Length);
             }
 
-            zip.CreateEntryFromFile(fixtureDll, "lib/netstandard2.0/SamplePluginFixture.dll");
+            zip.CreateEntryFromFile(dll, "lib/netstandard2.0/" + dllFileName);
         }
 
         return nupkg;
@@ -93,31 +119,29 @@ public sealed class PackageScannerBuildStateTests : IDisposable
 
     public void Dispose()
     {
+        foreach (string nupkg in _nupkgs)
+        {
+            TryDelete(() => File.Delete(nupkg), () => File.Exists(nupkg));
+        }
+
+        foreach (string dir in _temps)
+        {
+            TryDelete(() => Directory.Delete(dir, recursive: true), () => Directory.Exists(dir));
+        }
+    }
+
+    private static void TryDelete(Action delete, Func<bool> exists)
+    {
         try
         {
-            if (File.Exists(_nupkg))
+            if (exists())
             {
-                File.Delete(_nupkg);
+                delete();
             }
         }
         catch
         {
             // best-effort cleanup
-        }
-
-        foreach (string dir in _temps)
-        {
-            try
-            {
-                if (Directory.Exists(dir))
-                {
-                    Directory.Delete(dir, recursive: true);
-                }
-            }
-            catch
-            {
-                // best-effort cleanup
-            }
         }
     }
 }
