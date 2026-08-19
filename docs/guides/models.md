@@ -1,7 +1,11 @@
 # Early-bound generation (`vela models`)
 
 Generate early-bound model classes over the **same Dataverse connection** as `plan`/`apply` (no separate
-`pac auth`). Scope by **solution** (which `pac modelbuilder` can't) and/or an explicit table list:
+`pac auth`). Scope the **table list** by **solution** (which `pac modelbuilder` can't) and/or an explicit list.
+`--solution` chooses *which tables* to generate (its Entity components), **not which columns**: each table is
+generated with **all** its columns (full metadata, like `pac modelbuilder`). A column's solution membership is
+orthogonal to wanting it in the model (standard columns are never in a solution; a column may be added only for
+translation), so scoping columns to the solution would drop the ones you actually use.
 
 ```powershell
 # from the solution's components, into <prefix>.Shared.Models.Generated (inferred from the project)
