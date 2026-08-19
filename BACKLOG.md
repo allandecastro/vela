@@ -59,12 +59,6 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Developer experience
 
-- **P3 — Remote debugging of cloud plugins** — let a developer step through a *real* Dataverse plugin
-  execution from their machine. XrmFramework does this via an Azure Relay round-trip (client + generated
-  proxy assembly). **We can likely do simpler:** explore a lighter mechanism (e.g. a relay/forwarder the
-  plugin calls into only when a debug flag/shared-variable is set, or capturing the execution context to
-  replay it locally against the in-memory harness) before committing to the full Azure Relay approach.
-  Keep it opt-in and off by default so it never affects production registrations.
 - **P3 — Modern C# in net462 plugin projects via PolySharp.** Plugins target .NET Framework 4.6.2, so the
   compiler blocks newer language features (records, `required`, init-only, file-scoped namespaces sometimes,
   etc.). Add [PolySharp](https://github.com/Sergio0694/PolySharp) (source-generated polyfills for the missing
@@ -85,15 +79,18 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   `docs/LIMITATIONS.md` / `docs/Vela.Testing.md` were folded into `reference/limitations` and `guides/testing`.
 - **P2 — Optional real-Dataverse integration test tier** (beyond the generate-then-build smoke test) to
   catch CLI regressions against a live dev org.
-- **P2 — Review the logo / branding.** Revisit the brand assets in `branding/` (chevron, wordmark, lockups,
-  cards, slogan banners, favicon/tile) and `branding/DESIGN_SYSTEM.md` for consistency, quality and fit — and
-  check every place they're surfaced (README header, NuGet package icon, docs) uses the right variant.
-- **P2 — Split the generated `Roles` so the ids are usable in dev + tests.** Today `vela models --roles`
-  emits one `Roles` class that references `Vela.Testing.Security` (a test-only assembly), so it must live in the
-  test project. Split it: a dependency-light `Roles` (role `Name` + real root `Guid`) into
-  `<prefix>.Shared.Models.Generated` (usable by runtime plugin code *and* tests), and the harness
-  security-configurator part (privileges via `RoleBuilder`) into a separate class in the test project. Update
-  `RoleGenerator`, `ModelsCommand`, the snapshot tests, and `docs/guides/models.md`.
+- **Branding refresh — SHIPPED**: replaced `branding/` with the organized pack (`symbol/`, `wordmark/`,
+  `lockup/`, `stickers/`), aligned the symbol chevrons to the inverted V used across the pack, regenerated the
+  PNG rasters (`icon.png`, `vela-chevron.svg.png`), updated `DESIGN_SYSTEM.md`, and repointed the README header +
+  docs (navbar logo, favicon, ink hero lockup).
+- **P2 — Move the generated `Roles` into `<prefix>.Shared.Models.Generated` (usable in dev + tests).** Today
+  `vela models --roles` emits a `Roles` class in the test project because its privilege *configurator* calls
+  `RoleBuilder` (from the test-only `Vela.Testing.Security`). Keep it all in `Shared.Models.Generated` instead:
+  emit the privileges as **plain data** (a `RoleGrant[]` of entity + access level + privilege) rather than a
+  `RoleBuilder`-calling method, so the file is dependency-light (name + real root `Guid` + grant data) and both
+  runtime plugin code and tests can consume it. Add a harness `.Role(name, id, RoleGrant[])` overload that
+  applies the grant data. Update `RoleGenerator`, `ModelsCommand`, the snapshot tests, and `docs/guides/models.md`.
+  (Simpler alternative if preferred: generate only `Name` + `Id`, and configure privileges by hand in tests.)
 
 ## Won't do (by design — see the [Limitations reference](https://allandecastro.github.io/vela/reference/limitations.html))
 
