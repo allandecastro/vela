@@ -13,9 +13,9 @@ vela models --entities account,contact --namespace Zava.Shared.Models.Generated 
 # typed Request/Response message classes for Custom APIs
 vela models --custom-apis zava_Recalculate --interactive
 
-# security roles → a Roles class for the test project (real privileges + root role id)
-vela models --roles "Salesperson,Sales Manager" --namespace Zava.Tests.Roles --out tests/Zava.Tests/Roles
-vela models --solution ZavaSales --solution-roles --namespace Zava.Tests.Roles --out tests/Zava.Tests/Roles
+# security roles → a dependency-light Roles class in Shared.Models.Generated (real privileges + root role id)
+vela models --roles "Salesperson,Sales Manager" --namespace Zava.Shared.Models.Generated --out src/Zava.Shared/Models/Generated
+vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models.Generated --out src/Zava.Shared/Models/Generated
 ```
 
 Generated classes are `partial` (extend them in a sibling file), keep the primary id synced with `Entity.Id`,
@@ -35,16 +35,19 @@ Connection flags are the same as `plan`/`apply`
 ## Security roles (`--roles` / `--solution-roles`)
 
 `--roles "Salesperson,Sales Manager"` (explicit names) or `--solution-roles` (every role in a `--solution`)
-generates a `Roles` class **for the test project**. Each role becomes three members, keyed off its **root**
-role id (the stable id, identical across business units) and its real privileges read from the environment:
+generates a `Roles` class into the **shared models project**, alongside the table models. Each role becomes
+three members, keyed off its **root** role id (the stable id, identical across business units) and its real
+privileges read from the environment:
 
 ```csharp
 public static class Roles
 {
     public const string SalespersonName = "Salesperson";
     public static readonly Guid SalespersonId = new Guid("1111...");   // the real root role id
-    public static void Salesperson(RoleBuilder r) =>                   // its real privileges
-        r.Grant("account", AccessLevel.BusinessUnit, Privilege.Read);
+    public static readonly (string Entity, string Level, string Privilege)[] Salesperson = new[] // its real privileges
+    {
+        ("account", "BusinessUnit", "Read"),
+    };
 }
 ```
 
@@ -61,9 +64,10 @@ var svc = new InMemoryOrganizationService()
 ```
 
 > [!NOTE]
-> The generated `Roles` references `Vela.Testing.Security` (for `RoleBuilder`), so it lives in the **test**
-> project, not the shared runtime models. Its `Id` values are the real role ids, so a plugin that resolves a
-> user's roles at runtime and the test that seeds them line up on the same GUIDs.
+> The generated `Roles` is dependency-light (BCL types only, no test dependency), so it lives with the shared
+> runtime models. `Roles.XName` / `Roles.XId` are usable from plugin code at runtime, while the harness reads the
+> grant data in tests via the `Role(name, id, grants)` overload. Its `Id` values are the real role ids, so a
+> plugin that resolves a user's roles at runtime and the test that seeds them line up on the same GUIDs.
 
 > Out of scope for now (use `pac modelbuilder` if you need them): relationship navigation properties and an
 > `OrganizationServiceContext`/LINQ provider. See [Limitations reference](../reference/limitations.md).

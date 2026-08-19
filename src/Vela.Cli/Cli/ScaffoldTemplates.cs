@@ -372,6 +372,10 @@ vela models `
 `vela models` emits `partial` classes with option-set enums, multi-select choices, alternate-key factories and
 DataAnnotations. For the few things it leaves out (relationship navigation properties / `OrganizationServiceContext`
 LINQ, localized multi-language labels, custom casing), use `pac modelbuilder` instead.
+
+Add `--roles "<names>"` (or `--solution-roles` with `--solution`) to also generate a dependency-light `Roles`
+class into the same `Shared.Models.Generated` folder: `Roles.XName` / `Roles.XId` are usable from plugin code at
+runtime, and the harness seeds a role's real privileges in tests via `Role(Roles.XName, Roles.XId, Roles.X)`.
 """;
     }
 
@@ -533,6 +537,9 @@ $$"""
   <!-- net462: the plugin sandbox provides the SDK, so these reference assemblies are PrivateAssets. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net462'">
     <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="{{CrmCoreAssembliesVersion}}" PrivateAssets="all" />
+    <!-- .NET Framework 4.6.2 has no in-box System.ValueTuple; the generated Roles class exposes grant tuples.
+         Compile-time reference only (the type forwards to mscorlib on the 4.7.2+ Dataverse sandbox at runtime). -->
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
 
   <!-- net10.0: the cross-platform client supplies Microsoft.Xrm.Sdk for the ConsoleApp. -->
@@ -1290,9 +1297,9 @@ namespace {{prefix}}.Plugins.Tests.Security
         // whole organization. Salesperson holds it; OutsideUser holds no role at all (so: no access to anything).
         //
         // Roles are declared inline (by name) here so the example is self-contained. To mirror your REAL environment,
-        // generate a strongly-typed `Roles` class from its security roles with `vela models --roles` (or
-        // `--solution-roles`) and configure the harness with the actual privileges via
-        // `Role(Roles.Salesrep.Name, Roles.SalesrepId, Roles.Salesrep)` instead of the string name below.
+        // generate a dependency-light `Roles` class from its security roles with `vela models --roles` (or
+        // `--solution-roles`) into `{{prefix}}.Shared/Models/Generated`, then configure the harness with the actual
+        // privileges via `Role(Roles.SalesrepName, Roles.SalesrepId, Roles.Salesrep)` instead of the string name below.
         private static SecurityConfiguration Scenario(SecurityConfiguration security) => security
             .BusinessUnit(SalesBusinessUnit)
             .Role("salesrep", role => role.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Read, Privilege.Write))

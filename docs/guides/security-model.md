@@ -55,5 +55,6 @@ var crm = new InMemoryOrganizationService()
 - **Role membership.** With security configured, the platform's membership tables (`role`, `systemuserroles`,
   `teamroles`, `teammembership`) are queryable, so a plugin can resolve a user's roles as it does against
   Dataverse. Generate a `Roles` class with the **real** role privileges + ids from your environment with
-  [`vela models --roles`](models.md), then `Role(Roles.XName, Roles.XId, Roles.X)`.
+  [`vela models --roles`](models.md) (dependency-light, generated into the shared models project), then
+  `Role(Roles.XName, Roles.XId, Roles.X)`.
 - **Off by default** - any test that never calls `WithSecurity(...)` behaves exactly as before (full access).

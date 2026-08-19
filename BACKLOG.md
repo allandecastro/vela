@@ -59,11 +59,6 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Developer experience
 
-- **P3 — Modern C# in net462 plugin projects via PolySharp.** Plugins target .NET Framework 4.6.2, so the
-  compiler blocks newer language features (records, `required`, init-only, file-scoped namespaces sometimes,
-  etc.). Add [PolySharp](https://github.com/Sergio0694/PolySharp) (source-generated polyfills for the missing
-  runtime attributes) to `vela init`'s scaffolded plugin projects so authors can use modern C# without runtime
-  risk. Off the hot path (compile-time only), no effect on the produced assembly. (Idea seen in rezanid/xrmtools.)
 - **Typed FetchXML — SHIPPED** (#46, #48, +long-tail): `Query.For<T>()` and any `QueryExpression` serialize to
   FetchXML with `ToFetchXml()` (no new builder — `TypedQuery` already had the full typed fluent API, so this is
   just the `FetchXmlWriter` serializer). `TracingOrganizationService` now logs the FetchXML string; `vela init`
@@ -83,14 +78,24 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   `lockup/`, `stickers/`), aligned the symbol chevrons to the inverted V used across the pack, regenerated the
   PNG rasters (`icon.png`, `vela-chevron.svg.png`), updated `DESIGN_SYSTEM.md`, and repointed the README header +
   docs (navbar logo, favicon, ink hero lockup).
-- **P2 — Move the generated `Roles` into `<prefix>.Shared.Models.Generated` (usable in dev + tests).** Today
-  `vela models --roles` emits a `Roles` class in the test project because its privilege *configurator* calls
-  `RoleBuilder` (from the test-only `Vela.Testing.Security`). Keep it all in `Shared.Models.Generated` instead:
-  emit the privileges as **plain data** (a `RoleGrant[]` of entity + access level + privilege) rather than a
-  `RoleBuilder`-calling method, so the file is dependency-light (name + real root `Guid` + grant data) and both
-  runtime plugin code and tests can consume it. Add a harness `.Role(name, id, RoleGrant[])` overload that
-  applies the grant data. Update `RoleGenerator`, `ModelsCommand`, the snapshot tests, and `docs/guides/models.md`.
-  (Simpler alternative if preferred: generate only `Name` + `Id`, and configure privileges by hand in tests.)
+- **P2 — Generated `Roles` made dependency-light in `Shared.Models.Generated` — DONE (pending PR).** `vela models
+  --roles` used to emit a `Roles` class whose configurator called `RoleBuilder`/`AccessLevel`/`Privilege` (test-only
+  `Vela.Testing.Security`), so the file could not compile in the shared models project it was written to. Now the
+  emitted code is BCL-only, so it lives with the table models and runtime plugin code can use `Roles.XName` /
+  `Roles.XId` (no new project, no test dependency, no split). Shipped shape:
+    - `Roles.XName` (`const string`) and `Roles.XId` (`static readonly Guid`) — usable by plugins, ConsoleApp, tests.
+    - Grants as data: `public static readonly (string Entity, string Level, string Privilege)[] X = new[] { ("account",
+      "BusinessUnit", "Read"), … };`. Entity stays a **string** (role grants span far more tables than are ever
+      early-bound). Level/privilege are **strings** (typing them across the `Shared`(net462;net10.0) ↔
+      `Vela.Testing`(net462) boundary would need a shared netstandard2.0 assembly — not worth a new project; the
+      hand-written `RoleBuilder.Grant(entity, AccessLevel, Privilege)` path stays fully typed).
+    - Harness overload `Role(string name, Guid id, params (string Entity, string Level, string Privilege)[] grants)`
+      rehydrates the internal `RoleBuilder` (parses Level/Privilege → enums, throws on unknown). The `Action<RoleBuilder>`
+      overloads remain for hand-authored roles.
+    - Scaffolded `Shared.csproj` gains `System.ValueTuple` on its net462 target (4.6.2 lacks the in-box type; the
+      tuple grants need it — compile-time reference only, forwards to mscorlib on the 4.7.2+ sandbox).
+  Touched `RoleGenerator`, harness `SecurityModel`, `ModelsCommand` usage text, `ScaffoldTemplates`, docs
+  (`models.md`/`security-model.md`/`limitations.md`), and the `RoleGenerator`/harness tests.
 
 ## Won't do (by design — see the [Limitations reference](https://allandecastro.github.io/vela/reference/limitations.html))
 
@@ -100,13 +105,13 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 - Multi-select option set as a Custom API parameter type — **not supported by Dataverse** (`customapifieldtype`
   has no such value), so nothing to implement.
 - CLI **managing** (create/update/delete) solutions, security roles, web resources, environment variables — out of
-  scope (solution tooling's job). Note: **reading** roles to generate a test-project `Roles` class (`vela models
-  --roles`) is different and already shipped.
+  scope (solution tooling's job). Note: **reading** roles to generate a dependency-light `Roles` class in the shared
+  models project (`vela models --roles`) is different and already shipped.
 - **Entra ID (Azure AD) group teams** — out of scope for the harness security model (which now covers
   roles/privileges/BU/teams, sharing, 1:N cascades, access teams, manager **and** position hierarchy, and
   field-level security — see the "Test harness" section above). CLI **management** of security-role templates
   (create/update roles in an environment) also stays out of scope — that's solution-tooling's job; `vela models`
-  only *reads* roles for the test-project generator.
+  only *reads* roles for the shared-models generator.
 - **`vela models`**: relationship navigation properties + `OrganizationServiceContext`/LINQ (lazy loading +
   change tracking don't fit the plugin sandbox — use `Query.For<T>()`), localized multi-language labels, and
   custom class/property casing. For those, use `pac modelbuilder`.

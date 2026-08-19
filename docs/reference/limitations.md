@@ -78,8 +78,8 @@ untouched.
   early-bound model type (`--entity`).
 - **`vela models`** generates entity classes (typed properties, primary-id sync, XML doc, DataAnnotations,
   option-set enums local/global, multi-select as `IList<Enum>`, alternate-key reference factories) scoped by
-  `--solution`/`--entities`, Custom API message classes via `--custom-apis`, and a `Roles` class (real role
-  privileges + root role id, for the test project) via `--roles`/`--solution-roles`. **Out of scope:** relationship
+  `--solution`/`--entities`, Custom API message classes via `--custom-apis`, and a dependency-light `Roles` class
+  (real role privileges + root role id, in the shared models project) via `--roles`/`--solution-roles`. **Out of scope:** relationship
   navigation properties + `OrganizationServiceContext`/LINQ (lazy loading/change-tracking don't fit the plugin
   sandbox - use `Query.For<T>()`), localized multi-language labels, and custom class/property casing - use
   `pac modelbuilder` if you need those. Role generation covers **table** privileges only - non-entity /

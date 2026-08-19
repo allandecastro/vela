@@ -19,10 +19,11 @@ public sealed record RoleModel(string Name, Guid Id, IReadOnlyList<RoleGrantMode
 public sealed record RoleGenOptions(string Namespace);
 
 /// <summary>
-/// Generates a <c>Roles</c> class from Dataverse security roles, so tests configure the harness with the real role
-/// privilege configuration (via <c>WithSecurity(s =&gt; s.Role(Roles.XName, Roles.X))</c>) and the role's GUID. The
-/// output goes in the test project and references <c>Vela.Testing.Security</c> (unlike the dependency-light table
-/// models). This is a pure metadata-to-code function; the Dataverse query lives in <c>ModelsCommand</c>.
+/// Generates a <c>Roles</c> class from Dataverse security roles: each role's name, real root id and real privilege
+/// grants (as <c>[entity, access level, privilege]</c> name triples). The output is dependency-light (BCL only, no
+/// test types) so it sits with the shared models and both runtime plugin code (via <c>Roles.XName</c>/<c>Roles.XId</c>)
+/// and tests (via the <c>Role(name, id, grants)</c> harness overload) can consume it. This is a pure metadata-to-code
+/// function; the Dataverse query lives in <c>ModelsCommand</c>.
 /// </summary>
 public static class RoleGenerator
 {
@@ -51,11 +52,12 @@ public static class RoleGenerator
         sb.AppendLine($"namespace {options.Namespace}");
         sb.AppendLine("{");
         sb.AppendLine("    using System;");
-        sb.AppendLine("    using Vela.Testing.Security;");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    /// Security roles generated from the environment. Configure the harness with a role's real");
-        sb.AppendLine("    /// privileges via <c>WithSecurity(s =&gt; s.Role(Roles.XName, Roles.XId, Roles.X).User(userId, buId, Roles.XName))</c>");
+        sb.AppendLine("    /// Security roles generated from the environment (name, real root id, and real privilege grants as");
+        sb.AppendLine("    /// [entity, access level, privilege] name triples). Dependency-light (no test-only types), so it lives");
+        sb.AppendLine("    /// with the shared models and both runtime plugin code and tests can use it. Configure the harness via");
+        sb.AppendLine("    /// <c>WithSecurity(s =&gt; s.Role(Roles.XName, Roles.XId, Roles.X).User(userId, buId, Roles.XName))</c>");
         sb.AppendLine("    /// — passing <c>Roles.XId</c> makes systemuserroles/teamroles queries return the real role id, which");
         sb.AppendLine("    /// plugin logic also uses.");
         sb.AppendLine("    /// </summary>");
@@ -83,19 +85,31 @@ public static class RoleGenerator
         sb.AppendLine($"        /// <summary>The root id of the \"{XmlEscape(role.Name)}\" security role.</summary>");
         sb.AppendLine($"        public static readonly Guid {identifier}Id = new Guid(\"{role.Id:D}\");");
         sb.AppendLine();
-        sb.AppendLine($"        /// <summary>Applies the privileges of the \"{XmlEscape(role.Name)}\" role to a role builder.</summary>");
-        sb.AppendLine($"        public static void {identifier}(RoleBuilder r)");
-        sb.AppendLine("        {");
+        sb.AppendLine($"        /// <summary>The privilege grants of the \"{XmlEscape(role.Name)}\" role ([entity, access level, privilege]).</summary>");
 
-        foreach (RoleGrantModel grant in (role.Grants ?? Array.Empty<RoleGrantModel>())
+        List<RoleGrantModel> grants = (role.Grants ?? Array.Empty<RoleGrantModel>())
             .Where(g => g != null && !string.IsNullOrWhiteSpace(g.Entity))
             .OrderBy(g => g.Entity, StringComparer.Ordinal)
-            .ThenBy(g => g.Privilege, StringComparer.Ordinal))
+            .ThenBy(g => g.Privilege, StringComparer.Ordinal)
+            .ToList();
+
+        if (grants.Count == 0)
         {
-            sb.AppendLine($"            r.Grant(\"{Escape(grant.Entity)}\", AccessLevel.{grant.AccessLevel}, Privilege.{grant.Privilege});");
+            sb.AppendLine($"        public static readonly (string Entity, string Level, string Privilege)[] {identifier} =");
+            sb.AppendLine("            new (string Entity, string Level, string Privilege)[0];");
+        }
+        else
+        {
+            sb.AppendLine($"        public static readonly (string Entity, string Level, string Privilege)[] {identifier} = new[]");
+            sb.AppendLine("        {");
+            foreach (RoleGrantModel grant in grants)
+            {
+                sb.AppendLine($"            (\"{Escape(grant.Entity)}\", \"{Escape(grant.AccessLevel)}\", \"{Escape(grant.Privilege)}\"),");
+            }
+
+            sb.AppendLine("        };");
         }
 
-        sb.AppendLine("        }");
         if (!last)
         {
             sb.AppendLine();
