@@ -71,6 +71,3 @@ var svc = new InMemoryOrganizationService()
 
 > Out of scope for now (use `pac modelbuilder` if you need them): relationship navigation properties and an
 > `OrganizationServiceContext`/LINQ provider. See [Limitations reference](../reference/limitations.md).
-
-> Out of scope for now (use `pac modelbuilder` if you need them): relationship navigation properties and an
-> `OrganizationServiceContext`/LINQ provider. See [Limitations reference](../reference/limitations.md).
