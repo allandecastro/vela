@@ -11,7 +11,7 @@
       }
     ],
     "resource": [
-      { "files": ["images/**"] }
+      { "files": ["images/**", "favicon.ico"] }
     ],
     "output": "_site",
     "template": ["default", "modern", "templates/vela"],
