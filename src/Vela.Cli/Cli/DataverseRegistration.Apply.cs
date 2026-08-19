@@ -194,6 +194,20 @@ internal static partial class DataverseRegistration
 
     internal static void EnsurePluginPackages(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose)
 {
+    // Dataverse rejects a plugin-package import whose nuget name has no solution publisher prefix (0x80040265,
+    // "The nuget file name does not contain a solution prefix"). Without a --solution to source that prefix, a
+    // package whose name isn't already prefixed can't import — fail fast with a clear message instead.
+    if (string.IsNullOrWhiteSpace(solutionUniqueName))
+    {
+        PluginPackagePayload? unprefixed = packagePayloads.FirstOrDefault(p => !LooksSolutionPrefixed(p.PackageName));
+        if (unprefixed != null)
+        {
+            throw new InvalidOperationException(
+                $"Plugin package '{unprefixed.PackageName}' has no solution publisher prefix, which Dataverse requires " +
+                "to import a package. Re-run 'apply --execute' with --solution <uniqueName> so the prefix is applied.");
+        }
+    }
+
     string? solutionPrefix = string.IsNullOrWhiteSpace(solutionUniqueName)
         ? null
         : ResolveSolutionCustomizationPrefix(service, solutionUniqueName);
@@ -255,6 +269,21 @@ internal static partial class DataverseRegistration
     }
 
     return $"{solutionPrefix}_{packageName}";
+}
+
+    // A package name already carries a solution publisher prefix when it starts with "<prefix>_" and <prefix> is a
+    // plausible Dataverse customization prefix (2-8 letters/digits, letter-first). Used to decide whether importing
+    // without a --solution can possibly succeed.
+    internal static bool LooksSolutionPrefixed(string packageName)
+{
+    int underscore = packageName.IndexOf('_');
+    if (underscore < 2)
+    {
+        return false;
+    }
+
+    string prefix = packageName.Substring(0, underscore);
+    return prefix.Length >= 2 && prefix.Length <= 8 && char.IsLetter(prefix[0]) && prefix.All(char.IsLetterOrDigit);
 }
 
     internal static string ResolveSolutionCustomizationPrefix(IOrganizationService service, string solutionUniqueName)

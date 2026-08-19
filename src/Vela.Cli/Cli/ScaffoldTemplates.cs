@@ -63,6 +63,9 @@ $$"""
     <ImplicitUsings>disable</ImplicitUsings>
     <!-- Early-bound models and plugin code follow the classic non-nullable Dataverse conventions. -->
     <Nullable>disable</Nullable>
+    <!-- These projects pin package versions inline. Disable central package management explicitly so the solution
+         builds even if it is created inside a repository that has its own Directory.Packages.props. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
   </PropertyGroup>
 </Project>
 """;
@@ -540,6 +543,9 @@ $$"""
     <!-- .NET Framework 4.6.2 has no in-box System.ValueTuple; the generated Roles class exposes grant tuples.
          Compile-time reference only (the type forwards to mscorlib on the 4.7.2+ Dataverse sandbox at runtime). -->
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+    <!-- `vela models` emits [StringLength]/[Range] DataAnnotations by default; on net462 those types live in the
+         System.ComponentModel.DataAnnotations framework assembly, which is not referenced by default. -->
+    <Reference Include="System.ComponentModel.DataAnnotations" />
   </ItemGroup>
 
   <!-- net10.0: the cross-platform client supplies Microsoft.Xrm.Sdk for the ConsoleApp. -->

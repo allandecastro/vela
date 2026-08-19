@@ -35,6 +35,25 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
+    public void SharedCsproj_ReferencesDataAnnotations_SoGeneratedModelsCompileOnNet462()
+    {
+        string csproj = ScaffoldTemplates.SharedCsproj(Options());
+
+        // `vela models` emits [StringLength]/[Range] DataAnnotations by default; net462 must reference the
+        // System.ComponentModel.DataAnnotations framework assembly or the generated models fail to compile.
+        Assert.Contains("System.ComponentModel.DataAnnotations", csproj);
+    }
+
+    [Fact]
+    public void DirectoryBuildProps_DisablesCentralPackageManagement()
+    {
+        string props = ScaffoldTemplates.DirectoryBuildProps();
+
+        // Insulates the scaffolded solution from a parent Directory.Packages.props if created inside another repo.
+        Assert.Contains("<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>", props);
+    }
+
+    [Fact]
     public void PluginCsproj_OmitsSigningTarget_ByDefault_AndIncludesItWhenRequested()
     {
         string plain = ScaffoldTemplates.PluginCsproj("Zava.Plugins", "Zava.Shared", "1.0.0");

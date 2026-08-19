@@ -366,9 +366,25 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         Entity created = Assert.Single(svc.Created);
         Assert.Equal("pluginpackage", created.LogicalName);
-        Assert.Equal("acme_Pkg", created.GetAttributeValue<string>("name")); // no prefix applied
+        Assert.Equal("acme_Pkg", created.GetAttributeValue<string>("name")); // already prefixed → imports as-is
         // No solution → no solution/publisher queries issued.
         Assert.DoesNotContain(svc.Queries, q => q.EntityName == "solution");
+    }
+
+    [Fact]
+    public void EnsurePluginPackages_without_solution_and_unprefixed_name_throws()
+    {
+        // An unprefixed package (e.g. the project name "Zava.Plugins") can't import without a --solution to source
+        // the publisher prefix — fail fast with a clear message instead of the platform's cryptic 0x80040265.
+        var svc = new TestSupport.FakeOrgService();
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            DataverseRegistration.EnsurePluginPackages(
+                svc, [new PluginPackagePayload("Zava.Plugins", "1.0.0", "unused.nupkg")], solutionUniqueName: null, new List<string>(), verbose: false));
+
+        Assert.Contains("solution publisher prefix", ex.Message);
+        Assert.Contains("--solution", ex.Message);
+        Assert.Empty(svc.Created); // failed fast, nothing sent to Dataverse
     }
 
     [Fact]
@@ -1036,13 +1052,15 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
             Changed: [],
             LocalItems: [],
             CurrentItems: []);
-        var packages = new[] { new PluginPackagePayload("Zava.Plugins.Package", "1.0.0", nupkg) };
+        // Already-prefixed package name, so no --solution is needed to import it (the prefixing path is covered by
+        // EnsurePluginPackages_with_solution_resolves_prefix_and_id).
+        var packages = new[] { new PluginPackagePayload("acme_ZavaPlugins", "1.0.0", nupkg) };
 
         DataverseRegistration.ApplyDiff(svc, diff, [], packages, solutionUniqueName: null, new List<string>(), verbose: false);
 
         // The package was published with its name/version/content...
         Entity pkg = svc.Created.Single(e => e.LogicalName == "pluginpackage");
-        Assert.Equal("Zava.Plugins.Package", pkg.GetAttributeValue<string>("name"));
+        Assert.Equal("acme_ZavaPlugins", pkg.GetAttributeValue<string>("name"));
         Assert.Equal("1.0.0", pkg.GetAttributeValue<string>("version"));
         Assert.Equal(Convert.ToBase64String(Encoding.UTF8.GetBytes("pkg-bytes")), pkg.GetAttributeValue<string>("content"));
         // ...and, once the type resolved, the step was created bound to it.
