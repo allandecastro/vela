@@ -74,10 +74,18 @@ internal static partial class DataverseRegistration
     {
         string token = options.OAuthToken;
         string oauthUrl = options.OAuthUrl;
-        var client = new ServiceClient(
-            new Uri(oauthUrl),
-            _ => Task.FromResult(token),
-            useUniqueInstance: true);
+        ServiceClient client;
+        try
+        {
+            client = new ServiceClient(new Uri(oauthUrl), _ => Task.FromResult(token), useUniqueInstance: true);
+        }
+        catch (Exception ex) when (ex is not DataverseConnectionException)
+        {
+            // The SDK's ServiceClient constructor can throw on a bad token/endpoint. Surface it as a connection
+            // failure (exit 6) rather than a generic parse error (exit 4).
+            throw new DataverseConnectionException($"Dataverse connection failed: {ex.Message}", ex);
+        }
+
         if (!client.IsReady)
             throw new DataverseConnectionException($"Dataverse connection failed: {client.LastError}");
         return client;
@@ -87,7 +95,18 @@ internal static partial class DataverseRegistration
 
     internal static ServiceClient CreateDataverseClientFromConnectionString(string connectionString)
 {
-    ServiceClient client = new ServiceClient(connectionString);
+    ServiceClient client;
+    try
+    {
+        client = new ServiceClient(connectionString);
+    }
+    catch (Exception ex) when (ex is not DataverseConnectionException)
+    {
+        // A bad secret/url makes the SDK's ServiceClient constructor throw before IsReady can be checked. Surface
+        // it as a connection failure (exit 6), the documented code, instead of a generic parse error (exit 4).
+        throw new DataverseConnectionException($"Dataverse connection failed: {ex.Message}", ex);
+    }
+
     if (!client.IsReady)
     {
         throw new DataverseConnectionException($"Dataverse connection failed: {client.LastError}");
