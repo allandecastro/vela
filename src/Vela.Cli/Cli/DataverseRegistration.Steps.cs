@@ -347,15 +347,23 @@ internal static partial class DataverseRegistration
 
         if (existingByKey.TryGetValue(key, out Entity? existing))
         {
-            Entity update = new Entity("sdkmessageprocessingstepimage")
+            // The match key is (alias, imagetype), so those already agree, and messagepropertyname is derived from
+            // the (unchanged) message + imagetype. Only `attributes` can differ, so update just that. Crucially, do
+            // NOT re-set imagetype/messagepropertyname on an existing image: the platform throws a
+            // NullReferenceException (0x80040216) on such an image update, which broke every step update that had an
+            // image. Skip the update entirely when nothing changed.
+            string existingAttributes = string.Join(",", (existing.GetAttributeValue<string>("attributes") ?? string.Empty)
+                .Split(',')
+                .Select(x => x.Trim())
+                .Where(x => x.Length > 0)
+                .OrderBy(x => x, StringComparer.Ordinal));
+            if (string.Equals(existingAttributes, attributesCsv, StringComparison.OrdinalIgnoreCase))
             {
-                Id = existing.Id
-            };
-            update["entityalias"] = desiredImage.Alias;
-            update["name"] = desiredImage.Alias;
+                continue;
+            }
+
+            Entity update = new Entity("sdkmessageprocessingstepimage") { Id = existing.Id };
             update["attributes"] = attributesCsv;
-            update["imagetype"] = new OptionSetValue(desiredImage.ImageType);
-            update["messagepropertyname"] = msgPropertyName;
             service.Update(update);
             continue;
         }
