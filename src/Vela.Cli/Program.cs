@@ -240,7 +240,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
 
         using ServiceClient client = CreateDataverseClient(options);
         IOrganizationService service = client;
-        ApplyDiff(service, diff, local.SourceAssemblyPayloads, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose);
+        ApplyDiff(service, diff, local.SourceAssemblyPayloads, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey);
 
         RegistrationState after = BuildDataverseState(local.SourceAssemblies, options, jsonOptions);
         RegistrationDiff afterDiff = BuildDiff(local, after);

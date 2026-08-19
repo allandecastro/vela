@@ -35,6 +35,7 @@ internal static class PackageScanner
     List<string> sourceAssemblies = [];
     List<AssemblyPayload> sourceAssemblyPayloads = [];
     List<PluginPackagePayload> packagePayloads = [];
+    Dictionary<string, string> secureConfigByStepKey = new(StringComparer.Ordinal);
 
     foreach (string packagePath in options.PackagePaths)
     {
@@ -63,7 +64,17 @@ internal static class PackageScanner
 
                 foreach (object def in definitions!)
                 {
-                    JsonElement normalized = NormalizeStepDefinition(JsonSerializer.SerializeToElement(def, jsonOptions), jsonOptions);
+                    JsonElement raw = JsonSerializer.SerializeToElement(def, jsonOptions);
+                    JsonElement normalized = NormalizeStepDefinition(raw, jsonOptions);
+                    // Items keep only the hash of the secure config (so secrets never reach plan/inspect output);
+                    // stash the RAW value here, keyed by stepKey, so apply can write the real secret to Dataverse.
+                    if (raw.TryGetProperty("secureConfig", out JsonElement secureEl) && secureEl.ValueKind == JsonValueKind.String
+                        && secureEl.GetString() is { Length: > 0 } rawSecureConfig
+                        && normalized.TryGetProperty("stepKey", out JsonElement keyEl) && keyEl.GetString() is { Length: > 0 } stepKey)
+                    {
+                        secureConfigByStepKey[stepKey] = rawSecureConfig;
+                    }
+
                     items.Add(new RegistrationItem("step", type.FullName ?? type.Name, normalized));
                 }
             }
@@ -95,7 +106,8 @@ internal static class PackageScanner
             .ToArray(),
         GeneratedAtUtc: DateTime.UtcNow,
         Items: items.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
-        Diagnostics: []);
+        Diagnostics: [],
+        SecureConfigByStepKey: secureConfigByStepKey);
 }
 
     // A type we identified as a plugin/Custom API but couldn't introspect is a fatal authoring error: continuing

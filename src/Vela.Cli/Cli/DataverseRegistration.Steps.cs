@@ -21,7 +21,7 @@ namespace Vela.Cli;
 /// <summary> Step (sdkmessageprocessingstep) upsert/delete, images, message/filter resolution. </summary>
 internal static partial class DataverseRegistration
 {
-    internal static void UpsertStep(IOrganizationService service, Dictionary<string, Guid> pluginTypeIds, JsonElement definitionElement, bool verbose = true, StepMetadataCache? metadataCache = null)
+    internal static void UpsertStep(IOrganizationService service, Dictionary<string, Guid> pluginTypeIds, JsonElement definitionElement, bool verbose = true, StepMetadataCache? metadataCache = null, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null)
 {
     StepApplyDefinition definition = ParseStepDefinition(definitionElement);
     if (!pluginTypeIds.TryGetValue(definition.PluginTypeName, out Guid pluginTypeId))
@@ -74,7 +74,13 @@ internal static partial class DataverseRegistration
         LogOperation("step", "create", BuildStepName(definition));
     }
 
-    SyncStepSecureConfig(service, stepId, definition.SecureConfig ?? string.Empty);
+    // definition.SecureConfig is the redacted hash (Items never carry the plaintext); write the RAW value from the
+    // scan-time side channel so the real secret reaches Dataverse. Falls back to the definition value when no map
+    // is supplied (e.g. a direct unit test that passes a plaintext definition), or empty when there is no secret.
+    string secureConfig = secureConfigByStepKey != null && secureConfigByStepKey.TryGetValue(definition.StepKey, out string? rawSecureConfig)
+        ? rawSecureConfig
+        : definition.SecureConfig ?? string.Empty;
+    SyncStepSecureConfig(service, stepId, secureConfig);
     SyncStepState(service, stepId, definition.Enabled);
     SyncStepImages(service, stepId, definition.Message, definition.PreImages, definition.PostImages);
 }
