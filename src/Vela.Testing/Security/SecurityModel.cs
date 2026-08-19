@@ -178,6 +178,45 @@ namespace Vela.Testing.Security
             return this;
         }
 
+        /// <summary>
+        /// Defines a named role from generated grant data (a <c>Roles.X</c> array of
+        /// <c>(entity, access level, privilege)</c> name triples) with an explicit root <paramref name="id"/>. The
+        /// level/privilege names must match <see cref="AccessLevel"/>/<see cref="Privilege"/> members. This is the
+        /// overload the dependency-light generated <c>Roles</c> class feeds; hand-written roles use the
+        /// <see cref="Action{RoleBuilder}"/> overloads.
+        /// </summary>
+        public SecurityConfiguration Role(string name, Guid id, params (string Entity, string Level, string Privilege)[] grants)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("Role name is required.", nameof(name));
+            }
+
+            RoleBuilder builder = new RoleBuilder();
+            foreach ((string entity, string level, string privilege) in grants ?? Array.Empty<(string, string, string)>())
+            {
+                // Enum.IsDefined on the string validates the exact member name (case-sensitive) and rejects numeric
+                // strings like "2" — unlike Enum.TryParse, which would accept them.
+                if (level == null || !Enum.IsDefined(typeof(AccessLevel), level))
+                {
+                    throw new ArgumentException($"Unknown access level '{level}' in role '{name}'.", nameof(grants));
+                }
+
+                if (privilege == null || !Enum.IsDefined(typeof(Privilege), privilege))
+                {
+                    throw new ArgumentException($"Unknown privilege '{privilege}' in role '{name}'.", nameof(grants));
+                }
+
+                AccessLevel accessLevel = (AccessLevel)Enum.Parse(typeof(AccessLevel), level);
+                Privilege verb = (Privilege)Enum.Parse(typeof(Privilege), privilege);
+                builder.Grant(entity, accessLevel, verb);
+            }
+
+            _roles[name] = builder;
+            _roleIds[name] = id;
+            return this;
+        }
+
         /// <summary>Registers a user in <paramref name="businessUnit"/> holding the named <paramref name="roles"/>.</summary>
         public SecurityConfiguration User(Guid id, Guid businessUnit, params string[] roles)
         {

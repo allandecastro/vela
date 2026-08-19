@@ -400,7 +400,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
         Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
-        Console.WriteLine("  --roles <a,b,c>           security role names → a Roles class (root role id + privileges) for the test project");
+        Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
