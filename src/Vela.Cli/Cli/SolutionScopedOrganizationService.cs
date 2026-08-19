@@ -12,27 +12,21 @@ namespace Vela.Cli;
 /// steps, step images, secure config, Custom APIs and their parameters) into a solution. Reads, deletes and other
 /// messages pass straight through — only creations/updates need the solution context.
 /// </summary>
-internal sealed class SolutionScopedOrganizationService : IOrganizationService
+internal sealed class SolutionScopedOrganizationService(IOrganizationService inner, string solutionUniqueName) : IOrganizationService
 {
-    private readonly IOrganizationService _inner;
-    private readonly string _solutionUniqueName;
-
-    public SolutionScopedOrganizationService(IOrganizationService inner, string solutionUniqueName)
-    {
-        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-        _solutionUniqueName = solutionUniqueName ?? throw new ArgumentNullException(nameof(solutionUniqueName));
-    }
+    private readonly IOrganizationService _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+    private readonly string _solutionUniqueName = solutionUniqueName ?? throw new ArgumentNullException(nameof(solutionUniqueName));
 
     public Guid Create(Entity entity)
     {
-        CreateRequest request = new CreateRequest { Target = entity };
+        CreateRequest request = new() { Target = entity };
         request["SolutionUniqueName"] = _solutionUniqueName;
         return ((CreateResponse)_inner.Execute(request)).id;
     }
 
     public void Update(Entity entity)
     {
-        UpdateRequest request = new UpdateRequest { Target = entity };
+        UpdateRequest request = new() { Target = entity };
         request["SolutionUniqueName"] = _solutionUniqueName;
         _inner.Execute(request);
     }

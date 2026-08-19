@@ -76,8 +76,8 @@ internal static class ProjectScaffolder
         // ---- Shared ----
         AddProject(sharedName, "src");
         Write(Path.Combine("src", sharedName, $"{sharedName}.csproj"), SharedCsproj(options));
-        Write(Path.Combine("src", sharedName, "Models", "Account.cs"), AccountModel(prefix));
-        Write(Path.Combine("src", sharedName, "Models", "Contact.cs"), ContactModel(prefix));
+        Write(Path.Combine("src", sharedName, "Models", "Generated", "Account.cs"), AccountModel(prefix));
+        Write(Path.Combine("src", sharedName, "Models", "Generated", "Contact.cs"), ContactModel(prefix));
         Write(Path.Combine("src", sharedName, "Services", "IGreetingService.cs"), GreetingServiceInterface(prefix));
         Write(Path.Combine("src", sharedName, "Services", "GreetingService.cs"), GreetingService(prefix));
 

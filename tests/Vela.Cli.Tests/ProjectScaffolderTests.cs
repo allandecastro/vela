@@ -38,8 +38,8 @@ public class ProjectScaffolderTests
             AssertFileExists(root, "Directory.Build.props");
 
             AssertFileExists(root, "src", "Zava.Shared", "Zava.Shared.csproj");
-            AssertFileExists(root, "src", "Zava.Shared", "Models", "Account.cs");
-            AssertFileExists(root, "src", "Zava.Shared", "Models", "Contact.cs");
+            AssertFileExists(root, "src", "Zava.Shared", "Models", "Generated", "Account.cs");
+            AssertFileExists(root, "src", "Zava.Shared", "Models", "Generated", "Contact.cs");
             AssertFileExists(root, "src", "Zava.Shared", "Services", "GreetingService.cs");
 
             AssertFileExists(root, "src", "Zava.Plugins", "Zava.Plugins.csproj");

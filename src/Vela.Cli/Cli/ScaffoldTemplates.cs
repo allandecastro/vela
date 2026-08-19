@@ -361,9 +361,10 @@ returns `null` instead.
 
 ## Early-bound models
 
-`{{prefix}}.Shared/Models` ships hand-written `Account` and `Contact` models so the solution builds with
-no Dataverse connection. To regenerate the full set from your environment later, use `vela models` (it reuses
-the same connection options as `vela plan`/`apply`):
+`{{prefix}}.Shared/Models/Generated` ships hand-written `Account` and `Contact` stubs (namespace
+`{{prefix}}.Shared.Models.Generated`) so the solution builds with no Dataverse connection. Running `vela models`
+into the same folder/namespace **replaces them in place** with the full set — one copy, no duplicates. It reuses
+the same connection options as `vela plan`/`apply`:
 
 ```powershell
 vela models `
@@ -558,7 +559,7 @@ $$"""
 
     public static string AccountModel(string prefix) =>
 $$"""
-namespace {{prefix}}.Shared.Models
+namespace {{prefix}}.Shared.Models.Generated
 {
     using System;
     using Microsoft.Xrm.Sdk;
@@ -608,7 +609,7 @@ namespace {{prefix}}.Shared.Models
 
     public static string ContactModel(string prefix) =>
 $$"""
-namespace {{prefix}}.Shared.Models
+namespace {{prefix}}.Shared.Models.Generated
 {
     using System;
     using Microsoft.Xrm.Sdk;
@@ -714,21 +715,16 @@ namespace {{prefix}}.Plugins.Account.Services
     }
 
     /// <inheritdoc />
-    public sealed class AccountFollowUpService : IAccountFollowUpService
+    public sealed class AccountFollowUpService(IOrganizationService service) : IAccountFollowUpService
     {
         // Business rule: chase a newly created account one week later.
         private const int FollowUpDays = 7;
 
-        private readonly IOrganizationService _service;
-
-        public AccountFollowUpService(IOrganizationService service)
-        {
-            _service = service;
-        }
+        private readonly IOrganizationService _service = service;
 
         public Guid CreateFollowUpTask(Guid accountId, string accountName)
         {
-            Entity task = new Entity("task")
+            Entity task = new("task")
             {
                 ["subject"] = "Follow up with " + accountName,
                 ["description"] = "Auto-created " + FollowUpDays + " days after the account was created.",
@@ -749,6 +745,8 @@ namespace {{prefix}}.Plugins.Contact.Services
     using System;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
+    using Vela.Querying;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Contact-scoped domain service: finds a possible duplicate contact by email. A second
@@ -761,14 +759,9 @@ namespace {{prefix}}.Plugins.Contact.Services
     }
 
     /// <inheritdoc />
-    public sealed class ContactDuplicateService : IContactDuplicateService
+    public sealed class ContactDuplicateService(IOrganizationService service) : IContactDuplicateService
     {
-        private readonly IOrganizationService _service;
-
-        public ContactDuplicateService(IOrganizationService service)
-        {
-            _service = service;
-        }
+        private readonly IOrganizationService _service = service;
 
         public Guid? FindDuplicateByEmail(string email, Guid excludeContactId)
         {
@@ -777,15 +770,15 @@ namespace {{prefix}}.Plugins.Contact.Services
                 return null;
             }
 
-            QueryExpression query = new QueryExpression("contact")
-            {
-                ColumnSet = new ColumnSet(false),
-                TopCount = 1,
-            };
-            query.Criteria.AddCondition("emailaddress1", ConditionOperator.Equal, email);
-            query.Criteria.AddCondition("contactid", ConditionOperator.NotEqual, excludeContactId);
+            // Typed query over the early-bound Contact: table and column names are checked at compile time
+            // (a typo won't build). No columns are selected — only the matching row's Id is needed.
+            EntityCollection matches = _service.RetrieveMultiple(
+                Query.For<Contact>()
+                    .Where(c => c.EMailAddress1, ConditionOperator.Equal, email)
+                    .Where(c => c.ContactId, ConditionOperator.NotEqual, excludeContactId)
+                    .Top(1)
+                    .Build());
 
-            EntityCollection matches = _service.RetrieveMultiple(query);
             return matches.Entities.Count > 0 ? matches.Entities[0].Id : (Guid?)null;
         }
     }
@@ -880,7 +873,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.StepBuilder;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Single-step plugin: after an account is updated, counts the contacts that reference it. The query is authored
@@ -924,7 +917,7 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
     using Microsoft.Xrm.Sdk;
     using Xunit;
     using {{prefix}}.Plugins.Account.Plugins;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Tests <see cref="AccountRelatedContactsPlugin"/> against an in-memory Dataverse: seeds an account with two
@@ -968,7 +961,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.StepBuilder;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Account.Services;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Single-step plugin: after an account is created, schedules a follow-up task a week out.
@@ -1019,7 +1012,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
     using Vela.StepBuilder;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Contact.Services;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Multi-step "router" plugin: registers several steps in one class and binds each to a named
@@ -1083,7 +1076,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     using System;
     using Vela.Context;
     using Vela.CustomApi;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Custom API <b>bound</b> to the <c>account</c> table. Typed request/response models are mapped
@@ -1133,7 +1126,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     using System;
     using Vela.Context;
     using Vela.CustomApi;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Custom API <b>bound</b> to the <c>contact</c> table. Typed request/response models are mapped
@@ -1345,7 +1338,7 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Account.Plugins;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Tests <see cref="AccountPostCreatePlugin"/> with <c>Vela.Testing</c>: an in-memory Dataverse plus a
@@ -1395,7 +1388,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Contact.Plugins;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Tests the multi-step "router" <see cref="ContactRouterPlugin"/>. Because a router registers several
@@ -1588,14 +1581,9 @@ namespace {{ns}}
     }
 
     /// <inheritdoc />
-    public sealed class {{className}} : {{interfaceName}}
+    public sealed class {{className}}(IOrganizationService service) : {{interfaceName}}
     {
-        private readonly IOrganizationService _service;
-
-        public {{className}}(IOrganizationService service)
-        {
-            _service = service;
-        }
+        private readonly IOrganizationService _service = service;
 
         public void Execute({{entityType}} target)
         {
@@ -1758,7 +1746,7 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     using Vela.DI;
     using Vela.Plugin;
     using Vela.StepBuilder;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
     using {{prefix}}.Shared.Services;
 
     /// <summary>
@@ -1800,7 +1788,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
     using Vela.Context;
     using Vela.Plugin;
     using Vela.StepBuilder;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Multi-step integration router: one class handling create and update of accounts, each bound to
@@ -1851,7 +1839,7 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     using System;
     using Vela.Context;
     using Vela.CustomApi;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>Custom API <b>bound</b> to the <c>contact</c> table: exports a contact to an external system.</summary>
     public sealed class ContactExportCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<ContactExportRequest, ContactExportResponse>(unsecureConfig, secureConfig)
@@ -1898,7 +1886,7 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     using System;
     using Vela.Context;
     using Vela.CustomApi;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>Custom API <b>bound</b> to the <c>account</c> table: reconciles the account with an external system.</summary>
     public sealed class AccountReconcileCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<AccountReconcileRequest, AccountReconcileResponse>(unsecureConfig, secureConfig)
@@ -2081,7 +2069,7 @@ using Microsoft.Crm.Sdk.Messages;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
-using {{prefix}}.Shared.Models;
+using {{prefix}}.Shared.Models.Generated;
 
 // Interactive (browser) sign-in to Dataverse. Pass the environment URL as the first argument,
 // or enter it when prompted; a browser window opens for Microsoft login.
