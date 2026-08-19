@@ -27,6 +27,11 @@ var crm = new InMemoryOrganizationService()
 // RetrieveMultiple, and a write she lacks the privilege for throws PrincipalPrivilegeDenied.
 ```
 
+- **Arrange vs act.** `Seed(...)` writes records straight into the store, bypassing privilege checks (and the
+  system-column stamping) - it is your *starting state*, the data that already exists. `Create(...)` instead
+  demands the **Create** privilege, so reach for it only when the create itself is under test. A "Bob owns this
+  record, can Alice read it?" test therefore *seeds* Bob's record and asserts on Alice's `Retrieve`/`Update`;
+  seeding it never fails on a missing privilege, which keeps the assertion about the access you mean to test.
 - **Sharing (PoA).** `GrantAccess`/`ModifyAccess`/`RevokeAccess` share a specific record with a user or team -
   unioned with role access (a share only ever *adds* access, and can't exceed the sharer's own rights).
   `RetrievePrincipalAccess` returns the effective rights, `RetrieveSharedPrincipalsAndAccess` lists a record's

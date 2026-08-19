@@ -180,8 +180,13 @@ crm.Update(new Entity("account") { Id = id, ["name"] = "Renamed" });
 Entity stored = crm.Retrieve("account", id, new ColumnSet(true));
 ```
 
-- **Relationships:** for 1:N, set the lookup via `Update` (`account.primarycontactid = new EntityReference(...)`).
-  For N:N, declare the relationship once with `WithManyToMany(...)` and use `Associate`/`Disassociate` - they
+- **Relationships:** for 1:N, set the lookup via `Seed`/`Update` (`account.primarycontactid = new
+  EntityReference(...)`). A lookup is just **data** - the child carries an `EntityReference` to its parent, and that
+  alone drives queries, `link-entity` joins and filtering. You only need to *declare* the relationship with
+  `WithParentalRelationship(...)` / `WithReferentialRelationship(...)` (see the [security model](security-model.md))
+  when the test exercises a **cascade or inherited access**; a plain lookup with no declared relationship is
+  correct data, not a broken test. For N:N, declare the relationship once with `WithManyToMany(...)` and use
+  `Associate`/`Disassociate` - they
   create/delete the intersect rows, so `RetrieveMultiple` joins through them like Dataverse:
 
   ```csharp
