@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Test fixture only. A dependency-free assembly whose single plugin type is intentionally NOT introspectable
+    (no public (string, string) constructor), so PackageScanner.BuildLocalStateFromPackages fails on it and
+    raises BuildIntrospectionFailure. Used by PackageScannerBuildStateTests. See SamplePluginFixture for the
+    happy-path counterpart.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>BrokenPluginFixture</AssemblyName>
+    <RootNamespace>BrokenPluginFixture</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>
