@@ -105,13 +105,13 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 - Multi-select option set as a Custom API parameter type — **not supported by Dataverse** (`customapifieldtype`
   has no such value), so nothing to implement.
 - CLI **managing** (create/update/delete) solutions, security roles, web resources, environment variables — out of
-  scope (solution tooling's job). Note: **reading** roles to generate a test-project `Roles` class (`vela models
-  --roles`) is different and already shipped.
+  scope (solution tooling's job). Note: **reading** roles to generate a dependency-light `Roles` class in the shared
+  models project (`vela models --roles`) is different and already shipped.
 - **Entra ID (Azure AD) group teams** — out of scope for the harness security model (which now covers
   roles/privileges/BU/teams, sharing, 1:N cascades, access teams, manager **and** position hierarchy, and
   field-level security — see the "Test harness" section above). CLI **management** of security-role templates
   (create/update roles in an environment) also stays out of scope — that's solution-tooling's job; `vela models`
-  only *reads* roles for the test-project generator.
+  only *reads* roles for the shared-models generator.
 - **`vela models`**: relationship navigation properties + `OrganizationServiceContext`/LINQ (lazy loading +
   change tracking don't fit the plugin sandbox — use `Query.For<T>()`), localized multi-language labels, and
   custom class/property casing. For those, use `pac modelbuilder`.
