@@ -66,7 +66,8 @@ All jobs run on the self-hosted Windows runner.
 | `cli-customapi` | `DataverseRegistration.CustomApi.cs` | ~82.7% | 80 |
 | `cli-reader` | `DataverseRegistration.cs` | ~85.3% | 83 |
 | `cli-steps` | `DataverseRegistration.Steps.cs` | ~89.4% | 87 |
-| `cli-scanner` | `PackageScanner.cs` | ~82.6% | 80 |
+| `cli-scanner` | `PackageScanner.cs` | ~81.6% | 80 |
+| `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | ~90% | 80 |
 
 Notes on the scores:
 
@@ -75,10 +76,6 @@ Notes on the scores:
 - The **harness query core** and **security enforcement wiring** are net462 and so are
   measured only in CI.
 - Some CLI methods carry a `// Stryker disable all` block where a real `ServiceClient`
-  can't run offline (the `cli-reader` live-connection methods) or where package code is
-  loaded and executed (`BuildLocalStateFromPackages` in the scanner needs a compiled
-  plugin-assembly fixture).
-
-The remaining optional work (P2) is a compiled-plugin-fixture integration test to cover
-`BuildLocalStateFromPackages` and the package-payload / partial-type-resolution branches
-in `ApplyDiff` end-to-end.
+  can't run offline (the `cli-reader` live-connection methods). The scanner's
+  `BuildLocalStateFromPackages` used to as well; it is now driven end-to-end by
+  `PackageScannerBuildStateTests` on a real compiled plugin fixture.
