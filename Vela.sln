@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vela.Testing", "src\Vela.Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vela.Testing.Tests", "tests\Vela.Testing.Tests\Vela.Testing.Tests.csproj", "{D4A2B8C3-2C8E-4F66-8B4D-6F1E5A3C9B22}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SamplePluginFixture", "tests\SamplePluginFixture\SamplePluginFixture.csproj", "{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -101,6 +103,18 @@ Global
 		{D4A2B8C3-2C8E-4F66-8B4D-6F1E5A3C9B22}.Release|x64.Build.0 = Release|Any CPU
 		{D4A2B8C3-2C8E-4F66-8B4D-6F1E5A3C9B22}.Release|x86.ActiveCfg = Release|Any CPU
 		{D4A2B8C3-2C8E-4F66-8B4D-6F1E5A3C9B22}.Release|x86.Build.0 = Release|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Debug|x64.Build.0 = Debug|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Debug|x86.Build.0 = Debug|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Release|x64.ActiveCfg = Release|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Release|x64.Build.0 = Release|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Release|x86.ActiveCfg = Release|Any CPU
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -109,5 +123,6 @@ Global
 		{BB95796A-0842-4DB0-8C86-2F1C2AC21FC1} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{C3F1A9E2-1B7D-4E55-9A3C-7E2D6B4F8A11} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{D4A2B8C3-2C8E-4F66-8B4D-6F1E5A3C9B22} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{8D1E3A0C-3CF8-468F-AC0C-AABBB5C741D2} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

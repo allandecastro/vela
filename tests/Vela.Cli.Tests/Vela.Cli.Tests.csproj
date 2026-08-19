@@ -28,5 +28,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Vela.Cli\Vela.Cli.csproj" />
+    <!-- Dependency-free plugin assembly whose DLL is copied to the test output and packed into a .nupkg at test time,
+         so PackageScanner can Assembly.LoadFrom a real compiled plugin (PackageScannerBuildStateTests). Its types are
+         not used from test code. -->
+    <ProjectReference Include="..\SamplePluginFixture\SamplePluginFixture.csproj" />
   </ItemGroup>
 </Project>

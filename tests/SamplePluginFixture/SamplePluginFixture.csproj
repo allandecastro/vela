@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Test fixture only. A dependency-free assembly that PackageScanner.BuildLocalStateFromPackages can
+    Assembly.LoadFrom out of a real .nupkg (see PackageScannerBuildStateTests). It is NOT the real Vela.Plugins:
+    PackageScanner.IsPluginType matches base types by name prefix ("EntityPluginBase"/"CustomApiBase"), so the
+    fixture needs no Vela.Plugins/Xrm reference and loads cleanly in the net10 test host.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>SamplePluginFixture</AssemblyName>
+    <RootNamespace>SamplePluginFixture</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>
