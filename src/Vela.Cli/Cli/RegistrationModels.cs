@@ -13,7 +13,11 @@ public sealed record ExtractedPackage(string PackagePath, string TempDirectory, 
 public sealed record AssemblyPayload(string AssemblyName, string AssemblyPath);
 public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath);
 public sealed record RegistrationItem(string Kind, string Type, JsonElement Definition);
-public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics);
+// SecureConfigByStepKey carries each step's RAW secure config keyed by stepKey. The step definitions in Items have
+// their secure config redacted to a hash (so it never lands in plan/inspect output); apply reads the real value
+// from this side channel instead, so the plaintext secret is written to Dataverse rather than the digest. It is
+// only populated for the local package scan; the live/dataverse state leaves it null.
+public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null);
 public sealed record RegistrationDiff(string[] LocalAssemblies, string[] CurrentAssemblies, RegistrationItem[] Added, RegistrationItem[] Removed, RegistrationChange[] Changed, RegistrationItem[] LocalItems, RegistrationItem[] CurrentItems)
 {
     public DiffSummary Summary { get; init; } = new DiffSummary(Added.Length, Removed.Length, Changed.Length);

@@ -21,7 +21,7 @@ namespace Vela.Cli;
 /// <summary> Applies a registration diff: ordering, package/assembly/type sync, resume report. </summary>
 internal static partial class DataverseRegistration
 {
-    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, AssemblyPayload[] sourceAssemblyPayloads, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose)
+    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, AssemblyPayload[] sourceAssemblyPayloads, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null)
 {
     // When a solution is given, route every create/update through it so all components (package, assembly, types,
     // steps, images, secure config, Custom APIs and their parameters) are added to it — not just the package.
@@ -152,13 +152,13 @@ internal static partial class DataverseRegistration
         StepMetadataCache metadataCache = new StepMetadataCache();
         foreach (RegistrationItem item in addedSteps)
         {
-            UpsertStep(svc, pluginTypeIds, item.Definition, verbose, metadataCache);
+            UpsertStep(svc, pluginTypeIds, item.Definition, verbose, metadataCache, secureConfigByStepKey);
             done++;
         }
 
         foreach (RegistrationChange change in changedSteps)
         {
-            UpsertStep(svc, pluginTypeIds, change.After, verbose, metadataCache);
+            UpsertStep(svc, pluginTypeIds, change.After, verbose, metadataCache, secureConfigByStepKey);
             done++;
         }
     }

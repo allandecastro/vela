@@ -509,6 +509,32 @@ public sealed class DataverseRegistrationStepsTests
     }
 
     [Fact]
+    public void UpsertStep_writes_the_raw_secure_config_from_the_side_channel_not_the_hash()
+    {
+        var pluginTypeId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var stepId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessage"
+                ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", messageId))
+                : new EntityCollection(), // no existing step (create), no existing secure-config link
+            OnRetrieve = (e, id, _) => new Entity(e, id), // secure-config reconcile: no existing link
+            OnCreate = e => e.LogicalName == "sdkmessageprocessingstep" ? stepId : Guid.NewGuid(),
+        };
+
+        // The definition carries the REDACTED hash (Items never hold the plaintext); the side channel has the real
+        // secret. Apply must write the real secret to Dataverse, not the digest.
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Create", entityLogicalName = "", stepKey = "dv-key", stage = 40, mode = 0, enabled = true, secureConfig = "sha256:redacted" });
+        var secureByKey = new Dictionary<string, string> { ["dv-key"] = "real-secret" };
+
+        DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false, metadataCache: null, secureConfigByStepKey: secureByKey);
+
+        Entity secureRow = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstepsecureconfig");
+        Assert.Equal("real-secret", secureRow.GetAttributeValue<string>("secureconfig")); // the real secret, not the hash
+    }
+
+    [Fact]
     public void UpsertStep_updates_existing_step_and_throws_for_unknown_plugin_type()
     {
         var pluginTypeId = Guid.NewGuid();
