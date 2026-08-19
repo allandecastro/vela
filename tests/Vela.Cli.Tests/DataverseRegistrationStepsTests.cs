@@ -377,11 +377,36 @@ public sealed class DataverseRegistrationStepsTests
         Entity updated = Assert.Single(svc.Updated);
         Assert.Equal("sdkmessageprocessingstepimage", updated.LogicalName);
         Assert.Equal(existingId, updated.Id);
-        Assert.Equal("PreImage", updated.GetAttributeValue<string>("entityalias"));
-        Assert.Equal("PreImage", updated.GetAttributeValue<string>("name"));
         Assert.Equal("name", updated.GetAttributeValue<string>("attributes"));
-        Assert.Equal(0, updated.GetAttributeValue<OptionSetValue>("imagetype").Value);
-        Assert.Equal("Target", updated.GetAttributeValue<string>("messagepropertyname"));
+        // Only the mutable `attributes` is written. Re-setting imagetype/messagepropertyname on an existing image
+        // makes the platform throw a NullReferenceException (0x80040216), so they must NOT be part of the update.
+        Assert.False(updated.Contains("imagetype"));
+        Assert.False(updated.Contains("messagepropertyname"));
+        Assert.Empty(svc.Created);
+        Assert.Empty(svc.Deleted);
+    }
+
+    [Fact]
+    public void SyncStepImages_skips_update_when_attributes_unchanged()
+    {
+        var stepId = Guid.NewGuid();
+        var existing = new Entity("sdkmessageprocessingstepimage", Guid.NewGuid())
+        {
+            ["entityalias"] = "PreImage",
+            ["imagetype"] = new OptionSetValue(0),
+            ["attributes"] = "name",
+        };
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
+        };
+        var pre = new[] { new ImageApplyDefinition("PreImage", new[] { "name" }) };
+
+        DataverseRegistration.SyncStepImages(svc, stepId, "Update", pre, Array.Empty<ImageApplyDefinition>());
+
+        // Unchanged image: no write at all. Updating an unchanged image would re-set immutable fields and the
+        // platform throws (0x80040216) — this is what broke every step update that carried an image.
+        Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
         Assert.Empty(svc.Deleted);
     }

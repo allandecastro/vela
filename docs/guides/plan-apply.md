@@ -25,13 +25,14 @@ vela apply `
   --client-id <app-id> `
   --client-secret <client-secret>
 
-# 3b) Execute apply operations (idempotent upsert/delete)
+# 3b) Execute apply operations (idempotent upsert/delete) into an existing Dataverse solution
 vela apply `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `
   --tenant-id <tenant-id> `
   --client-id <app-id> `
   --client-secret <client-secret> `
+  --solution ZavaSales `
   --execute
 
 # 4) Interactive local mode (wizard prompts)

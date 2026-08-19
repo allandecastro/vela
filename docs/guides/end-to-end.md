@@ -51,9 +51,9 @@ vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --verbose
 **4. Apply** the changes (idempotent create/update/delete):
 
 ```powershell
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --execute --verbose
+vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive --execute --verbose
 ```
 
-`apply --execute` uploads the plugin package, ensures the plugin type exists, then registers the step and its image. Re-running with no local changes is a no-op. If a run fails partway, the resume report on stderr lists which operations completed and which did not - fix the cause and re-run (upserts are idempotent).
+`--solution` is an existing unmanaged Dataverse solution: importing a plugin package requires it, both because the package name is prefixed with the solution publisher's customization prefix and because every registered component (package, assembly, steps, Custom APIs) is added to that solution. `apply --execute` uploads the plugin package into it, ensures the plugin type exists, then registers the step and its image. Re-running with no local changes is a no-op. If a run fails partway, the resume report on stderr lists which operations completed and which did not - fix the cause and re-run (upserts are idempotent).
 
 **5. Verify** in Dataverse: update an account's name and confirm the step fires (its message appears in the plugin trace log).

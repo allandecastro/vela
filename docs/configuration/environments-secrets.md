@@ -28,13 +28,14 @@ vela plan `
   --client-id <app-id> `
   --client-secret <client-secret>
 
-# Execute apply operations (idempotent upsert/delete)
+# Execute apply operations (idempotent upsert/delete) into an existing Dataverse solution
 vela apply `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `
   --tenant-id <tenant-id> `
   --client-id <app-id> `
   --client-secret <client-secret> `
+  --solution ZavaSales `
   --execute
 ```
 
@@ -72,5 +73,5 @@ vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --verbose
 ```
 
 ```powershell
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --execute --verbose
+vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive --execute --verbose
 ```

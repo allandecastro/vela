@@ -23,6 +23,12 @@ internal static partial class DataverseRegistration
 {
     internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, AssemblyPayload[] sourceAssemblyPayloads, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose)
 {
+    // When a solution is given, route every create/update through it so all components (package, assembly, types,
+    // steps, images, secure config, Custom APIs and their parameters) are added to it — not just the package.
+    IOrganizationService svc = string.IsNullOrWhiteSpace(solutionUniqueName)
+        ? service
+        : new SolutionScopedOrganizationService(service, solutionUniqueName!);
+
     List<RegistrationItem> removedSteps = diff.Removed.Where(IsStep).ToList();
     List<RegistrationItem> removedApis = diff.Removed.Where(x => !IsStep(x)).ToList();
     List<RegistrationItem> addedApis = diff.Added.Where(x => !IsStep(x)).ToList();
@@ -80,7 +86,7 @@ internal static partial class DataverseRegistration
             done++;
         }
 
-        EnsurePluginPackages(service, packagePayloads, solutionUniqueName, tempDirectories, verbose);
+        EnsurePluginPackages(svc, packagePayloads, solutionUniqueName, tempDirectories, verbose);
 
         HashSet<string> requiredPluginTypes = GetRequiredPluginTypeNames(diff);
         Dictionary<string, Guid> pluginTypeIds = GetPluginTypeIdByNameForAssemblies(service, diff.LocalAssemblies);
@@ -92,11 +98,11 @@ internal static partial class DataverseRegistration
             }
             else
             {
-                EnsurePluginAssembliesForMissingTypes(service, sourceAssemblyPayloads, requiredPluginTypes);
+                EnsurePluginAssembliesForMissingTypes(svc, sourceAssemblyPayloads, requiredPluginTypes);
                 pluginTypeIds = GetPluginTypeIdByNameForAssemblies(service, diff.LocalAssemblies);
                 if (requiredPluginTypes.Any(x => !pluginTypeIds.ContainsKey(x)))
                 {
-                    EnsurePluginTypesForMissingEntries(service, sourceAssemblyPayloads, requiredPluginTypes);
+                    EnsurePluginTypesForMissingEntries(svc, sourceAssemblyPayloads, requiredPluginTypes);
                 }
             }
 
@@ -118,7 +124,7 @@ internal static partial class DataverseRegistration
         {
             try
             {
-                UpsertCustomApi(service, pluginTypeIds, item.Definition, verbose);
+                UpsertCustomApi(svc, pluginTypeIds, item.Definition, verbose);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
             {
@@ -132,7 +138,7 @@ internal static partial class DataverseRegistration
         {
             try
             {
-                UpsertCustomApi(service, pluginTypeIds, change.After, verbose);
+                UpsertCustomApi(svc, pluginTypeIds, change.After, verbose);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
             {
@@ -146,13 +152,13 @@ internal static partial class DataverseRegistration
         StepMetadataCache metadataCache = new StepMetadataCache();
         foreach (RegistrationItem item in addedSteps)
         {
-            UpsertStep(service, pluginTypeIds, item.Definition, verbose, metadataCache);
+            UpsertStep(svc, pluginTypeIds, item.Definition, verbose, metadataCache);
             done++;
         }
 
         foreach (RegistrationChange change in changedSteps)
         {
-            UpsertStep(service, pluginTypeIds, change.After, verbose, metadataCache);
+            UpsertStep(svc, pluginTypeIds, change.After, verbose, metadataCache);
             done++;
         }
     }
@@ -194,20 +200,33 @@ internal static partial class DataverseRegistration
 
     internal static void EnsurePluginPackages(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose)
 {
+    // Dataverse rejects a plugin-package import whose nuget name has no solution publisher prefix (0x80040265,
+    // "The nuget file name does not contain a solution prefix"). Without a --solution to source that prefix, a
+    // package whose name isn't already prefixed can't import — fail fast with a clear message instead.
+    if (string.IsNullOrWhiteSpace(solutionUniqueName))
+    {
+        PluginPackagePayload? unprefixed = packagePayloads.FirstOrDefault(p => !LooksSolutionPrefixed(p.PackageName));
+        if (unprefixed != null)
+        {
+            throw new InvalidOperationException(
+                $"Plugin package '{unprefixed.PackageName}' has no solution publisher prefix, which Dataverse requires " +
+                "to import a package. Re-run 'apply --execute' with --solution <uniqueName> so the prefix is applied.");
+        }
+    }
+
     string? solutionPrefix = string.IsNullOrWhiteSpace(solutionUniqueName)
         ? null
         : ResolveSolutionCustomizationPrefix(service, solutionUniqueName);
-    Guid? solutionId = string.IsNullOrWhiteSpace(solutionUniqueName)
-        ? null
-        : ResolveSolutionId(service, solutionUniqueName);
 
+    // Solution membership comes from the caller's solution-scoped service (the SolutionUniqueName request
+    // parameter); the prefix only shapes the package name.
     foreach (PluginPackagePayload package in packagePayloads)
     {
-        UpsertPluginPackage(service, package, solutionPrefix, solutionId, tempDirectories, verbose);
+        UpsertPluginPackage(service, package, solutionPrefix, tempDirectories, verbose);
     }
 }
 
-    internal static Guid UpsertPluginPackage(IOrganizationService service, PluginPackagePayload package, string? solutionPrefix, Guid? solutionId, List<string> tempDirectories, bool verbose)
+    internal static Guid UpsertPluginPackage(IOrganizationService service, PluginPackagePayload package, string? solutionPrefix, List<string> tempDirectories, bool verbose)
 {
     if (!File.Exists(package.PackagePath))
     {
@@ -225,10 +244,6 @@ internal static partial class DataverseRegistration
         create["name"] = desiredPackageName;
         create["version"] = package.Version;
         create["content"] = packageContent;
-        if (solutionId.HasValue)
-        {
-            create["solutionid"] = new EntityReference("solution", solutionId.Value);
-        }
         return service.Create(create);
     }
 
@@ -239,10 +254,6 @@ internal static partial class DataverseRegistration
     };
     update["version"] = package.Version;
     update["content"] = packageContent;
-    if (solutionId.HasValue)
-    {
-        update["solutionid"] = new EntityReference("solution", solutionId.Value);
-    }
     service.Update(update);
     return existing.Id;
 }
@@ -255,6 +266,21 @@ internal static partial class DataverseRegistration
     }
 
     return $"{solutionPrefix}_{packageName}";
+}
+
+    // A package name already carries a solution publisher prefix when it starts with "<prefix>_" and <prefix> is a
+    // plausible Dataverse customization prefix (2-8 letters/digits, letter-first). Used to decide whether importing
+    // without a --solution can possibly succeed.
+    internal static bool LooksSolutionPrefixed(string packageName)
+{
+    int underscore = packageName.IndexOf('_');
+    if (underscore < 2)
+    {
+        return false;
+    }
+
+    string prefix = packageName.Substring(0, underscore);
+    return prefix.Length >= 2 && prefix.Length <= 8 && char.IsLetter(prefix[0]) && prefix.All(char.IsLetterOrDigit);
 }
 
     internal static string ResolveSolutionCustomizationPrefix(IOrganizationService service, string solutionUniqueName)
@@ -286,24 +312,6 @@ internal static partial class DataverseRegistration
     }
 
     return prefix.Trim();
-}
-
-    internal static Guid ResolveSolutionId(IOrganizationService service, string solutionUniqueName)
-{
-    QueryExpression query = new QueryExpression("solution")
-    {
-        ColumnSet = new ColumnSet("solutionid"),
-        TopCount = 1
-    };
-    query.Criteria.AddCondition("uniquename", ConditionOperator.Equal, solutionUniqueName);
-
-    Entity? solution = service.RetrieveMultiple(query).Entities.FirstOrDefault();
-    if (solution == null)
-    {
-        throw new InvalidOperationException($"Solution not found: {solutionUniqueName}");
-    }
-
-    return solution.Id;
 }
 
     internal static byte[] ReadPackageBytesForImport(string packagePath, string originalPackageName, string desiredPackageName, List<string> tempDirectories)

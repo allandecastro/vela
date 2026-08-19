@@ -63,6 +63,9 @@ $$"""
     <ImplicitUsings>disable</ImplicitUsings>
     <!-- Early-bound models and plugin code follow the classic non-nullable Dataverse conventions. -->
     <Nullable>disable</Nullable>
+    <!-- These projects pin package versions inline. Disable central package management explicitly so the solution
+         builds even if it is created inside a repository that has its own Directory.Packages.props. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
   </PropertyGroup>
 </Project>
 """;
@@ -358,9 +361,10 @@ returns `null` instead.
 
 ## Early-bound models
 
-`{{prefix}}.Shared/Models` ships hand-written `Account` and `Contact` models so the solution builds with
-no Dataverse connection. To regenerate the full set from your environment later, use `vela models` (it reuses
-the same connection options as `vela plan`/`apply`):
+`{{prefix}}.Shared/Models/Generated` ships hand-written `Account` and `Contact` stubs (namespace
+`{{prefix}}.Shared.Models.Generated`) so the solution builds with no Dataverse connection. Running `vela models`
+into the same folder/namespace **replaces them in place** with the full set — one copy, no duplicates. It reuses
+the same connection options as `vela plan`/`apply`:
 
 ```powershell
 vela models `
@@ -540,6 +544,9 @@ $$"""
     <!-- .NET Framework 4.6.2 has no in-box System.ValueTuple; the generated Roles class exposes grant tuples.
          Compile-time reference only (the type forwards to mscorlib on the 4.7.2+ Dataverse sandbox at runtime). -->
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+    <!-- `vela models` emits [StringLength]/[Range] DataAnnotations by default; on net462 those types live in the
+         System.ComponentModel.DataAnnotations framework assembly, which is not referenced by default. -->
+    <Reference Include="System.ComponentModel.DataAnnotations" />
   </ItemGroup>
 
   <!-- net10.0: the cross-platform client supplies Microsoft.Xrm.Sdk for the ConsoleApp. -->
@@ -552,7 +559,7 @@ $$"""
 
     public static string AccountModel(string prefix) =>
 $$"""
-namespace {{prefix}}.Shared.Models
+namespace {{prefix}}.Shared.Models.Generated
 {
     using System;
     using Microsoft.Xrm.Sdk;
@@ -602,7 +609,7 @@ namespace {{prefix}}.Shared.Models
 
     public static string ContactModel(string prefix) =>
 $$"""
-namespace {{prefix}}.Shared.Models
+namespace {{prefix}}.Shared.Models.Generated
 {
     using System;
     using Microsoft.Xrm.Sdk;
@@ -708,21 +715,16 @@ namespace {{prefix}}.Plugins.Account.Services
     }
 
     /// <inheritdoc />
-    public sealed class AccountFollowUpService : IAccountFollowUpService
+    public sealed class AccountFollowUpService(IOrganizationService service) : IAccountFollowUpService
     {
         // Business rule: chase a newly created account one week later.
         private const int FollowUpDays = 7;
 
-        private readonly IOrganizationService _service;
-
-        public AccountFollowUpService(IOrganizationService service)
-        {
-            _service = service;
-        }
+        private readonly IOrganizationService _service = service;
 
         public Guid CreateFollowUpTask(Guid accountId, string accountName)
         {
-            Entity task = new Entity("task")
+            Entity task = new("task")
             {
                 ["subject"] = "Follow up with " + accountName,
                 ["description"] = "Auto-created " + FollowUpDays + " days after the account was created.",
@@ -743,6 +745,8 @@ namespace {{prefix}}.Plugins.Contact.Services
     using System;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
+    using Vela.Querying;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Contact-scoped domain service: finds a possible duplicate contact by email. A second
@@ -755,14 +759,9 @@ namespace {{prefix}}.Plugins.Contact.Services
     }
 
     /// <inheritdoc />
-    public sealed class ContactDuplicateService : IContactDuplicateService
+    public sealed class ContactDuplicateService(IOrganizationService service) : IContactDuplicateService
     {
-        private readonly IOrganizationService _service;
-
-        public ContactDuplicateService(IOrganizationService service)
-        {
-            _service = service;
-        }
+        private readonly IOrganizationService _service = service;
 
         public Guid? FindDuplicateByEmail(string email, Guid excludeContactId)
         {
@@ -771,15 +770,15 @@ namespace {{prefix}}.Plugins.Contact.Services
                 return null;
             }
 
-            QueryExpression query = new QueryExpression("contact")
-            {
-                ColumnSet = new ColumnSet(false),
-                TopCount = 1,
-            };
-            query.Criteria.AddCondition("emailaddress1", ConditionOperator.Equal, email);
-            query.Criteria.AddCondition("contactid", ConditionOperator.NotEqual, excludeContactId);
+            // Typed query over the early-bound Contact: table and column names are checked at compile time
+            // (a typo won't build). No columns are selected — only the matching row's Id is needed.
+            EntityCollection matches = _service.RetrieveMultiple(
+                Query.For<Contact>()
+                    .Where(c => c.EMailAddress1, ConditionOperator.Equal, email)
+                    .Where(c => c.ContactId, ConditionOperator.NotEqual, excludeContactId)
+                    .Top(1)
+                    .Build());
 
-            EntityCollection matches = _service.RetrieveMultiple(query);
             return matches.Entities.Count > 0 ? matches.Entities[0].Id : (Guid?)null;
         }
     }
@@ -874,7 +873,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.StepBuilder;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Single-step plugin: after an account is updated, counts the contacts that reference it. The query is authored
@@ -882,13 +881,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
     /// compile time (a typo won't build), then emitted as FetchXML with <c>ToFetchXml()</c> and executed. It's the
     /// same FetchXML you'd paste from FetchXML Builder, but refactor-safe.
     /// </summary>
-    public sealed class AccountRelatedContactsPlugin : EntityPluginBase<Account>
+    public sealed class AccountRelatedContactsPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
-        public AccountRelatedContactsPlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnUpdate()
@@ -923,7 +917,7 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
     using Microsoft.Xrm.Sdk;
     using Xunit;
     using {{prefix}}.Plugins.Account.Plugins;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Tests <see cref="AccountRelatedContactsPlugin"/> against an in-memory Dataverse: seeds an account with two
@@ -967,20 +961,15 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.StepBuilder;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Account.Services;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Single-step plugin: after an account is created, schedules a follow-up task a week out.
     /// Demonstrates dependency injection via <see cref="ConfigureServices"/> plus a table-scoped
     /// service (<see cref="IAccountFollowUpService"/>) resolved with <c>ctx.GetRequiredService&lt;T&gt;()</c>.
     /// </summary>
-    public sealed class AccountPostCreatePlugin : EntityPluginBase<Account>
+    public sealed class AccountPostCreatePlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
-        public AccountPostCreatePlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             // The default registrations already expose the initiating-user IOrganizationService; hand it
@@ -1023,20 +1012,15 @@ namespace {{prefix}}.Plugins.Contact.Plugins
     using Vela.StepBuilder;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Contact.Services;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Multi-step "router" plugin: registers several steps in one class and binds each to a named
     /// handler method. Every step in a multi-step plugin must declare a <c>Handler(...)</c>. Also shows a
     /// router consuming a table-scoped service (<see cref="IContactDuplicateService"/>) via DI.
     /// </summary>
-    public sealed class ContactRouterPlugin : EntityPluginBase<Contact>
+    public sealed class ContactRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
-        public ContactRouterPlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             services.AddScoped<IContactDuplicateService>(r => new ContactDuplicateService(r.GetRequiredService<IOrganizationService>()));
@@ -1092,19 +1076,14 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     using System;
     using Vela.Context;
     using Vela.CustomApi;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Custom API <b>bound</b> to the <c>account</c> table. Typed request/response models are mapped
     /// automatically by the framework.
     /// </summary>
-    public sealed class AccountEstimateValueCustomApi : CustomApiBase<EstimateValueRequest, EstimateValueResponse>
+    public sealed class AccountEstimateValueCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<EstimateValueRequest, EstimateValueResponse>(unsecureConfig, secureConfig)
     {
-        public AccountEstimateValueCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_AccountEstimateValue")
@@ -1147,19 +1126,14 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     using System;
     using Vela.Context;
     using Vela.CustomApi;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Custom API <b>bound</b> to the <c>contact</c> table. Typed request/response models are mapped
     /// automatically by the framework.
     /// </summary>
-    public sealed class ContactValidateCustomApi : CustomApiBase<ContactValidateRequest, ContactValidateResponse>
+    public sealed class ContactValidateCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<ContactValidateRequest, ContactValidateResponse>(unsecureConfig, secureConfig)
     {
-        public ContactValidateCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_ContactValidate")
@@ -1206,13 +1180,8 @@ namespace {{prefix}}.Plugins.GlobalCustomApis
     /// <b>Global</b> (unbound) Custom API using the lightweight style — no dedicated request/response
     /// models, parameters declared inline.
     /// </summary>
-    public sealed class PingCustomApi : CustomApiBase
+    public sealed class PingCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)
     {
-        public PingCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_Ping", nameof(Handle))
@@ -1369,7 +1338,7 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Account.Plugins;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Tests <see cref="AccountPostCreatePlugin"/> with <c>Vela.Testing</c>: an in-memory Dataverse plus a
@@ -1419,7 +1388,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Contact.Plugins;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Tests the multi-step "router" <see cref="ContactRouterPlugin"/>. Because a router registers several
@@ -1572,13 +1541,8 @@ namespace {{ns}}
     using {{modelsNamespace}};
 
     /// <summary>Single-step plugin generated by <c>vela add plugin</c>.</summary>
-    public sealed class {{className}} : EntityPluginBase<{{entityType}}>
+    public sealed class {{className}}(string unsecureConfig, string secureConfig) : EntityPluginBase<{{entityType}}>(unsecureConfig, secureConfig)
     {
-        public {{className}}(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().{{registrationCall}}
@@ -1617,14 +1581,9 @@ namespace {{ns}}
     }
 
     /// <inheritdoc />
-    public sealed class {{className}} : {{interfaceName}}
+    public sealed class {{className}}(IOrganizationService service) : {{interfaceName}}
     {
-        private readonly IOrganizationService _service;
-
-        public {{className}}(IOrganizationService service)
-        {
-            _service = service;
-        }
+        private readonly IOrganizationService _service = service;
 
         public void Execute({{entityType}} target)
         {
@@ -1717,13 +1676,8 @@ namespace {{ns}}
     using Vela.CustomApi;
 
     /// <summary>Global (unbound), lightweight Custom API generated by <c>vela add customapi</c>.</summary>
-    public sealed class {{className}} : CustomApiBase
+    public sealed class {{className}}(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)
     {
-        public {{className}}(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{uniqueName}}", nameof(Handle))
@@ -1749,13 +1703,8 @@ namespace {{ns}}
     using {{modelsNamespace}};
 
     /// <summary>Typed Custom API bound to <c>{{entityType}}</c>, generated by <c>vela add customapi</c>.</summary>
-    public sealed class {{className}} : CustomApiBase<{{className}}Request, {{className}}Response>
+    public sealed class {{className}}(string unsecureConfig, string secureConfig) : CustomApiBase<{{className}}Request, {{className}}Response>(unsecureConfig, secureConfig)
     {
-        public {{className}}(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{uniqueName}}")
@@ -1797,20 +1746,15 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     using Vela.DI;
     using Vela.Plugin;
     using Vela.StepBuilder;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
     using {{prefix}}.Shared.Services;
 
     /// <summary>
     /// Single-step integration plugin: runs asynchronously after a contact is created. Demonstrates
     /// dependency injection of the cross-table <see cref="IGreetingService"/> in a second plugin package.
     /// </summary>
-    public sealed class ContactSyncPlugin : EntityPluginBase<Contact>
+    public sealed class ContactSyncPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
-        public ContactSyncPlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             services.AddScoped<IGreetingService>(_ => new GreetingService());
@@ -1844,19 +1788,14 @@ namespace {{prefix}}.Integrations.Account.Plugins
     using Vela.Context;
     using Vela.Plugin;
     using Vela.StepBuilder;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
     /// Multi-step integration router: one class handling create and update of accounts, each bound to
     /// a dedicated handler method.
     /// </summary>
-    public sealed class AccountSyncRouterPlugin : EntityPluginBase<Account>
+    public sealed class AccountSyncRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
-        public AccountSyncRouterPlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
@@ -1900,16 +1839,11 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     using System;
     using Vela.Context;
     using Vela.CustomApi;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>Custom API <b>bound</b> to the <c>contact</c> table: exports a contact to an external system.</summary>
-    public sealed class ContactExportCustomApi : CustomApiBase<ContactExportRequest, ContactExportResponse>
+    public sealed class ContactExportCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<ContactExportRequest, ContactExportResponse>(unsecureConfig, secureConfig)
     {
-        public ContactExportCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_ContactExport")
@@ -1952,16 +1886,11 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     using System;
     using Vela.Context;
     using Vela.CustomApi;
-    using {{prefix}}.Shared.Models;
+    using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>Custom API <b>bound</b> to the <c>account</c> table: reconciles the account with an external system.</summary>
-    public sealed class AccountReconcileCustomApi : CustomApiBase<AccountReconcileRequest, AccountReconcileResponse>
+    public sealed class AccountReconcileCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<AccountReconcileRequest, AccountReconcileResponse>(unsecureConfig, secureConfig)
     {
-        public AccountReconcileCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_AccountReconcile")
@@ -2005,13 +1934,8 @@ namespace {{prefix}}.Integrations.GlobalCustomApis
     using Vela.CustomApi;
 
     /// <summary><b>Global</b> (unbound) Custom API that reports integration health.</summary>
-    public sealed class IntegrationHeartbeatCustomApi : CustomApiBase
+    public sealed class IntegrationHeartbeatCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)
     {
-        public IntegrationHeartbeatCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_IntegrationHeartbeat", nameof(Handle))
@@ -2145,7 +2069,7 @@ using Microsoft.Crm.Sdk.Messages;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
-using {{prefix}}.Shared.Models;
+using {{prefix}}.Shared.Models.Generated;
 
 // Interactive (browser) sign-in to Dataverse. Pass the environment URL as the first argument,
 // or enter it when prompted; a browser window opens for Microsoft login.

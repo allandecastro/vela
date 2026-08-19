@@ -54,6 +54,25 @@ public class ModelGeneratorTests
     }
 
     [Fact]
+    public void Virtual_companion_name_attributes_are_skipped()
+    {
+        // The "<name>name" formatted-name pseudo-columns (AttributeOf set) of option sets and lookups are noise —
+        // the generator must skip them and keep only the real columns.
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .String("name", "Name", maxLength: 160)
+            .String("primarycontactidname", "PrimaryContactIdName", maxLength: 100).Companion("primarycontactid")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { entity }, new ModelGenOptions("Acme.Shared.Models.Generated"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.Contains("public string Name", code);            // real column kept
+        Assert.DoesNotContain("primarycontactidname", code);    // companion skipped
+        Assert.DoesNotContain("PrimaryContactIdName", code);
+    }
+
+    [Fact]
     public void PartyList_IsTyped_AsEntityCollection()
     {
         // ActivityParty columns (email From/To/Cc) are partylists -> EntityCollection at runtime.

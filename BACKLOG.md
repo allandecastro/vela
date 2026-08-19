@@ -14,3 +14,4 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 ## Release
 
 - **P3 — nuget.org publishing path.** The packages are not yet published; document and automate the release.
+  Refresh `NUGET.md` (the shared package README) as part of this — it should read well on the nuget.org listing.

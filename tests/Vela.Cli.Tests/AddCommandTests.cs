@@ -22,7 +22,7 @@ public class AddCommandTests
             string content = File.ReadAllText(file);
             Assert.Contains("namespace Acme.Plugins.Account.Plugins", content);
             Assert.Contains("using Acme.Shared.Models;", content);
-            Assert.Contains("public sealed class AccountValidatorPlugin : EntityPluginBase<Account>", content);
+            Assert.Contains("public sealed class AccountValidatorPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)", content);
             Assert.Contains("RegisterSteps().OnUpdate()", content);
         });
     }
@@ -77,7 +77,7 @@ public class AddCommandTests
             string file = Path.Combine(dir, "GlobalCustomApis", "RecalculateTotals.cs");
             string content = File.ReadAllText(file);
             Assert.Contains("namespace Acme.Plugins.GlobalCustomApis", content);
-            Assert.Contains("public sealed class RecalculateTotals : CustomApiBase", content);
+            Assert.Contains("public sealed class RecalculateTotals(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)", content);
             Assert.Contains("RegisterCustomApi(\"acme_RecalculateTotals\", nameof(Handle))", content);
         });
     }
@@ -114,8 +114,8 @@ public class AddCommandTests
             Assert.Contains("namespace Acme.Plugins.Account.Services", content);
             Assert.Contains("using Acme.Shared.Models;", content);
             Assert.Contains("public interface IAccountFollowUpService", content);
-            Assert.Contains("public sealed class AccountFollowUpService : IAccountFollowUpService", content);
-            Assert.Contains("public AccountFollowUpService(IOrganizationService service)", content);
+            Assert.Contains("public sealed class AccountFollowUpService(IOrganizationService service) : IAccountFollowUpService", content);
+            Assert.Contains("private readonly IOrganizationService _service = service;", content);
             Assert.Contains("void Execute(Account target)", content);
         });
     }

@@ -35,6 +35,25 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
+    public void SharedCsproj_ReferencesDataAnnotations_SoGeneratedModelsCompileOnNet462()
+    {
+        string csproj = ScaffoldTemplates.SharedCsproj(Options());
+
+        // `vela models` emits [StringLength]/[Range] DataAnnotations by default; net462 must reference the
+        // System.ComponentModel.DataAnnotations framework assembly or the generated models fail to compile.
+        Assert.Contains("System.ComponentModel.DataAnnotations", csproj);
+    }
+
+    [Fact]
+    public void DirectoryBuildProps_DisablesCentralPackageManagement()
+    {
+        string props = ScaffoldTemplates.DirectoryBuildProps();
+
+        // Insulates the scaffolded solution from a parent Directory.Packages.props if created inside another repo.
+        Assert.Contains("<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>", props);
+    }
+
+    [Fact]
     public void PluginCsproj_OmitsSigningTarget_ByDefault_AndIncludesItWhenRequested()
     {
         string plain = ScaffoldTemplates.PluginCsproj("Zava.Plugins", "Zava.Shared", "1.0.0");
@@ -78,7 +97,7 @@ public class ScaffoldTemplatesTests
 
         Assert.Contains("namespace Zava.Plugins.Account.Services", code);
         Assert.Contains("interface IAccountFollowUpService", code);
-        Assert.Contains("new Entity(\"task\")", code);
+        Assert.Contains("new(\"task\")", code); // target-typed new
         Assert.Contains("AddDays(FollowUpDays)", code);
         Assert.Contains("FollowUpDays = 7", code);
     }
@@ -87,14 +106,14 @@ public class ScaffoldTemplatesTests
     public void AddServiceFile_EmitsTableScopedInterfaceAndImplementation()
     {
         string code = ScaffoldTemplates.AddServiceFile(
-            "Acme.Plugins.Account.Services", "IAccountFollowUpService", "AccountFollowUpService", "Account", "Acme.Shared.Models");
+            "Acme.Plugins.Account.Services", "IAccountFollowUpService", "AccountFollowUpService", "Account", "Acme.Shared.Models.Generated");
 
         Assert.Contains("namespace Acme.Plugins.Account.Services", code);
-        Assert.Contains("using Acme.Shared.Models;", code);
+        Assert.Contains("using Acme.Shared.Models.Generated;", code);
         Assert.Contains("public interface IAccountFollowUpService", code);
-        Assert.Contains("public sealed class AccountFollowUpService : IAccountFollowUpService", code);
-        // Table-scoped services take the initiating-user IOrganizationService, like vela init's examples.
-        Assert.Contains("public AccountFollowUpService(IOrganizationService service)", code);
+        Assert.Contains("public sealed class AccountFollowUpService(IOrganizationService service) : IAccountFollowUpService", code);
+        // Table-scoped services take the initiating-user IOrganizationService via a primary constructor.
+        Assert.Contains("private readonly IOrganizationService _service = service;", code);
         Assert.Contains("void Execute(Account target)", code);
     }
 
@@ -102,7 +121,7 @@ public class ScaffoldTemplatesTests
     public void AddPluginTestFile_TargetsThePluginAndExecutesIt()
     {
         string code = ScaffoldTemplates.AddPluginTestFile(
-            "Acme.Plugins.Tests.Account.Plugins", "Acme.Plugins.Account.Plugins", "Acme.Shared.Models",
+            "Acme.Plugins.Tests.Account.Plugins", "Acme.Plugins.Account.Plugins", "Acme.Shared.Models.Generated",
             "AccountValidatorPluginTests", "AccountValidatorPlugin", "Account");
 
         Assert.Contains("namespace Acme.Plugins.Tests.Account.Plugins", code);
@@ -133,8 +152,9 @@ public class ScaffoldTemplatesTests
 
         Assert.Contains("namespace Zava.Plugins.Contact.Services", service);
         Assert.Contains("interface IContactDuplicateService", service);
-        // It reads from Dataverse rather than writing.
-        Assert.Contains("RetrieveMultiple(query)", service);
+        // It reads from Dataverse rather than writing, via the typed query over the early-bound Contact.
+        Assert.Contains("Query.For<Contact>()", service);
+        Assert.Contains(".Where(c => c.EMailAddress1, ConditionOperator.Equal, email)", service);
 
         // The router plugin injects the table-scoped service.
         Assert.Contains("GetRequiredService<IContactDuplicateService>", plugin);
@@ -237,7 +257,7 @@ public class ScaffoldTemplatesTests
         Assert.Contains("[EntityLogicalName(EntityLogicalNameValue)]", account);
         Assert.Contains("[AttributeLogicalName(\"name\")]", account);
         Assert.Contains("[EntityLogicalName(EntityLogicalNameValue)]", contact);
-        Assert.Contains("namespace Zava.Shared.Models", account);
+        Assert.Contains("namespace Zava.Shared.Models.Generated", account);
     }
 
     [Fact]

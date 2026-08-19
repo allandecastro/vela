@@ -142,6 +142,14 @@ internal sealed class MetadataFactory
         return this;
     }
 
+    // Marks the last attribute as a virtual companion of another (e.g. the "<name>name" of a picklist/lookup),
+    // which the generator skips.
+    public MetadataFactory Companion(string attributeOf)
+    {
+        Set(_last!, nameof(AttributeMetadata.AttributeOf), attributeOf);
+        return this;
+    }
+
     public MetadataFactory Key(string logicalName, string schemaName, params string[] keyAttributes)
     {
         EntityKeyMetadata key = new EntityKeyMetadata();
