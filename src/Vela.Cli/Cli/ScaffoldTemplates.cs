@@ -888,13 +888,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
     /// compile time (a typo won't build), then emitted as FetchXML with <c>ToFetchXml()</c> and executed. It's the
     /// same FetchXML you'd paste from FetchXML Builder, but refactor-safe.
     /// </summary>
-    public sealed class AccountRelatedContactsPlugin : EntityPluginBase<Account>
+    public sealed class AccountRelatedContactsPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
-        public AccountRelatedContactsPlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnUpdate()
@@ -980,13 +975,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
     /// Demonstrates dependency injection via <see cref="ConfigureServices"/> plus a table-scoped
     /// service (<see cref="IAccountFollowUpService"/>) resolved with <c>ctx.GetRequiredService&lt;T&gt;()</c>.
     /// </summary>
-    public sealed class AccountPostCreatePlugin : EntityPluginBase<Account>
+    public sealed class AccountPostCreatePlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
-        public AccountPostCreatePlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             // The default registrations already expose the initiating-user IOrganizationService; hand it
@@ -1036,13 +1026,8 @@ namespace {{prefix}}.Plugins.Contact.Plugins
     /// handler method. Every step in a multi-step plugin must declare a <c>Handler(...)</c>. Also shows a
     /// router consuming a table-scoped service (<see cref="IContactDuplicateService"/>) via DI.
     /// </summary>
-    public sealed class ContactRouterPlugin : EntityPluginBase<Contact>
+    public sealed class ContactRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
-        public ContactRouterPlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             services.AddScoped<IContactDuplicateService>(r => new ContactDuplicateService(r.GetRequiredService<IOrganizationService>()));
@@ -1104,13 +1089,8 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     /// Custom API <b>bound</b> to the <c>account</c> table. Typed request/response models are mapped
     /// automatically by the framework.
     /// </summary>
-    public sealed class AccountEstimateValueCustomApi : CustomApiBase<EstimateValueRequest, EstimateValueResponse>
+    public sealed class AccountEstimateValueCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<EstimateValueRequest, EstimateValueResponse>(unsecureConfig, secureConfig)
     {
-        public AccountEstimateValueCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_AccountEstimateValue")
@@ -1159,13 +1139,8 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     /// Custom API <b>bound</b> to the <c>contact</c> table. Typed request/response models are mapped
     /// automatically by the framework.
     /// </summary>
-    public sealed class ContactValidateCustomApi : CustomApiBase<ContactValidateRequest, ContactValidateResponse>
+    public sealed class ContactValidateCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<ContactValidateRequest, ContactValidateResponse>(unsecureConfig, secureConfig)
     {
-        public ContactValidateCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_ContactValidate")
@@ -1212,13 +1187,8 @@ namespace {{prefix}}.Plugins.GlobalCustomApis
     /// <b>Global</b> (unbound) Custom API using the lightweight style — no dedicated request/response
     /// models, parameters declared inline.
     /// </summary>
-    public sealed class PingCustomApi : CustomApiBase
+    public sealed class PingCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)
     {
-        public PingCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_Ping", nameof(Handle))
@@ -1578,13 +1548,8 @@ namespace {{ns}}
     using {{modelsNamespace}};
 
     /// <summary>Single-step plugin generated by <c>vela add plugin</c>.</summary>
-    public sealed class {{className}} : EntityPluginBase<{{entityType}}>
+    public sealed class {{className}}(string unsecureConfig, string secureConfig) : EntityPluginBase<{{entityType}}>(unsecureConfig, secureConfig)
     {
-        public {{className}}(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().{{registrationCall}}
@@ -1723,13 +1688,8 @@ namespace {{ns}}
     using Vela.CustomApi;
 
     /// <summary>Global (unbound), lightweight Custom API generated by <c>vela add customapi</c>.</summary>
-    public sealed class {{className}} : CustomApiBase
+    public sealed class {{className}}(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)
     {
-        public {{className}}(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{uniqueName}}", nameof(Handle))
@@ -1755,13 +1715,8 @@ namespace {{ns}}
     using {{modelsNamespace}};
 
     /// <summary>Typed Custom API bound to <c>{{entityType}}</c>, generated by <c>vela add customapi</c>.</summary>
-    public sealed class {{className}} : CustomApiBase<{{className}}Request, {{className}}Response>
+    public sealed class {{className}}(string unsecureConfig, string secureConfig) : CustomApiBase<{{className}}Request, {{className}}Response>(unsecureConfig, secureConfig)
     {
-        public {{className}}(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{uniqueName}}")
@@ -1810,13 +1765,8 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     /// Single-step integration plugin: runs asynchronously after a contact is created. Demonstrates
     /// dependency injection of the cross-table <see cref="IGreetingService"/> in a second plugin package.
     /// </summary>
-    public sealed class ContactSyncPlugin : EntityPluginBase<Contact>
+    public sealed class ContactSyncPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
-        public ContactSyncPlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             services.AddScoped<IGreetingService>(_ => new GreetingService());
@@ -1856,13 +1806,8 @@ namespace {{prefix}}.Integrations.Account.Plugins
     /// Multi-step integration router: one class handling create and update of accounts, each bound to
     /// a dedicated handler method.
     /// </summary>
-    public sealed class AccountSyncRouterPlugin : EntityPluginBase<Account>
+    public sealed class AccountSyncRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
-        public AccountSyncRouterPlugin(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
@@ -1909,13 +1854,8 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     using {{prefix}}.Shared.Models;
 
     /// <summary>Custom API <b>bound</b> to the <c>contact</c> table: exports a contact to an external system.</summary>
-    public sealed class ContactExportCustomApi : CustomApiBase<ContactExportRequest, ContactExportResponse>
+    public sealed class ContactExportCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<ContactExportRequest, ContactExportResponse>(unsecureConfig, secureConfig)
     {
-        public ContactExportCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_ContactExport")
@@ -1961,13 +1901,8 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     using {{prefix}}.Shared.Models;
 
     /// <summary>Custom API <b>bound</b> to the <c>account</c> table: reconciles the account with an external system.</summary>
-    public sealed class AccountReconcileCustomApi : CustomApiBase<AccountReconcileRequest, AccountReconcileResponse>
+    public sealed class AccountReconcileCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<AccountReconcileRequest, AccountReconcileResponse>(unsecureConfig, secureConfig)
     {
-        public AccountReconcileCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_AccountReconcile")
@@ -2011,13 +1946,8 @@ namespace {{prefix}}.Integrations.GlobalCustomApis
     using Vela.CustomApi;
 
     /// <summary><b>Global</b> (unbound) Custom API that reports integration health.</summary>
-    public sealed class IntegrationHeartbeatCustomApi : CustomApiBase
+    public sealed class IntegrationHeartbeatCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)
     {
-        public IntegrationHeartbeatCustomApi(string unsecureConfig, string secureConfig)
-            : base(unsecureConfig, secureConfig)
-        {
-        }
-
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi("{{ApiPrefix(prefix)}}_IntegrationHeartbeat", nameof(Handle))

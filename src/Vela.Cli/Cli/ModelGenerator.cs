@@ -85,6 +85,11 @@ public static class ModelGenerator
 
         AttributeMetadata[] attributes = (entity.Attributes ?? Array.Empty<AttributeMetadata>())
             .Where(a => !string.IsNullOrWhiteSpace(a?.LogicalName) && a.AttributeType.HasValue)
+            // Skip virtual companion attributes (those with AttributeOf set) — the "<name>name" formatted-name
+            // pseudo-columns of option sets and lookups. They are not storable columns (the formatted text lives on
+            // FormattedValues), so emitting them as `object` properties is noise. Multi-select picklists are Virtual
+            // too but have no AttributeOf, so they are kept.
+            .Where(a => string.IsNullOrEmpty(a.AttributeOf))
             .OrderBy(a => a.LogicalName, StringComparer.Ordinal)
             .ToArray();
 

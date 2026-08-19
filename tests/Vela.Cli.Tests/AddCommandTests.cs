@@ -22,7 +22,7 @@ public class AddCommandTests
             string content = File.ReadAllText(file);
             Assert.Contains("namespace Acme.Plugins.Account.Plugins", content);
             Assert.Contains("using Acme.Shared.Models;", content);
-            Assert.Contains("public sealed class AccountValidatorPlugin : EntityPluginBase<Account>", content);
+            Assert.Contains("public sealed class AccountValidatorPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)", content);
             Assert.Contains("RegisterSteps().OnUpdate()", content);
         });
     }
@@ -77,7 +77,7 @@ public class AddCommandTests
             string file = Path.Combine(dir, "GlobalCustomApis", "RecalculateTotals.cs");
             string content = File.ReadAllText(file);
             Assert.Contains("namespace Acme.Plugins.GlobalCustomApis", content);
-            Assert.Contains("public sealed class RecalculateTotals : CustomApiBase", content);
+            Assert.Contains("public sealed class RecalculateTotals(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)", content);
             Assert.Contains("RegisterCustomApi(\"acme_RecalculateTotals\", nameof(Handle))", content);
         });
     }
