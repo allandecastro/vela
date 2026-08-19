@@ -136,35 +136,6 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Null(DataverseRegistration.GetPluginPackage(svc, "missing"));
     }
 
-    // ---- ResolveSolutionId ----------------------------------------------------------------------
-
-    [Fact]
-    public void ResolveSolutionId_returns_id_and_queries_by_uniquename()
-    {
-        var solutionId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("solution", solutionId)),
-        };
-
-        Assert.Equal(solutionId, DataverseRegistration.ResolveSolutionId(svc, "acme_solution"));
-
-        QueryExpression q = Assert.Single(svc.Queries);
-        Assert.Equal("solution", q.EntityName);
-        Assert.Contains("solutionid", q.ColumnSet.Columns);
-        ConditionExpression c = Assert.Single(q.Criteria.Conditions);
-        Assert.Equal("uniquename", c.AttributeName);
-        Assert.Equal("acme_solution", c.Values.Single());
-    }
-
-    [Fact]
-    public void ResolveSolutionId_throws_when_solution_absent()
-    {
-        var svc = new TestSupport.FakeOrgService();
-        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.ResolveSolutionId(svc, "nope"));
-        Assert.Contains("Solution not found: nope", ex.Message);
-    }
-
     // ---- ResolveSolutionCustomizationPrefix -----------------------------------------------------
 
     [Fact]
@@ -294,7 +265,6 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         byte[] bytes = Encoding.UTF8.GetBytes("pkg-bytes");
         string path = NewTempFile(bytes);
         var newId = Guid.NewGuid();
-        var solutionId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = _ => new EntityCollection(), // no existing package → create
@@ -302,7 +272,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         };
 
         var payload = new PluginPackagePayload("acme_Pkg", "2.3.4", path);
-        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, solutionId, new List<string>(), verbose: false);
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
 
         Assert.Equal(newId, result);
         Entity created = Assert.Single(svc.Created);
@@ -310,9 +280,9 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Equal("acme_Pkg", created.GetAttributeValue<string>("name"));
         Assert.Equal("2.3.4", created.GetAttributeValue<string>("version"));
         Assert.Equal(Convert.ToBase64String(bytes), created.GetAttributeValue<string>("content"));
-        EntityReference solutionRef = created.GetAttributeValue<EntityReference>("solutionid");
-        Assert.Equal("solution", solutionRef.LogicalName);
-        Assert.Equal(solutionId, solutionRef.Id);
+        // Solution membership is applied by the solution-scoped service (SolutionUniqueName parameter), not a
+        // solutionid attribute on the record.
+        Assert.False(created.Contains("solutionid"));
         Assert.Empty(svc.Updated);
     }
 
@@ -328,7 +298,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         };
 
         var payload = new PluginPackagePayload("acme_Pkg", "9.9.9", path);
-        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, solutionId: null, new List<string>(), verbose: false);
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
 
         Assert.Equal(existingId, result);
         Entity updated = Assert.Single(svc.Updated);
@@ -346,7 +316,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService();
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", Path.Combine(Path.GetTempPath(), "does-not-exist-" + Guid.NewGuid().ToString("N") + ".nupkg"));
         var ex = Assert.Throws<FileNotFoundException>(
-            () => DataverseRegistration.UpsertPluginPackage(svc, payload, null, null, new List<string>(), verbose: false));
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, null, new List<string>(), verbose: false));
         Assert.Contains("Plugin package file not found", ex.Message);
     }
 
@@ -408,7 +378,9 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         Entity created = Assert.Single(svc.Created);
         Assert.Equal("new_Pkg", created.GetAttributeValue<string>("name")); // prefix applied
-        Assert.Equal(solutionId, created.GetAttributeValue<EntityReference>("solutionid").Id);
+        // Solution membership is applied by the solution-scoped service (SolutionUniqueName parameter), not a
+        // solutionid attribute.
+        Assert.False(created.Contains("solutionid"));
     }
 
     // ---- UpsertPluginAssembly -------------------------------------------------------------------
@@ -1289,28 +1261,6 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         int a = ex.Message.IndexOf("Zava.Plugins,", StringComparison.Ordinal);
         int b = ex.Message.IndexOf("Zava.Plugins.Foo", StringComparison.Ordinal);
         Assert.True(a >= 0 && b >= 0 && a < b, "both matched types listed in ordinal order");
-    }
-
-    [Fact]
-    public void UpsertPluginPackage_updates_existing_package_with_solutionid()
-    {
-        byte[] bytes = Encoding.UTF8.GetBytes("pkg-bytes-3");
-        string path = NewTempFile(bytes);
-        var existingId = Guid.NewGuid();
-        var solutionId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginpackage", existingId)),
-        };
-
-        var payload = new PluginPackagePayload("acme_Pkg", "3.0.0", path);
-        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, solutionId, new List<string>(), verbose: false);
-
-        Assert.Equal(existingId, result);
-        Entity updated = Assert.Single(svc.Updated);
-        EntityReference solutionRef = updated.GetAttributeValue<EntityReference>("solutionid");
-        Assert.Equal("solution", solutionRef.LogicalName);
-        Assert.Equal(solutionId, solutionRef.Id);
     }
 
     // ---- fixtures --------------------------------------------------------------------------------
