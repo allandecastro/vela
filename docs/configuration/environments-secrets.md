@@ -72,5 +72,5 @@ vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --verbose
 ```
 
 ```powershell
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --execute --verbose
+vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive --execute --verbose
 ```

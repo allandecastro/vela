@@ -16,8 +16,8 @@ dotnet pack src/Zava.Plugins -c Release -o artifacts
 # 4. Preview what would change in your environment (read-only)
 vela plan  --packages-dir artifacts --interactive
 
-# 5. Apply the changes (idempotent create/update/delete)
-vela apply --packages-dir artifacts --interactive --execute
+# 5. Apply the changes (idempotent create/update/delete) into an existing Dataverse solution
+vela apply --packages-dir artifacts --solution ZavaSales --interactive --execute
 ```
 
 > [!NOTE]
