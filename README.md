@@ -13,6 +13,8 @@
   <a href="https://github.com/allandecastro/vela/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/allandecastro/vela/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
   <a href="https://github.com/allandecastro/vela/actions/workflows/mutation.yml"><img src="https://github.com/allandecastro/vela/actions/workflows/mutation.yml/badge.svg" alt="Mutation Testing" /></a>
   <a href="https://github.com/allandecastro/vela/actions/workflows/release.yml"><img src="https://github.com/allandecastro/vela/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
+  <a href="https://www.nuget.org/packages/Vela.Plugins"><img src="https://img.shields.io/nuget/v/Vela.Plugins?logo=nuget&label=Vela.Plugins" alt="Vela.Plugins on NuGet" /></a>
+  <a href="https://www.nuget.org/packages/Vela.Cli"><img src="https://img.shields.io/nuget/v/Vela.Cli?logo=nuget&label=Vela.Cli" alt="Vela.Cli on NuGet" /></a>
 </p>
 
 <p align="center">
@@ -51,7 +53,7 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 | `Vela.Cli` (command `vela`) | .NET 10.0 | Plan/apply, scaffolding and package signing for plugins and Custom APIs. |
 | `Vela.Testing` | .NET Framework 4.6.2 | Test harness: fake execution context + in-memory `IOrganizationService`, fluent strongly-typed builder. |
 
-> **Status** - Pre-1.0 and actively developed; **not yet on NuGet.org**, so build from source or consume via a local feed for now. Publishing is automated over two release lines: pushing a `framework-vX.Y.Z` tag publishes `Vela.Plugins` + `Vela.Testing`, and `cli-vX.Y.Z` publishes `Vela.Cli`. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped and the versioning policy.
+> **Status** - Pre-1.0 and actively developed, published on NuGet.org. Reference `Vela.Plugins` (and `Vela.Testing` in your test project) with `dotnet add package`, and install the CLI with `dotnet tool install --global Vela.Cli`. Releases run over two lines: a `framework-vX.Y.Z` tag publishes `Vela.Plugins` + `Vela.Testing`, and `cli-vX.Y.Z` publishes `Vela.Cli`. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped and the versioning policy.
 
 ## Quickstart
 

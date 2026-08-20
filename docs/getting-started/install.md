@@ -2,12 +2,7 @@
 
 `Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command.
 
-> [!NOTE]
-> Vela is pre-1.0 and **not yet on nuget.org**. For now, install from a private feed or from a
-> locally built package (see below). The `dotnet tool install` command below is what you will use
-> once it is published.
-
-## From your NuGet feed
+## From nuget.org
 
 ```powershell
 dotnet tool install --global Vela.Cli
