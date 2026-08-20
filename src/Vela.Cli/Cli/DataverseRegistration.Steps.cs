@@ -328,7 +328,9 @@ internal static partial class DataverseRegistration
     desired.AddRange(postImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 1)));
 
     // Dataverse requires different messagepropertyname depending on the message:
-    // Create PostImage → "id" (captures the new record ID); all others → "Target"
+    // Create PostImage → "id" (captures the new record ID); all others → "Target".
+    // Bulk messages (CreateMultiple/UpdateMultiple) never reach here: the platform supports no images on
+    // them, so the step builder rejects images on those messages up front (see IsImageAllowed).
     bool isCreateMessage = string.Equals(message, "Create", StringComparison.OrdinalIgnoreCase);
 
     QueryExpression query = new QueryExpression("sdkmessageprocessingstepimage")
