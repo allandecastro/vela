@@ -23,6 +23,18 @@ All notable changes to Vela are documented here. The format is based on
 
 _Nothing yet._
 
+## [0.1.2] - 2026-08-20
+
+CLI line only; the framework packages are unchanged.
+
+### Fixed
+
+- `vela init` scaffolded projects referencing `Vela.Plugins`/`Vela.Testing` `1.0.0`, which does not exist (the
+  published framework is `0.1.x`), causing NU1102 restore errors. The scaffold default (`--core-version`) is now
+  `0.1.1`.
+- Scaffolded Shared/ConsoleApp projects now pin a patched `System.Security.Cryptography.Xml` over the Dataverse
+  SDK's advisory transitive version (NU1903).
+
 ## [0.1.1] - 2026-08-20
 
 ### Fixed
