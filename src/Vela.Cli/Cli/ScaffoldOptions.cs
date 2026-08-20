@@ -40,7 +40,7 @@ internal sealed record ScaffoldOptions(
     // Prefix becomes C# namespaces and assembly names: a dotted identifier (e.g. Zava or Zava.CRM).
     private static readonly Regex PrefixPattern = new("^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$", RegexOptions.Compiled);
 
-    public const string DefaultCoreVersion = "1.0.0";
+    public const string DefaultCoreVersion = "0.1.1";
 
     /// <summary>True when the value is a valid solution name (folder / .sln-file safe).</summary>
     public static bool IsValidSolutionName(string value) =>

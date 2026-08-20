@@ -20,6 +20,10 @@ internal static class ScaffoldTemplates
     // Cross-platform Dataverse client used by the Shared (netstandard2.0) and ConsoleApp projects.
     public const string DataverseClientVersion = "1.2.10";
 
+    // The Dataverse client pulls System.Security.Cryptography.Xml in transitively at a version with known
+    // advisories (NU1903); pin the patched build in the projects that reference the client (Shared, ConsoleApp).
+    public const string CryptographyXmlVersion = "8.0.4";
+
     // .NET Framework Dataverse SDK reference assemblies for plugin (net462) compilation.
     public const string CrmCoreAssembliesVersion = "9.0.2.59";
 
@@ -547,11 +551,17 @@ $$"""
     <!-- `vela models` emits [StringLength]/[Range] DataAnnotations by default; on net462 those types live in the
          System.ComponentModel.DataAnnotations framework assembly, which is not referenced by default. -->
     <Reference Include="System.ComponentModel.DataAnnotations" />
+    <!-- Pin the patched System.Security.Cryptography.Xml (a transitive SDK dependency ships an advisory version,
+         NU1903). PrivateAssets so it stays compile-only and is not deployed to the plugin sandbox, which
+         provides its own. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="{{CryptographyXmlVersion}}" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- net10.0: the cross-platform client supplies Microsoft.Xrm.Sdk for the ConsoleApp. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="{{DataverseClientVersion}}" />
+    <!-- Pin the patched System.Security.Cryptography.Xml over the client's advisory transitive version (NU1903). -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="{{CryptographyXmlVersion}}" />
   </ItemGroup>
 
 </Project>
@@ -2054,6 +2064,8 @@ $$"""
 
   <ItemGroup>
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="{{DataverseClientVersion}}" />
+    <!-- Pin the patched System.Security.Cryptography.Xml over the client's advisory transitive version (NU1903). -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="{{CryptographyXmlVersion}}" />
   </ItemGroup>
 
   <ItemGroup>
