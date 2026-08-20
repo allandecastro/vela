@@ -452,23 +452,26 @@ public sealed class StepBuilder<TEntity> :
         throw new InvalidOperationException($"{imageType} is not supported for message '{message}' at stage '{stage}'.");
     }
 
-    // Encodes the Dataverse platform's rules for which entity images a step may capture, which depend
-    // on the pipeline stage and message. These are platform constraints (the server rejects invalid
-    // combinations), not framework choices:
+    // Encodes the stage/message rules for which entity images a step may capture. This is a construction-time
+    // shape check shared by the in-memory test harness (which simulates per-record bulk images from a step's
+    // registered images) and the CLI scanner. The stricter Dataverse deployment constraint - that the platform
+    // accepts no image on the CreateMultiple/UpdateMultiple messages at all - is enforced by the CLI at
+    // plan/apply time (see the bulk-image guard there), not here, so the harness can keep testing bulk images.
     //   * PreValidation / MainOperation: no images exist yet, so none are allowed.
     //   * PreOperation: only a pre-image, and only for Update/Delete (Create has no prior state).
     //   * PostOperation: pre-image for Update/Delete (prior state), post-image for Create/Update
     //     (committed state; Delete has no post-image because the row is gone).
-    //   * CreateMultiple / UpdateMultiple: no images at all. These bulk messages carry a "Targets"
-    //     collection rather than a single "Target", and the platform accepts neither "Target" nor
-    //     "Targets" as an image's messagepropertyname, so any image registration is rejected. Plugins
-    //     on bulk messages must read the entity collection from the input parameters instead.
     private static bool IsImageAllowed(string message, PluginStages stage, bool isPreImage)
     {
-        if (string.Equals(message, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message, PluginMessages.UpdateMultiple, StringComparison.OrdinalIgnoreCase))
+        // Bulk messages capture per-target image collections under the same stage/message rules as their
+        // single-row counterparts, so evaluate them as Create/Update.
+        if (string.Equals(message, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            message = PluginMessages.Create;
+        }
+        else if (string.Equals(message, PluginMessages.UpdateMultiple, StringComparison.OrdinalIgnoreCase))
+        {
+            message = PluginMessages.Update;
         }
 
         if (stage == PluginStages.PreValidation || stage == PluginStages.MainOperation)

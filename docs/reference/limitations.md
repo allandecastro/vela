@@ -27,11 +27,11 @@ and the packages are not on nuget.org yet.
   for plugin steps); `FilteringAttributes` apply to `Create`/`Update` only (and Vela requires at least one there);
   images are constrained by stage/message
   (no images in `PreValidation`; `PreImage` only for `Update`/`Delete` in `PreOperation`; `PostImage` only for
-  `Create`/`Update`; and no images at all on `CreateMultiple`/`UpdateMultiple`, which Dataverse does not accept).
-  Violations throw.
-- **Bulk images by index.** `CreateMultiple`/`UpdateMultiple` steps carry no images of their own; register the
-  image on the single `Create`/`Update` step (which also runs for bulk operations) and read per-record pre/post
-  images by index, not by target reference.
+  `Create`/`Update`). Violations throw.
+- **No images on bulk messages when deploying.** Dataverse accepts no image on `CreateMultiple`/`UpdateMultiple`,
+  so `plan`/`apply` reject a bulk step that carries a pre/post image (the in-memory harness still allows it, to
+  simulate per-record bulk images). Register the image on the single `Create`/`Update` step, which also runs for
+  bulk operations, and read per-record pre/post images by index, not by target reference.
 - **Custom APIs run at `MainOperation`, synchronously** - that stage/mode is fixed.
 - **Typed query builder = typed `QueryExpression`.** `Query.For<T>()` adds type safety and attribute-name
   mapping; it does **not** add capabilities beyond `QueryExpression` and does not author FetchXML (you can
