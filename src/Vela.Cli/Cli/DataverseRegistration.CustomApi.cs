@@ -47,6 +47,7 @@ internal static partial class DataverseRegistration
     Guid apiId;
     if (existingApiId.HasValue)
     {
+        EnsureCustomApiImmutablesUnchanged(service, existingApiId.Value, definition);
         api.Id = existingApiId.Value;
         service.Update(api);
         apiId = existingApiId.Value;
@@ -73,6 +74,42 @@ internal static partial class DataverseRegistration
         DeleteIfExists(service, "customapi", apiId.Value);
     }
 }
+
+    // isFunction, bindingType and the bound entity are fixed when a Custom API is created; Dataverse silently
+    // ignores attempts to change them on Update (no error, the value simply stays). Left unguarded, `apply`
+    // would report a successful update that never takes effect, so every subsequent plan/apply would show the
+    // same phantom change forever (idempotence never converges). Fail fast with guidance instead.
+    private static void EnsureCustomApiImmutablesUnchanged(IOrganizationService service, Guid existingApiId, CustomApiApplyDefinition definition)
+    {
+        Entity existing = service.Retrieve("customapi", existingApiId, new ColumnSet("isfunction", "bindingtype", "boundentitylogicalname"));
+        bool existingIsFunction = existing.GetAttributeValue<bool?>("isfunction") ?? false;
+        int existingBindingType = existing.GetAttributeValue<OptionSetValue>("bindingtype")?.Value ?? 0;
+        string existingBoundEntity = existing.GetAttributeValue<string>("boundentitylogicalname") ?? string.Empty;
+        string desiredBoundEntity = definition.BoundEntityLogicalName ?? string.Empty;
+
+        List<string> changed = new();
+        if (existingIsFunction != definition.IsFunction)
+        {
+            changed.Add($"isFunction ({existingIsFunction} -> {definition.IsFunction})");
+        }
+        if (existingBindingType != definition.BindingType)
+        {
+            changed.Add($"bindingType ({existingBindingType} -> {definition.BindingType})");
+        }
+        if (!string.Equals(existingBoundEntity, desiredBoundEntity, StringComparison.OrdinalIgnoreCase))
+        {
+            changed.Add($"boundEntity ('{existingBoundEntity}' -> '{desiredBoundEntity}')");
+        }
+
+        if (changed.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Custom API '{definition.UniqueName}': {string.Join(", ", changed)} cannot be changed on an " +
+                "existing Custom API. These are set at creation and Dataverse ignores such updates, so applying " +
+                "would report success but never converge. Delete the Custom API and re-apply to recreate it with " +
+                "the new shape, or revert the change.");
+        }
+    }
 
     internal static Guid? FindCustomApiId(IOrganizationService service, string uniqueName)
 {
