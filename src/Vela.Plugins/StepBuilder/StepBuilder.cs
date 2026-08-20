@@ -459,17 +459,16 @@ public sealed class StepBuilder<TEntity> :
     //   * PreOperation: only a pre-image, and only for Update/Delete (Create has no prior state).
     //   * PostOperation: pre-image for Update/Delete (prior state), post-image for Create/Update
     //     (committed state; Delete has no post-image because the row is gone).
+    //   * CreateMultiple / UpdateMultiple: no images at all. These bulk messages carry a "Targets"
+    //     collection rather than a single "Target", and the platform accepts neither "Target" nor
+    //     "Targets" as an image's messagepropertyname, so any image registration is rejected. Plugins
+    //     on bulk messages must read the entity collection from the input parameters instead.
     private static bool IsImageAllowed(string message, PluginStages stage, bool isPreImage)
     {
-        // Bulk messages capture per-target image collections under the same stage/message rules as their
-        // single-row counterparts, so evaluate them as Create/Update.
-        if (string.Equals(message, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(message, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message, PluginMessages.UpdateMultiple, StringComparison.OrdinalIgnoreCase))
         {
-            message = PluginMessages.Create;
-        }
-        else if (string.Equals(message, PluginMessages.UpdateMultiple, StringComparison.OrdinalIgnoreCase))
-        {
-            message = PluginMessages.Update;
+            return false;
         }
 
         if (stage == PluginStages.PreValidation || stage == PluginStages.MainOperation)

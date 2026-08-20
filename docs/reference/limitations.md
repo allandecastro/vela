@@ -27,9 +27,11 @@ and the packages are not on nuget.org yet.
   for plugin steps); `FilteringAttributes` apply to `Create`/`Update` only (and Vela requires at least one there);
   images are constrained by stage/message
   (no images in `PreValidation`; `PreImage` only for `Update`/`Delete` in `PreOperation`; `PostImage` only for
-  `Create`/`Update`). Violations throw.
-- **Bulk images by index.** For `CreateMultiple`/`UpdateMultiple`, per-record pre/post images are accessed by
-  index, not by target reference.
+  `Create`/`Update`; and no images at all on `CreateMultiple`/`UpdateMultiple`, which Dataverse does not accept).
+  Violations throw.
+- **Bulk images by index.** `CreateMultiple`/`UpdateMultiple` steps carry no images of their own; register the
+  image on the single `Create`/`Update` step (which also runs for bulk operations) and read per-record pre/post
+  images by index, not by target reference.
 - **Custom APIs run at `MainOperation`, synchronously** - that stage/mode is fixed.
 - **Typed query builder = typed `QueryExpression`.** `Query.For<T>()` adds type safety and attribute-name
   mapping; it does **not** add capabilities beyond `QueryExpression` and does not author FetchXML (you can
@@ -55,6 +57,9 @@ untouched.
   float, integer, guid, string, `Entity`, `EntityReference`, `EntityCollection`, `Money`, `OptionSetValue`,
   string array). Multi-select option sets and nested/complex types are not supported (unknown types fall back
   to `String`).
+- **Some Custom API fields are create-only.** `IsFunction`, the binding type, and the bound entity are fixed
+  when the Custom API is created; Dataverse ignores updates to them. `apply` detects such a change and fails
+  fast (delete and recreate the Custom API to change one) rather than reporting an update that never lands.
 - **Stage normalization:** async steps are forced to `PostOperation`; non-standard stage values default to
   `MainOperation`.
 - **Packaging:** a plugin-package `.nupkg` (built via `Microsoft.PowerApps.MSBuild.Plugin`) is required - a

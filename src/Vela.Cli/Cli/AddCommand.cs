@@ -20,7 +20,7 @@ internal static class AddCommand
     private static readonly Regex IdentifierPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     // RootNamespace suffixes that denote a project role; stripped to recover the solution prefix so the
-    // shared models namespace ({prefix}.Shared.Models) can be inferred.
+    // shared models namespace ({prefix}.Shared.Models.Generated, where `vela models` writes) can be inferred.
 
     // SDK messages that have a dedicated On...() builder method, matched case-insensitively so the
     // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("...").
@@ -84,7 +84,7 @@ internal static class AddCommand
         string projectDir = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
         string rootNamespace = ReadRootNamespace(projectFile);
         string prefix = StripRoleSuffix(rootNamespace);
-        string modelsNamespace = $"{prefix}.Shared.Models";
+        string modelsNamespace = $"{prefix}.Shared.Models.Generated";
 
         return kind switch
         {
@@ -170,7 +170,7 @@ internal static class AddCommand
 
             string ns = $"{rootNamespace}.{entity}.Plugins";
             string pluginNamespace = $"{pluginsRoot}.{entity}.Plugins";
-            string modelsNamespace = $"{prefix}.Shared.Models";
+            string modelsNamespace = $"{prefix}.Shared.Models.Generated";
             string relativePath = Path.Combine(entity!, "Plugins", $"{testClass}.cs");
             string content = AddPluginTestFile(ns, pluginNamespace, modelsNamespace, testClass, name, entity!);
             return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})");
@@ -214,12 +214,19 @@ internal static class AddCommand
         string message = known ?? rawMessage;
         string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
 
-        // Create/Update steps require filtering attributes at compile time; the generator does not know the
-        // entity's columns, so it emits a TODO placeholder on a property that exists on every early-bound type.
+        // Create/Update steps require at least one filtering attribute, and the builder's first argument is
+        // mandatory at compile time. The generator can't know which columns the caller actually generated onto
+        // the model (only Id, from the Entity base class, is guaranteed) and no real attribute is safe to
+        // assume, so it emits a placeholder property that does NOT exist. The project fails to build at this
+        // exact line (CS1061 "does not contain a definition for 'REPLACE_WITH_A_FILTERING_ATTRIBUTE'"), forcing
+        // the caller to pick a real filtering attribute before the step can be scanned or applied. This is
+        // deliberately better than a name that compiles: e.Id built fine but was then rejected at apply with the
+        // cryptic "Attribute (Id=id) does not exist", and a real column like e.OwnerId only compiles if that
+        // column was generated onto the model.
         bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
             || string.Equals(message, "Update", StringComparison.Ordinal);
         string filteringCall = needsFiltering
-            ? "\n                .FilteringAttributes(e => e.Id /* TODO: choose the attributes that should trigger this step */)"
+            ? "\n                .FilteringAttributes(e => e.REPLACE_WITH_A_FILTERING_ATTRIBUTE /* TODO: pick the attribute(s) that should trigger this step, e.g. e => e.Name */)"
             : string.Empty;
 
         string ns = $"{rootNamespace}.{entity}.Plugins";

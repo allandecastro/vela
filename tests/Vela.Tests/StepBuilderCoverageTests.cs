@@ -113,9 +113,11 @@ public sealed class StepBuilderCoverageTests
     // PreOperation: only a pre-image, and only for Update/Delete.
     [InlineData(PluginMessages.Update, PluginStages.PreOperation, true, true)]
     [InlineData(PluginMessages.Update, PluginStages.PreOperation, false, false)] // post-image rejected
-    // Bulk messages evaluate as their single-row counterpart.
-    [InlineData(PluginMessages.CreateMultiple, PluginStages.PostOperation, false, true)]
-    [InlineData(PluginMessages.UpdateMultiple, PluginStages.PostOperation, true, true)]
+    // Bulk messages support no images at all: the platform accepts neither "Target" nor "Targets" as an
+    // image messagepropertyname, so any PreImage/PostImage is rejected up front.
+    [InlineData(PluginMessages.CreateMultiple, PluginStages.PostOperation, false, false)]
+    [InlineData(PluginMessages.UpdateMultiple, PluginStages.PostOperation, true, false)]
+    [InlineData(PluginMessages.UpdateMultiple, PluginStages.PostOperation, false, false)]
     // PreValidation: no images at all.
     [InlineData(PluginMessages.Update, PluginStages.PreValidation, true, false)]
     public void Image_allowed_rules_match_the_platform_matrix(string message, PluginStages stage, bool preImage, bool allowed)

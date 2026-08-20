@@ -112,6 +112,37 @@ public sealed class DataverseRegistrationCustomApiTests
         Assert.Empty(svc.Created);
     }
 
+    [Theory]
+    // Dataverse fixes isFunction, bindingType and the bound entity at creation and ignores updates to them,
+    // so a local change to any must fail fast rather than report a phantom, never-converging update.
+    [InlineData("isfunction", true, 0, "", new object[] { "isFunction" })]
+    [InlineData("bindingtype", false, 1, "", new object[] { "bindingType" })]
+    [InlineData("boundentitylogicalname", false, 0, "account", new object[] { "boundEntity" })]
+    public void UpsertCustomApi_throws_when_an_immutable_field_differs_from_the_live_api(
+        string liveColumn, bool liveIsFunction, int liveBindingType, string liveBoundEntity, object[] expectedInMessage)
+    {
+        var existingId = Guid.NewGuid();
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService(new Entity("customapi", existingId));
+        var live = new Entity("customapi", existingId)
+        {
+            ["isfunction"] = liveIsFunction,
+            ["bindingtype"] = new OptionSetValue(liveBindingType),
+            ["boundentitylogicalname"] = string.IsNullOrEmpty(liveBoundEntity) ? null : liveBoundEntity,
+        };
+        svc.OnRetrieve = (_, _, _) => live;
+        // The desired shape leaves every immutable field at its default (action, global, unbound); exactly one
+        // therefore differs from the seeded live value named by liveColumn.
+        JsonElement def = Json(new { pluginTypeName = Plugin, uniqueName = "zava_DoThing", isFunction = false, isBound = false, isPrivate = false });
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
+        Assert.Contains("zava_DoThing", ex.Message);
+        Assert.Contains("cannot be changed", ex.Message);
+        Assert.Contains((string)expectedInMessage[0], ex.Message);
+        Assert.Empty(svc.Updated);
+        Assert.Empty(svc.Created);
+    }
+
     [Fact]
     public void UpsertCustomApi_throws_when_plugin_type_unresolved()
     {

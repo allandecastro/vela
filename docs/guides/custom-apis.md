@@ -86,4 +86,19 @@ against the in-memory `IOrganizationService`.
 - Scatter metadata across multiple methods.
 - Access raw `InputParameters` / `OutputParameters` when a typed request/response model is better.
 
+## Changing an existing Custom API
+
+Most Custom API metadata reconciles in place on the next `apply`: display name, description, request/response
+parameters, `ExecutePrivilege`, `IsPrivate`, and the allowed custom-processing-step types. A few fields are
+fixed by Dataverse when the Custom API is first created and cannot be changed afterward:
+
+- function versus action (`AsFunction()` / `AsAction()`),
+- the binding type (`BoundTo<T>()` versus global),
+- the bound entity.
+
+Dataverse silently ignores updates to these, so `apply` fails fast with a clear message rather than reporting a
+change that never takes effect (which would otherwise re-appear on every plan). To change one of them, delete
+the Custom API (remove it from the package and `apply`, or delete it in Dataverse) and re-apply to recreate it
+with the new shape.
+
 Legacy names (`Register.Plugin`, `Register.CustomApi`, `ConfigureCustomApi`) are kept for backward compatibility, but new code should use the direct API (`RegisterSteps()` for plugins, `RegisterCustomApi(...)` for Custom APIs).

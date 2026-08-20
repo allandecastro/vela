@@ -52,6 +52,12 @@ vela plan `
 
 `apply --execute` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff.
 
+By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
+
+## Resuming a failed apply
+
+`apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. The output is an ordered resume report listing what was applied and what was not, then the failing operation and its reason. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply --execute`: the operations that already succeeded become no-ops and the run continues from where it stopped, converging to a clean `plan`.
+
 ## Registration manifest
 
 Use `FrameworkManifestScanner` to extract both plugin steps and Custom APIs:
