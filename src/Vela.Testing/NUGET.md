@@ -1,10 +1,6 @@
-<img src="https://raw.githubusercontent.com/allandecastro/vela/main/branding/png/vela-chevron.png" width="72" align="left" alt="Vela" />
-
 # Vela.Testing
 
 **Unit-test Dataverse plugins with confidence** - no Dataverse connection, no mocking library required.
-
-<br clear="left" />
 
 `Vela.Testing` builds a fake plugin execution context for plugins and Custom APIs written with
 [`Vela.Plugins`](https://www.nuget.org/packages/Vela.Plugins), using a fluent, strongly-typed builder

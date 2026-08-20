@@ -1,10 +1,6 @@
-<img src="https://raw.githubusercontent.com/allandecastro/vela/main/branding/png/vela-chevron.png" width="72" align="left" alt="Vela" />
-
 # Vela
 
 **Build Dataverse with confidence** - modern Microsoft Dataverse development.
-
-<br clear="left" />
 
 Vela is a framework (`Vela.Plugins`) + CLI (`Vela.Cli`, command `vela`) for building Microsoft
 Dataverse plugins and Custom APIs, with a safe, preview-first `plan` → `apply` workflow.
