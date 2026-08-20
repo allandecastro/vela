@@ -1,7 +1,7 @@
 # Contributing to Vela
 
 This guide is for people who want to **build, test, or contribute to the Vela framework itself**. If you
-just want to *use* Vela to build Dataverse plugins and Custom APIs, see the [README](README.md) — you do
+just want to *use* Vela to build Dataverse plugins and Custom APIs, see the [README](README.md) - you do
 not need to clone this repository.
 
 Looking for something to work on? See the [backlog](BACKLOG.md) for planned and candidate work.
@@ -54,7 +54,7 @@ dotnet test .\tests\Vela.Tests\Vela.Tests.csproj `
 ```
 
 CI enforces a **branch-coverage gate** (via `coverlet.msbuild`) on the two areas where edge-case coverage matters
-most — the **diff engine** (plan/apply idempotence) and the **in-memory harness**. The run fails if branch
+most - the **diff engine** (plan/apply idempotence) and the **in-memory harness**. The run fails if branch
 coverage drops below the threshold. Reproduce a gate locally, e.g. the diff engine:
 
 ```bash
@@ -69,19 +69,19 @@ Thresholds are set just below current coverage to catch regressions without chur
 
 Two gate families guard the correctness-critical cores, and both follow the same policy:
 
-- **Branch coverage** (`ci.yml`) — diff engine, in-memory harness, and the plugin runtime (`Vela.Plugins`).
-- **Mutation score** (`mutation.yml`, Stryker.NET) — the diff engine + normalizer, and the harness query core.
+- **Branch coverage** (`ci.yml`) - diff engine, in-memory harness, and the plugin runtime (`Vela.Plugins`).
+- **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine + normalizer, and the harness query core.
 
-**Policy — 80% floor, ratcheted above it.** Every gated core stays at **≥ 80%** on *both* metrics; `80` is a hard
+**Policy - 80% floor, ratcheted above it.** Every gated core stays at **≥ 80%** on *both* metrics; `80` is a hard
 minimum, never to be lowered below. On top of that floor the enforced threshold is **ratcheted to just under the
-current measured value** (≈2 pts), so it catches regressions without flaking — and is tightened as the score rises.
-Branch coverage is the easier metric (currently ~85–92%); mutation score is stricter (a surviving mutant means a
+current measured value** (≈2 pts), so it catches regressions without flaking - and is tightened as the score rises.
+Branch coverage is the easier metric (currently ~85-92%); mutation score is stricter (a surviving mutant means a
 test passed even though the code was broken), so it sits lower (~80% harness, ~90% diff engine). Treat the gate as
 a *regression detector*, not a target to write tests for: if a run dips under the floor, **kill a surviving
 mutant** (or add the missing test) to lift the score rather than relaxing the gate.
 
 The tools tests include an **opt-in build smoke test** (`Generate_ThenDotnetBuild_Succeeds`) that packs
-`Vela.Plugins`, scaffolds a solution via `vela init`, and runs `dotnet build` on it — the only test that
+`Vela.Plugins`, scaffolds a solution via `vela init`, and runs `dotnet build` on it - the only test that
 actually compiles the generated C#. It is skipped unless enabled (it restores/builds, so it needs the SDK
 and the Microsoft packages):
 
@@ -98,5 +98,5 @@ Release artifacts are produced by the release pipeline and should include only t
 The packages follow [Semantic Versioning](https://semver.org/) and ship as two independent release lines: the
 **framework** (`Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
 notable change in [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** as you merge it; cutting a release means
-renaming that section (with a date) and pushing the line's tag — `framework-vX.Y.Z` or `cli-vX.Y.Z` — which
+renaming that section (with a date) and pushing the line's tag - `framework-vX.Y.Z` or `cli-vX.Y.Z` - which
 packs and publishes only that line. See the changelog's *Versioning policy* section for the pre-1.0 rules.
