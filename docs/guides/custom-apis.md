@@ -58,9 +58,7 @@ public class CalculateAccountScoreLight : CustomApiBase
 }
 ```
 
-Use the generic base when you want typed request/response models and automatic parameter mapping; use the lightweight base when you prefer fewer files and direct access to `InputParameters` / `OutputParameters`.
-
-Both modes support the same direct pattern with `RegisterCustomApi(...)` as the registration entry point.
+Use the generic base when you want typed request/response models and automatic parameter mapping; use the lightweight base when you prefer fewer files and direct access to `InputParameters` / `OutputParameters`. Both start from `RegisterCustomApi(...)`.
 
 ## Invoke and test
 
@@ -102,3 +100,9 @@ the Custom API (remove it from the package and `apply`, or delete it in Datavers
 with the new shape.
 
 Legacy names (`Register.Plugin`, `Register.CustomApi`, `ConfigureCustomApi`) are kept for backward compatibility, but new code should use the direct API (`RegisterSteps()` for plugins, `RegisterCustomApi(...)` for Custom APIs).
+
+## See also
+
+- [Write a plugin](plugins.md) - steps, context helpers, and images.
+- [`vela models`](models.md) - generate typed request/response classes.
+- [Testing with Vela.Testing](testing.md) - run the handler with no connection.

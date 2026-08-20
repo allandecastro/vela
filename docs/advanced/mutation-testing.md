@@ -29,12 +29,11 @@ The gate is a **regression detector**, not a target to write tests for.
 
 - **80% score floor.** Every gated core **measures ≥ 80%**. That is the minimum,
   never to be lowered below it.
-- **Gate ~2 points below the score.** The enforced `--break-at` is pinned just under
-  the measured value (about 2 points), so it catches regressions without flaking on
-  timeout-variance, and is tightened as the score rises. A core measured right at the
-  floor therefore carries a gate just under 80 (e.g. `cli-apply` at ~80.1% / gate 78).
-- **Measure first.** Each core was measured before a threshold was set, then the
-  `--break-at` was pinned just under the measured score.
+- **Measure first, then gate ~2 points below.** Each core is measured before a
+  threshold is set, then the enforced `--break-at` is pinned just under the measured
+  value (about 2 points). It catches regressions without flaking on timeout-variance,
+  and is tightened as the score rises. A core measured right at the floor therefore
+  carries a gate just under 80 (e.g. `cli-apply` at ~80.1% / gate 78).
 
 When a run dips under the floor, **kill a surviving mutant** (or add the missing test)
 to lift the score rather than relaxing the gate. Many remaining survivors are

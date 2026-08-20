@@ -28,19 +28,15 @@ ZavaSales/
   nuget.config                 # local-packages/ feed for Vela.Plugins / Vela.Testing
 ```
 
-- `Zava.Shared` - early-bound `Account`/`Contact` models and shared services (multi-targets `net462;net10.0`).
-- `Zava.Plugins` - plugin package that builds a Dataverse plugin-package `.nupkg` (via the
-  `Microsoft.PowerApps.MSBuild.Plugin` SDK). Code is organised **by table** (`Account/`, `Contact/`)
-  with `Plugins/`, `Services/` and `CustomApis/` subfolders, plus `GlobalCustomApis/` for unbound APIs;
-  each file's namespace matches its folder. Seeded with a single-step plugin (schedules a follow-up
-  task), a multi-step router plugin, table-**bound** + **global** Custom APIs, a cross-table shared
-  service, and two **table-scoped** services (one write, one read).
-- `Zava.Integrations` - a second plugin package (same layout, integration-themed names). Omit with `--no-integrations`.
-- `Zava.Plugins.Tests` - a unit-test project (xunit) that runs the seeded plugins/Custom APIs with
-  `Vela.Testing` - no Dataverse connection.
+The comments above label each project. Generated code is organised **by table**, with each file's
+namespace matching its folder. `Zava.Plugins` ships working examples: a single-step plugin (schedules a
+follow-up task), a multi-step router plugin, table-**bound** and **global** Custom APIs, a cross-table
+shared service, and two **table-scoped** services (one write, one read). `Zava.Plugins.Tests` runs those
+plugins and Custom APIs with `Vela.Testing`, no Dataverse connection.
 
 > [!TIP]
-> For the full set of `vela init` flags and the wizard, see the [Scaffold a solution](../guides/scaffold.md) guide.
+> For the full set of `vela init` flags, the generated `nuget.config`, and the wizard, see the
+> [Scaffold a solution](../guides/scaffold.md) guide.
 
 ## Where to go next
 

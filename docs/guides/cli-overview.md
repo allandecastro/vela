@@ -17,6 +17,7 @@ Core commands:
 | `vela models` | [Generate early-bound classes](models.md) for a solution or table list over your connection. |
 | `vela plan` | Preview the create/update/delete operations needed to converge Dataverse with your package (read-only). |
 | `vela apply --execute` | Apply those operations (idempotent upsert/delete). See [CLI automation](plan-apply.md). |
+| `vela inspect` | Report local package registrations alongside live Dataverse state, with diagnostics (read-only). |
 | `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
 
 > [!TIP]
