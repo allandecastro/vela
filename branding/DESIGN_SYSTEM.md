@@ -1,14 +1,14 @@
-# vela — Brand & Design System
+# vela - Brand & Design System
 
 > **Build Dataverse with confidence.**
-> Modern Dataverse development — plugins, Custom APIs & more.
+> Modern Dataverse development - plugins, Custom APIs & more.
 
 *Brand & Design System · v1.0*
 
 ---
 
 **Vela** is an **AI-ready** framework and CLI for building Microsoft Dataverse
-extensions — plugins, Custom APIs, and client-side surfaces later — through a safe,
+extensions - plugins, Custom APIs, and client-side surfaces later - through a safe,
 preview-first `plan` → `apply` workflow. This document is the single source of truth for
 the brand.
 
@@ -25,28 +25,28 @@ the brand.
 
 ## 01 · Name
 
-**Vela** — Latin / Italian / Spanish for *"the sails"*, and a southern-hemisphere
+**Vela** - Latin / Italian / Spanish for *"the sails"*, and a southern-hemisphere
 **constellation** carved out of the ship *Argo* (Jason's vessel).
 
-The story it tells: **set your course, catch the wind, sail forward** — a natural fit
+The story it tells: **set your course, catch the wind, sail forward** - a natural fit
 for a tool that takes you from `plan` to `apply`. The name is abstract and timeless: it
 depends on no product terminology, so it ages well as the project grows beyond plugins
 (server-side) into client-side surfaces.
 
-- **Always** — wordmark is always lowercase: **vela**.
-- **Never** — "Vela Framework" or "Dataverse Vela." Vela is the brand; "for Dataverse" is descriptive.
+- **Always** - wordmark is always lowercase: **vela**.
+- **Never** - "Vela Framework" or "Dataverse Vela." Vela is the brand; "for Dataverse" is descriptive.
 
 ## 02 · Tagline
 
 | Use | Text |
 | --- | --- |
 | **Slogan** (brand) | Build Dataverse with confidence |
-| **Description** (NuGet / repo subtitle) | Modern Dataverse development — plugins, Custom APIs & more |
+| **Description** (NuGet / repo subtitle) | Modern Dataverse development - plugins, Custom APIs & more |
 
 ## 03 · Logo
 
 The symbol is a **chevron**: a sail filled by the wind that also reads as an **upward
-arrow** ("apply", "ship", "move forward"). The mark is **flat** — a single filled
+arrow** ("apply", "ship", "move forward"). The mark is **flat** - a single filled
 chevron, no inner fold or shading, identical across every size and asset.
 
 ### Symbol
@@ -66,7 +66,6 @@ The logotype **vela** (lowercase). Pick the fill that fits the background:
 
 | Asset | File | Use |
 | --- | --- | --- |
-| Wordmark - gradient | [`wordmark/vela-wordmark-gradient.svg`](./wordmark/vela-wordmark-gradient.svg) | on white / light |
 | Wordmark - indigo | [`wordmark/vela-wordmark-indigo.svg`](./wordmark/vela-wordmark-indigo.svg) | on white / light |
 | Wordmark - ink | [`wordmark/vela-wordmark-ink.svg`](./wordmark/vela-wordmark-ink.svg) | on white / light, neutral |
 | Wordmark - white | [`wordmark/vela-wordmark-white.svg`](./wordmark/vela-wordmark-white.svg) | on dark surfaces |
@@ -77,7 +76,6 @@ Symbol beside the wordmark - the formal logo for cards, splash and docs headers:
 
 | Asset | File | Use |
 | --- | --- | --- |
-| Lockup - gradient | [`lockup/vela-lockup-gradient.svg`](./lockup/vela-lockup-gradient.svg) | on white / light (primary) |
 | Lockup - indigo | [`lockup/vela-lockup-indigo.svg`](./lockup/vela-lockup-indigo.svg) | on white / light |
 | Lockup - ink | [`lockup/vela-lockup-ink.svg`](./lockup/vela-lockup-ink.svg) | on white / light, neutral |
 | Lockup - white | [`lockup/vela-lockup-white.svg`](./lockup/vela-lockup-white.svg) | on dark surfaces |
@@ -85,12 +83,12 @@ Symbol beside the wordmark - the formal logo for cards, splash and docs headers:
 ### Stickers (die-cut, print)
 
 Print-ready die-cut variants - symbols, wordmark, lockup, slogan strips and share cards -
-live in [`stickers/`](./stickers/) (19 SVGs, numbered by family). See
+live in [`stickers/`](./stickers/) (16 SVGs, numbered by family). See
 [`stickers/README.txt`](./stickers/README.txt) for the full list and print notes (3 mm bleed,
 outline the type or supply Inter 700).
 
 PNG renders for web/app icons live in [`png/`](./png/): `icon.png` (the NuGet / avatar app
-tile) and `vela-chevron.svg.png` (the chevron raster used in package READMEs).
+tile) and `vela-chevron.png` (the chevron raster used in package READMEs).
 
 ### Clear space & sizing
 - Keep clear space around the symbol equal to **half the chevron height**.
@@ -102,15 +100,15 @@ tile) and `vela-chevron.svg.png` (the chevron raster used in package READMEs).
 - ✕ Don't recolor the gradient outside the brand palette.
 - ✕ Don't stretch, rotate, or add shadows / bevels to the symbol.
 - ✕ Don't recreate the wordmark in another typeface.
-- ✕ Don't add an inner fold or shading — the mark stays flat, identical across chevron,
+- ✕ Don't add an inner fold or shading - the mark stays flat, identical across chevron,
   tile and favicon.
 
 ## 04 · Color palette
 
-The **brand gradient** — 135°, indigo → cyan — is the signature: sky → sea, the world
+The **brand gradient** - 135°, indigo → cyan - is the signature: sky → sea, the world
 Vela sails through. Use it for the symbol and accent details, never for large surfaces.
 
-**Brand gradient · 135°** — `#6366F1` → `#22D3EE`
+**Brand gradient · 135°** - `#6366F1` → `#22D3EE`
 
 | Token | Role | Hex |
 | --- | --- | --- |
@@ -125,17 +123,17 @@ Vela sails through. Use it for the symbol and accent details, never for large su
 
 ## 05 · Typography
 
-**Inter** — fallbacks: Segoe UI, Helvetica, Arial, sans-serif.
+**Inter** - fallbacks: Segoe UI, Helvetica, Arial, sans-serif.
 
-- **Wordmark** — Inter **700**, lowercase, tracking ~`1px`.
-- **Tagline / accents** — Inter **500–600**.
-- **Body** — Inter **400**.
+- **Wordmark** - Inter **700**, lowercase, tracking ~`1px`.
+- **Tagline / accents** - Inter **500-600**.
+- **Body** - Inter **400**.
 
 ## 06 · Voice
 - **Confident, calm, precise.** Nautical metaphors are welcome but never forced
   (*set your course, chart, ship, on course*).
 - **Descriptive about Dataverse.** Always "for Microsoft Dataverse," never part of the
-  brand name — Vela is not affiliated with Microsoft.
+  brand name - Vela is not affiliated with Microsoft.
 
 ## 07 · Asset map
 
@@ -144,10 +142,10 @@ branding/
   DESIGN_SYSTEM.md   this file
 
   symbol/            chevron (gradient / black / white / mono), tile, favicon
-  wordmark/          vela logotype (gradient / indigo / ink / white)
-  lockup/            symbol + wordmark (gradient / indigo / ink / white)
-  stickers/          19 die-cut SVGs for print (symbols, wordmark, lockup, slogan, cards)
-  png/               icon.png (NuGet / avatar tile) + vela-chevron.svg.png (README raster)
+  wordmark/          vela logotype (indigo / ink / white)
+  lockup/            symbol + wordmark (indigo / ink / white)
+  stickers/          16 die-cut SVGs for print (symbols, wordmark, lockup, slogan, cards)
+  png/               icon.png (NuGet / avatar tile) + vela-chevron.png (README raster)
 ```
 
 All marks share one canonical chevron path (`M32 8 L54 50 L40 50 L32 32 L24 50 L10 50 Z`)
@@ -156,12 +154,12 @@ and the brand palette, so the families stay pixel-consistent across every size.
 ## 08 · Package naming
 
 Packages are brand-first under `Vela.*` so the prefix can be reserved on nuget.org and the
-brand scales to client-side. "Dataverse" is intentionally dropped from the ID — like
-`Serilog.*` or `MediatR` — discoverability is carried by Title, Description and Tags.
+brand scales to client-side. "Dataverse" is intentionally dropped from the ID - like
+`Serilog.*` or `MediatR` - discoverability is carried by Title, Description and Tags.
 
 ```
 Vela.Plugins      # runtime, contracts, primitives
-Vela.Cli          # command-line tool — command: `vela`
+Vela.Cli          # command-line tool - command: `vela`
 @vela/client, @vela/pcf, @vela/cli   # npm, client-side (later)
 ```
 
@@ -171,4 +169,4 @@ Vela.Cli          # command-line tool — command: `vela`
 
 ---
 
-*vela — Build Dataverse with confidence.*
+*vela - Build Dataverse with confidence.*

@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/allandecastro/vela/main/branding/png/vela-chevron.svg.png" width="72" align="left" alt="Vela" />
+<img src="https://raw.githubusercontent.com/allandecastro/vela/main/branding/png/vela-chevron.png" width="72" align="left" alt="Vela" />
 
 # Vela
 
