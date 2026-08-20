@@ -1,17 +1,14 @@
 # Backlog
 
-Planned and candidate work for Vela, grouped by area and rough priority. This is a living list — keep it in
+Planned and candidate work for Vela, grouped by area and rough priority. This is a living list: keep it in
 sync by removing items once they ship (the [`CHANGELOG.md`](CHANGELOG.md) records what shipped) or reconsidering
 them. For what is intentionally *out of scope*, see the [Limitations reference](https://allandecastro.github.io/vela/reference/limitations.html).
 
 Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** nice-to-have polish.
 
-## Testing & CI
-
-- **P2 — Real-Dataverse integration test tier.** Beyond the generate-then-build smoke test, run `plan`/`apply`
-  against a live dev org to catch CLI regressions the in-memory / offline tests can't.
-
 ## Release
 
-- **P3 — nuget.org publishing path.** The packages are not yet published; document and automate the release.
-  Refresh `NUGET.md` (the shared package README) as part of this — it should read well on the nuget.org listing.
+- **P3 - first nuget.org publish.** The `release.yml` workflow already packs and publishes on a
+  `framework-v*` / `cli-v*` tag via Trusted Publishing (OIDC, no stored key). What remains is the nuget.org
+  side: configure the Trusted Publishing policy for this repo, optionally reserve the `Vela.*` ID prefix, then
+  push the first release tag. A short release runbook would help.
