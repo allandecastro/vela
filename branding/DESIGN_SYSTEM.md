@@ -83,9 +83,8 @@ Symbol beside the wordmark - the formal logo for cards, splash and docs headers:
 ### Stickers (die-cut, print)
 
 Print-ready die-cut variants - symbols, wordmark, lockup, slogan strips and share cards -
-live in [`stickers/`](./stickers/) (16 SVGs, numbered by family). See
-[`stickers/README.txt`](./stickers/README.txt) for the full list and print notes (3 mm bleed,
-outline the type or supply Inter 700).
+live in [`stickers/`](./stickers/) (16 SVGs, numbered by family; the filenames say what each is).
+Print notes: 3 mm bleed, and outline the type or supply Inter 700.
 
 PNG renders for web/app icons live in [`png/`](./png/): `icon.png` (the NuGet / avatar app
 tile) and `vela-chevron.png` (the chevron raster used in package READMEs).
