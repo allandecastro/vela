@@ -21,7 +21,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(file);
             Assert.Contains("namespace Acme.Plugins.Account.Plugins", content);
-            Assert.Contains("using Acme.Shared.Models;", content);
+            Assert.Contains("using Acme.Shared.Models.Generated;", content);
             Assert.Contains("public sealed class AccountValidatorPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)", content);
             Assert.Contains("RegisterSteps().OnUpdate()", content);
         });
@@ -112,7 +112,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(file);
             Assert.Contains("namespace Acme.Plugins.Account.Services", content);
-            Assert.Contains("using Acme.Shared.Models;", content);
+            Assert.Contains("using Acme.Shared.Models.Generated;", content);
             Assert.Contains("public interface IAccountFollowUpService", content);
             Assert.Contains("public sealed class AccountFollowUpService(IOrganizationService service) : IAccountFollowUpService", content);
             Assert.Contains("private readonly IOrganizationService _service = service;", content);
@@ -144,7 +144,7 @@ public class AddCommandTests
             string content = File.ReadAllText(file);
             Assert.Contains("namespace Acme.Plugins.Tests.Account.Plugins", content);
             Assert.Contains("using Acme.Plugins.Account.Plugins;", content);
-            Assert.Contains("using Acme.Shared.Models;", content);
+            Assert.Contains("using Acme.Shared.Models.Generated;", content);
             Assert.Contains("public sealed class AccountValidatorPluginTests", content);
             Assert.Contains("PluginContext.For<Account>()", content);
             Assert.Contains("new AccountValidatorPlugin(string.Empty, string.Empty)", content);
@@ -328,7 +328,7 @@ namespace Acme.Plugins.Account.Plugins
     using Vela.Context;
     using Vela.Plugin;
     using Vela.StepBuilder;
-    using Acme.Shared.Models;
+    using Acme.Shared.Models.Generated;
 
     public sealed class AccountRouter : EntityPluginBase<Account>
     {

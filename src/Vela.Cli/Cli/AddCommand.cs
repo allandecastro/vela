@@ -20,7 +20,7 @@ internal static class AddCommand
     private static readonly Regex IdentifierPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     // RootNamespace suffixes that denote a project role; stripped to recover the solution prefix so the
-    // shared models namespace ({prefix}.Shared.Models) can be inferred.
+    // shared models namespace ({prefix}.Shared.Models.Generated, where `vela models` writes) can be inferred.
 
     // SDK messages that have a dedicated On...() builder method, matched case-insensitively so the
     // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("...").
@@ -84,7 +84,7 @@ internal static class AddCommand
         string projectDir = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
         string rootNamespace = ReadRootNamespace(projectFile);
         string prefix = StripRoleSuffix(rootNamespace);
-        string modelsNamespace = $"{prefix}.Shared.Models";
+        string modelsNamespace = $"{prefix}.Shared.Models.Generated";
 
         return kind switch
         {
@@ -170,7 +170,7 @@ internal static class AddCommand
 
             string ns = $"{rootNamespace}.{entity}.Plugins";
             string pluginNamespace = $"{pluginsRoot}.{entity}.Plugins";
-            string modelsNamespace = $"{prefix}.Shared.Models";
+            string modelsNamespace = $"{prefix}.Shared.Models.Generated";
             string relativePath = Path.Combine(entity!, "Plugins", $"{testClass}.cs");
             string content = AddPluginTestFile(ns, pluginNamespace, modelsNamespace, testClass, name, entity!);
             return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})");
