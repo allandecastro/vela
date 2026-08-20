@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using static Vela.Cli.CliExitCodes;
 using static Vela.Cli.CommandLineOptions;
@@ -40,6 +42,9 @@ internal sealed record ScaffoldOptions(
     // Prefix becomes C# namespaces and assembly names: a dotted identifier (e.g. Zava or Zava.CRM).
     private static readonly Regex PrefixPattern = new("^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$", RegexOptions.Compiled);
 
+    // Offline fallback only. `vela init` normally resolves the latest published Vela.Plugins version from
+    // nuget.org (see ResolveLatestFrameworkVersion); this is used when that lookup fails or `--core-version`
+    // is not passed and the machine is offline. Keep it a real, published version.
     public const string DefaultCoreVersion = "0.1.1";
 
     /// <summary>True when the value is a valid solution name (folder / .sln-file safe).</summary>
@@ -61,7 +66,7 @@ internal sealed record ScaffoldOptions(
 
         // Resolve the name from --name, else the first positional token. FindPositional skips only the
         // values of value-taking options, so boolean flags (e.g. `init --force MySolution`) do not
-        // swallow the name — unlike the shared TryReadFirstPositional heuristic.
+        // swallow the name - unlike the shared TryReadFirstPositional heuristic.
         string? name = TryReadOption(args, "--name") ?? FindPositional(args);
 
         if (string.IsNullOrWhiteSpace(name) && interactive)
@@ -234,5 +239,42 @@ internal sealed record ScaffoldOptions(
         }
 
         return answer.Trim().StartsWith("y", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Resolve the latest published stable Vela.Plugins version from nuget.org, so `vela init` scaffolds against
+    // the current framework without the CLI needing a new release per framework version. Returns null on any
+    // failure (offline, timeout, parse), so the caller falls back to DefaultCoreVersion. Not called during
+    // arg parsing (kept out of the unit-tested path); the init command calls it before generating.
+    internal static string? ResolveLatestFrameworkVersion()
+    {
+        try
+        {
+            using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(5) };
+            string json = http.GetStringAsync("https://api.nuget.org/v3-flatcontainer/vela.plugins/index.json")
+                .GetAwaiter().GetResult();
+            using JsonDocument doc = JsonDocument.Parse(json);
+            Version? best = null;
+            string? bestStr = null;
+            foreach (JsonElement element in doc.RootElement.GetProperty("versions").EnumerateArray())
+            {
+                string? candidate = element.GetString();
+                if (string.IsNullOrEmpty(candidate) || candidate.Contains('-'))
+                {
+                    continue; // skip prerelease versions
+                }
+
+                if (Version.TryParse(candidate, out Version? parsed) && (best is null || parsed > best))
+                {
+                    best = parsed;
+                    bestStr = candidate;
+                }
+            }
+
+            return bestStr;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

@@ -86,6 +86,23 @@ static int RunNew(string[] args)
         return exitCode;
     }
 
+    // Unless the caller pinned a version, scaffold against the latest published framework resolved from
+    // nuget.org, so the CLI and framework can release on independent tags without the scaffold going stale.
+    // Falls back to the built-in default when offline.
+    if (!args.Any(x => string.Equals(x, "--core-version", StringComparison.OrdinalIgnoreCase)))
+    {
+        string? latest = ScaffoldOptions.ResolveLatestFrameworkVersion();
+        if (latest != null)
+        {
+            options = options with { CoreVersion = latest };
+            Console.WriteLine($"Scaffolding against Vela.Plugins {latest} (latest on nuget.org; override with --core-version).");
+        }
+        else
+        {
+            Console.WriteLine($"Could not reach nuget.org; scaffolding against Vela.Plugins {options.CoreVersion} (built-in default). Override with --core-version.");
+        }
+    }
+
     bool verbose = args.Any(x => string.Equals(x, "--verbose", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-v", StringComparison.OrdinalIgnoreCase));
     try
     {
