@@ -66,6 +66,20 @@ internal static class PackageScanner
                 {
                     JsonElement raw = JsonSerializer.SerializeToElement(def, jsonOptions);
                     JsonElement normalized = NormalizeStepDefinition(raw, jsonOptions);
+                    // Dataverse supports no image on the CreateMultiple/UpdateMultiple messages (it accepts
+                    // neither 'Target' nor 'Targets' as an image messagepropertyname), so a bulk-message step
+                    // with a pre/post image cannot be deployed. The in-memory harness allows it (to simulate
+                    // per-record bulk images), so reject it here at scan time - before any write - with a clear
+                    // message rather than letting apply fail mid-run with a cryptic platform error.
+                    if (IsBulkStepWithImages(normalized))
+                    {
+                        string bulkMessage = normalized.TryGetProperty("message", out JsonElement bm) ? bm.GetString() ?? "" : "";
+                        throw new InvalidOperationException(
+                            $"Plugin '{type.FullName}' registers a step on '{bulkMessage}' with a pre/post image, but " +
+                            "Dataverse supports no images on the CreateMultiple/UpdateMultiple messages. Register the " +
+                            "image on the single Create/Update step instead (it also runs for bulk operations, where " +
+                            "per-record images are available by index), or remove the image from the bulk step.");
+                    }
                     // Items keep only the hash of the secure config (so secrets never reach plan/inspect output);
                     // stash the RAW value here, keyed by stepKey, so apply can write the real secret to Dataverse.
                     if (raw.TryGetProperty("secureConfig", out JsonElement secureEl) && secureEl.ValueKind == JsonValueKind.String
@@ -109,6 +123,24 @@ internal static class PackageScanner
         Diagnostics: [],
         SecureConfigByStepKey: secureConfigByStepKey);
 }
+
+    // True when a step targets a bulk message (CreateMultiple/UpdateMultiple) and carries any pre/post image.
+    // Dataverse cannot deploy such a step, so plan/apply reject it up front (see the call site).
+    internal static bool IsBulkStepWithImages(JsonElement step)
+    {
+        string? message = step.TryGetProperty("message", out JsonElement m) ? m.GetString() : null;
+        bool isBulk = string.Equals(message, "CreateMultiple", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(message, "UpdateMultiple", StringComparison.OrdinalIgnoreCase);
+        if (!isBulk)
+        {
+            return false;
+        }
+
+        return HasItems(step, "preImages") || HasItems(step, "postImages");
+
+        static bool HasItems(JsonElement e, string name)
+            => e.TryGetProperty(name, out JsonElement arr) && arr.ValueKind == JsonValueKind.Array && arr.GetArrayLength() > 0;
+    }
 
     // A type we identified as a plugin/Custom API but couldn't introspect is a fatal authoring error: continuing
     // would treat it as contributing nothing, so plan/apply would mark its existing live registrations for deletion.

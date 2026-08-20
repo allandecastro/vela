@@ -329,8 +329,8 @@ internal static partial class DataverseRegistration
 
     // Dataverse requires different messagepropertyname depending on the message:
     // Create PostImage → "id" (captures the new record ID); all others → "Target".
-    // Bulk messages (CreateMultiple/UpdateMultiple) never reach here: the platform supports no images on
-    // them, so the step builder rejects images on those messages up front (see IsImageAllowed).
+    // Bulk messages (CreateMultiple/UpdateMultiple) never reach here: the platform supports no images on them,
+    // so the scanner rejects a bulk step carrying images before apply (see PackageScanner.IsBulkStepWithImages).
     bool isCreateMessage = string.Equals(message, "Create", StringComparison.OrdinalIgnoreCase);
 
     QueryExpression query = new QueryExpression("sdkmessageprocessingstepimage")
