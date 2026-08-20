@@ -28,21 +28,15 @@ ZavaSales/
   nuget.config                 # local-packages/ feed for Vela.Plugins / Vela.Testing
 ```
 
-- `Zava.Shared` - early-bound `Account`/`Contact` models and shared services (multi-targets `net462;net10.0`).
-- `Zava.Plugins` - plugin package that builds a Dataverse plugin-package `.nupkg` (via the
-  `Microsoft.PowerApps.MSBuild.Plugin` SDK). Code is organised **by table** (`Account/`, `Contact/`)
-  with `Plugins/`, `Services/` and `CustomApis/` subfolders, plus `GlobalCustomApis/` for unbound APIs;
-  each file's namespace matches its folder. Seeded with a single-step plugin (schedules a follow-up
-  task), a multi-step router plugin, table-**bound** + **global** Custom APIs, a cross-table shared
-  service, and two **table-scoped** services (one write, one read).
-- `Zava.Integrations` - a second plugin package (same layout, integration-themed names). Omit with `--no-integrations`.
-- `Zava.Plugins.Tests` - a unit-test project (xunit) that runs the seeded plugins/Custom APIs with
-  [`Vela.Testing`](testing.md) - no Dataverse connection. Run with
-  `dotnet test tests/Zava.Plugins.Tests`. Omit with `--no-tests`.
-- `Zava.Integrations.Tests` - the matching test project for the Integrations package (generated when both
-  the Integrations project and tests are included).
-- `Zava.ConsoleApp` - a .NET 10 console app that signs in to Dataverse **interactively** (browser).
-  Omit with `--no-console`.
+The tree comments label each project. Two carry detail beyond that:
+
+- `Zava.Plugins` builds a Dataverse plugin package `.nupkg` via the `Microsoft.PowerApps.MSBuild.Plugin`
+  SDK. Code is organised **by table**, with each file's namespace matching its folder, and is seeded with
+  working examples: a single-step plugin (schedules a follow-up task), a multi-step router plugin,
+  table-**bound** and **global** Custom APIs, a cross-table shared service, and two **table-scoped**
+  services (one write, one read).
+- `Zava.Plugins.Tests` runs those plugins and Custom APIs with [`Vela.Testing`](testing.md), no Dataverse
+  connection. Run them with `dotnet test tests/Zava.Plugins.Tests`.
 
 Flags: `--prefix` (default: derived from name), `--output` (default: `.`), `--core-version`
 (default: `1.0.0`), `--no-integrations`, `--no-tests`, `--no-console`, `--managed-identity` / `--mi`

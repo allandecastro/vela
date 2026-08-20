@@ -19,8 +19,6 @@ There are three ways to connect:
 | Client id / secret | `--url` + `--tenant-id` + `--client-id` + `--client-secret` | Unattended automation / CI with an app registration. |
 | Interactive | `--interactive` | Local use - signs in through the browser with a wizard. |
 
-These are the same across `plan`, `apply` and `vela models`.
-
 ## Client id / client secret
 
 For unattended runs, authenticate with an app registration by passing the environment
@@ -43,10 +41,6 @@ The secret can be supplied three ways:
 | Environment variable | `DATAVERSE_CLIENT_SECRET` | Preferred. Nothing on the command line. |
 | Standard input | `--client-secret-stdin` | Preferred. Pipe the secret in. |
 | Flag | `--client-secret <client-secret>` | Discouraged - visible to shell history and process listings; the CLI warns when you use it. |
-
-> [!TIP]
-> Prefer the `DATAVERSE_CLIENT_SECRET` environment variable or `--client-secret-stdin`
-> over `--client-secret`.
 
 > [!WARNING]
 > `--client-secret` is exposed to shell history and process listings (the CLI warns
@@ -76,6 +70,5 @@ MSAL login with:
 | `--auth-client-id` | The client id used for the interactive MSAL login. |
 | `--authority` | The authority (login) endpoint to sign in against. |
 
-> [!TIP]
-> Add `--verbose` for human-readable summaries and full exception stack traces on
-> failure. See [Environments & CI](environments-secrets.md).
+For running unattended in CI, including `--strict` and `--verbose`, see
+[Environments & CI](environments-secrets.md).

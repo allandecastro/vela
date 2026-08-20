@@ -199,18 +199,8 @@ protected override void Execute(ILocalPluginContext ctx, Account target)
 > [!WARNING]
 > A snapshot dumps Target/Image/Input/Output attribute values into the Plugin Trace Log. Avoid calling `TraceExecutionSnapshot` from plugins handling sensitive data when the environment's Plugin Trace Log is set to `All`.
 
-### Tracing detail added by the framework
-
-At runtime, the framework automatically adds:
-
-1. Pipeline context on execution start/end (`message`, `stage`, `mode`, `depth`, `correlationId`, entity).
-2. Structured execution snapshots (`TraceExecutionSnapshot(...)`), emitted automatically by `PluginBase` at the
-   `start`, `success` and exception phases - so you rarely call it yourself.
-3. Dataverse operation tracing on wrapped services with operation name + duration.
-4. Optional plugin telemetry forwarding when Dataverse telemetry logger is available.
-
 `TraceExecutionSnapshot(...)` always emits the **full** structured payload (every Input/Output parameter, the
-pre/post images and the Target, with attribute values) - there is no compact/verbose mode:
+pre/post images and the Target, with attribute values); there is no compact/verbose mode. A snapshot looks like:
 
 ```text
 [2026-06-14T09:12:44.1573820Z] ExecutionSnapshot
@@ -276,14 +266,8 @@ Example output - wrapped Dataverse operation tracing (automatic on `UserService`
   details     : entity=account; id=3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
 ```
 
-Notes:
-
-- Snapshots are always built in full; **whether they are persisted** is the environment's **Plugin Trace Log**
-  setting (`Off` / `Exception` / `All`). There is **no framework verbosity switch** - a server-side plugin can't
-  read OS environment variables, so a runtime flag would be inert. Keep the setting off `All` for plugins
-  handling sensitive data (snapshots dump attribute values - see the warning above).
-- Keep your own handler traces business-focused (decisions and key values); rely on the framework for the
-  infra / snapshot / Dataverse-operation tracing.
+Keep your own handler traces business-focused (decisions and key values); rely on the framework for the
+pipeline, snapshot, and Dataverse-operation tracing.
 
 ## See also
 

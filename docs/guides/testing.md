@@ -1,128 +1,19 @@
 # Testing with Vela.Testing
 
-The `Vela.Testing` package builds a fake plugin execution context so you can unit-test plugins and
-Custom APIs **without a Dataverse connection** and **without depending on any mocking library**. Its
-fluent builder mirrors the registration DSL (`OnUpdate().Stage(...).Mode(...)`), and the primary entity
-name is derived from `[EntityLogicalName]`:
+`Vela.Testing` builds a fake plugin execution context and a stateful in-memory CRM, so you can unit-test
+plugins and Custom APIs **without a Dataverse connection** and **without any mocking library**. The fluent
+builder mirrors the registration DSL (`OnUpdate().Stage(...).Mode(...)`), and the primary entity name is
+derived from `[EntityLogicalName]`. You can still inject your own `IOrganizationService` when you need
+behaviour the built-in fakes don't cover.
 
 ```powershell
 dotnet add package Vela.Testing
 ```
 
-```csharp
-using Vela.Constants;
-using Vela.StepBuilder;
-using Vela.Testing;
+## Run a plugin against a fake context
 
-// Build a context and run the plugin in one chain:
-AccountPostUpdate plugin = PluginContext.For<Account>()
-    .OnUpdate()
-    .Stage(PluginStages.PostOperation)
-    .Mode(ExecutionMode.Synchronous)
-    .WithTarget(new Account { Name = "Zava" })
-    .WithPreImage(new Account { Name = "Old name" })
-    .Execute<AccountPostUpdate>();
-
-// ...or build a LocalPluginContext for direct assertions:
-LocalPluginContext ctx = PluginContext.For<Account>()
-    .WithTarget(new Account { Name = "Zava" })
-    .Build();
-```
-
-- **Custom APIs / message-only plugins:** `PluginContext.ForMessage("vela_DoThing").WithInputParameter("amount", 5)`.
-- **Bulk (`CreateMultiple`/`UpdateMultiple`):** `.WithTargets(account1, account2)`.
-- **Test doubles (no Moq):** `FakeOrganizationService` (delegate hooks `OnCreate`/`OnRetrieve`/…),
-  `FakePluginExecutionContext` (implements the full `IPluginExecutionContext2..7` chain, so plugins that
-  read newer context members work), `RecordingTracingService` (assert via `builder.TraceCapture`).
-- **Stateful in-memory CRM:** `InMemoryOrganizationService` for real Create/Retrieve/Update/Delete
-  round-trips, bulk `CreateMultiple`/`UpdateMultiple` via `Execute(...)`, and a near-complete
-  `RetrieveMultiple`: filters (many operators incl. Between, dates, EqualUserId, CompareColumns),
-  conditions on linked entities, link-entities (Inner/LeftOuter/Exists/In/…, aliased columns, criteria,
-  nested), Any/All related-record filters, ordering (incl. linked columns), TopCount, paging, Distinct,
-  total record count, column aliases, aggregates, and **FetchXML** (common subset).
-  Opt-in platform behaviours mirror Dataverse:
-
-  ```csharp
-  var crm = new InMemoryOrganizationService()
-      .WithAlternateKey("account", "accountnumber")        // duplicate key -> throws
-      .WithAutoNumber("task", "ticketnumber", "T-", 3);     // auto-populated on create: T-001, T-002, …
-
-  // The trigger (Create/PostOperation) is auto-derived from the plugin's own registration -
-  // no need to restate OnCreate().Stage(...).Mode(...).
-  PluginContext.For<Account>()
-      .WithPrimaryEntity("account", accountId)
-      .WithTarget(new Account { Id = accountId, Name = "Zava" })
-      .WithOrganizationService(crm)
-      .Execute(new ProvisionAccountPlugin());
-
-  Assert.Single(crm.GetAll("task")); // assert on the resulting CRM state
-  ```
-- **Standard system columns:** Create/Update auto-populate `createdon`/`createdby`/`modifiedon`/`modifiedby`,
-  `statecode`/`statuscode` (active by default) and `versionnumber`, for user/team-owned tables `ownerid` +
-  `owninguser`/`owningteam` + `owningbusinessunit`, and for org-owned tables `organizationid` (set the actor
-  with `WithCurrentUser(...)` / `WithCurrentBusinessUnit(...)` / `WithOrganizationId(...)`, pin timestamps with
-  `WithClock(...)`, and make ids reproducible with `WithIdSequence()`). Ownership type is inferred from the
-  early-bound model and overridable per table with `AsOrganizationOwned(...)` / `AsUserOwned(...)` /
-  `AsVirtual(...)` / `AsElastic(...)`. `Execute(new AssignRequest { ... })` reassigns the owner. See the
-  [Reference](#reference) section below.
-- **Bring your own service:** `.WithOrganizationService(myService)` accepts any `IOrganizationService`
-  implementation when you need behaviour the built-in fakes don't cover.
-
-## Simulate the pipeline (cascade)
-
-For scenario tests that go beyond a single plugin, `PluginPipeline` simulates the Dataverse pipeline
-**in memory**: writes through its service auto-fire the registered plugins (pre/post stages, execution
-order, filtering attributes, pre/post images), and a plugin that writes triggers further plugins
-(cascade). Registrations are **discovered automatically** from your assembly via `GetStepDefinitions()`.
-
-```csharp
-var pipeline = PluginPipeline.FromAssemblyOf<AccountPostCreate>()
-    .WithAutoNumber("task", "ticketnumber", "T-", 3);
-
-pipeline.Service.Create(new Account { Name = "Zava" });   // fires Create-account plugins, then cascades
-
-Assert.Single(pipeline.GetAll("task"));        // assert on the resulting CRM state
-Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPostCreate")); // and on what ran
-```
-
-- Synchronous-plugin exceptions **roll the operation back** (snapshot/restore); **asynchronous** steps
-  run inline after the synchronous commit. Cascade depth is guarded (the plugin's own depth guard plus a
-  pipeline cap via `WithMaxDepth`).
-- **Custom APIs** run through `Service.Execute(new OrganizationRequest("vela_MyApi"){ ["x"] = 1 })`.
-- **Shared variables / `tag`.** A client passes the `tag` via a named request (not the shortcut methods, per
-  the platform); the pipeline routes `Execute(CreateRequest/UpdateRequest/…)` through the registered steps and
-  exposes it as a shared variable. Read it with `ctx.Tag` (or `ctx.GetSharedVariable("key")`):
-
-  ```csharp
-  // plugin: read the client tag
-  protected override void Execute(ILocalPluginContext ctx, Account target)
-  {
-      if (ctx.Tag == "bulk-import") { /* skip enrichment for imports */ }
-  }
-
-  // test: pass it on the request
-  var request = new CreateRequest { Target = new Account { Name = "Zava" } };
-  request["tag"] = "bulk-import";
-  pipeline.Service.Execute(request);
-  ```
-
-  For a single-plugin unit test, set it on the context builder instead: `PluginContext.For<Account>().….WithTag("bulk-import")`.
-- Use `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
-- **Associate/Disassociate** fire their registered plugins, and the N:N intersect rows persist when the
-  relationship is declared with `WithManyToMany(...)` (or derived from registered metadata) - the store has no
-  live relationship metadata otherwise.
-
-## Reference
-
-`Vela.Testing` builds a fake plugin execution context and a stateful in-memory CRM so you can run your
-plugins/Custom APIs in a plain test, assert on the records they produce, and even simulate the pipeline
-(cascading plugins). It has **no dependency on any mocking framework**; you can still inject your own
-`IOrganizationService` when you want.
-
-### 1. Run a plugin against a fake context
-
-The fluent builder mirrors the registration DSL and is strongly typed. The trigger (message/stage/mode) is
-**auto-derived** from the plugin's own registration, so you don't restate it.
+The fluent builder is strongly typed. The trigger (message/stage/mode) is **auto-derived** from the plugin's
+own registration, so you don't restate it.
 
 ```csharp
 using Vela.Constants;
@@ -135,7 +26,7 @@ AccountPostUpdate plugin = PluginContext.For<Account>()
     .WithPreImage(new Account { Name = "Old name" })
     .Execute<AccountPostUpdate>();
 
-// ...or build a LocalPluginContext for direct assertions:
+// ...or build a LocalPluginContext for direct assertions (restate the trigger to override the default):
 LocalPluginContext ctx = PluginContext.For<Account>()
     .OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
     .WithTarget(new Account { Name = "Zava" })
@@ -144,35 +35,32 @@ LocalPluginContext ctx = PluginContext.For<Account>()
 
 **Custom APIs / message-only plugins:** `PluginContext.ForMessage("vela_DoThing").WithInputParameter("amount", 5)`.
 
-The builder also exposes: `WithInputParameter`/`WithOutputParameter`, `WithSharedVariable`, `WithUserId`,
-`WithTargets(...)` (bulk), `WithManagedIdentityService`, `WithEnvironmentId`/`WithTenantId`/`AsApplicationUser`,
-and `TraceCapture` (a `RecordingTracingService` to assert on emitted traces). `FakePluginExecutionContext`
-implements the full `IPluginExecutionContext2..7` chain, so plugins reading newer members work.
+The builder also exposes: `WithInputParameter`/`WithOutputParameter`, `WithSharedVariable`, `WithTag`,
+`WithUserId`, `WithTargets(...)` (bulk `CreateMultiple`/`UpdateMultiple`), `WithManagedIdentityService`,
+`WithEnvironmentId`/`WithTenantId`/`AsApplicationUser`, and `TraceCapture` (a `RecordingTracingService` to
+assert on emitted traces). `FakePluginExecutionContext` implements the full `IPluginExecutionContext2..7`
+chain, so plugins reading newer context members work.
 
----
-
-### 2. Test doubles (no Moq)
+## Test doubles (no Moq)
 
 | Type | Purpose |
 | --- | --- |
 | `FakePluginExecutionContext` | mutable execution context (full interface chain) |
-| `FakeOrganizationService` | delegate hooks `OnCreate`/`OnRetrieve`/… (no-op by default) |
+| `FakeOrganizationService` | delegate hooks `OnCreate`/`OnRetrieve`/... (no-op by default) |
 | `FakeOrganizationServiceFactory` | hands out user/system services |
 | `RecordingTracingService` | captures `ctx.Trace(...)` for assertions |
 | `InMemoryOrganizationService` | **stateful** CRM (see below) |
 
-Inject any service yourself with `.WithOrganizationService(...)` - Moq, your own fake, etc.
+Inject any service yourself with `.WithOrganizationService(...)`: Moq, your own fake, etc.
 
----
-
-### 3. Stateful in-memory CRM
+## Stateful in-memory CRM
 
 `InMemoryOrganizationService` stores records so Create/Retrieve/Update/Delete round-trips just work.
 
 ```csharp
 var crm = new InMemoryOrganizationService()
     .WithAlternateKey("account", "accountnumber")      // duplicate key -> throws
-    .WithAutoNumber("task", "ticketnumber", "T-", 3)    // auto-populated on create: T-001, T-002, …
+    .WithAutoNumber("task", "ticketnumber", "T-", 3)    // auto-populated on create: T-001, T-002, ...
     .WithCurrentUser(currentUserId);                    // for ConditionOperator.EqualUserId
 
 var id = crm.Create(new Entity("account") { ["name"] = "Zava" });
@@ -180,60 +68,80 @@ crm.Update(new Entity("account") { Id = id, ["name"] = "Renamed" });
 Entity stored = crm.Retrieve("account", id, new ColumnSet(true));
 ```
 
-- **Relationships:** for 1:N, set the lookup via `Seed`/`Update` (`account.primarycontactid = new
-  EntityReference(...)`). A lookup is just **data** - the child carries an `EntityReference` to its parent, and that
-  alone drives queries, `link-entity` joins and filtering. You only need to *declare* the relationship with
-  `WithParentalRelationship(...)` / `WithReferentialRelationship(...)` (see the [security model](security-model.md))
-  when the test exercises a **cascade or inherited access**; a plain lookup with no declared relationship is
-  correct data, not a broken test. For N:N, declare the relationship once with `WithManyToMany(...)` and use
-  `Associate`/`Disassociate` - they
-  create/delete the intersect rows, so `RetrieveMultiple` joins through them like Dataverse:
+To run a plugin against a stateful store, pass the service on the builder and assert on the resulting CRM
+state:
 
-  ```csharp
-  var crm = new InMemoryOrganizationService()
-      .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid");
+```csharp
+PluginContext.For<Account>()
+    .WithTarget(new Account { Id = accountId, Name = "Zava" })
+    .WithOrganizationService(crm)
+    .Execute(new ProvisionAccountPlugin());
 
-  crm.Associate("account", accountId, new Relationship("account_contacts"),
-      new EntityReferenceCollection { new EntityReference("contact", contactId) });
+Assert.Single(crm.GetAll("task"));
+```
 
-  // The account's contacts, joined through the intersect entity:
-  var q = new QueryExpression("contact") { ColumnSet = new ColumnSet("fullname") };
-  var link = q.AddLink("account_contact", "contactid", "contactid", JoinOperator.Inner);
-  link.LinkCriteria.AddCondition("accountid", ConditionOperator.Equal, accountId);
-  crm.RetrieveMultiple(q);
-  ```
+### Relationships
 
-  `Associate` is idempotent (an existing pair is not duplicated). An undeclared relationship throws.
+For 1:N, set the lookup via `Seed`/`Update` (`account.primarycontactid = new EntityReference(...)`). A lookup
+is just **data**: the child carries an `EntityReference` to its parent, and that alone drives queries,
+`link-entity` joins and filtering. You only need to *declare* the relationship with
+`WithParentalRelationship(...)` / `WithReferentialRelationship(...)` (see the
+[security model](security-model.md)) when the test exercises a **cascade or inherited access**; a plain lookup
+with no declared relationship is correct data, not a broken test.
 
-  With early-bound types there is a strongly-typed overload - the table and column names come from the types
-  and the property accesses:
+For N:N, declare the relationship once with `WithManyToMany(...)` and use `Associate`/`Disassociate`: they
+create/delete the intersect rows, so `RetrieveMultiple` joins through them like Dataverse:
 
-  ```csharp
-  crm.WithManyToMany<AccountContact, Account, Contact>("account_contacts", ac => ac.AccountId, ac => ac.ContactId);
-  ```
+```csharp
+var crm = new InMemoryOrganizationService()
+    .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid");
 
-  `WithManyToMany(...)` is **optional** when the relationship is carried by registered metadata - declare it on a
-  `FakeEntityMetadata` via `.ManyToMany(schema, intersect, e1, e1Attr, e2, e2Attr)` and `Associate`/`Disassociate`
-  derive the intersect mapping from it.
-- **Bulk & batch:** `Execute(...)` handles `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple` requests,
-  `CreateMultipleRequest`/`UpdateMultipleRequest`, and `ExecuteMultipleRequest`/`ExecuteTransactionRequest`
-  (ExecuteMultiple honours `ContinueOnError`/`ReturnResponses`; ExecuteTransaction rolls the whole batch back if any
-  request throws).
-- **File / image columns:** the block protocol works over an in-memory blob store - `InitializeFileBlocksUpload`
-  → `UploadBlock` → `CommitFileBlocksUpload` (returns a `FileId`; the File column then stores that fileid),
-  `InitializeFileBlocksDownload` → `DownloadBlock` (round-trips the content), and `DeleteFile`. These messages
-  have no strongly-typed request class in the referenced SDK, so call them with a plain
-  `OrganizationRequest("InitializeFileBlocksUpload") { Parameters = { … } }`. An Image column that holds bytes
-  inline is downloaded directly (its bytes are the thumbnail); a plain `byte[]`/fileid attribute already
-  round-trips through Create/Update/Retrieve.
+crm.Associate("account", accountId, new Relationship("account_contacts"),
+    new EntityReferenceCollection { new EntityReference("contact", contactId) });
 
-#### Standard system columns
+// The account's contacts, joined through the intersect entity:
+var q = new QueryExpression("contact") { ColumnSet = new ColumnSet("fullname") };
+var link = q.AddLink("account_contact", "contactid", "contactid", JoinOperator.Inner);
+link.LinkCriteria.AddCondition("accountid", ConditionOperator.Equal, accountId);
+crm.RetrieveMultiple(q);
+```
 
-Create/Update auto-populate the standard columns the platform sets for you, so plugins that read or filter
-on them behave like they do online:
+`Associate` is idempotent (an existing pair is not duplicated); an undeclared relationship throws. With
+early-bound types there is a strongly-typed overload, where the table and column names come from the types and
+the property accesses:
 
-- **Audit:** `createdon`/`createdby` on Create, `modifiedon`/`modifiedby` on Create and every Update,
-  stamped with the calling user (`WithCurrentUser(...)`). When unset, a stable non-empty default user
+```csharp
+crm.WithManyToMany<AccountContact, Account, Contact>("account_contacts", ac => ac.AccountId, ac => ac.ContactId);
+```
+
+`WithManyToMany(...)` is **optional** when the relationship is carried by registered metadata: declare it on a
+`FakeEntityMetadata` via `.ManyToMany(schema, intersect, e1, e1Attr, e2, e2Attr)` and `Associate`/`Disassociate`
+derive the intersect mapping from it.
+
+### Bulk & batch
+
+`Execute(...)` handles `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple` requests,
+`CreateMultipleRequest`/`UpdateMultipleRequest`, and `ExecuteMultipleRequest`/`ExecuteTransactionRequest`
+(ExecuteMultiple honours `ContinueOnError`/`ReturnResponses`; ExecuteTransaction rolls the whole batch back if
+any request throws).
+
+### File / image columns
+
+The block protocol works over an in-memory blob store: `InitializeFileBlocksUpload` -> `UploadBlock` ->
+`CommitFileBlocksUpload` (returns a `FileId`; the File column then stores that fileid),
+`InitializeFileBlocksDownload` -> `DownloadBlock` (round-trips the content), and `DeleteFile`. These messages
+have no strongly-typed request class in the referenced SDK, so call them with a plain
+`OrganizationRequest("InitializeFileBlocksUpload") { Parameters = { ... } }`. An Image column that holds bytes
+inline is downloaded directly (its bytes are the thumbnail); a plain `byte[]`/fileid attribute already
+round-trips through Create/Update/Retrieve.
+
+### Standard system columns
+
+Create/Update auto-populate the standard columns the platform sets for you, so plugins that read or filter on
+them behave like they do online:
+
+- **Audit:** `createdon`/`createdby` on Create, `modifiedon`/`modifiedby` on Create and every Update, stamped
+  with the calling user (`WithCurrentUser(...)`). When unset, a stable non-empty default user
   (`InMemoryOrganizationService.DefaultCallingUser`) is used instead of the empty GUID.
 - **Owner (user/team-owned tables):** `ownerid`, `owninguser` *or* `owningteam`, and `owningbusinessunit`
   (from `WithCurrentBusinessUnit(...)`). A caller-supplied `ownerid` is honoured and the owning columns are
@@ -248,7 +156,7 @@ on them behave like they do online:
 - **Timestamps** use `DateTime.UtcNow` by default; pin them with `WithClock(() => fixedInstant)` to assert
   `createdon`/`modifiedon` deterministically.
 - **Ids** are random `Guid`s by default; make them reproducible with `WithIdSequence()` (deterministic
-  `00000000-0000-0000-0000-000000000001`, `...0002`, … - assert with `SequentialIds.At(n)`) or
+  `00000000-0000-0000-0000-000000000001`, `...0002`, ...; assert with `SequentialIds.At(n)`) or
   `WithIdSequence(() => myGuid)` for a custom generator. Virtual tables get none of these system columns.
 
 The **ownership type** is resolved per table: an early-bound row is inferred (a generated class exposes an
@@ -266,7 +174,7 @@ var crm = new InMemoryOrganizationService()
     .AsElastic("zava_telemetry");       // elastic is a storage type, not ownership: audit + owner columns
 ```
 
-#### Table metadata
+### Table metadata
 
 Plugins that read metadata (`RetrieveEntityRequest`, `RetrieveAllEntitiesRequest`, `RetrieveAttributeRequest`)
 work once you register the tables you need. Build the metadata with `FakeEntityMetadata` (it handles the SDK's
@@ -285,12 +193,12 @@ var crm = new InMemoryOrganizationService()
 
 var response = (RetrieveEntityResponse)crm.Execute(
     new RetrieveEntityRequest { LogicalName = "account", EntityFilters = EntityFilters.All });
-EntityMetadata account = response.EntityMetadata; // PrimaryIdAttribute, Attributes, OwnershipType, …
+EntityMetadata account = response.EntityMetadata; // PrimaryIdAttribute, Attributes, OwnershipType, ...
 ```
 
 Only what you register is returned; an unregistered table throws.
 
-**Or derive it from the early-bound type** - no hand-written metadata. `FakeEntityMetadata.From<TEntity>()`
+**Or derive it from the early-bound type**, with no hand-written metadata. `FakeEntityMetadata.From<TEntity>()`
 reflects over a class generated by `vela models`: each `[AttributeLogicalName]` property becomes an attribute
 (its CLR type maps to the `AttributeTypeCode`), generated option-set enums become picklists, the conventional
 `{logicalname}id` column is the primary id, a `name` column is the primary name, ownership is inferred from an
@@ -301,7 +209,7 @@ reflects over a class generated by `vela models`: each `[AttributeLogicalName]` 
 var crm = new InMemoryOrganizationService().WithEntityMetadata<Account>();   // zero metadata, zero connection
 ```
 
-It returns the same builder, so chain overrides for the facets the early-bound type can't carry - select an
+It returns the same builder, so chain overrides for the facets the early-bound type can't carry: select an
 attribute with `On(...)` then set the facet:
 
 ```csharp
@@ -312,11 +220,11 @@ attribute with `On(...)` then set the facet:
         .Build());
 ```
 
-Override-only (the early-bound type doesn't carry them - set with `On(...)` + a facet setter, or `For(...)`):
+Override-only (the early-bound type doesn't carry them; set with `On(...)` + a facet setter, or `For(...)`):
 lookup targets, required level, numeric range, and any non-conventional primary-name column. Skipped entirely
 (no faithful single mapping): multi-select choices, file/image columns, and partylists.
 
-#### Queries
+### Queries
 
 `RetrieveMultiple` runs `QueryExpression`, `QueryByAttribute` and `FetchExpression` (FetchXML, common subset):
 
@@ -337,9 +245,9 @@ CompareColumns), conditions on linked entities (records-not-in-a-set), link-enti
 ordering (incl. linked columns), TopCount, paging, Distinct, total record count, column aliases, and
 aggregates (count/sum/avg/min/max + group-by). FetchXML aggregates via `<fetch aggregate='true'>`.
 
-#### Typed query builder
+### Typed query builder
 
-`Query.For<T>()` produces the same `QueryExpression`, fully typed, no repeated type arguments:
+`Query.For<T>()` produces the same `QueryExpression`, fully typed, with no repeated type arguments:
 
 ```csharp
 QueryExpression q = Query.For<Contact>()
@@ -353,15 +261,15 @@ crm.RetrieveMultiple(q); // implicit conversion to QueryExpression
 ```
 
 Also: `Distinct()`, `Page(n, count)`, `WithTotalRecordCount()`, `WhereColumns(a, op, b)`,
-`WhereLink<TLinked>(alias, …)`, `WhereRelated<TTo>(…, JoinOperator.Any/All/…)`, and aggregates
+`WhereLink<TLinked>(alias, ...)`, `WhereRelated<TTo>(..., JoinOperator.Any/All/...)`, and aggregates
 `GroupBy/Count/Sum/Average/Min/Max`.
 
----
+## Simulate the pipeline (cascade)
 
-### 4. Pipeline simulation (cascade)
-
-`PluginPipeline` simulates the Dataverse pipeline in memory: writes auto-fire the registered plugins and
-**cascade** (a plugin that writes triggers more plugins). Registrations are discovered from the assembly.
+For scenario tests that go beyond a single plugin, `PluginPipeline` simulates the Dataverse pipeline **in
+memory**: writes through its service auto-fire the registered plugins (pre/post stages, execution order,
+filtering attributes, pre/post images), and a plugin that writes triggers further plugins (**cascade**).
+Registrations are **discovered automatically** from the assembly via `GetStepDefinitions()`.
 
 ```csharp
 var pipeline = PluginPipeline.FromAssemblyOf<AccountPostCreate>()
@@ -369,38 +277,61 @@ var pipeline = PluginPipeline.FromAssemblyOf<AccountPostCreate>()
 
 pipeline.Service.Create(new Account { Name = "Zava" });   // fires Create-account plugins, then cascades
 
-Assert.Single(pipeline.GetAll("task"));
-Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPostCreate"));
+Assert.Single(pipeline.GetAll("task"));        // assert on the resulting CRM state
+Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPostCreate")); // and on what ran
 ```
 
-- Pre/post stages, execution order, filtering attributes, pre/post images.
-- Synchronous-plugin exceptions **roll the operation back**; **async** steps run inline after commit.
-- **Custom APIs** via `Service.Execute(new OrganizationRequest("vela_MyApi"))`.
+- Synchronous-plugin exceptions **roll the operation back** (snapshot/restore); **asynchronous** steps run
+  inline after the synchronous commit. Cascade depth is guarded (the plugin's own depth guard plus a pipeline
+  cap via `WithMaxDepth`).
+- **Custom APIs** run through `Service.Execute(new OrganizationRequest("vela_MyApi"){ ["x"] = 1 })`.
 - **Bulk (`CreateMultiple`/`UpdateMultiple`)** fire steps the way Dataverse merges the two messages: a
   `CreateMultiple`/`UpdateMultiple` request runs your single `Create`/`Update` steps **once per row**, and a
-  step registered with `OnCreateMultiple()`/`OnUpdateMultiple()` runs **once with the whole batch** (read it via
-  `ctx.BulkTargets`, with per-row pre/post images on `ctx.BulkPre/PostEntityImagesCollection`). The merge runs
-  both ways, so a bulk step also fires for a plain `Create`/`Update` (a one-row batch). The whole batch is one
-  transaction - a synchronous failure rolls every row back.
+  step registered with `OnCreateMultiple()`/`OnUpdateMultiple()` runs **once with the whole batch** (read it
+  via `ctx.BulkTargets`, with per-row pre/post images on `ctx.BulkPre/PostEntityImagesCollection`). The merge
+  runs both ways, so a bulk step also fires for a plain `Create`/`Update` (a one-row batch). The whole batch is
+  one transaction: a synchronous failure rolls every row back.
 - **Owner/state Update split & `SetState`:** an `Update` that carries `ownerid` or `statecode`/`statuscode`
-  **alongside** standard fields fires the Update step **twice** - once for the standard fields, then once for the
-  owner/state fields - like the platform. `Execute(new SetStateRequest { … })` is mapped to a
+  **alongside** standard fields fires the Update step **twice**, once for the standard fields, then once for
+  the owner/state fields, like the platform. `Execute(new SetStateRequest { ... })` is mapped to a
   `statecode`/`statuscode` Update (so Update plugins run; the status defaults from the state when omitted),
   mirroring how `AssignRequest` is modelled as an `ownerid` update.
+- **Shared variables / `tag`.** A client passes the `tag` via a named request (not the shortcut methods, per
+  the platform); the pipeline routes `Execute(CreateRequest/UpdateRequest/...)` through the registered steps
+  and exposes it as a shared variable. Read it with `ctx.Tag` (or `ctx.GetSharedVariable("key")`):
+
+  ```csharp
+  // plugin: read the client tag
+  protected override void Execute(ILocalPluginContext ctx, Account target)
+  {
+      if (ctx.Tag == "bulk-import") { /* skip enrichment for imports */ }
+  }
+
+  // test: pass it on the request
+  var request = new CreateRequest { Target = new Account { Name = "Zava" } };
+  request["tag"] = "bulk-import";
+  pipeline.Service.Execute(request);
+  ```
+
+  For a single-plugin unit test, set it on the context builder instead:
+  `PluginContext.For<Account>()....WithTag("bulk-import")`.
 - **Bypass parameters** on an `Execute(...)` request suppress steps the way the platform does:
   `BypassCustomPluginExecution = true` skips every step; `BypassBusinessLogicExecution = "CustomSync"` /
   `"CustomAsync"` skips by execution mode; and `BypassBusinessLogicExecutionStepIds` skips specific steps
-  (matched against the step **key** - pass a comma-separated string or a collection of keys). The data is still
+  (matched against the step **key**: pass a comma-separated string or a collection of keys). The data is still
   written; only the plugins are skipped.
-- `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
+- **Associate/Disassociate** fire their registered plugins, and the N:N intersect rows persist when the
+  relationship is declared with `WithManyToMany(...)` (or derived from registered metadata); the store has no
+  live relationship metadata otherwise.
+- Use `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
 
----
-
-### Not supported (by design)
+## Not supported (by design)
 
 Query hints, NoLock, `FilterHint=union`, faithful paging cookies. `Associate`/`Disassociate` persist intersect
-rows once the relationship is declared (`WithManyToMany(...)` or registered metadata), but a 1:N relationship is
-modelled by `Update`-ing the lookup column. For anything else, inject your own `IOrganizationService`.
+rows once the relationship is declared (`WithManyToMany(...)` or registered metadata), but a 1:N relationship
+is modelled by `Update`-ing the lookup column. For anything else, inject your own `IOrganizationService`.
 
 For the full picture across the whole framework (runtime, CLI and this test harness), see
 [Limitations](../reference/limitations.md).
+</content>
+</invoke>

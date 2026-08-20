@@ -29,9 +29,9 @@ standard annotation can express - `[RequiredLevel(...)]` (the full four-value Da
 lossy boolean) and `[LookupTargets(...)]` (a lookup / Customer / polymorphic column's target tables). The test
 harness's `FakeEntityMetadata.From<T>()` recovers all of these by reflection, so a derived fake metadata carries
 required level and lookup targets with no hand-written overrides. `vela models` turns choices into enums (local choices nested in
-the table, global option sets as shared enums; multi-select choices become an `IList<Enum>`), type **File**
-columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail), and expose alternate keys as typed factories
-(`Account.ByAccountNumberKey("A-001")` → a key-based `EntityReference`). `--custom-apis` instead generates typed
+the table, global option sets as shared enums; multi-select choices become an `IList<Enum>`), types **File**
+columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail), and exposes alternate keys as typed factories
+(`Account.ByAccountNumberKey("A-001")` returns a key-based `EntityReference`). `--custom-apis` instead generates typed
 `OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`).
 Connection flags are the same as `plan`/`apply`
 (`--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or `--interactive`).
