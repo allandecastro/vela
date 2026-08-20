@@ -23,6 +23,14 @@ All notable changes to Vela are documented here. The format is based on
 
 _Nothing yet._
 
+## [0.1.1] - 2026-08-20
+
+### Fixed
+
+- Package READMEs now render as plain markdown on nuget.org. The `<img>` logo and `<br>` tags were raw HTML,
+  which the gallery escapes to literal text; removed them (the package icon already provides the branding).
+  Code is identical to 0.1.0.
+
 ## [0.1.0] - 2026-08-20
 
 First public release, published to NuGet.org as `framework-v0.1.0` (`Vela.Plugins` + `Vela.Testing`) and
