@@ -1,8 +1,8 @@
-<img src="https://raw.githubusercontent.com/allandecastro/vela/main/branding/png/vela-chevron.svg.png" width="72" align="left" alt="Vela" />
+<img src="https://raw.githubusercontent.com/allandecastro/vela/main/branding/png/vela-chevron.png" width="72" align="left" alt="Vela" />
 
 # Vela
 
-**Build Dataverse with confidence** — modern Microsoft Dataverse development.
+**Build Dataverse with confidence** - modern Microsoft Dataverse development.
 
 <br clear="left" />
 
@@ -15,7 +15,7 @@ Dataverse plugins and Custom APIs, with a safe, preview-first `plan` → `apply`
 # Framework (reference from your plugin project)
 dotnet add package Vela.Plugins
 
-# CLI (.NET global tool — exposes the `vela` command)
+# CLI (.NET global tool - exposes the `vela` command)
 dotnet tool install --global Vela.Cli
 ```
 
@@ -48,7 +48,14 @@ vela plan  --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
 vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --execute
 ```
 
+The `vela` CLI does more than deploy:
+
+- `vela init` scaffolds a complete, build-ready plugin solution.
+- `vela models` generates early-bound classes, security roles, and typed Custom API request/response messages from your environment.
+- `vela add` generates a plugin, service, Custom API, test, or step into an existing project.
+- `vela sign` signs a plugin package for managed-identity registration.
+
 ## Documentation
 
-Full docs, scaffolding (`vela init`), Custom APIs, DI, caching and tracing:
+Full docs, scaffolding (`vela init`), Custom APIs, DI, caching, and tracing:
 **https://github.com/allandecastro/vela**
