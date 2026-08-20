@@ -147,7 +147,7 @@ branding/
   png/               icon.png (NuGet / avatar tile) + vela-chevron.png (README raster)
 ```
 
-All marks share one canonical chevron path (`M32 8 L54 50 L40 50 L32 32 L24 50 L10 50 Z`)
+All marks share one canonical chevron path (`M32 50 L54 8 L40 8 L32 26 L24 8 L10 8 Z`)
 and the brand palette, so the families stay pixel-consistent across every size.
 
 ## 08 · Package naming
