@@ -14,6 +14,7 @@
   <a href="https://github.com/allandecastro/vela/actions/workflows/mutation.yml"><img src="https://github.com/allandecastro/vela/actions/workflows/mutation.yml/badge.svg" alt="Mutation Testing" /></a>
   <a href="https://github.com/allandecastro/vela/actions/workflows/release.yml"><img src="https://github.com/allandecastro/vela/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
   <a href="https://www.nuget.org/packages/Vela.Plugins"><img src="https://img.shields.io/nuget/v/Vela.Plugins?logo=nuget&label=Vela.Plugins" alt="Vela.Plugins on NuGet" /></a>
+  <a href="https://www.nuget.org/packages/Vela.Testing"><img src="https://img.shields.io/nuget/v/Vela.Testing?logo=nuget&label=Vela.Testing" alt="Vela.Testing on NuGet" /></a>
   <a href="https://www.nuget.org/packages/Vela.Cli"><img src="https://img.shields.io/nuget/v/Vela.Cli?logo=nuget&label=Vela.Cli" alt="Vela.Cli on NuGet" /></a>
 </p>
 
