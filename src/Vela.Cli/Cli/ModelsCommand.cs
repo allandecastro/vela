@@ -235,13 +235,17 @@ internal static class ModelsCommand
             ReadCustomApiParameters(service, "customapiresponseproperty", api.Id));
     }
 
-    private static List<CustomApiParameter> ReadCustomApiParameters(IOrganizationService service, string entity, Guid customApiId)
+    internal static List<CustomApiParameter> ReadCustomApiParameters(IOrganizationService service, string entity, Guid customApiId)
     {
-        QueryExpression query = new QueryExpression(entity) { ColumnSet = new ColumnSet("uniquename", "type") };
+        // Use the parameter's `name` (e.g. "ContactId"), NOT its `uniquename` (e.g. "zava_ContactValidate.
+        // ContactId"): the name is both the C# property identifier and the runtime Parameters/Results key.
+        // The dotted uniquename would emit `public Guid zava_ContactValidate.ContactId` (parsed as an explicit
+        // interface member, CS0538) and read the wrong Parameters key at runtime.
+        QueryExpression query = new QueryExpression(entity) { ColumnSet = new ColumnSet("name", "type") };
         query.Criteria.AddCondition("customapiid", ConditionOperator.Equal, customApiId);
         return service.RetrieveAll(query)
             .Select(e => new CustomApiParameter(
-                e.GetAttributeValue<string>("uniquename") ?? string.Empty,
+                e.GetAttributeValue<string>("name") ?? string.Empty,
                 e.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10))
             .Where(p => !string.IsNullOrWhiteSpace(p.Name))
             .OrderBy(p => p.Name, StringComparer.Ordinal)
