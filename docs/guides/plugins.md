@@ -139,6 +139,11 @@ Image validation rules enforced by the framework:
 2. `PreOperation` - only `PreImage`, only for `Update` and `Delete`.
 3. `PostOperation` - `PreImage` for `Update`/`Delete`, `PostImage` for `Create`/`Update`.
 4. `MainOperation` - not allowed for regular plugin steps.
+5. `CreateMultiple` / `UpdateMultiple` - no images at all. Dataverse accepts neither `Target` nor `Targets`
+   as an image property on the bulk messages, so registering a `PreImage`/`PostImage` on a `*Multiple` step is
+   rejected up front (the fluent builder throws when you call `PreImage()`/`PostImage()`). Register the image on
+   the single `Create`/`Update` step instead: it also runs for bulk operations, where per-record images are read
+   with `ctx.GetPreImage(index, alias)` / `ctx.GetPostImage(index, alias)`.
 
 ## Context helpers
 

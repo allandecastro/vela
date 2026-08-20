@@ -31,6 +31,12 @@ vela add --interactive
   `Associate`/`Disassociate`/`SetState` get a strongly-typed `On...()` call; any other name is registered as a
   custom SDK message via `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the current
   directory), `--force` (overwrite an existing file).
+- **Filtering attributes on a `Create`/`Update` plugin:** these messages require at least one filtering
+  attribute, and the generator cannot know your model's columns, so the step is scaffolded with a
+  `FilteringAttributes(e => e.REPLACE_WITH_A_FILTERING_ATTRIBUTE)` placeholder that does not compile. Replace it
+  with the real attribute(s) that should trigger the step (for example `e => e.Name`) before building. This is
+  deliberate: it fails at that line with a clear compiler error instead of registering a step that Dataverse
+  would later reject at apply.
 - `vela add service` scaffolds a table-scoped `I<Name>` interface + sealed implementation (injecting
   `IOrganizationService`) under `<Table>/Services/`, and prints the `services.AddScoped<...>(...)` line to drop
   into your plugin's `ConfigureServices(...)`.
