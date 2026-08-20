@@ -1,13 +1,13 @@
 name: Mutation Testing
 
-# Mutation testing (Stryker.NET) is much slower than the unit suite, so it does NOT run on every PR — it runs
+# Mutation testing (Stryker.NET) is much slower than the unit suite, so it does NOT run on every PR: it runs
 # weekly and on demand. Each job mutates a correctness core and publishes the rendered report to the run summary
-# + an HTML artifact.
+# plus an HTML artifact.
 #
-# Both jobs run on the self-hosted Windows runner: GitHub-hosted runners are unavailable (the account's Actions
-# budget is exhausted), and the self-hosted runner is free. The harness (net462) needs Windows anyway. The
-# diff-engine (net10) only needs x64: the runner is arm64, but Stryker's VsTest launches an x64 test host, so that
-# job installs the x64 .NET runtime and points DOTNET_ROOT_X64 at it (otherwise: "did not report any test").
+# Jobs run on GitHub-hosted windows-latest runners (reliable for long runs, unlike the personal self-hosted box
+# that can sleep or drop its connection mid-run). The harness (net462) needs Windows, and Stryker's VsTest
+# launches an x64 test host, which windows-latest (x64) provides. The diff-engine's explicit x64-runtime install
+# below is a leftover from the arm64 self-hosted runner; harmless on x64.
 on:
   workflow_dispatch:
   schedule:
@@ -21,7 +21,7 @@ defaults:
 
 jobs:
   diff-engine:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 30 # a normal run is ~12min; cap a hung restore/build (the runner is a personal machine that can sleep)
     env:
       # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
@@ -44,7 +44,7 @@ jobs:
       # net10-only project: no --solution, so Stryker builds just the CLI test project (+ its referenced Vela.Cli)
       # and never drags the net462 projects into the build. --project disambiguates the mutation target: the CLI test
       # project also references the compiled plugin fixtures (Sample/BrokenPluginFixture), so Stryker can't auto-pick.
-      - name: Mutation test — diff engine + normalizer
+      - name: Mutation test - diff engine + normalizer
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
@@ -67,7 +67,7 @@ jobs:
           if-no-files-found: ignore
 
   harness:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 30 # a normal run is ~12min; cap a hung restore/build (the runner is a personal machine that can sleep)
     env:
       # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
@@ -86,7 +86,7 @@ jobs:
       # upper-bound inclusivity, FetchXML named-attribute projection, …); --break-at is ratcheted to 89 (~2pts below).
       # The remaining survivors are equivalent mutants (exception-message strings, never-null/never-empty edges); the
       # "List surviving mutants" step dumps them so the next round can keep killing rather than lowering the gate.
-      - name: Mutation test — in-memory harness query core
+      - name: Mutation test - in-memory harness query core
         working-directory: tests/Vela.Testing.Tests
         run: >
           dotnet-stryker
@@ -129,7 +129,7 @@ jobs:
           if-no-files-found: ignore
 
   security-harness:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 45 # more files than the query-core job
     env:
       # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
@@ -146,7 +146,7 @@ jobs:
       # (~2pts below), the remaining survivors being equivalents (exception-message strings, comparer internals,
       # cycle guards). The enforcement wiring in InMemoryOrganizationService is a whole-file surface, left for a
       # separate pass. The "List surviving mutants" step dumps what remains.
-      - name: Mutation test — harness security model
+      - name: Mutation test - harness security model
         working-directory: tests/Vela.Testing.Tests
         run: >
           dotnet-stryker
@@ -190,7 +190,7 @@ jobs:
           if-no-files-found: ignore
 
   security-cli:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 30
     env:
       # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
@@ -211,7 +211,7 @@ jobs:
       # Role generation (net10, CLI): the pure metadata->code generator and the privilege mapper. A full-output
       # snapshot test pins the generator's emitted strings; --break-at is ratcheted to 80 (the remaining survivors
       # are equivalent whitespace/statement mutations of the generated text).
-      - name: Mutation test — role generation
+      - name: Mutation test - role generation
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
@@ -254,7 +254,7 @@ jobs:
           if-no-files-found: ignore
 
   security-enforcement:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 30
     env:
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
@@ -267,13 +267,13 @@ jobs:
         run: dotnet tool update -g dotnet-stryker
       # The security ENFORCEMENT wiring (DemandAccess/CanAccess, cascade delete/assign/share, FLS masking + write
       # rejection, inherited access, share clamping, owner-BU realign, the read filter and the membership tables) is
-      # isolated in the InMemoryOrganizationService.Security.cs partial, so the gate measures only that surface — not
+      # isolated in the InMemoryOrganizationService.Security.cs partial, so the gate measures only that surface - not
       # the store's query/versioning/seed code. Measured at ~84.8% after killing the real survivors (FLS aggregate/
       # group-by, cascade owner/scope/recursion, cascade share/unshare recursion+scope); --break-at is ratcheted to 82
-      # (~2pts below). Remaining survivors are mostly equivalent — guard-clause early returns whose downstream also
+      # (~2pts below). Remaining survivors are mostly equivalent - guard-clause early returns whose downstream also
       # guards, fault-message / entity-name strings, and owner-column removals the system field applier re-derives; the
       # "List surviving mutants" step dumps them for future triage.
-      - name: Mutation test — enforcement wiring (InMemoryOrganizationService.Security)
+      - name: Mutation test - enforcement wiring (InMemoryOrganizationService.Security)
         working-directory: tests/Vela.Testing.Tests
         run: >
           dotnet-stryker
@@ -317,7 +317,7 @@ jobs:
           if-no-files-found: ignore
 
   cli-apply:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 60 # apply reconciliation is a large net10 surface
     env:
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
@@ -342,7 +342,7 @@ jobs:
       # resolution via assembly sync, and the resume-report done++ boundaries; --break-at is ratcheted to 78.
       # The remaining survivors are equivalent (log-arg/culture/version fallbacks, polling-loop timing bounds,
       # temp-dir path strings, columnsets the fake ignores).
-      - name: Mutation test — CLI apply reconciliation
+      - name: Mutation test - CLI apply reconciliation
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
@@ -386,7 +386,7 @@ jobs:
           if-no-files-found: ignore
 
   cli-customapi:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 60
     env:
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
@@ -406,10 +406,10 @@ jobs:
         run: dotnet tool update -g dotnet-stryker
       # The Custom API reconciliation core (DataverseRegistration.CustomApi): the customapi entity build, request/
       # response parameter reconciliation (create/update/delete-orphan), the uniquename lookup, and the parameter
-      # type-code resolver — all driven through the IOrganizationService seam. Measured at ~82.7%; --break-at is
+      # type-code resolver - all driven through the IOrganizationService seam. Measured at ~82.7%; --break-at is
       # ratcheted to 80. Remaining survivors are equivalent (LogOperation arg strings, the static ParameterSyncSpec
       # record literals, and read-only ColumnSet columns).
-      - name: Mutation test — CLI Custom API reconciliation
+      - name: Mutation test - CLI Custom API reconciliation
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
@@ -453,7 +453,7 @@ jobs:
           if-no-files-found: ignore
 
   cli-reader:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 60
     env:
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
@@ -475,8 +475,8 @@ jobs:
       # images, secure config) and Custom APIs (+ request/response parameters) out of Dataverse and maps them to the
       # diff shape. Driven through the IOrganizationService seam. Measured at ~85.3%; --break-at is ratcheted to 83.
       # The live-connection methods (CreateDataverseClient*, BuildDataverseState) carry a `// Stryker disable all`
-      # block — they construct a real ServiceClient and can't run offline.
-      - name: Mutation test — CLI plan reader
+      # block - they construct a real ServiceClient and can't run offline.
+      - name: Mutation test - CLI plan reader
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
@@ -520,7 +520,7 @@ jobs:
           if-no-files-found: ignore
 
   cli-steps:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 60
     env:
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
@@ -544,7 +544,7 @@ jobs:
       # Driven through the IOrganizationService seam. Measured at ~89.4%; --break-at is ratcheted to 87. Remaining
       # survivors are equivalent (LogOperation arg strings, aliased-value reads Stryker can't attribute, ternaries
       # whose branches match on the tested inputs).
-      - name: Mutation test — CLI step reconciliation
+      - name: Mutation test - CLI step reconciliation
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
@@ -588,7 +588,7 @@ jobs:
           if-no-files-found: ignore
 
   cli-scanner:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 60
     env:
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
@@ -611,7 +611,7 @@ jobs:
       # their definitions. Driven with crafted .nupkg fixtures + stub plugin types, plus PackageScannerBuildStateTests
       # which runs BuildLocalStateFromPackages end-to-end on a real compiled plugin fixture (Sample/BrokenPluginFixture),
       # so the former `// Stryker disable all` block is gone. Measured at ~81.6%; --break-at is ratcheted to 80.
-      - name: Mutation test — CLI package scanner
+      - name: Mutation test - CLI package scanner
         working-directory: tests/Vela.Cli.Tests
         run: >
           dotnet-stryker
