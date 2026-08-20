@@ -86,7 +86,10 @@ jobs:
         run: dotnet nuget push "artifacts\**\*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create GitHub Release with packages
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" (Get-ChildItem artifacts -Recurse -Filter *.nupkg | ForEach-Object FullName) --title "${{ github.ref_name }}" --generate-notes
-        shell: pwsh
+        # Use the action rather than `gh release create`: the self-hosted runner has no GitHub CLI installed.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: artifacts/**/*.nupkg
