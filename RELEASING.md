@@ -34,14 +34,13 @@ local-dev default.
 4. Watch the run under the repo's Actions tab. On success the packages are live on NuGet.org and a GitHub
    Release is created. `--skip-duplicate` keeps re-running the same tag safe.
 
-## When you release a new framework version
+## Framework version in scaffolded projects
 
-The CLI scaffolds generated projects against a pinned framework version (`ScaffoldOptions.DefaultCoreVersion`,
-the default for `vela init --core-version`). Because the CLI and framework release on independent tags, this
-constant does not update itself: after publishing a `framework-vX.Y.Z`, bump `DefaultCoreVersion` to `X.Y.Z`
-and release a matching `cli-vA.B.C` so `vela init` scaffolds against a published framework. Otherwise `vela
-init` keeps referencing the old version (a NU1102 restore error if that version is ever unlisted). Users can
-always override with `vela init --core-version X.Y.Z` in the meantime.
+`vela init` resolves the latest published `Vela.Plugins` version from nuget.org at scaffold time, so a new
+framework release is picked up automatically with no CLI release. `--core-version X.Y.Z` still pins a specific
+version. The only remaining coupling is the offline fallback constant `ScaffoldOptions.DefaultCoreVersion`,
+used when nuget.org is unreachable; bump it to a recent published version when convenient, but it is no longer
+release-critical.
 
 ## Versioning
 

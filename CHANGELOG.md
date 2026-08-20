@@ -23,6 +23,20 @@ All notable changes to Vela are documented here. The format is based on
 
 _Nothing yet._
 
+## [0.1.3] - 2026-08-20
+
+CLI line only.
+
+### Changed
+
+- `vela init` resolves the latest published `Vela.Plugins` version from nuget.org at scaffold time (falling back
+  to a built-in default when offline), so scaffolded projects track the framework without a CLI release per
+  framework version. `--core-version` still pins a specific version.
+
+### Fixed
+
+- Removed em dashes from the scaffold-generated README and code comments (house style is hyphens).
+
 ## [0.1.2] - 2026-08-20
 
 CLI line only; the framework packages are unchanged.
