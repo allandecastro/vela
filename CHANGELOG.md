@@ -21,8 +21,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-First public release line. The packages are not yet published to NuGet.org; everything below ships in the
-initial release.
+_Nothing yet._
+
+## [0.1.0] - 2026-08-20
+
+First public release, published to NuGet.org as `framework-v0.1.0` (`Vela.Plugins` + `Vela.Testing`) and
+`cli-v0.1.0` (`Vela.Cli`). Everything below ships in this release.
 
 ### Added
 

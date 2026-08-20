@@ -20,10 +20,6 @@ vela plan  --packages-dir artifacts --interactive
 vela apply --packages-dir artifacts --solution ZavaSales --interactive --execute
 ```
 
-> [!NOTE]
-> Vela is not on nuget.org yet, so step 1's `dotnet tool install` won't resolve until it's published -
-> for now install the CLI from a local feed (see [Install](install.md)).
-
 What you get from `vela init`: a solution that references `Vela.Plugins` as a NuGet package, with seeded
 plugins, Custom APIs, services and a no-connection test project. See [Initialize a solution](initialize-a-solution.md)
 for the layout and the [guides](../guides/index.md) to write and test your own code.

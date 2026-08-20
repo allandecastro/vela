@@ -2,8 +2,8 @@
 
 What Vela deliberately does **not** do, and the known gaps - so you can tell "by design" from "bug" before
 you file one. Most constraints come from the Dataverse plugin sandbox, the preview-first `plan`/`apply`
-scope, or the in-memory test double being a faithful-but-partial model. Vela is **pre-1.0**: APIs may change
-and the packages are not on nuget.org yet.
+scope, or the in-memory test double being a faithful-but-partial model. Vela is **pre-1.0**: APIs may still
+change.
 
 - [`Vela.Plugins` (runtime)](#velaplugins-runtime)
 - [`Vela.Cli` (`plan` / `apply` / `init` / `add` / `models` / `sign`)](#velacli)

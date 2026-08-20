@@ -1,8 +1,7 @@
 # The vela CLI
 
 `Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command. See
-[Install](../getting-started/install.md) to get it (it is not on nuget.org yet - install from a
-local feed for now). Then run, for example:
+[Install](../getting-started/install.md) to get it. Then run, for example:
 
 ```powershell
 vela plan --packages-dir .\artifacts --interactive
