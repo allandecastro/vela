@@ -21,7 +21,17 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-_Nothing yet._
+CLI line only.
+
+### Fixed
+
+- `vela --help` no longer shows the pre-rename `dataverse-framework` command in its examples, and the header is
+  the `Vela CLI` brand instead of the raw `Vela.Cli` assembly name. The top-level usage is now rendered through
+  Spectre.Console (teal banner and aligned command list in a terminal, plain text when redirected) and lists
+  every `add` subcommand (`plugin`, `service`, `customapi`, `test`, `step`). Internal temp directories are named
+  `vela-tools` rather than `dataverse-framework-tools`.
+- Bumped the pinned `System.Security.Cryptography.Xml` from `8.0.3` to `8.0.4`. `8.0.3` had picked up its own
+  advisories (NU1903); `8.0.4` is the latest 8.x servicing patch and clears them.
 
 ## [0.1.3] - 2026-08-20
 
