@@ -21,6 +21,10 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.1.4] - 2026-08-21
+
 CLI line only.
 
 ### Fixed
