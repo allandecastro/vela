@@ -321,7 +321,7 @@ internal static partial class DataverseRegistration
         return File.ReadAllBytes(packagePath);
     }
 
-    string tempRoot = Path.Combine(Path.GetTempPath(), "dataverse-framework-tools", Guid.NewGuid().ToString("N"));
+    string tempRoot = Path.Combine(Path.GetTempPath(), "vela-tools", Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(tempRoot);
     tempDirectories.Add(tempRoot);
 
@@ -355,7 +355,7 @@ internal static partial class DataverseRegistration
         File.Move(nuspecPath, desiredNuspecPath);
     }
 
-    string outputDirectory = Path.Combine(Path.GetTempPath(), "dataverse-framework-tools", Guid.NewGuid().ToString("N"));
+    string outputDirectory = Path.Combine(Path.GetTempPath(), "vela-tools", Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(outputDirectory);
     tempDirectories.Add(outputDirectory);
     string transformedPackagePath = Path.Combine(outputDirectory, $"{desiredPackageName}.nupkg");

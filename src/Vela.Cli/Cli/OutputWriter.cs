@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Spectre.Console;
 using static Vela.Cli.JsonReader;
 using static Vela.Cli.DefinitionNormalizer;
 using static Vela.Cli.DiffEngine;
@@ -174,39 +175,67 @@ internal static class OutputWriter
             ]);
     }
 
+    // Top-level `vela --help`. Section headers and command names are rendered through Spectre so a real
+    // terminal gets the teal branding used by the interactive menu, while the dense, bracket-heavy option
+    // and example lines are written with plain Console.WriteLine — Spectre would otherwise treat their
+    // '[' / ']' as markup and reflow them to the detected console width. When stdout is redirected
+    // (pipes, CI) Spectre strips the styling automatically, so scripts still see clean plain text.
     public static void PrintUsage()
     {
-        Console.WriteLine("Vela.Cli");
-        Console.WriteLine("Commands:");
-        Console.WriteLine("  plan [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--connection-string <value>] [--url <envUrl> --tenant-id <tenant> --client-id <appId> --client-secret <secret>] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose]");
-        Console.WriteLine("  apply [same args as plan] [--solution <solutionUniqueName>] [--execute] [--strict] [--verbose]");
-        Console.WriteLine("  inspect [same args as plan] [--verbose]");
-        Console.WriteLine("  init --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--force] [--interactive]");
-        Console.WriteLine("  add plugin <Name> --entity <ModelType> [--message Create|Update|Delete] [--project <csproj>] [--force]");
-        Console.WriteLine("  add customapi <Name> [--entity <ModelType>] [--project <csproj>] [--force]");
-        Console.WriteLine("  models (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [connection options]");
-        Console.WriteLine("  sign --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>]");
-        Console.WriteLine("  menu                        Launch the interactive menu (also the default when run with no arguments in a terminal).");
-        Console.WriteLine("  version                     Print the tool version.");
-        Console.WriteLine();
-        Console.WriteLine("Auth options:");
+        IAnsiConsole console = AnsiConsole.Console;
+
+        console.MarkupLine($"[bold teal]{Markup.Escape(ToolInfo.ProductName)}[/]  [green]v{Markup.Escape(ToolInfo.Version)}[/]");
+        console.MarkupLine("[grey]Register Dataverse plugins and Custom APIs from your build packages.[/]");
+        console.WriteLine();
+        console.MarkupLine("[bold]Usage:[/] vela <command> [[options]]");
+        console.WriteLine();
+
+        console.MarkupLine("[bold]Commands:[/]");
+        WriteCommand(console, "plan", "Preview registration changes; never writes to Dataverse.");
+        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose]");
+        WriteCommand(console, "apply", "Same inputs as plan; add --execute to write the changes.");
+        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--execute] [--strict] [--verbose]");
+        WriteCommand(console, "inspect", "Compare local packages with the live environment.");
+        Console.WriteLine("      [same args as plan] [--verbose]");
+        WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");
+        Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--force] [--interactive]");
+        WriteCommand(console, "add", "Add a plugin, service, Custom API, test, or step to a project.");
+        Console.WriteLine("      (plugin|service|customapi|test|step) <Name> [...]   run 'vela add --help' for the full options");
+        WriteCommand(console, "models", "Generate early-bound model classes.");
+        Console.WriteLine("      (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [connection options]");
+        WriteCommand(console, "sign", "Sign a plugin package.");
+        Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>]");
+        WriteCommand(console, "menu", "Launch the interactive menu (default with no args).");
+        WriteCommand(console, "version", "Print the tool version.");
+        console.WriteLine();
+
+        console.MarkupLine("[bold]Auth options:[/]");
         Console.WriteLine("  Client secret resolution order: --client-secret <value> (warned), --client-secret-stdin, DATAVERSE_CLIENT_SECRET env var.");
         Console.WriteLine("  --auth-client-id <appId>   Override the MSAL public client id used for --interactive browser login.");
         Console.WriteLine("  --authority <url>          Override the MSAL authority (e.g. for sovereign clouds).");
         Console.WriteLine("  --verbose also prints full exception stack traces on failure.");
-        Console.WriteLine();
-        Console.WriteLine("Examples:");
-        Console.WriteLine("  dataverse-framework plan --package .\\bin\\Release\\Zava.Plugins.Package.1.0.0.nupkg --url https://zava.crm.dynamics.com --tenant-id <tenantId> --client-id <appId> --client-secret <secret>");
-        Console.WriteLine("  dataverse-framework plan --packages-dir .\\artifacts\\packages --connection-string \"$env:DATAVERSE_CONNECTION_STRING\"");
-        Console.WriteLine("  dataverse-framework plan --interactive");
+        console.WriteLine();
+
+        console.MarkupLine("[bold]Examples:[/]");
+        Console.WriteLine("  vela plan --package .\\bin\\Release\\Zava.Plugins.Package.1.0.0.nupkg --url https://zava.crm.dynamics.com --tenant-id <tenantId> --client-id <appId> --client-secret <secret>");
+        Console.WriteLine("  vela plan --packages-dir .\\artifacts\\packages --connection-string \"$env:DATAVERSE_CONNECTION_STRING\"");
+        Console.WriteLine("  vela plan --interactive");
         Console.WriteLine("  vela init --name ZavaSales --prefix Zava --output .");
-        Console.WriteLine();
-        Console.WriteLine("Exit codes:");
+        console.WriteLine();
+
+        console.MarkupLine("[bold]Exit codes:[/]");
         Console.WriteLine("  0: Success");
         Console.WriteLine("  2: Invalid arguments");
         Console.WriteLine("  3: File not found");
         Console.WriteLine("  4: Parse/read error");
         Console.WriteLine("  6: Dataverse connection failure");
+    }
+
+    // Renders one command row: a colored, aligned name followed by a short summary. Names are padded to a
+    // fixed width so summaries line up; the padding is applied before markup so styling doesn't skew it.
+    private static void WriteCommand(IAnsiConsole console, string name, string summary)
+    {
+        console.MarkupLine($"  [aqua]{name.PadRight(9)}[/] [grey]{Markup.Escape(summary)}[/]");
     }
 
     public static int Fail(string message, int exitCode, bool includeUsage = true)

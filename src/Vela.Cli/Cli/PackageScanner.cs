@@ -163,7 +163,7 @@ internal static class PackageScanner
 
     internal static ExtractedPackage ExtractPackage(string packagePath, string? preferredAssemblyName, List<string> tempDirectories)
 {
-    string tempRoot = Path.Combine(Path.GetTempPath(), "dataverse-framework-tools", Guid.NewGuid().ToString("N"));
+    string tempRoot = Path.Combine(Path.GetTempPath(), "vela-tools", Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(tempRoot);
     tempDirectories.Add(tempRoot);
 
