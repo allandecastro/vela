@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Cli;
@@ -40,6 +41,25 @@ public class ModelsCommandTests
     public void Models_Help_Succeeds()
     {
         Assert.Equal(ExitSuccess, ModelsCommand.Run(["--help"]));
+    }
+
+    [Fact]
+    public void BuildGenerationReport_Lists_Files_In_Order()
+    {
+        string json = ModelsCommand.BuildGenerationReport(
+            "/tmp/out",
+            new[]
+            {
+                new GeneratedModel("account.main.form.ts", "// a"),
+                new GeneratedModel("option-sets.ts", "// b"),
+            });
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        Assert.Equal("/tmp/out", doc.RootElement.GetProperty("outDir").GetString());
+        Assert.Equal(2, doc.RootElement.GetProperty("count").GetInt32());
+        Assert.Equal(
+            new[] { "account.main.form.ts", "option-sets.ts" },
+            doc.RootElement.GetProperty("files").EnumerateArray().Select(e => e.GetString()).ToArray());
     }
 
     [Fact]

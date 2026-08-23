@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -64,6 +65,7 @@ internal static class ModelsCommand
         string outDir = Path.GetFullPath(TryReadOption(args, "--out") ?? ".");
         bool overwrite = HasFlag(args, "--overwrite");
         bool interactive = HasFlag(args, "--interactive") || HasFlag(args, "-i");
+        bool json = HasFlag(args, "--json");
 
         // --forms emits TypeScript FormModel files (parsed FormXML + table metadata) instead of C# early-bound
         // classes; --lang selects the emitter (csharp default). The two share the scope/connection/write plumbing.
@@ -81,7 +83,7 @@ internal static class ModelsCommand
                 return Fail("vela models --forms needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
             }
 
-            return RunForms(args, solution, entities, outDir, overwrite, interactive);
+            return RunForms(args, solution, entities, outDir, overwrite, interactive, json);
         }
 
         if (lang != "csharp")
@@ -150,7 +152,7 @@ internal static class ModelsCommand
                 return Fail("Nothing resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
             }
 
-            return WriteModels(models, outDir, overwrite, $" (namespace {ns})");
+            return WriteModels(models, outDir, overwrite, json, $" (namespace {ns})");
         }
         catch (DataverseConnectionException ex)
         {
@@ -169,7 +171,7 @@ internal static class ModelsCommand
     // The --forms --lang ts path: read published Main/QuickCreate forms for the scoped tables, join each with its
     // table metadata, and emit the vela-client FormModel .ts files. Shares the scope/connection/write plumbing with
     // the C# path but needs no namespace (TS modules aren't namespaced).
-    private static int RunForms(string[] args, string? solution, string[] entities, string outDir, bool overwrite, bool interactive)
+    private static int RunForms(string[] args, string? solution, string[] entities, string outDir, bool overwrite, bool interactive, bool json)
     {
         if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
         {
@@ -222,7 +224,7 @@ internal static class ModelsCommand
                 return Fail("No form models were generated from the scoped forms.", ExitInvalidArguments, includeUsage: false);
             }
 
-            return WriteModels(models, outDir, overwrite, string.Empty);
+            return WriteModels(models, outDir, overwrite, json, string.Empty);
         }
         catch (DataverseConnectionException ex)
         {
@@ -239,8 +241,9 @@ internal static class ModelsCommand
     }
 
     // Writes generated files all-or-nothing: fails up front on any pre-existing file (unless --overwrite) so a
-    // partial write can never leave a half-generated output directory.
-    private static int WriteModels(IReadOnlyList<GeneratedModel> models, string outDir, bool overwrite, string summarySuffix)
+    // partial write can never leave a half-generated output directory. On success prints a human summary, or a
+    // machine-readable JSON report when --json is set (for scripts and agents).
+    private static int WriteModels(IReadOnlyList<GeneratedModel> models, string outDir, bool overwrite, bool json, string summarySuffix)
     {
         Directory.CreateDirectory(outDir);
 
@@ -263,9 +266,20 @@ internal static class ModelsCommand
             written++;
         }
 
-        Console.WriteLine($"Generated {written} file(s) into {outDir}{summarySuffix}.");
+        Console.WriteLine(json ? BuildGenerationReport(outDir, models) : $"Generated {written} file(s) into {outDir}{summarySuffix}.");
         return ExitSuccess;
     }
+
+    // The --json success report: the output directory and the generated file names, in generation order.
+    internal static string BuildGenerationReport(string outDir, IReadOnlyList<GeneratedModel> models) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                outDir,
+                count = models.Count,
+                files = models.Select(m => m.FileName).ToArray(),
+            },
+            new JsonSerializerOptions { WriteIndented = true });
 
     private static List<string> ResolveLogicalNames(IOrganizationService service, string? solution, string[] entities)
     {
@@ -512,6 +526,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --forms --lang ts         emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
+        Console.WriteLine("  --json                    print a JSON report of the generated files (for scripts/agents)");
         Console.WriteLine("  --no-annotations          omit DataAnnotations ([StringLength]/[Range])");
         Console.WriteLine("  --overwrite               overwrite existing files");
         Console.WriteLine("  connection: --connection-string | --url + --tenant-id + --client-id + --client-secret | --interactive");
