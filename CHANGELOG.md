@@ -21,7 +21,19 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-_Nothing yet._
+CLI line only.
+
+### Added
+
+- `vela models --forms --lang ts` generates TypeScript `FormModel` files for the scoped tables' published Main
+  and Quick Create forms, for the vela-client runtime to consume. Each form's FormXML is parsed (validated
+  against the official Microsoft `FormXml.xsd`) and joined with the table metadata, emitting one
+  `<entity>.<form>.form.ts` const that `satisfies FormModel` plus a shared `option-sets.ts` of numeric enums.
+  Field kinds, option sets and lookup targets follow the same mapping as the C# models. Generation is
+  deterministic and all-or-nothing, reuses the existing `--solution` / `--entities` scope and connection flags,
+  reads published forms only, and disambiguates same-named forms of one table.
+- `vela models --json` prints a machine-readable report of the generated files (output directory, count and file
+  names) instead of the human summary, on both the C# and `--forms` paths.
 
 ## [0.1.4] - 2026-08-21
 

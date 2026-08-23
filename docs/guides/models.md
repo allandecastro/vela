@@ -36,6 +36,29 @@ columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbna
 Connection flags are the same as `plan`/`apply`
 (`--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or `--interactive`).
 
+## TypeScript form models (`--forms --lang ts`)
+
+`vela models --forms --lang ts` generates **TypeScript `FormModel` files** for the scoped tables' published
+**Main** and **Quick Create** forms, for the vela-client runtime to consume. It reads each form's FormXML and
+joins it with the table metadata, so the emitted model carries only the fields, tabs, sections and subgrids
+actually on that form, each typed by the same rules as the C# models (string/memo, the numeric family, boolean,
+date, choice/multichoice, lookup with its targets, guid, file, image).
+
+```powershell
+# every published Main / Quick Create form of the scoped tables, into ./src/generated
+vela models --forms --lang ts --entities account,contact --out src/generated --interactive
+
+# machine-readable report of the generated files (for scripts and agents)
+vela models --forms --lang ts --solution ZavaSales --out src/generated --json
+```
+
+Each form becomes one `<entity>.<form>.form.ts` const that `satisfies FormModel`, plus a shared `option-sets.ts`
+of numeric enums the choice fields reference. Generation is deterministic (fields follow the form's layout order,
+option sets follow first-reference order) and all-or-nothing, and reuses the same scope (`--solution` /
+`--entities`) and connection flags as the rest of `vela models`. Only published forms are read (no drafts), and
+same-named forms of one table get disambiguated file names. The FormXML is parsed against the official Microsoft
+`FormXml.xsd`, so malformed exports fail with a clear error rather than a half-generated model.
+
 ## Security roles (`--roles` / `--solution-roles`)
 
 `--roles "Salesperson,Sales Manager"` (explicit names) or `--solution-roles` (every role in a `--solution`)
