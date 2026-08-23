@@ -183,6 +183,65 @@ public class FormXmlParserTests
     }
 
     [Fact]
+    public void Reads_Footer_Fields_Without_Location()
+    {
+        const string xml = """
+            <form>
+              <tabs><tab name="general">
+                <columns><column width="100%"><sections><section name="s">
+                  <rows><row><cell><control datafieldname="name" /></cell></row></rows>
+                </section></sections></column></columns>
+              </tab></tabs>
+              <footer id="{00000000-0000-0000-0000-00000000eeee}">
+                <rows><row><cell><control datafieldname="modifiedon" /></cell></row></rows>
+              </footer>
+            </form>
+            """;
+
+        ParsedForm form = FormXmlParser.Parse(xml);
+
+        FormFieldCell footer = Assert.Single(form.FooterFields);
+        Assert.Equal("modifiedon", footer.DataFieldName);
+    }
+
+    [Fact]
+    public void Subgrid_Name_Falls_Back_To_UniqueId_Then_Target()
+    {
+        const string xml = """
+            <form><tabs><tab name="t">
+              <columns><column><sections><section name="s">
+                <rows>
+                  <row><cell>
+                    <control uniqueid="{00000000-0000-0000-0000-0000000000ab}" indicationOfSubgrid="true">
+                      <parameters><TargetEntityType>task</TargetEntityType></parameters>
+                    </control>
+                  </cell></row>
+                </rows>
+              </section></sections></column></columns>
+            </tab></tabs></form>
+            """;
+
+        FormSubgrid subgrid = Assert.Single(FormXmlParser.Parse(xml).Subgrids);
+        Assert.Equal("{00000000-0000-0000-0000-0000000000ab}", subgrid.Name);
+        Assert.Equal("task", subgrid.TargetEntity);
+    }
+
+    [Fact]
+    public void Falls_Back_To_Description_Attribute_When_No_Labels_Element()
+    {
+        // Defensive: an element carrying a direct `description` attribute (no <labels> child) still yields a label.
+        const string xml = """
+            <form><tabs><tab name="t" description="Direct Tab">
+              <columns><column><sections><section name="s">
+                <rows><row><cell><control datafieldname="name" /></cell></row></rows>
+              </section></sections></column></columns>
+            </tab></tabs></form>
+            """;
+
+        Assert.Equal("Direct Tab", FormXmlParser.Parse(xml).Tabs.Single().Label);
+    }
+
+    [Fact]
     public void Falls_Back_To_First_Label_When_No_Base_Language()
     {
         const string xml = """

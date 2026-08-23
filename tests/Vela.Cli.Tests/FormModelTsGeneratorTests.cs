@@ -277,6 +277,122 @@ public class FormModelTsGeneratorTests
     }
 
     [Fact]
+    public void Same_Named_Forms_Get_Unique_File_And_Const_Names()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .String("name", "Name").Display("Name")
+            .Build();
+
+        // A Main and a Quick Create form both literally named "Account" would slug to the same file/const.
+        var files = FormModelTsGenerator.Generate(new[]
+        {
+            new FormSource("id1", "Main", "Account", FormXmlParser.Parse(OneSection("s", "name")), entity),
+            new FormSource("id2", "QuickCreate", "Account", FormXmlParser.Parse(OneSection("s", "name")), entity),
+        });
+
+        Assert.Equal(
+            new[] { "account.account.form.ts", "account.account-2.form.ts" },
+            files.Select(f => f.FileName).ToArray());
+        Assert.Contains("export const AccountAccount = {", files[0].Code);
+        Assert.Contains("export const AccountAccount2 = {", files[1].Code);
+    }
+
+    [Fact]
+    public void Generate_Null_Throws()
+    {
+        Assert.Throws<System.ArgumentNullException>(() => FormModelTsGenerator.Generate(null!));
+    }
+
+    [Fact]
+    public void Form_With_Blank_Entity_Is_Skipped()
+    {
+        // A source whose metadata has no logical name is dropped rather than emitting a nameless file.
+        EntityMetadata blank = new EntityMetadata();
+        var files = FormModelTsGenerator.Generate(new[]
+        {
+            new FormSource("id", "Main", "X", FormXmlParser.Parse(OneSection("s")), blank),
+        });
+
+        Assert.Empty(files);
+    }
+
+    [Fact]
+    public void Escapes_Quotes_And_Quotes_Non_Identifier_Keys()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .String("name", "Name").Display("O'Brien & Co")
+            .Build();
+
+        // A subgrid whose control id isn't a valid JS identifier must be emitted as a quoted key.
+        const string xml = """
+            <form><tabs><tab name="general">
+              <labels><label description="General" languagecode="1033" /></labels>
+              <columns><column width="100%"><sections><section name="s">
+                <labels><label description="Sec" languagecode="1033" /></labels>
+                <rows>
+                  <row><cell><control datafieldname="name" /></cell></row>
+                  <row><cell>
+                    <control id="My Grid" classid="{E7A81278-8635-4d9e-8D4D-59480B391C5B}">
+                      <parameters><TargetEntityType>contact</TargetEntityType></parameters>
+                    </control>
+                  </cell></row>
+                </rows>
+              </section></sections></column></columns>
+            </tab></tabs></form>
+            """;
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "account.info.form.ts");
+
+        Assert.Contains(@"label: 'O\'Brien & Co',", ts);
+        Assert.Contains("'My Grid': { entity: 'contact' },", ts);
+    }
+
+    [Fact]
+    public void Owner_Lookup_Maps_To_Lookup_Kind()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .Owner("ownerid", "OwnerId", "systemuser", "team").Display("Owner")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "ownerid")), entity), "contact.info.form.ts");
+
+        Assert.Contains("kind: 'lookup',", ts);
+        Assert.Contains("targets: ['systemuser', 'team'],", ts);
+    }
+
+    [Fact]
+    public void Fractional_Number_Facets_Keep_Their_Decimals()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .Decimal("ratio", "Ratio", min: 0.5m, max: 2.5m, precision: 2).Display("Ratio")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "ratio")), entity), "account.info.form.ts");
+
+        Assert.Contains("min: 0.5,", ts);
+        Assert.Contains("max: 2.5,", ts);
+    }
+
+    [Fact]
+    public void Unknown_Field_Cell_Is_Dropped()
+    {
+        // A control bound to a column absent from the metadata can't be typed, so it's skipped (not emitted).
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName").Display("First Name")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname", "ghostfield")), entity), "contact.info.form.ts");
+
+        Assert.Contains("firstname: {", ts);
+        Assert.DoesNotContain("ghostfield", ts);
+    }
+
+    [Fact]
     public void Form_Fixtures_Are_Schema_Valid()
     {
         // The golden inputs are real FormXML: both validate against the official Microsoft FormXml.xsd.

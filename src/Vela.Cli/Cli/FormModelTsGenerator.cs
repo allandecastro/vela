@@ -39,10 +39,20 @@ public static class FormModelTsGenerator
         // global option sets, but order is kept explicit so the output is stable regardless of dictionary internals.
         OptionSetRegistry optionSets = new OptionSetRegistry();
 
-        List<GeneratedModel> files = forms
-            .Where(f => f?.Entity?.LogicalName is { Length: > 0 })
-            .Select(f => GenerateForm(f, optionSets))
-            .ToList();
+        // Several forms of the same table can slug to the same const/file name (e.g. a Main and a Quick Create form
+        // both named "Account"). Disambiguate deterministically up front so no generated file is silently
+        // overwritten by a later one in the batch.
+        HashSet<string> usedConsts = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> usedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        List<GeneratedModel> files = new List<GeneratedModel>();
+        foreach (FormSource form in forms.Where(f => f?.Entity?.LogicalName is { Length: > 0 }))
+        {
+            string entity = form.Entity.LogicalName;
+            string constName = UniqueName(ConstName(entity, form.FormName), usedConsts);
+            string fileName = UniqueFileName(FileName(entity, form.FormName), usedFiles);
+            files.Add(GenerateForm(form, entity, constName, fileName, optionSets));
+        }
 
         if (optionSets.Count > 0)
         {
@@ -71,9 +81,8 @@ public static class FormModelTsGenerator
         }
     }
 
-    private static GeneratedModel GenerateForm(FormSource source, OptionSetRegistry optionSets)
+    private static GeneratedModel GenerateForm(FormSource source, string entity, string constName, string fileName, OptionSetRegistry optionSets)
     {
-        string entity = source.Entity.LogicalName;
         IReadOnlyDictionary<string, AttributeMetadata> attributes = source.Entity.Attributes?
             .Where(a => !string.IsNullOrWhiteSpace(a?.LogicalName))
             .GroupBy(a => a.LogicalName, StringComparer.OrdinalIgnoreCase)
@@ -117,7 +126,7 @@ public static class FormModelTsGenerator
         }
 
         sb.Append('\n');
-        sb.Append($"export const {ConstName(entity, source.FormName)} = {{\n");
+        sb.Append($"export const {constName} = {{\n");
         sb.Append($"  entity: {TsString(entity)},\n");
         sb.Append($"  formId: {TsString(source.FormId)},\n");
         sb.Append($"  formType: {TsString(source.FormType)},\n");
@@ -133,7 +142,7 @@ public static class FormModelTsGenerator
         }
 
         sb.Append("} as const satisfies FormModel;\n");
-        return new GeneratedModel(FileName(entity, source.FormName), sb.ToString());
+        return new GeneratedModel(fileName, sb.ToString());
     }
 
     private static void TryPlace(string entity, FormFieldCell cell, FieldLocation? location, IReadOnlyDictionary<string, AttributeMetadata> attributes, HashSet<string> seen, List<PlacedField> placed)
@@ -497,6 +506,34 @@ public static class FormModelTsGenerator
     private static string ConstName(string entity, string formName) => Pascalize(entity) + Pascalize(formName);
 
     private static string FileName(string entity, string formName) => $"{entity}.{Slug(formName)}.form.ts";
+
+    // Ensures a name is unique within the batch by appending 2, 3, ... on collision (matching ModelGenerator).
+    private static string UniqueName(string name, HashSet<string> used)
+    {
+        string candidate = name;
+        int suffix = 2;
+        while (!used.Add(candidate))
+        {
+            candidate = name + suffix++;
+        }
+
+        return candidate;
+    }
+
+    // Like UniqueName but keeps the ".form.ts" suffix intact, inserting -2, -3, ... before it on collision.
+    private static string UniqueFileName(string fileName, HashSet<string> used)
+    {
+        const string ext = ".form.ts";
+        string stem = fileName.EndsWith(ext, StringComparison.Ordinal) ? fileName[..^ext.Length] : fileName;
+        string candidate = fileName;
+        int suffix = 2;
+        while (!used.Add(candidate))
+        {
+            candidate = $"{stem}-{suffix++}{ext}";
+        }
+
+        return candidate;
+    }
 
     private static string Slug(string value) =>
         new string(value.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();

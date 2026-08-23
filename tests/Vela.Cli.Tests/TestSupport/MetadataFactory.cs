@@ -206,6 +206,17 @@ internal sealed class MetadataFactory
         return this;
     }
 
+    public MetadataFactory Owner(string logicalName, string schemaName, params string[] targets)
+    {
+        Add(new LookupAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Owner);
+        if (targets.Length > 0)
+        {
+            Set(_last!, "Targets", targets);
+        }
+
+        return this;
+    }
+
     public MetadataFactory Picklist(string logicalName, string schemaName)
         => Add(new PicklistAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Picklist);
 

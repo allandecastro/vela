@@ -245,6 +245,19 @@ internal static class ModelsCommand
     // machine-readable JSON report when --json is set (for scripts and agents).
     private static int WriteModels(IReadOnlyList<GeneratedModel> models, string outDir, bool overwrite, bool json, string summarySuffix)
     {
+        // Guard against two generated files sharing a name: writing them in a loop would silently overwrite the
+        // first, and the reported count would exceed what lands on disk. Generators disambiguate, so this is a
+        // belt-and-braces check that turns any regression into a clear failure instead of data loss.
+        string[] duplicates = models
+            .GroupBy(model => model.FileName, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicates.Length > 0)
+        {
+            return Fail($"Generated file name collision: {string.Join(", ", duplicates)}.", ExitParseError, includeUsage: false);
+        }
+
         Directory.CreateDirectory(outDir);
 
         if (!overwrite)
