@@ -43,6 +43,91 @@ public class ModelsCommandTests
         Assert.Equal(ExitSuccess, ModelsCommand.Run(["--help"]));
     }
 
+    private static string TempDir()
+    {
+        string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "vela-models-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void WriteModels_Writes_All_Files_And_Returns_Success()
+    {
+        string dir = TempDir();
+        try
+        {
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel("a.ts", "// a"), new GeneratedModel("b.ts", "// b") },
+                dir, overwrite: false, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitSuccess, exit);
+            Assert.Equal("// a", System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "a.ts")));
+            Assert.Equal("// b", System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "b.ts")));
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WriteModels_Refuses_Existing_File_Without_Overwrite()
+    {
+        string dir = TempDir();
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "a.ts"), "old");
+
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel("a.ts", "// new") }, dir, overwrite: false, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitInvalidArguments, exit);
+            Assert.Equal("old", System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "a.ts"))); // untouched
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WriteModels_Overwrite_Replaces_Existing_File()
+    {
+        string dir = TempDir();
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "a.ts"), "old");
+
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel("a.ts", "// new") }, dir, overwrite: true, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitSuccess, exit);
+            Assert.Equal("// new", System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "a.ts")));
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WriteModels_Fails_On_Duplicate_File_Names()
+    {
+        string dir = TempDir();
+        try
+        {
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel("dup.ts", "x"), new GeneratedModel("dup.ts", "y") },
+                dir, overwrite: true, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitParseError, exit);
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public void BuildGenerationReport_Lists_Files_In_Order()
     {

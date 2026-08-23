@@ -76,6 +76,19 @@ public class FormReaderTests
     }
 
     [Fact]
+    public void ReadForms_Skips_Rows_Without_ObjectTypeCode()
+    {
+        Entity form = new Entity("systemform", Guid.NewGuid());
+        form["name"] = "Orphan";
+        form["type"] = new OptionSetValue(2);
+        form["formxml"] = "<form><tabs /></form>";
+        // no objecttypecode
+        FakeOrgService svc = new FakeOrgService { OnRetrieveMultiple = _ => FakeOrgService.Collection(form) };
+
+        Assert.Empty(FormReader.ReadForms(svc, new[] { "account" }));
+    }
+
+    [Fact]
     public void ReadForms_With_No_Entities_Returns_Empty_Without_Querying()
     {
         FakeOrgService svc = new FakeOrgService();

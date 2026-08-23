@@ -142,6 +142,10 @@ internal sealed class MetadataFactory
     public MetadataFactory Boolean(string logicalName, string schemaName)
         => Add(new BooleanAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Boolean);
 
+    // An attribute whose type the generator doesn't map explicitly (falls through to the default kind).
+    public MetadataFactory Unmapped(string logicalName, string schemaName)
+        => Add(new ManagedPropertyAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.ManagedProperty);
+
     public MetadataFactory DateTime(string logicalName, string schemaName, DateTimeFormat? format = null)
     {
         Add(new DateTimeAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.DateTime);

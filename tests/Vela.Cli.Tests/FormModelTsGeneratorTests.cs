@@ -349,6 +349,52 @@ public class FormModelTsGeneratorTests
         Assert.Contains("'My Grid': { entity: 'contact' },", ts);
     }
 
+    [Theory]
+    [InlineData(StringFormat.Email, "email")]
+    [InlineData(StringFormat.Url, "url")]
+    [InlineData(StringFormat.Phone, "phone")]
+    [InlineData(StringFormat.TickerSymbol, "ticker")]
+    [InlineData(StringFormat.Text, "text")]
+    public void String_Format_Is_Mapped(StringFormat format, string expected)
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("field", "Field").StringFormat(format).Display("Field")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "field")), entity), "contact.info.form.ts");
+
+        Assert.Contains($"format: '{expected}',", ts);
+    }
+
+    [Fact]
+    public void Unsupported_String_Format_Emits_No_Format()
+    {
+        // A format outside the FormModel union (e.g. RichText) maps to null: no `format` property is emitted.
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("field", "Field").StringFormat(StringFormat.RichText).Display("Field")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "field")), entity), "contact.info.form.ts");
+
+        Assert.DoesNotContain("format:", ts);
+    }
+
+    [Fact]
+    public void Unmapped_Attribute_Type_Falls_Back_To_String_Kind()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .Unmapped("weird", "Weird").Display("Weird")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "weird")), entity), "contact.info.form.ts");
+
+        Assert.Contains("weird: {", ts);
+        Assert.Contains("kind: 'string',", ts);
+    }
+
     [Fact]
     public void Owner_Lookup_Maps_To_Lookup_Kind()
     {
