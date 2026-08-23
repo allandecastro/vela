@@ -43,6 +43,27 @@ public class ModelsCommandTests
     }
 
     [Fact]
+    public void Models_Forms_WithNonTsLang_Fails_BeforeConnecting()
+    {
+        // --forms only emits TypeScript today; --lang csharp with --forms is refused up front.
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--forms", "--lang", "csharp", "--entities", "account"]));
+    }
+
+    [Fact]
+    public void Models_Forms_WithoutTableScope_Fails_BeforeConnecting()
+    {
+        // A Custom API scope satisfies the generic scope gate but not --forms, which needs a table scope.
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--forms", "--lang", "ts", "--custom-apis", "zava_DoThing"]));
+    }
+
+    [Fact]
+    public void Models_LangTs_WithoutForms_Fails_BeforeConnecting()
+    {
+        // --lang only applies to --forms; using it on the C# path is an error, not a silent ignore.
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--entities", "account", "--lang", "ts"]));
+    }
+
+    [Fact]
     public void Models_WithoutScope_Fails_BeforeConnecting()
     {
         // No --solution / --entities → refuses up front (never touches the connection).

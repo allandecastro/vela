@@ -61,16 +61,41 @@ internal static class ModelsCommand
             return Fail("--solution-roles requires --solution <uniquename>.", ExitInvalidArguments, includeUsage: false);
         }
 
+        string outDir = Path.GetFullPath(TryReadOption(args, "--out") ?? ".");
+        bool overwrite = HasFlag(args, "--overwrite");
+        bool interactive = HasFlag(args, "--interactive") || HasFlag(args, "-i");
+
+        // --forms emits TypeScript FormModel files (parsed FormXML + table metadata) instead of C# early-bound
+        // classes; --lang selects the emitter (csharp default). The two share the scope/connection/write plumbing.
+        bool forms = HasFlag(args, "--forms");
+        string lang = (TryReadOption(args, "--lang") ?? "csharp").Trim().ToLowerInvariant();
+        if (forms)
+        {
+            if (lang != "ts")
+            {
+                return Fail("vela models --forms currently supports --lang ts only.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0)
+            {
+                return Fail("vela models --forms needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            return RunForms(args, solution, entities, outDir, overwrite, interactive);
+        }
+
+        if (lang != "csharp")
+        {
+            return Fail("--lang applies to --forms (TypeScript form models) only.", ExitInvalidArguments, includeUsage: false);
+        }
+
         string? ns = ResolveNamespace(args);
         if (string.IsNullOrWhiteSpace(ns))
         {
             return Fail("Could not infer a namespace. Pass --namespace <ns> (or run inside a project so it can be derived).", ExitInvalidArguments, includeUsage: false);
         }
 
-        string outDir = Path.GetFullPath(TryReadOption(args, "--out") ?? ".");
         bool dataAnnotations = !HasFlag(args, "--no-annotations");
-        bool overwrite = HasFlag(args, "--overwrite");
-        bool interactive = HasFlag(args, "--interactive") || HasFlag(args, "-i");
 
         if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
         {
@@ -125,31 +150,7 @@ internal static class ModelsCommand
                 return Fail("Nothing resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
             }
 
-            Directory.CreateDirectory(outDir);
-
-            // Fail up front on any pre-existing file so generation is all-or-nothing: writing some files and
-            // then aborting mid-loop would leave a half-generated output directory.
-            if (!overwrite)
-            {
-                List<string> existing = models
-                    .Select(model => Path.Combine(outDir, model.FileName))
-                    .Where(File.Exists)
-                    .ToList();
-                if (existing.Count > 0)
-                {
-                    return Fail($"Refusing to overwrite existing file(s): {string.Join(", ", existing)}. Use --overwrite to regenerate.", ExitInvalidArguments, includeUsage: false);
-                }
-            }
-
-            int written = 0;
-            foreach (GeneratedModel model in models)
-            {
-                File.WriteAllText(Path.Combine(outDir, model.FileName), model.Code);
-                written++;
-            }
-
-            Console.WriteLine($"Generated {written} file(s) into {outDir} (namespace {ns}).");
-            return ExitSuccess;
+            return WriteModels(models, outDir, overwrite, $" (namespace {ns})");
         }
         catch (DataverseConnectionException ex)
         {
@@ -163,6 +164,107 @@ internal static class ModelsCommand
         {
             return FailWithException(ex, ExitParseError, options.Verbose);
         }
+    }
+
+    // The --forms --lang ts path: read published Main/QuickCreate forms for the scoped tables, join each with its
+    // table metadata, and emit the vela-client FormModel .ts files. Shares the scope/connection/write plumbing with
+    // the C# path but needs no namespace (TS modules aren't namespaced).
+    private static int RunForms(string[] args, string? solution, string[] entities, string outDir, bool overwrite, bool interactive)
+    {
+        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
+        {
+            return exitCode;
+        }
+
+        SharedOptions options = new SharedOptions(
+            PackagePaths: [],
+            PackageAssembly: null,
+            ConnectionString: connectionString,
+            OAuthUrl: oauthUrl,
+            OAuthToken: oauthToken,
+            SolutionUniqueName: solution,
+            Environment: url,
+            OutPath: outDir,
+            Execute: false,
+            Interactive: interactive,
+            Strict: false,
+            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
+
+        try
+        {
+            using ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
+            IOrganizationService service = client;
+
+            List<string> logicalNames = ResolveLogicalNames(service, solution, entities);
+            IReadOnlyList<SystemForm> systemForms = FormReader.ReadForms(service, logicalNames);
+            if (systemForms.Count == 0)
+            {
+                return Fail("No published Main or Quick Create forms were found for the scoped tables.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            // One metadata read per table, shared across that table's forms.
+            Dictionary<string, EntityMetadata> metadata = new Dictionary<string, EntityMetadata>(StringComparer.OrdinalIgnoreCase);
+            List<FormSource> sources = new List<FormSource>();
+            foreach (SystemForm form in systemForms)
+            {
+                if (!metadata.TryGetValue(form.ObjectTypeCode, out EntityMetadata? entity))
+                {
+                    entity = ReadEntity(service, form.ObjectTypeCode);
+                    metadata[form.ObjectTypeCode] = entity;
+                }
+
+                sources.Add(new FormSource(form.FormId.ToString("D"), form.FormType, form.Name, FormXmlParser.Parse(form.FormXml), entity));
+            }
+
+            IReadOnlyList<GeneratedModel> models = FormModelTsGenerator.Generate(sources);
+            if (models.Count == 0)
+            {
+                return Fail("No form models were generated from the scoped forms.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            return WriteModels(models, outDir, overwrite, string.Empty);
+        }
+        catch (DataverseConnectionException ex)
+        {
+            return FailWithException(ex, ExitConnectionFailure, options.Verbose);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return FailWithException(ex, ExitFileNotFound, options.Verbose);
+        }
+        catch (Exception ex)
+        {
+            return FailWithException(ex, ExitParseError, options.Verbose);
+        }
+    }
+
+    // Writes generated files all-or-nothing: fails up front on any pre-existing file (unless --overwrite) so a
+    // partial write can never leave a half-generated output directory.
+    private static int WriteModels(IReadOnlyList<GeneratedModel> models, string outDir, bool overwrite, string summarySuffix)
+    {
+        Directory.CreateDirectory(outDir);
+
+        if (!overwrite)
+        {
+            List<string> existing = models
+                .Select(model => Path.Combine(outDir, model.FileName))
+                .Where(File.Exists)
+                .ToList();
+            if (existing.Count > 0)
+            {
+                return Fail($"Refusing to overwrite existing file(s): {string.Join(", ", existing)}. Use --overwrite to regenerate.", ExitInvalidArguments, includeUsage: false);
+            }
+        }
+
+        int written = 0;
+        foreach (GeneratedModel model in models)
+        {
+            File.WriteAllText(Path.Combine(outDir, model.FileName), model.Code);
+            written++;
+        }
+
+        Console.WriteLine($"Generated {written} file(s) into {outDir}{summarySuffix}.");
+        return ExitSuccess;
     }
 
     private static List<string> ResolveLogicalNames(IOrganizationService service, string? solution, string[] entities)
@@ -399,6 +501,7 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --entities account,contact [connection options]");
         Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
         Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
+        Console.WriteLine("  vela models --forms --lang ts --entities account,contact [connection options]");
         Console.WriteLine();
         Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
@@ -406,6 +509,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
         Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
+        Console.WriteLine("  --forms --lang ts         emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
         Console.WriteLine("  --no-annotations          omit DataAnnotations ([StringLength]/[Range])");
