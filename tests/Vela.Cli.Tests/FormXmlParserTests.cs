@@ -71,7 +71,7 @@ public class FormXmlParserTests
               </columns>
             </tab>
           </tabs>
-          <header>
+          <header id="{00000000-0000-0000-0000-00000000ffff}">
             <rows>
               <row>
                 <cell>
@@ -208,5 +208,12 @@ public class FormXmlParserTests
     public void Empty_FormXml_Throws()
     {
         Assert.Throws<System.ArgumentException>(() => FormXmlParser.Parse("   "));
+    }
+
+    [Fact]
+    public void Corpus_Is_Schema_Valid()
+    {
+        // The parser corpus must be real FormXML: it validates against the official Microsoft FormXml.xsd.
+        Assert.True(FormXmlSchema.IsValid(ContactMainFormXml), string.Join("\n", FormXmlSchema.Validate(ContactMainFormXml)));
     }
 }

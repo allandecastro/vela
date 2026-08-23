@@ -34,4 +34,11 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Vela.Cli.Tests" />
   </ItemGroup>
+
+  <!-- Official Microsoft FormXML / Ribbon XSDs (Dynamics 365 CE 9.0), embedded so FormXmlParser can validate
+       formxml against the real schema offline. FormXml.xsd includes RibbonCore.xsd, which includes the two
+       Ribbon* schemas; all four ship together. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Cli\Schemas\*.xsd" />
+  </ItemGroup>
 </Project>

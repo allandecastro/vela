@@ -18,7 +18,7 @@ public class FormModelTsGeneratorTests
           <tabs>
             <tab name="general">
               <labels><label description="General" languagecode="1033" /></labels>
-              <columns><column><sections>
+              <columns><column width="100%"><sections>
                 <section name="contactInfo">
                   <labels><label description="Contact" languagecode="1033" /></labels>
                   <rows>
@@ -44,7 +44,7 @@ public class FormModelTsGeneratorTests
             </tab>
             <tab name="details">
               <labels><label description="Details" languagecode="1033" /></labels>
-              <columns><column><sections>
+              <columns><column width="100%"><sections>
                 <section name="finance">
                   <labels><label description="Finance" languagecode="1033" /></labels>
                   <rows>
@@ -62,7 +62,7 @@ public class FormModelTsGeneratorTests
           <tabs>
             <tab name="general">
               <labels><label description="General" languagecode="1033" /></labels>
-              <columns><column><sections>
+              <columns><column width="100%"><sections>
                 <section name="accountInfo">
                   <labels><label description="Account Information" languagecode="1033" /></labels>
                   <rows>
@@ -89,7 +89,7 @@ public class FormModelTsGeneratorTests
             </tab>
             <tab name="details">
               <labels><label description="Details" languagecode="1033" /></labels>
-              <columns><column><sections>
+              <columns><column width="100%"><sections>
                 <section name="demographics">
                   <labels><label description="Demographics" languagecode="1033" /></labels>
                   <rows>
@@ -177,6 +177,14 @@ public class FormModelTsGeneratorTests
 
     private static string Generate(FormSource form, string fileName) =>
         FormModelTsGenerator.Generate(new[] { form }).Single(m => m.FileName == fileName).Code;
+
+    [Fact]
+    public void Form_Fixtures_Are_Schema_Valid()
+    {
+        // The golden inputs are real FormXML: both validate against the official Microsoft FormXml.xsd.
+        Assert.True(FormXmlSchema.IsValid(ContactFormXml), string.Join("\n", FormXmlSchema.Validate(ContactFormXml)));
+        Assert.True(FormXmlSchema.IsValid(AccountFormXml), string.Join("\n", FormXmlSchema.Validate(AccountFormXml)));
+    }
 
     [Fact]
     public void Contact_Form_Matches_Golden()
@@ -570,7 +578,7 @@ public class FormModelTsGeneratorTests
         const string xml = """
             <form><tabs><tab name="general">
               <labels><label description="General" languagecode="1033" /></labels>
-              <columns><column><sections><section name="s">
+              <columns><column width="100%"><sections><section name="s">
                 <labels><label description="General" languagecode="1033" /></labels>
                 <rows><row><cell><control datafieldname="subject" /></cell></row></rows>
               </section></sections></column></columns>
