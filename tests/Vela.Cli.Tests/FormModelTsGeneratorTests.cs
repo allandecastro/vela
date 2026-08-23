@@ -178,6 +178,104 @@ public class FormModelTsGeneratorTests
     private static string Generate(FormSource form, string fileName) =>
         FormModelTsGenerator.Generate(new[] { form }).Single(m => m.FileName == fileName).Code;
 
+    // Wraps a body-less section of field controls into a schema-valid single-tab form.
+    private static string OneSection(string section, params string[] dataFields)
+    {
+        string rows = string.Concat(dataFields.Select(f => $"<row><cell><control datafieldname=\"{f}\" /></cell></row>"));
+        return $"""
+            <form><tabs><tab name="general">
+              <labels><label description="General" languagecode="1033" /></labels>
+              <columns><column width="100%"><sections><section name="{section}">
+                <labels><label description="Sec" languagecode="1033" /></labels>
+                <rows>{rows}</rows>
+              </section></sections></column></columns>
+            </tab></tabs></form>
+            """;
+    }
+
+    [Fact]
+    public void Header_Field_Has_No_Location_And_Is_Absent_From_Layout()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName").Display("First Name")
+            .Lookup("ownerid", "OwnerId", "systemuser", "team").Display("Owner")
+            .Build();
+
+        const string xml = """
+            <form>
+              <tabs><tab name="general">
+                <labels><label description="General" languagecode="1033" /></labels>
+                <columns><column width="100%"><sections><section name="s">
+                  <labels><label description="Sec" languagecode="1033" /></labels>
+                  <rows><row><cell><control datafieldname="firstname" /></cell></row></rows>
+                </section></sections></column></columns>
+              </tab></tabs>
+              <header id="{00000000-0000-0000-0000-00000000ffff}">
+                <rows><row><cell><control datafieldname="ownerid" /></cell></row></rows>
+              </header>
+            </form>
+            """;
+
+        Assert.True(FormXmlSchema.IsValid(xml), string.Join("\n", FormXmlSchema.Validate(xml)));
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "contact.info.form.ts");
+
+        // ownerid is a header field: present in `fields`, but with no `at` and absent from the layout section list.
+        Assert.Contains("ownerid: {", ts);
+        Assert.DoesNotContain("'ownerid'", ts); // never listed in a section's fields array
+        int ownerBlock = ts.IndexOf("ownerid: {", System.StringComparison.Ordinal);
+        int nextClose = ts.IndexOf("},", ownerBlock, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("at: {", ts.Substring(ownerBlock, nextClose - ownerBlock));
+    }
+
+    [Fact]
+    public void Global_Option_Set_Uses_Its_Own_Name_And_Is_Shared()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .Choice("preferredcolor", "PreferredColor", global: true, "vela_color", (1, "Red"), (2, "Green")).Display("Color")
+            .Build();
+
+        var files = FormModelTsGenerator.Generate(new[]
+        {
+            new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "preferredcolor")), entity),
+        });
+
+        string form = files.Single(f => f.FileName == "contact.info.form.ts").Code;
+        string optionSets = files.Single(f => f.FileName == "option-sets.ts").Code;
+
+        Assert.Contains("import { vela_color } from './option-sets';", form);
+        Assert.Contains("options: vela_color,", form);
+        Assert.Contains("export enum vela_color {", optionSets);
+    }
+
+    [Fact]
+    public void QuickCreate_FormType_Is_Emitted_Verbatim()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName").Display("First Name")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "QuickCreate", "Quick", FormXmlParser.Parse(OneSection("s", "firstname")), entity), "contact.quick.form.ts");
+
+        Assert.Contains("formType: 'QuickCreate',", ts);
+    }
+
+    [Fact]
+    public void Duplicate_Field_Cells_Are_Emitted_Once()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName").Display("First Name")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname", "firstname")), entity), "contact.info.form.ts");
+
+        // The column appears twice in the FormXML but must be emitted once, and listed once in its section.
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(ts, "firstname").Count); // field key + section entry
+    }
+
     [Fact]
     public void Form_Fixtures_Are_Schema_Valid()
     {

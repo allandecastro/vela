@@ -216,4 +216,39 @@ public class FormXmlParserTests
         // The parser corpus must be real FormXML: it validates against the official Microsoft FormXml.xsd.
         Assert.True(FormXmlSchema.IsValid(ContactMainFormXml), string.Join("\n", FormXmlSchema.Validate(ContactMainFormXml)));
     }
+
+    [Fact]
+    public void Flattens_Sections_Across_Multiple_Columns_In_Document_Order()
+    {
+        // A tab can lay sections out across several columns; the parser flattens them in document order.
+        const string xml = """
+            <form>
+              <tabs>
+                <tab name="general">
+                  <columns>
+                    <column width="50%">
+                      <sections>
+                        <section name="left">
+                          <rows><row><cell><control datafieldname="a" /></cell></row></rows>
+                        </section>
+                      </sections>
+                    </column>
+                    <column width="50%">
+                      <sections>
+                        <section name="right">
+                          <rows><row><cell><control datafieldname="b" /></cell></row></rows>
+                        </section>
+                      </sections>
+                    </column>
+                  </columns>
+                </tab>
+              </tabs>
+            </form>
+            """;
+
+        ParsedForm form = FormXmlParser.Parse(xml);
+
+        Assert.Equal(new[] { "left", "right" }, form.Tabs.Single().Sections.Select(s => s.Name));
+        Assert.True(FormXmlSchema.IsValid(xml), string.Join("\n", FormXmlSchema.Validate(xml)));
+    }
 }
