@@ -18,8 +18,7 @@ public class RibbonDiffXmlGeneratorTests
                 EnableRules: new[]
                 {
                     new RibbonRule("adc.contact.canSave.EnableRule", "adc.contact.canSave", Default: false, Parameters: new[] { "PrimaryControl" }),
-                },
-                DisplayRules: new List<RibbonRule>()),
+                }),
         });
 
     [Fact]
@@ -57,8 +56,8 @@ public class RibbonDiffXmlGeneratorTests
         RibbonRule shared = new RibbonRule("adc.shared.EnableRule", "adc.shared", false, new[] { "PrimaryControl" });
         RibbonRegistration registration = new RibbonRegistration("account", "adc_/js/account/Ribbon/commands.js", new[]
         {
-            new RibbonCommand("adc.a.Command", "adc.a", new[] { "PrimaryControl" }, new[] { shared }, new List<RibbonRule>()),
-            new RibbonCommand("adc.b.Command", "adc.b", new[] { "PrimaryControl" }, new[] { shared }, new List<RibbonRule>()),
+            new RibbonCommand("adc.a.Command", "adc.a", new[] { "PrimaryControl" }, new[] { shared }),
+            new RibbonCommand("adc.b.Command", "adc.b", new[] { "PrimaryControl" }, new[] { shared }),
         });
 
         string xml = RibbonDiffXmlGenerator.Generate(registration);
@@ -66,6 +65,28 @@ public class RibbonDiffXmlGeneratorTests
         // Referenced twice (a self-closing <EnableRule Id=.. /> per command) but its CustomRule is defined once.
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(xml, "<EnableRule Id=\"adc.shared.EnableRule\" />").Count);
         Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(xml, "<CustomRule FunctionName=\"adc.shared\"").Count);
+        Assert.True(RibbonSchema.IsValid(xml), string.Join("\n", RibbonSchema.Validate(xml)));
+    }
+
+    [Fact]
+    public void Enable_Rule_Default_True_Is_Emitted()
+    {
+        RibbonRegistration registration = new RibbonRegistration("account", "adc_/js/account/Ribbon/commands.js", new[]
+        {
+            new RibbonCommand(
+                Id: "adc.account.show.Command",
+                FunctionName: "adc.account.show",
+                Parameters: new[] { "PrimaryControl" },
+                EnableRules: new[]
+                {
+                    new RibbonRule("adc.account.enabled.EnableRule", "adc.account.enabled", Default: true, Parameters: new[] { "PrimaryControl" }),
+                }),
+        });
+
+        string xml = RibbonDiffXmlGenerator.Generate(registration);
+
+        Assert.Contains("<CustomRule FunctionName=\"adc.account.enabled\"", xml);
+        Assert.Contains("Default=\"true\"", xml);
         Assert.True(RibbonSchema.IsValid(xml), string.Join("\n", RibbonSchema.Validate(xml)));
     }
 

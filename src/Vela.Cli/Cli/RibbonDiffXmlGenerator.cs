@@ -8,13 +8,15 @@ namespace Vela.Cli;
 /// <summary>An enable/display rule: a JavaScript CustomRule function plus its ordered CrmParameter values.</summary>
 public sealed record RibbonRule(string Id, string FunctionName, bool Default, IReadOnlyList<string> Parameters);
 
-/// <summary>A ribbon command: the JavaScript action function, its CrmParameters and its rule bindings.</summary>
+/// <summary>
+/// A ribbon command: the JavaScript action function, its CrmParameters and its enable-rule bindings. Only enable
+/// rules can be JavaScript <c>CustomRule</c> functions; display rules are declarative and out of scope here.
+/// </summary>
 public sealed record RibbonCommand(
     string Id,
     string FunctionName,
     IReadOnlyList<string> Parameters,
-    IReadOnlyList<RibbonRule> EnableRules,
-    IReadOnlyList<RibbonRule> DisplayRules);
+    IReadOnlyList<RibbonRule> EnableRules);
 
 /// <summary>
 /// A table's ribbon customization: the command web resource library and the commands to wire. Analogous to a form
@@ -42,13 +44,13 @@ public static class RibbonDiffXmlGenerator
         XElement commandDefinitions = new XElement("CommandDefinitions",
             registration.Commands.Select(command => CommandDefinition(command, library)));
 
-        // Rules are defined once each (deduped by id) even if several commands reference the same rule.
+        // Enable rules are the JavaScript CustomRule functions, defined once each (deduped by id) even if several
+        // commands reference the same rule. Display/tab-display rules are declarative and left empty here.
         XElement ruleDefinitions = new XElement("RuleDefinitions",
             new XElement("TabDisplayRules"),
-            new XElement("DisplayRules", DedupeById(registration.Commands.SelectMany(c => c.DisplayRules))
-                .Select(rule => RuleElement("DisplayRule", rule, library))),
+            new XElement("DisplayRules"),
             new XElement("EnableRules", DedupeById(registration.Commands.SelectMany(c => c.EnableRules))
-                .Select(rule => RuleElement("EnableRule", rule, library))));
+                .Select(rule => EnableRuleElement(rule, library))));
 
         XElement root = new XElement("RibbonDiffXml", commandDefinitions, ruleDefinitions);
         return root.ToString();
@@ -58,15 +60,15 @@ public static class RibbonDiffXmlGenerator
         new XElement("CommandDefinition",
             new XAttribute("Id", command.Id),
             new XElement("EnableRules", command.EnableRules.Select(r => new XElement("EnableRule", new XAttribute("Id", r.Id)))),
-            new XElement("DisplayRules", command.DisplayRules.Select(r => new XElement("DisplayRule", new XAttribute("Id", r.Id)))),
+            new XElement("DisplayRules"),
             new XElement("Actions",
                 new XElement("JavaScriptFunction",
                     new XAttribute("FunctionName", command.FunctionName),
                     new XAttribute("Library", library),
                     command.Parameters.Select(CrmParameter))));
 
-    private static XElement RuleElement(string wrapper, RibbonRule rule, string library) =>
-        new XElement(wrapper,
+    private static XElement EnableRuleElement(RibbonRule rule, string library) =>
+        new XElement("EnableRule",
             new XAttribute("Id", rule.Id),
             new XElement("CustomRule",
                 new XAttribute("FunctionName", rule.FunctionName),
