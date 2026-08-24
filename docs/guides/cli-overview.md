@@ -19,6 +19,13 @@ Core commands:
 | `vela inspect` | Report local package registrations alongside live Dataverse state, with diagnostics (read-only). |
 | `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
 
+> [!NOTE]
+> **Client-side (preview / work in progress).** For the [vela-client](https://github.com/allandecastro/vela)
+> runtime, `vela models --forms --lang ts` generates [TypeScript FormModel files](models.md),
+> `vela init --web-resources` [scaffolds a web resources project](scaffold.md), and `vela plan` /
+> `apply --webresources` [deploy web resources](plan-apply.md). These are new and may change. Most commands also
+> take `--json` for machine-readable output.
+
 > [!TIP]
 > **Secrets:** prefer the `DATAVERSE_CLIENT_SECRET` environment variable or `--client-secret-stdin`
 > over `--client-secret`, which is exposed to shell history and process listings (the CLI warns when

@@ -1,0 +1,122 @@
+# Client-side: form scripts and web resources (preview)
+
+> [!NOTE]
+> Preview / work in progress. This is the .NET/CLI side of the client-side initiative for the
+> [vela-client](https://github.com/allandecastro/vela) TypeScript runtime, and it may change.
+
+Vela's client-side support lets you author **model-driven form scripts** in TypeScript against typed,
+generated form models, build them into a single bundle, and deploy them (and any static web resources) to
+Dataverse. The CLI only automates the Dataverse-facing steps (generate, deploy); the build is plain `tsup`.
+
+## The loop
+
+```text
+vela init --web-resources         # 1. scaffold the {prefix}.WebResources project (once)
+vela models --forms --lang ts     # 2. generate typed FormModel .ts from your published forms
+# 3. write form scripts against the models, in your editor
+npm run build                     # 4. bundle with tsup (not the CLI)
+vela apply --webresources ...     # 5. deploy the bundle + static assets, published
+```
+
+## 1. Scaffold the web resources project
+
+`vela init --web-resources` adds an opt-in `{prefix}.WebResources` TypeScript project next to the plugin
+projects (see [Scaffold a solution](scaffold.md)):
+
+```powershell
+vela init --name ZavaSales --prefix Zava --web-resources --web-resources-namespace zava
+```
+
+It emits `package.json` (tsup + Vitest, depends on `vela-client`), `tsconfig.json`, `tsup.config.ts`
+(`globalName` = your publisher prefix, one entry per form), a `.esproj` so Visual Studio "Build" runs npm, and
+the `src/generated` (regenerated) vs `src` (hand-written) split.
+
+## 2. Generate the typed form models
+
+`vela models --forms --lang ts` reads your tables' published Main / Quick Create forms and emits one
+`<entity>.<form>.form.ts` per form (each `satisfies FormModel`) plus a shared `option-sets.ts`, into
+`src/generated/` (see [Early-bound models](models.md)):
+
+```powershell
+vela models --forms --lang ts --solution ZavaSales --out src/Zava.WebResources/src/generated --interactive
+```
+
+The model carries only the fields, tabs, sections and subgrids actually on that form, each typed by the same
+rules as the C# early-bound models (string/memo, the numeric family, boolean, date, choice/multichoice, lookup
+with its targets, guid, file, image). Scope by `--solution` (only that solution's tables) and/or `--entities`.
+
+## 3. Write form scripts, 4. build
+
+Import a generated model, wrap it with `VelaForm` from the `vela-client` runtime, and use the typed field
+accessors:
+
+```ts
+// src/contact/main.ts
+import { VelaForm } from 'vela-client';
+import { ContactInformation } from '../generated/contact.information.form';
+
+const ContactForm = VelaForm(ContactInformation);
+
+// Wired as the form OnLoad handler; the exposed global is <prefix>.Contact.onLoad, never "Vela".
+export function onLoad(executionContext: Xrm.Events.EventContext): void {
+  const form = new ContactForm(executionContext);
+
+  // Typed accessors, guaranteed present because the field is on the model.
+  if (!form.fields.emailaddress1.getValue()) {
+    form.controls.emailaddress1.setNotification('An email is recommended.', 'email');
+  }
+
+  // Choice fields expose their option set and selected text.
+  const gender = form.fields.gendercode.getText();
+}
+```
+
+Then bundle with tsup (`npm run build`, or `npm run dev` to watch). The build is plain tsup, not the CLI.
+The scaffolded project also includes Vitest; form scripts are unit-testable off-browser with the
+`vela-client/testing` fakes (`fakeForm` / `fakeExecutionContext`), no live Dataverse:
+
+```ts
+// test/contact.test.ts
+import { describe, it, expect } from 'vitest';
+import { VelaForm } from 'vela-client';
+import { fakeForm } from 'vela-client/testing';
+import { ContactInformation } from '../src/generated/contact.information.form';
+
+describe('contact form', () => {
+  it('round-trips a typed field value', () => {
+    const form = fakeForm(ContactInformation, VelaForm(ContactInformation));
+
+    form.fields.firstname.setValue('Ada');
+    expect(form.fields.firstname.getValue()).toBe('Ada');
+    expect(form.fields.firstname.getIsDirty()).toBe(true);
+  });
+});
+```
+
+## 5. Deploy the web resources
+
+`vela plan` / `apply --webresources <folder> --solution <name>` mirror the build output folder to Dataverse
+(see [Plan & Apply](plan-apply.md)):
+
+```powershell
+vela plan  --webresources src/Zava.WebResources/dist --solution ZavaSales --interactive
+vela apply --webresources src/Zava.WebResources/dist --solution ZavaSales --execute --interactive
+```
+
+The folder is mirrored **verbatim**: each file's unique name is its path relative to the root, so the
+top-level folder (for example `zava_`) is a real folder, not a prepended prefix. The type is inferred from the
+extension, a content hash drives the diff, and changed/created resources are published in one call. Reconciliation
+is **additive and scoped to the top-level folders you deploy** (mirroring a subset folder never prunes another
+team's folders), and each name must start with the solution's publisher prefix. `--webresources` requires
+`--solution`, and needs no `--package` (you can deploy web resources on their own).
+
+## Ribbon (utility only)
+
+A classic `RibbonDiffXml` generator + Ribbon-XSD validation exists as a building block, but registering a
+command on a button (the command bar wiring) is left to the developer via the Power Apps command designer.
+Automating the full ribbon deploy is tracked as low priority.
+
+## Machine-readable output
+
+`vela models --json` (and `init` / `sign` / `add`) print a JSON report of what was generated or done, for
+scripts and agents driving the CLI.

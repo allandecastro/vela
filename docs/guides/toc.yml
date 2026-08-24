@@ -22,6 +22,8 @@
   href: plan-apply.md
 - name: Early-bound models
   href: models.md
+- name: Client-side (preview)
+  href: client-side.md
 - name: Signing
   href: signing.md
 - name: End-to-end example
