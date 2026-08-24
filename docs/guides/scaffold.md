@@ -21,6 +21,7 @@ ZavaSales/
       GlobalCustomApis/        #   unbound Custom APIs
     Zava.Integrations/      # second plugin package (omit with --no-integrations)
     Zava.ConsoleApp/        # .NET 10 interactive browser login (omit with --no-console)
+    Zava.WebResources/      # opt-in TypeScript form scripts / web resources (add with --web-resources)
   tests/
     Zava.Plugins.Tests/      # xunit tests using Vela.Testing - no connection (omit with --no-tests)
     Zava.Integrations.Tests/ # xunit tests for the Integrations package
