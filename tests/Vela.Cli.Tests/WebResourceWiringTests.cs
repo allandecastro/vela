@@ -23,6 +23,26 @@ public class WebResourceWiringTests
     }
 
     [Fact]
+    public void WebResources_WithoutSolution_Fails()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "vela-wr-nosol-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            bool ok = CommandLineOptions.TryParseSharedOptions(
+                ["--webresources", dir, "--connection-string", "AuthType=OAuth;Url=https://x.crm.dynamics.com"],
+                out _, out int exitCode);
+
+            Assert.False(ok);
+            Assert.Equal(ExitInvalidArguments, exitCode);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void WebResources_WithoutPackage_IsAllowed()
     {
         string dir = Path.Combine(Path.GetTempPath(), "vela-wr-wiring-" + Guid.NewGuid().ToString("N"));

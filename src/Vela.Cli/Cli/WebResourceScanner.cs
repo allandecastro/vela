@@ -56,6 +56,9 @@ internal static class WebResourceScanner
         }
 
         List<RegistrationItem> items = new List<RegistrationItem>();
+        // Web resource unique names are case-insensitive in Dataverse, so two files differing only by case would
+        // collide; catch that up front with a clear error rather than a later dictionary crash / silent overwrite.
+        Dictionary<string, string> namesSeen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (string file in Directory.EnumerateFiles(fullRoot, "*", SearchOption.AllDirectories))
         {
             int? type = MapType(Path.GetExtension(file));
@@ -65,6 +68,12 @@ internal static class WebResourceScanner
             }
 
             string name = ToWebResourceName(fullRoot, file);
+            if (namesSeen.TryGetValue(name, out string? existing))
+            {
+                throw new InvalidOperationException($"Web resource name collision (names are case-insensitive): '{existing}' and '{name}'.");
+            }
+
+            namesSeen[name] = name;
             WebResourceDefinition definition = new WebResourceDefinition(name, type.Value, HashFile(file), file);
             items.Add(new RegistrationItem("web-resource", name, JsonSerializer.SerializeToElement(definition, jsonOptions)));
         }

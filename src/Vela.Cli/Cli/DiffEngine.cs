@@ -22,6 +22,14 @@ internal static class DiffEngine
         return string.Equals(item.Kind, "web-resource", StringComparison.OrdinalIgnoreCase);
     }
 
+    // The top-level folder of a web resource name (the segment before the first '/'), e.g. "adc_/js/a.js" -> "adc_".
+    // Deletion reconciliation is scoped to these so a subset folder never prunes unrelated top-level folders.
+    private static string TopFolder(string name)
+    {
+        int slash = name.IndexOf('/');
+        return slash < 0 ? name : name.Substring(0, slash);
+    }
+
     public static string GetIdentityKey(RegistrationItem item)
     {
         return $"{item.Kind}:{GetIdentity(item)}";
@@ -233,9 +241,16 @@ internal static class DiffEngine
             }
         }
 
+        // Deletion is scoped to the top-level folders actually deployed locally, so mirroring a subset folder never
+        // hard-deletes web resources under other top-level folders (e.g. another team's `other_/...`). An empty
+        // local set therefore removes nothing.
+        HashSet<string> localTopFolders = new HashSet<string>(
+            localWebResources.Select(w => TopFolder(GetIdentity(w))),
+            StringComparer.OrdinalIgnoreCase);
+
         foreach (KeyValuePair<string, RegistrationItem> pair in currentWebResourceMap)
         {
-            if (!localWebResourceMap.ContainsKey(pair.Key))
+            if (!localWebResourceMap.ContainsKey(pair.Key) && localTopFolders.Contains(TopFolder(GetIdentity(pair.Value))))
             {
                 removed.Add(pair.Value);
             }

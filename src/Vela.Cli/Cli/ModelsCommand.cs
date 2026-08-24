@@ -40,6 +40,7 @@ internal static class ModelsCommand
             .Split([','], StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
             .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         string[] roles = (TryReadOption(args, "--roles") ?? string.Empty)
@@ -81,6 +82,12 @@ internal static class ModelsCommand
             if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0)
             {
                 return Fail("vela models --forms needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            // --forms only reads tables; anything else in scope is ignored, so say so rather than dropping it silently.
+            if (customApis.Length > 0 || roles.Length > 0 || solutionRoles)
+            {
+                Console.Error.WriteLine("Warning: --forms generates TypeScript form models only; --custom-apis / --roles / --solution-roles are ignored.");
             }
 
             return RunForms(args, solution, entities, outDir, overwrite, interactive, json);
@@ -204,18 +211,46 @@ internal static class ModelsCommand
                 return Fail("No published Main or Quick Create forms were found for the scoped tables.", ExitInvalidArguments, includeUsage: false);
             }
 
-            // One metadata read per table, shared across that table's forms.
+            // One metadata read per table, shared across that table's forms. A single unreadable table or malformed
+            // form is skipped with a warning rather than aborting the whole batch, so the healthy forms still emit.
             Dictionary<string, EntityMetadata> metadata = new Dictionary<string, EntityMetadata>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> unreadableTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             List<FormSource> sources = new List<FormSource>();
             foreach (SystemForm form in systemForms)
             {
-                if (!metadata.TryGetValue(form.ObjectTypeCode, out EntityMetadata? entity))
+                if (unreadableTables.Contains(form.ObjectTypeCode))
                 {
-                    entity = ReadEntity(service, form.ObjectTypeCode);
-                    metadata[form.ObjectTypeCode] = entity;
+                    continue;
                 }
 
-                sources.Add(new FormSource(form.FormId.ToString("D"), form.FormType, form.Name, FormXmlParser.Parse(form.FormXml), entity));
+                if (!metadata.TryGetValue(form.ObjectTypeCode, out EntityMetadata? entity))
+                {
+                    try
+                    {
+                        entity = ReadEntity(service, form.ObjectTypeCode);
+                        metadata[form.ObjectTypeCode] = entity;
+                    }
+                    catch (Exception ex)
+                    {
+                        unreadableTables.Add(form.ObjectTypeCode);
+                        Console.Error.WriteLine($"Warning: skipping table '{form.ObjectTypeCode}' (metadata read failed): {ex.Message}");
+                        continue;
+                    }
+                }
+
+                try
+                {
+                    sources.Add(new FormSource(form.FormId.ToString("D"), form.FormType, form.Name, FormXmlParser.Parse(form.FormXml), entity));
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Warning: skipping form '{form.ObjectTypeCode}/{form.Name}' (invalid FormXML): {ex.Message}");
+                }
+            }
+
+            if (sources.Count == 0)
+            {
+                return Fail("No form models were generated from the scoped forms.", ExitInvalidArguments, includeUsage: false);
             }
 
             IReadOnlyList<GeneratedModel> models = FormModelTsGenerator.Generate(sources);

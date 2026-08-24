@@ -76,12 +76,15 @@ inferred from the extension (`.js`, `.css`, `.html`, `.png`, ...); a content has
 files are skipped. Changed and created resources are published in one `PublishXmlRequest`.
 
 Web resources reconcile **independently and additively**: a plugin-only `apply` never touches web resources, and
-a `--webresources` run never touches plugins. Deletions happen only within the scoped web-resource reconciliation
-(a web resource the solution has but the folder no longer contains). A `--webresources` run needs no `--package`,
-so you can deploy web resources on their own. Each name must start with the solution's publisher prefix (its
-top-level folder); Vela validates this up front and fails with a clear message otherwise. Generate the TypeScript
-form models the scripts build on with [`vela models --forms --lang ts`](models.md), and scaffold the client
-project with [`vela init --web-resources`](scaffold.md).
+a `--webresources` run never touches plugins. `--webresources` **requires `--solution`** (web resources are
+reconciled within a solution, component type 61). Deletion is **scoped to the top-level folders you actually
+deploy**: a live web resource is removed only when it shares a top-level folder (e.g. `adc_`) with the local set
+but is absent from it, so mirroring a subset folder never prunes other folders, and an empty folder deletes
+nothing. A `--webresources` run needs no `--package`, so you can deploy web resources on their own. Each name must
+start with the solution's publisher prefix (its top-level folder); Vela validates this up front and fails with a
+clear message otherwise. Generate the TypeScript form models the scripts build on with
+[`vela models --forms --lang ts`](models.md), and scaffold the client project with
+[`vela init --web-resources`](scaffold.md).
 
 ## Resuming a failed apply
 

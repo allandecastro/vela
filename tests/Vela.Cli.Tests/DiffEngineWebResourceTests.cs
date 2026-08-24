@@ -31,14 +31,26 @@ public class DiffEngineWebResourceTests
     }
 
     [Fact]
-    public void Missing_Local_File_Is_Removed()
+    public void Missing_Local_File_Under_A_Deployed_Folder_Is_Removed()
     {
+        // Local still deploys the adc_ folder (keep.js), so a live adc_ file absent locally is reconciled away.
+        RegistrationDiff diff = DiffEngine.BuildDiff(
+            State(WebResource("adc_/js/keep.js", "h0")),
+            State(WebResource("adc_/js/keep.js", "h0"), WebResource("adc_/js/a.js", "h1")));
+
+        RegistrationItem removed = Assert.Single(diff.Removed);
+        Assert.Equal("adc_/js/a.js", removed.Type);
+    }
+
+    [Fact]
+    public void Empty_Local_Web_Resources_Remove_Nothing()
+    {
+        // Safety: an empty local set (e.g. an empty folder) never hard-deletes the solution's web resources.
         RegistrationDiff diff = DiffEngine.BuildDiff(
             State(),
             State(WebResource("adc_/js/a.js", "h1")));
 
-        RegistrationItem removed = Assert.Single(diff.Removed);
-        Assert.Equal("adc_/js/a.js", removed.Type);
+        Assert.Empty(diff.Removed);
     }
 
     [Fact]
@@ -71,6 +83,22 @@ public class DiffEngineWebResourceTests
         Assert.Contains(diff.Added, i => i.Kind == "web-resource");
         Assert.Contains(diff.Removed, i => i.Kind == "custom-api");
         Assert.Empty(diff.Changed);
+    }
+
+    [Fact]
+    public void Deletion_Is_Scoped_To_Local_Top_Level_Folders()
+    {
+        // Local deploys only the adc_ folder; the live solution also has a web resource under other_.
+        RegistrationDiff diff = DiffEngine.BuildDiff(
+            State(WebResource("adc_/js/a.js", "h1")),
+            State(
+                WebResource("adc_/js/a.js", "h1"),      // unchanged
+                WebResource("adc_/js/gone.js", "h2"),   // same top folder, not local -> removed
+                WebResource("other_/js/x.js", "h3")));   // different top folder -> left alone
+
+        RegistrationItem removed = Assert.Single(diff.Removed);
+        Assert.Equal("adc_/js/gone.js", removed.Type);
+        Assert.DoesNotContain(diff.Removed, i => i.Type == "other_/js/x.js");
     }
 
     [Fact]

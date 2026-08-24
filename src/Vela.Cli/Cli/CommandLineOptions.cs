@@ -29,6 +29,15 @@ internal static class CommandLineOptions
                 exitCode = Fail($"Web resources folder not found: {webResourcesRoot}", ExitFileNotFound, includeUsage: false);
                 return false;
             }
+
+            // Web resources reconcile against a solution (component type 61): without one the current state can't be
+            // read, so the plan would show every file as added every run and could never reconcile deletions or
+            // validate the publisher prefix. Require the scope explicitly.
+            if (string.IsNullOrWhiteSpace(TryReadOption(args, "--solution") ?? TryReadOption(args, "--solution-unique-name")))
+            {
+                exitCode = Fail("--webresources requires --solution <uniquename> (web resources are reconciled within a solution).", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
         }
 
         List<string> packagePaths = [];
