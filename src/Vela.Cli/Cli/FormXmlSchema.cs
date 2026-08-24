@@ -9,6 +9,11 @@ namespace Vela.Cli;
 /// assembly. The schema has no target namespace, so exported (namespace-less) formxml validates directly. Its
 /// <c>xs:include</c> chain (RibbonCore -> RibbonTypes / RibbonWSS) is resolved from the embedded copies. The
 /// compiled schema set is built once and cached.
+///
+/// Note: this is the 9.0 schema. Live modern formxml can carry attributes newer than it declares (e.g.
+/// <c>headerdensity</c>, <c>showinformselector</c>, <c>showcommandbar</c>), so strict validation may report those
+/// as errors. This is a best-effort aid for authored fixtures, not a gate: <see cref="FormXmlParser"/> is
+/// deliberately tolerant and the generation path never rejects a form on schema validity.
 /// </summary>
 public static class FormXmlSchema
 {
