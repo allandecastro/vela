@@ -53,6 +53,9 @@ and test packages).
 
 ## Web resources project (opt-in)
 
+> [!NOTE]
+> Preview / work in progress. This is part of the new client-side initiative and may change.
+
 Pass `--web-resources` (or answer the interactive prompt) to also scaffold a TypeScript project for
 model-driven **form scripting**, sitting next to the plugin projects in the same solution:
 

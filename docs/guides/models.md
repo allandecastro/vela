@@ -38,6 +38,9 @@ Connection flags are the same as `plan`/`apply`
 
 ## TypeScript form models (`--forms --lang ts`)
 
+> [!NOTE]
+> Preview / work in progress. This is part of the new client-side initiative and may change.
+
 `vela models --forms --lang ts` generates **TypeScript `FormModel` files** for the scoped tables' published
 **Main** and **Quick Create** forms, for the vela-client runtime to consume. It reads each form's FormXML and
 joins it with the table metadata, so the emitted model carries only the fields, tabs, sections and subgrids
@@ -56,8 +59,9 @@ Each form becomes one `<entity>.<form>.form.ts` const that `satisfies FormModel`
 of numeric enums the choice fields reference. Generation is deterministic (fields follow the form's layout order,
 option sets follow first-reference order) and all-or-nothing, and reuses the same scope (`--solution` /
 `--entities`) and connection flags as the rest of `vela models`. Only published forms are read (no drafts), and
-same-named forms of one table get disambiguated file names. The FormXML is parsed against the official Microsoft
-`FormXml.xsd`, so malformed exports fail with a clear error rather than a half-generated model.
+same-named forms of one table get disambiguated file names. The FormXML parser is deliberately tolerant (modern
+forms carry attributes newer than the published `FormXml.xsd`), so real forms generate cleanly; strict XSD
+validation is available as a separate best-effort aid, not a gate on generation.
 
 ## Security roles (`--roles` / `--solution-roles`)
 

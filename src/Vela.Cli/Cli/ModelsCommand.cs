@@ -528,7 +528,7 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --entities account,contact [connection options]");
         Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
         Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
-        Console.WriteLine("  vela models --forms --lang ts --entities account,contact [connection options]");
+        Console.WriteLine("  vela models --forms --lang ts --entities account,contact [connection options]   (preview)");
         Console.WriteLine();
         Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
@@ -536,7 +536,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
         Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
-        Console.WriteLine("  --forms --lang ts         emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
+        Console.WriteLine("  --forms --lang ts         (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
         Console.WriteLine("  --json                    print a JSON report of the generated files (for scripts/agents)");

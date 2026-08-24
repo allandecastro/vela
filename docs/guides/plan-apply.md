@@ -56,6 +56,9 @@ By default the plugin assembly is inferred from the package. If a package bundle
 
 ## Deploy web resources (`--webresources`)
 
+> [!NOTE]
+> Preview / work in progress. This is part of the new client-side initiative and may change.
+
 `plan` and `apply` can also deploy **web resources** (form scripts, CSS, images, HTML, ...) from a folder mirror,
 alongside or instead of plugins:
 
