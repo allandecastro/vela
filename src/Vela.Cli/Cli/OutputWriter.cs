@@ -198,13 +198,13 @@ internal static class OutputWriter
         WriteCommand(console, "inspect", "Compare local packages with the live environment.");
         Console.WriteLine("      [same args as plan] [--verbose]");
         WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");
-        Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--web-resources [--web-resources-namespace <name>] [--web-resources-folder <dir>]] [--force] [--interactive]");
+        Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--web-resources [--web-resources-namespace <name>] [--web-resources-folder <dir>]] [--json] [--force] [--interactive]");
         WriteCommand(console, "add", "Add a plugin, service, Custom API, test, or step to a project.");
         Console.WriteLine("      (plugin|service|customapi|test|step) <Name> [...]   run 'vela add --help' for the full options");
         WriteCommand(console, "models", "Generate early-bound model classes.");
         Console.WriteLine("      (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--forms --lang ts] [connection options]");
         WriteCommand(console, "sign", "Sign a plugin package.");
-        Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>]");
+        Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
         WriteCommand(console, "menu", "Launch the interactive menu (default with no args).");
         WriteCommand(console, "version", "Print the tool version.");
         console.WriteLine();

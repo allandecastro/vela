@@ -52,6 +52,9 @@ CLI line only.
   reads published forms only, and disambiguates same-named forms of one table.
 - `vela models --json` prints a machine-readable report of the generated files (output directory, count and file
   names) instead of the human summary, on both the C# and `--forms` paths.
+- `--json` is now also available on `vela init` (solution, root, file count, project names), `vela sign` (package,
+  method, timestamp) and `vela add` (description + created files), so scripts and agents get structured output
+  from the whole command surface.
 
 ## [0.1.4] - 2026-08-21
 

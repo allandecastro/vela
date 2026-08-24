@@ -361,6 +361,32 @@ public class ProjectScaffolderTests
         });
     }
 
+    [Fact]
+    public void Generate_WithJson_PrintsMachineReadableReport()
+    {
+        RunInTempDir(temp =>
+        {
+            string outText;
+            System.IO.TextWriter original = System.Console.Out;
+            using System.IO.StringWriter capture = new System.IO.StringWriter();
+            System.Console.SetOut(capture);
+            try
+            {
+                ProjectScaffolder.Generate(Options(temp) with { Json = true });
+                outText = capture.ToString();
+            }
+            finally
+            {
+                System.Console.SetOut(original);
+            }
+
+            using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(outText);
+            Assert.Equal("ZavaSales", doc.RootElement.GetProperty("solution").GetString());
+            Assert.True(doc.RootElement.GetProperty("files").GetInt32() > 0);
+            Assert.Contains("Zava.Plugins", doc.RootElement.GetProperty("projects").EnumerateArray().Select(e => e.GetString()));
+        });
+    }
+
     private static void AssertFileExists(string root, params string[] segments)
     {
         string path = root;

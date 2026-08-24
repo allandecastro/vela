@@ -40,7 +40,8 @@ internal sealed record ScaffoldOptions(
     bool ManagedIdentity = false,
     bool IncludeWebResources = false,
     string WebResourceNamespace = "",
-    string WebResourcesFolder = "web")
+    string WebResourcesFolder = "web",
+    bool Json = false)
 {
     // Solution name doubles as a folder + file name, so keep it to filename-safe characters.
     private static readonly Regex SolutionNamePattern = new("^[A-Za-z0-9._-]+$", RegexOptions.Compiled);
@@ -221,7 +222,8 @@ internal sealed record ScaffoldOptions(
             ManagedIdentity: managedIdentity,
             IncludeWebResources: includeWebResources,
             WebResourceNamespace: webResourceNamespace,
-            WebResourcesFolder: webResourcesFolder);
+            WebResourcesFolder: webResourcesFolder,
+            Json: HasFlag(args, "--json"));
         return true;
     }
 

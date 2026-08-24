@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using static Vela.Cli.CliExitCodes;
 using static Vela.Cli.OutputWriter;
 using static Vela.Cli.ScaffoldTemplates;
@@ -175,6 +176,12 @@ internal static class ProjectScaffolder
         Write(Path.Combine("local-packages", ".gitkeep"), string.Empty);
         Write("README.md", RootReadme(options));
 
+        if (options.Json)
+        {
+            Console.WriteLine(BuildScaffoldReport(options.SolutionName, root, fileCount, projects));
+            return ExitSuccess;
+        }
+
         Console.WriteLine($"Created {options.SolutionName} ({fileCount} files) at {root}");
         Console.WriteLine("Projects:");
         foreach (ProjectEntry project in projects)
@@ -203,4 +210,16 @@ internal static class ProjectScaffolder
 
         return ExitSuccess;
     }
+
+    // The --json success report: the solution, its root, the file count and the generated project names.
+    internal static string BuildScaffoldReport(string solution, string root, int fileCount, IReadOnlyList<ProjectEntry> projects) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                solution,
+                root,
+                files = fileCount,
+                projects = projects.Select(p => p.Name).ToArray(),
+            },
+            new JsonSerializerOptions { WriteIndented = true });
 }
