@@ -25,11 +25,12 @@ CLI line only.
 
 ### Added
 
-- Ribbon wiring foundation: a pure `RibbonDiffXml` generator turns a `RibbonRegistration` (commands + enable/
-  display rules) into classic ribbon XML with `JavaScriptFunction` actions and `CustomRule` rules, each
-  referencing its command web resource via `Library="$webresource:<name>"` (the web-resource solution
-  dependency). Output is validated against the official Microsoft Ribbon XSDs. Deploying the generated wiring
-  (modern `appaction` / solution import) is a follow-up.
+- Ribbon utility (optional): a pure `RibbonDiffXml` generator turns a `RibbonRegistration` (commands + enable
+  rules) into classic ribbon XML with `JavaScriptFunction` actions and `CustomRule` enable rules, each
+  referencing its command web resource via `Library="$webresource:<name>"`, validated against the official
+  Microsoft Ribbon XSDs. This is a building block only: registering a command on a button (the command bar
+  wiring) is left to the developer (Power Apps command designer or a hand-authored `RibbonDiffXml`); automating
+  the full deploy is tracked as low priority in the backlog.
 - `vela plan` / `vela apply --webresources <folder>` deploy web resources (form scripts, CSS, images, HTML, ...)
   as a third registration kind, mirroring the folder verbatim: each file's unique name is its path relative to the
   root (forward slashes), the type is inferred from the extension, and a content hash drives the diff. Changed and
