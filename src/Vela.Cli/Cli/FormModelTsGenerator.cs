@@ -250,8 +250,16 @@ public static class FormModelTsGenerator
         }
 
         sb.Append("  subgrids: {\n");
+        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (FormSubgrid subgrid in subgrids)
         {
+            // Subgrid names key an object; skip a duplicate (e.g. two grids whose name falls back to the same
+            // target) so the emitted `as const` never carries a duplicate key.
+            if (!seen.Add(subgrid.Name))
+            {
+                continue;
+            }
+
             StringBuilder inner = new StringBuilder();
             inner.Append($"entity: {TsString(subgrid.TargetEntity)}");
             if (!string.IsNullOrWhiteSpace(subgrid.RelationshipName))
@@ -591,8 +599,30 @@ public static class FormModelTsGenerator
             ? ((long)value).ToString(CultureInfo.InvariantCulture)
             : value.ToString(CultureInfo.InvariantCulture);
 
-    private static string TsString(string value) =>
-        "'" + value.Replace("\\", "\\\\").Replace("'", "\\'") + "'";
+    // Emits a single-quoted TS string literal, escaping the backslash, the quote and every character that would
+    // otherwise break or terminate the literal (newlines, CR, tab, and the JS line separators U+2028/U+2029).
+    private static string TsString(string value)
+    {
+        StringBuilder sb = new StringBuilder(value.Length + 2);
+        sb.Append('\'');
+        foreach (char c in value)
+        {
+            switch (c)
+            {
+                case '\\': sb.Append("\\\\"); break;
+                case '\'': sb.Append("\\'"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                case '\u2028': sb.Append("\\u2028"); break;
+                case '\u2029': sb.Append("\\u2029"); break;
+                default: sb.Append(c); break;
+            }
+        }
+
+        sb.Append('\'');
+        return sb.ToString();
+    }
 
     // Server metadata fills UserLocalizedLabel; client-built labels only fill LocalizedLabels - read either.
     private static string? LabelText(Label? label) =>

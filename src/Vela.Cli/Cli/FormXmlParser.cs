@@ -55,14 +55,14 @@ public static class FormXmlParser
         List<FormTab> tabs = new List<FormTab>();
         List<FormSubgrid> subgrids = new List<FormSubgrid>();
 
-        foreach (XElement tab in Descend(root, "tabs").SelectMany(t => Children(t, "tab")))
+        foreach (XElement tab in Children(root, "tabs").SelectMany(t => Children(t, "tab")))
         {
             List<FormSection> sections = new List<FormSection>();
 
             // A tab lays sections out across columns; flatten the columns in document order.
             IEnumerable<XElement> sectionElements = Children(tab, "columns")
                 .SelectMany(c => Children(c, "column"))
-                .SelectMany(c => Descend(c, "sections"))
+                .SelectMany(c => Children(c, "sections"))
                 .SelectMany(s => Children(s, "section"));
 
             foreach (XElement section in sectionElements)
@@ -79,20 +79,21 @@ public static class FormXmlParser
             tabs.Add(new FormTab(Attr(tab, "name") ?? string.Empty, LabelOf(tab), sections));
         }
 
-        return new ParsedForm(tabs, subgrids, RegionFields(root, "header"), RegionFields(root, "footer"));
+        IReadOnlyList<FormFieldCell> headerFields = RegionFields(root, "header", subgrids);
+        IReadOnlyList<FormFieldCell> footerFields = RegionFields(root, "footer", subgrids);
+        return new ParsedForm(tabs, subgrids, headerFields, footerFields);
     }
 
-    // Header/footer fields sit outside the tab tree; collect just their bound field cells (subgrids there are rare
-    // and, like body subgrids, are routed to the subgrid list).
-    private static IReadOnlyList<FormFieldCell> RegionFields(XElement root, string region)
+    // Header/footer fields sit outside the tab tree; collect their bound field cells, and route any subgrid there
+    // into the same form-level subgrid list (rare, but the parsed model should not silently drop it).
+    private static IReadOnlyList<FormFieldCell> RegionFields(XElement root, string region, List<FormSubgrid> subgrids)
     {
         List<FormFieldCell> cells = new List<FormFieldCell>();
-        List<FormSubgrid> ignored = new List<FormSubgrid>();
         foreach (XElement regionElement in Children(root, region))
         {
             foreach (XElement cell in CellsOf(regionElement))
             {
-                ClassifyCell(cell, cells, ignored);
+                ClassifyCell(cell, cells, subgrids);
             }
         }
 
@@ -156,7 +157,7 @@ public static class FormXmlParser
     }
 
     private static IEnumerable<XElement> CellsOf(XElement container) =>
-        Descend(container, "rows").SelectMany(r => Children(r, "row")).SelectMany(row => Children(row, "cell"));
+        Children(container, "rows").SelectMany(r => Children(r, "row")).SelectMany(row => Children(row, "cell"));
 
     // The base-language (1033) label, falling back to the first label authored.
     private static string? LabelOf(XElement element)
@@ -190,8 +191,6 @@ public static class FormXmlParser
     private static IEnumerable<XElement> Children(XElement parent, string localName) =>
         parent.Elements().Where(e => string.Equals(e.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase));
 
-    // The single well-known container child (e.g. <tabs>, <rows>, <sections>) - tolerant of it being absent.
-    private static IEnumerable<XElement> Descend(XElement parent, string localName) => Children(parent, localName);
 
     private static string? Attr(XElement element, string localName) =>
         element.Attributes().FirstOrDefault(a => string.Equals(a.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase))?.Value;

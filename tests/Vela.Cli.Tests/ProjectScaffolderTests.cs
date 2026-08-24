@@ -362,29 +362,23 @@ public class ProjectScaffolderTests
     }
 
     [Fact]
-    public void Generate_WithJson_PrintsMachineReadableReport()
+    public void BuildScaffoldReport_Lists_Solution_Root_Files_And_Projects()
     {
-        RunInTempDir(temp =>
-        {
-            string outText;
-            System.IO.TextWriter original = System.Console.Out;
-            using System.IO.StringWriter capture = new System.IO.StringWriter();
-            System.Console.SetOut(capture);
-            try
+        string json = ProjectScaffolder.BuildScaffoldReport(
+            "ZavaSales",
+            "/tmp/ZavaSales",
+            29,
+            new[]
             {
-                ProjectScaffolder.Generate(Options(temp) with { Json = true });
-                outText = capture.ToString();
-            }
-            finally
-            {
-                System.Console.SetOut(original);
-            }
+                new ScaffoldTemplates.ProjectEntry("Zava.Shared", "src\\Zava.Shared\\Zava.Shared.csproj", ScaffoldTemplates.StableGuid("Zava.Shared")),
+                new ScaffoldTemplates.ProjectEntry("Zava.Plugins", "src\\Zava.Plugins\\Zava.Plugins.csproj", ScaffoldTemplates.StableGuid("Zava.Plugins")),
+            });
 
-            using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(outText);
-            Assert.Equal("ZavaSales", doc.RootElement.GetProperty("solution").GetString());
-            Assert.True(doc.RootElement.GetProperty("files").GetInt32() > 0);
-            Assert.Contains("Zava.Plugins", doc.RootElement.GetProperty("projects").EnumerateArray().Select(e => e.GetString()));
-        });
+        using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal("ZavaSales", doc.RootElement.GetProperty("solution").GetString());
+        Assert.Equal("/tmp/ZavaSales", doc.RootElement.GetProperty("root").GetString());
+        Assert.Equal(29, doc.RootElement.GetProperty("files").GetInt32());
+        Assert.Contains("Zava.Plugins", doc.RootElement.GetProperty("projects").EnumerateArray().Select(e => e.GetString()));
     }
 
     private static void AssertFileExists(string root, params string[] segments)

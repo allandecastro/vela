@@ -396,6 +396,48 @@ public class FormModelTsGeneratorTests
     }
 
     [Fact]
+    public void Label_With_Newline_Is_Escaped()
+    {
+        // A label carrying a newline must not break the string literal (regression: TsString escapes control chars).
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName").Display("First\nName")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname")), entity), "contact.info.form.ts");
+
+        Assert.Contains(@"label: 'First\nName',", ts);
+        Assert.DoesNotContain("First\nName", ts); // never a raw newline inside the literal
+    }
+
+    [Fact]
+    public void Duplicate_Subgrid_Names_Are_Emitted_Once()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .String("name", "Name").Display("Name")
+            .Build();
+
+        const string xml = """
+            <form><tabs><tab name="general">
+              <labels><label description="General" languagecode="1033" /></labels>
+              <columns><column width="100%"><sections><section name="s">
+                <labels><label description="Sec" languagecode="1033" /></labels>
+                <rows>
+                  <row><cell><control datafieldname="name" /></cell></row>
+                  <row><cell><control id="Dup" classid="{E7A81278-8635-4d9e-8D4D-59480B391C5B}"><parameters><TargetEntityType>contact</TargetEntityType></parameters></control></cell></row>
+                  <row><cell><control id="Dup" classid="{E7A81278-8635-4d9e-8D4D-59480B391C5B}"><parameters><TargetEntityType>lead</TargetEntityType></parameters></control></cell></row>
+                </rows>
+              </section></sections></column></columns>
+            </tab></tabs></form>
+            """;
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "account.info.form.ts");
+
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(ts, "Dup: \\{").Count);
+    }
+
+    [Fact]
     public void Owner_Lookup_Maps_To_Lookup_Kind()
     {
         EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")

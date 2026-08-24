@@ -183,6 +183,32 @@ public class FormXmlParserTests
     }
 
     [Fact]
+    public void Collects_A_Subgrid_Placed_In_The_Header()
+    {
+        // A subgrid in the header must be routed to the form-level subgrid list, not silently dropped.
+        const string xml = """
+            <form>
+              <tabs><tab name="general">
+                <columns><column width="100%"><sections><section name="s">
+                  <rows><row><cell><control datafieldname="name" /></cell></row></rows>
+                </section></sections></column></columns>
+              </tab></tabs>
+              <header id="{00000000-0000-0000-0000-00000000dddd}">
+                <rows><row><cell>
+                  <control id="HeaderGrid" classid="{E7A81278-8635-4d9e-8D4D-59480B391C5B}">
+                    <parameters><TargetEntityType>task</TargetEntityType></parameters>
+                  </control>
+                </cell></row></rows>
+              </header>
+            </form>
+            """;
+
+        FormSubgrid subgrid = Assert.Single(FormXmlParser.Parse(xml).Subgrids);
+        Assert.Equal("HeaderGrid", subgrid.Name);
+        Assert.Equal("task", subgrid.TargetEntity);
+    }
+
+    [Fact]
     public void Reads_Footer_Fields_Without_Location()
     {
         const string xml = """
