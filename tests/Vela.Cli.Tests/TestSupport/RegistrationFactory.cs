@@ -17,6 +17,9 @@ internal static class RegistrationFactory
     public static RegistrationItem CustomApi(object definition, string type = "Zava.Plugins.MyApi")
         => new RegistrationItem("custom-api", type, Json(definition));
 
+    public static RegistrationItem WebResource(string name, string contentHash, int webResourceType = 3, string? contentPath = null)
+        => new RegistrationItem("web-resource", name, Json(new { name, webResourceType, contentHash, contentPath }));
+
     public static RegistrationState State(params RegistrationItem[] items)
         => new RegistrationState(
             SourceAssemblies: [],

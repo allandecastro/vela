@@ -17,6 +17,11 @@ internal static class DiffEngine
         return string.Equals(item.Kind, "step", StringComparison.OrdinalIgnoreCase);
     }
 
+    public static bool IsWebResource(RegistrationItem item)
+    {
+        return string.Equals(item.Kind, "web-resource", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string GetIdentityKey(RegistrationItem item)
     {
         return $"{item.Kind}:{GetIdentity(item)}";
@@ -27,6 +32,11 @@ internal static class DiffEngine
         if (string.Equals(item.Kind, "custom-api", StringComparison.OrdinalIgnoreCase))
         {
             return TryGetString(item.Definition, "uniqueName") ?? item.Type;
+        }
+
+        if (IsWebResource(item))
+        {
+            return TryGetString(item.Definition, "name") ?? item.Type;
         }
 
         string? stepKey = TryGetString(item.Definition, "stepKey");
@@ -72,8 +82,8 @@ internal static class DiffEngine
         List<RegistrationItem> removed = [];
         List<RegistrationChange> changed = [];
 
-        List<RegistrationItem> localCustomApis = local.Items.Where(x => !IsStep(x)).ToList();
-        List<RegistrationItem> currentCustomApis = current.Items.Where(x => !IsStep(x)).ToList();
+        List<RegistrationItem> localCustomApis = local.Items.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
+        List<RegistrationItem> currentCustomApis = current.Items.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
         Dictionary<string, RegistrationItem> localCustomApiMap = localCustomApis.ToDictionary(GetIdentityKey, StringComparer.OrdinalIgnoreCase);
         Dictionary<string, RegistrationItem> currentCustomApiMap = currentCustomApis.ToDictionary(GetIdentityKey, StringComparer.OrdinalIgnoreCase);
 
@@ -193,6 +203,41 @@ internal static class DiffEngine
             if (!currentStepMatched[i])
             {
                 removed.Add(currentSteps[i]);
+            }
+        }
+
+        // Web resources reconcile independently of plugins/Custom APIs: match by name (path), change by content
+        // hash. Scope safety (a plugin-only run never touches web resources and vice versa) is upstream - the
+        // current state only carries web resources when a web-resources scan is requested, so plugin-only runs
+        // have none on either side and produce no web-resource diff here.
+        List<RegistrationItem> localWebResources = local.Items.Where(IsWebResource).ToList();
+        List<RegistrationItem> currentWebResources = current.Items.Where(IsWebResource).ToList();
+        Dictionary<string, RegistrationItem> localWebResourceMap = localWebResources.ToDictionary(GetIdentityKey, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, RegistrationItem> currentWebResourceMap = currentWebResources.ToDictionary(GetIdentityKey, StringComparer.OrdinalIgnoreCase);
+
+        foreach (KeyValuePair<string, RegistrationItem> pair in localWebResourceMap)
+        {
+            if (!currentWebResourceMap.TryGetValue(pair.Key, out RegistrationItem? before))
+            {
+                added.Add(pair.Value);
+                continue;
+            }
+
+            // Compare only the content hash: the local definition also carries a local file path the live state
+            // can't have, so a whole-definition compare would always report a spurious change.
+            string beforeHash = TryGetString(before.Definition, "contentHash") ?? string.Empty;
+            string afterHash = TryGetString(pair.Value.Definition, "contentHash") ?? string.Empty;
+            if (!string.Equals(beforeHash, afterHash, StringComparison.Ordinal))
+            {
+                changed.Add(new RegistrationChange(pair.Value.Kind, pair.Value.Type, before.Definition, pair.Value.Definition));
+            }
+        }
+
+        foreach (KeyValuePair<string, RegistrationItem> pair in currentWebResourceMap)
+        {
+            if (!localWebResourceMap.ContainsKey(pair.Key))
+            {
+                removed.Add(pair.Value);
             }
         }
 
