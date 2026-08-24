@@ -294,7 +294,7 @@ internal static class ModelsCommand
             },
             new JsonSerializerOptions { WriteIndented = true });
 
-    private static List<string> ResolveLogicalNames(IOrganizationService service, string? solution, string[] entities)
+    internal static List<string> ResolveLogicalNames(IOrganizationService service, string? solution, string[] entities)
     {
         SortedSet<string> names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string entity in entities)

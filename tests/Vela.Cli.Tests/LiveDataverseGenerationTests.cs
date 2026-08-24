@@ -30,12 +30,17 @@ public class LiveDataverseGenerationTests
             return; // opt-in only
         }
 
-        var jsonOptions = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
-        string[] tables = (Environment.GetEnvironmentVariable("VELA_LIVE_TABLES") ?? "account,contact")
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
         using ServiceClient service = new ServiceClient(new Uri(url), _ => Task.FromResult(token!), useUniqueInstance: true);
         Assert.True(service.IsReady, service.LastError);
+
+        // Scope: an explicit --solution (resolved to its tables via the real ModelsCommand path) or an explicit
+        // table list. This exercises whichever `vela models --forms` scope the run asked for.
+        string? solution = Environment.GetEnvironmentVariable("VELA_LIVE_SOLUTION");
+        string[] tables = string.IsNullOrWhiteSpace(solution)
+            ? (Environment.GetEnvironmentVariable("VELA_LIVE_TABLES") ?? "account,contact").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : ModelsCommand.ResolveLogicalNames(service, solution, Array.Empty<string>()).ToArray();
+        Assert.NotEmpty(tables);
+        Console.WriteLine($"SCOPE: {(string.IsNullOrWhiteSpace(solution) ? "tables" : "solution " + solution)} -> {tables.Length} table(s): {string.Join(", ", tables.Take(12))}");
 
         // 1) Read the published Main/Quick Create forms for the scoped tables (the real FormReader path).
         IReadOnlyList<SystemForm> forms = FormReader.ReadForms(service, tables);
