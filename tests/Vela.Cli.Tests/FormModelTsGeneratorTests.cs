@@ -642,7 +642,7 @@ public class FormModelTsGeneratorTests
 
             """;
 
-        Assert.Equal(expected, Generate(ContactForm(), "contact.information.form.ts"));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Generate(ContactForm(), "contact.information.form.ts"));
     }
 
     [Fact]
@@ -855,7 +855,7 @@ public class FormModelTsGeneratorTests
 
             """;
 
-        Assert.Equal(expected, Generate(AccountForm(), "account.main.form.ts"));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Generate(AccountForm(), "account.main.form.ts"));
     }
 
     [Fact]
@@ -899,7 +899,7 @@ public class FormModelTsGeneratorTests
         string optionSets = FormModelTsGenerator.Generate(new[] { ContactForm(), AccountForm() })
             .Single(m => m.FileName == "option-sets.ts").Code;
 
-        Assert.Equal(expected, optionSets);
+        Assert.Equal(expected.ReplaceLineEndings("\n"), optionSets);
     }
 
     [Fact]
