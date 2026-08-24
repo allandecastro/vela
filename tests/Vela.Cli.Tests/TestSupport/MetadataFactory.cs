@@ -43,7 +43,121 @@ internal sealed class MetadataFactory
         return this;
     }
 
-    public MetadataFactory Money(string logicalName, string schemaName, decimal? min = null, decimal? max = null)
+    public MetadataFactory Memo(string logicalName, string schemaName, int? maxLength = null, StringFormat? format = null)
+    {
+        Add(new MemoAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Memo);
+        if (maxLength.HasValue)
+        {
+            Set(_last!, "MaxLength", maxLength.Value);
+        }
+
+        if (format.HasValue)
+        {
+            Set(_last!, "Format", format.Value);
+        }
+
+        return this;
+    }
+
+    public MetadataFactory StringFormat(StringFormat format)
+    {
+        Set(_last!, "Format", format);
+        return this;
+    }
+
+    public MetadataFactory Integer(string logicalName, string schemaName, int? min = null, int? max = null)
+    {
+        Add(new IntegerAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Integer);
+        if (min.HasValue)
+        {
+            Set(_last!, "MinValue", min.Value);
+        }
+
+        if (max.HasValue)
+        {
+            Set(_last!, "MaxValue", max.Value);
+        }
+
+        return this;
+    }
+
+    public MetadataFactory BigInt(string logicalName, string schemaName, long? min = null, long? max = null)
+    {
+        Add(new BigIntAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.BigInt);
+        if (min.HasValue)
+        {
+            Set(_last!, "MinValue", min.Value);
+        }
+
+        if (max.HasValue)
+        {
+            Set(_last!, "MaxValue", max.Value);
+        }
+
+        return this;
+    }
+
+    public MetadataFactory Decimal(string logicalName, string schemaName, decimal? min = null, decimal? max = null, int? precision = null)
+    {
+        Add(new DecimalAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Decimal);
+        if (min.HasValue)
+        {
+            Set(_last!, "MinValue", min.Value);
+        }
+
+        if (max.HasValue)
+        {
+            Set(_last!, "MaxValue", max.Value);
+        }
+
+        if (precision.HasValue)
+        {
+            Set(_last!, "Precision", precision.Value);
+        }
+
+        return this;
+    }
+
+    public MetadataFactory Double(string logicalName, string schemaName, double? min = null, double? max = null, int? precision = null)
+    {
+        Add(new DoubleAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Double);
+        if (min.HasValue)
+        {
+            Set(_last!, "MinValue", min.Value);
+        }
+
+        if (max.HasValue)
+        {
+            Set(_last!, "MaxValue", max.Value);
+        }
+
+        if (precision.HasValue)
+        {
+            Set(_last!, "Precision", precision.Value);
+        }
+
+        return this;
+    }
+
+    public MetadataFactory Boolean(string logicalName, string schemaName)
+        => Add(new BooleanAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Boolean);
+
+    // An attribute whose type the generator doesn't map explicitly (falls through to the default kind).
+    public MetadataFactory Unmapped(string logicalName, string schemaName)
+        => Add(new ManagedPropertyAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.ManagedProperty);
+
+    public MetadataFactory DateTime(string logicalName, string schemaName, DateTimeFormat? format = null)
+    {
+        Add(new DateTimeAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.DateTime);
+        if (format.HasValue)
+        {
+            Set(_last!, "Format", format.Value);
+        }
+
+        return this;
+    }
+
+    public MetadataFactory Money(string logicalName, string schemaName, decimal? min = null, decimal? max = null, int? precision = null)
     {
         Add(new MoneyAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Money);
         if (min.HasValue)
@@ -56,6 +170,22 @@ internal sealed class MetadataFactory
             Set(_last!, "MaxValue", (double)max.Value);
         }
 
+        if (precision.HasValue)
+        {
+            Set(_last!, "Precision", precision.Value);
+        }
+
+        return this;
+    }
+
+    public MetadataFactory PartyList(string logicalName, string schemaName, params string[] targets)
+    {
+        Add(new LookupAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.PartyList);
+        if (targets.Length > 0)
+        {
+            Set(_last!, "Targets", targets);
+        }
+
         return this;
     }
 
@@ -65,9 +195,6 @@ internal sealed class MetadataFactory
         Set(_last!, "Targets", targets);
         return this;
     }
-
-    public MetadataFactory PartyList(string logicalName, string schemaName)
-        => Add(new LookupAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.PartyList);
 
     // File/Image columns have no dedicated AttributeTypeCode; the generator detects them by metadata subclass.
     public MetadataFactory File(string logicalName, string schemaName)
@@ -80,6 +207,17 @@ internal sealed class MetadataFactory
     {
         Add(new LookupAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Customer);
         Set(_last!, "Targets", targets);
+        return this;
+    }
+
+    public MetadataFactory Owner(string logicalName, string schemaName, params string[] targets)
+    {
+        Add(new LookupAttributeMetadata(), logicalName, schemaName, AttributeTypeCode.Owner);
+        if (targets.Length > 0)
+        {
+            Set(_last!, "Targets", targets);
+        }
+
         return this;
     }
 

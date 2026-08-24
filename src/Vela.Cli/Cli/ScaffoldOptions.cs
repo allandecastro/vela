@@ -24,6 +24,9 @@ namespace Vela.Cli;
 /// <param name="Force">When true, overwrite an existing target directory.</param>
 /// <param name="Interactive">When true, missing values are prompted for.</param>
 /// <param name="ManagedIdentity">When true, mark the Integrations package as managed-identity-enabled and add the build-time package-signing step it requires.</param>
+/// <param name="IncludeWebResources">When true, scaffold the opt-in <c>{prefix}.WebResources</c> TypeScript project.</param>
+/// <param name="WebResourceNamespace">The dotted JS global name (esbuild <c>globalName</c>) the bundle exposes; the consumer's publisher prefix, never "Vela".</param>
+/// <param name="WebResourcesFolder">The build output folder (tsup <c>outDir</c>) and default <c>vela apply --webresources</c> target.</param>
 internal sealed record ScaffoldOptions(
     string SolutionName,
     string Prefix,
@@ -34,13 +37,30 @@ internal sealed record ScaffoldOptions(
     string CoreVersion,
     bool Force,
     bool Interactive,
-    bool ManagedIdentity = false)
+    bool ManagedIdentity = false,
+    bool IncludeWebResources = false,
+    string WebResourceNamespace = "",
+    string WebResourcesFolder = "web",
+    bool Json = false)
 {
     // Solution name doubles as a folder + file name, so keep it to filename-safe characters.
     private static readonly Regex SolutionNamePattern = new("^[A-Za-z0-9._-]+$", RegexOptions.Compiled);
 
     // Prefix becomes C# namespaces and assembly names: a dotted identifier (e.g. Zava or Zava.CRM).
     private static readonly Regex PrefixPattern = new("^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$", RegexOptions.Compiled);
+
+    // The JS global name is a dotted identifier (esbuild globalName), e.g. `adc` or `adc.sales`.
+    private static readonly Regex GlobalNamePattern = new("^[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*$", RegexOptions.Compiled);
+
+    // A web-resources output folder is a simple relative directory name (no separators or traversal).
+    private static readonly Regex FolderPattern = new("^[A-Za-z0-9._-]+$", RegexOptions.Compiled);
+
+    /// <summary>True when the value is a valid JS global name (dotted identifier).</summary>
+    public static bool IsValidGlobalName(string value) =>
+        !string.IsNullOrWhiteSpace(value) && GlobalNamePattern.IsMatch(value);
+
+    /// <summary>The default JS global name suggested at init: the prefix with dots removed, lower-cased.</summary>
+    public static string SuggestGlobalName(string prefix) => ScaffoldTemplates.ApiPrefix(prefix);
 
     // Offline fallback only. `vela init` normally resolves the latest published Vela.Plugins version from
     // nuget.org (see ResolveLatestFrameworkVersion); this is used when that lookup fails or `--core-version`
@@ -146,6 +166,49 @@ internal sealed record ScaffoldOptions(
             managedIdentity = PromptYesNo("Enable managed identity for the Integrations project (adds the required signing step)? [y/N]:", defaultYes: false);
         }
 
+        // The web-resources (TypeScript) project is opt-in: off unless --web-resources or the interactive prompt.
+        bool includeWebResources = HasFlag(args, "--web-resources") || HasFlag(args, "--webresources");
+        if (interactive && !includeWebResources)
+        {
+            includeWebResources = PromptYesNo("Scaffold a web resources (TypeScript) project? [y/N]:", defaultYes: false);
+        }
+
+        string webResourceNamespace = TryReadOption(args, "--web-resources-namespace") ?? string.Empty;
+        string webResourcesFolder = TryReadOption(args, "--web-resources-folder") ?? "web";
+        if (includeWebResources)
+        {
+            if (interactive && string.IsNullOrWhiteSpace(webResourceNamespace))
+            {
+                webResourceNamespace = Prompt($"Web resources namespace (global name, default: {SuggestGlobalName(prefix)}):", allowEmpty: true) ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(webResourceNamespace))
+            {
+                webResourceNamespace = SuggestGlobalName(prefix);
+            }
+
+            if (!GlobalNamePattern.IsMatch(webResourceNamespace))
+            {
+                exitCode = Fail($"Invalid web resources namespace '{webResourceNamespace}'. Use a dotted identifier such as 'adc' or 'adc.sales'.", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+
+            if (interactive && string.Equals(webResourcesFolder, "web", StringComparison.Ordinal) && !HasFlag(args, "--web-resources-folder"))
+            {
+                string? answer = Prompt("Web resources output folder (default: web):", allowEmpty: true);
+                if (!string.IsNullOrWhiteSpace(answer))
+                {
+                    webResourcesFolder = answer.Trim();
+                }
+            }
+
+            if (!FolderPattern.IsMatch(webResourcesFolder))
+            {
+                exitCode = Fail($"Invalid web resources folder '{webResourcesFolder}'. Use a simple directory name (letters, digits, '.', '-' or '_').", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+        }
+
         options = new ScaffoldOptions(
             SolutionName: name,
             Prefix: prefix,
@@ -156,7 +219,11 @@ internal sealed record ScaffoldOptions(
             CoreVersion: coreVersion,
             Force: force,
             Interactive: interactive,
-            ManagedIdentity: managedIdentity);
+            ManagedIdentity: managedIdentity,
+            IncludeWebResources: includeWebResources,
+            WebResourceNamespace: webResourceNamespace,
+            WebResourcesFolder: webResourcesFolder,
+            Json: HasFlag(args, "--json"));
         return true;
     }
 
@@ -205,7 +272,7 @@ internal sealed record ScaffoldOptions(
 
     // Options that consume the following token as their value; everything else is treated as boolean.
     private static readonly string[] ValueOptions =
-        ["--name", "--prefix", "--output", "-o", "--core-version"];
+        ["--name", "--prefix", "--output", "-o", "--core-version", "--web-resources-namespace", "--web-resources-folder"];
 
     // Returns the first positional argument (a token not starting with '-' and not the value of a
     // value-taking option), or null if there is none.

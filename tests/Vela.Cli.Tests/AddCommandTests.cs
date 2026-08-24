@@ -9,6 +9,18 @@ namespace Vela.Cli.Tests;
 public class AddCommandTests
 {
     [Fact]
+    public void BuildAddReport_Lists_Description_And_Created_Files()
+    {
+        using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(
+            AddCommand.BuildAddReport("plugin Foo (Create Account)", ["/proj/Account/Plugins/Foo.cs"]));
+
+        Assert.Equal("plugin Foo (Create Account)", doc.RootElement.GetProperty("description").GetString());
+        string created = Assert.Single(System.Linq.Enumerable.ToArray(
+            System.Linq.Enumerable.Select(doc.RootElement.GetProperty("created").EnumerateArray(), e => e.GetString())));
+        Assert.Equal("/proj/Account/Plugins/Foo.cs", created);
+    }
+
+    [Fact]
     public void Add_Plugin_GeneratesTypedPlugin_WithInferredNamespaces()
     {
         RunInProject("Acme.Plugins", (project, dir) =>

@@ -7,6 +7,27 @@ namespace Vela.Cli.Tests;
 public class SignCommandTests
 {
     [Fact]
+    public void TryParseOptions_ReadsJsonFlag()
+    {
+        Assert.True(SignCommand.TryParseOptions(["--package", "x.nupkg", "--fingerprint", "ABCD", "--json"], out SignOptions options, out _));
+        Assert.True(options.Json);
+    }
+
+    [Fact]
+    public void BuildSignReport_Reports_Package_And_Method()
+    {
+        SignOptions fingerprint = new SignOptions("pkg.nupkg", "ABCD", null, null, null, null, "http://ts", Json: true);
+        using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(SignCommand.BuildSignReport(fingerprint));
+        Assert.Equal("pkg.nupkg", doc.RootElement.GetProperty("package").GetString());
+        Assert.True(doc.RootElement.GetProperty("signed").GetBoolean());
+        Assert.Equal("fingerprint", doc.RootElement.GetProperty("method").GetString());
+
+        SignOptions pfx = new SignOptions("pkg.nupkg", null, "cert.pfx", null, "pw", null, "http://ts");
+        using System.Text.Json.JsonDocument doc2 = System.Text.Json.JsonDocument.Parse(SignCommand.BuildSignReport(pfx));
+        Assert.Equal("pfx", doc2.RootElement.GetProperty("method").GetString());
+    }
+
+    [Fact]
     public void TryParseOptions_Fingerprint_IsValid_AndDefaultsTimestamp()
     {
         bool ok = SignCommand.TryParseOptions(

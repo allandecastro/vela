@@ -54,6 +54,38 @@ vela plan `
 
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
+## Deploy web resources (`--webresources`)
+
+> [!NOTE]
+> Preview / work in progress. This is part of the new client-side initiative and may change.
+
+`plan` and `apply` can also deploy **web resources** (form scripts, CSS, images, HTML, ...) from a folder mirror,
+alongside or instead of plugins:
+
+```powershell
+# preview: create/update/delete web resources so the solution matches ./dist
+vela plan --webresources ./dist --solution ZavaSales --interactive
+
+# apply them (and publish the changes so they go live)
+vela apply --webresources ./dist --solution ZavaSales --execute --interactive
+```
+
+The folder is mirrored **verbatim**: each file's unique name is its path relative to the root, with forward
+slashes, so the top-level folder (for example `adc_`) is a real folder, not a prepended prefix. The type is
+inferred from the extension (`.js`, `.css`, `.html`, `.png`, ...); a content hash drives the diff, so unchanged
+files are skipped. Changed and created resources are published in one `PublishXmlRequest`.
+
+Web resources reconcile **independently and additively**: a plugin-only `apply` never touches web resources, and
+a `--webresources` run never touches plugins. `--webresources` **requires `--solution`** (web resources are
+reconciled within a solution, component type 61). Deletion is **scoped to the top-level folders you actually
+deploy**: a live web resource is removed only when it shares a top-level folder (e.g. `adc_`) with the local set
+but is absent from it, so mirroring a subset folder never prunes other folders, and an empty folder deletes
+nothing. A `--webresources` run needs no `--package`, so you can deploy web resources on their own. Each name must
+start with the solution's publisher prefix (its top-level folder); Vela validates this up front and fails with a
+clear message otherwise. Generate the TypeScript form models the scripts build on with
+[`vela models --forms --lang ts`](models.md), and scaffold the client project with
+[`vela init --web-resources`](scaffold.md).
+
 ## Resuming a failed apply
 
 `apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. The output is an ordered resume report listing what was applied and what was not, then the failing operation and its reason. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply --execute`: the operations that already succeeded become no-ops and the run continues from where it stopped, converging to a clean `plan`.

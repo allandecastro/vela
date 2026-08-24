@@ -41,6 +41,8 @@ The tree comments label each project. Two carry detail beyond that:
 Flags: `--prefix` (default: derived from name), `--output` (default: `.`), `--core-version`
 (default: `1.0.0`), `--no-integrations`, `--no-tests`, `--no-console`, `--managed-identity` / `--mi`
 (wire an opt-in package-signing step into the Integrations project - see [Sign the plugin package](signing.md)),
+`--web-resources` (also scaffold the TypeScript web-resources project, see below; `--web-resources-namespace`
+and `--web-resources-folder` set its global name and build folder),
 `--force` (overwrite an existing folder). The generated solution references `Vela.Plugins` as
 a NuGet package, then follows the `dotnet pack` → `vela plan` → `vela apply` loop from the [Quickstart](../getting-started/quickstart.md).
 
@@ -48,3 +50,31 @@ It also emits a `nuget.config` with a `local-packages/` folder feed, since `Vela
 `Vela.Testing`, used by the test project) are **not on nuget.org**: point that source at your private
 feed, or drop their `.nupkg` files into `local-packages/` (nuget.org is inherited for the Microsoft SDK
 and test packages).
+
+## Web resources project (opt-in)
+
+> [!NOTE]
+> Preview / work in progress. This is part of the new client-side initiative and may change.
+
+Pass `--web-resources` (or answer the interactive prompt) to also scaffold a TypeScript project for
+model-driven **form scripting**, sitting next to the plugin projects in the same solution:
+
+```text
+src/
+  Zava.WebResources/           # opt-in TypeScript web resources (--web-resources)
+    Zava.WebResources.esproj      # JS/TS SDK project: VS "Build" runs npm
+    package.json                  # tsup build + Vitest, depends on vela-client
+    tsup.config.ts                # globalName (your publisher prefix) + one entry per form
+    tsconfig.json
+    src/
+      account/main.ts             # hand-written form scripts (example)
+      generated/                  # regenerated form models (never edited)
+    test/account.test.ts          # Vitest example
+```
+
+The bundle is built with **tsup** (`npm run build` / `npm run dev`), not the CLI, and exposes a dotted
+global named after **your** publisher prefix (`--web-resources-namespace`, default: the project prefix
+lower-cased), never "Vela". Its output folder (`--web-resources-folder`, default `web`) mirrors the Dataverse
+web resource names and is what a later `vela apply --webresources` deploys. Regenerate the form models under
+`src/generated/` with [`vela models --forms --lang ts`](models.md). See the runtime library in the separate
+`vela-client` package for `VelaForm` and the typed accessors.

@@ -35,13 +35,157 @@ internal static class ScaffoldTemplates
 
     private const string CSharpProjectTypeGuid = "FAE04EC0-301F-11D3-BF4B-00C04F79EFBC";
 
-    /// <summary>A project to be listed in the generated solution file.</summary>
-    public sealed record ProjectEntry(string Name, string RelativePath, Guid ProjectGuid);
+    /// <summary>The Visual Studio JavaScript/TypeScript project system (.esproj) type id.</summary>
+    public const string JavaScriptProjectTypeGuid = "54A90642-561A-4BB1-A94E-469ADEE60C69";
+
+    /// <summary>A project to be listed in the generated solution file. The type id defaults to C#.</summary>
+    public sealed record ProjectEntry(string Name, string RelativePath, Guid ProjectGuid, string ProjectTypeGuid = CSharpProjectTypeGuid);
 
     // The Custom API unique-name publisher prefix is derived from the namespace prefix (lower-cased,
     // dots removed) so it is a valid Dataverse customization prefix.
     public static string ApiPrefix(string prefix) =>
         prefix.Replace(".", string.Empty).ToLowerInvariant();
+
+    // ---- Web resources project (opt-in TypeScript) ------------------------
+    // npm dependency versions for the scaffolded {prefix}.WebResources project. Pinned as caret ranges so a
+    // fresh `npm install` picks up compatible patches.
+    public const string TsupVersion = "^8.3.5";
+    public const string TypeScriptVersion = "^5.6.3";
+    public const string VitestVersion = "^2.1.8";
+    public const string VelaClientVersion = "^0.1.0";
+
+    // The npm package name for the web resources project: lower-case, dot-free, dash-suffixed.
+    public static string WebResourcesPackageName(string prefix) => $"{ApiPrefix(prefix)}-webresources";
+
+    // The web resource NAME prefix (the real top-level folder, e.g. `adc_`) is the first segment of the JS global
+    // name. It is distinct from the JS global namespace itself (see the web-resource-project plan).
+    private static string WebResourcePrefix(string globalName) => globalName.Split('.')[0];
+
+    public static string WebResourcesPackageJson(string prefix) =>
+$$"""
+{
+  "name": "{{WebResourcesPackageName(prefix)}}",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Model-driven form web resources for {{prefix}}, bundled with tsup.",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "vela-client": "{{VelaClientVersion}}"
+  },
+  "devDependencies": {
+    "tsup": "{{TsupVersion}}",
+    "typescript": "{{TypeScriptVersion}}",
+    "vitest": "{{VitestVersion}}"
+  }
+}
+""";
+
+    public static string WebResourcesTsconfig() =>
+$$"""
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["vitest/globals"]
+  },
+  "include": ["src", "test"]
+}
+""";
+
+    // globalName is the consumer's own publisher prefix (never "Vela"). The output tree mirrors the Dataverse web
+    // resource names, so tsup emits one IIFE per form under `<folder>/<prefix>_/js/...`.
+    public static string WebResourcesTsupConfig(string globalName, string folder)
+    {
+        string wrPrefix = WebResourcePrefix(globalName);
+        return
+$$"""
+import { defineConfig } from 'tsup';
+
+// One entry per form web resource. The key is the Dataverse web resource name (the path, minus extension) and
+// the value is its source module. `globalName` is your publisher prefix, exposed as a dotted global (e.g.
+// `{{globalName}}.Account.onLoad`); edit it to change the namespace. Add one entry per form you deploy.
+export default defineConfig({
+  entry: {
+    '{{wrPrefix}}_/js/account/Forms/main': 'src/account/main.ts',
+  },
+  format: ['iife'],
+  globalName: '{{globalName}}',
+  outDir: '{{folder}}',
+  clean: true,
+  minify: true,
+  sourcemap: true,
+});
+""";
+    }
+
+    // A minimal .esproj so Visual Studio's "Build" runs npm, sitting next to the plugin projects in the solution.
+    public static string WebResourcesEsproj() =>
+$$"""
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.1184077">
+  <PropertyGroup>
+    <BuildCommand>npm run build</BuildCommand>
+    <StartupCommand>npm run dev</StartupCommand>
+    <ShouldRunNpmInstall>true</ShouldRunNpmInstall>
+  </PropertyGroup>
+</Project>
+""";
+
+    public static string WebResourcesVitestConfig() =>
+$$"""
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['test/**/*.test.ts'],
+  },
+});
+""";
+
+    // node_modules and the build output folder are never committed.
+    public static string WebResourcesGitignore(string folder) =>
+$$"""
+node_modules/
+{{folder}}/
+*.tsbuildinfo
+""";
+
+    // An example form script. `globalName.Account.onLoad` is what FormXML's FunctionName references; the file
+    // itself is what `$webresource:<prefix>_/js/account/Forms/main.js` points at.
+    public static string WebResourcesExampleForm() =>
+$$"""
+// Example form script (hand-written). Generated form models live in ./generated - regenerate them with
+//   vela models --forms --lang ts --solution <name> --out src/generated
+// then import a model and wrap it with VelaForm. This stub keeps the bundle building before you generate.
+
+export function onLoad(): void {
+  // Your onLoad logic here.
+}
+""";
+
+    public static string WebResourcesExampleTest() =>
+$$"""
+import { describe, it, expect } from 'vitest';
+import { onLoad } from '../src/account/main';
+
+describe('account form', () => {
+  it('runs onLoad without throwing', () => {
+    expect(() => onLoad()).not.toThrow();
+  });
+});
+""";
 
     // ---- Root files -------------------------------------------------------
 
@@ -101,7 +245,7 @@ $$"""
 
         foreach (ProjectEntry project in projects)
         {
-            sb.AppendLine($"Project(\"{{{CSharpProjectTypeGuid}}}\") = \"{project.Name}\", \"{project.RelativePath}\", \"{{{project.ProjectGuid.ToString().ToUpperInvariant()}}}\"");
+            sb.AppendLine($"Project(\"{{{project.ProjectTypeGuid}}}\") = \"{project.Name}\", \"{project.RelativePath}\", \"{{{project.ProjectGuid.ToString().ToUpperInvariant()}}}\"");
             sb.AppendLine("EndProject");
         }
 

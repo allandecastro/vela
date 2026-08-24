@@ -21,7 +21,41 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-_Nothing yet._
+CLI line only.
+
+### Added
+
+- Ribbon utility (optional): a pure `RibbonDiffXml` generator turns a `RibbonRegistration` (commands + enable
+  rules) into classic ribbon XML with `JavaScriptFunction` actions and `CustomRule` enable rules, each
+  referencing its command web resource via `Library="$webresource:<name>"`, validated against the official
+  Microsoft Ribbon XSDs. This is a building block only: registering a command on a button (the command bar
+  wiring) is left to the developer (Power Apps command designer or a hand-authored `RibbonDiffXml`); automating
+  the full deploy is tracked as low priority in the backlog.
+- `vela plan` / `vela apply --webresources <folder>` deploy web resources (form scripts, CSS, images, HTML, ...)
+  as a third registration kind, mirroring the folder verbatim: each file's unique name is its path relative to the
+  root (forward slashes), the type is inferred from the extension, and a content hash drives the diff. Changed and
+  created resources are published with `PublishXmlRequest`. Web resources reconcile independently and additively
+  (a plugin-only run never touches them and vice versa; deletions are scoped to the web-resource set); a
+  `--webresources` run needs no `--package`; and each name is validated to carry the solution's publisher prefix.
+- `vela init --web-resources` additionally scaffolds an opt-in `{prefix}.WebResources` TypeScript project for
+  model-driven form scripting, next to the plugin projects in the same solution: `package.json`,
+  `tsconfig.json`, `tsup.config.ts` (bundler config with the JS global name and one entry per form), a `.esproj`
+  so Visual Studio "Build" runs npm, Vitest, `.gitignore`, and the `src/generated` (regenerated) vs `src`
+  (hand-written) split. `--web-resources-namespace` sets the exposed global (default: the project prefix,
+  lower-cased) and `--web-resources-folder` the build output folder (default `web`). Interactive `vela init`
+  prompts for it (off by default).
+- `vela models --forms --lang ts` generates TypeScript `FormModel` files for the scoped tables' published Main
+  and Quick Create forms, for the vela-client runtime to consume. Each form's FormXML is parsed (validated
+  against the official Microsoft `FormXml.xsd`) and joined with the table metadata, emitting one
+  `<entity>.<form>.form.ts` const that `satisfies FormModel` plus a shared `option-sets.ts` of numeric enums.
+  Field kinds, option sets and lookup targets follow the same mapping as the C# models. Generation is
+  deterministic and all-or-nothing, reuses the existing `--solution` / `--entities` scope and connection flags,
+  reads published forms only, and disambiguates same-named forms of one table.
+- `vela models --json` prints a machine-readable report of the generated files (output directory, count and file
+  names) instead of the human summary, on both the C# and `--forms` paths.
+- `--json` is now also available on `vela init` (solution, root, file count, project names), `vela sign` (package,
+  method, timestamp) and `vela add` (description + created files), so scripts and agents get structured output
+  from the whole command surface.
 
 ## [0.1.4] - 2026-08-21
 

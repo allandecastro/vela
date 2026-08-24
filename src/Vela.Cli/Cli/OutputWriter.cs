@@ -192,19 +192,19 @@ internal static class OutputWriter
 
         console.MarkupLine("[bold]Commands:[/]");
         WriteCommand(console, "plan", "Preview registration changes; never writes to Dataverse.");
-        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose]");
+        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--webresources <folder> (preview)] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose]");
         WriteCommand(console, "apply", "Same inputs as plan; add --execute to write the changes.");
-        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--execute] [--strict] [--verbose]");
+        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--execute] [--strict] [--verbose]");
         WriteCommand(console, "inspect", "Compare local packages with the live environment.");
         Console.WriteLine("      [same args as plan] [--verbose]");
         WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");
-        Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--force] [--interactive]");
+        Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--web-resources (preview) [--web-resources-namespace <name>] [--web-resources-folder <dir>]] [--json] [--force] [--interactive]");
         WriteCommand(console, "add", "Add a plugin, service, Custom API, test, or step to a project.");
         Console.WriteLine("      (plugin|service|customapi|test|step) <Name> [...]   run 'vela add --help' for the full options");
         WriteCommand(console, "models", "Generate early-bound model classes.");
-        Console.WriteLine("      (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [connection options]");
+        Console.WriteLine("      (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--forms --lang ts (preview)] [connection options]");
         WriteCommand(console, "sign", "Sign a plugin package.");
-        Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>]");
+        Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
         WriteCommand(console, "menu", "Launch the interactive menu (default with no args).");
         WriteCommand(console, "version", "Print the tool version.");
         console.WriteLine();

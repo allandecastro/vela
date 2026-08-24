@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Cli;
@@ -40,6 +41,131 @@ public class ModelsCommandTests
     public void Models_Help_Succeeds()
     {
         Assert.Equal(ExitSuccess, ModelsCommand.Run(["--help"]));
+    }
+
+    private static string TempDir()
+    {
+        string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "vela-models-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void WriteModels_Writes_All_Files_And_Returns_Success()
+    {
+        string dir = TempDir();
+        try
+        {
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel("a.ts", "// a"), new GeneratedModel("b.ts", "// b") },
+                dir, overwrite: false, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitSuccess, exit);
+            Assert.Equal("// a", System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "a.ts")));
+            Assert.Equal("// b", System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "b.ts")));
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WriteModels_Refuses_Existing_File_Without_Overwrite()
+    {
+        string dir = TempDir();
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "a.ts"), "old");
+
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel("a.ts", "// new") }, dir, overwrite: false, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitInvalidArguments, exit);
+            Assert.Equal("old", System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "a.ts"))); // untouched
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WriteModels_Overwrite_Replaces_Existing_File()
+    {
+        string dir = TempDir();
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "a.ts"), "old");
+
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel("a.ts", "// new") }, dir, overwrite: true, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitSuccess, exit);
+            Assert.Equal("// new", System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "a.ts")));
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WriteModels_Fails_On_Duplicate_File_Names()
+    {
+        string dir = TempDir();
+        try
+        {
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel("dup.ts", "x"), new GeneratedModel("dup.ts", "y") },
+                dir, overwrite: true, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitInvalidArguments, exit);
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildGenerationReport_Lists_Files_In_Order()
+    {
+        string json = ModelsCommand.BuildGenerationReport(
+            "/tmp/out",
+            new[]
+            {
+                new GeneratedModel("account.main.form.ts", "// a"),
+                new GeneratedModel("option-sets.ts", "// b"),
+            });
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        Assert.Equal("/tmp/out", doc.RootElement.GetProperty("outDir").GetString());
+        Assert.Equal(2, doc.RootElement.GetProperty("count").GetInt32());
+        Assert.Equal(
+            new[] { "account.main.form.ts", "option-sets.ts" },
+            doc.RootElement.GetProperty("files").EnumerateArray().Select(e => e.GetString()).ToArray());
+    }
+
+    [Fact]
+    public void Models_Forms_WithNonTsLang_Fails_BeforeConnecting()
+    {
+        // --forms only emits TypeScript today; --lang csharp with --forms is refused up front.
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--forms", "--lang", "csharp", "--entities", "account"]));
+    }
+
+    [Fact]
+    public void Models_Forms_WithoutTableScope_Fails_BeforeConnecting()
+    {
+        // A Custom API scope satisfies the generic scope gate but not --forms, which needs a table scope.
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--forms", "--lang", "ts", "--custom-apis", "zava_DoThing"]));
+    }
+
+    [Fact]
+    public void Models_LangTs_WithoutForms_Fails_BeforeConnecting()
+    {
+        // --lang only applies to --forms; using it on the C# path is an error, not a silent ignore.
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--entities", "account", "--lang", "ts"]));
     }
 
     [Fact]

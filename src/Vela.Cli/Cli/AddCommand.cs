@@ -89,7 +89,7 @@ internal static class AddCommand
         return kind switch
         {
             "plugin" => AddPlugin(args, name, entity, force, projectDir, rootNamespace, modelsNamespace),
-            "service" => AddService(name, entity, force, projectDir, rootNamespace, modelsNamespace),
+            "service" => AddService(name, entity, force, projectDir, rootNamespace, modelsNamespace, HasFlag(args, "--json")),
             "test" => AddTest(args, name, entity, force, projectDir, rootNamespace),
             "step" => AddStep(args, name, entity, projectDir),
             _ => AddCustomApi(args, name, entity, force, projectDir, rootNamespace, modelsNamespace, prefix),
@@ -137,8 +137,16 @@ internal static class AddCommand
         }
 
         File.WriteAllText(filePath, updated);
-        Console.WriteLine($"Added step {message} ({handler}) to {name}");
-        Console.WriteLine($"  {filePath}");
+        if (HasFlag(args, "--json"))
+        {
+            Console.WriteLine(BuildAddReport($"step {message} ({handler}) on {name}", [filePath]));
+        }
+        else
+        {
+            Console.WriteLine($"Added step {message} ({handler}) to {name}");
+            Console.WriteLine($"  {filePath}");
+        }
+
         return ExitSuccess;
     }
 
@@ -173,7 +181,7 @@ internal static class AddCommand
             string modelsNamespace = $"{prefix}.Shared.Models.Generated";
             string relativePath = Path.Combine(entity!, "Plugins", $"{testClass}.cs");
             string content = AddPluginTestFile(ns, pluginNamespace, modelsNamespace, testClass, name, entity!);
-            return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})");
+            return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})", HasFlag(args, "--json"));
         }
 
         string uniqueName = $"{ApiPrefix(prefix)}_{name}";
@@ -183,7 +191,7 @@ internal static class AddCommand
             string apiNamespace = $"{pluginsRoot}.GlobalCustomApis";
             string relativePath = Path.Combine("GlobalCustomApis", $"{testClass}.cs");
             string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName);
-            return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})");
+            return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})", HasFlag(args, "--json"));
         }
         else
         {
@@ -191,7 +199,7 @@ internal static class AddCommand
             string apiNamespace = $"{pluginsRoot}.{entity}.CustomApis";
             string relativePath = Path.Combine(entity!, "CustomApis", $"{testClass}.cs");
             string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName);
-            return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})");
+            return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})", HasFlag(args, "--json"));
         }
     }
 
@@ -232,10 +240,10 @@ internal static class AddCommand
         string ns = $"{rootNamespace}.{entity}.Plugins";
         string relativePath = Path.Combine(entity!, "Plugins", $"{name}.cs");
         string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, filteringCall);
-        return WriteFile(projectDir, relativePath, content, force, $"plugin {name} ({message} {entity})");
+        return WriteFile(projectDir, relativePath, content, force, $"plugin {name} ({message} {entity})", HasFlag(args, "--json"));
     }
 
-    private static int AddService(string name, string? entity, bool force, string projectDir, string rootNamespace, string modelsNamespace)
+    private static int AddService(string name, string? entity, bool force, string projectDir, string rootNamespace, string modelsNamespace, bool json)
     {
         if (string.IsNullOrWhiteSpace(entity))
         {
@@ -246,8 +254,8 @@ internal static class AddCommand
         string ns = $"{rootNamespace}.{entity}.Services";
         string relativePath = Path.Combine(entity!, "Services", $"{name}.cs");
         string content = AddServiceFile(ns, interfaceName, name, entity!, modelsNamespace);
-        int result = WriteFile(projectDir, relativePath, content, force, $"service {name} (scoped to {entity})");
-        if (result == ExitSuccess)
+        int result = WriteFile(projectDir, relativePath, content, force, $"service {name} (scoped to {entity})", json);
+        if (result == ExitSuccess && !json)
         {
             Console.WriteLine("  Register it from your plugin's ConfigureServices(...):");
             Console.WriteLine($"    services.AddScoped<{interfaceName}>(r => new {name}(r.GetRequiredService<IOrganizationService>()));");
@@ -308,18 +316,18 @@ internal static class AddCommand
             string ns = $"{rootNamespace}.GlobalCustomApis";
             string relativePath = Path.Combine("GlobalCustomApis", $"{name}.cs");
             string content = AddGlobalCustomApiFile(ns, name, uniqueName, operation);
-            return WriteFile(projectDir, relativePath, content, force, $"global Custom API {name} ({uniqueName})");
+            return WriteFile(projectDir, relativePath, content, force, $"global Custom API {name} ({uniqueName})", HasFlag(args, "--json"));
         }
         else
         {
             string ns = $"{rootNamespace}.{entity}.CustomApis";
             string relativePath = Path.Combine(entity!, "CustomApis", $"{name}.cs");
             string content = AddBoundCustomApiFile(ns, name, uniqueName, entity!, modelsNamespace, operation);
-            return WriteFile(projectDir, relativePath, content, force, $"Custom API {name} bound to {entity} ({uniqueName})");
+            return WriteFile(projectDir, relativePath, content, force, $"Custom API {name} bound to {entity} ({uniqueName})", HasFlag(args, "--json"));
         }
     }
 
-    private static int WriteFile(string projectDir, string relativePath, string content, bool force, string description)
+    private static int WriteFile(string projectDir, string relativePath, string content, bool force, string description, bool json = false)
     {
         string fullPath = Path.Combine(projectDir, relativePath);
         if (File.Exists(fullPath) && !force)
@@ -329,10 +337,24 @@ internal static class AddCommand
 
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllText(fullPath, content);
-        Console.WriteLine($"Created {description}");
-        Console.WriteLine($"  {fullPath}");
+        if (json)
+        {
+            Console.WriteLine(BuildAddReport(description, [fullPath]));
+        }
+        else
+        {
+            Console.WriteLine($"Created {description}");
+            Console.WriteLine($"  {fullPath}");
+        }
+
         return ExitSuccess;
     }
+
+    // The --json success report: what was added and the file(s) it created/updated.
+    internal static string BuildAddReport(string description, string[] files) =>
+        System.Text.Json.JsonSerializer.Serialize(
+            new { description, created = files },
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
     // Resolves the target .csproj: an explicit path/dir, or the single .csproj in the current directory.
     private static bool TryResolveProject(string? requested, out string projectFile, out string error)

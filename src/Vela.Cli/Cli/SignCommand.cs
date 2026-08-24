@@ -82,7 +82,8 @@ internal static class SignCommand
             PfxBase64: pfxBase64,
             PfxPassword: pfxPassword,
             PfxCredentialTarget: pfxCredential,
-            TimestampUrl: timestamp);
+            TimestampUrl: timestamp,
+            Json: HasFlag(args, "--json"));
         return true;
     }
 
@@ -113,7 +114,7 @@ internal static class SignCommand
 
             if (!string.IsNullOrWhiteSpace(options.Fingerprint))
             {
-                Console.WriteLine($"Signing '{options.PackagePath}' with certificate fingerprint {options.Fingerprint} ...");
+                if (!options.Json) { Console.WriteLine($"Signing '{options.PackagePath}' with certificate fingerprint {options.Fingerprint} ..."); }
                 psi.ArgumentList.Add("--certificate-fingerprint");
                 psi.ArgumentList.Add(options.Fingerprint);
             }
@@ -169,7 +170,7 @@ internal static class SignCommand
                 }
 
                 string source = tempPfx is null ? $"'{pfxFile}'" : "--pfx-base64";
-                Console.WriteLine($"Signing '{options.PackagePath}' with PFX {source} ...");
+                if (!options.Json) { Console.WriteLine($"Signing '{options.PackagePath}' with PFX {source} ..."); }
                 psi.ArgumentList.Add("--certificate-path");
                 psi.ArgumentList.Add(pfxFile);
                 psi.ArgumentList.Add("--certificate-password");
@@ -200,7 +201,7 @@ internal static class SignCommand
                 return Fail($"dotnet nuget sign failed (exit {process.ExitCode}).{detail}", ExitParseError, includeUsage: false);
             }
 
-            Console.WriteLine($"Signed: {options.PackagePath}");
+            Console.WriteLine(options.Json ? BuildSignReport(options) : $"Signed: {options.PackagePath}");
             return ExitSuccess;
         }
         catch (Exception ex)
@@ -283,6 +284,18 @@ internal static class SignCommand
             public static extern void CredFree(IntPtr credentialPtr);
         }
     }
+
+    // The --json success report: the signed package, the method used and the timestamp authority.
+    internal static string BuildSignReport(SignOptions options) =>
+        System.Text.Json.JsonSerializer.Serialize(
+            new
+            {
+                package = options.PackagePath,
+                signed = true,
+                method = options.Fingerprint != null ? "fingerprint" : "pfx",
+                timestampUrl = options.TimestampUrl,
+            },
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 }
 
 /// <summary>Parsed options for <c>vela sign</c>.</summary>
@@ -293,7 +306,8 @@ internal sealed record SignOptions(
     string? PfxBase64,
     string? PfxPassword,
     string? PfxCredentialTarget,
-    string TimestampUrl)
+    string TimestampUrl,
+    bool Json = false)
 {
     public const string DefaultTimestampUrl = "http://timestamp.digicert.com";
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using static Vela.Cli.CliExitCodes;
 using static Vela.Cli.OutputWriter;
 using static Vela.Cli.ScaffoldTemplates;
@@ -54,7 +55,8 @@ internal static class ProjectScaffolder
 
         if (options.ManagedIdentity && !options.IncludeIntegrations)
         {
-            Console.WriteLine("Warning: --managed-identity applies to the Integrations project, which is excluded; ignoring it.");
+            // stderr so it never pollutes the --json report on stdout.
+            Console.Error.WriteLine("Warning: --managed-identity applies to the Integrations project, which is excluded; ignoring it.");
         }
 
         List<ProjectEntry> projects = [];
@@ -143,6 +145,29 @@ internal static class ProjectScaffolder
             Write(Path.Combine("src", consoleName, "Program.cs"), ConsoleProgram(prefix));
         }
 
+        // ---- WebResources (optional, TypeScript) ----
+        // An opt-in JS/TS SDK project (.esproj) so Visual Studio "Build" runs npm. Its src/generated holds the
+        // regenerated form models (vela models --forms --lang ts); src/ is hand-written form/ribbon/shared code.
+        string webResourcesName = $"{prefix}.WebResources";
+        if (options.IncludeWebResources)
+        {
+            projects.Add(new ProjectEntry(
+                webResourcesName,
+                $"src\\{webResourcesName}\\{webResourcesName}.esproj",
+                StableGuid(webResourcesName),
+                JavaScriptProjectTypeGuid));
+
+            Write(Path.Combine("src", webResourcesName, $"{webResourcesName}.esproj"), WebResourcesEsproj());
+            Write(Path.Combine("src", webResourcesName, "package.json"), WebResourcesPackageJson(prefix));
+            Write(Path.Combine("src", webResourcesName, "tsconfig.json"), WebResourcesTsconfig());
+            Write(Path.Combine("src", webResourcesName, "tsup.config.ts"), WebResourcesTsupConfig(options.WebResourceNamespace, options.WebResourcesFolder));
+            Write(Path.Combine("src", webResourcesName, "vitest.config.ts"), WebResourcesVitestConfig());
+            Write(Path.Combine("src", webResourcesName, ".gitignore"), WebResourcesGitignore(options.WebResourcesFolder));
+            Write(Path.Combine("src", webResourcesName, "src", "account", "main.ts"), WebResourcesExampleForm());
+            Write(Path.Combine("src", webResourcesName, "src", "generated", ".gitkeep"), string.Empty);
+            Write(Path.Combine("src", webResourcesName, "test", "account.test.ts"), WebResourcesExampleTest());
+        }
+
         // ---- Solution-wide files ----
         Write("Directory.Build.props", DirectoryBuildProps());
         Write($"{options.SolutionName}.sln", Solution(projects));
@@ -151,6 +176,12 @@ internal static class ProjectScaffolder
         // Keep the local feed folder in the tree so restore has a valid source even before a package is dropped in.
         Write(Path.Combine("local-packages", ".gitkeep"), string.Empty);
         Write("README.md", RootReadme(options));
+
+        if (options.Json)
+        {
+            Console.WriteLine(BuildScaffoldReport(options.SolutionName, root, fileCount, projects));
+            return ExitSuccess;
+        }
 
         Console.WriteLine($"Created {options.SolutionName} ({fileCount} files) at {root}");
         Console.WriteLine("Projects:");
@@ -173,6 +204,23 @@ internal static class ProjectScaffolder
 
         Console.WriteLine($"  dotnet pack src/{pluginsName} -c Release -o artifacts");
         Console.WriteLine($"  vela plan --package artifacts/{pluginsName}.1.0.0.nupkg --interactive --verbose");
+        if (options.IncludeWebResources)
+        {
+            Console.WriteLine($"  cd src/{webResourcesName} && npm install && npm run build   # bundle the form web resources");
+        }
+
         return ExitSuccess;
     }
+
+    // The --json success report: the solution, its root, the file count and the generated project names.
+    internal static string BuildScaffoldReport(string solution, string root, int fileCount, IReadOnlyList<ProjectEntry> projects) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                solution,
+                root,
+                files = fileCount,
+                projects = projects.Select(p => p.Name).ToArray(),
+            },
+            new JsonSerializerOptions { WriteIndented = true });
 }

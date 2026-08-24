@@ -167,12 +167,12 @@ static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptio
             .Select(x => new { x.Kind, x.Type, definition = x.Definition })
             .ToArray();
 
-        var localCustomApis = local.Items.Where(x => !IsStep(x))
+        var localCustomApis = local.Items.Where(x => !IsStep(x) && !IsWebResource(x))
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .Select(x => new { x.Kind, x.Type, definition = x.Definition })
             .ToArray();
 
-        var currentCustomApis = current.Items.Where(x => !IsStep(x))
+        var currentCustomApis = current.Items.Where(x => !IsStep(x) && !IsWebResource(x))
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .Select(x => new { x.Kind, x.Type, definition = x.Definition })
             .ToArray();

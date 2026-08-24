@@ -59,6 +59,13 @@ internal static partial class DataverseRegistration
         items.AddRange(GetCustomApiItems(service, pluginTypes, jsonOptions));
     }
 
+    // Web resources reconcile independently and only when a web resources root is given, so a plugin-only run
+    // never reads (and therefore never deletes) them. Scoped to the target solution (componenttype 61).
+    if (!string.IsNullOrWhiteSpace(options.WebResourcesRoot) && !string.IsNullOrWhiteSpace(options.SolutionUniqueName))
+    {
+        items.AddRange(ReadWebResourcesInSolution(service, options.SolutionUniqueName!, jsonOptions));
+    }
+
     return new RegistrationState(
         SourceAssemblies: sourceAssemblies,
         SourceAssemblyPayloads: [],

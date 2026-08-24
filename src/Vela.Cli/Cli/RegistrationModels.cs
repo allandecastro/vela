@@ -8,7 +8,7 @@ public sealed class DataverseConnectionException : Exception
     public DataverseConnectionException(string message) : base(message) { }
     public DataverseConnectionException(string message, Exception innerException) : base(message, innerException) { }
 }
-public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool Execute, bool Interactive, bool Strict, bool Verbose);
+public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool Execute, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null);
 public sealed record ExtractedPackage(string PackagePath, string TempDirectory, string PrimaryAssemblyPath, string[] RegistrableAssemblyPaths);
 public sealed record AssemblyPayload(string AssemblyName, string AssemblyPath);
 public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath);
