@@ -30,11 +30,16 @@ internal static partial class DataverseRegistration
         : new SolutionScopedOrganizationService(service, solutionUniqueName!);
 
     List<RegistrationItem> removedSteps = diff.Removed.Where(IsStep).ToList();
-    List<RegistrationItem> removedApis = diff.Removed.Where(x => !IsStep(x)).ToList();
-    List<RegistrationItem> addedApis = diff.Added.Where(x => !IsStep(x)).ToList();
+    List<RegistrationItem> removedApis = diff.Removed.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
+    List<RegistrationItem> addedApis = diff.Added.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
     List<RegistrationChange> changedApis = diff.Changed.Where(x => string.Equals(x.Kind, "custom-api", StringComparison.OrdinalIgnoreCase)).ToList();
     List<RegistrationItem> addedSteps = diff.Added.Where(IsStep).ToList();
     List<RegistrationChange> changedSteps = diff.Changed.Where(x => string.Equals(x.Kind, "step", StringComparison.OrdinalIgnoreCase)).ToList();
+
+    // Web resources reconcile independently of plugins/Custom APIs (folder mirror + publish).
+    List<RegistrationItem> removedWebResources = diff.Removed.Where(IsWebResource).ToList();
+    List<RegistrationItem> addedWebResources = diff.Added.Where(IsWebResource).ToList();
+    List<RegistrationChange> changedWebResources = diff.Changed.Where(x => string.Equals(x.Kind, "web-resource", StringComparison.OrdinalIgnoreCase)).ToList();
 
     // Ordered list of every operation this apply will perform, used to produce a resume report if
     // the run fails partway through (Dataverse has no cross-entity transaction).
@@ -47,6 +52,14 @@ internal static partial class DataverseRegistration
     planned.AddRange(changedApis.Select(x => $"update custom-api {x.Type}"));
     planned.AddRange(addedSteps.Select(x => $"create step {x.Type}"));
     planned.AddRange(changedSteps.Select(x => $"update step {x.Type}"));
+    planned.AddRange(removedWebResources.Select(x => $"delete web-resource {x.Type}"));
+    planned.AddRange(addedWebResources.Select(x => $"create web-resource {x.Type}"));
+    planned.AddRange(changedWebResources.Select(x => $"update web-resource {x.Type}"));
+    bool hasWebResourceWrites = addedWebResources.Count > 0 || changedWebResources.Count > 0;
+    if (hasWebResourceWrites)
+    {
+        planned.Add("publish web resource(s)");
+    }
 
     int done = 0;
     try
@@ -159,6 +172,33 @@ internal static partial class DataverseRegistration
         foreach (RegistrationChange change in changedSteps)
         {
             UpsertStep(svc, pluginTypeIds, change.After, verbose, metadataCache, secureConfigByStepKey);
+            done++;
+        }
+
+        // Web resources: delete removed, upsert added/changed, then publish the writes so they go live. Create/
+        // update flow through the solution-scoped service (componenttype 61); publish uses the raw service.
+        foreach (RegistrationItem item in removedWebResources)
+        {
+            DeleteWebResourceByName(service, TryGetString(item.Definition, "name") ?? item.Type);
+            done++;
+        }
+
+        List<Guid> webResourcesToPublish = [];
+        foreach (RegistrationItem item in addedWebResources)
+        {
+            webResourcesToPublish.Add(UpsertWebResource(svc, item.Definition, verbose));
+            done++;
+        }
+
+        foreach (RegistrationChange change in changedWebResources)
+        {
+            webResourcesToPublish.Add(UpsertWebResource(svc, change.After, verbose));
+            done++;
+        }
+
+        if (hasWebResourceWrites)
+        {
+            PublishWebResources(service, webResourcesToPublish);
             done++;
         }
     }

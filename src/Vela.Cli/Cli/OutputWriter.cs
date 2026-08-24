@@ -192,9 +192,9 @@ internal static class OutputWriter
 
         console.MarkupLine("[bold]Commands:[/]");
         WriteCommand(console, "plan", "Preview registration changes; never writes to Dataverse.");
-        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose]");
+        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--webresources <folder>] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose]");
         WriteCommand(console, "apply", "Same inputs as plan; add --execute to write the changes.");
-        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--execute] [--strict] [--verbose]");
+        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder>] [--execute] [--strict] [--verbose]");
         WriteCommand(console, "inspect", "Compare local packages with the live environment.");
         Console.WriteLine("      [same args as plan] [--verbose]");
         WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");

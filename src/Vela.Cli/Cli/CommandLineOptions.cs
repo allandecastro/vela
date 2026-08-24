@@ -19,6 +19,18 @@ internal static class CommandLineOptions
         exitCode = ExitSuccess;
         bool interactive = args.Any(x => string.Equals(x, "--interactive", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-i", StringComparison.OrdinalIgnoreCase));
 
+        // A web resources root makes plugin packages optional: you can deploy web resources on their own.
+        string? webResourcesRoot = TryReadOption(args, "--webresources");
+        if (!string.IsNullOrWhiteSpace(webResourcesRoot))
+        {
+            webResourcesRoot = Path.GetFullPath(webResourcesRoot);
+            if (!Directory.Exists(webResourcesRoot))
+            {
+                exitCode = Fail($"Web resources folder not found: {webResourcesRoot}", ExitFileNotFound, includeUsage: false);
+                return false;
+            }
+        }
+
         List<string> packagePaths = [];
         packagePaths.AddRange(ReadMultiOption(args, "--package"));
         packagePaths.AddRange(ReadMultiOption(args, "-p"));
@@ -45,7 +57,8 @@ internal static class CommandLineOptions
             }
         }
 
-        if (packagePaths.Count == 0)
+        // With a web resources root, running without any plugin package is valid (web-resource-only deploy).
+        if (packagePaths.Count == 0 && string.IsNullOrWhiteSpace(webResourcesRoot))
         {
             if (interactive)
             {
@@ -116,7 +129,8 @@ internal static class CommandLineOptions
             Execute: args.Any(x => string.Equals(x, "--execute", StringComparison.OrdinalIgnoreCase)),
             Interactive: interactive,
             Strict: args.Any(x => string.Equals(x, "--strict", StringComparison.OrdinalIgnoreCase)),
-            Verbose: args.Any(x => string.Equals(x, "--verbose", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-v", StringComparison.OrdinalIgnoreCase)));
+            Verbose: args.Any(x => string.Equals(x, "--verbose", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-v", StringComparison.OrdinalIgnoreCase)),
+            WebResourcesRoot: webResourcesRoot);
         return true;
     }
 

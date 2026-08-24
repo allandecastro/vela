@@ -106,6 +106,12 @@ internal static class PackageScanner
         }
     }
 
+    // A web resources root adds web-resource items alongside the plugin/Custom API items (folder mirror).
+    if (!string.IsNullOrWhiteSpace(options.WebResourcesRoot))
+    {
+        items.AddRange(WebResourceScanner.Scan(options.WebResourcesRoot!, jsonOptions));
+    }
+
     return new RegistrationState(
         SourceAssemblies: sourceAssemblies.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.Ordinal).ToArray(),
         SourceAssemblyPayloads: sourceAssemblyPayloads
