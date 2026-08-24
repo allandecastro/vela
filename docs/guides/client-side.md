@@ -13,10 +13,15 @@ Dataverse. The CLI only automates the Dataverse-facing steps (generate, deploy);
 ```text
 vela init --web-resources         # 1. scaffold the {prefix}.WebResources project (once)
 vela models --forms --lang ts     # 2. generate typed FormModel .ts from your published forms
-# 3. write form scripts against the models, in your editor
-npm run build                     # 4. bundle with tsup (not the CLI)
-vela apply --webresources ...     # 5. deploy the bundle + static assets, published
+vela add form-script <entity>     # 3. scaffold + register a form script for a table (repeat per form)
+# 4. fill in the form script against the model, in your editor
+npm run build                     # 5. bundle with tsup (not the CLI)
+vela apply --webresources ...     # 6. deploy the bundle + static assets, published
 ```
+
+Each form web resource is one entry in `web-resources.entries.ts` (`<prefix>_/js/<entity>/Forms/main` -> its
+`src/<entity>/Forms/main.ts` source). `tsup.config.ts` imports that map, and `vela add form-script <entity>`
+maintains it, so you never edit the tsup config by hand. `add form-script` is idempotent.
 
 ## 1. Scaffold the web resources project
 

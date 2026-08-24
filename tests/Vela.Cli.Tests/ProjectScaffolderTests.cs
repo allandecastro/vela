@@ -339,11 +339,12 @@ public class ProjectScaffolderTests
             AssertFileExists(root, "src", "Zava.WebResources", "package.json");
             AssertFileExists(root, "src", "Zava.WebResources", "tsconfig.json");
             AssertFileExists(root, "src", "Zava.WebResources", "tsup.config.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", "web-resources.entries.ts");
             AssertFileExists(root, "src", "Zava.WebResources", "vitest.config.ts");
             AssertFileExists(root, "src", "Zava.WebResources", ".gitignore");
-            AssertFileExists(root, "src", "Zava.WebResources", "src", "account", "main.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", "src", "account", "Forms", "main.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", "src", "account", "Forms", "main.test.ts");
             AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", ".gitkeep");
-            AssertFileExists(root, "src", "Zava.WebResources", "test", "account.test.ts");
             AssertFileExists(root, "src", "Zava.WebResources", "test", "entries.test.ts");
 
             // The .sln references the .esproj under the JavaScript project type id.
@@ -351,27 +352,34 @@ public class ProjectScaffolderTests
             Assert.Contains("Zava.WebResources.esproj", sln);
             Assert.Contains(ScaffoldTemplates.JavaScriptProjectTypeGuid, sln);
 
-            // tsup carries the chosen global name, output folder, a prefixed entry (first segment of the global),
-            // and an outExtension that forces `.js` (so the deployed name never carries tsup's `.global` suffix).
+            // tsup carries the chosen global name and output folder, imports the entry map, and forces the `.js`
+            // out-extension (so the deployed name never carries tsup's `.global` suffix).
             string tsup = File.ReadAllText(Path.Combine(project, "tsup.config.ts"));
             Assert.Contains("globalName: 'adc.sales'", tsup);
             Assert.Contains("outDir: 'dist'", tsup);
-            Assert.Contains("'adc_/js/account/Forms/main': 'src/account/main.ts'", tsup);
+            Assert.Contains("import { entries } from './web-resources.entries'", tsup);
+            Assert.Contains("entry: entries,", tsup);
             Assert.Contains("outExtension()", tsup);
             Assert.Contains("return { js: '.js' };", tsup);
+
+            // The entry map is the source of truth: it carries the prefixed name -> source module mirror.
+            string entries = File.ReadAllText(Path.Combine(project, "web-resources.entries.ts"));
+            Assert.Contains("export const entries = {", entries);
+            Assert.Contains("'adc_/js/account/Forms/main': 'src/account/Forms/main.ts',", entries);
+            Assert.Contains("} as const;", entries);
 
             Assert.Contains("\"name\": \"zava-webresources\"", File.ReadAllText(Path.Combine(project, "package.json")));
             Assert.Contains("dist/", File.ReadAllText(Path.Combine(project, ".gitignore")));
 
             // The example entry exports both onLoad and onSave, so the freshly scaffolded entries guard passes.
-            string main = File.ReadAllText(Path.Combine(project, "src", "account", "main.ts"));
+            string main = File.ReadAllText(Path.Combine(project, "src", "account", "Forms", "main.ts"));
             Assert.Contains("export function onLoad(", main);
             Assert.Contains("export function onSave(", main);
 
-            // The entries guard reads tsup.config.ts and asserts each entry module exports the FormXML handlers.
+            // The entries guard reads the entry map and asserts each entry module exports the FormXML handlers.
             string entriesTest = File.ReadAllText(Path.Combine(project, "test", "entries.test.ts"));
             Assert.Contains("exports onLoad/onSave", entriesTest);
-            Assert.Contains("import config from '../tsup.config'", entriesTest);
+            Assert.Contains("import { entries } from '../web-resources.entries'", entriesTest);
         });
     }
 

@@ -161,11 +161,12 @@ internal static class ProjectScaffolder
             Write(Path.Combine("src", webResourcesName, "package.json"), WebResourcesPackageJson(prefix));
             Write(Path.Combine("src", webResourcesName, "tsconfig.json"), WebResourcesTsconfig());
             Write(Path.Combine("src", webResourcesName, "tsup.config.ts"), WebResourcesTsupConfig(options.WebResourceNamespace, options.WebResourcesFolder));
+            Write(Path.Combine("src", webResourcesName, "web-resources.entries.ts"), WebResourcesEntries(options.WebResourceNamespace));
             Write(Path.Combine("src", webResourcesName, "vitest.config.ts"), WebResourcesVitestConfig());
             Write(Path.Combine("src", webResourcesName, ".gitignore"), WebResourcesGitignore(options.WebResourcesFolder));
-            Write(Path.Combine("src", webResourcesName, "src", "account", "main.ts"), WebResourcesExampleForm());
+            Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.ts"), WebResourcesExampleForm());
+            Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.test.ts"), WebResourcesExampleFormTest());
             Write(Path.Combine("src", webResourcesName, "src", "generated", ".gitkeep"), string.Empty);
-            Write(Path.Combine("src", webResourcesName, "test", "account.test.ts"), WebResourcesExampleTest());
             Write(Path.Combine("src", webResourcesName, "test", "entries.test.ts"), WebResourcesEntriesTest());
         }
 
@@ -208,6 +209,7 @@ internal static class ProjectScaffolder
         if (options.IncludeWebResources)
         {
             Console.WriteLine($"  cd src/{webResourcesName} && npm install && npm run build   # bundle the form web resources");
+            Console.WriteLine($"  vela apply --webresources src/{webResourcesName}/{options.WebResourcesFolder} --solution <name> --execute --interactive   # deploy them");
         }
 
         return ExitSuccess;
