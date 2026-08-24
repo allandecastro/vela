@@ -23,6 +23,54 @@ public class ScaffoldOptionsTests
     }
 
     [Fact]
+    public void TryParse_WebResources_OffByDefault()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["MySolution"], out ScaffoldOptions options, out _));
+        Assert.False(options.IncludeWebResources);
+    }
+
+    [Fact]
+    public void TryParse_WebResourcesFlag_EnablesWithDefaults()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["MySolution", "--web-resources"], out ScaffoldOptions options, out _));
+
+        Assert.True(options.IncludeWebResources);
+        Assert.Equal(ScaffoldOptions.SuggestGlobalName("MySolution"), options.WebResourceNamespace); // "mysolution"
+        Assert.Equal("web", options.WebResourcesFolder);
+    }
+
+    [Fact]
+    public void TryParse_WebResources_ReadsNamespaceAndFolder()
+    {
+        Assert.True(ScaffoldOptions.TryParse(
+            ["MySolution", "--web-resources", "--web-resources-namespace", "adc.sales", "--web-resources-folder", "dist"],
+            out ScaffoldOptions options, out _));
+
+        Assert.Equal("adc.sales", options.WebResourceNamespace);
+        Assert.Equal("dist", options.WebResourcesFolder);
+    }
+
+    [Fact]
+    public void TryParse_InvalidWebResourcesNamespace_Fails()
+    {
+        bool ok = ScaffoldOptions.TryParse(
+            ["MySolution", "--web-resources", "--web-resources-namespace", "9bad"], out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParse_InvalidWebResourcesFolder_Fails()
+    {
+        bool ok = ScaffoldOptions.TryParse(
+            ["MySolution", "--web-resources", "--web-resources-folder", "a/b"], out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
     public void TryParse_ReadsNameFromPositional()
     {
         bool ok = ScaffoldOptions.TryParse(["ZavaSales"], out ScaffoldOptions options, out _);

@@ -143,6 +143,29 @@ internal static class ProjectScaffolder
             Write(Path.Combine("src", consoleName, "Program.cs"), ConsoleProgram(prefix));
         }
 
+        // ---- WebResources (optional, TypeScript) ----
+        // An opt-in JS/TS SDK project (.esproj) so Visual Studio "Build" runs npm. Its src/generated holds the
+        // regenerated form models (vela models --forms --lang ts); src/ is hand-written form/ribbon/shared code.
+        string webResourcesName = $"{prefix}.WebResources";
+        if (options.IncludeWebResources)
+        {
+            projects.Add(new ProjectEntry(
+                webResourcesName,
+                $"src\\{webResourcesName}\\{webResourcesName}.esproj",
+                StableGuid(webResourcesName),
+                JavaScriptProjectTypeGuid));
+
+            Write(Path.Combine("src", webResourcesName, $"{webResourcesName}.esproj"), WebResourcesEsproj());
+            Write(Path.Combine("src", webResourcesName, "package.json"), WebResourcesPackageJson(prefix));
+            Write(Path.Combine("src", webResourcesName, "tsconfig.json"), WebResourcesTsconfig());
+            Write(Path.Combine("src", webResourcesName, "tsup.config.ts"), WebResourcesTsupConfig(options.WebResourceNamespace, options.WebResourcesFolder));
+            Write(Path.Combine("src", webResourcesName, "vitest.config.ts"), WebResourcesVitestConfig());
+            Write(Path.Combine("src", webResourcesName, ".gitignore"), WebResourcesGitignore(options.WebResourcesFolder));
+            Write(Path.Combine("src", webResourcesName, "src", "account", "main.ts"), WebResourcesExampleForm());
+            Write(Path.Combine("src", webResourcesName, "src", "generated", ".gitkeep"), string.Empty);
+            Write(Path.Combine("src", webResourcesName, "test", "account.test.ts"), WebResourcesExampleTest());
+        }
+
         // ---- Solution-wide files ----
         Write("Directory.Build.props", DirectoryBuildProps());
         Write($"{options.SolutionName}.sln", Solution(projects));
@@ -173,6 +196,11 @@ internal static class ProjectScaffolder
 
         Console.WriteLine($"  dotnet pack src/{pluginsName} -c Release -o artifacts");
         Console.WriteLine($"  vela plan --package artifacts/{pluginsName}.1.0.0.nupkg --interactive --verbose");
+        if (options.IncludeWebResources)
+        {
+            Console.WriteLine($"  cd src/{webResourcesName} && npm install && npm run build   # bundle the form web resources");
+        }
+
         return ExitSuccess;
     }
 }

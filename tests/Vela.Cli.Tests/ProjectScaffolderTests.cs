@@ -305,6 +305,62 @@ public class ProjectScaffolderTests
         return process.ExitCode;
     }
 
+    [Fact]
+    public void Generate_WithoutWebResources_OmitsTheProject()
+    {
+        RunInTempDir(temp =>
+        {
+            ProjectScaffolder.Generate(Options(temp));
+            string root = Path.Combine(temp, "ZavaSales");
+
+            Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.WebResources")));
+            Assert.DoesNotContain(".esproj", File.ReadAllText(Path.Combine(root, "ZavaSales.sln")));
+        });
+    }
+
+    [Fact]
+    public void Generate_WithWebResources_CreatesProjectAndWiresTheSolution()
+    {
+        RunInTempDir(temp =>
+        {
+            ScaffoldOptions options = Options(temp) with
+            {
+                IncludeWebResources = true,
+                WebResourceNamespace = "adc.sales",
+                WebResourcesFolder = "dist",
+            };
+
+            int exit = ProjectScaffolder.Generate(options);
+            Assert.Equal(ExitSuccess, exit);
+
+            string root = Path.Combine(temp, "ZavaSales");
+            string project = Path.Combine(root, "src", "Zava.WebResources");
+            AssertFileExists(root, "src", "Zava.WebResources", "Zava.WebResources.esproj");
+            AssertFileExists(root, "src", "Zava.WebResources", "package.json");
+            AssertFileExists(root, "src", "Zava.WebResources", "tsconfig.json");
+            AssertFileExists(root, "src", "Zava.WebResources", "tsup.config.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", "vitest.config.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", ".gitignore");
+            AssertFileExists(root, "src", "Zava.WebResources", "src", "account", "main.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", ".gitkeep");
+            AssertFileExists(root, "src", "Zava.WebResources", "test", "account.test.ts");
+
+            // The .sln references the .esproj under the JavaScript project type id.
+            string sln = File.ReadAllText(Path.Combine(root, "ZavaSales.sln"));
+            Assert.Contains("Zava.WebResources.esproj", sln);
+            Assert.Contains(ScaffoldTemplates.JavaScriptProjectTypeGuid, sln);
+
+            // tsup carries the chosen global name, output folder and a prefixed entry (first segment of the global).
+            string tsup = File.ReadAllText(Path.Combine(project, "tsup.config.ts"));
+            Assert.Contains("globalName: 'adc.sales'", tsup);
+            Assert.Contains("outDir: 'dist'", tsup);
+            Assert.Contains("'adc_/js/account/Forms/main': 'src/account/main.ts'", tsup);
+
+            Assert.Contains("\"name\": \"zava-webresources\"", File.ReadAllText(Path.Combine(project, "package.json")));
+            Assert.Contains("dist/", File.ReadAllText(Path.Combine(project, ".gitignore")));
+        });
+    }
+
     private static void AssertFileExists(string root, params string[] segments)
     {
         string path = root;
