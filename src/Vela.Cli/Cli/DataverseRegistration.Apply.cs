@@ -52,10 +52,16 @@ internal static partial class DataverseRegistration
     planned.AddRange(changedApis.Select(x => $"update custom-api {x.Type}"));
     planned.AddRange(addedSteps.Select(x => $"create step {x.Type}"));
     planned.AddRange(changedSteps.Select(x => $"update step {x.Type}"));
+    bool hasWebResourceWrites = addedWebResources.Count > 0 || changedWebResources.Count > 0;
+    bool validatesWebResourcePrefix = hasWebResourceWrites && !string.IsNullOrWhiteSpace(solutionUniqueName);
+    if (validatesWebResourcePrefix)
+    {
+        planned.Add("validate web resource publisher prefix");
+    }
+
     planned.AddRange(removedWebResources.Select(x => $"delete web-resource {x.Type}"));
     planned.AddRange(addedWebResources.Select(x => $"create web-resource {x.Type}"));
     planned.AddRange(changedWebResources.Select(x => $"update web-resource {x.Type}"));
-    bool hasWebResourceWrites = addedWebResources.Count > 0 || changedWebResources.Count > 0;
     if (hasWebResourceWrites)
     {
         planned.Add("publish web resource(s)");
@@ -177,7 +183,7 @@ internal static partial class DataverseRegistration
 
         // Safeguard: every web resource name must start with the solution's publisher prefix (its top-level folder),
         // or Dataverse rejects the create. Validate once, up front, before any web-resource mutation.
-        if (hasWebResourceWrites && !string.IsNullOrWhiteSpace(solutionUniqueName))
+        if (validatesWebResourcePrefix)
         {
             string prefix = ResolveSolutionCustomizationPrefix(service, solutionUniqueName!);
             string[] wrongPrefix = FindWebResourcesWithWrongPrefix(
@@ -189,13 +195,15 @@ internal static partial class DataverseRegistration
                 throw new InvalidOperationException(
                     $"Web resource name(s) must start with the solution publisher prefix '{prefix}_' (the top-level folder is the prefix): {string.Join(", ", wrongPrefix)}");
             }
+
+            done++; // "validate web resource publisher prefix"
         }
 
         // Web resources: delete removed, upsert added/changed, then publish the writes so they go live. Create/
         // update flow through the solution-scoped service (componenttype 61); publish uses the raw service.
         foreach (RegistrationItem item in removedWebResources)
         {
-            DeleteWebResourceByName(service, TryGetString(item.Definition, "name") ?? item.Type);
+            DeleteWebResourceByName(service, TryGetString(item.Definition, "name") ?? item.Type, verbose);
             done++;
         }
 

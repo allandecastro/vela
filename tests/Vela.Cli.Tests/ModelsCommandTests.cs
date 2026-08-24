@@ -120,7 +120,7 @@ public class ModelsCommandTests
                 new[] { new GeneratedModel("dup.ts", "x"), new GeneratedModel("dup.ts", "y") },
                 dir, overwrite: true, json: false, summarySuffix: "");
 
-            Assert.Equal(ExitParseError, exit);
+            Assert.Equal(ExitInvalidArguments, exit);
         }
         finally
         {

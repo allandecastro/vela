@@ -290,7 +290,7 @@ internal static class ModelsCommand
             .ToArray();
         if (duplicates.Length > 0)
         {
-            return Fail($"Generated file name collision: {string.Join(", ", duplicates)}.", ExitParseError, includeUsage: false);
+            return Fail($"Generated file name collision: {string.Join(", ", duplicates)}. Narrow the scope or rename to disambiguate.", ExitInvalidArguments, includeUsage: false);
         }
 
         Directory.CreateDirectory(outDir);

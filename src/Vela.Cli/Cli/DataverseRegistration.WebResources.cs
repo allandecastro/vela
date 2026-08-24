@@ -34,7 +34,7 @@ internal static partial class DataverseRegistration
         Entity? existing = FindWebResourceByName(svc, name);
         if (existing == null)
         {
-            LogOperation("web-resource", "create", name);
+            LogOperation("web-resource", "create", name, verbose: verbose);
             Entity created = new Entity("webresource")
             {
                 ["name"] = name,
@@ -45,7 +45,7 @@ internal static partial class DataverseRegistration
             return svc.Create(created);
         }
 
-        LogOperation("web-resource", "update", name);
+        LogOperation("web-resource", "update", name, verbose: verbose);
         Entity update = new Entity("webresource", existing.Id)
         {
             ["content"] = content,
@@ -55,7 +55,7 @@ internal static partial class DataverseRegistration
         return existing.Id;
     }
 
-    internal static void DeleteWebResourceByName(IOrganizationService service, string name)
+    internal static void DeleteWebResourceByName(IOrganizationService service, string name, bool verbose = false)
     {
         Entity? existing = FindWebResourceByName(service, name);
         if (existing == null)
@@ -63,7 +63,7 @@ internal static partial class DataverseRegistration
             return; // already gone: deletion is idempotent
         }
 
-        LogOperation("web-resource", "delete", name);
+        LogOperation("web-resource", "delete", name, verbose: verbose);
         service.Delete("webresource", existing.Id);
     }
 
