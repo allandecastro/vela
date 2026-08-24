@@ -36,7 +36,7 @@ public class ScaffoldOptionsTests
 
         Assert.True(options.IncludeWebResources);
         Assert.Equal(ScaffoldOptions.SuggestGlobalName("MySolution"), options.WebResourceNamespace); // "mysolution"
-        Assert.Equal("web", options.WebResourcesFolder);
+        Assert.Equal("dist", options.WebResourcesFolder);
     }
 
     [Fact]
