@@ -25,6 +25,11 @@ CLI line only.
 
 ### Added
 
+- Ribbon wiring foundation: a pure `RibbonDiffXml` generator turns a `RibbonRegistration` (commands + enable/
+  display rules) into classic ribbon XML with `JavaScriptFunction` actions and `CustomRule` rules, each
+  referencing its command web resource via `Library="$webresource:<name>"` (the web-resource solution
+  dependency). Output is validated against the official Microsoft Ribbon XSDs. Deploying the generated wiring
+  (modern `appaction` / solution import) is a follow-up.
 - `vela plan` / `vela apply --webresources <folder>` deploy web resources (form scripts, CSS, images, HTML, ...)
   as a third registration kind, mirroring the folder verbatim: each file's unique name is its path relative to the
   root (forward slashes), the type is inferred from the extension, and a content hash drives the diff. Changed and
