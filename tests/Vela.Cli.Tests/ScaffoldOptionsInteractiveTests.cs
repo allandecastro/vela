@@ -48,7 +48,7 @@ public sealed class ScaffoldOptionsInteractiveTests
     [Fact]
     public void Interactive_WebResources_Yes_Empty_Answers_Use_Defaults()
     {
-        // web-resources yes, empty namespace -> default (prefix lower-cased), empty folder -> "web".
+        // web-resources yes, empty namespace -> default (prefix lower-cased), empty folder -> "dist".
         bool ok = Parse("n\nn\nn\ny\n\n\n",
             ["--name", "DemoSol", "--prefix", "Demo", "--output", ".", "--interactive"],
             out ScaffoldOptions options);
@@ -56,7 +56,7 @@ public sealed class ScaffoldOptionsInteractiveTests
         Assert.True(ok);
         Assert.True(options.IncludeWebResources);
         Assert.Equal(ScaffoldOptions.SuggestGlobalName("Demo"), options.WebResourceNamespace); // "demo"
-        Assert.Equal("web", options.WebResourcesFolder);
+        Assert.Equal("dist", options.WebResourcesFolder);
     }
 
     [Fact]

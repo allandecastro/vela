@@ -40,7 +40,7 @@ internal sealed record ScaffoldOptions(
     bool ManagedIdentity = false,
     bool IncludeWebResources = false,
     string WebResourceNamespace = "",
-    string WebResourcesFolder = "web",
+    string WebResourcesFolder = "dist",
     bool Json = false)
 {
     // Solution name doubles as a folder + file name, so keep it to filename-safe characters.
@@ -174,7 +174,7 @@ internal sealed record ScaffoldOptions(
         }
 
         string webResourceNamespace = TryReadOption(args, "--web-resources-namespace") ?? string.Empty;
-        string webResourcesFolder = TryReadOption(args, "--web-resources-folder") ?? "web";
+        string webResourcesFolder = TryReadOption(args, "--web-resources-folder") ?? "dist";
         if (includeWebResources)
         {
             if (interactive && string.IsNullOrWhiteSpace(webResourceNamespace))
@@ -193,9 +193,9 @@ internal sealed record ScaffoldOptions(
                 return false;
             }
 
-            if (interactive && string.Equals(webResourcesFolder, "web", StringComparison.Ordinal) && !HasFlag(args, "--web-resources-folder"))
+            if (interactive && string.Equals(webResourcesFolder, "dist", StringComparison.Ordinal) && !HasFlag(args, "--web-resources-folder"))
             {
-                string? answer = Prompt("Web resources output folder (default: web):", allowEmpty: true);
+                string? answer = Prompt("Web resources output folder (default: dist):", allowEmpty: true);
                 if (!string.IsNullOrWhiteSpace(answer))
                 {
                     webResourcesFolder = answer.Trim();

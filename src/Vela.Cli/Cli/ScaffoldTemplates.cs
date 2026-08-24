@@ -125,6 +125,11 @@ export default defineConfig({
   clean: true,
   minify: true,
   sourcemap: true,
+  // Name the bundle `<entry>.js`. Without this tsup suffixes the iife format as `<entry>.global.js`, and the
+  // `.global` would leak into the deployed web resource name.
+  outExtension() {
+    return { js: '.js' };
+  },
 });
 """;
     }
@@ -163,15 +168,23 @@ node_modules/
 """;
 
     // An example form script. `globalName.Account.onLoad` is what FormXML's FunctionName references; the file
-    // itself is what `$webresource:<prefix>_/js/account/Forms/main.js` points at.
+    // itself is what `$webresource:<prefix>_/js/account/Forms/main.js` points at. It exports `onLoad` AND `onSave`
+    // so the entries guard (test/entries.test.ts) passes on a fresh scaffold; once you generate a model, replace
+    // the stubs with `export const { onLoad, onSave } = defineForm(Model, Form)`.
     public static string WebResourcesExampleForm() =>
 $$"""
 // Example form script (hand-written). Generated form models live in ./generated - regenerate them with
 //   vela models --forms --lang ts --solution <name> --out src/generated
-// then import a model and wrap it with VelaForm. This stub keeps the bundle building before you generate.
+// then import a model and wire the handlers with `defineForm` from vela-client, e.g.
+//   export const { onLoad, onSave } = defineForm(AccountMain, class extends VelaForm(AccountMain) {});
+// This stub keeps the bundle building - and every entry exporting onLoad/onSave - before you generate.
 
 export function onLoad(): void {
   // Your onLoad logic here.
+}
+
+export function onSave(): void {
+  // Your onSave logic here.
 }
 """;
 
@@ -184,6 +197,32 @@ describe('account form', () => {
   it('runs onLoad without throwing', () => {
     expect(() => onLoad()).not.toThrow();
   });
+});
+""";
+
+    // Structural guard: every tsup entry module must export onLoad and onSave. A form web resource whose source
+    // forgets the `export const { onLoad, onSave } = defineForm(...)` wiring builds a bundle that exposes nothing,
+    // silently. This test walks the entries in tsup.config.ts and fails the build (like the fixture drift-guard)
+    // the moment one stops exporting its FormXML handlers.
+    public static string WebResourcesEntriesTest() =>
+$$"""
+import { describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import config from '../tsup.config';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const entries = Object.values((config as { entry: Record<string, string> }).entry);
+
+describe('web resource entries expose their FormXML handlers', () => {
+  it('has at least one entry', () => expect(entries.length).toBeGreaterThan(0));
+  for (const src of entries) {
+    it(`${src} exports onLoad/onSave (defineForm wiring present)`, async () => {
+      const mod = await import(join(root, src));
+      expect(typeof mod.onLoad).toBe('function');
+      expect(typeof mod.onSave).toBe('function');
+    });
+  }
 });
 """;
 

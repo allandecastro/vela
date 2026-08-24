@@ -166,6 +166,7 @@ internal static class ProjectScaffolder
             Write(Path.Combine("src", webResourcesName, "src", "account", "main.ts"), WebResourcesExampleForm());
             Write(Path.Combine("src", webResourcesName, "src", "generated", ".gitkeep"), string.Empty);
             Write(Path.Combine("src", webResourcesName, "test", "account.test.ts"), WebResourcesExampleTest());
+            Write(Path.Combine("src", webResourcesName, "test", "entries.test.ts"), WebResourcesEntriesTest());
         }
 
         // ---- Solution-wide files ----

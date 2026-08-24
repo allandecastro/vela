@@ -70,12 +70,14 @@ src/
     src/
       account/main.ts             # hand-written form scripts (example)
       generated/                  # regenerated form models (never edited)
-    test/account.test.ts          # Vitest example
+    test/
+      account.test.ts             # Vitest example
+      entries.test.ts             # guard: every entry must export onLoad/onSave
 ```
 
 The bundle is built with **tsup** (`npm run build` / `npm run dev`), not the CLI, and exposes a dotted
 global named after **your** publisher prefix (`--web-resources-namespace`, default: the project prefix
-lower-cased), never "Vela". Its output folder (`--web-resources-folder`, default `web`) mirrors the Dataverse
+lower-cased), never "Vela". Its output folder (`--web-resources-folder`, default `dist`) mirrors the Dataverse
 web resource names and is what a later `vela apply --webresources` deploys. Regenerate the form models under
 `src/generated/` with [`vela models --forms --lang ts`](models.md). See the runtime library in the separate
 `vela-client` package for `VelaForm` and the typed accessors.
