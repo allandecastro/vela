@@ -129,6 +129,14 @@ internal static partial class DataverseRegistration
         return items.OrderBy(i => i.Type, StringComparer.Ordinal).ToArray();
     }
 
+    // A web resource unique name must start with the solution's publisher prefix + '_' (the real top-level folder),
+    // or Dataverse rejects the create with a cryptic error. Validate up front and fail clearly instead.
+    internal static bool HasPublisherPrefix(string name, string prefix) =>
+        name.StartsWith(prefix + "_", StringComparison.OrdinalIgnoreCase);
+
+    internal static string[] FindWebResourcesWithWrongPrefix(IEnumerable<string> names, string prefix) =>
+        names.Where(n => !HasPublisherPrefix(n, prefix)).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+
     private static Entity? FindWebResourceByName(IOrganizationService service, string name)
     {
         QueryExpression query = new QueryExpression("webresource") { ColumnSet = new ColumnSet("webresourceid", "name"), TopCount = 1 };

@@ -149,6 +149,25 @@ public class WebResourceApplyTests
         Assert.Empty(DataverseRegistration.ReadWebResourcesInSolution(svc, "Nope", Web));
     }
 
+    [Theory]
+    [InlineData("adc_/js/a.js", "adc", true)]
+    [InlineData("ADC_/js/a.js", "adc", true)] // prefix match is case-insensitive
+    [InlineData("other_/js/a.js", "adc", false)]
+    [InlineData("adc/js/a.js", "adc", false)] // needs the underscore
+    public void HasPublisherPrefix_Requires_Prefix_Underscore(string name, string prefix, bool expected)
+    {
+        Assert.Equal(expected, DataverseRegistration.HasPublisherPrefix(name, prefix));
+    }
+
+    [Fact]
+    public void FindWebResourcesWithWrongPrefix_Returns_The_Offenders_Sorted()
+    {
+        string[] wrong = DataverseRegistration.FindWebResourcesWithWrongPrefix(
+            new[] { "adc_/js/ok.js", "zzz_/js/bad.js", "aaa_/js/bad.js" }, "adc");
+
+        Assert.Equal(new[] { "aaa_/js/bad.js", "zzz_/js/bad.js" }, wrong);
+    }
+
     private static string ScannerHashFor(string relativePath, string content)
     {
         string root = Path.Combine(Path.GetTempPath(), "vela-wr-hash-" + Guid.NewGuid().ToString("N"));

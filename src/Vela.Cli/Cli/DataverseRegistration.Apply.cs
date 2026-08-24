@@ -175,6 +175,22 @@ internal static partial class DataverseRegistration
             done++;
         }
 
+        // Safeguard: every web resource name must start with the solution's publisher prefix (its top-level folder),
+        // or Dataverse rejects the create. Validate once, up front, before any web-resource mutation.
+        if (hasWebResourceWrites && !string.IsNullOrWhiteSpace(solutionUniqueName))
+        {
+            string prefix = ResolveSolutionCustomizationPrefix(service, solutionUniqueName!);
+            string[] wrongPrefix = FindWebResourcesWithWrongPrefix(
+                addedWebResources.Select(x => TryGetString(x.Definition, "name") ?? x.Type)
+                    .Concat(changedWebResources.Select(x => TryGetString(x.After, "name") ?? x.Type)),
+                prefix);
+            if (wrongPrefix.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Web resource name(s) must start with the solution publisher prefix '{prefix}_' (the top-level folder is the prefix): {string.Join(", ", wrongPrefix)}");
+            }
+        }
+
         // Web resources: delete removed, upsert added/changed, then publish the writes so they go live. Create/
         // update flow through the solution-scoped service (componenttype 61); publish uses the raw service.
         foreach (RegistrationItem item in removedWebResources)
