@@ -25,6 +25,12 @@ CLI line only.
 
 ### Added
 
+- `vela plan` / `vela apply --webresources <folder>` deploy web resources (form scripts, CSS, images, HTML, ...)
+  as a third registration kind, mirroring the folder verbatim: each file's unique name is its path relative to the
+  root (forward slashes), the type is inferred from the extension, and a content hash drives the diff. Changed and
+  created resources are published with `PublishXmlRequest`. Web resources reconcile independently and additively
+  (a plugin-only run never touches them and vice versa; deletions are scoped to the web-resource set); a
+  `--webresources` run needs no `--package`; and each name is validated to carry the solution's publisher prefix.
 - `vela init --web-resources` additionally scaffolds an opt-in `{prefix}.WebResources` TypeScript project for
   model-driven form scripting, next to the plugin projects in the same solution: `package.json`,
   `tsconfig.json`, `tsup.config.ts` (bundler config with the JS global name and one entry per form), a `.esproj`
