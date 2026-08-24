@@ -25,6 +25,13 @@ CLI line only.
 
 ### Added
 
+- `vela init --web-resources` additionally scaffolds an opt-in `{prefix}.WebResources` TypeScript project for
+  model-driven form scripting, next to the plugin projects in the same solution: `package.json`,
+  `tsconfig.json`, `tsup.config.ts` (bundler config with the JS global name and one entry per form), a `.esproj`
+  so Visual Studio "Build" runs npm, Vitest, `.gitignore`, and the `src/generated` (regenerated) vs `src`
+  (hand-written) split. `--web-resources-namespace` sets the exposed global (default: the project prefix,
+  lower-cased) and `--web-resources-folder` the build output folder (default `web`). Interactive `vela init`
+  prompts for it (off by default).
 - `vela models --forms --lang ts` generates TypeScript `FormModel` files for the scoped tables' published Main
   and Quick Create forms, for the vela-client runtime to consume. Each form's FormXML is parsed (validated
   against the official Microsoft `FormXml.xsd`) and joined with the table metadata, emitting one
