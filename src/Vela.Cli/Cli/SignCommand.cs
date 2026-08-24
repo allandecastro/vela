@@ -114,7 +114,7 @@ internal static class SignCommand
 
             if (!string.IsNullOrWhiteSpace(options.Fingerprint))
             {
-                Console.WriteLine($"Signing '{options.PackagePath}' with certificate fingerprint {options.Fingerprint} ...");
+                if (!options.Json) { Console.WriteLine($"Signing '{options.PackagePath}' with certificate fingerprint {options.Fingerprint} ..."); }
                 psi.ArgumentList.Add("--certificate-fingerprint");
                 psi.ArgumentList.Add(options.Fingerprint);
             }
@@ -170,7 +170,7 @@ internal static class SignCommand
                 }
 
                 string source = tempPfx is null ? $"'{pfxFile}'" : "--pfx-base64";
-                Console.WriteLine($"Signing '{options.PackagePath}' with PFX {source} ...");
+                if (!options.Json) { Console.WriteLine($"Signing '{options.PackagePath}' with PFX {source} ..."); }
                 psi.ArgumentList.Add("--certificate-path");
                 psi.ArgumentList.Add(pfxFile);
                 psi.ArgumentList.Add("--certificate-password");

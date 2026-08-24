@@ -182,15 +182,34 @@ public static class FormModelTsGenerator
 
     private static void AppendLayout(StringBuilder sb, ParsedForm form, IReadOnlyList<PlacedField> placed)
     {
-        HashSet<string> placedNames = new HashSet<string>(placed.Where(p => p.Location != null).Select(p => p.LogicalName), StringComparer.OrdinalIgnoreCase);
+        // Map each placed field to the exact section it was placed in (its `at`), in placement order. A column that
+        // appears in several sections is placed once, so it is listed only under that one section - the layout and
+        // the field's `at` stay consistent.
+        Dictionary<(string Tab, string Section), List<string>> byLocation = new Dictionary<(string, string), List<string>>();
+        foreach (PlacedField field in placed)
+        {
+            if (field.Location == null)
+            {
+                continue;
+            }
+
+            (string, string) key = (field.Location.Tab, field.Location.Section);
+            if (!byLocation.TryGetValue(key, out List<string>? names))
+            {
+                names = new List<string>();
+                byLocation[key] = names;
+            }
+
+            names.Add(field.LogicalName);
+        }
 
         sb.Append("  layout: {\n");
         sb.Append("    tabs: {\n");
         foreach (FormTab tab in form.Tabs)
         {
-            // Only sections holding at least one emitted field make the layout (empty/structural sections are noise).
+            // Only sections that actually hold a placed field make the layout (empty/structural sections are noise).
             List<FormSection> sections = tab.Sections
-                .Where(s => s.Cells.Any(c => placedNames.Contains(c.DataFieldName)))
+                .Where(s => byLocation.ContainsKey((tab.Name, s.Name)))
                 .ToList();
             if (sections.Count == 0)
             {
@@ -202,15 +221,9 @@ public static class FormModelTsGenerator
             sb.Append("        sections: {\n");
             foreach (FormSection section in sections)
             {
-                string[] fields = section.Cells
-                    .Select(c => c.DataFieldName)
-                    .Where(placedNames.Contains)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-
                 sb.Append($"          {PropertyKey(section.Name)}: {{\n");
                 sb.Append($"            label: {TsString(section.Label ?? section.Name)},\n");
-                AppendFieldList(sb, fields);
+                AppendFieldList(sb, byLocation[(tab.Name, section.Name)]);
                 sb.Append("          },\n");
             }
 
@@ -390,15 +403,15 @@ public static class FormModelTsGenerator
 
     private static void AppendNumberFacets(AttributeMetadata attribute, List<string> lines)
     {
-        (double? min, double? max, int? precision) = NumberFacets(attribute);
-        if (min.HasValue)
+        (string? min, string? max, int? precision) = NumberFacets(attribute);
+        if (min != null)
         {
-            lines.Add($"min: {NumberLiteral(min.Value)},");
+            lines.Add($"min: {min},");
         }
 
-        if (max.HasValue)
+        if (max != null)
         {
-            lines.Add($"max: {NumberLiteral(max.Value)},");
+            lines.Add($"max: {max},");
         }
 
         if (precision.HasValue)
@@ -444,15 +457,35 @@ public static class FormModelTsGenerator
         };
     }
 
-    private static (double? Min, double? Max, int? Precision) NumberFacets(AttributeMetadata a) => a switch
+    // Min/max are formatted in each column's native numeric type - a BigInt's long bounds (e.g. the default
+    // long.MaxValue) must NOT go through double, which would round past 2^53 and overflow the (long) cast.
+    private static (string? Min, string? Max, int? Precision) NumberFacets(AttributeMetadata a) => a switch
     {
-        IntegerAttributeMetadata i => (i.MinValue, i.MaxValue, null),
-        BigIntAttributeMetadata b => (b.MinValue, b.MaxValue, null),
-        DecimalAttributeMetadata d => ((double?)d.MinValue, (double?)d.MaxValue, d.Precision),
-        DoubleAttributeMetadata o => (o.MinValue, o.MaxValue, o.Precision),
-        MoneyAttributeMetadata m => (m.MinValue, m.MaxValue, m.Precision),
+        IntegerAttributeMetadata i => (IntLiteral(i.MinValue), IntLiteral(i.MaxValue), null),
+        BigIntAttributeMetadata b => (LongLiteral(b.MinValue), LongLiteral(b.MaxValue), null),
+        DecimalAttributeMetadata d => (DecimalLiteral(d.MinValue), DecimalLiteral(d.MaxValue), d.Precision),
+        DoubleAttributeMetadata o => (DoubleLiteral(o.MinValue), DoubleLiteral(o.MaxValue), o.Precision),
+        MoneyAttributeMetadata m => (DoubleLiteral(m.MinValue), DoubleLiteral(m.MaxValue), m.Precision),
         _ => (null, null, null),
     };
+
+    private static string? IntLiteral(int? v) => v?.ToString(CultureInfo.InvariantCulture);
+
+    private static string? LongLiteral(long? v) => v?.ToString(CultureInfo.InvariantCulture);
+
+    private static string? DecimalLiteral(decimal? v)
+    {
+        if (!v.HasValue)
+        {
+            return null;
+        }
+
+        string s = v.Value.ToString(CultureInfo.InvariantCulture);
+        // Trim a fractional tail's trailing zeros so a scaled 0.0000 emits as 0, matching the shortest literal.
+        return s.Contains('.') ? s.TrimEnd('0').TrimEnd('.') : s;
+    }
+
+    private static string? DoubleLiteral(double? v) => v.HasValue ? NumberLiteral(v.Value) : null;
 
     private static string? StringFormatName(AttributeMetadata a)
     {

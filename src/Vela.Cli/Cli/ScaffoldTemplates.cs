@@ -97,7 +97,6 @@ $$"""
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "rootDir": "src",
     "types": ["vitest/globals"]
   },
   "include": ["src", "test"]

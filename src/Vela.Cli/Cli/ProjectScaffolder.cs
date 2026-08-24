@@ -55,7 +55,8 @@ internal static class ProjectScaffolder
 
         if (options.ManagedIdentity && !options.IncludeIntegrations)
         {
-            Console.WriteLine("Warning: --managed-identity applies to the Integrations project, which is excluded; ignoring it.");
+            // stderr so it never pollutes the --json report on stdout.
+            Console.Error.WriteLine("Warning: --managed-identity applies to the Integrations project, which is excluded; ignoring it.");
         }
 
         List<ProjectEntry> projects = [];

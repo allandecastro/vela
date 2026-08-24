@@ -5,7 +5,11 @@ using System.Xml.Linq;
 
 namespace Vela.Cli;
 
-/// <summary>An enable/display rule: a JavaScript CustomRule function plus its ordered CrmParameter values.</summary>
+/// <summary>
+/// An enable rule: a JavaScript CustomRule function plus its ordered CrmParameter values. Each parameter value must
+/// be a Dataverse <c>CrmParameterValue</c> (e.g. <c>PrimaryControl</c>, <c>SelectedControl</c>), or the emitted
+/// RibbonDiffXml fails XSD validation - literal-argument parameters are not modelled.
+/// </summary>
 public sealed record RibbonRule(string Id, string FunctionName, bool Default, IReadOnlyList<string> Parameters);
 
 /// <summary>

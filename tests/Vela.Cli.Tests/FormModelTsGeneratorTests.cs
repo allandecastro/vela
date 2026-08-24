@@ -438,6 +438,51 @@ public class FormModelTsGeneratorTests
     }
 
     [Fact]
+    public void BigInt_Bounds_Are_Not_Corrupted_By_Double_Rounding()
+    {
+        // Regression: long bounds must not go through double (long.MaxValue rounds past 2^53 and overflowed to a
+        // negative max).
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .BigInt("bignum", "BigNum", min: long.MinValue, max: long.MaxValue).Display("Big Num")
+            .Build();
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "bignum")), entity), "account.info.form.ts");
+
+        Assert.Contains("min: -9223372036854775808,", ts);
+        Assert.Contains("max: 9223372036854775807,", ts);
+    }
+
+    [Fact]
+    public void Field_Placed_In_Two_Sections_Is_Listed_Only_Where_Placed()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .String("name", "Name").Display("Name")
+            .Build();
+
+        // `name` appears in both s1 and s2; it is placed once (s1) with a single `at`, and must be listed only there.
+        const string xml = """
+            <form><tabs><tab name="general">
+              <labels><label description="General" languagecode="1033" /></labels>
+              <columns><column width="100%"><sections>
+                <section name="s1"><labels><label description="One" languagecode="1033" /></labels>
+                  <rows><row><cell><control datafieldname="name" /></cell></row></rows></section>
+                <section name="s2"><labels><label description="Two" languagecode="1033" /></labels>
+                  <rows><row><cell><control datafieldname="name" /></cell></row></rows></section>
+              </sections></column></columns>
+            </tab></tabs></form>
+            """;
+
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "account.info.form.ts");
+
+        Assert.Contains("at: { tab: 'general', section: 's1' },", ts);
+        Assert.Contains("s1: {", ts);
+        Assert.DoesNotContain("s2: {", ts);          // the empty second section is not resurrected
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(ts, "'name'").Count); // listed once, under s1
+    }
+
+    [Fact]
     public void Owner_Lookup_Maps_To_Lookup_Kind()
     {
         EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
