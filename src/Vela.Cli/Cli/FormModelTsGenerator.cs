@@ -494,7 +494,19 @@ public static class FormModelTsGenerator
 
     // --- emission helpers --------------------------------------------------------------------------------------
 
-    private static string ConstName(string entity, string formName) => Pascalize(entity) + Pascalize(formName);
+    // The exported const name must be a valid TS identifier: Pascalize strips non-identifier characters (a form
+    // named "Profile Web Form (Enhanced)" would otherwise emit `ContactProfileWebForm(Enhanced)`, which does not
+    // compile), and a leading digit or an empty result is prefixed with "_".
+    private static string ConstName(string entity, string formName)
+    {
+        string name = Pascalize(entity) + Pascalize(formName);
+        if (name.Length == 0)
+        {
+            return "_";
+        }
+
+        return char.IsDigit(name[0]) ? "_" + name : name;
+    }
 
     private static string FileName(string entity, string formName) => $"{entity}.{Slug(formName)}.form.ts";
 
@@ -529,9 +541,30 @@ public static class FormModelTsGenerator
     private static string Slug(string value) =>
         new string(value.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
 
+    // Splits on any non-alphanumeric character (spaces, punctuation, parentheses, ...) and upper-cases each word's
+    // first letter, so the result contains only identifier characters. "Profile Web Form (Enhanced)" -> "ProfileWebFormEnhanced".
     private static string Pascalize(string value)
     {
-        IEnumerable<string> words = value.Split(new[] { ' ', '_', '-', '.', '/' }, StringSplitOptions.RemoveEmptyEntries);
+        List<string> words = new List<string>();
+        StringBuilder word = new StringBuilder();
+        foreach (char c in value)
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                word.Append(c);
+            }
+            else if (word.Length > 0)
+            {
+                words.Add(word.ToString());
+                word.Clear();
+            }
+        }
+
+        if (word.Length > 0)
+        {
+            words.Add(word.ToString());
+        }
+
         return string.Concat(words.Select(w => char.ToUpperInvariant(w[0]) + w.Substring(1)));
     }
 
