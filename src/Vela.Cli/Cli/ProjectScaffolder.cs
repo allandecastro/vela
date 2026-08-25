@@ -171,6 +171,7 @@ internal static class ProjectScaffolder
             Write(Path.Combine("src", webResourcesName, "src", "generated", "forms", "account", "main.form.ts"), WebResourcesExampleGeneratedForm());
             Write(Path.Combine("src", webResourcesName, "src", "generated", "option-sets", "account.ts"), WebResourcesExampleGeneratedOptionSets());
             Write(Path.Combine("src", webResourcesName, "src", "generated", "tables", "contact.ts"), WebResourcesExampleGeneratedTable());
+            Write(Path.Combine("src", webResourcesName, "src", "generated", "index.ts"), WebResourcesExampleGeneratedBarrel());
             Write(Path.Combine("src", webResourcesName, "test", "entries.test.ts"), WebResourcesEntriesTest());
         }
 

@@ -72,6 +72,7 @@ src/
       account/Forms/main.ts       # example form script (typed accessors + a typed Web API query)
       account/Forms/main.test.ts  # co-located Vitest example (rules + save guard)
       generated/                  # models (ships an EXAMPLE set; vela models overwrites it)
+        index.ts                  #   the root barrel, imported as @generated
     test/
       entries.test.ts             # guard: every entry must export onLoad/onSave
 ```
@@ -79,7 +80,8 @@ src/
 The scaffold ships a **working** example, not a stub: the `account` form script compiles and its Vitest passes
 out of the box (`npm install && npm test`), against a small example model set under `src/generated/` (each file
 carries an `// EXAMPLE - regenerate with: vela models ...` header). Run [`vela models`](models.md) to replace it
-with the real models from your environment.
+with the real models from your environment. Form scripts import generated symbols through the `@generated` alias
+(a tsconfig path to `src/generated`, resolved by tsup and Vitest), which points at the generated root barrel.
 
 The bundle is built with **tsup** (`npm run build` / `npm run dev`), not the CLI, and exposes a dotted
 global named after **your** publisher prefix (`--web-resources-namespace`, default: the project prefix

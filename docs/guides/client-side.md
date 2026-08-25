@@ -69,15 +69,15 @@ share the same `option-sets/` folder.
 ## 3. Write form scripts, 4. build
 
 Extend `VelaForm(<model>)` with a class, use the typed field/tab accessors, and export the handlers with
-`defineForm`. This is exactly what the scaffolded `account` example ships:
+`defineForm`. This is exactly what the scaffolded `account` example ships. Generated symbols come through the
+`@generated` alias (a tsconfig path to `src/generated`, resolved by tsup and Vitest too), which points at the
+generated [root barrel](models.md) - so one import line covers the form model, table types and enums:
 
 ```ts
 // src/account/Forms/main.ts
 import { VelaForm, defineForm, type SaveEventArgs } from 'vela-client';
 import { createWebApi } from 'vela-client/webapi';
-import { AccountMain } from '../../generated/forms/account/main.form';
-import { account_customertypecode } from '../../generated/option-sets/account';
-import { Contact } from '../../generated/tables/contact';
+import { AccountMain, Contact, account_customertypecode } from '@generated';
 
 export class AccountForm extends VelaForm(AccountMain) {
   onLoad(): void {
@@ -127,8 +127,7 @@ The scaffolded project also includes Vitest; form scripts are unit-testable off-
 // src/account/Forms/main.test.ts
 import { describe, it, expect } from 'vitest';
 import { fakeForm } from 'vela-client/testing';
-import { AccountMain } from '../../generated/forms/account/main.form';
-import { account_customertypecode } from '../../generated/option-sets/account';
+import { AccountMain, account_customertypecode } from '@generated';
 import { AccountForm } from './main';
 
 describe('AccountForm', () => {
