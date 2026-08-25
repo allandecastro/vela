@@ -27,8 +27,12 @@ CLI line only.
 
 - `vela models --forms --lang ts` now writes each form model to `forms/<entity>/<slug>.form.ts` (the folder is the
   table's lower-cased logical name and the file name drops the entity prefix), instead of a flat
-  `<entity>.<slug>.form.ts`. The shared `option-sets.ts` stays at the output root; a form file's import of it is
-  `../../option-sets`. Table types (`--tables`) are unchanged (`tables/<logicalname>.ts`).
+  `<entity>.<slug>.form.ts`. Table types (`--tables`) are unchanged (`tables/<logicalname>.ts`).
+- The generated enums move from a single `option-sets.ts` to an `option-sets/` folder: global choices in
+  `option-sets/global.ts` (each global defined once, shared across tables), and a table's local choices in
+  `option-sets/<entity>.ts`. A consuming file imports its locals from `<prefix>option-sets/<entity>` and its
+  globals from `<prefix>option-sets/global`, where the prefix is depth-adjusted (`../` for a table, `../../` for a
+  form). Shared by both `--forms` and `--tables`.
 
 ## [0.1.6] - 2026-08-25
 

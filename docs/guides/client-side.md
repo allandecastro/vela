@@ -39,7 +39,7 @@ the `src/generated` (regenerated) vs `src` (hand-written) split.
 ## 2. Generate the typed form models
 
 `vela models --forms --lang ts` reads your tables' published Main / Quick Create forms and emits one
-`forms/<entity>/<form>.form.ts` per form (each `satisfies FormModel`) plus a shared `option-sets.ts` at the
+`forms/<entity>/<form>.form.ts` per form (each `satisfies FormModel`) plus a shared `option-sets/` folder at the
 output root, into `src/generated/` (see [Early-bound models](models.md)):
 
 ```powershell

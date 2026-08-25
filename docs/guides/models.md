@@ -56,7 +56,8 @@ vela models --forms --lang ts --solution ZavaSales --out src/generated --json
 ```
 
 Each form becomes one `forms/<entity>/<form>.form.ts` const that `satisfies FormModel` (the folder is the table's
-logical name; the file name drops the entity prefix), plus a shared `option-sets.ts` at the output root that the
+logical name; the file name drops the entity prefix), plus a shared `option-sets/` folder at the output root
+(`option-sets/global.ts` for global choices, `option-sets/<entity>.ts` for a table's local choices) that the
 choice fields reference. Generation is deterministic (fields follow the form's layout order,
 option sets follow first-reference order) and all-or-nothing, and reuses the same scope (`--solution` /
 `--entities`) and connection flags as the rest of `vela models`. Only published forms are read (no drafts), and
@@ -78,7 +79,8 @@ vela models --tables --lang ts --entities account,contact --out src/generated --
 ```
 
 Each table becomes `export interface <Pascal> extends DataverseRecordMeta { ... }`, importing the same shared
-`option-sets.ts` the `--forms` path emits. Columns map by type: string/memo to `string`, the whole numeric family
+`option-sets/` folder (`global.ts` + `<entity>.ts`) the `--forms` path emits (a table one level deep imports from
+`../option-sets/...`). Columns map by type: string/memo to `string`, the whole numeric family
 (integer, decimal, money, ...) to `number`, boolean to `boolean`, date/time to `string` (the Web API returns ISO
 strings), choice to its enum and multi-select to an enum array, and file/image to `string`. Every non-key column
 is optional and nullable (`name?: string | null`); the **primary key is required** (`accountid: string`). A
