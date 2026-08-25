@@ -63,6 +63,28 @@ same-named forms of one table get disambiguated file names. The FormXML parser i
 forms carry attributes newer than the published `FormXml.xsd`), so real forms generate cleanly; strict XSD
 validation is available as a separate best-effort aid, not a gate on generation.
 
+## TypeScript table types (`--tables --lang ts`)
+
+> [!NOTE]
+> Preview / work in progress. This is part of the new client-side initiative and may change.
+
+`vela models --tables --lang ts` generates **TypeScript record interfaces** for the scoped tables, so the
+vela-client Web API query layer is typed without hand-writing `T` in `retrieveMultiple<T>('account').select(...)`.
+It is the Web API twin of the C# early-bound models: one `tables/<logicalname>.ts` per table.
+
+```powershell
+vela models --tables --lang ts --entities account,contact --out src/generated --interactive
+```
+
+Each table becomes `export interface <Pascal> extends DataverseRecordMeta { ... }`, importing the same shared
+`option-sets.ts` the `--forms` path emits. Columns map by type: string/memo to `string`, the whole numeric family
+(integer, decimal, money, ...) to `number`, boolean to `boolean`, date/time to `string` (the Web API returns ISO
+strings), choice to its enum and multi-select to an enum array, and file/image to `string`. Every non-key column
+is optional and nullable (`name?: string | null`); the **primary key is required** (`accountid: string`). A
+**lookup** is exposed as its GUID under `_<name>_value` (for example `_primarycontactid_value?: string | null`).
+Generation is deterministic (columns in metadata order, primary key first) and reuses the same scope and
+connection flags as the rest of `vela models`.
+
 ## Security roles (`--roles` / `--solution-roles`)
 
 `--roles "Salesperson,Sales Manager"` (explicit names) or `--solution-roles` (every role in a `--solution`)
