@@ -21,6 +21,8 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-08-25
+
 CLI line only.
 
 ### Added
@@ -41,6 +43,12 @@ CLI line only.
   `option-sets/<entity>.ts`. A consuming file imports its locals from `<prefix>option-sets/<entity>` and its
   globals from `<prefix>option-sets/global`, where the prefix is depth-adjusted (`../` for a table, `../../` for a
   form). Shared by both `--forms` and `--tables`.
+
+### Fixed
+
+- `vela models --forms --lang ts` sanitizes the exported const name to a valid TypeScript identifier: a form named,
+  for example, `Profile Web Form (Enhanced)` now emits `export const ContactProfileWebFormEnhanced` instead of a
+  name with spaces and parentheses that did not compile. Collisions are disambiguated as before.
 
 ## [0.1.6] - 2026-08-25
 
