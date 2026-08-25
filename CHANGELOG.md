@@ -21,6 +21,17 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Changed
+
+- `vela init --web-resources` now scaffolds a **working** example instead of a stub: the `account` form script uses
+  typed field accessors, a typed `onChange` rule, a typed `createWebApi()` query (reading a polymorphic lookup
+  annotation) and a save guard, wired with `defineForm`, plus a `fakeForm` Vitest. It ships a small example model
+  set under `src/generated/` (each file headed `// EXAMPLE - regenerate with: vela models ...`), so
+  `npm install && npx tsc --noEmit && npm test` are green out of the box. The scaffold's `vela-client` dependency
+  is bumped to `^0.1.3`.
+
 ## [0.1.7] - 2026-08-25
 
 CLI line only.

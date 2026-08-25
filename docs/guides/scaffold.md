@@ -69,12 +69,17 @@ src/
     web-resources.entries.ts      # the entry map (name -> source); vela add form-script maintains it
     tsconfig.json
     src/
-      account/Forms/main.ts       # hand-written form script (example)
-      account/Forms/main.test.ts  # co-located Vitest example
-      generated/                  # regenerated form models (never edited)
+      account/Forms/main.ts       # example form script (typed accessors + a typed Web API query)
+      account/Forms/main.test.ts  # co-located Vitest example (rules + save guard)
+      generated/                  # models (ships an EXAMPLE set; vela models overwrites it)
     test/
       entries.test.ts             # guard: every entry must export onLoad/onSave
 ```
+
+The scaffold ships a **working** example, not a stub: the `account` form script compiles and its Vitest passes
+out of the box (`npm install && npm test`), against a small example model set under `src/generated/` (each file
+carries an `// EXAMPLE - regenerate with: vela models ...` header). Run [`vela models`](models.md) to replace it
+with the real models from your environment.
 
 The bundle is built with **tsup** (`npm run build` / `npm run dev`), not the CLI, and exposes a dotted
 global named after **your** publisher prefix (`--web-resources-namespace`, default: the project prefix

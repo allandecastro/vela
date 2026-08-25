@@ -344,7 +344,9 @@ public class ProjectScaffolderTests
             AssertFileExists(root, "src", "Zava.WebResources", ".gitignore");
             AssertFileExists(root, "src", "Zava.WebResources", "src", "account", "Forms", "main.ts");
             AssertFileExists(root, "src", "Zava.WebResources", "src", "account", "Forms", "main.test.ts");
-            AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", ".gitkeep");
+            AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", "forms", "account", "main.form.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", "option-sets", "account.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", "tables", "contact.ts");
             AssertFileExists(root, "src", "Zava.WebResources", "test", "entries.test.ts");
 
             // The .sln references the .esproj under the JavaScript project type id.
@@ -380,10 +382,17 @@ public class ProjectScaffolderTests
 
             Assert.Contains("dist/", File.ReadAllText(Path.Combine(project, ".gitignore")));
 
-            // The example entry exports both onLoad and onSave, so the freshly scaffolded entries guard passes.
+            // The example entry exports onLoad and onSave (via defineForm), so the freshly scaffolded entries guard
+            // passes; it is a real example, not a stub (typed accessors + a typed Web API query wired with defineForm).
             string main = File.ReadAllText(Path.Combine(project, "src", "account", "Forms", "main.ts"));
-            Assert.Contains("export function onLoad(", main);
-            Assert.Contains("export function onSave(", main);
+            Assert.Contains("export const { onLoad, onSave } = defineForm(AccountMain, AccountForm);", main);
+            Assert.Contains("export class AccountForm extends VelaForm(AccountMain)", main);
+            Assert.Contains("createWebApi()", main);
+
+            // The example generated model set is present (with the EXAMPLE regenerate header) so the form compiles.
+            string generatedForm = File.ReadAllText(Path.Combine(project, "src", "generated", "forms", "account", "main.form.ts"));
+            Assert.Contains("// EXAMPLE - regenerate with:", generatedForm);
+            Assert.Contains("export const AccountMain =", generatedForm);
 
             // The entries guard reads the entry map and asserts each entry module exports the FormXML handlers.
             string entriesTest = File.ReadAllText(Path.Combine(project, "test", "entries.test.ts"));
