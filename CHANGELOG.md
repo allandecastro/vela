@@ -23,6 +23,14 @@ All notable changes to Vela are documented here. The format is based on
 
 CLI line only.
 
+### Added
+
+- `vela models --forms` / `--tables` also emit a root `<out>/index.ts` **barrel** that named-re-exports every
+  generated symbol (form-model consts, table interfaces + their `defineTable` consts, option-set enums), so a
+  consumer writes `import { AccountMain, Contact, account_customertypecode } from './generated'` instead of many
+  deep imports. The re-exports are named (never `export *`) so esbuild keeps tree-shaking, a name is exported once
+  (a table's shared type/value name never double-exports), and the barrel is emitted only when there is a symbol.
+
 ### Changed
 
 - `vela models --forms` / `--tables` no longer require `--lang ts`: their output is TypeScript only, so `--lang`

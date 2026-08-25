@@ -47,6 +47,13 @@ public static class TableTypeTsGenerator
         // The enums are shared with --forms: a --tables-only run stays self-contained by emitting the same files.
         files.AddRange(OptionSetsTs.GenerateFiles(optionSets));
 
+        // A root index.ts barrel re-exporting every generated symbol, so consumers import from './generated'.
+        GeneratedModel? barrel = BarrelTs.Build(files);
+        if (barrel != null)
+        {
+            files.Add(barrel);
+        }
+
         return files;
     }
 
