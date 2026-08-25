@@ -166,7 +166,11 @@ internal static class ProjectScaffolder
             Write(Path.Combine("src", webResourcesName, ".gitignore"), WebResourcesGitignore(options.WebResourcesFolder));
             Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.ts"), WebResourcesExampleForm());
             Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.test.ts"), WebResourcesExampleFormTest());
-            Write(Path.Combine("src", webResourcesName, "src", "generated", ".gitkeep"), string.Empty);
+            // A ready-made example model set so the example form compiles and its test passes out of the box;
+            // `vela models` overwrites src/generated with real models from your environment.
+            Write(Path.Combine("src", webResourcesName, "src", "generated", "forms", "account", "main.form.ts"), WebResourcesExampleGeneratedForm());
+            Write(Path.Combine("src", webResourcesName, "src", "generated", "option-sets", "account.ts"), WebResourcesExampleGeneratedOptionSets());
+            Write(Path.Combine("src", webResourcesName, "src", "generated", "tables", "contact.ts"), WebResourcesExampleGeneratedTable());
             Write(Path.Combine("src", webResourcesName, "test", "entries.test.ts"), WebResourcesEntriesTest());
         }
 

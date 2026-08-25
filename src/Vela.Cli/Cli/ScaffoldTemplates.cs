@@ -52,7 +52,7 @@ internal static class ScaffoldTemplates
     public const string TsupVersion = "^8.3.5";
     public const string TypeScriptVersion = "^5.6.3";
     public const string VitestVersion = "^2.1.8";
-    public const string VelaClientVersion = "^0.1.2";
+    public const string VelaClientVersion = "^0.1.3";
 
     // Node type definitions: the entries guard imports node:url / node:path, so a `tsc --noEmit` typecheck needs
     // these even though esbuild (tsup/vitest) resolves the node: scheme at runtime without them.
@@ -185,38 +185,170 @@ node_modules/
 *.tsbuildinfo
 """;
 
-    // An example form script at src/account/Forms/main.ts. `globalName.Account.onLoad` is what FormXML's
-    // FunctionName references; the file itself is what `$webresource:<prefix>_/js/account/Forms/main.js` points at.
-    // It exports `onLoad` AND `onSave` so the entries guard (test/entries.test.ts) passes on a fresh scaffold; once
-    // you generate a model, replace the stubs with `export const { onLoad, onSave } = defineForm(Model, Form)`.
+    // A working example form script at src/account/Forms/main.ts: typed field accessors, a typed onChange rule, a
+    // typed Web API query (reading the polymorphic lookup annotation), and a save guard - wired with `defineForm`.
+    // It compiles and its Vitest passes out of the box against the example models under src/generated. The exposed
+    // global is `<prefix>.Account.onLoad`, and the file is `$webresource:<prefix>_/js/account/Forms/main.js`.
     public static string WebResourcesExampleForm() =>
-$$"""
-// Example form script (hand-written). Generated form models live in ../../generated - regenerate them with
-//   vela models --forms --lang ts --solution <name> --out src/generated
-// then import a model and wire the handlers with `defineForm` from vela-client, e.g.
-//   export const { onLoad, onSave } = defineForm(AccountMain, class extends VelaForm(AccountMain) {});
-// This stub keeps the bundle building - and every entry exporting onLoad/onSave - before you generate.
+"""
+// Example form script: typed accessors + a typed Web API query, wired with defineForm.
+import { VelaForm, defineForm, type SaveEventArgs } from 'vela-client';
+import { createWebApi } from 'vela-client/webapi';
+import { AccountMain } from '../../generated/forms/account/main.form';
+import { account_customertypecode } from '../../generated/option-sets/account';
+import { Contact } from '../../generated/tables/contact';
 
-export function onLoad(): void {
-  // Your onLoad logic here.
+export class AccountForm extends VelaForm(AccountMain) {
+  onLoad(): void {
+    this.fields.customertypecode.addOnChange(this.applyRules);
+    this.applyRules();
+  }
+
+  applyRules(): void {
+    const isCompetitor =
+      this.fields.customertypecode.getValue() === account_customertypecode.Competitor;
+    this.tabs.details.setVisible(!isCompetitor);
+    this.fields.industrycode.setRequiredLevel(isCompetitor ? 'none' : 'required');
+  }
+
+  // Typed query: Contact ref infers the row type; the polymorphic lookup target is typed too.
+  async relatedContacts(): Promise<Array<{ name: string | null; parentType: string | null }>> {
+    if (!this.id) return [];
+    const { entities } = await createWebApi()
+      .retrieveMultiple(Contact)
+      .select('fullname', 'emailaddress1', '_parentcustomerid_value')
+      .filter((f) => f.eqGuid('_parentcustomerid_value', this.id))
+      .execute();
+
+    return entities.map((c) => ({
+      name: c.fullname ?? null,
+      parentType: c['_parentcustomerid_value@Microsoft.Dynamics.CRM.lookuplogicalname'] ?? null,
+    }));
+  }
+
+  onSave(e: SaveEventArgs): void {
+    if (!this.fields.name.getValue()) {
+      e.preventDefault();
+      this.setFormNotification('Account name is required', 'ERROR');
+    }
+  }
 }
 
-export function onSave(): void {
-  // Your onSave logic here.
+export const { onLoad, onSave } = defineForm(AccountMain, AccountForm);
+""";
+
+    // The co-located Vitest example next to the example form script (src/account/Forms/main.test.ts): exercises the
+    // onChange rules and the save guard with the `fakeForm` harness, no browser or live Dataverse.
+    public static string WebResourcesExampleFormTest() =>
+"""
+import { describe, it, expect } from 'vitest';
+import { fakeForm } from 'vela-client/testing';
+import { AccountMain } from '../../generated/forms/account/main.form';
+import { account_customertypecode } from '../../generated/option-sets/account';
+import { AccountForm } from './main';
+
+describe('AccountForm (example)', () => {
+  it('hides Details and relaxes industry for a competitor', async () => {
+    const form = fakeForm(AccountMain, AccountForm);
+    await form.load();
+    form.fields.customertypecode.setValue(account_customertypecode.Competitor);
+    form.fields.customertypecode.fireOnChange();
+    expect(form.tabs.details.getVisible()).toBe(false);
+    expect(form.fields.industrycode.getRequiredLevel()).toBe('none');
+  });
+
+  it('blocks save when the account name is empty', async () => {
+    const form = fakeForm(AccountMain, AccountForm);
+    await form.load();
+    expect((await form.triggerSave()).prevented).toBe(true);
+  });
+});
+""";
+
+    // Example generated form model (src/generated/forms/account/main.form.ts). The "EXAMPLE" header marks it as a
+    // ready-made sample; `vela models --forms` overwrites src/generated with real models from your environment.
+    public static string WebResourcesExampleGeneratedForm() =>
+"""
+// EXAMPLE - regenerate with: vela models --forms --entities account --out src/generated
+// Generated by "vela models --forms --lang ts" - do not edit by hand.
+import type { FormModel } from 'vela-client';
+import { account_customertypecode, account_industrycode } from '../../option-sets/account';
+
+export const AccountMain = {
+  entity: 'account',
+  formId: '00000000-0000-0000-0000-000000000001',
+  formType: 'Main',
+  fields: {
+    name: {
+      kind: 'string',
+      label: 'Account Name',
+      required: 'required',
+      at: { tab: 'general', section: 'info' },
+    },
+    customertypecode: {
+      kind: 'choice',
+      label: 'Relationship Type',
+      required: 'none',
+      options: account_customertypecode,
+      at: { tab: 'general', section: 'info' },
+    },
+    industrycode: {
+      kind: 'choice',
+      label: 'Industry',
+      required: 'none',
+      options: account_industrycode,
+      at: { tab: 'details', section: 'pro' },
+    },
+  },
+  layout: {
+    tabs: {
+      general: {
+        label: 'General',
+        sections: { info: { label: 'Info', fields: ['name', 'customertypecode'] } },
+      },
+      details: {
+        label: 'Details',
+        sections: { pro: { label: 'Professional', fields: ['industrycode'] } },
+      },
+    },
+  },
+} as const satisfies FormModel;
+""";
+
+    // Example generated option sets (src/generated/option-sets/account.ts).
+    public static string WebResourcesExampleGeneratedOptionSets() =>
+"""
+// EXAMPLE - regenerate with: vela models --forms --tables --entities account,contact --out src/generated
+// Generated by "vela models --forms --lang ts" - do not edit by hand.
+
+export enum account_customertypecode {
+  Competitor = 1,
+  Customer = 3,
+}
+
+export enum account_industrycode {
+  Accounting = 1,
+  Consulting = 2,
 }
 """;
 
-    // The co-located Vitest example next to the example form script (src/account/Forms/main.test.ts).
-    public static string WebResourcesExampleFormTest() =>
-$$"""
-import { describe, it, expect } from 'vitest';
-import { onLoad } from './main';
+    // Example generated table record (src/generated/tables/contact.ts), used by the example form's typed query.
+    public static string WebResourcesExampleGeneratedTable() =>
+"""
+// EXAMPLE - regenerate with: vela models --tables --entities contact --out src/generated
+// Generated by "vela models --tables --lang ts" - do not edit by hand.
+import type { DataverseRecordMeta } from 'vela-client/webapi';
+import { defineTable } from 'vela-client/webapi';
 
-describe('account form', () => {
-  it('runs onLoad without throwing', () => {
-    expect(() => onLoad()).not.toThrow();
-  });
-});
+export interface Contact extends DataverseRecordMeta {
+  contactid: string;
+  fullname?: string | null;
+  emailaddress1?: string | null;
+  _parentcustomerid_value?: string | null;
+  '_parentcustomerid_value@Microsoft.Dynamics.CRM.lookuplogicalname'?: 'account' | 'contact';
+}
+
+export const Contact = defineTable<Contact>({ entity: 'contact', primaryId: 'contactid' });
 """;
 
     // Structural guard: every entry module must export onLoad and onSave. A form web resource whose source forgets
