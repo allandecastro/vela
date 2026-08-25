@@ -47,6 +47,10 @@ vela add --interactive
   `RegisterSteps().On<Message>()…Handler(nameof(Handle<Message>))` registration and a matching handler method
   (`--message`, optional `--handler <Method>`). It refuses single-step plugins (those using the `Execute(...)`
   override) and any file it can't parse cleanly, so it never corrupts source.
+- `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +
+  a co-located `main.test.ts`) in the [web-resources project](client-side.md) and registers its entry in
+  `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it is
+  idempotent, and the `<entity>` is the table logical name.
 
 ## See also
 

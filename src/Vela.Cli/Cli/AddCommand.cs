@@ -52,9 +52,17 @@ internal static class AddCommand
         }
 
         string kind = args[0].ToLowerInvariant();
+
+        // form-script targets the TypeScript web-resources project (a folder with web-resources.entries.ts), not a
+        // .csproj, so it resolves its target itself and returns before the C# project plumbing below.
+        if (kind == "form-script")
+        {
+            return AddFormScript(args);
+        }
+
         if (kind is not ("plugin" or "customapi" or "service" or "test" or "step"))
         {
-            return Fail($"Unknown 'add' kind '{args[0]}'. Expected 'plugin', 'customapi', 'service', 'test' or 'step'.", ExitInvalidArguments, includeUsage: false);
+            return Fail($"Unknown 'add' kind '{args[0]}'. Expected 'plugin', 'customapi', 'service', 'test', 'step' or 'form-script'.", ExitInvalidArguments, includeUsage: false);
         }
 
         string? name = FindPositional(args.Skip(1).ToArray());
@@ -94,6 +102,125 @@ internal static class AddCommand
             "step" => AddStep(args, name, entity, projectDir),
             _ => AddCustomApi(args, name, entity, force, projectDir, rootNamespace, modelsNamespace, prefix),
         };
+    }
+
+    // vela add form-script <entity>: scaffolds src/<entity>/Forms/main.ts (+ co-located main.test.ts) in the
+    // web-resources project and registers its entry in web-resources.entries.ts. Idempotent - existing files are
+    // left untouched (unless --force) and an already-mapped entry is not duplicated.
+    private static int AddFormScript(string[] args)
+    {
+        string? raw = FindPositional(args.Skip(1).ToArray());
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return Fail("Missing table. Usage: vela add form-script <entity> [--project <web-resources dir>] [--force]", ExitInvalidArguments, includeUsage: false);
+        }
+
+        // Dataverse logical names are lower-case; accept any casing and normalise so the folder/name are consistent.
+        string entity = raw.Trim().ToLowerInvariant();
+        if (!FormScriptScaffold.IsValidEntity(entity))
+        {
+            return Fail($"Invalid table '{raw}'. Use a table logical name (lower-case, letters/digits/'_', e.g. 'account' or 'new_order').", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (!TryResolveWebResourcesProject(TryReadOption(args, "--project") ?? TryReadOption(args, "-p"), out string projectDir, out string error))
+        {
+            return Fail(error, ExitInvalidArguments, includeUsage: false);
+        }
+
+        string tsupPath = Path.Combine(projectDir, "tsup.config.ts");
+        string entriesPath = Path.Combine(projectDir, "web-resources.entries.ts");
+        string? wrPrefix = FormScriptScaffold.WebResourcePrefixFromTsup(File.ReadAllText(tsupPath));
+        if (string.IsNullOrWhiteSpace(wrPrefix))
+        {
+            return Fail($"Could not read the web resource prefix (globalName) from {tsupPath}.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        bool force = HasFlag(args, "--force");
+        string formScriptPath = Path.Combine(projectDir, "src", entity, "Forms", "main.ts");
+        string testPath = Path.Combine(projectDir, "src", entity, "Forms", "main.test.ts");
+
+        var created = new System.Collections.Generic.List<string>();
+        var skipped = new System.Collections.Generic.List<string>();
+
+        WriteIfAbsent(formScriptPath, FormScriptScaffold.FormScript(entity), force, created, skipped);
+        WriteIfAbsent(testPath, FormScriptScaffold.FormScriptTest(entity), force, created, skipped);
+
+        // Register the tsup entry (idempotent). The map is the source of truth tsup.config.ts and the guard read.
+        string entryName = FormScriptScaffold.EntryName(wrPrefix!, entity);
+        string sourcePath = FormScriptScaffold.SourcePath(entity);
+        if (!FormScriptScaffold.TryInsertEntry(File.ReadAllText(entriesPath), entryName, sourcePath, out string updatedEntries, out bool inserted))
+        {
+            return Fail($"Could not find the 'export const entries = {{ ... }} as const;' map in {entriesPath}.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (inserted)
+        {
+            File.WriteAllText(entriesPath, updatedEntries);
+            created.Add($"{entriesPath} (+ entry '{entryName}')");
+        }
+        else
+        {
+            skipped.Add($"{entriesPath} (entry '{entryName}' already present)");
+        }
+
+        if (HasFlag(args, "--json"))
+        {
+            Console.WriteLine(BuildAddReport($"form-script {entity}", created.ToArray()));
+        }
+        else
+        {
+            Console.WriteLine($"Added form-script for '{entity}'");
+            foreach (string path in created)
+            {
+                Console.WriteLine($"  + {path}");
+            }
+
+            foreach (string path in skipped)
+            {
+                Console.WriteLine($"  = {path}");
+            }
+        }
+
+        return ExitSuccess;
+    }
+
+    // Writes content unless the file already exists (then it is skipped, or overwritten when force). Records the
+    // outcome so the caller can report created vs skipped for an idempotent run.
+    private static void WriteIfAbsent(string fullPath, string content, bool force, System.Collections.Generic.List<string> created, System.Collections.Generic.List<string> skipped)
+    {
+        if (File.Exists(fullPath) && !force)
+        {
+            skipped.Add($"{fullPath} (already exists)");
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllText(fullPath, content);
+        created.Add(fullPath);
+    }
+
+    // Resolves the web-resources project directory: an explicit --project dir, or the current directory. The
+    // directory must contain web-resources.entries.ts and tsup.config.ts (the scaffolded web-resources project).
+    private static bool TryResolveWebResourcesProject(string? requested, out string projectDir, out string error)
+    {
+        projectDir = string.Empty;
+        error = string.Empty;
+
+        string candidate = string.IsNullOrWhiteSpace(requested) ? Directory.GetCurrentDirectory() : requested!;
+        if (!Directory.Exists(candidate))
+        {
+            error = $"Directory not found: {candidate}";
+            return false;
+        }
+
+        if (!File.Exists(Path.Combine(candidate, "web-resources.entries.ts")) || !File.Exists(Path.Combine(candidate, "tsup.config.ts")))
+        {
+            error = $"'{candidate}' is not a web-resources project (expected web-resources.entries.ts and tsup.config.ts). Run inside the {{prefix}}.WebResources folder or pass --project <dir>.";
+            return false;
+        }
+
+        projectDir = Path.GetFullPath(candidate);
+        return true;
     }
 
     private static int AddStep(string[] args, string name, string? entity, string projectDir)
@@ -436,6 +563,7 @@ internal static class AddCommand
         Console.WriteLine("  vela add customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--project <csproj>]");
+        Console.WriteLine("  vela add form-script <entity> [--project <web-resources dir>] [--force]   (preview)");
         Console.WriteLine("  vela add --interactive            # guided wizard");
         Console.WriteLine();
         Console.WriteLine("Generates a single file into an existing project, inferring namespaces from its RootNamespace.");

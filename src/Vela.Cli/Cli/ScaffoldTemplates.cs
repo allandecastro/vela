@@ -104,21 +104,18 @@ $$"""
 """;
 
     // globalName is the consumer's own publisher prefix (never "Vela"). The output tree mirrors the Dataverse web
-    // resource names, so tsup emits one IIFE per form under `<folder>/<prefix>_/js/...`.
-    public static string WebResourcesTsupConfig(string globalName, string folder)
-    {
-        string wrPrefix = WebResourcePrefix(globalName);
-        return
+    // resource names, so tsup emits one IIFE per form under `<folder>/<prefix>_/js/...`. The entry map lives in
+    // web-resources.entries.ts (maintained by `vela add form-script`) so the config itself never has to be edited.
+    public static string WebResourcesTsupConfig(string globalName, string folder) =>
 $$"""
 import { defineConfig } from 'tsup';
+import { entries } from './web-resources.entries';
 
-// One entry per form web resource. The key is the Dataverse web resource name (the path, minus extension) and
-// the value is its source module. `globalName` is your publisher prefix, exposed as a dotted global (e.g.
-// `{{globalName}}.Account.onLoad`); edit it to change the namespace. Add one entry per form you deploy.
+// `globalName` is your publisher prefix, exposed as a dotted global (e.g. `{{globalName}}.Account.onLoad`);
+// edit it to change the namespace. The entry map (Dataverse web resource name -> source module) lives in
+// web-resources.entries.ts - `vela add form-script <entity>` adds to it. One IIFE bundle is emitted per entry.
 export default defineConfig({
-  entry: {
-    '{{wrPrefix}}_/js/account/Forms/main': 'src/account/main.ts',
-  },
+  entry: entries,
   format: ['iife'],
   globalName: '{{globalName}}',
   outDir: '{{folder}}',
@@ -131,6 +128,21 @@ export default defineConfig({
     return { js: '.js' };
   },
 });
+""";
+
+    // The single source of truth for what gets bundled and deployed: Dataverse web resource name (the path, minus
+    // extension) -> its source module. `vela add form-script <entity>` inserts here; tsup.config.ts and the entries
+    // guard both read it. The web resource name is `<prefix>_/js/<entity>/Forms/main`, mirrored by the source path.
+    public static string WebResourcesEntries(string globalName)
+    {
+        string wrPrefix = WebResourcePrefix(globalName);
+        return
+$$"""
+// Web resource entries: Dataverse web resource name (path, minus extension) -> its source module.
+// Maintained by `vela add form-script <entity>`; safe to edit by hand. Keys mirror the source paths.
+export const entries = {
+  '{{wrPrefix}}_/js/account/Forms/main': 'src/account/Forms/main.ts',
+} as const;
 """;
     }
 
@@ -154,7 +166,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['test/**/*.test.ts'],
+    // Co-located form-script tests (src/<entity>/Forms/main.test.ts) plus the shared guards under test/.
+    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
   },
 });
 """;
@@ -167,13 +180,13 @@ node_modules/
 *.tsbuildinfo
 """;
 
-    // An example form script. `globalName.Account.onLoad` is what FormXML's FunctionName references; the file
-    // itself is what `$webresource:<prefix>_/js/account/Forms/main.js` points at. It exports `onLoad` AND `onSave`
-    // so the entries guard (test/entries.test.ts) passes on a fresh scaffold; once you generate a model, replace
-    // the stubs with `export const { onLoad, onSave } = defineForm(Model, Form)`.
+    // An example form script at src/account/Forms/main.ts. `globalName.Account.onLoad` is what FormXML's
+    // FunctionName references; the file itself is what `$webresource:<prefix>_/js/account/Forms/main.js` points at.
+    // It exports `onLoad` AND `onSave` so the entries guard (test/entries.test.ts) passes on a fresh scaffold; once
+    // you generate a model, replace the stubs with `export const { onLoad, onSave } = defineForm(Model, Form)`.
     public static string WebResourcesExampleForm() =>
 $$"""
-// Example form script (hand-written). Generated form models live in ./generated - regenerate them with
+// Example form script (hand-written). Generated form models live in ../../generated - regenerate them with
 //   vela models --forms --lang ts --solution <name> --out src/generated
 // then import a model and wire the handlers with `defineForm` from vela-client, e.g.
 //   export const { onLoad, onSave } = defineForm(AccountMain, class extends VelaForm(AccountMain) {});
@@ -188,10 +201,11 @@ export function onSave(): void {
 }
 """;
 
-    public static string WebResourcesExampleTest() =>
+    // The co-located Vitest example next to the example form script (src/account/Forms/main.test.ts).
+    public static string WebResourcesExampleFormTest() =>
 $$"""
 import { describe, it, expect } from 'vitest';
-import { onLoad } from '../src/account/main';
+import { onLoad } from './main';
 
 describe('account form', () => {
   it('runs onLoad without throwing', () => {
@@ -200,23 +214,23 @@ describe('account form', () => {
 });
 """;
 
-    // Structural guard: every tsup entry module must export onLoad and onSave. A form web resource whose source
-    // forgets the `export const { onLoad, onSave } = defineForm(...)` wiring builds a bundle that exposes nothing,
-    // silently. This test walks the entries in tsup.config.ts and fails the build (like the fixture drift-guard)
+    // Structural guard: every entry module must export onLoad and onSave. A form web resource whose source forgets
+    // the `export const { onLoad, onSave } = defineForm(...)` wiring builds a bundle that exposes nothing, silently.
+    // This test walks the entry map in web-resources.entries.ts and fails the build (like the fixture drift-guard)
     // the moment one stops exporting its FormXML handlers.
     public static string WebResourcesEntriesTest() =>
 $$"""
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import config from '../tsup.config';
+import { entries } from '../web-resources.entries';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const entries = Object.values((config as { entry: Record<string, string> }).entry);
+const sources = Object.values(entries) as string[];
 
 describe('web resource entries expose their FormXML handlers', () => {
-  it('has at least one entry', () => expect(entries.length).toBeGreaterThan(0));
-  for (const src of entries) {
+  it('has at least one entry', () => expect(sources.length).toBeGreaterThan(0));
+  for (const src of sources) {
     it(`${src} exports onLoad/onSave (defineForm wiring present)`, async () => {
       const mod = await import(join(root, src));
       expect(typeof mod.onLoad).toBe('function');

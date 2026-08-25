@@ -65,13 +65,14 @@ src/
   Zava.WebResources/           # opt-in TypeScript web resources (--web-resources)
     Zava.WebResources.esproj      # JS/TS SDK project: VS "Build" runs npm
     package.json                  # tsup build + Vitest, depends on vela-client
-    tsup.config.ts                # globalName (your publisher prefix) + one entry per form
+    tsup.config.ts                # globalName (your publisher prefix); imports the entry map
+    web-resources.entries.ts      # the entry map (name -> source); vela add form-script maintains it
     tsconfig.json
     src/
-      account/main.ts             # hand-written form scripts (example)
+      account/Forms/main.ts       # hand-written form script (example)
+      account/Forms/main.test.ts  # co-located Vitest example
       generated/                  # regenerated form models (never edited)
     test/
-      account.test.ts             # Vitest example
       entries.test.ts             # guard: every entry must export onLoad/onSave
 ```
 
@@ -81,3 +82,13 @@ lower-cased), never "Vela". Its output folder (`--web-resources-folder`, default
 web resource names and is what a later `vela apply --webresources` deploys. Regenerate the form models under
 `src/generated/` with [`vela models --forms --lang ts`](models.md). See the runtime library in the separate
 `vela-client` package for `VelaForm` and the typed accessors.
+
+Each form web resource is one **entry** in `web-resources.entries.ts` (`<prefix>_/js/<entity>/Forms/main`
+mapped to its `src/<entity>/Forms/main.ts` source). Add one with:
+
+```powershell
+vela add form-script account   # scaffolds src/account/Forms/main.ts (+ main.test.ts) and registers the entry
+```
+
+`vela add form-script <entity>` is idempotent (re-running it leaves existing files and the entry untouched); the
+`<entity>` is the table logical name (lower-cased for the folder, PascalCased for the referenced form model).
