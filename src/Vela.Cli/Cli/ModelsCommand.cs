@@ -76,14 +76,11 @@ internal static class ModelsCommand
         bool tables = HasFlag(args, "--tables");
         string? langOption = TryReadOption(args, "--lang");
 
-        if (forms && tables)
-        {
-            return Fail("Use either --forms or --tables, not both.", ExitInvalidArguments, includeUsage: false);
-        }
-
         if (forms || tables)
         {
-            string scope = forms ? "--forms" : "--tables";
+            // --forms and --tables may be combined: a single run then emits form models, table types, the shared
+            // option-sets/ folder and one complete barrel (index.ts) covering both.
+            string scope = forms && tables ? "--forms --tables" : forms ? "--forms" : "--tables";
 
             // TypeScript is the only output for the client-side scopes, so --lang defaults to ts and only an
             // explicit non-ts value is rejected.
@@ -101,13 +98,10 @@ internal static class ModelsCommand
             // These scopes only read tables; anything else is ignored, so say so rather than dropping it silently.
             if (customApis.Length > 0 || roles.Length > 0 || solutionRoles)
             {
-                string kind = forms ? "form models" : "record interfaces";
-                Console.Error.WriteLine($"Warning: {scope} generates TypeScript {kind} only; --custom-apis / --roles / --solution-roles are ignored.");
+                Console.Error.WriteLine($"Warning: {scope} generates TypeScript output only; --custom-apis / --roles / --solution-roles are ignored.");
             }
 
-            return forms
-                ? RunForms(args, solution, entities, outDir, overwrite, interactive, json)
-                : RunTables(args, solution, entities, outDir, overwrite, interactive, json);
+            return RunTsModels(args, forms, tables, solution, entities, outDir, overwrite, interactive, json);
         }
 
         string lang = (langOption ?? "csharp").Trim().ToLowerInvariant();
@@ -193,110 +187,11 @@ internal static class ModelsCommand
         }
     }
 
-    // The --forms --lang ts path: read published Main/QuickCreate forms for the scoped tables, join each with its
-    // table metadata, and emit the vela-client FormModel .ts files. Shares the scope/connection/write plumbing with
-    // the C# path but needs no namespace (TS modules aren't namespaced).
-    private static int RunForms(string[] args, string? solution, string[] entities, string outDir, bool overwrite, bool interactive, bool json)
-    {
-        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
-        {
-            return exitCode;
-        }
-
-        SharedOptions options = new SharedOptions(
-            PackagePaths: [],
-            PackageAssembly: null,
-            ConnectionString: connectionString,
-            OAuthUrl: oauthUrl,
-            OAuthToken: oauthToken,
-            SolutionUniqueName: solution,
-            Environment: url,
-            OutPath: outDir,
-            Execute: false,
-            Interactive: interactive,
-            Strict: false,
-            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
-
-        try
-        {
-            using ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
-            IOrganizationService service = client;
-
-            List<string> logicalNames = ResolveLogicalNames(service, solution, entities);
-            IReadOnlyList<SystemForm> systemForms = FormReader.ReadForms(service, logicalNames);
-            if (systemForms.Count == 0)
-            {
-                return Fail("No published Main or Quick Create forms were found for the scoped tables.", ExitInvalidArguments, includeUsage: false);
-            }
-
-            // One metadata read per table, shared across that table's forms. A single unreadable table or malformed
-            // form is skipped with a warning rather than aborting the whole batch, so the healthy forms still emit.
-            Dictionary<string, EntityMetadata> metadata = new Dictionary<string, EntityMetadata>(StringComparer.OrdinalIgnoreCase);
-            HashSet<string> unreadableTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            List<FormSource> sources = new List<FormSource>();
-            foreach (SystemForm form in systemForms)
-            {
-                if (unreadableTables.Contains(form.ObjectTypeCode))
-                {
-                    continue;
-                }
-
-                if (!metadata.TryGetValue(form.ObjectTypeCode, out EntityMetadata? entity))
-                {
-                    try
-                    {
-                        entity = ReadEntity(service, form.ObjectTypeCode);
-                        metadata[form.ObjectTypeCode] = entity;
-                    }
-                    catch (Exception ex)
-                    {
-                        unreadableTables.Add(form.ObjectTypeCode);
-                        Console.Error.WriteLine($"Warning: skipping table '{form.ObjectTypeCode}' (metadata read failed): {ex.Message}");
-                        continue;
-                    }
-                }
-
-                try
-                {
-                    sources.Add(new FormSource(form.FormId.ToString("D"), form.FormType, form.Name, FormXmlParser.Parse(form.FormXml), entity));
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine($"Warning: skipping form '{form.ObjectTypeCode}/{form.Name}' (invalid FormXML): {ex.Message}");
-                }
-            }
-
-            if (sources.Count == 0)
-            {
-                return Fail("No form models were generated from the scoped forms.", ExitInvalidArguments, includeUsage: false);
-            }
-
-            IReadOnlyList<GeneratedModel> models = FormModelTsGenerator.Generate(sources);
-            if (models.Count == 0)
-            {
-                return Fail("No form models were generated from the scoped forms.", ExitInvalidArguments, includeUsage: false);
-            }
-
-            return WriteModels(models, outDir, overwrite, json, string.Empty);
-        }
-        catch (DataverseConnectionException ex)
-        {
-            return FailWithException(ex, ExitConnectionFailure, options.Verbose);
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return FailWithException(ex, ExitFileNotFound, options.Verbose);
-        }
-        catch (Exception ex)
-        {
-            return FailWithException(ex, ExitParseError, options.Verbose);
-        }
-    }
-
-    // The --tables --lang ts path: read the scoped tables' metadata and emit the vela-client Web API record
-    // interfaces (tables/<logicalname>.ts) plus the shared option-sets.ts. Shares the scope/connection/write
-    // plumbing with the C# and --forms paths; needs no namespace (TS modules aren't namespaced).
-    private static int RunTables(string[] args, string? solution, string[] entities, string outDir, bool overwrite, bool interactive, bool json)
+    // The --forms / --tables / --forms --tables path: read the scoped tables' metadata (and, for --forms, their
+    // published Main/QuickCreate forms), and emit the vela-client TypeScript output. When both scopes run, the form
+    // models and table types share one option-sets registry (so the enum files are the union) and one index.ts
+    // barrel covers everything. Shares the connection/write plumbing with the C# path; needs no namespace.
+    private static int RunTsModels(string[] args, bool forms, bool tables, string? solution, string[] entities, string outDir, bool overwrite, bool interactive, bool json)
     {
         if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
         {
@@ -328,27 +223,100 @@ internal static class ModelsCommand
                 return Fail("No tables resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
             }
 
-            // A single unreadable table is skipped with a warning rather than aborting the whole batch.
-            List<EntityMetadata> metadata = new List<EntityMetadata>();
-            foreach (string name in logicalNames)
+            // Metadata is read once per table and cached, shared between the forms and tables scopes; a single
+            // unreadable table is skipped with a warning rather than aborting the whole batch.
+            Dictionary<string, EntityMetadata> metaCache = new Dictionary<string, EntityMetadata>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> unreadable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            EntityMetadata? ReadMeta(string logicalName)
             {
+                if (unreadable.Contains(logicalName))
+                {
+                    return null;
+                }
+
+                if (metaCache.TryGetValue(logicalName, out EntityMetadata? cached))
+                {
+                    return cached;
+                }
+
                 try
                 {
-                    metadata.Add(ReadEntity(service, name));
+                    EntityMetadata read = ReadEntity(service, logicalName);
+                    metaCache[logicalName] = read;
+                    return read;
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Warning: skipping table '{name}' (metadata read failed): {ex.Message}");
+                    unreadable.Add(logicalName);
+                    Console.Error.WriteLine($"Warning: skipping table '{logicalName}' (metadata read failed): {ex.Message}");
+                    return null;
                 }
             }
 
-            IReadOnlyList<GeneratedModel> models = TableTypeTsGenerator.Generate(metadata);
-            if (models.Count == 0)
+            // Shared across both scopes so option sets are registered once and the enum files are the union.
+            OptionSetsTs.Registry optionSets = new OptionSetsTs.Registry();
+            List<GeneratedModel> files = new List<GeneratedModel>();
+
+            if (forms)
             {
-                return Fail("No table types were generated from the scoped tables.", ExitInvalidArguments, includeUsage: false);
+                List<FormSource> sources = new List<FormSource>();
+                foreach (SystemForm form in FormReader.ReadForms(service, logicalNames))
+                {
+                    EntityMetadata? entity = ReadMeta(form.ObjectTypeCode);
+                    if (entity == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        sources.Add(new FormSource(form.FormId.ToString("D"), form.FormType, form.Name, FormXmlParser.Parse(form.FormXml), entity));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Warning: skipping form '{form.ObjectTypeCode}/{form.Name}' (invalid FormXML): {ex.Message}");
+                    }
+                }
+
+                files.AddRange(FormModelTsGenerator.GenerateForms(sources, optionSets));
             }
 
-            return WriteModels(models, outDir, overwrite, json, string.Empty);
+            if (tables)
+            {
+                List<EntityMetadata> metadata = new List<EntityMetadata>();
+                foreach (string name in logicalNames)
+                {
+                    EntityMetadata? entity = ReadMeta(name);
+                    if (entity != null)
+                    {
+                        metadata.Add(entity);
+                    }
+                }
+
+                files.AddRange(TableTypeTsGenerator.GenerateTables(metadata, optionSets));
+            }
+
+            files.AddRange(OptionSetsTs.GenerateFiles(optionSets));
+
+            GeneratedModel? barrel = BarrelTs.Build(files);
+            if (barrel != null)
+            {
+                files.Add(barrel);
+            }
+
+            if (files.Count == 0)
+            {
+                // Distinguish the common forms-only "no published forms" case from a genuinely empty scope.
+                return Fail(
+                    forms && !tables
+                        ? "No published Main or Quick Create forms were found for the scoped tables."
+                        : "No TypeScript models were generated from the scoped tables.",
+                    ExitInvalidArguments,
+                    includeUsage: false);
+            }
+
+            return WriteModels(files, outDir, overwrite, json, string.Empty);
         }
         catch (DataverseConnectionException ex)
         {
@@ -657,6 +625,7 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
         Console.WriteLine("  vela models --forms --entities account,contact [connection options]   (preview)");
         Console.WriteLine("  vela models --tables --entities account,contact [connection options]  (preview)");
+        Console.WriteLine("  vela models --forms --tables --entities account,contact [connection options]  (preview, both + one barrel)");
         Console.WriteLine();
         Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
@@ -666,6 +635,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
         Console.WriteLine("  --forms                   (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms (TypeScript; --lang optional)");
         Console.WriteLine("  --tables                  (preview) emit vela-client TypeScript Web API record interfaces (tables/<name>.ts) for the scoped tables (TypeScript; --lang optional)");
+        Console.WriteLine("                            (--forms and --tables can be combined: one run emits both plus a shared option-sets/ folder and one index.ts barrel)");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
         Console.WriteLine("  --json                    print a JSON report of the generated files (for scripts/agents)");

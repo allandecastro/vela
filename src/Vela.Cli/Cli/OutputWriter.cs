@@ -202,7 +202,7 @@ internal static class OutputWriter
         WriteCommand(console, "add", "Add a plugin, service, Custom API, test, or step to a project.");
         Console.WriteLine("      (plugin|service|customapi|test|step) <Name> [...]   run 'vela add --help' for the full options");
         WriteCommand(console, "models", "Generate early-bound model classes.");
-        Console.WriteLine("      (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--forms | --tables (preview, TypeScript)] [connection options]");
+        Console.WriteLine("      (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--forms and/or --tables (preview, TypeScript)] [connection options]");
         WriteCommand(console, "sign", "Sign a plugin package.");
         Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
         WriteCommand(console, "menu", "Launch the interactive menu (default with no args).");
