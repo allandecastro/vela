@@ -35,14 +35,34 @@ public static class FormModelTsGenerator
 
     public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<FormSource> forms)
     {
+        // Option sets are shared across forms → registered once (keyed by their deterministic enum name), in
+        // first-reference order, and emitted into the option-sets/ folder (see OptionSetsTs, shared with --tables).
+        OptionSetsTs.Registry optionSets = new OptionSetsTs.Registry();
+
+        List<GeneratedModel> files = new List<GeneratedModel>(GenerateForms(forms, optionSets));
+        files.AddRange(OptionSetsTs.GenerateFiles(optionSets));
+
+        // A root index.ts barrel re-exporting every generated symbol, so consumers import from './generated'.
+        GeneratedModel? barrel = BarrelTs.Build(files);
+        if (barrel != null)
+        {
+            files.Add(barrel);
+        }
+
+        return files;
+    }
+
+    /// <summary>
+    /// Emits only the per-form model files, registering their option sets into <paramref name="optionSets"/>
+    /// (no option-sets files, no barrel). The combined <c>--forms --tables</c> path calls this so both scopes share
+    /// one registry and one barrel; the single-scope <see cref="Generate"/> wraps it.
+    /// </summary>
+    internal static IReadOnlyList<GeneratedModel> GenerateForms(IEnumerable<FormSource> forms, OptionSetsTs.Registry optionSets)
+    {
         if (forms == null)
         {
             throw new ArgumentNullException(nameof(forms));
         }
-
-        // Option sets are shared across forms → registered once (keyed by their deterministic enum name), in
-        // first-reference order, and emitted into a single option-sets.ts (see OptionSetsTs, shared with --tables).
-        OptionSetsTs.Registry optionSets = new OptionSetsTs.Registry();
 
         // Several forms of the same table can slug to the same const/file name (e.g. a Main and a Quick Create form
         // both named "Account"). Disambiguate deterministically up front so no generated file is silently
@@ -57,15 +77,6 @@ public static class FormModelTsGenerator
             string constName = UniqueName(ConstName(entity, form.FormName), usedConsts);
             string fileName = UniqueFileName(FileName(entity, form.FormName), usedFiles);
             files.Add(GenerateForm(form, entity, constName, fileName, optionSets));
-        }
-
-        files.AddRange(OptionSetsTs.GenerateFiles(optionSets));
-
-        // A root index.ts barrel re-exporting every generated symbol, so consumers import from './generated'.
-        GeneratedModel? barrel = BarrelTs.Build(files);
-        if (barrel != null)
-        {
-            files.Add(barrel);
         }
 
         return files;

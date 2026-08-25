@@ -32,17 +32,9 @@ public static class TableTypeTsGenerator
 
     public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<EntityMetadata> entities)
     {
-        if (entities == null)
-        {
-            throw new ArgumentNullException(nameof(entities));
-        }
-
         OptionSetsTs.Registry optionSets = new OptionSetsTs.Registry();
 
-        List<GeneratedModel> files = entities
-            .Where(e => !string.IsNullOrWhiteSpace(e?.LogicalName))
-            .Select(e => GenerateTable(e, optionSets))
-            .ToList();
+        List<GeneratedModel> files = new List<GeneratedModel>(GenerateTables(entities, optionSets));
 
         // The enums are shared with --forms: a --tables-only run stays self-contained by emitting the same files.
         files.AddRange(OptionSetsTs.GenerateFiles(optionSets));
@@ -55,6 +47,24 @@ public static class TableTypeTsGenerator
         }
 
         return files;
+    }
+
+    /// <summary>
+    /// Emits only the per-table record files, registering their option sets into <paramref name="optionSets"/>
+    /// (no option-sets files, no barrel). The combined <c>--forms --tables</c> path calls this so both scopes share
+    /// one registry and one barrel; the single-scope <see cref="Generate"/> wraps it.
+    /// </summary>
+    internal static IReadOnlyList<GeneratedModel> GenerateTables(IEnumerable<EntityMetadata> entities, OptionSetsTs.Registry optionSets)
+    {
+        if (entities == null)
+        {
+            throw new ArgumentNullException(nameof(entities));
+        }
+
+        return entities
+            .Where(e => !string.IsNullOrWhiteSpace(e?.LogicalName))
+            .Select(e => GenerateTable(e, optionSets))
+            .ToList();
     }
 
     private static GeneratedModel GenerateTable(EntityMetadata entity, OptionSetsTs.Registry optionSets)

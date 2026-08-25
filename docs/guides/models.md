@@ -120,6 +120,14 @@ The re-exports are **named** (never `export *`), so esbuild still tree-shakes th
 once (a table's shared type/value name, or any collision, never double-exports). The barrel aggregates what the
 run produced under `--out`, and is emitted only when there is at least one symbol.
 
+`--forms` and `--tables` can be **combined in one run**, so form models, table types, the shared `option-sets/`
+folder and a single complete barrel are emitted together (a `--forms`-only or `--tables`-only run only barrels its
+own scope). Regenerating into a folder that already has generated files needs `--overwrite`:
+
+```powershell
+vela models --forms --tables --entities account,contact --out src/generated --overwrite
+```
+
 ## Security roles (`--roles` / `--solution-roles`)
 
 `--roles "Salesperson,Sales Manager"` (explicit names) or `--solution-roles` (every role in a `--solution`)

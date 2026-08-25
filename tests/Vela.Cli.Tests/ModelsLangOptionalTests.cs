@@ -55,4 +55,16 @@ public sealed class ModelsLangOptionalTests
         Assert.Equal(ExitInvalidArguments, exitCode);
         Assert.Contains("only supports TypeScript output", stderr);
     }
+
+    [Fact]
+    public void Forms_And_Tables_Can_Be_Combined()
+    {
+        // --forms and --tables together are accepted (one run, one barrel): the command clears the scope/language
+        // gates and only stops later at the connection gate, not with an "either/or" rejection.
+        string stderr = RunCapturingStderr(["--forms", "--tables", "--entities", "account"], out int exitCode);
+
+        Assert.Equal(ExitInvalidArguments, exitCode);
+        Assert.Contains("Missing Dataverse auth", stderr);
+        Assert.DoesNotContain("not both", stderr);
+    }
 }

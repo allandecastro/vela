@@ -21,6 +21,17 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Changed
+
+- `vela models --forms` and `--tables` can now be **combined in one run**: form models and table types then share
+  one `option-sets/` folder (the enum files are the union) and a single complete `index.ts` barrel that re-exports
+  both. A single-scope run still barrels only its own scope. This is the recommended way to regenerate a
+  web-resources project's `src/generated/` (`vela models --forms --tables --out src/generated --overwrite`), so
+  the `@generated` barrel covers form models, table types and enums together. Documented the `--overwrite` needed
+  to regenerate into a folder that already has generated files (the scaffold ships example files there).
+
 ## [0.1.9] - 2026-08-25
 
 CLI line only.
