@@ -347,6 +347,7 @@ public class ProjectScaffolderTests
             AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", "forms", "account", "main.form.ts");
             AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", "option-sets", "account.ts");
             AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", "tables", "contact.ts");
+            AssertFileExists(root, "src", "Zava.WebResources", "src", "generated", "index.ts");
             AssertFileExists(root, "src", "Zava.WebResources", "test", "entries.test.ts");
 
             // The .sln references the .esproj under the JavaScript project type id.
@@ -376,9 +377,14 @@ public class ProjectScaffolderTests
             Assert.Contains("\"name\": \"zava-webresources\"", packageJson);
             Assert.Contains("\"@types/node\":", packageJson);
 
-            // tsconfig lists "node" explicitly (an explicit `types` array is exhaustive, so the package alone
-            // would not be picked up).
-            Assert.Contains("\"types\": [\"vitest/globals\", \"node\"]", File.ReadAllText(Path.Combine(project, "tsconfig.json")));
+            // tsconfig lists "node" explicitly and defines the @generated path alias (baseUrl + paths).
+            string tsconfig = File.ReadAllText(Path.Combine(project, "tsconfig.json"));
+            Assert.Contains("\"types\": [\"vitest/globals\", \"node\"]", tsconfig);
+            Assert.Contains("\"@generated\": [\"src/generated\"]", tsconfig);
+
+            // vitest resolves the same @generated alias so tests import the barrel like the source does.
+            Assert.Contains("'@generated': fileURLToPath(new URL('./src/generated', import.meta.url))",
+                File.ReadAllText(Path.Combine(project, "vitest.config.ts")));
 
             Assert.Contains("dist/", File.ReadAllText(Path.Combine(project, ".gitignore")));
 
@@ -388,11 +394,18 @@ public class ProjectScaffolderTests
             Assert.Contains("export const { onLoad, onSave } = defineForm(AccountMain, AccountForm);", main);
             Assert.Contains("export class AccountForm extends VelaForm(AccountMain)", main);
             Assert.Contains("createWebApi()", main);
+            // Imports the generated symbols through the @generated barrel, not deep paths.
+            Assert.Contains("import { AccountMain, Contact, account_customertypecode } from '@generated';", main);
 
             // The example generated model set is present (with the EXAMPLE regenerate header) so the form compiles.
             string generatedForm = File.ReadAllText(Path.Combine(project, "src", "generated", "forms", "account", "main.form.ts"));
             Assert.Contains("// EXAMPLE - regenerate with:", generatedForm);
             Assert.Contains("export const AccountMain =", generatedForm);
+
+            // The example barrel re-exports the model set for the @generated alias.
+            string barrel = File.ReadAllText(Path.Combine(project, "src", "generated", "index.ts"));
+            Assert.Contains("export { AccountMain } from './forms/account/main.form';", barrel);
+            Assert.Contains("export { Contact } from './tables/contact';", barrel);
 
             // The entries guard reads the entry map and asserts each entry module exports the FormXML handlers.
             string entriesTest = File.ReadAllText(Path.Combine(project, "test", "entries.test.ts"));

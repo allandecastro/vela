@@ -37,6 +37,9 @@ CLI line only.
   is optional and defaults to `ts` (an explicit non-`ts` value is still rejected). `--lang ts` keeps working.
 - `vela add form-script <entity>` now refuses to overwrite an existing file (use `--force`), matching the rest of
   `vela add`, instead of silently skipping it. Registering the tsup entry stays idempotent.
+- The scaffolded web-resources project exposes a `@generated` path alias (tsconfig `paths`, resolved by tsup and
+  Vitest) pointing at `src/generated`, and the example form script imports the generated symbols through the
+  barrel (`import { AccountMain, Contact, account_customertypecode } from '@generated';`) instead of deep paths.
 
 ## [0.1.8] - 2026-08-25
 
