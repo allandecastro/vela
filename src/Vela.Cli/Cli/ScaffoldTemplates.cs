@@ -54,6 +54,10 @@ internal static class ScaffoldTemplates
     public const string VitestVersion = "^2.1.8";
     public const string VelaClientVersion = "^0.1.2";
 
+    // Node type definitions: the entries guard imports node:url / node:path, so a `tsc --noEmit` typecheck needs
+    // these even though esbuild (tsup/vitest) resolves the node: scheme at runtime without them.
+    public const string TypesNodeVersion = "^20.14.0";
+
     // The npm package name for the web resources project: lower-case, dot-free, dash-suffixed.
     public static string WebResourcesPackageName(string prefix) => $"{ApiPrefix(prefix)}-webresources";
 
@@ -79,6 +83,7 @@ $$"""
     "vela-client": "{{VelaClientVersion}}"
   },
   "devDependencies": {
+    "@types/node": "{{TypesNodeVersion}}",
     "tsup": "{{TsupVersion}}",
     "typescript": "{{TypeScriptVersion}}",
     "vitest": "{{VitestVersion}}"
@@ -97,7 +102,7 @@ $$"""
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals", "node"]
   },
   "include": ["src", "test"]
 }
