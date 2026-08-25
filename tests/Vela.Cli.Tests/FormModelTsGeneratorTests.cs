@@ -299,6 +299,42 @@ public class FormModelTsGeneratorTests
     }
 
     [Fact]
+    public void Const_Name_Is_Sanitized_To_A_Valid_Identifier()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName").Display("First Name")
+            .Build();
+
+        // A form name with spaces, parentheses and digits must not leak into the const (which would not compile).
+        string ts = Generate(
+            new FormSource("id", "Main", "Foo (Bar) 2", FormXmlParser.Parse(OneSection("s", "firstname")), entity),
+            "contact.foobar2.form.ts");
+
+        Assert.Contains("export const ContactFooBar2 = {", ts);
+        Assert.DoesNotContain("(", ts.Split('\n').First(l => l.StartsWith("export const"))); // no parens in the identifier
+    }
+
+    [Fact]
+    public void Sanitized_Const_Name_Collisions_Are_Deduplicated()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName").Display("First Name")
+            .Build();
+
+        // "Foo (Bar)" and "Foo [Bar]" both sanitize to ContactFooBar, so the second is disambiguated.
+        var files = FormModelTsGenerator.Generate(new[]
+        {
+            new FormSource("id1", "Main", "Foo (Bar)", FormXmlParser.Parse(OneSection("s", "firstname")), entity),
+            new FormSource("id2", "QuickCreate", "Foo [Bar]", FormXmlParser.Parse(OneSection("s", "firstname")), entity),
+        });
+
+        Assert.Contains("export const ContactFooBar = {", files[0].Code);
+        Assert.Contains("export const ContactFooBar2 = {", files[1].Code);
+    }
+
+    [Fact]
     public void Generate_Null_Throws()
     {
         Assert.Throws<System.ArgumentNullException>(() => FormModelTsGenerator.Generate(null!));
