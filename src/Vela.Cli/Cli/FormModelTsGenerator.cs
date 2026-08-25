@@ -25,9 +25,9 @@ public static class FormModelTsGenerator
 {
     private const string ClientPackage = "vela-client";
 
-    // Each form file lives at forms/<entity>/<slug>.form.ts, so the shared option-sets.ts at the output root is two
+    // Each form file lives at forms/<entity>/<slug>.form.ts, so the option-sets/ folder at the output root is two
     // directories up.
-    private const string OptionSetsModule = "../../option-sets";
+    private const string OptionSetsPrefix = "../../";
 
     // Header on every emitted file: marks it as generated and names the command that regenerates it, so a hand-edit
     // is obviously wrong and the drift-guard snapshot on the vela-client side has a stable line to assert.
@@ -59,10 +59,7 @@ public static class FormModelTsGenerator
             files.Add(GenerateForm(form, entity, constName, fileName, optionSets));
         }
 
-        if (optionSets.Count > 0)
-        {
-            files.Add(new GeneratedModel(OptionSetsTs.FileName, OptionSetsTs.GenerateFile(optionSets)));
-        }
+        files.AddRange(OptionSetsTs.GenerateFiles(optionSets));
 
         return files;
     }
@@ -100,15 +97,25 @@ public static class FormModelTsGenerator
         sb.Append(GeneratedBanner);
         sb.Append($"import type {{ FormModel }} from '{ClientPackage}';\n");
 
-        string[] referencedEnums = placed
-            .Select(p => p.OptionSetEnum)
-            .Where(name => name != null)
-            .Select(name => name!)
+        // Locals (this entity's option sets) import from option-sets/<entity>; globals from option-sets/global.
+        string[] localEnums = placed
+            .Where(p => p.OptionSet is { IsGlobal: not true })
+            .Select(p => p.OptionSetEnum!)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        if (referencedEnums.Length > 0)
+        string[] globalEnums = placed
+            .Where(p => p.OptionSet is { IsGlobal: true })
+            .Select(p => p.OptionSetEnum!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (localEnums.Length > 0)
         {
-            sb.Append($"import {{ {string.Join(", ", referencedEnums)} }} from '{OptionSetsModule}';\n");
+            sb.Append($"import {{ {string.Join(", ", localEnums)} }} from '{OptionSetsTs.EntityModule(OptionSetsPrefix, entity)}';\n");
+        }
+
+        if (globalEnums.Length > 0)
+        {
+            sb.Append($"import {{ {string.Join(", ", globalEnums)} }} from '{OptionSetsTs.GlobalModule(OptionSetsPrefix)}';\n");
         }
 
         sb.Append('\n');
@@ -121,10 +128,10 @@ public static class FormModelTsGenerator
         AppendLayout(sb, source.Form, placed);
         AppendSubgrids(sb, source.Form.Subgrids);
 
-        // Register the referenced option sets in placement order, so the shared option-sets.ts is deterministic.
+        // Register the referenced option sets in placement order, so the shared option-sets files are deterministic.
         foreach (PlacedField field in placed.Where(p => p.OptionSet != null))
         {
-            optionSets.Register(field.OptionSetEnum!, field.OptionSet!);
+            optionSets.Register(entity, field.OptionSetEnum!, field.OptionSet!);
         }
 
         sb.Append("} as const satisfies FormModel;\n");
