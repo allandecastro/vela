@@ -52,7 +52,7 @@ internal static class ScaffoldTemplates
     public const string TsupVersion = "^8.3.5";
     public const string TypeScriptVersion = "^5.6.3";
     public const string VitestVersion = "^2.1.8";
-    public const string VelaClientVersion = "^0.1.0";
+    public const string VelaClientVersion = "^0.1.2";
 
     // The npm package name for the web resources project: lower-case, dot-free, dash-suffixed.
     public static string WebResourcesPackageName(string prefix) => $"{ApiPrefix(prefix)}-webresources";
