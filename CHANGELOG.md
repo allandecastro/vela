@@ -23,6 +23,14 @@ All notable changes to Vela are documented here. The format is based on
 
 CLI line only.
 
+### Added
+
+- `vela models --tables --lang ts` pairs each record interface with a same-named `defineTable<Name>({ entity,
+  primaryId, multiSelect })` runtime descriptor (imported from `vela-client/webapi`; the `multiSelect` key is
+  omitted when the table has none), and emits a typed logical-name annotation for multi-target lookups
+  (`'_<name>_value@Microsoft.Dynamics.CRM.lookuplogicalname'?: 'account' | 'contact'`); single-target lookups omit
+  it.
+
 ### Changed
 
 - `vela models --forms --lang ts` now writes each form model to `forms/<entity>/<slug>.form.ts` (the folder is the
