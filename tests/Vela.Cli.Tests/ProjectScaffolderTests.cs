@@ -368,7 +368,16 @@ public class ProjectScaffolderTests
             Assert.Contains("'adc_/js/account/Forms/main': 'src/account/Forms/main.ts',", entries);
             Assert.Contains("} as const;", entries);
 
-            Assert.Contains("\"name\": \"zava-webresources\"", File.ReadAllText(Path.Combine(project, "package.json")));
+            // package.json carries @types/node (the entries guard imports node:url / node:path, so a tsc --noEmit
+            // typecheck needs the Node types) alongside the project name.
+            string packageJson = File.ReadAllText(Path.Combine(project, "package.json"));
+            Assert.Contains("\"name\": \"zava-webresources\"", packageJson);
+            Assert.Contains("\"@types/node\":", packageJson);
+
+            // tsconfig lists "node" explicitly (an explicit `types` array is exhaustive, so the package alone
+            // would not be picked up).
+            Assert.Contains("\"types\": [\"vitest/globals\", \"node\"]", File.ReadAllText(Path.Combine(project, "tsconfig.json")));
+
             Assert.Contains("dist/", File.ReadAllText(Path.Combine(project, ".gitignore")));
 
             // The example entry exports both onLoad and onSave, so the freshly scaffolded entries guard passes.
