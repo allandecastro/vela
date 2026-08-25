@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Changed
+
+- `vela models --forms` / `--tables` no longer require `--lang ts`: their output is TypeScript only, so `--lang`
+  is optional and defaults to `ts` (an explicit non-`ts` value is still rejected). `--lang ts` keeps working.
+- `vela add form-script <entity>` now refuses to overwrite an existing file (use `--force`), matching the rest of
+  `vela add`, instead of silently skipping it. Registering the tsup entry stays idempotent.
+
 ## [0.1.8] - 2026-08-25
 
 CLI line only.

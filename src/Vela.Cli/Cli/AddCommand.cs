@@ -105,8 +105,8 @@ internal static class AddCommand
     }
 
     // vela add form-script <entity>: scaffolds src/<entity>/Forms/main.ts (+ co-located main.test.ts) in the
-    // web-resources project and registers its entry in web-resources.entries.ts. Idempotent - existing files are
-    // left untouched (unless --force) and an already-mapped entry is not duplicated.
+    // web-resources project and registers its entry in web-resources.entries.ts. Like the rest of `vela add`, it
+    // refuses to overwrite an existing file without --force; the entry-map insertion stays idempotent.
     private static int AddFormScript(string[] args)
     {
         string? raw = FindPositional(args.Skip(1).ToArray());
@@ -139,11 +139,20 @@ internal static class AddCommand
         string formScriptPath = Path.Combine(projectDir, "src", entity, "Forms", "main.ts");
         string testPath = Path.Combine(projectDir, "src", entity, "Forms", "main.test.ts");
 
-        var created = new System.Collections.Generic.List<string>();
-        var skipped = new System.Collections.Generic.List<string>();
+        // Match the rest of `vela add`: refuse to clobber an existing file unless --force, rather than silently
+        // skipping it. The entry-map insertion stays idempotent (a duplicate key is never re-added).
+        if (!force)
+        {
+            string? existing = new[] { formScriptPath, testPath }.FirstOrDefault(File.Exists);
+            if (existing != null)
+            {
+                return Fail($"File already exists: {existing}. Use --force to overwrite.", ExitInvalidArguments, includeUsage: false);
+            }
+        }
 
-        WriteIfAbsent(formScriptPath, FormScriptScaffold.FormScript(entity), force, created, skipped);
-        WriteIfAbsent(testPath, FormScriptScaffold.FormScriptTest(entity), force, created, skipped);
+        var created = new System.Collections.Generic.List<string>();
+        WriteScaffoldFile(formScriptPath, FormScriptScaffold.FormScript(entity), created);
+        WriteScaffoldFile(testPath, FormScriptScaffold.FormScriptTest(entity), created);
 
         // Register the tsup entry (idempotent). The map is the source of truth tsup.config.ts and the guard read.
         string entryName = FormScriptScaffold.EntryName(wrPrefix!, entity);
@@ -158,10 +167,6 @@ internal static class AddCommand
             File.WriteAllText(entriesPath, updatedEntries);
             created.Add($"{entriesPath} (+ entry '{entryName}')");
         }
-        else
-        {
-            skipped.Add($"{entriesPath} (entry '{entryName}' already present)");
-        }
 
         if (HasFlag(args, "--json"))
         {
@@ -172,28 +177,15 @@ internal static class AddCommand
             Console.WriteLine($"Added form-script for '{entity}'");
             foreach (string path in created)
             {
-                Console.WriteLine($"  + {path}");
-            }
-
-            foreach (string path in skipped)
-            {
-                Console.WriteLine($"  = {path}");
+                Console.WriteLine($"  {path}");
             }
         }
 
         return ExitSuccess;
     }
 
-    // Writes content unless the file already exists (then it is skipped, or overwritten when force). Records the
-    // outcome so the caller can report created vs skipped for an idempotent run.
-    private static void WriteIfAbsent(string fullPath, string content, bool force, System.Collections.Generic.List<string> created, System.Collections.Generic.List<string> skipped)
+    private static void WriteScaffoldFile(string fullPath, string content, System.Collections.Generic.List<string> created)
     {
-        if (File.Exists(fullPath) && !force)
-        {
-            skipped.Add($"{fullPath} (already exists)");
-            return;
-        }
-
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllText(fullPath, content);
         created.Add(fullPath);

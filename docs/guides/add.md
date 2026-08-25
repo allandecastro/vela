@@ -50,7 +50,7 @@ vela add --interactive
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +
   a co-located `main.test.ts`) in the [web-resources project](client-side.md) and registers its entry in
   `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it is
-  idempotent, and the `<entity>` is the table logical name.
+  refuses to overwrite an existing file (use `--force`), and the `<entity>` is the table logical name.
 
 ## See also
 

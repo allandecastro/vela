@@ -45,19 +45,30 @@ public class AddFormScriptTests
     }
 
     [Fact]
-    public void Add_FormScript_Is_Idempotent()
+    public void Add_FormScript_Existing_File_Fails_Without_Force()
+    {
+        RunInWebResourcesProject(dir =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["form-script", "contact", "--project", dir]));
+
+            // Re-running without --force refuses to overwrite, like the rest of `vela add`.
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["form-script", "contact", "--project", dir]));
+        });
+    }
+
+    [Fact]
+    public void Add_FormScript_Force_Overwrites_Without_Duplicating_The_Entry()
     {
         RunInWebResourcesProject(dir =>
         {
             Assert.Equal(ExitSuccess, AddCommand.Run(["form-script", "contact", "--project", dir]));
             string afterFirst = File.ReadAllText(Path.Combine(dir, "web-resources.entries.ts"));
 
-            // A second run touches nothing new and still succeeds.
-            Assert.Equal(ExitSuccess, AddCommand.Run(["form-script", "contact", "--project", dir]));
+            // --force overwrites the files; the entry-map insertion stays idempotent.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["form-script", "contact", "--project", dir, "--force"]));
             string afterSecond = File.ReadAllText(Path.Combine(dir, "web-resources.entries.ts"));
 
             Assert.Equal(afterFirst, afterSecond);
-            // The entry appears exactly once.
             Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(afterSecond, "adc_/js/contact/Forms/main").Count);
         });
     }
