@@ -39,8 +39,8 @@ the `src/generated` (regenerated) vs `src` (hand-written) split.
 ## 2. Generate the typed form models
 
 `vela models --forms --lang ts` reads your tables' published Main / Quick Create forms and emits one
-`<entity>.<form>.form.ts` per form (each `satisfies FormModel`) plus a shared `option-sets.ts`, into
-`src/generated/` (see [Early-bound models](models.md)):
+`forms/<entity>/<form>.form.ts` per form (each `satisfies FormModel`) plus a shared `option-sets.ts` at the
+output root, into `src/generated/` (see [Early-bound models](models.md)):
 
 ```powershell
 vela models --forms --lang ts --solution ZavaSales --out src/Zava.WebResources/src/generated --interactive
@@ -65,7 +65,7 @@ accessors:
 ```ts
 // src/contact/main.ts
 import { VelaForm } from 'vela-client';
-import { ContactInformation } from '../generated/contact.information.form';
+import { ContactInformation } from '../generated/forms/contact/information.form';
 
 const ContactForm = VelaForm(ContactInformation);
 
@@ -92,7 +92,7 @@ The scaffolded project also includes Vitest; form scripts are unit-testable off-
 import { describe, it, expect } from 'vitest';
 import { VelaForm } from 'vela-client';
 import { fakeForm } from 'vela-client/testing';
-import { ContactInformation } from '../src/generated/contact.information.form';
+import { ContactInformation } from '../src/generated/forms/contact/information.form';
 
 describe('contact form', () => {
   it('round-trips a typed field value', () => {

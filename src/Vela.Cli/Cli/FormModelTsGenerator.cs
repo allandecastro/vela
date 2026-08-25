@@ -24,7 +24,10 @@ public sealed record FormSource(string FormId, string FormType, string FormName,
 public static class FormModelTsGenerator
 {
     private const string ClientPackage = "vela-client";
-    private const string OptionSetsModule = "./option-sets";
+
+    // Each form file lives at forms/<entity>/<slug>.form.ts, so the shared option-sets.ts at the output root is two
+    // directories up.
+    private const string OptionSetsModule = "../../option-sets";
 
     // Header on every emitted file: marks it as generated and names the command that regenerates it, so a hand-edit
     // is obviously wrong and the drift-guard snapshot on the vela-client side has a stable line to assert.
@@ -508,7 +511,9 @@ public static class FormModelTsGenerator
         return char.IsDigit(name[0]) ? "_" + name : name;
     }
 
-    private static string FileName(string entity, string formName) => $"{entity}.{Slug(formName)}.form.ts";
+    // Nested layout: forms/<entity logical name, lower-cased>/<slug>.form.ts. The folder carries the entity, so the
+    // file name itself drops the entity prefix.
+    private static string FileName(string entity, string formName) => $"forms/{entity.ToLowerInvariant()}/{Slug(formName)}.form.ts";
 
     // Ensures a name is unique within the batch by appending 2, 3, ... on collision (matching ModelGenerator).
     private static string UniqueName(string name, HashSet<string> used)
