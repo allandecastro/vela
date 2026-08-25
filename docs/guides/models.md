@@ -106,6 +106,20 @@ export const Account = defineTable<Account>({
 multi-select columns. Generation is deterministic (columns in metadata order, primary key first) and reuses the
 same scope and connection flags as the rest of `vela models`.
 
+## Root barrel (`index.ts`)
+
+Both TypeScript scopes also emit a root `<out>/index.ts` **barrel** that named-re-exports every generated symbol
+(form-model consts, table interfaces + their `defineTable` consts, and option-set enums), so a consumer imports
+from one place instead of many deep paths:
+
+```ts
+import { AccountMain, Contact, account_customertypecode } from './generated';
+```
+
+The re-exports are **named** (never `export *`), so esbuild still tree-shakes the unused ones; a name is exported
+once (a table's shared type/value name, or any collision, never double-exports). The barrel aggregates what the
+run produced under `--out`, and is emitted only when there is at least one symbol.
+
 ## Security roles (`--roles` / `--solution-roles`)
 
 `--roles "Salesperson,Sales Manager"` (explicit names) or `--solution-roles` (every role in a `--solution`)
