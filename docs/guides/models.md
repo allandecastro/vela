@@ -84,9 +84,25 @@ Each table becomes `export interface <Pascal> extends DataverseRecordMeta { ... 
 (integer, decimal, money, ...) to `number`, boolean to `boolean`, date/time to `string` (the Web API returns ISO
 strings), choice to its enum and multi-select to an enum array, and file/image to `string`. Every non-key column
 is optional and nullable (`name?: string | null`); the **primary key is required** (`accountid: string`). A
-**lookup** is exposed as its GUID under `_<name>_value` (for example `_primarycontactid_value?: string | null`).
-Generation is deterministic (columns in metadata order, primary key first) and reuses the same scope and
-connection flags as the rest of `vela models`.
+**lookup** is exposed as its GUID under `_<name>_value` (for example `_primarycontactid_value?: string | null`); a
+**multi-target** lookup (Customer, Owner, or any lookup with more than one target) additionally carries a typed
+logical-name annotation naming which table the row points at
+(`'_<name>_value@Microsoft.Dynamics.CRM.lookuplogicalname'?: 'account' | 'contact'`), while a single-target lookup
+omits it.
+
+Each interface is paired with a same-named runtime descriptor (so the symbol merges type and value):
+
+```ts
+export const Account = defineTable<Account>({
+  entity: 'account',
+  primaryId: 'accountid',
+  multiSelect: ['new_servicetypes'],
+});
+```
+
+`defineTable` is imported from `vela-client/webapi`, and the `multiSelect` key is omitted when the table has no
+multi-select columns. Generation is deterministic (columns in metadata order, primary key first) and reuses the
+same scope and connection flags as the rest of `vela models`.
 
 ## Security roles (`--roles` / `--solution-roles`)
 
