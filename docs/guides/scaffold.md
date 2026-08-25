@@ -85,7 +85,7 @@ The bundle is built with **tsup** (`npm run build` / `npm run dev`), not the CLI
 global named after **your** publisher prefix (`--web-resources-namespace`, default: the project prefix
 lower-cased), never "Vela". Its output folder (`--web-resources-folder`, default `dist`) mirrors the Dataverse
 web resource names and is what a later `vela apply --webresources` deploys. Regenerate the form models under
-`src/generated/` with [`vela models --forms --lang ts`](models.md). See the runtime library in the separate
+`src/generated/` with [`vela models --forms`](models.md). See the runtime library in the separate
 `vela-client` package for `VelaForm` and the typed accessors.
 
 Each form web resource is one **entry** in `web-resources.entries.ts` (`<prefix>_/js/<entity>/Forms/main`
@@ -95,5 +95,6 @@ mapped to its `src/<entity>/Forms/main.ts` source). Add one with:
 vela add form-script account   # scaffolds src/account/Forms/main.ts (+ main.test.ts) and registers the entry
 ```
 
-`vela add form-script <entity>` is idempotent (re-running it leaves existing files and the entry untouched); the
-`<entity>` is the table logical name (lower-cased for the folder, PascalCased for the referenced form model).
+`vela add form-script <entity>` refuses to overwrite an existing file (use `--force`); its entry-map insertion
+stays idempotent. The `<entity>` is the table logical name (lower-cased for the folder, PascalCased for the
+referenced form model).

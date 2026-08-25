@@ -36,23 +36,24 @@ columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbna
 Connection flags are the same as `plan`/`apply`
 (`--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or `--interactive`).
 
-## TypeScript form models (`--forms --lang ts`)
+## TypeScript form models (`--forms`)
 
 > [!NOTE]
 > Preview / work in progress. This is part of the new client-side initiative and may change.
 
-`vela models --forms --lang ts` generates **TypeScript `FormModel` files** for the scoped tables' published
+`vela models --forms` generates **TypeScript `FormModel` files** for the scoped tables' published
 **Main** and **Quick Create** forms, for the vela-client runtime to consume. It reads each form's FormXML and
 joins it with the table metadata, so the emitted model carries only the fields, tabs, sections and subgrids
 actually on that form, each typed by the same rules as the C# models (string/memo, the numeric family, boolean,
-date, choice/multichoice, lookup with its targets, guid, file, image).
+date, choice/multichoice, lookup with its targets, guid, file, image). The output is TypeScript, so `--lang` is
+optional here and defaults to `ts` (`--lang ts` is still accepted).
 
 ```powershell
 # every published Main / Quick Create form of the scoped tables, into ./src/generated
-vela models --forms --lang ts --entities account,contact --out src/generated --interactive
+vela models --forms --entities account,contact --out src/generated --interactive
 
 # machine-readable report of the generated files (for scripts and agents)
-vela models --forms --lang ts --solution ZavaSales --out src/generated --json
+vela models --forms --solution ZavaSales --out src/generated --json
 ```
 
 Each form becomes one `forms/<entity>/<form>.form.ts` const that `satisfies FormModel` (the folder is the table's
@@ -65,17 +66,18 @@ same-named forms of one table get disambiguated file names. The FormXML parser i
 forms carry attributes newer than the published `FormXml.xsd`), so real forms generate cleanly; strict XSD
 validation is available as a separate best-effort aid, not a gate on generation.
 
-## TypeScript table types (`--tables --lang ts`)
+## TypeScript table types (`--tables`)
 
 > [!NOTE]
 > Preview / work in progress. This is part of the new client-side initiative and may change.
 
-`vela models --tables --lang ts` generates **TypeScript record interfaces** for the scoped tables, so the
+`vela models --tables` generates **TypeScript record interfaces** for the scoped tables, so the
 vela-client Web API query layer is typed without hand-writing `T` in `retrieveMultiple<T>('account').select(...)`.
-It is the Web API twin of the C# early-bound models: one `tables/<logicalname>.ts` per table.
+It is the Web API twin of the C# early-bound models: one `tables/<logicalname>.ts` per table. As with `--forms`,
+`--lang` is optional and defaults to `ts`.
 
 ```powershell
-vela models --tables --lang ts --entities account,contact --out src/generated --interactive
+vela models --tables --entities account,contact --out src/generated --interactive
 ```
 
 Each table becomes `export interface <Pascal> extends DataverseRecordMeta { ... }`, importing the same shared

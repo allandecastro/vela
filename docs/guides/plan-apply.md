@@ -83,7 +83,7 @@ but is absent from it, so mirroring a subset folder never prunes other folders, 
 nothing. A `--webresources` run needs no `--package`, so you can deploy web resources on their own. Each name must
 start with the solution's publisher prefix (its top-level folder); Vela validates this up front and fails with a
 clear message otherwise. Generate the TypeScript form models the scripts build on with
-[`vela models --forms --lang ts`](models.md), and scaffold the client project with
+[`vela models --forms`](models.md), and scaffold the client project with
 [`vela init --web-resources`](scaffold.md).
 
 ## Resuming a failed apply

@@ -69,58 +69,48 @@ internal static class ModelsCommand
         bool json = HasFlag(args, "--json");
 
         // --forms emits TypeScript FormModel files (parsed FormXML + table metadata) and --tables emits TypeScript
-        // Web API record interfaces, instead of C# early-bound classes; --lang selects the emitter (csharp default).
-        // All three share the scope/connection/write plumbing.
+        // Web API record interfaces, instead of C# early-bound classes. Their output is TypeScript only, so --lang
+        // is optional there and defaults to ts (the C# path keeps csharp as its default). All three share the
+        // scope/connection/write plumbing.
         bool forms = HasFlag(args, "--forms");
         bool tables = HasFlag(args, "--tables");
-        string lang = (TryReadOption(args, "--lang") ?? "csharp").Trim().ToLowerInvariant();
+        string? langOption = TryReadOption(args, "--lang");
 
         if (forms && tables)
         {
             return Fail("Use either --forms or --tables, not both.", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (forms)
+        if (forms || tables)
         {
-            if (lang != "ts")
+            string scope = forms ? "--forms" : "--tables";
+
+            // TypeScript is the only output for the client-side scopes, so --lang defaults to ts and only an
+            // explicit non-ts value is rejected.
+            string tsLang = (langOption ?? "ts").Trim().ToLowerInvariant();
+            if (tsLang != "ts")
             {
-                return Fail("vela models --forms currently supports --lang ts only.", ExitInvalidArguments, includeUsage: false);
+                return Fail($"vela models {scope} only supports TypeScript output; --lang is optional and defaults to ts.", ExitInvalidArguments, includeUsage: false);
             }
 
             if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0)
             {
-                return Fail("vela models --forms needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
+                return Fail($"vela models {scope} needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
             }
 
-            // --forms only reads tables; anything else in scope is ignored, so say so rather than dropping it silently.
+            // These scopes only read tables; anything else is ignored, so say so rather than dropping it silently.
             if (customApis.Length > 0 || roles.Length > 0 || solutionRoles)
             {
-                Console.Error.WriteLine("Warning: --forms generates TypeScript form models only; --custom-apis / --roles / --solution-roles are ignored.");
+                string kind = forms ? "form models" : "record interfaces";
+                Console.Error.WriteLine($"Warning: {scope} generates TypeScript {kind} only; --custom-apis / --roles / --solution-roles are ignored.");
             }
 
-            return RunForms(args, solution, entities, outDir, overwrite, interactive, json);
+            return forms
+                ? RunForms(args, solution, entities, outDir, overwrite, interactive, json)
+                : RunTables(args, solution, entities, outDir, overwrite, interactive, json);
         }
 
-        if (tables)
-        {
-            if (lang != "ts")
-            {
-                return Fail("vela models --tables currently supports --lang ts only.", ExitInvalidArguments, includeUsage: false);
-            }
-
-            if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0)
-            {
-                return Fail("vela models --tables needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
-            }
-
-            if (customApis.Length > 0 || roles.Length > 0 || solutionRoles)
-            {
-                Console.Error.WriteLine("Warning: --tables generates TypeScript record interfaces only; --custom-apis / --roles / --solution-roles are ignored.");
-            }
-
-            return RunTables(args, solution, entities, outDir, overwrite, interactive, json);
-        }
-
+        string lang = (langOption ?? "csharp").Trim().ToLowerInvariant();
         if (lang != "csharp")
         {
             return Fail("--lang applies to --forms / --tables (TypeScript output) only.", ExitInvalidArguments, includeUsage: false);
@@ -665,8 +655,8 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --entities account,contact [connection options]");
         Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
         Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
-        Console.WriteLine("  vela models --forms --lang ts --entities account,contact [connection options]   (preview)");
-        Console.WriteLine("  vela models --tables --lang ts --entities account,contact [connection options]  (preview)");
+        Console.WriteLine("  vela models --forms --entities account,contact [connection options]   (preview)");
+        Console.WriteLine("  vela models --tables --entities account,contact [connection options]  (preview)");
         Console.WriteLine();
         Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
@@ -674,8 +664,8 @@ internal static class ModelsCommand
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
         Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
-        Console.WriteLine("  --forms --lang ts         (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
-        Console.WriteLine("  --tables --lang ts        (preview) emit vela-client TypeScript Web API record interfaces (tables/<name>.ts) for the scoped tables");
+        Console.WriteLine("  --forms                   (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms (TypeScript; --lang optional)");
+        Console.WriteLine("  --tables                  (preview) emit vela-client TypeScript Web API record interfaces (tables/<name>.ts) for the scoped tables (TypeScript; --lang optional)");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
         Console.WriteLine("  --json                    print a JSON report of the generated files (for scripts/agents)");
