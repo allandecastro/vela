@@ -55,8 +55,9 @@ vela models --forms --lang ts --entities account,contact --out src/generated --i
 vela models --forms --lang ts --solution ZavaSales --out src/generated --json
 ```
 
-Each form becomes one `<entity>.<form>.form.ts` const that `satisfies FormModel`, plus a shared `option-sets.ts`
-of numeric enums the choice fields reference. Generation is deterministic (fields follow the form's layout order,
+Each form becomes one `forms/<entity>/<form>.form.ts` const that `satisfies FormModel` (the folder is the table's
+logical name; the file name drops the entity prefix), plus a shared `option-sets.ts` at the output root that the
+choice fields reference. Generation is deterministic (fields follow the form's layout order,
 option sets follow first-reference order) and all-or-nothing, and reuses the same scope (`--solution` /
 `--entities`) and connection flags as the rest of `vela models`. Only published forms are read (no drafts), and
 same-named forms of one table get disambiguated file names. The FormXML parser is deliberately tolerant (modern

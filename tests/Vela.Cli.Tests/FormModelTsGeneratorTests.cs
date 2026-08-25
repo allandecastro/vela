@@ -218,7 +218,7 @@ public class FormModelTsGeneratorTests
             """;
 
         Assert.True(FormXmlSchema.IsValid(xml), string.Join("\n", FormXmlSchema.Validate(xml)));
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "contact.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "forms/contact/info.form.ts");
 
         // ownerid is a header field: present in `fields`, but with no `at` and absent from the layout section list.
         Assert.Contains("ownerid: {", ts);
@@ -241,10 +241,10 @@ public class FormModelTsGeneratorTests
             new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "preferredcolor")), entity),
         });
 
-        string form = files.Single(f => f.FileName == "contact.info.form.ts").Code;
+        string form = files.Single(f => f.FileName == "forms/contact/info.form.ts").Code;
         string optionSets = files.Single(f => f.FileName == "option-sets.ts").Code;
 
-        Assert.Contains("import { vela_color } from './option-sets';", form);
+        Assert.Contains("import { vela_color } from '../../option-sets';", form);
         Assert.Contains("options: vela_color,", form);
         Assert.Contains("export enum vela_color {", optionSets);
     }
@@ -257,7 +257,7 @@ public class FormModelTsGeneratorTests
             .String("firstname", "FirstName").Display("First Name")
             .Build();
 
-        string ts = Generate(new FormSource("id", "QuickCreate", "Quick", FormXmlParser.Parse(OneSection("s", "firstname")), entity), "contact.quick.form.ts");
+        string ts = Generate(new FormSource("id", "QuickCreate", "Quick", FormXmlParser.Parse(OneSection("s", "firstname")), entity), "forms/contact/quick.form.ts");
 
         Assert.Contains("formType: 'QuickCreate',", ts);
     }
@@ -270,7 +270,7 @@ public class FormModelTsGeneratorTests
             .String("firstname", "FirstName").Display("First Name")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname", "firstname")), entity), "contact.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname", "firstname")), entity), "forms/contact/info.form.ts");
 
         // The column appears twice in the FormXML but must be emitted once, and listed once in its section.
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(ts, "firstname").Count); // field key + section entry
@@ -292,7 +292,7 @@ public class FormModelTsGeneratorTests
         });
 
         Assert.Equal(
-            new[] { "account.account.form.ts", "account.account-2.form.ts" },
+            new[] { "forms/account/account.form.ts", "forms/account/account-2.form.ts" },
             files.Select(f => f.FileName).ToArray());
         Assert.Contains("export const AccountAccount = {", files[0].Code);
         Assert.Contains("export const AccountAccount2 = {", files[1].Code);
@@ -309,7 +309,7 @@ public class FormModelTsGeneratorTests
         // A form name with spaces, parentheses and digits must not leak into the const (which would not compile).
         string ts = Generate(
             new FormSource("id", "Main", "Foo (Bar) 2", FormXmlParser.Parse(OneSection("s", "firstname")), entity),
-            "contact.foobar2.form.ts");
+            "forms/contact/foobar2.form.ts");
 
         Assert.Contains("export const ContactFooBar2 = {", ts);
         Assert.DoesNotContain("(", ts.Split('\n').First(l => l.StartsWith("export const"))); // no parens in the identifier
@@ -379,7 +379,7 @@ public class FormModelTsGeneratorTests
             </tab></tabs></form>
             """;
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "account.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "forms/account/info.form.ts");
 
         Assert.Contains(@"label: 'O\'Brien & Co',", ts);
         Assert.Contains("'My Grid': { entity: 'contact' },", ts);
@@ -398,7 +398,7 @@ public class FormModelTsGeneratorTests
             .String("field", "Field").StringFormat(format).Display("Field")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "field")), entity), "contact.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "field")), entity), "forms/contact/info.form.ts");
 
         Assert.Contains($"format: '{expected}',", ts);
     }
@@ -412,7 +412,7 @@ public class FormModelTsGeneratorTests
             .String("field", "Field").StringFormat(StringFormat.RichText).Display("Field")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "field")), entity), "contact.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "field")), entity), "forms/contact/info.form.ts");
 
         Assert.DoesNotContain("format:", ts);
     }
@@ -425,7 +425,7 @@ public class FormModelTsGeneratorTests
             .Unmapped("weird", "Weird").Display("Weird")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "weird")), entity), "contact.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "weird")), entity), "forms/contact/info.form.ts");
 
         Assert.Contains("weird: {", ts);
         Assert.Contains("kind: 'string',", ts);
@@ -440,7 +440,7 @@ public class FormModelTsGeneratorTests
             .String("firstname", "FirstName").Display("First\nName")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname")), entity), "contact.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname")), entity), "forms/contact/info.form.ts");
 
         Assert.Contains(@"label: 'First\nName',", ts);
         Assert.DoesNotContain("First\nName", ts); // never a raw newline inside the literal
@@ -468,7 +468,7 @@ public class FormModelTsGeneratorTests
             </tab></tabs></form>
             """;
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "account.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "forms/account/info.form.ts");
 
         Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(ts, "Dup: \\{").Count);
     }
@@ -483,7 +483,7 @@ public class FormModelTsGeneratorTests
             .BigInt("bignum", "BigNum", min: long.MinValue, max: long.MaxValue).Display("Big Num")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "bignum")), entity), "account.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "bignum")), entity), "forms/account/info.form.ts");
 
         Assert.Contains("min: -9223372036854775808,", ts);
         Assert.Contains("max: 9223372036854775807,", ts);
@@ -510,7 +510,7 @@ public class FormModelTsGeneratorTests
             </tab></tabs></form>
             """;
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "account.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "forms/account/info.form.ts");
 
         Assert.Contains("at: { tab: 'general', section: 's1' },", ts);
         Assert.Contains("s1: {", ts);
@@ -526,7 +526,7 @@ public class FormModelTsGeneratorTests
             .Owner("ownerid", "OwnerId", "systemuser", "team").Display("Owner")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "ownerid")), entity), "contact.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "ownerid")), entity), "forms/contact/info.form.ts");
 
         Assert.Contains("kind: 'lookup',", ts);
         Assert.Contains("targets: ['systemuser', 'team'],", ts);
@@ -540,7 +540,7 @@ public class FormModelTsGeneratorTests
             .Decimal("ratio", "Ratio", min: 0.5m, max: 2.5m, precision: 2).Display("Ratio")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "ratio")), entity), "account.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "ratio")), entity), "forms/account/info.form.ts");
 
         Assert.Contains("min: 0.5,", ts);
         Assert.Contains("max: 2.5,", ts);
@@ -555,7 +555,7 @@ public class FormModelTsGeneratorTests
             .String("firstname", "FirstName").Display("First Name")
             .Build();
 
-        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname", "ghostfield")), entity), "contact.info.form.ts");
+        string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname", "ghostfield")), entity), "forms/contact/info.form.ts");
 
         Assert.Contains("firstname: {", ts);
         Assert.DoesNotContain("ghostfield", ts);
@@ -575,7 +575,7 @@ public class FormModelTsGeneratorTests
         const string expected = """
             // Generated by "vela models --forms --lang ts" - do not edit by hand.
             import type { FormModel } from 'vela-client';
-            import { contact_gendercode, contact_statuscode } from './option-sets';
+            import { contact_gendercode, contact_statuscode } from '../../option-sets';
 
             export const ContactInformation = {
               entity: 'contact',
@@ -678,7 +678,7 @@ public class FormModelTsGeneratorTests
 
             """;
 
-        Assert.Equal(expected.ReplaceLineEndings("\n"), Generate(ContactForm(), "contact.information.form.ts"));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Generate(ContactForm(), "forms/contact/information.form.ts"));
     }
 
     [Fact]
@@ -687,7 +687,7 @@ public class FormModelTsGeneratorTests
         const string expected = """
             // Generated by "vela models --forms --lang ts" - do not edit by hand.
             import type { FormModel } from 'vela-client';
-            import { account_industrycode, account_statuscode, account_new_servicetypes } from './option-sets';
+            import { account_industrycode, account_statuscode, account_new_servicetypes } from '../../option-sets';
 
             export const AccountMain = {
               entity: 'account',
@@ -891,7 +891,7 @@ public class FormModelTsGeneratorTests
 
             """;
 
-        Assert.Equal(expected.ReplaceLineEndings("\n"), Generate(AccountForm(), "account.main.form.ts"));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Generate(AccountForm(), "forms/account/main.form.ts"));
     }
 
     [Fact]
@@ -946,7 +946,7 @@ public class FormModelTsGeneratorTests
             .ToArray();
 
         Assert.Equal(
-            new[] { "contact.information.form.ts", "account.main.form.ts", "option-sets.ts" },
+            new[] { "forms/contact/information.form.ts", "forms/account/main.form.ts", "option-sets.ts" },
             files);
     }
 

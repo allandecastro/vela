@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Changed
+
+- `vela models --forms --lang ts` now writes each form model to `forms/<entity>/<slug>.form.ts` (the folder is the
+  table's lower-cased logical name and the file name drops the entity prefix), instead of a flat
+  `<entity>.<slug>.form.ts`. The shared `option-sets.ts` stays at the output root; a form file's import of it is
+  `../../option-sets`. Table types (`--tables`) are unchanged (`tables/<logicalname>.ts`).
+
 ## [0.1.6] - 2026-08-25
 
 CLI line only.

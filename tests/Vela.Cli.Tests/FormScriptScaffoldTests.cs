@@ -43,7 +43,7 @@ public class FormScriptScaffoldTests
         Assert.Contains("export function onLoad(", script);
         Assert.Contains("export function onSave(", script);
         Assert.Contains("defineForm(NewOrderMain", script);
-        Assert.Contains("../../generated/new_order.main.form", script);
+        Assert.Contains("../../generated/forms/new_order/main.form", script);
     }
 
     [Fact]
