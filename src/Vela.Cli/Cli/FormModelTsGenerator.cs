@@ -25,7 +25,6 @@ public static class FormModelTsGenerator
 {
     private const string ClientPackage = "vela-client";
     private const string OptionSetsModule = "./option-sets";
-    private const string OptionSetsFileName = "option-sets.ts";
 
     // Header on every emitted file: marks it as generated and names the command that regenerates it, so a hand-edit
     // is obviously wrong and the drift-guard snapshot on the vela-client side has a stable line to assert.
@@ -39,9 +38,8 @@ public static class FormModelTsGenerator
         }
 
         // Option sets are shared across forms → registered once (keyed by their deterministic enum name), in
-        // first-reference order, and emitted into a single option-sets.ts. Mirrors how ModelGenerator dedupes
-        // global option sets, but order is kept explicit so the output is stable regardless of dictionary internals.
-        OptionSetRegistry optionSets = new OptionSetRegistry();
+        // first-reference order, and emitted into a single option-sets.ts (see OptionSetsTs, shared with --tables).
+        OptionSetsTs.Registry optionSets = new OptionSetsTs.Registry();
 
         // Several forms of the same table can slug to the same const/file name (e.g. a Main and a Quick Create form
         // both named "Account"). Disambiguate deterministically up front so no generated file is silently
@@ -60,32 +58,13 @@ public static class FormModelTsGenerator
 
         if (optionSets.Count > 0)
         {
-            files.Add(new GeneratedModel(OptionSetsFileName, GenerateOptionSetsFile(optionSets)));
+            files.Add(new GeneratedModel(OptionSetsTs.FileName, OptionSetsTs.GenerateFile(optionSets)));
         }
 
         return files;
     }
 
-    // Insertion-ordered set of option sets keyed by enum name, so the shared option-sets.ts is deterministic.
-    private sealed class OptionSetRegistry
-    {
-        private readonly HashSet<string> _names = new HashSet<string>(StringComparer.Ordinal);
-        private readonly List<(string Name, OptionSetMetadata Set)> _ordered = new List<(string, OptionSetMetadata)>();
-
-        public int Count => _ordered.Count;
-
-        public IReadOnlyList<(string Name, OptionSetMetadata Set)> Entries => _ordered;
-
-        public void Register(string name, OptionSetMetadata set)
-        {
-            if (_names.Add(name))
-            {
-                _ordered.Add((name, set));
-            }
-        }
-    }
-
-    private static GeneratedModel GenerateForm(FormSource source, string entity, string constName, string fileName, OptionSetRegistry optionSets)
+    private static GeneratedModel GenerateForm(FormSource source, string entity, string constName, string fileName, OptionSetsTs.Registry optionSets)
     {
         IReadOnlyDictionary<string, AttributeMetadata> attributes = source.Entity.Attributes?
             .Where(a => !string.IsNullOrWhiteSpace(a?.LogicalName))
@@ -295,27 +274,6 @@ public static class FormModelTsGenerator
         sb.Append("  },\n");
     }
 
-    private static string GenerateOptionSetsFile(OptionSetRegistry optionSets)
-    {
-        StringBuilder sb = new StringBuilder();
-        sb.Append(GeneratedBanner);
-        foreach ((string name, OptionSetMetadata set) in optionSets.Entries)
-        {
-            sb.Append('\n');
-            sb.Append($"export enum {name} {{\n");
-            HashSet<string> used = new HashSet<string>(StringComparer.Ordinal);
-            foreach (OptionMetadata option in set.Options.OrderBy(o => o.Value ?? 0))
-            {
-                int value = option.Value ?? 0;
-                sb.Append($"  {SanitizeMember(LabelText(option.Label), value, used)} = {value.ToString(CultureInfo.InvariantCulture)},\n");
-            }
-
-            sb.Append("}\n");
-        }
-
-        return sb.ToString();
-    }
-
     // --- field model -------------------------------------------------------------------------------------------
 
     private sealed record FieldLocation(string Tab, string Section);
@@ -366,7 +324,7 @@ public static class FormModelTsGenerator
                     optionSet = OptionSetOf(attribute);
                     if (optionSet != null)
                     {
-                        enumName = EnumName(entity, attribute, optionSet);
+                        enumName = OptionSetsTs.EnumName(entity, attribute, optionSet);
                         lines.Add($"options: {enumName},");
                     }
 
@@ -519,18 +477,6 @@ public static class FormModelTsGenerator
     private static OptionSetMetadata? OptionSetOf(AttributeMetadata a) =>
         (a as EnumAttributeMetadata)?.OptionSet is { Options.Count: > 0 } set ? set : null;
 
-    // Local option sets are named <entity>_<column> (the vela-client fixture convention); a global set keeps its own
-    // (sanitized) name so it is shared across the tables that reference it.
-    private static string EnumName(string entity, AttributeMetadata attribute, OptionSetMetadata optionSet)
-    {
-        if (optionSet.IsGlobal == true && !string.IsNullOrWhiteSpace(optionSet.Name))
-        {
-            return SanitizeIdentifier(optionSet.Name!);
-        }
-
-        return SanitizeIdentifier($"{entity}_{attribute.LogicalName}");
-    }
-
     private static string ResolveRequired(FormFieldCell cell, AttributeMetadata attribute)
     {
         if (cell.Required.HasValue)
@@ -599,35 +545,6 @@ public static class FormModelTsGenerator
         }
 
         return name.All(c => char.IsLetterOrDigit(c) || c == '_' || c == '$');
-    }
-
-    private static string SanitizeIdentifier(string name)
-    {
-        string filtered = new string(name.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
-        if (filtered.Length == 0 || char.IsDigit(filtered[0]))
-        {
-            filtered = "_" + filtered;
-        }
-
-        return filtered;
-    }
-
-    private static string SanitizeMember(string? label, int value, HashSet<string> used)
-    {
-        string filtered = new string((label ?? string.Empty).Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
-        if (filtered.Length == 0 || !(char.IsLetter(filtered[0]) || filtered[0] == '_'))
-        {
-            filtered = "_" + (filtered.Length == 0 ? value.ToString(CultureInfo.InvariantCulture) : filtered);
-        }
-
-        string candidate = filtered;
-        int suffix = value;
-        while (!used.Add(candidate))
-        {
-            candidate = filtered + "_" + suffix++;
-        }
-
-        return candidate;
     }
 
     // Shortest round-tripping literal: integral values lose the trailing ".0".

@@ -68,10 +68,18 @@ internal static class ModelsCommand
         bool interactive = HasFlag(args, "--interactive") || HasFlag(args, "-i");
         bool json = HasFlag(args, "--json");
 
-        // --forms emits TypeScript FormModel files (parsed FormXML + table metadata) instead of C# early-bound
-        // classes; --lang selects the emitter (csharp default). The two share the scope/connection/write plumbing.
+        // --forms emits TypeScript FormModel files (parsed FormXML + table metadata) and --tables emits TypeScript
+        // Web API record interfaces, instead of C# early-bound classes; --lang selects the emitter (csharp default).
+        // All three share the scope/connection/write plumbing.
         bool forms = HasFlag(args, "--forms");
+        bool tables = HasFlag(args, "--tables");
         string lang = (TryReadOption(args, "--lang") ?? "csharp").Trim().ToLowerInvariant();
+
+        if (forms && tables)
+        {
+            return Fail("Use either --forms or --tables, not both.", ExitInvalidArguments, includeUsage: false);
+        }
+
         if (forms)
         {
             if (lang != "ts")
@@ -93,9 +101,29 @@ internal static class ModelsCommand
             return RunForms(args, solution, entities, outDir, overwrite, interactive, json);
         }
 
+        if (tables)
+        {
+            if (lang != "ts")
+            {
+                return Fail("vela models --tables currently supports --lang ts only.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0)
+            {
+                return Fail("vela models --tables needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            if (customApis.Length > 0 || roles.Length > 0 || solutionRoles)
+            {
+                Console.Error.WriteLine("Warning: --tables generates TypeScript record interfaces only; --custom-apis / --roles / --solution-roles are ignored.");
+            }
+
+            return RunTables(args, solution, entities, outDir, overwrite, interactive, json);
+        }
+
         if (lang != "csharp")
         {
-            return Fail("--lang applies to --forms (TypeScript form models) only.", ExitInvalidArguments, includeUsage: false);
+            return Fail("--lang applies to --forms / --tables (TypeScript output) only.", ExitInvalidArguments, includeUsage: false);
         }
 
         string? ns = ResolveNamespace(args);
@@ -275,6 +303,77 @@ internal static class ModelsCommand
         }
     }
 
+    // The --tables --lang ts path: read the scoped tables' metadata and emit the vela-client Web API record
+    // interfaces (tables/<logicalname>.ts) plus the shared option-sets.ts. Shares the scope/connection/write
+    // plumbing with the C# and --forms paths; needs no namespace (TS modules aren't namespaced).
+    private static int RunTables(string[] args, string? solution, string[] entities, string outDir, bool overwrite, bool interactive, bool json)
+    {
+        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
+        {
+            return exitCode;
+        }
+
+        SharedOptions options = new SharedOptions(
+            PackagePaths: [],
+            PackageAssembly: null,
+            ConnectionString: connectionString,
+            OAuthUrl: oauthUrl,
+            OAuthToken: oauthToken,
+            SolutionUniqueName: solution,
+            Environment: url,
+            OutPath: outDir,
+            Execute: false,
+            Interactive: interactive,
+            Strict: false,
+            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
+
+        try
+        {
+            using ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
+            IOrganizationService service = client;
+
+            List<string> logicalNames = ResolveLogicalNames(service, solution, entities);
+            if (logicalNames.Count == 0)
+            {
+                return Fail("No tables resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            // A single unreadable table is skipped with a warning rather than aborting the whole batch.
+            List<EntityMetadata> metadata = new List<EntityMetadata>();
+            foreach (string name in logicalNames)
+            {
+                try
+                {
+                    metadata.Add(ReadEntity(service, name));
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Warning: skipping table '{name}' (metadata read failed): {ex.Message}");
+                }
+            }
+
+            IReadOnlyList<GeneratedModel> models = TableTypeTsGenerator.Generate(metadata);
+            if (models.Count == 0)
+            {
+                return Fail("No table types were generated from the scoped tables.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            return WriteModels(models, outDir, overwrite, json, string.Empty);
+        }
+        catch (DataverseConnectionException ex)
+        {
+            return FailWithException(ex, ExitConnectionFailure, options.Verbose);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return FailWithException(ex, ExitFileNotFound, options.Verbose);
+        }
+        catch (Exception ex)
+        {
+            return FailWithException(ex, ExitParseError, options.Verbose);
+        }
+    }
+
     // Writes generated files all-or-nothing: fails up front on any pre-existing file (unless --overwrite) so a
     // partial write can never leave a half-generated output directory. On success prints a human summary, or a
     // machine-readable JSON report when --json is set (for scripts and agents).
@@ -310,7 +409,10 @@ internal static class ModelsCommand
         int written = 0;
         foreach (GeneratedModel model in models)
         {
-            File.WriteAllText(Path.Combine(outDir, model.FileName), model.Code);
+            // A model's file name can carry a subfolder (e.g. tables/account.ts), so ensure its directory exists.
+            string target = Path.Combine(outDir, model.FileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.WriteAllText(target, model.Code);
             written++;
         }
 
@@ -564,6 +666,7 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
         Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
         Console.WriteLine("  vela models --forms --lang ts --entities account,contact [connection options]   (preview)");
+        Console.WriteLine("  vela models --tables --lang ts --entities account,contact [connection options]  (preview)");
         Console.WriteLine();
         Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
@@ -572,6 +675,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
         Console.WriteLine("  --forms --lang ts         (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
+        Console.WriteLine("  --tables --lang ts        (preview) emit vela-client TypeScript Web API record interfaces (tables/<name>.ts) for the scoped tables");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
         Console.WriteLine("  --json                    print a JSON report of the generated files (for scripts/agents)");

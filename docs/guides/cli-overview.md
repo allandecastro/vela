@@ -21,7 +21,8 @@ Core commands:
 
 > [!NOTE]
 > **Client-side (preview / work in progress).** For the [vela-client](https://github.com/allandecastro/vela)
-> runtime, `vela models --forms --lang ts` generates [TypeScript FormModel files](models.md),
+> runtime, `vela models --forms --lang ts` generates [TypeScript FormModel files](models.md) and
+> `vela models --tables --lang ts` [TypeScript Web API record interfaces](models.md),
 > `vela init --web-resources` [scaffolds a web resources project](scaffold.md), and `vela plan` /
 > `apply --webresources` [deploy web resources](plan-apply.md). These are new and may change. Most commands also
 > take `--json` for machine-readable output.
