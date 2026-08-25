@@ -21,6 +21,18 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-25
+
+CLI line only.
+
+### Fixed
+
+- The scaffolded `{prefix}.WebResources` project now typechecks: its generated `test/entries.test.ts` imports
+  `node:url` / `node:path`, but the scaffold shipped no Node types, so `tsc --noEmit` failed with `TS2307`
+  (Vitest and tsup pass because esbuild resolves the `node:` scheme at runtime, but a CI typecheck would break).
+  `@types/node` is added to the project's `devDependencies` and `"node"` is listed in the `tsconfig`
+  `compilerOptions.types` array.
+
 ## [0.1.5] - 2026-08-25
 
 CLI line only.
