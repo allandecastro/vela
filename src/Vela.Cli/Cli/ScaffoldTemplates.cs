@@ -52,7 +52,7 @@ internal static class ScaffoldTemplates
     public const string TsupVersion = "^8.3.5";
     public const string TypeScriptVersion = "^5.6.3";
     public const string VitestVersion = "^2.1.8";
-    public const string VelaClientVersion = "^0.1.3";
+    public const string VelaClientVersion = "^0.1.4";
 
     // Node type definitions: the entries guard imports node:url / node:path, so a `tsc --noEmit` typecheck needs
     // these even though esbuild (tsup/vitest) resolves the node: scheme at runtime without them.
@@ -226,7 +226,7 @@ export class AccountForm extends VelaForm(AccountMain) {
     if (!this.id) return [];
     const { entities } = await createWebApi()
       .retrieveMultiple(Contact)
-      .select('fullname', 'emailaddress1', '_parentcustomerid_value')
+      .select('fullname', '_parentcustomerid_value')
       .filter((f) => f.eqGuid('_parentcustomerid_value', this.id))
       .execute();
 
@@ -252,11 +252,12 @@ export const { onLoad, onSave } = defineForm(AccountMain, AccountForm);
     public static string WebResourcesExampleFormTest() =>
 """
 import { describe, it, expect } from 'vitest';
-import { fakeForm } from 'vela-client/testing';
+import { fakeForm, createFakeWebApi } from 'vela-client/testing';
 import { AccountMain, account_customertypecode } from '@generated';
 import { AccountForm } from './main';
 
 describe('AccountForm (example)', () => {
+  // Layer 1: form rules, driven with the fakeForm accessors (no browser, no Dataverse).
   it('hides Details and relaxes industry for a competitor', async () => {
     const form = fakeForm(AccountMain, AccountForm);
     await form.load();
@@ -270,6 +271,20 @@ describe('AccountForm (example)', () => {
     const form = fakeForm(AccountMain, AccountForm);
     await form.load();
     expect((await form.triggerSave()).prevented).toBe(true);
+  });
+
+  // Layer 2: a form method that calls createWebApi(), tested with a fake ambient Xrm.WebApi.
+  it('reads related contacts through the typed Web API', async () => {
+    const accountId = '11111111-1111-1111-1111-111111111111';
+    const api = createFakeWebApi();
+    await api.createRecord('contact', { fullname: 'Ada Byron', _parentcustomerid_value: accountId });
+
+    // recordId makes this.id non-empty; webApi installs the fake ambient for the form's lifetime.
+    const form = fakeForm(AccountMain, AccountForm, { recordId: accountId, webApi: api });
+    const rows = await form.instance.relatedContacts();
+
+    expect(rows.map((r) => r.name)).toContain('Ada Byron');
+    form.restore();
   });
 });
 """;
