@@ -407,6 +407,14 @@ public class ProjectScaffolderTests
             Assert.Contains("export { AccountMain } from './forms/account/main.form';", barrel);
             Assert.Contains("export { Contact } from './tables/contact';", barrel);
 
+            // The example test demonstrates both layers: form rules and the typed Web API (via fakeForm({ webApi })).
+            string mainTest = File.ReadAllText(Path.Combine(project, "src", "account", "Forms", "main.test.ts"));
+            Assert.Contains("import { fakeForm, createFakeWebApi } from 'vela-client/testing';", mainTest);
+            Assert.Contains("reads related contacts through the typed Web API", mainTest);
+            Assert.Contains("fakeForm(AccountMain, AccountForm, { recordId:", mainTest);
+            Assert.Contains("form.instance.relatedContacts()", mainTest);
+            Assert.Contains("form.restore();", mainTest);
+
             // The entries guard reads the entry map and asserts each entry module exports the FormXML handlers.
             string entriesTest = File.ReadAllText(Path.Combine(project, "test", "entries.test.ts"));
             Assert.Contains("exports onLoad/onSave", entriesTest);

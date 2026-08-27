@@ -103,7 +103,7 @@ export class AccountForm extends VelaForm(AccountMain) {
     if (!this.id) return [];
     const { entities } = await createWebApi()
       .retrieveMultiple(Contact)
-      .select('fullname', 'emailaddress1', '_parentcustomerid_value')
+      .select('fullname', '_parentcustomerid_value')
       .filter((f) => f.eqGuid('_parentcustomerid_value', this.id))
       .execute();
 
@@ -127,16 +127,18 @@ export const { onLoad, onSave } = defineForm(AccountMain, AccountForm);
 
 Then bundle with tsup (`npm run build`, or `npm run dev` to watch). The build is plain tsup, not the CLI.
 The scaffolded project also includes Vitest; form scripts are unit-testable off-browser with the
-`vela-client/testing` `fakeForm` harness, no live Dataverse:
+`vela-client/testing` `fakeForm` harness, no live Dataverse. The example test shows **both layers** - the form
+rules, and a form method that calls `createWebApi()`, tested with a fake ambient Web API via `fakeForm({ webApi })`:
 
 ```ts
 // src/account/Forms/main.test.ts
 import { describe, it, expect } from 'vitest';
-import { fakeForm } from 'vela-client/testing';
+import { fakeForm, createFakeWebApi } from 'vela-client/testing';
 import { AccountMain, account_customertypecode } from '@generated';
 import { AccountForm } from './main';
 
 describe('AccountForm', () => {
+  // Layer 1: form rules, driven with the fakeForm accessors.
   it('hides Details and relaxes industry for a competitor', async () => {
     const form = fakeForm(AccountMain, AccountForm);
     await form.load();
@@ -150,6 +152,20 @@ describe('AccountForm', () => {
     const form = fakeForm(AccountMain, AccountForm);
     await form.load();
     expect((await form.triggerSave()).prevented).toBe(true);
+  });
+
+  // Layer 2: a method that calls createWebApi(), tested with a fake ambient Xrm.WebApi.
+  it('reads related contacts through the typed Web API', async () => {
+    const accountId = '11111111-1111-1111-1111-111111111111';
+    const api = createFakeWebApi();
+    await api.createRecord('contact', { fullname: 'Ada Byron', _parentcustomerid_value: accountId });
+
+    // recordId makes this.id non-empty; webApi installs the fake ambient for the form's lifetime.
+    const form = fakeForm(AccountMain, AccountForm, { recordId: accountId, webApi: api });
+    const rows = await form.instance.relatedContacts();
+
+    expect(rows.map((r) => r.name)).toContain('Ada Byron');
+    form.restore();
   });
 });
 ```

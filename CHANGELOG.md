@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Changed
+
+- The scaffolded web-resources example now demonstrates **both testing layers**: the form rules (via `fakeForm`)
+  and a form method that calls `createWebApi()`, tested with a fake ambient Web API via
+  `fakeForm(model, class, { webApi })` + `createFakeWebApi()` (asserting on `form.instance` and calling
+  `form.restore()`). The scaffold's `vela-client` dependency is bumped to `^0.1.4`.
+
 ## [0.1.10] - 2026-08-25
 
 CLI line only.
