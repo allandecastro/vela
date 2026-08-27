@@ -87,7 +87,7 @@ internal static class ModelsCommand
             string tsLang = (langOption ?? "ts").Trim().ToLowerInvariant();
             if (tsLang != "ts")
             {
-                return Fail($"vela models {scope} only supports TypeScript output; --lang is optional and defaults to ts.", ExitInvalidArguments, includeUsage: false);
+                return Fail($"vela models {scope} only supports TypeScript output.", ExitInvalidArguments, includeUsage: false);
             }
 
             if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0)
@@ -633,8 +633,8 @@ internal static class ModelsCommand
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
         Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
-        Console.WriteLine("  --forms                   (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms (TypeScript; --lang optional)");
-        Console.WriteLine("  --tables                  (preview) emit vela-client TypeScript Web API record interfaces (tables/<name>.ts) for the scoped tables (TypeScript; --lang optional)");
+        Console.WriteLine("  --forms                   (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
+        Console.WriteLine("  --tables                  (preview) emit vela-client TypeScript Web API record interfaces (tables/<name>.ts) for the scoped tables");
         Console.WriteLine("                            (--forms and --tables can be combined: one run emits both plus a shared option-sets/ folder and one index.ts barrel)");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");

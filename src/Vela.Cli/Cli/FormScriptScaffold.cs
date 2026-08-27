@@ -56,7 +56,7 @@ internal static class FormScriptScaffold
         return
 $$"""
 // Form script for the {{entity}} table (hand-written). Generate the form model with
-//   vela models --forms --lang ts --solution <name> --out src/generated
+//   vela models --forms --solution <name> --out src/generated
 // then wire the handlers with `defineForm` from vela-client, e.g.
 //   import { {{pascal}}Main } from '../../generated/forms/{{entity}}/main.form';
 //   export const { onLoad, onSave } = defineForm({{pascal}}Main, class extends VelaForm({{pascal}}Main) {});

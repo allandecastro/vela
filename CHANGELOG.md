@@ -21,6 +21,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Changed
+
+- The redundant `--lang` flag is no longer advertised on `vela models --forms` / `--tables` (their output is
+  TypeScript, selected by `--forms` / `--tables`, not by `--lang`). It stays accepted for back-compat (`--lang ts`
+  is a no-op there; an explicit non-`ts` value is still rejected), and the generated-file banners are unchanged.
+
 ## [0.1.11] - 2026-08-27
 
 CLI line only.

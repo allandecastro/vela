@@ -45,8 +45,7 @@ Connection flags are the same as `plan`/`apply`
 **Main** and **Quick Create** forms, for the vela-client runtime to consume. It reads each form's FormXML and
 joins it with the table metadata, so the emitted model carries only the fields, tabs, sections and subgrids
 actually on that form, each typed by the same rules as the C# models (string/memo, the numeric family, boolean,
-date, choice/multichoice, lookup with its targets, guid, file, image). The output is TypeScript, so `--lang` is
-optional here and defaults to `ts` (`--lang ts` is still accepted).
+date, choice/multichoice, lookup with its targets, guid, file, image).
 
 ```powershell
 # every published Main / Quick Create form of the scoped tables, into ./src/generated
@@ -73,8 +72,7 @@ validation is available as a separate best-effort aid, not a gate on generation.
 
 `vela models --tables` generates **TypeScript record interfaces** for the scoped tables, so the
 vela-client Web API query layer is typed without hand-writing `T` in `retrieveMultiple<T>('account').select(...)`.
-It is the Web API twin of the C# early-bound models: one `tables/<logicalname>.ts` per table. As with `--forms`,
-`--lang` is optional and defaults to `ts`.
+It is the Web API twin of the C# early-bound models: one `tables/<logicalname>.ts` per table.
 
 ```powershell
 vela models --tables --entities account,contact --out src/generated --interactive

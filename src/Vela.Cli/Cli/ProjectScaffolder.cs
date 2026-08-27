@@ -147,7 +147,7 @@ internal static class ProjectScaffolder
 
         // ---- WebResources (optional, TypeScript) ----
         // An opt-in JS/TS SDK project (.esproj) so Visual Studio "Build" runs npm. Its src/generated holds the
-        // regenerated form models (vela models --forms --lang ts); src/ is hand-written form/ribbon/shared code.
+        // regenerated form models (vela models --forms); src/ is hand-written form/ribbon/shared code.
         string webResourcesName = $"{prefix}.WebResources";
         if (options.IncludeWebResources)
         {
