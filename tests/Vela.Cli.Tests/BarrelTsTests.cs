@@ -21,7 +21,9 @@ public class BarrelTsTests
 
         Assert.NotNull(barrel);
         Assert.Equal("index.ts", barrel!.FileName);
-        Assert.Contains("export { A, B, c } from './a';", barrel.Code);
+        // Values via `export { }`, the type-only alias via `export type { }` (so it survives isolated-modules).
+        Assert.Contains("export { A, c } from './a';", barrel.Code);
+        Assert.Contains("export type { B } from './a';", barrel.Code);
         Assert.Contains("export { D, E, f, g } from './b';", barrel.Code);
     }
 

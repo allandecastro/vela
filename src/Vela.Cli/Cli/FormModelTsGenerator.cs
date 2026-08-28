@@ -70,19 +70,27 @@ public static class FormModelTsGenerator
         HashSet<string> usedConsts = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> usedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Emit the ribbon command-context alias (<Entity>Cmd) once per entity, on its first Main form.
+        HashSet<string> aliasedEntities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         List<GeneratedModel> files = new List<GeneratedModel>();
         foreach (FormSource form in forms.Where(f => f?.Entity?.LogicalName is { Length: > 0 }))
         {
             string entity = form.Entity.LogicalName;
             string constName = UniqueName(ConstName(entity, form.FormName), usedConsts);
             string fileName = UniqueFileName(FileName(entity, form.FormName), usedFiles);
-            files.Add(GenerateForm(form, entity, constName, fileName, optionSets));
+
+            string? cmdAlias = string.Equals(form.FormType, "Main", StringComparison.OrdinalIgnoreCase) && aliasedEntities.Add(entity)
+                ? Pascalize(entity) + "Cmd"
+                : null;
+
+            files.Add(GenerateForm(form, entity, constName, fileName, optionSets, cmdAlias));
         }
 
         return files;
     }
 
-    private static GeneratedModel GenerateForm(FormSource source, string entity, string constName, string fileName, OptionSetsTs.Registry optionSets)
+    private static GeneratedModel GenerateForm(FormSource source, string entity, string constName, string fileName, OptionSetsTs.Registry optionSets, string? cmdAlias)
     {
         IReadOnlyDictionary<string, AttributeMetadata> attributes = source.Entity.Attributes?
             .Where(a => !string.IsNullOrWhiteSpace(a?.LogicalName))
@@ -114,6 +122,10 @@ public static class FormModelTsGenerator
         StringBuilder sb = new StringBuilder();
         sb.Append(GeneratedBanner);
         sb.Append($"import type {{ FormModel }} from '{ClientPackage}';\n");
+        if (cmdAlias != null)
+        {
+            sb.Append("import type { FormCommandContext } from 'vela-client/ribbon';\n");
+        }
 
         // Locals (this entity's option sets) import from option-sets/<entity>; globals from option-sets/global.
         string[] localEnums = placed
@@ -153,6 +165,15 @@ public static class FormModelTsGenerator
         }
 
         sb.Append("} as const satisfies FormModel;\n");
+
+        // The ribbon command-context alias for this entity, based on its Main form model (named <Entity>Cmd, never
+        // <Entity>Form, to avoid colliding with a hand-written form class).
+        if (cmdAlias != null)
+        {
+            sb.Append('\n');
+            sb.Append($"export type {cmdAlias} = FormCommandContext<typeof {constName}>;\n");
+        }
+
         return new GeneratedModel(fileName, sb.ToString());
     }
 
