@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Added
+
+- Discoverability for ribbon commands: `vela init --web-resources` now prints a `vela add ribbon-script <entity>`
+  next step, and the scaffolded web-resources project ships a `README.md` documenting form scripts and a Ribbon
+  commands section (scaffold, plus wiring the button at `<Prefix>.Ribbon.<entity>.<command>` in the Command
+  Designer).
+
 ## [0.1.15] - 2026-08-28
 
 CLI line only.
