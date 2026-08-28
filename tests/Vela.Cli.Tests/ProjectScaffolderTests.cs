@@ -422,6 +422,12 @@ public class ProjectScaffolderTests
             string entriesTest = File.ReadAllText(Path.Combine(project, "test", "entries.test.ts"));
             Assert.Contains("exports onLoad/onSave", entriesTest);
             Assert.Contains("import { entries } from '../web-resources.entries'", entriesTest);
+
+            // The project README documents form scripts and ribbon commands so both are discoverable.
+            string readme = File.ReadAllText(Path.Combine(project, "README.md"));
+            Assert.Contains("## Ribbon commands", readme);
+            Assert.Contains("vela add ribbon-script <entity>", readme);
+            Assert.Contains("point the button's action at", readme);
         });
     }
 
