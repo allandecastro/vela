@@ -198,8 +198,9 @@ typed command context and wire it with `formCommand` / `formRule`; `bootstrapCom
 dotted global the platform can call. The typed context is the generated `<Entity>Cmd` alias (a
 `FormCommandContext` over the entity's Main form model), re-exported from `@generated` next to the model.
 
-Scaffold a command module with `vela add command <entity>` (creates `src/<entity>/Ribbon/commands.ts` + a
-co-located test, and registers the entry):
+Scaffold a command module with `vela add ribbon-script <entity>` (creates `src/<entity>/Ribbon/commands.ts` + a
+co-located test, and registers the entry). It reads the entity's generated Main form model from `@generated`, so
+run `vela models --forms --entities <entity>` first:
 
 ```ts
 // src/account/Ribbon/commands.ts

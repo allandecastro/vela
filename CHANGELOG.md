@@ -27,9 +27,10 @@ CLI line only.
 
 - Ribbon commands (preview). `vela models --forms` now emits, next to each entity's Main form model, a typed
   command-context alias `export type <Entity>Cmd = FormCommandContext<typeof <Entity>Main>;` (from
-  `vela-client/ribbon`), re-exported by the root barrel. `vela add command <entity>` scaffolds
+  `vela-client/ribbon`), re-exported by the root barrel. `vela add ribbon-script <entity>` scaffolds
   `src/<entity>/Ribbon/commands.ts` (a `formCommand` action + a `formRule` enable rule wired with
-  `bootstrapCommands`) and a co-located `fakeFormCommand` test, and registers the tsup entry; it prints the
+  `bootstrapCommands`, over the entity's generated Main form model) and a co-located `fakeFormCommand` test, and
+  registers the tsup entry; it prints the
   `<Prefix>.Ribbon.<entity>` namespace the maker points the button at in the Command Designer (deploy is a web
   resource, maker-wired, no appaction generated). The scaffold ships the `<Entity>Cmd` alias in `@generated`, its
   `vela-client` dependency is bumped to `^0.1.6`, and the entries guard is ribbon-aware (Forms entries export

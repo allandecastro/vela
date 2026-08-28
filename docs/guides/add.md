@@ -51,9 +51,10 @@ vela add --interactive
   a co-located `main.test.ts`) in the [web-resources project](client-side.md) and registers its entry in
   `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it
   refuses to overwrite an existing file (use `--force`), and the `<entity>` is the table logical name.
-- `vela add command <entity>` (preview) scaffolds a [ribbon command](client-side.md) module
+- `vela add ribbon-script <entity>` (preview) scaffolds a [ribbon command](client-side.md) module
   (`src/<entity>/Ribbon/commands.ts` + a co-located test) in the web-resources project and registers its entry.
-  It prints the `<Prefix>.Ribbon.<entity>` namespace the maker points the button at in the Command Designer. Same
+  It prints the `<Prefix>.Ribbon.<entity>` namespace the maker points the button at in the Command Designer. The
+  entity needs a generated Main form model (run `vela models --forms --entities <entity>` first). Same
   conventions as `form-script` (`--project`, `--force`).
 
 ## See also
