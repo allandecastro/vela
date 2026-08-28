@@ -53,16 +53,21 @@ internal static class AddCommand
 
         string kind = args[0].ToLowerInvariant();
 
-        // form-script targets the TypeScript web-resources project (a folder with web-resources.entries.ts), not a
-        // .csproj, so it resolves its target itself and returns before the C# project plumbing below.
+        // form-script / ribbon-script target the TypeScript web-resources project (a folder with web-resources.entries.ts),
+        // not a .csproj, so they resolve their target themselves and return before the C# project plumbing below.
         if (kind == "form-script")
         {
             return AddFormScript(args);
         }
 
+        if (kind == "ribbon-script")
+        {
+            return AddRibbonScript(args);
+        }
+
         if (kind is not ("plugin" or "customapi" or "service" or "test" or "step"))
         {
-            return Fail($"Unknown 'add' kind '{args[0]}'. Expected 'plugin', 'customapi', 'service', 'test', 'step' or 'form-script'.", ExitInvalidArguments, includeUsage: false);
+            return Fail($"Unknown 'add' kind '{args[0]}'. Expected 'plugin', 'customapi', 'service', 'test', 'step', 'form-script' or 'ribbon-script'.", ExitInvalidArguments, includeUsage: false);
         }
 
         string? name = FindPositional(args.Skip(1).ToArray());
@@ -179,6 +184,101 @@ internal static class AddCommand
             {
                 Console.WriteLine($"  {path}");
             }
+        }
+
+        return ExitSuccess;
+    }
+
+    // vela add ribbon-script <entity>: scaffolds src/<entity>/Ribbon/commands.ts (+ co-located commands.test.ts) in
+    // the web-resources project and registers its entry. Same conventions as form-script: refuses to overwrite
+    // without --force; the entry-map insertion stays idempotent. The maker wires the button to the printed namespace.
+    private static int AddRibbonScript(string[] args)
+    {
+        string? raw = FindPositional(args.Skip(1).ToArray());
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return Fail("Missing table. Usage: vela add ribbon-script <entity> [--project <web-resources dir>] [--force]", ExitInvalidArguments, includeUsage: false);
+        }
+
+        string entity = raw.Trim().ToLowerInvariant();
+        if (!FormScriptScaffold.IsValidEntity(entity))
+        {
+            return Fail($"Invalid table '{raw}'. Use a table logical name (lower-case, letters/digits/'_', e.g. 'account' or 'new_order').", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (!TryResolveWebResourcesProject(TryReadOption(args, "--project") ?? TryReadOption(args, "-p"), out string projectDir, out string error))
+        {
+            return Fail(error, ExitInvalidArguments, includeUsage: false);
+        }
+
+        string tsupPath = Path.Combine(projectDir, "tsup.config.ts");
+        string entriesPath = Path.Combine(projectDir, "web-resources.entries.ts");
+        string? wrPrefix = FormScriptScaffold.WebResourcePrefixFromTsup(File.ReadAllText(tsupPath));
+        if (string.IsNullOrWhiteSpace(wrPrefix))
+        {
+            return Fail($"Could not read the web resource prefix (globalName) from {tsupPath}.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        // A form command needs the entity's generated Main form model (its const name depends on the form name), so
+        // resolve it from the barrel; this also refuses tables with no generated Main form rather than emit a module
+        // that cannot compile.
+        string barrelPath = Path.Combine(projectDir, "src", "generated", "index.ts");
+        if (!File.Exists(barrelPath))
+        {
+            return Fail($"No generated barrel at {barrelPath}. Run 'vela models --forms --entities {entity}' first.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (!RibbonCommandScaffold.TryResolveModel(File.ReadAllText(barrelPath), entity, out string modelConst, out string modelError))
+        {
+            return Fail(modelError, ExitInvalidArguments, includeUsage: false);
+        }
+
+        bool force = HasFlag(args, "--force");
+        string commandsPath = Path.Combine(projectDir, "src", entity, "Ribbon", "commands.ts");
+        string testPath = Path.Combine(projectDir, "src", entity, "Ribbon", "commands.test.ts");
+
+        if (!force)
+        {
+            string? existing = new[] { commandsPath, testPath }.FirstOrDefault(File.Exists);
+            if (existing != null)
+            {
+                return Fail($"File already exists: {existing}. Use --force to overwrite.", ExitInvalidArguments, includeUsage: false);
+            }
+        }
+
+        string ns = RibbonCommandScaffold.Namespace(projectDir, wrPrefix!, entity);
+        string contextType = RibbonCommandScaffold.ContextType(entity);
+
+        var created = new System.Collections.Generic.List<string>();
+        WriteScaffoldFile(commandsPath, RibbonCommandScaffold.Commands(entity, ns, modelConst, contextType), created);
+        WriteScaffoldFile(testPath, RibbonCommandScaffold.CommandsTest(entity, modelConst), created);
+
+        string entryName = RibbonCommandScaffold.EntryName(wrPrefix!, entity);
+        string sourcePath = RibbonCommandScaffold.SourcePath(entity);
+        if (!FormScriptScaffold.TryInsertEntry(File.ReadAllText(entriesPath), entryName, sourcePath, out string updatedEntries, out bool inserted))
+        {
+            return Fail($"Could not find the 'export const entries = {{ ... }} as const;' map in {entriesPath}.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (inserted)
+        {
+            File.WriteAllText(entriesPath, updatedEntries);
+            created.Add($"{entriesPath} (+ entry '{entryName}')");
+        }
+
+        if (HasFlag(args, "--json"))
+        {
+            Console.WriteLine(BuildAddReport($"ribbon-script {entity}", created.ToArray()));
+        }
+        else
+        {
+            Console.WriteLine($"Added ribbon commands for '{entity}'");
+            foreach (string path in created)
+            {
+                Console.WriteLine($"  {path}");
+            }
+
+            Console.WriteLine($"  In the Command Designer, point the button's action at {ns}.<command> (e.g. {ns}.myCommand).");
         }
 
         return ExitSuccess;
@@ -556,6 +656,7 @@ internal static class AddCommand
         Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--project <csproj>]");
         Console.WriteLine("  vela add form-script <entity> [--project <web-resources dir>] [--force]   (preview)");
+        Console.WriteLine("  vela add ribbon-script <entity> [--project <web-resources dir>] [--force] (preview, ribbon commands)");
         Console.WriteLine("  vela add --interactive            # guided wizard");
         Console.WriteLine();
         Console.WriteLine("Generates a single file into an existing project, inferring namespaces from its RootNamespace.");

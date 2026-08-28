@@ -190,11 +190,63 @@ is **additive and scoped to the top-level folders you deploy** (mirroring a subs
 team's folders), and each name must start with the solution's publisher prefix. `--webresources` requires
 `--solution`, and needs no `--package` (you can deploy web resources on their own).
 
-## Ribbon (utility only)
+## Ribbon commands
 
-A classic `RibbonDiffXml` generator + Ribbon-XSD validation exists as a building block, but registering a
-command on a button (the command bar wiring) is left to the developer via the Power Apps command designer.
-Automating the full ribbon deploy is tracked as low priority.
+Ribbon (command bar) buttons run **commands**: an **action** (runs on click) and, optionally, an **enable rule**
+(a synchronous boolean deciding whether the button is enabled). You author each as a plain function taking the
+typed command context and wire it with `formCommand` / `formRule`; `bootstrapCommands` attaches the wired set to a
+dotted global the platform can call. The typed context is the generated `<Entity>Cmd` alias (a
+`FormCommandContext` over the entity's Main form model), re-exported from `@generated` next to the model.
+
+Scaffold a command module with `vela add ribbon-script <entity>` (creates `src/<entity>/Ribbon/commands.ts` + a
+co-located test, and registers the entry). It reads the entity's generated Main form model from `@generated`, so
+run `vela models --forms --entities <entity>` first:
+
+```ts
+// src/account/Ribbon/commands.ts
+import { formCommand, formRule, bootstrapCommands } from 'vela-client/ribbon';
+import { AccountMain } from '@generated';
+import type { AccountCmd } from '@generated';
+
+function reviewAccount(form: AccountCmd): void {
+  form.tabs.details.setVisible(true); // typed accessors, like a form script
+}
+
+function canReview(form: AccountCmd): boolean {
+  return Boolean(form.fields.name.getValue()); // enable rule: a synchronous boolean
+}
+
+export const commands = bootstrapCommands(
+  { reviewAccount: formCommand(AccountMain, reviewAccount), canReview: formRule(AccountMain, canReview) },
+  { namespace: 'Zava.Ribbon.account' }, // <Prefix>.Ribbon.<entity>
+);
+```
+
+Test them off-browser with `fakeFormCommand` (form commands) / `fakeGridCommand` (grid / homepage commands):
+
+```ts
+// src/account/Ribbon/commands.test.ts
+import { describe, it, expect } from 'vitest';
+import { fakeFormCommand } from 'vela-client/testing';
+import { AccountMain } from '@generated';
+import { commands } from './commands';
+
+describe('account ribbon commands', () => {
+  it('enables the command once the account has a name', () => {
+    const form = fakeFormCommand(AccountMain);
+    expect(commands.canReview(form.primaryControl)).toBe(false);
+    form.fields.name.setValue('Zava');
+    expect(commands.canReview(form.primaryControl)).toBe(true);
+    form.restore();
+  });
+});
+```
+
+**Deploy is maker-wired.** A command bundles to a web resource like a form script, so
+`vela apply --webresources <folder>` already deploys it. The CLI does **not** generate a `RibbonDiffXml` / app
+action: you add the button in the **Power Apps Command Designer** (its label, icon and location), and point its
+action (and, if any, its enable rule) at the dotted global - `<Prefix>.Ribbon.<entity>.<command>`, for example
+`Zava.Ribbon.account.reviewAccount`. That is exactly the `namespace` in `bootstrapCommands` plus the command name.
 
 ## Keeping models in sync (drift guard)
 

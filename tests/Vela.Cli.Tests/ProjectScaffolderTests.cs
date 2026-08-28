@@ -402,10 +402,13 @@ public class ProjectScaffolderTests
             Assert.Contains("// EXAMPLE - regenerate with:", generatedForm);
             Assert.Contains("export const AccountMain =", generatedForm);
 
-            // The example barrel re-exports the model set for the @generated alias.
+            // The example barrel re-exports the model set for the @generated alias, including the ribbon command
+            // context alias as a type-only re-export.
             string barrel = File.ReadAllText(Path.Combine(project, "src", "generated", "index.ts"));
             Assert.Contains("export { AccountMain } from './forms/account/main.form';", barrel);
+            Assert.Contains("export type { AccountCmd } from './forms/account/main.form';", barrel);
             Assert.Contains("export { Contact } from './tables/contact';", barrel);
+            Assert.Contains("export type AccountCmd = FormCommandContext<typeof AccountMain>;", generatedForm);
 
             // The example test demonstrates both layers: form rules and the typed Web API (via fakeForm({ webApi })).
             string mainTest = File.ReadAllText(Path.Combine(project, "src", "account", "Forms", "main.test.ts"));

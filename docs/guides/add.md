@@ -49,8 +49,13 @@ vela add --interactive
   override) and any file it can't parse cleanly, so it never corrupts source.
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +
   a co-located `main.test.ts`) in the [web-resources project](client-side.md) and registers its entry in
-  `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it is
+  `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it
   refuses to overwrite an existing file (use `--force`), and the `<entity>` is the table logical name.
+- `vela add ribbon-script <entity>` (preview) scaffolds a [ribbon command](client-side.md) module
+  (`src/<entity>/Ribbon/commands.ts` + a co-located test) in the web-resources project and registers its entry.
+  It prints the `<Prefix>.Ribbon.<entity>` namespace the maker points the button at in the Command Designer. The
+  entity needs a generated Main form model (run `vela models --forms --entities <entity>` first). Same
+  conventions as `form-script` (`--project`, `--force`).
 
 ## See also
 

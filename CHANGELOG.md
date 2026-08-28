@@ -21,6 +21,26 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Added
+
+- Ribbon commands (preview). `vela models --forms` now emits, next to each entity's Main form model, a typed
+  command-context alias `export type <Entity>Cmd = FormCommandContext<typeof <Entity>Main>;` (from
+  `vela-client/ribbon`), re-exported by the root barrel. `vela add ribbon-script <entity>` scaffolds
+  `src/<entity>/Ribbon/commands.ts` (a `formCommand` action + a `formRule` enable rule wired with
+  `bootstrapCommands`, over the entity's generated Main form model) and a co-located `fakeFormCommand` test, and
+  registers the tsup entry; it prints the
+  `<Prefix>.Ribbon.<entity>` namespace the maker points the button at in the Command Designer (deploy is a web
+  resource, maker-wired, no appaction generated). The scaffold ships the `<Entity>Cmd` alias in `@generated`, its
+  `vela-client` dependency is bumped to `^0.1.6`, and the entries guard is ribbon-aware (Forms entries export
+  onLoad/onSave, Ribbon entries export at least one command).
+
+### Changed
+
+- The root barrel re-exports type-only symbols (an interface or type alias with no same-name value, such as the
+  new `<Entity>Cmd` alias) with `export type { ... }` so they survive isolated-modules transpilation.
+
 ## [0.1.14] - 2026-08-28
 
 CLI line only.
