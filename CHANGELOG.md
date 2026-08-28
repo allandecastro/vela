@@ -21,6 +21,16 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Added
+
+- `vela models --tables` now types **activity party lists** (email `to`/`from`/`cc`, appointment attendees, ...).
+  An activity table exposes one `<entity>_activity_parties?: ActivityParty[] | null` collection (in place of the
+  individual PartyList attributes, which share it, distinguished by `participationtypemask`), imports
+  `ActivityParty` from `vela-client/webapi`, and its `defineTable` carries `activityParties:
+  '<entity>_activity_parties'`. Non-activity tables are unchanged. Requires `vela-client@0.1.5`.
+
 ## [0.1.12] - 2026-08-28
 
 CLI line only.

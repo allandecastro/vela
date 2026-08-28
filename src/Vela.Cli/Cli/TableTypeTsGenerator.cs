@@ -91,9 +91,25 @@ public static class TableTypeTsGenerator
             members.AddRange(MapMembers(logical, attribute));
         }
 
+        // Activity tables expose their party lists (to/from/cc, requiredattendees, ...) as one activityparty
+        // collection navigation, distinguished by participationtypemask - not per-slot columns. Emit that single
+        // collection (last, after the scalar columns), in place of the individual PartyList attributes (which
+        // MapMembers dropped). Detect via IsActivity or the presence of any PartyList attribute.
+        string? partyNav = (entity.IsActivity == true
+            || (entity.Attributes?.Any(a => a?.AttributeType == AttributeTypeCode.PartyList) ?? false))
+            ? $"{logical}_activity_parties"
+            : null;
+        if (partyNav != null)
+        {
+            members.Add(new Member(partyNav, "ActivityParty[]", null, null, ActivityParties: true));
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.Append(Banner);
-        sb.Append(RecordMetaImport);
+        // ActivityParty joins the record-meta type import when the table has parties.
+        sb.Append(partyNav != null
+            ? "import type { ActivityParty, DataverseRecordMeta } from 'vela-client/webapi';\n"
+            : RecordMetaImport);
         sb.Append(DefineTableImport);
 
         // Enum imports in first-reference order, deduped: locals from option-sets/<entity>, globals from
@@ -142,7 +158,7 @@ public static class TableTypeTsGenerator
         // The runtime descriptor: a same-named const (merging with the interface) carrying the entity, primary key
         // and the multi-select columns (the key is omitted when the table has none).
         string[] multiSelect = members
-            .Where(m => m.Type.EndsWith("[]", StringComparison.Ordinal))
+            .Where(m => !m.ActivityParties && m.Type.EndsWith("[]", StringComparison.Ordinal))
             .Select(m => m.Key)
             .ToArray();
 
@@ -159,6 +175,11 @@ public static class TableTypeTsGenerator
             sb.Append($"  multiSelect: [{string.Join(", ", multiSelect.Select(c => $"'{c}'"))}],\n");
         }
 
+        if (partyNav != null)
+        {
+            sb.Append($"  activityParties: '{partyNav}',\n");
+        }
+
         sb.Append("});\n");
 
         return new GeneratedModel($"tables/{logical}.ts", sb.ToString());
@@ -167,7 +188,7 @@ public static class TableTypeTsGenerator
     // A record member: its property key, the base TypeScript type (before the ` | null`), the option set it
     // references (so the caller can register the shared enum) if any, and whether the column is nullable (the lookup
     // logical-name annotation is optional but not nullable).
-    private sealed record Member(string Key, string Type, string? EnumName, OptionSetMetadata? OptionSet, bool Nullable = true);
+    private sealed record Member(string Key, string Type, string? EnumName, OptionSetMetadata? OptionSet, bool Nullable = true, bool ActivityParties = false);
 
     // Maps one attribute to zero or more record members (a multi-target lookup adds its logical-name annotation).
     private static IReadOnlyList<Member> MapMembers(string entity, AttributeMetadata attribute)
@@ -219,7 +240,8 @@ public static class TableTypeTsGenerator
 
                 return new[] { new Member(logical, "number", null, null) };
             case AttributeTypeCode.PartyList:
-                // Activity party lists are expanded collections, not a scalar `_value`; omit them from the record.
+                // Individual party-list attributes (to/from/cc, ...) are dropped here: GenerateTable emits a single
+                // <entity>_activity_parties collection for the whole activity instead (they share one collection).
                 return Array.Empty<Member>();
             default:
                 return new[] { new Member(logical, "unknown", null, null) };
