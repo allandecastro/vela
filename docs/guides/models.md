@@ -104,6 +104,23 @@ export const Account = defineTable<Account>({
 multi-select columns. Generation is deterministic (columns in metadata order, primary key first) and reuses the
 same scope and connection flags as the rest of `vela models`.
 
+**Activity tables** (email, appointment, ...) expose their party lists (`to` / `from` / `cc`,
+`requiredattendees`, ...) not as per-slot columns but as one `activityparty` collection distinguished by
+`participationtypemask`. The record therefore carries a single `<entity>_activity_parties?: ActivityParty[] | null`
+member (in place of the individual party-list attributes), and `defineTable` adds `activityParties:
+'<entity>_activity_parties'`. On the consumer side you read them through `expand`, then filter by mask:
+
+```ts
+const { entities } = await createWebApi()
+  .retrieveMultiple(Email)
+  .select('subject')
+  .expand<ActivityParty[]>('email_activity_parties', ['participationtypemask', '_partyid_value'])
+  .execute();
+
+const to = entities[0]?.email_activity_parties
+  ?.filter((p) => p.participationtypemask === ParticipationType.ToRecipient);
+```
+
 ## Root barrel (`index.ts`)
 
 Both TypeScript scopes also emit a root `<out>/index.ts` **barrel** that named-re-exports every generated symbol
