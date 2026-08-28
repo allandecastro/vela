@@ -21,6 +21,16 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Fixed
+
+- `vela models --tables`: a multi-select choice column with no option metadata is now typed `number[]` (a
+  collection of option values) and listed in the `defineTable` `multiSelect` descriptor, instead of `unknown`.
+- The root `index.ts` barrel now re-exports every named `export` form (`type` / `function` / `class` / `let` /
+  `var`, with `declare` / `async` / `abstract`), not only `const` / `interface` / `enum`, so future generated
+  symbols are never silently left out.
+
 ## [0.1.13] - 2026-08-28
 
 CLI line only.

@@ -196,10 +196,16 @@ public static class TableTypeTsGenerator
         string logical = attribute.LogicalName;
 
         // Multi-select choice: an array of the shared enum. File/Image columns come back as strings.
-        if (attribute is MultiSelectPicklistAttributeMetadata multi && multi.OptionSet?.Options is { Count: > 0 })
+        if (attribute is MultiSelectPicklistAttributeMetadata multi)
         {
-            string enumName = OptionSetsTs.EnumName(entity, attribute, multi.OptionSet);
-            return new[] { new Member(logical, $"{enumName}[]", enumName, multi.OptionSet) };
+            if (multi.OptionSet?.Options is { Count: > 0 })
+            {
+                string enumName = OptionSetsTs.EnumName(entity, attribute, multi.OptionSet);
+                return new[] { new Member(logical, $"{enumName}[]", enumName, multi.OptionSet) };
+            }
+
+            // No option metadata: still a multi-select column (a collection of option integers), so type it number[].
+            return new[] { new Member(logical, "number[]", null, null) };
         }
 
         if (attribute is FileAttributeMetadata or ImageAttributeMetadata)

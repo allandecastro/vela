@@ -321,6 +321,22 @@ public class TableTypeTsGeneratorTests
     }
 
     [Fact]
+    public void Multi_Select_Without_Option_Metadata_Is_Number_Array()
+    {
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .MultiSelect("tags", "Tags", global: false, null).Display("Tags") // no options
+            .Build();
+
+        string ts = Generate(entity, "tables/account.ts");
+
+        // Still a multi-select (a collection of option integers), typed number[] and listed in the descriptor.
+        Assert.Contains("tags?: number[] | null;", ts);
+        Assert.Contains("multiSelect: ['tags'],", ts);
+        Assert.DoesNotContain("unknown", ts);
+    }
+
+    [Fact]
     public void Non_Activity_Table_Has_No_Party_Collection()
     {
         string ts = Generate(Account(), "tables/account.ts");
