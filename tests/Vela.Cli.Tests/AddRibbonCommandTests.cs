@@ -28,8 +28,8 @@ public class AddRibbonCommandTests
             Assert.Contains("import { ContactInformation } from '@generated';", src);
             Assert.Contains("import type { ContactCmd } from '@generated';", src);
             Assert.Contains("export const commands = bootstrapCommands(", src);
-            // The deploy namespace is <Prefix>.Ribbon.<entity>, derived from the project folder name.
-            Assert.Contains("namespace: 'Demo.Ribbon.contact'", src);
+            // The deploy namespace is <prefix>.Ribbon.<entity>, derived from the project folder name and lower-cased.
+            Assert.Contains("namespace: 'demo.Ribbon.contact'", src);
 
             string testSrc = File.ReadAllText(test);
             Assert.Contains("fakeFormCommand", testSrc);

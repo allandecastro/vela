@@ -121,8 +121,9 @@ $$"""
 import { defineConfig } from 'tsup';
 import { entries } from './web-resources.entries';
 
-// `globalName` is your publisher prefix, exposed as a dotted global (e.g. `{{globalName}}.Account.onLoad`);
-// edit it to change the namespace. The entry map (Dataverse web resource name -> source module) lives in
+// `globalName` is the IIFE wrapper root (your publisher prefix, lower-case). The handlers a form/ribbon web
+// resource actually exposes are set by `defineForm`/`bootstrapCommands` (e.g. `<prefix>.Forms.account.onLoad`,
+// `<prefix>.Ribbon.account.<command>`). The entry map (Dataverse web resource name -> source module) lives in
 // web-resources.entries.ts - `vela add form-script <entity>` adds to it. One IIFE bundle is emitted per entry.
 export default defineConfig({
   entry: entries,
@@ -162,6 +163,7 @@ export const entries = {
     public static string WebResourcesReadme(string prefix, string globalName, string folder)
     {
         string wrPrefix = WebResourcePrefix(globalName);
+        string nsPrefix = prefix.ToLowerInvariant();
         return
 $$"""
 # {{prefix}}.WebResources
@@ -184,8 +186,9 @@ npm test        # vitest: form-script + ribbon tests, plus the entries guard
 vela add form-script <entity>   # src/<entity>/Forms/main.ts (+ a co-located test), registers the entry
 ```
 
-A form script exports `onLoad` / `onSave`; register it on the form's event handlers as
-`{{wrPrefix}}_/js/<entity>/Forms/main`.
+A form script is wired with `defineForm(Model, Class, { namespace: '{{nsPrefix}}.Forms.<entity>' })`; on the form's
+event handlers, use the library `{{wrPrefix}}_/js/<entity>/Forms/main` and the function name
+`{{nsPrefix}}.Forms.<entity>.onLoad` / `.onSave` (aligned with the ribbon's `{{nsPrefix}}.Ribbon.<entity>.<command>`).
 
 ## Ribbon commands
 
@@ -195,7 +198,7 @@ vela add ribbon-script <entity>   # src/<entity>/Ribbon/commands.ts (+ a co-loca
 
 A ribbon command is a plain function wired with `formCommand` (action) / `formRule` (enable rule) and attached
 to a dotted global by `bootstrapCommands`. In the Command Designer, point the button's action at
-`{{prefix}}.Ribbon.<entity>.<command>`. The entity needs a generated Main form model, so run
+`{{nsPrefix}}.Ribbon.<entity>.<command>`. The entity needs a generated Main form model, so run
 `vela models --forms --entities <entity>` first.
 
 ## Deploy
@@ -249,10 +252,14 @@ node_modules/
 
     // A working example form script at src/account/Forms/main.ts: typed field accessors, a typed onChange rule, a
     // typed Web API query (reading the polymorphic lookup annotation), and a save guard - wired with `defineForm`.
-    // It compiles and its Vitest passes out of the box against the example models under src/generated. The exposed
-    // global is `<prefix>.Account.onLoad`, and the file is `$webresource:<prefix>_/js/account/Forms/main.js`.
-    public static string WebResourcesExampleForm() =>
-"""
+    // It compiles and its Vitest passes out of the box against the example models under src/generated. `defineForm`'s
+    // namespace exposes the handlers at `<prefix>.Forms.account.onLoad` (aligned with the ribbon's
+    // `<prefix>.Ribbon.<entity>.<command>`); the file is `$webresource:<prefix>_/js/account/Forms/main.js`.
+    public static string WebResourcesExampleForm(string prefix)
+    {
+        string ns = prefix.ToLowerInvariant();
+        return
+$$"""
 // Example form script: typed accessors + a typed Web API query, wired with defineForm.
 import { VelaForm, defineForm, type SaveEventArgs } from 'vela-client';
 import { createWebApi } from 'vela-client/webapi';
@@ -294,8 +301,11 @@ export class AccountForm extends VelaForm(AccountMain) {
   }
 }
 
-export const { onLoad, onSave } = defineForm(AccountMain, AccountForm);
+// `namespace` exposes the handlers at `{{ns}}.Forms.account.onLoad` / onSave (aligned with the ribbon
+// namespace), never "Vela". The onLoad/onSave exports are kept for the entries guard and unit tests.
+export const { onLoad, onSave } = defineForm(AccountMain, AccountForm, { namespace: '{{ns}}.Forms.account' });
 """;
+    }
 
     // The co-located Vitest example next to the example form script (src/account/Forms/main.test.ts): exercises the
     // onChange rules and the save guard with the `fakeForm` harness, no browser or live Dataverse.

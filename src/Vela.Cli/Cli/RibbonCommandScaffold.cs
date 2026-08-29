@@ -32,7 +32,8 @@ internal static class RibbonCommandScaffold
         string prefix = folder.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
             ? folder.Substring(0, folder.Length - suffix.Length)
             : webResourcePrefix;
-        return $"{prefix}.Ribbon.{entity}";
+        // Lower-case the prefix so the deployed global matches the form namespace (<prefix>.Forms.<entity>).
+        return $"{prefix.ToLowerInvariant()}.Ribbon.{entity}";
     }
 
     /// <summary>

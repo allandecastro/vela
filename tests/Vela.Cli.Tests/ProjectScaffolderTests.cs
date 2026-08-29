@@ -391,7 +391,8 @@ public class ProjectScaffolderTests
             // The example entry exports onLoad and onSave (via defineForm), so the freshly scaffolded entries guard
             // passes; it is a real example, not a stub (typed accessors + a typed Web API query wired with defineForm).
             string main = File.ReadAllText(Path.Combine(project, "src", "account", "Forms", "main.ts"));
-            Assert.Contains("export const { onLoad, onSave } = defineForm(AccountMain, AccountForm);", main);
+            // The form namespace is lower-cased and aligned with the ribbon (<prefix>.Forms.<entity>).
+            Assert.Contains("export const { onLoad, onSave } = defineForm(AccountMain, AccountForm, { namespace: 'zava.Forms.account' });", main);
             Assert.Contains("export class AccountForm extends VelaForm(AccountMain)", main);
             Assert.Contains("createWebApi()", main);
             // Imports the generated symbols through the @generated barrel, not deep paths.
