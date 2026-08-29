@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+CLI line only.
+
+### Changed
+
+- The scaffolded form example now wires `defineForm(Model, Class, { namespace: '<prefix>.Forms.<entity>' })`, so a
+  form web resource exposes its handlers at `<prefix>.Forms.<entity>.onLoad` / `.onSave` - consistent with the
+  ribbon's `<prefix>.Ribbon.<entity>.<command>`. The JS global name and both namespaces are lower-cased. The
+  `export { onLoad, onSave }` is kept (the entries guard and unit tests rely on it).
+
 ## [0.1.16] - 2026-08-28
 
 CLI line only.

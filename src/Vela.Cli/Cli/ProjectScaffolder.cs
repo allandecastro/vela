@@ -157,15 +157,18 @@ internal static class ProjectScaffolder
                 StableGuid(webResourcesName),
                 JavaScriptProjectTypeGuid));
 
+            // The JS global name (esbuild wrapper root) and the form/ribbon namespaces are lower-cased so the
+            // deployed globals are consistent regardless of the prefix casing.
+            string globalName = options.WebResourceNamespace.ToLowerInvariant();
             Write(Path.Combine("src", webResourcesName, $"{webResourcesName}.esproj"), WebResourcesEsproj());
-            Write(Path.Combine("src", webResourcesName, "README.md"), WebResourcesReadme(prefix, options.WebResourceNamespace, options.WebResourcesFolder));
+            Write(Path.Combine("src", webResourcesName, "README.md"), WebResourcesReadme(prefix, globalName, options.WebResourcesFolder));
             Write(Path.Combine("src", webResourcesName, "package.json"), WebResourcesPackageJson(prefix));
             Write(Path.Combine("src", webResourcesName, "tsconfig.json"), WebResourcesTsconfig());
-            Write(Path.Combine("src", webResourcesName, "tsup.config.ts"), WebResourcesTsupConfig(options.WebResourceNamespace, options.WebResourcesFolder));
-            Write(Path.Combine("src", webResourcesName, "web-resources.entries.ts"), WebResourcesEntries(options.WebResourceNamespace));
+            Write(Path.Combine("src", webResourcesName, "tsup.config.ts"), WebResourcesTsupConfig(globalName, options.WebResourcesFolder));
+            Write(Path.Combine("src", webResourcesName, "web-resources.entries.ts"), WebResourcesEntries(globalName));
             Write(Path.Combine("src", webResourcesName, "vitest.config.ts"), WebResourcesVitestConfig());
             Write(Path.Combine("src", webResourcesName, ".gitignore"), WebResourcesGitignore(options.WebResourcesFolder));
-            Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.ts"), WebResourcesExampleForm());
+            Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.ts"), WebResourcesExampleForm(prefix));
             Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.test.ts"), WebResourcesExampleFormTest());
             // A ready-made example model set so the example form compiles and its test passes out of the box;
             // `vela models` overwrites src/generated with real models from your environment.

@@ -121,8 +121,9 @@ export class AccountForm extends VelaForm(AccountMain) {
   }
 }
 
-// The exposed globals are <prefix>.Account.onLoad / onSave (from tsup's globalName), never "Vela".
-export const { onLoad, onSave } = defineForm(AccountMain, AccountForm);
+// `namespace` exposes the handlers at <prefix>.Forms.account.onLoad / onSave (aligned with the ribbon's
+// <prefix>.Ribbon.<entity>.<command>), never "Vela". The onLoad/onSave exports are kept for the entries guard.
+export const { onLoad, onSave } = defineForm(AccountMain, AccountForm, { namespace: 'zava.Forms.account' });
 ```
 
 Then bundle with tsup (`npm run build`, or `npm run dev` to watch). The build is plain tsup, not the CLI.
