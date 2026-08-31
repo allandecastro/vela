@@ -30,6 +30,13 @@ CLI line only.
   ribbon's `<prefix>.Ribbon.<entity>.<command>`. The JS global name and both namespaces are lower-cased. The
   `export { onLoad, onSave }` is kept (the entries guard and unit tests rely on it).
 
+### Fixed
+
+- `plan` / `apply` / `inspect` now reject an unknown or misspelled option (e.g. `--packages-dur`) with a clear
+  `Unknown option '...'` error instead of silently ignoring it. Previously a typo in `--packages-dir` dropped the
+  package input and only surfaced later as a confusing `Missing package input` (after prompting, in interactive
+  mode).
+
 ## [0.1.16] - 2026-08-28
 
 CLI line only.

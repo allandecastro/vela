@@ -13,10 +13,69 @@ namespace Vela.Cli;
 /// </summary>
 internal static class CommandLineOptions
 {
+    // Every option the shared parser (TryParseSharedOptions + TryResolveConnection + ResolveClientSecret) reads.
+    // Kept as an allowlist so an unknown/misspelled option (e.g. --packages-dur) fails fast with a clear message
+    // instead of being silently ignored - a dropped --packages-dir would otherwise leave the run with no package
+    // input and only surface as a confusing "Missing package input" much later. Value options consume the next
+    // token; flags stand alone. Keep both sets in sync when adding a shared option.
+    private static readonly HashSet<string> SharedValueOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--webresources", "--package", "-p", "--packages-dir", "--solution", "--solution-unique-name",
+        "--package-assembly", "--environment", "--out", "--connection-string", "--url", "--tenant-id",
+        "--client-id", "--client-secret", "--auth-client-id", "--authority",
+    };
+
+    private static readonly HashSet<string> SharedFlagOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--interactive", "-i", "--execute", "--strict", "--verbose", "-v", "--client-secret-stdin",
+        "--help", "-h",
+    };
+
+    /// <summary>
+    /// Rejects any dash-prefixed token that is not a known shared option, so a typo is reported up front rather
+    /// than silently ignored. Value-option values (the token after a known value option) are skipped, and
+    /// non-dash tokens (the positional package path) are left alone.
+    /// </summary>
+    public static bool TryValidateKnownOptions(string[] args, out int exitCode)
+    {
+        for (int i = 0; i < args.Length; i++)
+        {
+            string token = args[i];
+            if (token.Length < 2 || token[0] != '-')
+            {
+                continue;
+            }
+
+            if (SharedValueOptions.Contains(token))
+            {
+                i++; // its value is not an option
+                continue;
+            }
+
+            if (SharedFlagOptions.Contains(token))
+            {
+                continue;
+            }
+
+            exitCode = Fail($"Unknown option '{token}'. Run 'vela --help' to see the available options.", ExitInvalidArguments);
+            return false;
+        }
+
+        exitCode = ExitSuccess;
+        return true;
+    }
+
     public static bool TryParseSharedOptions(string[] args, out SharedOptions options, out int exitCode)
     {
         options = default!;
         exitCode = ExitSuccess;
+
+        // Fail fast on a misspelled/unknown option before prompting or reading anything else.
+        if (!TryValidateKnownOptions(args, out exitCode))
+        {
+            return false;
+        }
+
         bool interactive = args.Any(x => string.Equals(x, "--interactive", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-i", StringComparison.OrdinalIgnoreCase));
 
         // A web resources root makes plugin packages optional: you can deploy web resources on their own.
