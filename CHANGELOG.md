@@ -36,6 +36,10 @@ CLI line only.
   `Unknown option '...'` error instead of silently ignoring it. Previously a typo in `--packages-dir` dropped the
   package input and only surfaced later as a confusing `Missing package input` (after prompting, in interactive
   mode).
+- The same unknown-option guard now covers `init`, `add`, `models` and `sign` (each had its own parser that
+  silently ignored unrecognized flags), and every command honors `--help` / `-h` / `-?` **anywhere** in its args
+  (printing usage and exiting success) - previously only `add` / `models` did, and only as the first argument, so
+  `vela init --help` / `vela sign --help` did nothing useful. A bare `--` is treated as a positional separator.
 - Scaffolded solutions now package the plugin with **`dotnet build -c Release`**, not `dotnet pack`. The Power
   Platform plugin SDK bundles the dependent assemblies during the build (from the publish output), so a cold
   `dotnet pack` emitted an assembly-less package (`NU5128`) that `vela plan` rejected with "No assemblies found in

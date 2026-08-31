@@ -16,6 +16,54 @@ public class CommandLineOptionsTests
         Assert.Equal(ExitInvalidArguments, exitCode);
     }
 
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("-h")]
+    [InlineData("-?")]
+    [InlineData("/?")]
+    public void IsHelpRequested_True_ForHelpTokenAnywhere(string token)
+    {
+        Assert.True(CommandLineOptions.IsHelpRequested(["plugin", "Foo", token]));
+    }
+
+    [Fact]
+    public void IsHelpRequested_False_WhenNoHelpToken()
+    {
+        Assert.False(CommandLineOptions.IsHelpRequested(["plugin", "Foo", "--entity", "Account"]));
+    }
+
+    [Fact]
+    public void TryValidateKnownOptions_Generic_SkipsBareDoubleDash_And_ValuesAndPositionals()
+    {
+        HashSet<string> valueOpts = new(StringComparer.OrdinalIgnoreCase) { "--name" };
+        HashSet<string> flagOpts = new(StringComparer.OrdinalIgnoreCase) { "--force" };
+        // positional 'Foo', a bare '--' separator, a value option + its (dash-looking) value, and a known flag.
+        string[] args = ["Foo", "--", "--name", "-weird", "--force"];
+
+        Assert.True(CommandLineOptions.TryValidateKnownOptions(args, valueOpts, flagOpts, out int exitCode));
+        Assert.Equal(ExitSuccess, exitCode);
+    }
+
+    [Fact]
+    public void TryValidateKnownOptions_Generic_RejectsUnknown()
+    {
+        HashSet<string> valueOpts = new(StringComparer.OrdinalIgnoreCase) { "--name" };
+        HashSet<string> flagOpts = new(StringComparer.OrdinalIgnoreCase) { "--force" };
+
+        Assert.False(CommandLineOptions.TryValidateKnownOptions(["--nam", "Foo"], valueOpts, flagOpts, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void AddWizardComposedArgs_PassTheAddAllowlist()
+    {
+        // Guard against a regression where the interactive add wizard emits an option the guard would reject.
+        string[] composed = InteractiveMenu.ComposeAddArgs("plugin", "MyPlugin", "Account", "Update", "OnUpdate", "customapi", function: true);
+
+        Assert.True(CommandLineOptions.TryValidateKnownOptions(composed, AddCommand.ValueOptions, AddCommand.FlagOptions, out int exitCode));
+        Assert.Equal(ExitSuccess, exitCode);
+    }
+
     [Fact]
     public void TryValidateKnownOptions_Accepts_KnownOptions_And_Positional()
     {

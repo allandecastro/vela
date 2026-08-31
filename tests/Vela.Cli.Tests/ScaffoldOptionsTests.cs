@@ -7,6 +7,21 @@ namespace Vela.Cli.Tests;
 public class ScaffoldOptionsTests
 {
     [Fact]
+    public void TryParse_RejectsUnknownOption()
+    {
+        // A misspelled --prefix must fail fast, not be silently ignored (and then scaffold with a wrong prefix).
+        Assert.False(ScaffoldOptions.TryParse(["ZavaSales", "--prefx", "Zava"], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParse_AcceptsKnownOptions_AndBareDoubleDash()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--", "--force"], out _, out int exitCode));
+        Assert.Equal(ExitSuccess, exitCode);
+    }
+
+    [Fact]
     public void TryParse_AppliesDefaults_WhenOnlyNameProvided()
     {
         bool ok = ScaffoldOptions.TryParse(["--name", "ZavaSales"], out ScaffoldOptions options, out int exitCode);

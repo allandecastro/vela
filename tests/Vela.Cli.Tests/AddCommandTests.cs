@@ -9,6 +9,18 @@ namespace Vela.Cli.Tests;
 public class AddCommandTests
 {
     [Fact]
+    public void Run_RejectsUnknownOption_BeforeDispatch()
+    {
+        Assert.Equal(ExitInvalidArguments, AddCommand.Run(["plugin", "Foo", "--entty", "Account"]));
+    }
+
+    [Fact]
+    public void Run_HelpAnywhere_PrintsUsage_AndSucceeds()
+    {
+        Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "--help"]));
+    }
+
+    [Fact]
     public void BuildAddReport_Lists_Description_And_Created_Files()
     {
         using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(

@@ -21,12 +21,32 @@ namespace Vela.Cli;
 /// </summary>
 internal static class ModelsCommand
 {
+    // The models allowlist: its own options plus the shared connection options (models authenticates to
+    // Dataverse via TryResolveConnection). Value options consume the next token; flags stand alone.
+    private static readonly HashSet<string> ValueOptions = new(CommandLineOptions.ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
+    {
+        "--solution", "--entities", "--custom-apis", "--roles", "--solution-roles", "--out", "--lang",
+        "--namespace", "--project", "-p",
+    };
+
+    private static readonly HashSet<string> FlagOptions = new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
+    {
+        "--forms", "--tables", "--no-annotations", "--overwrite", "--verbose", "-v", "--json",
+        "--interactive", "-i", "--help", "-h",
+    };
+
     public static int Run(string[] args)
     {
-        if (args.Length > 0 && args[0] is "--help" or "-h" or "-?" or "/?" or "help")
+        if ((args.Length > 0 && args[0] is "help") || CommandLineOptions.IsHelpRequested(args))
         {
             PrintModelsUsage();
             return ExitSuccess;
+        }
+
+        // Fail fast on a misspelled/unknown option before connecting to Dataverse or generating anything.
+        if (!CommandLineOptions.TryValidateKnownOptions(args, ValueOptions, FlagOptions, out int optExit))
+        {
+            return optExit;
         }
 
         string? solution = TryReadOption(args, "--solution");
