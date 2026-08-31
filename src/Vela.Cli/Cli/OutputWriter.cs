@@ -261,14 +261,19 @@ internal static class OutputWriter
         return Fail(ex.Message, exitCode, includeUsage: false);
     }
 
-    public static string? Prompt(string label, bool allowEmpty = false, bool secret = false)
+    public static string? Prompt(string label, bool allowEmpty = false, bool secret = false, string? defaultValue = null)
     {
+        bool hasDefault = !string.IsNullOrWhiteSpace(defaultValue);
         string? value;
         if (Console.IsInputRedirected)
         {
             // Redirected stdin (tests, pipes, CI): plain read so behavior stays deterministic.
-            Console.Write(label + " ");
+            Console.Write(hasDefault ? $"{label} [{defaultValue}] " : label + " ");
             value = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(value) && hasDefault)
+            {
+                value = defaultValue; // empty input accepts the remembered default
+            }
         }
         else
         {
@@ -280,6 +285,13 @@ internal static class OutputWriter
                 IsSecret = secret,
                 Mask = '*',
             };
+
+            // A remembered value is shown as the default; pressing Enter accepts it.
+            if (hasDefault)
+            {
+                prompt.DefaultValue(defaultValue!);
+                prompt.ShowDefaultValue = true;
+            }
 
             value = Spectre.Console.AnsiConsole.Prompt(prompt);
         }

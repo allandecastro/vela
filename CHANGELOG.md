@@ -23,6 +23,12 @@ All notable changes to Vela are documented here. The format is based on
 
 CLI line only.
 
+### Added
+
+- `plan` / `apply` / `inspect` / `models` `--interactive` now **remember the last Dataverse URL** (in
+  `~/.vela/config.json`, or `$VELA_CONFIG_DIR`) and offer it as the prompt default - press Enter to reuse it
+  instead of re-typing the org URL every run. The URL is not a secret, so it is a plain preferences file.
+
 ### Changed
 
 - The scaffolded form example now wires `defineForm(Model, Class, { namespace: '<prefix>.Forms.<entity>' })`, so a

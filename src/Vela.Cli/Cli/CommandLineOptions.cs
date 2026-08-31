@@ -246,7 +246,13 @@ internal static class CommandLineOptions
 
         if (interactive && string.IsNullOrWhiteSpace(connectionString))
         {
-            url = string.IsNullOrWhiteSpace(url) ? Prompt("Dataverse URL (https://org.crm.dynamics.com):") : url;
+            // Default the prompt to the last URL used interactively, so a repeat run just presses Enter.
+            url = string.IsNullOrWhiteSpace(url)
+                ? Prompt("Dataverse URL (https://org.crm.dynamics.com):", defaultValue: UserConfig.GetLastDataverseUrl())
+                : url;
+
+            // Remember it for next time (best-effort; the URL is not a secret).
+            UserConfig.SetLastDataverseUrl(url);
 
             // If client-id / client-secret were not supplied, use browser-based OAuth
             bool useOAuth = string.IsNullOrWhiteSpace(clientId) && string.IsNullOrWhiteSpace(clientSecret);
