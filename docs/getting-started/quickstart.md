@@ -10,8 +10,8 @@ dotnet tool install --global Vela.Cli
 vela init --name ZavaSales --prefix Zava
 cd ZavaSales
 
-# 3. Build the plugin package into a .nupkg
-dotnet pack src/Zava.Plugins -c Release -o artifacts
+# 3. Build the plugin package into a .nupkg (the build packages it into artifacts/; not dotnet pack)
+dotnet build ZavaSales.sln -c Release
 
 # 4. Preview what would change in your environment (read-only)
 vela plan  --packages-dir artifacts --interactive

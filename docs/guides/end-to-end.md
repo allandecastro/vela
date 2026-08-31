@@ -34,10 +34,12 @@ public class AccountPostUpdate : EntityPluginBase<Account>
 }
 ```
 
-**2. Build the plugin package** into a `.nupkg`:
+**2. Build the plugin package** into a `.nupkg` (the Release build packages it into `artifacts/` via
+`GeneratePackageOnBuild` + `PackageOutputPath` - use `dotnet build`, not `dotnet pack`, which on a cold tree
+emits an assembly-less package):
 
 ```powershell
-dotnet pack .\src\Zava.Plugins -c Release -o .\artifacts
+dotnet build .\src\Zava.Plugins -c Release
 ```
 
 **3. Preview** what would change in the target environment (read-only):

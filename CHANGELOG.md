@@ -36,6 +36,12 @@ CLI line only.
   `Unknown option '...'` error instead of silently ignoring it. Previously a typo in `--packages-dir` dropped the
   package input and only surfaced later as a confusing `Missing package input` (after prompting, in interactive
   mode).
+- Scaffolded solutions now package the plugin with **`dotnet build -c Release`**, not `dotnet pack`. The Power
+  Platform plugin SDK bundles the dependent assemblies during the build (from the publish output), so a cold
+  `dotnet pack` emitted an assembly-less package (`NU5128`) that `vela plan` rejected with "No assemblies found in
+  package". The plugin projects set `<PackageOutputPath>` so the Release build drops the package into `artifacts/`,
+  the `vela init` next steps and generated README/docs use `dotnet build`, and the opt-in signing target (which
+  runs `AfterTargets="Pack"`, fired by `GeneratePackageOnBuild`) now documents `dotnet build -c Release`.
 
 ## [0.1.16] - 2026-08-28
 

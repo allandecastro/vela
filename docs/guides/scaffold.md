@@ -45,7 +45,7 @@ Flags: `--prefix` (default: derived from name), `--output` (default: `.`), `--co
 `--web-resources` (also scaffold the TypeScript web-resources project, see below; `--web-resources-namespace`
 and `--web-resources-folder` set its global name and build folder),
 `--force` (overwrite an existing folder). The generated solution references `Vela.Plugins` as
-a NuGet package, then follows the `dotnet pack` → `vela plan` → `vela apply` loop from the [Quickstart](../getting-started/quickstart.md).
+a NuGet package, then follows the `dotnet build -c Release` → `vela plan` → `vela apply` loop from the [Quickstart](../getting-started/quickstart.md).
 
 It also emits a `nuget.config` with a `local-packages/` folder feed, since `Vela.Plugins` (and
 `Vela.Testing`, used by the test project) are **not on nuget.org**: point that source at your private
