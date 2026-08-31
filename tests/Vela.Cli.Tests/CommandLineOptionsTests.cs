@@ -1,10 +1,41 @@
 using Vela.Cli;
 using Xunit;
+using static Vela.Cli.CliExitCodes;
 
 namespace Vela.Cli.Tests;
 
 public class CommandLineOptionsTests
 {
+    [Fact]
+    public void TryValidateKnownOptions_Rejects_UnknownOption()
+    {
+        // The reported typo: --packages-dur instead of --packages-dir must fail fast, not be silently ignored.
+        string[] args = ["--packages-dur", ".\\artifacts\\", "--interactive"];
+
+        Assert.False(CommandLineOptions.TryValidateKnownOptions(args, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryValidateKnownOptions_Accepts_KnownOptions_And_Positional()
+    {
+        // Value options consume their next token; flags stand alone; the .nupkg is a positional.
+        string[] args = ["--packages-dir", ".\\artifacts\\", "--solution", "Zava", "--strict", "pkg.nupkg", "-v"];
+
+        Assert.True(CommandLineOptions.TryValidateKnownOptions(args, out int exitCode));
+        Assert.Equal(ExitSuccess, exitCode);
+    }
+
+    [Fact]
+    public void TryValidateKnownOptions_DoesNotFlag_ValueThatLooksLikeOption()
+    {
+        // A value that itself starts with '-' is skipped because it follows a known value option.
+        string[] args = ["--out", "-weird-name", "--package", "a.nupkg"];
+
+        Assert.True(CommandLineOptions.TryValidateKnownOptions(args, out _));
+    }
+
+
     [Fact]
     public void TryReadOption_ReturnsValue_AfterMatchingFlag()
     {
