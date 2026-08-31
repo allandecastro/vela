@@ -31,20 +31,31 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
   slow Dataverse-backed factories, since the cache is a shared static across concurrent sandbox executions). Do
   **not** add an entry cap: the entry count is the caller's concern, bounded by TTL, and eviction would add a
   policy nobody asked for. Framework-line change (separate release from the CLI).
-- **P2 - close the compile-time gap on image/stage validity.** `StepBuilder` forces `FilteringAttributes(...)`
-  at **compile time** via the type-state chain (`IFilteringStep*Builder`), but image/stage validity is only a
-  **runtime** guard (`EnsureImageAllowed`/`IsImageAllowed`): `.PostImage()` on a PreValidation step compiles fine
-  and only throws when the chain runs (surfaced hard at `vela plan`/`apply` via `PackageScanner`, and by the test
-  harness, so it is not unchecked - just late). Either extend the type-state to a message x stage matrix so an
-  invalid image can't be written, or at minimum keep the runtime guard but improve it: (1) the error when
-  `.PostImage()`/`.PreImage()` is called **before** `.Stage()` reads the default stage `(PluginStages)0` and reads
-  as "stage '0'" - re-validate images in `Build()` against the final stage and emit a message that names the real
-  stage; (2) make the message spell out which stage/message *does* support the requested image. Guards already
-  exist and are tested (`RoutingTests.StepBuilder_Disallows*`); this is about catching it as early as filtering.
-- **P2 - guard the empty `target.Id` footgun in pre-stage Create.** On PreValidation/PreOperation **Create**,
-  the record is not yet committed, so `target.Id` is `Guid.Empty`; nothing warns a developer who reads/uses it
-  (the scaffolded `AccountPostCreatePlugin` uses `target.Id` and is PostOperation for exactly this reason - moving
-  it to a pre-stage silently passes an empty id). Consider a runtime trace/warning (or doc note on
-  `EntityPluginBase.Execute`) when `target.Id` is empty on a Create pre-stage. Note the deliberate design: for
-  reference-based messages (Delete/Associate/SetState) `ResolveTarget` materializes a typed `TEntity` holding only
-  the id, so `Execute`/handlers are always typed and never null - that part is intended, not a bug.
+- **P2 - make an invalid image/stage a compile error (typed stage chain), not a runtime throw.** Today
+  `StepBuilder` forces `FilteringAttributes(...)` at **compile time** (type-state), but image/stage validity is
+  only a **runtime** guard (`EnsureImageAllowed`/`IsImageAllowed`): `.PostImage()` on a **PreValidation** step -
+  or on a **Delete** step (Delete has no post-image; only a pre-image in PostOperation) - compiles fine and only
+  throws when the chain runs. **Goal: the project must not compile with an invalid combination.** This lives
+  entirely in the fluent builder (not in `Execute`), so it is achievable: replace the enum `.Stage(PluginStages.X)`
+  with **typed stage methods** (`.PreValidation()` / `.PreOperation()` / `.PostOperation()`) returning message x
+  stage-specific interfaces that expose only the images that stage/message actually supports (Create+PostOperation
+  -> `.PostImage()` only; Delete+PostOperation -> `.PreImage()` only; PreValidation -> no image). Also encode the
+  **logical order** in the type-state (message -> stage -> mode -> filtering -> images) so the chain forces the
+  developer down the valid path. Trade-off: many more interfaces, and the loss of the `.Stage(enum)` ergonomics.
+  **Keep the runtime check in `Build()` as a backstop** that validates *regardless of call order* (a config
+  assembled out of order, or built by a path that bypasses the fluent typing, is still caught), and fix its
+  message: `.PostImage()`/`.PreImage()` called **before** `.Stage()` currently reads the default `(PluginStages)0`
+  as "stage '0'". Guards exist and are tested (`RoutingTests.StepBuilder_Disallows*`).
+- **P3 - message-dependent `Execute` target is a redesign, not a type-state tweak.** For **Delete** /
+  Associate / SetState the platform `Target` is an `EntityReference`, but `EntityPluginBase<TEntity>` exposes a
+  single `Execute(ILocalPluginContext, TEntity target)` and `ResolveTarget` materializes a typed `TEntity`
+  holding only the id. Typing `target` per message (an `EntityReference` for Delete, a full entity for
+  Create/Update) is **not reachable with the current design**: the message/stage are chosen dynamically in
+  `RegisterSteps()`, so the compiler cannot specialize `Execute`'s signature - it would need message/stage as
+  **generic type parameters** of the base, or **per-message typed handlers** (`OnDelete(ctx, EntityReference)` vs
+  `OnCreate(ctx, Account)`), i.e. a major redesign. Near-term: keep the uniform typed target (never null - a
+  deliberate choice), document it on `EntityPluginBase.Execute`, and consider a typed helper (e.g.
+  `ctx.TargetReference`) for reference messages. Related footgun: on PreValidation/PreOperation **Create** the
+  record is not yet committed, so `target.Id` is `Guid.Empty` (the scaffolded `AccountPostCreatePlugin` uses
+  `target.Id` and is PostOperation for that reason); a runtime trace/warning when `target.Id` is empty on a
+  Create pre-stage would help.
