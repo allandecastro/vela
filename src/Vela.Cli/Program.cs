@@ -81,6 +81,12 @@ return command switch
 // so it has its own option parser instead of TryParseSharedOptions.
 static int RunNew(string[] args)
 {
+    if (IsHelpRequested(args))
+    {
+        PrintUsage();
+        return ExitSuccess;
+    }
+
     if (!ScaffoldOptions.TryParse(args, out ScaffoldOptions options, out int exitCode))
     {
         return exitCode;
@@ -116,6 +122,12 @@ static int RunNew(string[] args)
 
 static int RunPlan(string[] args, JsonSerializerOptions jsonOptions)
 {
+    if (IsHelpRequested(args))
+    {
+        PrintUsage();
+        return ExitSuccess;
+    }
+
     if (!TryParseSharedOptions(args, out SharedOptions options, out int exitCode))
     {
         return exitCode;
@@ -126,6 +138,12 @@ static int RunPlan(string[] args, JsonSerializerOptions jsonOptions)
 
 static int RunApply(string[] args, JsonSerializerOptions jsonOptions)
 {
+    if (IsHelpRequested(args))
+    {
+        PrintUsage();
+        return ExitSuccess;
+    }
+
     if (!TryParseSharedOptions(args, out SharedOptions options, out int exitCode))
     {
         return exitCode;
@@ -141,6 +159,12 @@ static int RunApply(string[] args, JsonSerializerOptions jsonOptions)
 
 static int RunInspect(string[] args, JsonSerializerOptions jsonOptions)
 {
+    if (IsHelpRequested(args))
+    {
+        PrintUsage();
+        return ExitSuccess;
+    }
+
     if (!TryParseSharedOptions(args, out SharedOptions options, out int exitCode))
     {
         return exitCode;

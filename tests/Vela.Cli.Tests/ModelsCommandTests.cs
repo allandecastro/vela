@@ -12,6 +12,18 @@ namespace Vela.Cli.Tests;
 public class ModelsCommandTests
 {
     [Fact]
+    public void Run_RejectsUnknownOption_BeforeConnecting()
+    {
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--soluton", "Zava"]));
+    }
+
+    [Fact]
+    public void Run_Help_PrintsUsage_AndSucceeds()
+    {
+        Assert.Equal(ExitSuccess, ModelsCommand.Run(["--help"]));
+    }
+
+    [Fact]
     public void ReadCustomApiParameters_uses_the_name_not_the_dotted_uniquename()
     {
         // Dataverse stores a Custom API parameter's `name` unqualified ("ContactId") and its `uniquename`

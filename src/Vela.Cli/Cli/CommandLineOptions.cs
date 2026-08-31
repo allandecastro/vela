@@ -13,51 +13,76 @@ namespace Vela.Cli;
 /// </summary>
 internal static class CommandLineOptions
 {
-    // Every option the shared parser (TryParseSharedOptions + TryResolveConnection + ResolveClientSecret) reads.
-    // Kept as an allowlist so an unknown/misspelled option (e.g. --packages-dur) fails fast with a clear message
-    // instead of being silently ignored - a dropped --packages-dir would otherwise leave the run with no package
-    // input and only surface as a confusing "Missing package input" much later. Value options consume the next
-    // token; flags stand alone. Keep both sets in sync when adding a shared option.
-    private static readonly HashSet<string> SharedValueOptions = new(StringComparer.OrdinalIgnoreCase)
+    // Connection options every Dataverse-authenticating command reads (the connected commands via
+    // TryResolveConnection/ResolveClientSecret, and `vela models`). Kept separate so each command's allowlist
+    // composes them without duplicating the list.
+    internal static readonly HashSet<string> ConnectionValueOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--connection-string", "--url", "--tenant-id", "--client-id", "--client-secret",
+        "--auth-client-id", "--authority",
+    };
+
+    internal static readonly HashSet<string> ConnectionFlagOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--client-secret-stdin",
+    };
+
+    // Every option the shared parser (TryParseSharedOptions) reads: the package/scope options plus the shared
+    // connection options. Kept as an allowlist so an unknown/misspelled option (e.g. --packages-dur) fails fast
+    // with a clear message instead of being silently ignored - a dropped --packages-dir would otherwise leave the
+    // run with no package input and only surface as a confusing "Missing package input" much later. Value options
+    // consume the next token; flags stand alone. Keep these in sync when adding a shared option.
+    private static readonly HashSet<string> SharedValueOptions = new(ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--webresources", "--package", "-p", "--packages-dir", "--solution", "--solution-unique-name",
-        "--package-assembly", "--environment", "--out", "--connection-string", "--url", "--tenant-id",
-        "--client-id", "--client-secret", "--auth-client-id", "--authority",
+        "--package-assembly", "--environment", "--out",
     };
 
-    private static readonly HashSet<string> SharedFlagOptions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> SharedFlagOptions = new(ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
     {
-        "--interactive", "-i", "--execute", "--strict", "--verbose", "-v", "--client-secret-stdin",
-        "--help", "-h",
+        "--interactive", "-i", "--execute", "--strict", "--verbose", "-v", "--help", "-h",
     };
+
+    // The tokens that request usage on any command; handled (print usage, exit success) before the option guard.
+    private static readonly HashSet<string> HelpTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--help", "-h", "-?", "/?",
+    };
+
+    /// <summary>True when any argument requests help (<c>--help</c>/<c>-h</c>/<c>-?</c>/<c>/?</c>).</summary>
+    public static bool IsHelpRequested(string[] args) => args.Any(HelpTokens.Contains);
+
+    /// <summary>Validates the shared (plan/apply/inspect) options against the shared allowlist.</summary>
+    public static bool TryValidateKnownOptions(string[] args, out int exitCode) =>
+        TryValidateKnownOptions(args, SharedValueOptions, SharedFlagOptions, out exitCode);
 
     /// <summary>
-    /// Rejects any dash-prefixed token that is not a known shared option, so a typo is reported up front rather
-    /// than silently ignored. Value-option values (the token after a known value option) are skipped, and
-    /// non-dash tokens (the positional package path) are left alone.
+    /// Rejects any dash-prefixed token that is not a known option (a value option or a flag), so a typo is
+    /// reported up front rather than silently ignored. The value of a value option (the following token) is
+    /// skipped; non-dash tokens (positionals), a lone <c>-</c>, and a bare <c>--</c> separator are left alone.
     /// </summary>
-    public static bool TryValidateKnownOptions(string[] args, out int exitCode)
+    public static bool TryValidateKnownOptions(string[] args, HashSet<string> valueOptions, HashSet<string> flagOptions, out int exitCode)
     {
         for (int i = 0; i < args.Length; i++)
         {
             string token = args[i];
-            if (token.Length < 2 || token[0] != '-')
+            if (token.Length < 2 || token[0] != '-' || token == "--")
             {
-                continue;
+                continue; // positional, lone '-', or the bare '--' separator
             }
 
-            if (SharedValueOptions.Contains(token))
+            if (valueOptions.Contains(token))
             {
                 i++; // its value is not an option
                 continue;
             }
 
-            if (SharedFlagOptions.Contains(token))
+            if (flagOptions.Contains(token))
             {
                 continue;
             }
 
-            exitCode = Fail($"Unknown option '{token}'. Run 'vela --help' to see the available options.", ExitInvalidArguments);
+            exitCode = Fail($"Unknown option '{token}'. Run 'vela <command> --help' to see the available options.", ExitInvalidArguments);
             return false;
         }
 

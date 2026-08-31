@@ -32,10 +32,17 @@ internal static class AddCommand
 
     public static int Run(string[] args)
     {
-        if (args.Length == 0 || IsHelp(args[0]))
+        if (args.Length == 0)
         {
             PrintAddUsage();
-            return args.Length == 0 ? ExitInvalidArguments : ExitSuccess;
+            return ExitInvalidArguments;
+        }
+
+        // Help anywhere (the leading kind or a later `--help`) prints usage and succeeds.
+        if (IsHelp(args[0]) || CommandLineOptions.IsHelpRequested(args))
+        {
+            PrintAddUsage();
+            return ExitSuccess;
         }
 
         // `vela add --interactive` launches the wizard, then re-runs with the composed args. Redirected
@@ -49,6 +56,13 @@ internal static class AddCommand
             }
 
             return Run(InteractiveMenu.PromptAdd());
+        }
+
+        // Fail fast on an unknown/misspelled option. The kind and name are positionals, so they pass; the
+        // allowlist is the union over all add kinds (per-kind option validity is enforced further down).
+        if (!CommandLineOptions.TryValidateKnownOptions(args, ValueOptions, FlagOptions, out int optExit))
+        {
+            return optExit;
         }
 
         string kind = args[0].ToLowerInvariant();
@@ -623,8 +637,16 @@ internal static class AddCommand
     private static bool IsHelp(string arg) =>
         arg is "--help" or "-h" or "-?" or "/?" or "help";
 
-    // Options that consume the next token as their value; everything else may be a positional.
-    private static readonly string[] ValueOptions = ["--entity", "-e", "--project", "-p", "--message", "--kind", "--handler"];
+    // Options that consume the next token as their value; everything else may be a positional. Also the
+    // value-option half of the unknown-option allowlist (union over all add kinds). Keep in sync with the kinds.
+    internal static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
+        { "--entity", "-e", "--project", "-p", "--message", "--kind", "--handler" };
+
+    // Boolean flags across all add kinds (customapi binding/operation, --force/--json, interactive, help).
+    internal static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--force", "--json", "--bound", "--global", "--function", "--action", "--interactive", "-i", "--help", "-h",
+    };
 
     private static string? FindPositional(string[] args)
     {
@@ -633,7 +655,7 @@ internal static class AddCommand
             string current = args[i];
             if (current.StartsWith('-'))
             {
-                if (i + 1 < args.Length && ValueOptions.Contains(current, StringComparer.OrdinalIgnoreCase))
+                if (i + 1 < args.Length && ValueOptions.Contains(current))
                 {
                     i++;
                 }

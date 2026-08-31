@@ -7,6 +7,19 @@ namespace Vela.Cli.Tests;
 public class SignCommandTests
 {
     [Fact]
+    public void Run_RejectsUnknownOption()
+    {
+        // --certificate-fingerprint is a `dotnet nuget sign` arg, NOT a `vela sign` option: it must be rejected.
+        Assert.Equal(ExitInvalidArguments, SignCommand.Run(["--package", "x.nupkg", "--certificate-fingerprint", "ABCD"]));
+    }
+
+    [Fact]
+    public void Run_Help_PrintsUsage_AndSucceeds()
+    {
+        Assert.Equal(ExitSuccess, SignCommand.Run(["--help"]));
+    }
+
+    [Fact]
     public void TryParseOptions_ReadsJsonFlag()
     {
         Assert.True(SignCommand.TryParseOptions(["--package", "x.nupkg", "--fingerprint", "ABCD", "--json"], out SignOptions options, out _));

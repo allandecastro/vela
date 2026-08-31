@@ -80,6 +80,12 @@ internal sealed record ScaffoldOptions(
         options = default!;
         exitCode = ExitSuccess;
 
+        // Fail fast on a misspelled/unknown option (e.g. --prefx) before prompting or scaffolding anything.
+        if (!CommandLineOptions.TryValidateKnownOptions(args, ValueOptions, FlagOptions, out exitCode))
+        {
+            return false;
+        }
+
         bool interactive = args.Any(x =>
             string.Equals(x, "--interactive", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(x, "-i", StringComparison.OrdinalIgnoreCase));
@@ -271,8 +277,16 @@ internal sealed record ScaffoldOptions(
     }
 
     // Options that consume the following token as their value; everything else is treated as boolean.
-    private static readonly string[] ValueOptions =
-        ["--name", "--prefix", "--output", "-o", "--core-version", "--web-resources-namespace", "--web-resources-folder"];
+    // Value options (consume the next token) and boolean flags for `vela init`. Used both to skip value-option
+    // values when reading the positional name and as the unknown-option allowlist. Keep in sync with TryParse.
+    private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
+        { "--name", "--prefix", "--output", "-o", "--core-version", "--web-resources-namespace", "--web-resources-folder" };
+
+    private static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--force", "--json", "--managed-identity", "--mi", "--no-console", "--no-integrations", "--no-tests",
+        "--web-resources", "--webresources", "--interactive", "-i", "--help", "-h",
+    };
 
     // Returns the first positional argument (a token not starting with '-' and not the value of a
     // value-taking option), or null if there is none.
@@ -283,7 +297,7 @@ internal sealed record ScaffoldOptions(
             string current = args[i];
             if (current.StartsWith('-'))
             {
-                if (i + 1 < args.Length && ValueOptions.Contains(current, StringComparer.OrdinalIgnoreCase))
+                if (i + 1 < args.Length && ValueOptions.Contains(current))
                 {
                     i++;
                 }
