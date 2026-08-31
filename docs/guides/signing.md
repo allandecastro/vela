@@ -18,6 +18,6 @@ disk), `--pfx <file>` with `--pfx-password` or `--pfx-credential` (a Windows Cre
 `vela init --managed-identity` wires this into the build of the **Integrations** project: a `SignPluginPackage`
 MSBuild target runs after `Pack`, **inert until a certificate source is configured** and **skipped inside CI**
 (`GITHUB_ACTIONS` / `TF_BUILD`) so a pipeline owns its own sign step - no double-signing. Configure it with
-MSBuild properties, e.g. `dotnet pack src/Zava.Integrations -c Release -o artifacts
+MSBuild properties, e.g. `dotnet build src/Zava.Integrations -c Release
 -p:PluginSigningFingerprint=<sha256>` (or `-p:PluginSigningCertificate=path.pfx -p:PluginSigningCredential=<cred>`).
 The generated solution's README documents the full property set.

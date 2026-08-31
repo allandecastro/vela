@@ -31,6 +31,8 @@ public class ScaffoldTemplatesTests
         Assert.Contains("Vela.Plugins", csproj);
         Assert.Contains("Zava.Shared\\Zava.Shared.csproj", csproj);
         Assert.Contains("<GeneratePackageOnBuild>true</GeneratePackageOnBuild>", csproj);
+        // The build (not `dotnet pack`) produces the plugin package; PackageOutputPath drops it in artifacts/.
+        Assert.Contains("<PackageOutputPath>$(MSBuildProjectDirectory)\\..\\..\\artifacts</PackageOutputPath>", csproj);
         Assert.Contains("net462", csproj);
     }
 
@@ -308,6 +310,19 @@ public class ScaffoldTemplatesTests
         Assert.Contains("## Signing the plugin package", unsigned);
         Assert.Contains("vela init <name> --managed-identity", unsigned);
         Assert.DoesNotContain("SignPluginPackage", unsigned);
+    }
+
+    [Fact]
+    public void RootReadme_PackagesWithBuild_NotPack()
+    {
+        // The plugin package is produced by `dotnet build -c Release` (GeneratePackageOnBuild + PackageOutputPath),
+        // never `dotnet pack` (which, run cold, emits an assembly-less package rejected by `vela plan`).
+        string readme = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = true });
+
+        Assert.Contains("dotnet build", readme);
+        // No `dotnet pack <project>` command anywhere (prose may still mention it as the thing NOT to run).
+        Assert.DoesNotContain("dotnet pack src", readme);
+        Assert.DoesNotContain("dotnet pack .", readme);
     }
 
     private static int CountOccurrences(string haystack, string needle)

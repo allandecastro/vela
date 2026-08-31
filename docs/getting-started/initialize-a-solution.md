@@ -44,4 +44,4 @@ plugins and Custom APIs with `Vela.Testing`, no Dataverse connection.
 - **Write your own code** - [plugins](../guides/plugins.md), [Custom APIs](../guides/custom-apis.md),
   [dependency injection](../guides/dependency-injection.md), [caching](../guides/caching.md).
 - **Test without a connection** - [Testing with Vela.Testing](../guides/testing.md).
-- **Ship** - `dotnet pack` → [plan & apply](../guides/plan-apply.md).
+- **Ship** - `dotnet build -c Release` (packages the plugin into `artifacts/`) → [plan & apply](../guides/plan-apply.md).

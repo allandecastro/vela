@@ -213,8 +213,9 @@ internal static class ProjectScaffolder
             }
         }
 
-        Console.WriteLine($"  dotnet pack src/{pluginsName} -c Release -o artifacts");
-        Console.WriteLine($"  vela plan --package artifacts/{pluginsName}.1.0.0.nupkg --interactive --verbose");
+        // `dotnet build -c Release` packages the plugin project(s) into artifacts/ (GeneratePackageOnBuild +
+        // PackageOutputPath). `dotnet pack` is intentionally not used: run cold it emits an assembly-less package.
+        Console.WriteLine($"  vela plan --packages-dir artifacts --interactive --verbose");
         if (options.IncludeWebResources)
         {
             Console.WriteLine($"  cd src/{webResourcesName} && npm install && npm run build   # bundle the form web resources");
