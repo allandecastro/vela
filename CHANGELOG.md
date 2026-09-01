@@ -44,6 +44,10 @@ CLI line only.
 
 ### Fixed
 
+- `plan` / `apply` / `inspect` no longer leave a `vela-tools\<guid>` temp folder behind (or warn `Access to the
+  path '...dll' is denied`) on Windows. The scanner now byte-loads the package assemblies into an isolated load
+  context instead of `Assembly.LoadFrom`, which held the `.dll` files open for the process lifetime, so the
+  extracted folder can be deleted right after the scan.
 - `plan` / `apply` / `inspect` now reject an unknown or misspelled option (e.g. `--packages-dur`) with a clear
   `Unknown option '...'` error instead of silently ignoring it. Previously a typo in `--packages-dir` dropped the
   package input and only surfaced later as a confusing `Missing package input` (after prompting, in interactive

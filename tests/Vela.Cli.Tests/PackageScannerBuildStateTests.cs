@@ -50,6 +50,26 @@ public sealed class PackageScannerBuildStateTests : IDisposable
     }
 
     [Fact]
+    public void Scanning_leaves_the_extracted_temp_folders_deletable()
+    {
+        // The scanner byte-loads the package assemblies so the extracted .dll files are never locked. On Windows
+        // Assembly.LoadFrom held them open for the process lifetime, so deleting the temp folder here failed with
+        // "Access to the path '...dll' is denied". This asserts the folders can be removed right after the scan.
+        string nupkg = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture");
+        List<string> temps = new();
+
+        PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg), Web, temps);
+
+        Assert.NotEmpty(temps);
+        foreach (string dir in temps)
+        {
+            Assert.True(Directory.Exists(dir));
+            Directory.Delete(dir, recursive: true); // must not throw (no held file handle)
+            Assert.False(Directory.Exists(dir));
+        }
+    }
+
+    [Fact]
     public void A_plugin_that_cannot_be_introspected_fails_loudly()
     {
         string nupkg = BuildNupkg("BrokenPluginFixture.dll", "BrokenPluginFixture");
