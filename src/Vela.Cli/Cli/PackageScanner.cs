@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Text.Json;
 using System.Xml.Linq;
 using Microsoft.Xrm.Sdk;
@@ -37,14 +38,20 @@ internal static class PackageScanner
     List<PluginPackagePayload> packagePayloads = [];
     Dictionary<string, string> secureConfigByStepKey = new(StringComparer.Ordinal);
 
+    // An isolated load context that resolves the package's assemblies (and their siblings) from the temp
+    // folders by *bytes*, so no .dll file is ever locked - on Windows Assembly.LoadFrom would hold the file
+    // for the process lifetime, leaking the temp directory and failing its cleanup. Framework/SDK assemblies
+    // not present in the temp folders fall back to the default context.
+    PluginLoadContext loadContext = new(tempDirectories);
+
     foreach (string packagePath in options.PackagePaths)
     {
         packagePayloads.Add(ReadPluginPackagePayload(packagePath));
         ExtractedPackage package = ExtractPackage(packagePath, options.PackageAssembly, tempDirectories);
-        // Loads the package's assembly (and resolves its sibling dependencies from the same temp folder).
-        // The types below are then instantiated and invoked to read their definitions — so this runs code from
-        // the package. Only scan trusted packages. See the class-level SECURITY note.
-        Assembly assembly = Assembly.LoadFrom(package.PrimaryAssemblyPath);
+        // Loads the package's assembly (and resolves its sibling dependencies from the same temp folder), by
+        // bytes so the file stays deletable. The types below are then instantiated and invoked to read their
+        // definitions - so this runs code from the package. Only scan trusted packages. See the SECURITY note.
+        Assembly assembly = loadContext.LoadFromAssemblyPathByBytes(package.PrimaryAssemblyPath);
         string assemblyName = assembly.GetName().Name ?? assembly.FullName ?? Path.GetFileNameWithoutExtension(packagePath);
         sourceAssemblies.Add(assemblyName);
         foreach (string assemblyPath in package.RegistrableAssemblyPaths)
@@ -129,6 +136,41 @@ internal static class PackageScanner
         Diagnostics: [],
         SecureConfigByStepKey: secureConfigByStepKey);
 }
+
+    // An isolated, byte-loading assembly load context. Loading assemblies from bytes (never LoadFrom /
+    // LoadFromAssemblyPath) means the underlying .dll files are never locked, so the extracted temp folders can
+    // be deleted right after the scan - on Windows LoadFrom holds the file open for the process lifetime, which
+    // leaked the temp directory and made its cleanup warn ("Access to the path '...dll' is denied"). Isolation
+    // keeps the package's own dependencies (e.g. the net462 Microsoft.Xrm.Sdk shipped in the package) resolving
+    // from the temp folders, matching the previous LoadFrom directory-probing; anything not found there falls
+    // back to the default context (framework / SDK assemblies the CLI already has).
+    private sealed class PluginLoadContext(IReadOnlyList<string> probeDirectories) : AssemblyLoadContext
+    {
+        public Assembly LoadFromAssemblyPathByBytes(string assemblyPath)
+        {
+            using MemoryStream stream = new(File.ReadAllBytes(assemblyPath));
+            return LoadFromStream(stream);
+        }
+
+        protected override Assembly? Load(AssemblyName assemblyName)
+        {
+            if (string.IsNullOrEmpty(assemblyName.Name))
+            {
+                return null;
+            }
+
+            foreach (string directory in probeDirectories)
+            {
+                string candidate = Path.Combine(directory, assemblyName.Name + ".dll");
+                if (File.Exists(candidate))
+                {
+                    return LoadFromAssemblyPathByBytes(candidate);
+                }
+            }
+
+            return null; // framework / SDK assembly -> resolved by the default context
+        }
+    }
 
     // True when a step targets a bulk message (CreateMultiple/UpdateMultiple) and carries any pre/post image.
     // Dataverse cannot deploy such a step, so plan/apply reject it up front (see the call site).
