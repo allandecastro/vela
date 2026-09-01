@@ -37,6 +37,38 @@ internal static class UserConfig
 
     public static string ConfigPath => Path.Combine(ConfigDir, "config.json");
 
+    /// <summary>The MSAL token cache file the Dataverse SDK persists interactive-login tokens to (OAuth only).</summary>
+    public static string TokenCachePath => Path.Combine(ConfigDir, "token.dat");
+
+    /// <summary>Ensures the config directory exists so the SDK can write the token cache into it.</summary>
+    public static void EnsureConfigDir()
+    {
+        try
+        {
+            Directory.CreateDirectory(ConfigDir);
+        }
+        catch
+        {
+            // Best-effort: the SDK also creates the path; a failure here surfaces later as a connection error.
+        }
+    }
+
+    /// <summary>Deletes the persisted interactive-login token cache (used by <c>vela logout</c>). Best-effort.</summary>
+    public static void ClearTokenCache()
+    {
+        try
+        {
+            if (File.Exists(TokenCachePath))
+            {
+                File.Delete(TokenCachePath);
+            }
+        }
+        catch
+        {
+            // Best-effort: nothing to do if it cannot be removed.
+        }
+    }
+
     /// <summary>The last Dataverse URL used interactively, or null when none is remembered / the file is unreadable.</summary>
     public static string? GetLastDataverseUrl() => Read()?.LastDataverseUrl;
 

@@ -74,6 +74,7 @@ return command switch
     "add" => AddCommand.Run(commandArgs),
     "models" => ModelsCommand.Run(commandArgs),
     "sign" => SignCommand.Run(commandArgs),
+    "logout" => LogoutCommand.Run(commandArgs),
     _ => Fail($"Unknown command '{effectiveArgs[0]}'.", ExitInvalidArguments)
 };
 

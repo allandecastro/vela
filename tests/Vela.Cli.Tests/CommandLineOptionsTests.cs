@@ -152,6 +152,38 @@ public class CommandLineOptionsTests
     }
 
     [Fact]
+    public void BuildOAuthConnectionString_UsesTokenCache_AndDefaultSampleApp()
+    {
+        string cs = CommandLineOptions.BuildOAuthConnectionString(
+            "https://zava.crm.dynamics.com", appId: null, tokenCachePath: "/home/u/.vela/token.dat", freshLogin: false);
+
+        Assert.Contains("AuthType=OAuth", cs);
+        Assert.Contains("Url=https://zava.crm.dynamics.com", cs);
+        Assert.Contains($"AppId={CommandLineOptions.DefaultInteractiveClientId}", cs);
+        Assert.Contains("RedirectUri=app://", cs);
+        Assert.Contains("TokenCacheStorePath=/home/u/.vela/token.dat", cs);
+        Assert.Contains("LoginPrompt=Auto", cs);
+    }
+
+    [Fact]
+    public void BuildOAuthConnectionString_FreshLogin_ForcesAlwaysPrompt_AndHonorsCustomAppId()
+    {
+        string cs = CommandLineOptions.BuildOAuthConnectionString(
+            "https://zava.crm.dynamics.com", appId: "my-app-id", tokenCachePath: "/t/token.dat", freshLogin: true);
+
+        Assert.Contains("LoginPrompt=Always", cs);
+        Assert.Contains("AppId=my-app-id", cs);
+        Assert.DoesNotContain("LoginPrompt=Auto", cs);
+    }
+
+    [Fact]
+    public void TryValidateKnownOptions_Allows_FreshLogin()
+    {
+        Assert.True(CommandLineOptions.TryValidateKnownOptions(["--fresh-login"], out int exitCode));
+        Assert.Equal(ExitSuccess, exitCode);
+    }
+
+    [Fact]
     public void BuildClientSecretConnectionString_FormatsAllFields()
     {
         string cs = CommandLineOptions.BuildClientSecretConnectionString(

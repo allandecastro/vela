@@ -205,12 +205,14 @@ internal static class OutputWriter
         Console.WriteLine("      (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--forms and/or --tables (preview, TypeScript)] [connection options]");
         WriteCommand(console, "sign", "Sign a plugin package.");
         Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
+        WriteCommand(console, "logout", "Clear the cached interactive-login token and remembered Dataverse URL.");
         WriteCommand(console, "menu", "Launch the interactive menu (default with no args).");
         WriteCommand(console, "version", "Print the tool version.");
         console.WriteLine();
 
         console.MarkupLine("[bold]Auth options:[/]");
         Console.WriteLine("  Client secret resolution order: --client-secret <value> (warned), --client-secret-stdin, DATAVERSE_CLIENT_SECRET env var.");
+        Console.WriteLine("  --interactive persists the login token (~/.vela/token.dat) so repeat runs are silent; --fresh-login forces a new prompt, 'vela logout' clears it.");
         Console.WriteLine("  --auth-client-id <appId>   Override the MSAL public client id used for --interactive browser login.");
         Console.WriteLine("  --authority <url>          Override the MSAL authority (e.g. for sovereign clouds).");
         Console.WriteLine("  --verbose also prints full exception stack traces on failure.");

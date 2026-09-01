@@ -73,6 +73,29 @@ public class UserConfigTests
                 OutputWriter.Prompt("Dataverse URL:", defaultValue: "https://remembered.crm.dynamics.com/")));
     }
 
+    [Fact]
+    public void TokenCachePath_IsUnderConfigDir()
+    {
+        InTempConfigDir(dir =>
+            Assert.Equal(Path.Combine(dir, "token.dat"), UserConfig.TokenCachePath));
+    }
+
+    [Fact]
+    public void ClearTokenCache_RemovesTheTokenFile_AndToleratesAbsence()
+    {
+        InTempConfigDir(dir =>
+        {
+            UserConfig.ClearTokenCache(); // no file yet -> best-effort, no throw
+
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(UserConfig.TokenCachePath, "cache-bytes");
+            Assert.True(File.Exists(UserConfig.TokenCachePath));
+
+            UserConfig.ClearTokenCache();
+            Assert.False(File.Exists(UserConfig.TokenCachePath));
+        });
+    }
+
     private static void InTempConfigDir(Action<string> action)
     {
         string dir = Path.Combine(Path.GetTempPath(), "vela-cfg-" + Guid.NewGuid().ToString("N"));

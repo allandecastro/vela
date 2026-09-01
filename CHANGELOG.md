@@ -28,6 +28,12 @@ CLI line only.
 - `plan` / `apply` / `inspect` / `models` `--interactive` now **remember the last Dataverse URL** (in
   `~/.vela/config.json`, or `$VELA_CONFIG_DIR`) and offer it as the prompt default - press Enter to reuse it
   instead of re-typing the org URL every run. The URL is not a secret, so it is a plain preferences file.
+- `--interactive` browser login now **persists the token** across runs, so a repeat run is silent instead of
+  re-opening the browser. It uses the Dataverse SDK's own OAuth token cache (`TokenCacheStorePath` ->
+  `~/.vela/token.dat`), which is DPAPI-encrypted on Windows (Keychain on macOS, libsecret on Linux) - no extra
+  dependency and no MSAL version change. `--fresh-login` forces a new prompt for the run, and the new **`vela
+  logout`** command clears the cached token and the remembered URL. (A custom `--authority` still uses the
+  previous per-run token flow, which has no persistent cache.)
 
 ### Changed
 
