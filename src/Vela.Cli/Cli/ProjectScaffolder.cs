@@ -183,9 +183,8 @@ internal static class ProjectScaffolder
         Write("Directory.Build.props", DirectoryBuildProps());
         Write($"{options.SolutionName}.sln", Solution(projects));
         Write(".gitignore", Gitignore());
-        Write("nuget.config", NuGetConfig());
-        // Keep the local feed folder in the tree so restore has a valid source even before a package is dropped in.
-        Write(Path.Combine("local-packages", ".gitkeep"), string.Empty);
+        // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
+        // nuget.org, the default source. Add your own nuget.config only if you use a private feed.
         Write("README.md", RootReadme(options));
 
         if (options.Json)

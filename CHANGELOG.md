@@ -38,6 +38,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed
 
+- `vela init` no longer emits a `nuget.config` or a `local-packages/` folder. That was a workaround from before
+  `Vela.Plugins` / `Vela.Testing` were published; they now resolve from **nuget.org** (the default source), so a
+  generated solution restores and builds out of the box. Add your own `nuget.config` only for a private feed.
 - When `plan` / `apply` / `inspect` can't read a plugin's registrations, the error now hints that a **stale
   package** is a common cause ("the package may be out of date - rebuild it (dotnet build -c Release)"). This is
   the usual reason the failure names an old message/stage that no longer matches the edited source.

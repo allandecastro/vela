@@ -26,7 +26,6 @@ ZavaSales/
     Zava.Plugins.Tests/      # xunit tests using Vela.Testing - no connection (omit with --no-tests)
     Zava.Integrations.Tests/ # xunit tests for the Integrations package
   Directory.Build.props        # shared build settings for src/ and tests/
-  nuget.config                 # local-packages/ feed for Vela.Plugins / Vela.Testing
 ```
 
 The tree comments label each project. Two carry detail beyond that:
@@ -47,10 +46,8 @@ and `--web-resources-folder` set its global name and build folder),
 `--force` (overwrite an existing folder). The generated solution references `Vela.Plugins` as
 a NuGet package, then follows the `dotnet build -c Release` → `vela plan` → `vela apply` loop from the [Quickstart](../getting-started/quickstart.md).
 
-It also emits a `nuget.config` with a `local-packages/` folder feed, since `Vela.Plugins` (and
-`Vela.Testing`, used by the test project) are **not on nuget.org**: point that source at your private
-feed, or drop their `.nupkg` files into `local-packages/` (nuget.org is inherited for the Microsoft SDK
-and test packages).
+`Vela.Plugins` and `Vela.Testing` resolve from **nuget.org** (the default package source), so the generated
+solution restores and builds out of the box with no `nuget.config`. Add your own only if you use a private feed.
 
 ## Web resources project (opt-in)
 

@@ -32,8 +32,9 @@ public class ProjectScaffolderTests
             string root = Path.Combine(temp, "ZavaSales");
             AssertFileExists(root, "README.md");
             AssertFileExists(root, ".gitignore");
-            AssertFileExists(root, "nuget.config");
-            AssertFileExists(root, "local-packages", ".gitkeep");
+            // No nuget.config / local-packages: Vela resolves from nuget.org (the default source).
+            Assert.False(File.Exists(Path.Combine(root, "nuget.config")), "scaffold should not emit a nuget.config");
+            Assert.False(Directory.Exists(Path.Combine(root, "local-packages")), "scaffold should not emit a local-packages feed");
             AssertFileExists(root, "ZavaSales.sln");
             AssertFileExists(root, "Directory.Build.props");
 
@@ -281,8 +282,14 @@ public class ProjectScaffolderTests
             string root = Path.Combine(temp, "ZavaSales");
             string localFeed = Path.Combine(root, "local-packages");
 
-            // Supply Vela.Plugins and Vela.Testing through the generated solution's own local-packages feed,
-            // so the generated nuget.config is exercised too (the test project consumes Vela.Testing).
+            // The scaffold resolves Vela from nuget.org and emits no nuget.config; here we build against the
+            // repo's *current* Vela.Plugins / Vela.Testing (1.0.0) instead, so the test writes its own
+            // local-packages nuget.config (additive; nuget.org still resolves the Microsoft SDK / test packages)
+            // and packs those projects into it. This keeps the build check on local sources, not a published feed.
+            Directory.CreateDirectory(localFeed);
+            File.WriteAllText(Path.Combine(root, "nuget.config"),
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<configuration>\n  <packageSources>\n" +
+                "    <add key=\"local-packages\" value=\"local-packages\" />\n  </packageSources>\n</configuration>\n");
             Assert.Equal(0, RunDotnet($"pack \"{coreProject}\" -c Release -o \"{localFeed}\"", temp));
             Assert.Equal(0, RunDotnet($"pack \"{testingProject}\" -c Release -o \"{localFeed}\"", temp));
 
@@ -292,7 +299,9 @@ public class ProjectScaffolderTests
             string sln = Path.Combine(root, "ZavaSales.sln");
             Assert.Equal(0, RunDotnet($"restore \"{sln}\" --disable-parallel", temp));
 
-            int build = RunDotnet($"build \"{sln}\" -c Release --no-restore", temp);
+            // Single-process build (-m:1): two plugin projects run GeneratePackageOnBuild into the shared
+            // artifacts/ folder, and a parallel build can race on the pack output ("used by another process").
+            int build = RunDotnet($"build \"{sln}\" -c Release --no-restore -m:1", temp);
             Assert.Equal(0, build);
         });
     }

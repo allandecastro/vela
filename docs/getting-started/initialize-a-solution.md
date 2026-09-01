@@ -26,7 +26,6 @@ ZavaSales/
     Zava.Plugins.Tests/      # xunit tests using Vela.Testing - no connection (omit with --no-tests)
     Zava.Integrations.Tests/ # xunit tests for the Integrations package
   Directory.Build.props        # shared build settings for src/ and tests/
-  nuget.config                 # local-packages/ feed for Vela.Plugins / Vela.Testing
 ```
 
 The comments above label each project. Generated code is organised **by table**, with each file's
@@ -36,7 +35,7 @@ shared service, and two **table-scoped** services (one write, one read). `Zava.P
 plugins and Custom APIs with `Vela.Testing`, no Dataverse connection.
 
 > [!TIP]
-> For the full set of `vela init` flags, the generated `nuget.config`, and the wizard, see the
+> For the full set of `vela init` flags and the wizard, see the
 > [Scaffold a solution](../guides/scaffold.md) guide.
 
 ## Where to go next
