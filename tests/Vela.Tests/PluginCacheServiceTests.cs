@@ -161,10 +161,10 @@ public sealed class PluginCacheServiceTests
     }
 
     [Fact]
-    public void GetOrCreate_WithManyDistinctKeys_KeepsPerKeyValuesAndBoundsLocks()
+    public void GetOrCreate_WithManyDistinctKeys_KeepsPerKeyValues()
     {
-        // Regression for the unbounded per-key lock pool: many distinct keys must still
-        // resolve correctly (and not leak a lock per key). The striped pool serves them all.
+        // Many distinct keys each resolve and cache their own value independently (the per-key monitor is
+        // created on demand from a ConcurrentDictionary - one lock per live key, by design).
         PluginCacheService cache = new PluginCacheService();
 
         for (int i = 0; i < 500; i++)
@@ -185,7 +185,7 @@ public sealed class PluginCacheServiceTests
     [Fact]
     public async Task GetOrCreate_ConcurrentAccessToSameKey_InvokesFactoryOnce()
     {
-        // Keys sharing a stripe must still serialize per-key creation: exactly one factory call.
+        // Concurrent callers of the same key serialize on its monitor, so the factory runs exactly once.
         PluginCacheService cache = new PluginCacheService();
         int calls = 0;
         using ManualResetEventSlim start = new ManualResetEventSlim(false);

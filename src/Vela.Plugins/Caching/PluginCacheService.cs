@@ -12,17 +12,13 @@ namespace Vela.Caching
     /// </remarks>
     public sealed class PluginCacheService : IPluginCacheService
     {
-        // Number of stripes in the lock pool. Fixed-size by design: bounds memory so monitors never
-        // accumulate per distinct key, and no lock object is ever removed while it may be held.
-        private const int LockStripeCount = 64;
-
         private readonly ConcurrentDictionary<string, CacheEntry> _cache = new ConcurrentDictionary<string, CacheEntry>(StringComparer.Ordinal);
 
-        // Striped lock pool: keys are mapped onto a fixed set of monitor objects by hash. Two distinct
-        // keys may share a stripe (benign extra serialization) but the pool can never grow unbounded.
-        // This static is shared across concurrent sandbox executions, so the pool is immutable after
-        // construction and each element is only ever used as a 'lock' target.
-        private readonly object[] _keyLocks = CreateLockStripes(LockStripeCount);
+        // One monitor per cache key, so a cache-miss factory runs once per key (double-checked below) without
+        // serializing unrelated keys. GetOrAdd hands every thread for a key the same object, so it is a correct
+        // per-key lock. Lock objects are never removed (that would let two threads lock different objects for the
+        // same key) - they are tiny and bounded by the number of distinct keys, which is the caller's concern.
+        private readonly ConcurrentDictionary<string, object> _keyLocks = new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
 
         public T GetOrCreate<T>(string key, TimeSpan ttl, Func<T> factory)
         {
@@ -117,20 +113,9 @@ namespace Vela.Caching
         {
             EnsureKey(key);
 
-            // Map the key onto a fixed stripe. Mask off the sign bit so the modulo stays non-negative.
-            int index = (StringComparer.Ordinal.GetHashCode(key) & int.MaxValue) % _keyLocks.Length;
-            return _keyLocks[index];
-        }
-
-        private static object[] CreateLockStripes(int count)
-        {
-            object[] stripes = new object[count];
-            for (int i = 0; i < count; i++)
-            {
-                stripes[i] = new object();
-            }
-
-            return stripes;
+            // Same object for every thread that asks for this key (the factory may create a throwaway under
+            // contention, but only the stored one is returned), so it is a correct per-key monitor.
+            return _keyLocks.GetOrAdd(key, _ => new object());
         }
 
         private static void EnsureKey(string key)
