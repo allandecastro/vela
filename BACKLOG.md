@@ -8,13 +8,16 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## CLI
 
-- **P3 - parallel `dotnet build <sln>` can race on the plugin package output.** With two plugin projects
-  (`.Plugins` + `.Integrations`) both running `GeneratePackageOnBuild` into the shared `artifacts/`
-  (`PackageOutputPath`), a parallel solution build occasionally fails with `The process cannot access the file
-  '...<Plugin>.1.0.0.nupkg' because it is being used by another process` (seen in the `VELA_BUILD_SMOKE` test;
-  worked around there with `-m:1`). This hits the documented `dotnet build <sln> -c Release` command, so it is a
-  real if intermittent user-facing flake. Investigate a proper fix (e.g. per-project pack output, serialize the
-  pack target, or GeneratePackageOnBuild only where needed) rather than telling users to pass `-m:1`.
+- **P3 - rare parallel-build pack race (needs a reliable repro first).** Once, the `VELA_BUILD_SMOKE` test's
+  `restore --disable-parallel` then `build --no-restore` (parallel) sequence failed with `The process cannot
+  access the file '...<Plugin>.1.0.0.nupkg' because it is being used by another process` - two plugin projects
+  (`.Plugins` + `.Integrations`) `GeneratePackageOnBuild` into the shared `artifacts/` (`PackageOutputPath`).
+  **Not reproducible so far** (10 clean runs, including the documented `dotnet build <sln> -c Release` *with*
+  restore, which never raced - the flake was only on the test's `--no-restore` parallel path). The test is
+  mitigated with `-m:1`. Because it can't be reproduced, any code fix would be unverifiable, so first capture an
+  MSBuild binlog when it recurs to find the real cause (double-pack of one project vs. two writers), then fix
+  (e.g. serialize the Pack target) rather than telling users to pass `-m:1`. User impact looks low: the
+  documented command includes restore and did not race.
 - **P2 - reject unknown options on the remaining commands.** `plan` / `apply` / `inspect` now fail fast on an
   unknown/misspelled option (`TryValidateKnownOptions` in the shared parser). `init`, `add`, `models` and `sign`
   each have their own ad-hoc parser that still silently ignores unrecognized `--flags`, so a typo there is
