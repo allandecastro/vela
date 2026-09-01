@@ -195,7 +195,8 @@ internal static class PackageScanner
     private static string BuildIntrospectionFailure(string packagePath, Type type, string what, string? error)
 {
     return $"Failed to read {what} from '{type.FullName ?? type.Name}' in package '{Path.GetFileName(packagePath)}': {error} " +
-        "Fix the plugin so it can be read — refusing to continue, since otherwise its existing registrations could be deleted.";
+        "Fix the plugin so it can be read — refusing to continue, since otherwise its existing registrations could be deleted. " +
+        "If you recently changed this plugin, the package may be out of date — rebuild it (dotnet build -c Release) and try again.";
 }
 
     internal static PluginPackagePayload ReadPluginPackagePayload(string packagePath)

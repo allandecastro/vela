@@ -38,6 +38,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed
 
+- When `plan` / `apply` / `inspect` can't read a plugin's registrations, the error now hints that a **stale
+  package** is a common cause ("the package may be out of date - rebuild it (dotnet build -c Release)"). This is
+  the usual reason the failure names an old message/stage that no longer matches the edited source.
 - The scaffolded form example now wires `defineForm(Model, Class, { namespace: '<prefix>.Forms.<entity>' })`, so a
   form web resource exposes its handlers at `<prefix>.Forms.<entity>.onLoad` / `.onSave` - consistent with the
   ribbon's `<prefix>.Ribbon.<entity>.<command>`. The JS global name and both namespaces are lower-cased. The
