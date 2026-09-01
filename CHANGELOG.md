@@ -21,7 +21,8 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-CLI line only.
+The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
+(`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
 ### Added
 
@@ -62,6 +63,14 @@ CLI line only.
   package". The plugin projects set `<PackageOutputPath>` so the Release build drops the package into `artifacts/`,
   the `vela init` next steps and generated README/docs use `dotnet build`, and the opt-in signing target (which
   runs `AfterTargets="Pack"`, fired by `GeneratePackageOnBuild`) now documents `dotnet build -c Release`.
+
+### Framework line (Vela.Plugins + Vela.Testing) - Changed
+
+- `PluginCacheService` now takes its per-key lock from a `ConcurrentDictionary<string, object>` (one monitor per
+  key) instead of a fixed 64-slot striped `object[]` pool addressed by hashing. This is a true per-key lock -
+  unrelated keys never serialize on a shared stripe - and it drops the `LockStripeCount` constant and the
+  hash-and-mask. Behavior is unchanged (same-key stampede protection; a cache-miss factory still runs once per
+  key), lock objects are still never removed, and there is no public API change.
 
 ## [0.1.16] - 2026-08-28
 
