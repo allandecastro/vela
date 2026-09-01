@@ -24,7 +24,7 @@ internal static class CommandLineOptions
 
     internal static readonly HashSet<string> ConnectionFlagOptions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "--client-secret-stdin",
+        "--client-secret-stdin", "--fresh-login",
     };
 
     // Every option the shared parser (TryParseSharedOptions) reads: the package/scope options plus the shared
@@ -289,8 +289,27 @@ internal static class CommandLineOptions
 
             if (oauthInteractive)
             {
-                oauthUrl = url!;
-                oauthToken = AcquireTokenInteractive(url!, TryReadOption(args, "--auth-client-id"), TryReadOption(args, "--authority"));
+                string? authority = TryReadOption(args, "--authority");
+                if (!string.IsNullOrWhiteSpace(authority))
+                {
+                    // A custom authority (sovereign cloud) can't be expressed in an OAuth connection string, so
+                    // fall back to the token-callback path (this one does not persist a token cache).
+                    oauthUrl = url!;
+                    oauthToken = AcquireTokenInteractive(url!, TryReadOption(args, "--auth-client-id"), authority);
+                }
+                else
+                {
+                    // Preferred: let the Dataverse SDK run the browser login and persist/reuse the token via
+                    // TokenCacheStorePath, so a repeat run is silent. --fresh-login forces a new prompt.
+                    bool freshLogin = HasFlag(args, "--fresh-login");
+                    if (freshLogin)
+                    {
+                        UserConfig.ClearTokenCache();
+                    }
+
+                    UserConfig.EnsureConfigDir();
+                    connectionString = BuildOAuthConnectionString(url!, TryReadOption(args, "--auth-client-id"), UserConfig.TokenCachePath, freshLogin);
+                }
             }
             else if (string.IsNullOrWhiteSpace(url) ||
                 string.IsNullOrWhiteSpace(tenantId) ||
@@ -314,6 +333,24 @@ internal static class CommandLineOptions
     public static string BuildClientSecretConnectionString(string url, string tenantId, string clientId, string clientSecret)
     {
         return $"AuthType=ClientSecret;Url={url};TenantId={tenantId};ClientId={clientId};ClientSecret={clientSecret};RequireNewInstance=true";
+    }
+
+    // The Microsoft-provided sample public client (AppId + RedirectUri) for Dataverse interactive OAuth flows,
+    // documented for development use. It is the same client the previous custom MSAL flow used.
+    public const string DefaultInteractiveClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
+    private const string DefaultInteractiveRedirectUri = "app://58145B91-0C36-4500-8554-080854F2AC97";
+
+    /// <summary>
+    /// Builds the interactive OAuth connection string. The Dataverse SDK opens the browser on first use and, via
+    /// <c>TokenCacheStorePath</c>, persists the MSAL token (DPAPI-encrypted on Windows) so later runs reuse it
+    /// silently (<c>LoginPrompt=Auto</c>). <paramref name="freshLogin"/> forces a new prompt (<c>Always</c>).
+    /// </summary>
+    public static string BuildOAuthConnectionString(string url, string? appId, string tokenCachePath, bool freshLogin)
+    {
+        string clientId = string.IsNullOrWhiteSpace(appId) ? DefaultInteractiveClientId : appId!;
+        string loginPrompt = freshLogin ? "Always" : "Auto";
+        return $"AuthType=OAuth;Url={url};AppId={clientId};RedirectUri={DefaultInteractiveRedirectUri};" +
+               $"TokenCacheStorePath={tokenCachePath};LoginPrompt={loginPrompt};RequireNewInstance=true";
     }
 
     // Resolves the client secret, preferring the DATAVERSE_CLIENT_SECRET env var or stdin over the command line.

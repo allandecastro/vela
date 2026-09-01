@@ -33,3 +33,9 @@ Core commands:
 > you use it). For sovereign clouds / custom app registrations under `--interactive`, override the
 > MSAL login with `--auth-client-id` and `--authority`. Add `--verbose` for human-readable summaries
 > and full exception stack traces on failure.
+
+> [!TIP]
+> **Interactive login is remembered.** The first `--interactive` run opens a browser; the token is then
+> cached (`~/.vela/token.dat`, DPAPI-encrypted on Windows) so later runs are silent, and the last Dataverse
+> URL is offered as the prompt default. Use `--fresh-login` to force a new prompt, or `vela logout` to clear
+> the cached token and remembered URL. Override the config location with `$VELA_CONFIG_DIR`.
