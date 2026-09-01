@@ -8,6 +8,13 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## CLI
 
+- **P3 - parallel `dotnet build <sln>` can race on the plugin package output.** With two plugin projects
+  (`.Plugins` + `.Integrations`) both running `GeneratePackageOnBuild` into the shared `artifacts/`
+  (`PackageOutputPath`), a parallel solution build occasionally fails with `The process cannot access the file
+  '...<Plugin>.1.0.0.nupkg' because it is being used by another process` (seen in the `VELA_BUILD_SMOKE` test;
+  worked around there with `-m:1`). This hits the documented `dotnet build <sln> -c Release` command, so it is a
+  real if intermittent user-facing flake. Investigate a proper fix (e.g. per-project pack output, serialize the
+  pack target, or GeneratePackageOnBuild only where needed) rather than telling users to pass `-m:1`.
 - **P2 - reject unknown options on the remaining commands.** `plan` / `apply` / `inspect` now fail fast on an
   unknown/misspelled option (`TryValidateKnownOptions` in the shared parser). `init`, `add`, `models` and `sign`
   each have their own ad-hoc parser that still silently ignores unrecognized `--flags`, so a typo there is
