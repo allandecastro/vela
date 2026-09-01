@@ -82,6 +82,9 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         Assert.Contains("steps", ex.Message);
         Assert.Contains("Missing (string, string) constructor.", ex.Message);
         Assert.Contains("refusing to continue", ex.Message);
+        // Hints that a stale package is a common cause (the reported "old message/stage" confusion).
+        Assert.Contains("the package may be out of date", ex.Message);
+        Assert.Contains("dotnet build -c Release", ex.Message);
     }
 
     [Fact]
