@@ -77,6 +77,35 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   unrelated keys never serialize on a shared stripe - and it drops the `LockStripeCount` constant and the
   hash-and-mask. Behavior is unchanged (same-key stampede protection; a cache-miss factory still runs once per
   key), lock objects are still never removed, and there is no public API change.
+- **BREAKING - an invalid image/stage combination is now a compile error.** The step builder replaces the enum
+  `.Stage(PluginStages.X)` with typed stage methods - `.PreValidation()`, `.PreOperation()`, `.PostOperation()`
+  - and the (message, stage) pair you pick only exposes the images that combination actually supports. A wrong
+  image no longer compiles, in the IDE, with no CLI needed: `OnDelete().PostOperation()....PostImage()` (Delete
+  has no post-image), `OnUpdate().PreValidation()....PreImage()` (no images before the operation), and
+  `OnCreate().PostOperation()....PreImage()` (Create has no prior state) all fail to build. `OnMessage("...")`
+  for a non-modelled message stays permissive (both images offered; the platform validates at deploy). The
+  runtime check in `Build()` remains as a backstop for out-of-order/reflection assembly, and is relaxed to only
+  enforce the modelled messages (Create/Update/Delete and their bulk variants). Migration: replace
+  `.Stage(PluginStages.PreValidation|PreOperation|PostOperation)` with the matching `.PreValidation()` /
+  `.PreOperation()` / `.PostOperation()` call. The `PluginContextBuilder` test helper keeps its own
+  `.Stage(PluginStages.X)` (a separate API) unchanged.
+
+### Framework line (Vela.Plugins + Vela.Testing) - Removed
+
+- **BREAKING - `OnSetState()` / `OnSetStateDynamicEntity()` step methods.** `SetState` and
+  `SetStateDynamicEntity` are deprecated by Dataverse (update `statecode`/`statuscode` via an `Update` instead),
+  the test harness already models them as an `Update`, and the framework never registered images on them - so
+  the typed methods were dead surface. Migration: register on `OnUpdate()` targeting `statecode`/`statuscode`,
+  or use the permissive `OnMessage("SetState")` escape hatch if you must target the legacy message. The
+  `PluginMessages.SetState` / `SetStateDynamicEntity` constants and the harness `SetStateRequest` emulation are
+  kept.
+- **BREAKING - the old step-builder interfaces** (`IStepMessageBuilder`, `IStepStageBuilder`,
+  `IStepModeBuilder`, `IStepImageBuilder`, `IFilteringStepMessageBuilder`, `IFilteringStepStageBuilder`,
+  `IFilteringStepModeBuilder`) are replaced by the typed stage chain (`ICreateStepStage`, `IUpdateStepStage`,
+  `IDeleteStepStage`, `IReferenceStepStage`, `IPermissiveStepStage`, the capability terminals `INoImageStep` /
+  `IPreImageStep` / `IPostImageStep` / `IPreAndPostImageStep`, and the generic `IStepConfig` / `IModeSelector` /
+  `IFilteringSelector`). Code that named the old interface types directly must move to the new ones; the fluent
+  chain itself reads the same apart from the stage method.
 
 ## [0.1.16] - 2026-08-28
 

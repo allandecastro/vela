@@ -61,9 +61,9 @@ public sealed class StepDefinitionConcurrencyTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name).Handler(OnCreate);
-            RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name).Handler(OnUpdate);
         }
 

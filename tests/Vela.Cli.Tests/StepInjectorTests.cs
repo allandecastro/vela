@@ -23,7 +23,7 @@ namespace Acme.Plugins.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .Handler(nameof(HandleCreate));
         }
@@ -52,7 +52,7 @@ namespace Acme.Plugins.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous);
         }
 

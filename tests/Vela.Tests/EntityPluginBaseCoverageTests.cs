@@ -30,7 +30,7 @@ public sealed class EntityPluginBaseCoverageTests
     {
         public SingleAutoKeyStep() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name); // no .Key() -> auto-generated
         protected override void Execute(ILocalPluginContext ctx, TestAccount target) { }
     }
@@ -40,8 +40,8 @@ public sealed class EntityPluginBaseCoverageTests
         public DuplicateTriggerSteps() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
-            RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.AccountId);
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.AccountId);
         }
         protected override void Execute(ILocalPluginContext ctx, TestAccount target) { }
     }
@@ -52,8 +52,8 @@ public sealed class EntityPluginBaseCoverageTests
         protected override void RegisterPluginSteps()
         {
             // Distinct triggers (different stages) pass the trigger check, but neither declares a Handler.
-            RegisterSteps().OnUpdate().Stage(PluginStages.PreOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
-            RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
+            RegisterSteps().OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
         }
         protected override void Execute(ILocalPluginContext ctx, TestAccount target) { }
     }
@@ -62,7 +62,7 @@ public sealed class EntityPluginBaseCoverageTests
     {
         public NoNamePlugin() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnDelete().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous);
+            => RegisterSteps().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous);
         protected override void Execute(ILocalPluginContext ctx, NoNameEntity target) { }
     }
 
@@ -71,7 +71,7 @@ public sealed class EntityPluginBaseCoverageTests
         public RegisterOutside() : this(null!, null!) { }
         public void CallRegisterStepsOutside() => RegisterSteps(); // illegal: not inside RegisterPluginSteps()
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
         protected override void Execute(ILocalPluginContext ctx, TestAccount target) { }
     }
 

@@ -9,83 +9,27 @@ namespace Vela.Plugin
     {
         private readonly Action<StepBuilder<TEntity>> _registerStep = registerStep ?? throw new ArgumentNullException(nameof(registerStep));
 
-        public IFilteringStepMessageBuilder<TEntity> OnCreate()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnCreate();
-        }
+        public ICreateStepStage<TEntity> OnCreate() => BeginStep().OnCreate();
 
-        public IFilteringStepMessageBuilder<TEntity> OnUpdate()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnUpdate();
-        }
+        public IUpdateStepStage<TEntity> OnUpdate() => BeginStep().OnUpdate();
 
-        public IFilteringStepMessageBuilder<TEntity> OnCreateMultiple()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnCreateMultiple();
-        }
+        public ICreateStepStage<TEntity> OnCreateMultiple() => BeginStep().OnCreateMultiple();
 
-        public IFilteringStepMessageBuilder<TEntity> OnUpdateMultiple()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnUpdateMultiple();
-        }
+        public IUpdateStepStage<TEntity> OnUpdateMultiple() => BeginStep().OnUpdateMultiple();
 
-        public IStepMessageBuilder<TEntity> OnDelete()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnDelete();
-        }
+        public IDeleteStepStage<TEntity> OnDelete() => BeginStep().OnDelete();
 
-        public IStepMessageBuilder<TEntity> OnRetrieve()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnRetrieve();
-        }
+        public IReferenceStepStage<TEntity> OnRetrieve() => BeginStep().OnRetrieve();
 
-        public IStepMessageBuilder<TEntity> OnRetrieveMultiple()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnRetrieveMultiple();
-        }
+        public IReferenceStepStage<TEntity> OnRetrieveMultiple() => BeginStep().OnRetrieveMultiple();
 
-        public IStepMessageBuilder<TEntity> OnAssociate()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnAssociate();
-        }
+        public IReferenceStepStage<TEntity> OnAssociate() => BeginStep().OnAssociate();
 
-        public IStepMessageBuilder<TEntity> OnDisassociate()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnDisassociate();
-        }
+        public IReferenceStepStage<TEntity> OnDisassociate() => BeginStep().OnDisassociate();
 
-        public IStepMessageBuilder<TEntity> OnSetState()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnSetState();
-        }
+        public IPermissiveStepStage<TEntity> OnMessage(string messageName) => BeginStep().OnMessage(messageName);
 
-        public IStepMessageBuilder<TEntity> OnSetStateDynamicEntity()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnSetStateDynamicEntity();
-        }
-
-        public IStepMessageBuilder<TEntity> OnMessage(string messageName)
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnMessage(messageName);
-        }
-
-        public IStepMessageBuilder<TEntity> OnMessage<TMessage>() where TMessage : class
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnMessage<TMessage>();
-        }
+        public IPermissiveStepStage<TEntity> OnMessage<TMessage>() where TMessage : class => BeginStep().OnMessage<TMessage>();
 
         private StepBuilder<TEntity> BeginStep()
         {

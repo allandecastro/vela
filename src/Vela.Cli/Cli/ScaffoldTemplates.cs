@@ -665,7 +665,7 @@ override with the fluent `RegisterSteps()` builder - no step XML and no manual `
 protected override void RegisterPluginSteps()
 {
     RegisterSteps().OnCreate()                       // message: OnCreate/OnUpdate/OnDelete/OnMessage("...")
-        .Stage(PluginStages.PostOperation)           // PreValidation | PreOperation | PostOperation
+        .PostOperation()                             // stage: .PreValidation() | .PreOperation() | .PostOperation()
         .Mode(ExecutionMode.Synchronous)             // Synchronous | Asynchronous
         .FilteringAttributes(a => a.Name)            // (create/update) attributes that trigger the step
         .Description("Runs after an account is created.")
@@ -687,7 +687,7 @@ configures.
 
 ```csharp
 RegisterSteps().OnUpdate()
-    .Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+    .PostOperation().Mode(ExecutionMode.Synchronous)
     .FilteringAttributes(c => c.LastName)            // (update) fire only when these columns change
     .Handler(nameof(OnLastNameChanged))
     .PreImage().Attributes(c => c.LastName);         // before-snapshot for the handler
@@ -1327,7 +1327,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Description("Counts the contacts related to an account after it is updated.");
@@ -1421,7 +1421,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Description("Schedules a 7-day follow-up task after an account is created.")
@@ -1470,7 +1470,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
                 .Handler(nameof(OnCreatePost))
@@ -1479,7 +1479,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
                     .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
 
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(c => c.LastName)
                 .Handler(nameof(OnUpdatePost))
@@ -1987,7 +1987,7 @@ namespace {{ns}}
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().{{registrationCall}}
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous){{filteringCall}}
                 .Description("{{message}} {{entityType}} handler.");
         }
@@ -2204,7 +2204,7 @@ namespace {{prefix}}.Integrations.Contact.Plugins
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Asynchronous)
                 .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
                 .Description("Runs after a contact is created.")
@@ -2240,7 +2240,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Asynchronous)
                 .FilteringAttributes(a => a.Name)
                 .Handler(nameof(OnAccountCreated))
@@ -2249,7 +2249,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
                     .Attributes(a => a.Name);
 
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Asynchronous)
                 .FilteringAttributes(a => a.Name, a => a.Telephone1)
                 .Handler(nameof(OnAccountChanged))

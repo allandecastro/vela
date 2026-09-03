@@ -26,8 +26,8 @@ internal static class AddCommand
     // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("...").
     private static readonly string[] KnownMessages =
     [
-        "Create", "Update", "Delete", "Retrieve", "RetrieveMultiple",
-        "Associate", "Disassociate", "SetState", "SetStateDynamicEntity",
+        "Create", "Update", "CreateMultiple", "UpdateMultiple", "Delete", "Retrieve", "RetrieveMultiple",
+        "Associate", "Disassociate",
     ];
 
     public static int Run(string[] args)
@@ -465,7 +465,9 @@ internal static class AddCommand
         // cryptic "Attribute (Id=id) does not exist", and a real column like e.OwnerId only compiles if that
         // column was generated onto the model.
         bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
-            || string.Equals(message, "Update", StringComparison.Ordinal);
+            || string.Equals(message, "Update", StringComparison.Ordinal)
+            || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
+            || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
         string filteringCall = needsFiltering
             ? "\n                .FilteringAttributes(e => e.REPLACE_WITH_A_FILTERING_ATTRIBUTE /* TODO: pick the attribute(s) that should trigger this step, e.g. e => e.Name */)"
             : string.Empty;

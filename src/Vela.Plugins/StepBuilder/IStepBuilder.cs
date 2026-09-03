@@ -1,58 +1,53 @@
-using Vela.Constants;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.StepBuilder;
 
 /// <summary>
-/// Defines the step configuration starting point - message selection.
+/// Entry point of the typed step chain: choose the message. The message determines which stage selector is
+/// returned, and the stage in turn determines which entity images the step may capture - an invalid
+/// image/stage/message combination does not compile.
 /// </summary>
 /// <typeparam name="TEntity">The entity type for this step.</typeparam>
 public interface IStepBuilder<TEntity> where TEntity : Entity
 {
     /// <summary>Configure step to trigger on Create message. Filtering attributes are required.</summary>
-    IFilteringStepMessageBuilder<TEntity> OnCreate();
+    ICreateStepStage<TEntity> OnCreate();
 
     /// <summary>Configure step to trigger on Update message. Filtering attributes are required.</summary>
-    IFilteringStepMessageBuilder<TEntity> OnUpdate();
+    IUpdateStepStage<TEntity> OnUpdate();
 
     /// <summary>
     /// Configure step to trigger on the CreateMultiple (bulk create) message. The step fires once with the
     /// whole <c>Targets</c> collection (read it via <c>ctx.BulkTargets</c>). Filtering attributes are required.
     /// </summary>
-    IFilteringStepMessageBuilder<TEntity> OnCreateMultiple();
+    ICreateStepStage<TEntity> OnCreateMultiple();
 
     /// <summary>
     /// Configure step to trigger on the UpdateMultiple (bulk update) message. The step fires once with the
     /// whole <c>Targets</c> collection (read it via <c>ctx.BulkTargets</c>). Filtering attributes are required.
     /// </summary>
-    IFilteringStepMessageBuilder<TEntity> OnUpdateMultiple();
+    IUpdateStepStage<TEntity> OnUpdateMultiple();
 
     /// <summary>Configure step to trigger on Delete message.</summary>
-    IStepMessageBuilder<TEntity> OnDelete();
+    IDeleteStepStage<TEntity> OnDelete();
 
     /// <summary>Configure step to trigger on Retrieve message.</summary>
-    IStepMessageBuilder<TEntity> OnRetrieve();
+    IReferenceStepStage<TEntity> OnRetrieve();
 
     /// <summary>Configure step to trigger on RetrieveMultiple message.</summary>
-    IStepMessageBuilder<TEntity> OnRetrieveMultiple();
+    IReferenceStepStage<TEntity> OnRetrieveMultiple();
 
     /// <summary>Configure step to trigger on Associate message.</summary>
-    IStepMessageBuilder<TEntity> OnAssociate();
+    IReferenceStepStage<TEntity> OnAssociate();
 
     /// <summary>Configure step to trigger on Disassociate message.</summary>
-    IStepMessageBuilder<TEntity> OnDisassociate();
+    IReferenceStepStage<TEntity> OnDisassociate();
 
-    /// <summary>Configure step to trigger on SetState message.</summary>
-    IStepMessageBuilder<TEntity> OnSetState();
-
-    /// <summary>Configure step to trigger on SetStateDynamicEntity message.</summary>
-    IStepMessageBuilder<TEntity> OnSetStateDynamicEntity();
-
-    /// <summary>Configure step to trigger on a custom message.</summary>
+    /// <summary>Configure step to trigger on a custom message. Image validity is enforced at runtime.</summary>
     /// <param name="messageName">The SDK message name.</param>
-    IStepMessageBuilder<TEntity> OnMessage(string messageName);
+    IPermissiveStepStage<TEntity> OnMessage(string messageName);
 
-    /// <summary>Configure step to trigger on a typed custom message.</summary>
+    /// <summary>Configure step to trigger on a typed custom message. Image validity is enforced at runtime.</summary>
     /// <typeparam name="TMessage">The message marker type.</typeparam>
-    IStepMessageBuilder<TEntity> OnMessage<TMessage>() where TMessage : class;
+    IPermissiveStepStage<TEntity> OnMessage<TMessage>() where TMessage : class;
 }

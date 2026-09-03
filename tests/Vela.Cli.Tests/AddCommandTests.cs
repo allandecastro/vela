@@ -54,7 +54,8 @@ public class AddCommandTests
     [Theory]
     [InlineData("Associate", "RegisterSteps().OnAssociate()")]
     [InlineData("retrievemultiple", "RegisterSteps().OnRetrieveMultiple()")]
-    [InlineData("SetState", "RegisterSteps().OnSetState()")]
+    [InlineData("CreateMultiple", "RegisterSteps().OnCreateMultiple()")]
+    [InlineData("UpdateMultiple", "RegisterSteps().OnUpdateMultiple()")]
     public void Add_Plugin_KnownMessage_RendersTypedCall(string message, string expectedCall)
     {
         RunInProject("Acme.Plugins", (project, dir) =>
@@ -77,6 +78,43 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountCustom.cs"));
             Assert.Contains("RegisterSteps().OnMessage(\"acme_DoThing\")", content);
+        });
+    }
+
+    // CreateMultiple/UpdateMultiple map to the typed OnCreateMultiple()/OnUpdateMultiple() builder methods,
+    // which require a filtering attribute at compile time - so the generator must also emit the filtering call,
+    // otherwise the scaffolded plugin would not compile.
+    [Theory]
+    [InlineData("CreateMultiple", "RegisterSteps().OnCreateMultiple()")]
+    [InlineData("UpdateMultiple", "RegisterSteps().OnUpdateMultiple()")]
+    public void Add_Plugin_BulkMessage_RendersTypedCallWithFiltering(string message, string expectedCall)
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountBulk", "--entity", "Account", "--message", message, "--project", project, "--force"]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountBulk.cs"));
+            Assert.Contains(expectedCall, content);
+            Assert.Contains(".FilteringAttributes(", content);
+        });
+    }
+
+    // SetState/SetStateDynamicEntity are deprecated by the platform (use an Update of statecode/statuscode),
+    // so the builder no longer exposes a typed On...() method for them. `vela add` treats them as any other
+    // custom message and renders the permissive OnMessage("...") escape hatch.
+    [Theory]
+    [InlineData("SetState")]
+    [InlineData("SetStateDynamicEntity")]
+    public void Add_Plugin_SetState_RendersOnMessageCall(string message)
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--project", project, "--force"]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
+            Assert.Contains($"RegisterSteps().OnMessage(\"{message}\")", content);
         });
     }
 
@@ -361,7 +399,7 @@ namespace Acme.Plugins.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .Handler(nameof(HandleCreate));
         }

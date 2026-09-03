@@ -29,7 +29,7 @@ namespace Vela.Testing.Tests
         public CreateTaskOnAccountCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
@@ -42,7 +42,7 @@ namespace Vela.Testing.Tests
         public CreateNoteOnTaskCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Subject);
 
         protected override void Execute(ILocalPluginContext ctx, FakeTask target)
@@ -56,7 +56,7 @@ namespace Vela.Testing.Tests
         public OnTaskDelete(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnDelete().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous);
+            => RegisterSteps().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous);
 
         protected override void Execute(ILocalPluginContext ctx, FakeTask target)
         {
@@ -69,7 +69,7 @@ namespace Vela.Testing.Tests
         public OnNameChange(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
@@ -86,7 +86,7 @@ namespace Vela.Testing.Tests
         public KeyedNameChange(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Key(StepKey);
 
@@ -103,7 +103,7 @@ namespace Vela.Testing.Tests
         public RecordUpdatePasses(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name, a => a.OwnerId);
 
         protected override void Execute(ILocalPluginContext ctx, FakeOwnable target)
@@ -116,7 +116,7 @@ namespace Vela.Testing.Tests
         public OnStateChange(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.StateCode);
 
         protected override void Execute(ILocalPluginContext ctx, FakeOwnable target)
@@ -131,7 +131,7 @@ namespace Vela.Testing.Tests
         public CaptureImages(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .PreImage().Attributes(a => a.Name)
                 .PostImage().Attributes(a => a.Name);
@@ -153,7 +153,7 @@ namespace Vela.Testing.Tests
         public RecurseOnUpdate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
@@ -166,7 +166,7 @@ namespace Vela.Testing.Tests
         public ThrowOnPostCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
@@ -179,7 +179,7 @@ namespace Vela.Testing.Tests
         public AsyncCreateNote(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Asynchronous)
+            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Asynchronous)
                 .FilteringAttributes(a => a.Name);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
@@ -192,7 +192,7 @@ namespace Vela.Testing.Tests
         public AutoDiscoveredPlugin(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Id);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAuto target)
@@ -208,7 +208,7 @@ namespace Vela.Testing.Tests
         public OnAccountCreateMultiple(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreateMultiple().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnCreateMultiple().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
@@ -221,7 +221,7 @@ namespace Vela.Testing.Tests
         public CaptureBulkImages(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdateMultiple().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdateMultiple().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .PreImage().Attributes(a => a.Name)
                 .PostImage().Attributes(a => a.Name);
@@ -247,7 +247,7 @@ namespace Vela.Testing.Tests
         public OnAccountAssociate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnAssociate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous);
+            => RegisterSteps().OnAssociate().PostOperation().Mode(ExecutionMode.Synchronous);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
         {
@@ -261,7 +261,7 @@ namespace Vela.Testing.Tests
         public OnAccountDisassociateAsync(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnDisassociate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Asynchronous);
+            => RegisterSteps().OnDisassociate().PostOperation().Mode(ExecutionMode.Asynchronous);
 
         protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
             => ctx.SystemService.Create(new Entity("annotation") { ["subject"] = "disassociated" });
@@ -273,7 +273,7 @@ namespace Vela.Testing.Tests
         public CaptureFullPreImage(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .PreImage(); // no Attributes(...) -> the projected image keeps all columns
 
