@@ -24,6 +24,16 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.2.1] - 2026-09-03
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.2.1`.
+
+### Changed
+
+- Docs only: the `Vela.Plugins` package readme (`NUGET.md`) plugin example now uses the typed stage chain
+  (`.PostOperation()` instead of `.Stage(PluginStages.PostOperation)`), matching the 0.2.0 API. No code change;
+  `Vela.Testing` is re-published only to keep the two framework packages in lockstep.
+
 ## [0.2.0] - 2026-09-03
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.2.0`.
