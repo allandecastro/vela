@@ -75,8 +75,10 @@ or a base64 `.pfx`, and delegates to `dotnet nuget sign`. Key Vault / HSM signin
 
 ### Is Vela available on nuget.org?
 
-Not yet - it is pre-1.0, so build from source or consume via a local/private feed for now.
-See [limitations](limitations.md).
+Yes. `Vela.Plugins` and `Vela.Testing` (the framework line) and `Vela.Cli` (the CLI) are published on
+nuget.org. Reference the framework packages with `dotnet add package Vela.Plugins` / `Vela.Testing`, and
+install the CLI with `dotnet tool install --global Vela.Cli`. It is still **pre-1.0**, so APIs may change
+between minor versions - see [limitations](limitations.md).
 
 ### Can the plugin cache do async I/O?
 

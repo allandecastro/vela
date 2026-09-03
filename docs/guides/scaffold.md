@@ -39,7 +39,9 @@ The tree comments label each project. Two carry detail beyond that:
   connection. Run them with `dotnet test tests/Zava.Plugins.Tests`.
 
 Flags: `--prefix` (default: derived from name), `--output` (default: `.`), `--core-version`
-(default: `1.0.0`), `--no-integrations`, `--no-tests`, `--no-console`, `--managed-identity` / `--mi`
+(the `Vela.Plugins` / `Vela.Testing` version the generated projects reference; default: the latest published
+framework version, resolved from nuget.org), `--no-integrations`, `--no-tests`, `--no-console`,
+`--managed-identity` / `--mi`
 (wire an opt-in package-signing step into the Integrations project - see [Sign the plugin package](signing.md)),
 `--web-resources` (also scaffold the TypeScript web-resources project, see below; `--web-resources-namespace`
 and `--web-resources-folder` set its global name and build folder),
