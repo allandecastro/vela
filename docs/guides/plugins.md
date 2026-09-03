@@ -18,7 +18,7 @@ namespace Zava.Plugins.Account
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)      // Only trigger when Name changes
                 .Description("Handles account updates")
@@ -47,7 +47,7 @@ public class AccountStepRouter : EntityPluginBase<Account>
     protected override void RegisterPluginSteps()
     {
         RegisterSteps().OnCreate()
-            .Stage(PluginStages.PostOperation)
+            .PostOperation()
             .Mode(ExecutionMode.Synchronous)
             .FilteringAttributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
             .Handler(OnCreatePost)
@@ -56,7 +56,7 @@ public class AccountStepRouter : EntityPluginBase<Account>
                 .Attributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1);
 
         RegisterSteps().OnUpdate()
-            .Stage(PluginStages.PostOperation)
+            .PostOperation()
             .Mode(ExecutionMode.Synchronous)
             .FilteringAttributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
             .Handler(OnUpdatePost)
@@ -107,7 +107,8 @@ The fluent builder enforces a specific order:
    `OnMessage("custom_message")` for any other SDK message. The deprecated `SetState` /
    `SetStateDynamicEntity` messages have no typed method: update `statecode`/`statuscode` with `OnUpdate()`
    instead, or register through `OnMessage("SetState")` if you must target the legacy message.
-2. **Stage** - `Stage(PluginStages.PostOperation)`
+2. **Stage** - `PreValidation()`, `PreOperation()`, or `PostOperation()` (typed methods; the stage you pick
+   determines which images the rest of the chain will offer)
 3. **Mode** - `Mode(ExecutionMode.Synchronous)` or `Mode(ExecutionMode.Asynchronous)`
 4. **Filtering** - `FilteringAttributes(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
    `CreateMultiple` and `UpdateMultiple`** (at least one attribute) and must come immediately after `Mode(...)`;
@@ -133,14 +134,21 @@ stored on the linked `sdkmessageprocessingstepsecureconfig` row). Unsecure confi
 JSON (it is non-sensitive by design); the **secure** value is **redacted to a hash** in plan/inspect output (and any
 `-o` plan file), so a changed secret is still detected without the value ever leaving Dataverse.
 
-`MainOperation` is reserved for Custom API main handlers and is rejected for regular plugin-step fluent registrations.
+`MainOperation` is reserved for Custom API main handlers; it is not one of the typed stage methods, so a
+regular plugin step cannot register there.
 
-Image validation rules enforced by the framework:
+**Image validity is a compile error, not a runtime surprise.** The stage method you pick returns a builder
+that exposes **only** the images that (message, stage) actually supports, so a wrong image does not compile -
+in the IDE, without the CLI. For example `OnDelete().PostOperation()....PostImage()` and
+`OnUpdate().PreValidation()....PreImage()` and `OnCreate().PostOperation()....PreImage()` all fail to build.
+The rules the chain encodes:
 
-1. `PreValidation` - no images allowed.
+1. `PreValidation` - no images (nothing captured yet).
 2. `PreOperation` - only `PreImage`, only for `Update` and `Delete`.
 3. `PostOperation` - `PreImage` for `Update`/`Delete`, `PostImage` for `Create`/`Update`.
-4. `MainOperation` - not allowed for regular plugin steps.
+4. `OnMessage("...")` - a non-modelled message is **permissive**: both images are offered and validity is left
+   to Dataverse at deploy time (Vela does not know an arbitrary message's image rules). A modelled message
+   reached through `OnMessage(...)` is still validated by the runtime backstop in `Build()`.
 5. `CreateMultiple` / `UpdateMultiple` - not deployable with images. Dataverse accepts neither `Target` nor
    `Targets` as an image property on the bulk messages, so a `*Multiple` step that carries a `PreImage`/`PostImage`
    is rejected by `plan`/`apply` at scan time (a clear error, before anything is written). Register the image on

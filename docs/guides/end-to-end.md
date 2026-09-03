@@ -19,7 +19,7 @@ public class AccountPostUpdate : EntityPluginBase<Account>
     protected override void RegisterPluginSteps()
     {
         RegisterSteps().OnUpdate()
-            .Stage(PluginStages.PostOperation)
+            .PostOperation()
             .Mode(ExecutionMode.Synchronous)
             .FilteringAttributes(a => a.Name)   // only fire when Name changes
             .PreImage()
