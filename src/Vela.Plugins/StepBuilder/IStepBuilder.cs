@@ -42,12 +42,6 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     /// <summary>Configure step to trigger on Disassociate message.</summary>
     IStepMessageBuilder<TEntity> OnDisassociate();
 
-    /// <summary>Configure step to trigger on SetState message.</summary>
-    IStepMessageBuilder<TEntity> OnSetState();
-
-    /// <summary>Configure step to trigger on SetStateDynamicEntity message.</summary>
-    IStepMessageBuilder<TEntity> OnSetStateDynamicEntity();
-
     /// <summary>Configure step to trigger on a custom message.</summary>
     /// <param name="messageName">The SDK message name.</param>
     IStepMessageBuilder<TEntity> OnMessage(string messageName);

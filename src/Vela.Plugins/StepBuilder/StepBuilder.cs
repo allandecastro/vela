@@ -151,18 +151,6 @@ public sealed class StepBuilder<TEntity> :
         return this;
     }
 
-    public IStepMessageBuilder<TEntity> OnSetState()
-    {
-        _definition.Message = PluginMessages.SetState;
-        return this;
-    }
-
-    public IStepMessageBuilder<TEntity> OnSetStateDynamicEntity()
-    {
-        _definition.Message = PluginMessages.SetStateDynamicEntity;
-        return this;
-    }
-
     public IStepMessageBuilder<TEntity> OnMessage(string messageName)
     {
         if (string.IsNullOrWhiteSpace(messageName))

@@ -103,8 +103,10 @@ the shared logic in one step (combine the filtering attributes) or use a differe
 The fluent builder enforces a specific order:
 
 1. **Message** - `OnCreate()`, `OnUpdate()`, `OnCreateMultiple()`, `OnUpdateMultiple()`, `OnDelete()`,
-   `OnRetrieve()`, `OnRetrieveMultiple()`, `OnAssociate()`, `OnDisassociate()`, `OnSetState()`, or
-   `OnMessage("custom_message")` for any other SDK message.
+   `OnRetrieve()`, `OnRetrieveMultiple()`, `OnAssociate()`, `OnDisassociate()`, or
+   `OnMessage("custom_message")` for any other SDK message. The deprecated `SetState` /
+   `SetStateDynamicEntity` messages have no typed method: update `statecode`/`statuscode` with `OnUpdate()`
+   instead, or register through `OnMessage("SetState")` if you must target the legacy message.
 2. **Stage** - `Stage(PluginStages.PostOperation)`
 3. **Mode** - `Mode(ExecutionMode.Synchronous)` or `Mode(ExecutionMode.Asynchronous)`
 4. **Filtering** - `FilteringAttributes(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,

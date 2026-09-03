@@ -63,18 +63,6 @@ namespace Vela.Plugin
             return step.OnDisassociate();
         }
 
-        public IStepMessageBuilder<TEntity> OnSetState()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnSetState();
-        }
-
-        public IStepMessageBuilder<TEntity> OnSetStateDynamicEntity()
-        {
-            StepBuilder<TEntity> step = BeginStep();
-            return step.OnSetStateDynamicEntity();
-        }
-
         public IStepMessageBuilder<TEntity> OnMessage(string messageName)
         {
             StepBuilder<TEntity> step = BeginStep();
