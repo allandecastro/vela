@@ -14,7 +14,7 @@ namespace Vela.Tests
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
 
@@ -31,7 +31,7 @@ namespace Vela.Tests
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
 
@@ -46,7 +46,7 @@ namespace Vela.Tests
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .PreImage()
@@ -70,7 +70,7 @@ namespace Vela.Tests
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Description("Test description");
@@ -85,7 +85,7 @@ namespace Vela.Tests
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Handler(nameof(StepBuilder_CapturesHandlerMethod));
@@ -100,7 +100,7 @@ namespace Vela.Tests
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Handler(TestHandler);
@@ -110,43 +110,16 @@ namespace Vela.Tests
             Assert.Equal(nameof(TestHandler), definition.HandlerMethodName);
         }
 
-        [Fact]
-        public void StepBuilder_DisallowsImagesInPreValidation()
-        {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
-                .Stage(PluginStages.PreValidation)
-                .Mode(ExecutionMode.Synchronous);
-
-            Assert.Throws<InvalidOperationException>(() => builder.PreImage());
-            Assert.Throws<InvalidOperationException>(() => builder.PostImage());
-        }
-
-        [Fact]
-        public void StepBuilder_DisallowsMainOperationStage()
-        {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate();
-            Assert.Throws<InvalidOperationException>(() => builder.Stage(PluginStages.MainOperation));
-        }
-
-        [Fact]
-        public void StepBuilder_DisallowsPreImageForPreOperationCreate()
-        {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnCreate()
-                .Stage(PluginStages.PreOperation)
-                .Mode(ExecutionMode.Synchronous);
-
-            Assert.Throws<InvalidOperationException>(() => builder.PreImage());
-        }
+        // The typed stage chain now prevents an invalid image at compile time (a pre-image in PreValidation,
+        // a post-image on Delete, a pre-image on Create, etc. do not compile). These positive tests confirm
+        // the valid combinations the chain does expose.
 
         [Fact]
         public void StepBuilder_AllowsPreImageForPreOperationUpdate()
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnUpdate()
-                .Stage(PluginStages.PreOperation)
+                .PreOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .PreImage()
@@ -157,45 +130,60 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void StepBuilder_DisallowsPostImageForPreOperation()
-        {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
-                .Stage(PluginStages.PreOperation)
-                .Mode(ExecutionMode.Synchronous);
-
-            Assert.Throws<InvalidOperationException>(() => builder.PostImage());
-        }
-
-        [Fact]
-        public void StepBuilder_AllowsOnlyPostImageForPostOperationCreate()
+        public void StepBuilder_AllowsPostImageForPostOperationCreate()
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
-
-            Assert.Throws<InvalidOperationException>(() => builder.PreImage());
-            builder.PostImage().Attributes(a => a.Name);
+                .FilteringAttributes(a => a.Name)
+                .PostImage().Attributes(a => a.Name);
 
             var definition = builder.Build();
             Assert.Single(definition.PostImages);
         }
 
         [Fact]
-        public void StepBuilder_AllowsOnlyPreImageForPostOperationDelete()
+        public void StepBuilder_AllowsPreImageForPostOperationDelete()
         {
             var builder = new StepBuilder<TestAccount>();
             builder.OnDelete()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .PreImage()
                 .Attributes(a => a.Name);
 
-            Assert.Throws<InvalidOperationException>(() => builder.PostImage());
             var definition = builder.Build();
             Assert.Single(definition.PreImages);
+        }
+
+        // Runtime backstop: the permissive OnMessage(...) escape hatch exposes both images at PostOperation, so
+        // a step assembled with a modelled message that the platform does not support at that stage is still
+        // caught at Build() (regardless of how it was assembled). A non-modelled message is left permissive.
+
+        [Fact]
+        public void StepBuilder_Build_RejectsPostImageOnDelete_ViaPermissiveMessage()
+        {
+            Assert.Throws<InvalidOperationException>(() =>
+                new StepBuilder<TestAccount>().OnMessage(PluginMessages.Delete)
+                    .PostOperation()
+                    .Mode(ExecutionMode.Synchronous)
+                    .PostImage()
+                    .Build());
+        }
+
+        [Fact]
+        public void StepBuilder_Build_AllowsImagesOnUnmodelledMessage()
+        {
+            StepDefinition definition = new StepBuilder<TestAccount>().OnMessage("acme_DoThing")
+                .PostOperation()
+                .Mode(ExecutionMode.Synchronous)
+                .PreImage().Attributes(a => a.Name)
+                .PostImage().Attributes(a => a.Name)
+                .Build();
+
+            Assert.Single(definition.PreImages);
+            Assert.Single(definition.PostImages);
         }
 
         private void TestHandler(ILocalPluginContext ctx, TestAccount target)

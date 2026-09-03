@@ -18,7 +18,7 @@ namespace Vela.Tests
         public void Update_WithoutFiltering_ThrowsOnBuild()
         {
             var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous);
+            builder.OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous);
 
             var ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
             Assert.Contains("filtering attribute", ex.Message);
@@ -28,7 +28,7 @@ namespace Vela.Tests
         public void Create_WithoutFiltering_ThrowsOnBuild()
         {
             var builder = new StepBuilder<TestAccount>();
-            builder.OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous);
+            builder.OnCreate().PostOperation().Mode(ExecutionMode.Synchronous);
 
             var ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
             Assert.Contains("filtering attribute", ex.Message);
@@ -38,7 +38,7 @@ namespace Vela.Tests
         public void Update_WithFiltering_Builds()
         {
             var definition = new StepBuilder<TestAccount>()
-                .OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+                .OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Build();
 
@@ -49,7 +49,7 @@ namespace Vela.Tests
         public void Delete_WithoutFiltering_Builds()
         {
             var definition = new StepBuilder<TestAccount>()
-                .OnDelete().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+                .OnDelete().PostOperation().Mode(ExecutionMode.Synchronous)
                 .Build();
 
             Assert.Empty(definition.FilteringAttributes);
@@ -61,7 +61,7 @@ namespace Vela.Tests
         {
             var ex = Assert.Throws<InvalidOperationException>(() =>
                 new StepBuilder<TestAccount>()
-                    .OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+                    .OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                     .FilteringAttributes(a => a.Name, a => a.Name)
                     .Build());
 
@@ -73,7 +73,7 @@ namespace Vela.Tests
         {
             var ex = Assert.Throws<InvalidOperationException>(() =>
                 new StepBuilder<TestAccount>()
-                    .OnUpdate().Stage(PluginStages.PreOperation).Mode(ExecutionMode.Synchronous)
+                    .OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous)
                     .FilteringAttributes(a => a.Name)
                     .PreImage("img").Attributes(a => a.Name, a => a.Name)
                     .Build());
@@ -86,7 +86,7 @@ namespace Vela.Tests
         {
             var ex = Assert.Throws<InvalidOperationException>(() =>
                 new StepBuilder<TestAccount>()
-                    .OnUpdate().Stage(PluginStages.PreOperation).Mode(ExecutionMode.Synchronous)
+                    .OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous)
                     .FilteringAttributes(a => a.Name)
                     .PreImage("dup").Attributes(a => a.Name)
                     .PreImage("dup").Attributes(a => a.AccountId)

@@ -38,9 +38,9 @@ public sealed class StepRegistrationGuardTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name).Handler(First);
-            RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name).Handler(Second);
         }
 
@@ -55,9 +55,9 @@ public sealed class StepRegistrationGuardTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name).Handler(OnCreated);
-            RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name).Handler(OnUpdated);
         }
 

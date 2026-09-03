@@ -117,13 +117,13 @@ public sealed class MultiStepEntityPluginTests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Handler(HandleCreate);
 
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Handler(HandleUpdate);
@@ -151,7 +151,7 @@ public sealed class MultiStepEntityPluginTests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
         }
@@ -175,7 +175,7 @@ public sealed class MultiStepEntityPluginTests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnDelete()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous);
         }
 
@@ -201,7 +201,7 @@ public sealed class MultiStepEntityPluginTests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnRetrieveMultiple()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous);
         }
 
@@ -222,12 +222,12 @@ public sealed class MultiStepEntityPluginTests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
 
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
         }

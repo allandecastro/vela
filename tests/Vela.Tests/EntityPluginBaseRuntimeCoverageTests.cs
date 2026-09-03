@@ -21,7 +21,7 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public TestAccount? Seen { get; private set; }
         public bool Ran { get; private set; }
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
+            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
         protected override void Execute(ILocalPluginContext ctx, TestAccount target) { Seen = target; Ran = true; }
     }
 
@@ -31,7 +31,7 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public SetStateProbe() : this(string.Empty, string.Empty) { }
         public Guid SeenId { get; private set; }
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnMessage(PluginMessages.SetState).Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous);
+            => RegisterSteps().OnMessage(PluginMessages.SetState).PostOperation().Mode(ExecutionMode.Synchronous);
         protected override void Execute(ILocalPluginContext ctx, TestAccount target) => SeenId = target.Id;
     }
 
@@ -41,8 +41,8 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public TwoHandlerSteps() : this(string.Empty, string.Empty) { }
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate().Stage(PluginStages.PreOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(nameof(HandleA));
-            RegisterSteps().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(nameof(HandleB));
+            RegisterSteps().OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(nameof(HandleA));
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(nameof(HandleB));
         }
         public void HandleA(ILocalPluginContext ctx, TestAccount target) { }
         public void HandleB(ILocalPluginContext ctx, TestAccount target) { }

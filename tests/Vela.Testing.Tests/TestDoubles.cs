@@ -75,7 +75,7 @@ namespace Vela.Testing.Tests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
         }
@@ -98,7 +98,7 @@ namespace Vela.Testing.Tests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
         }
@@ -123,7 +123,7 @@ namespace Vela.Testing.Tests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Handler(OnCreated);
@@ -230,7 +230,7 @@ namespace Vela.Testing.Tests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
         }

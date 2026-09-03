@@ -21,7 +21,7 @@ public sealed class ManifestScannerTests
     {
         StepDefinition definition = Register.RegisterPluginStep<TestAccount>()
             .OnMessage<ZavaAccountUpdateMessage>()
-            .Stage(PluginStages.PostOperation)
+            .PostOperation()
             .Mode(ExecutionMode.Synchronous)
             .Build();
 
@@ -33,7 +33,7 @@ public sealed class ManifestScannerTests
     {
         StepDefinition definition = Register.RegisterPluginStep<TestAccount>()
             .OnUpdate()
-            .Stage(PluginStages.PostOperation)
+            .PostOperation()
             .Mode(ExecutionMode.Synchronous)
             .FilteringAttributes(a => a.Name)
             .Build();
@@ -48,7 +48,7 @@ public sealed class ManifestScannerTests
     {
         StepDefinition definition = Register.RegisterPluginStep<TestAccount>()
             .OnUpdate()
-            .Stage(PluginStages.PostOperation)
+            .PostOperation()
             .Mode(ExecutionMode.Synchronous)
             .FilteringAttributes(a => a.Name)
             .Disabled()
@@ -155,7 +155,7 @@ public sealed class ManifestScannerTests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name);
         }
@@ -170,13 +170,13 @@ public sealed class ManifestScannerTests
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnCreate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Handler("OnCreate");
 
             RegisterSteps().OnUpdate()
-                .Stage(PluginStages.PostOperation)
+                .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
                 .Handler("OnUpdate");

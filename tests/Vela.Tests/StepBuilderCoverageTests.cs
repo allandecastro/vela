@@ -9,7 +9,8 @@ using Xunit;
 namespace Vela.Tests;
 
 // Covers StepBuilder<TEntity> branches: argument guards, optional-config null coalescing, the image
-// add/configure paths, and the platform image-allowed rules (stage/message matrix).
+// add/configure paths, and the Build() image backstop (relaxed for non-modelled messages). The typed stage
+// chain enforces the image/stage rules at compile time; this file exercises the runtime pieces that remain.
 public sealed class StepBuilderCoverageTests
 {
     // An entity type without [EntityLogicalName] so the constructor's type-name fallback is exercised.
@@ -31,7 +32,7 @@ public sealed class StepBuilderCoverageTests
     public void Constructor_falls_back_to_the_type_name_without_the_logical_name_attribute()
     {
         StepDefinition definition = new StepBuilder<NoNameEntity>()
-            .OnDelete().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous).Build();
+            .OnDelete().PostOperation().Mode(ExecutionMode.Synchronous).Build();
 
         Assert.Equal("nonameentity", definition.EntityLogicalName);
     }
@@ -46,19 +47,13 @@ public sealed class StepBuilderCoverageTests
     [Fact]
     public void FilteringAttributes_rejects_a_null_primary_attribute()
     {
-        Assert.Throws<ArgumentNullException>(() => New().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous).FilteringAttributes(null!));
-    }
-
-    [Fact]
-    public void Stage_rejects_the_reserved_main_operation()
-    {
-        Assert.Throws<InvalidOperationException>(() => New().OnDelete().Stage(PluginStages.MainOperation));
+        Assert.Throws<ArgumentNullException>(() => New().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(null!));
     }
 
     [Fact]
     public void Key_Handler_and_config_guards_and_trimming()
     {
-        IStepModeBuilder<TestAccount> step = New().OnDelete().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous);
+        IPreImageStep<TestAccount> step = New().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous);
 
         Assert.Throws<ArgumentNullException>(() => step.Key("  "));
         Assert.Throws<ArgumentNullException>(() => step.Handler((string)null!));
@@ -84,7 +79,7 @@ public sealed class StepBuilderCoverageTests
     [Fact]
     public void AddPreImage_and_AddPostImage_with_and_without_attributes()
     {
-        StepDefinition withAttrs = New().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+        StepDefinition withAttrs = New().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
             .FilteringAttributes(a => a.Name)
             .AddPreImage(a => a.Name)
             .AddPostImage() // no attributes -> full image
@@ -96,55 +91,46 @@ public sealed class StepBuilderCoverageTests
         Assert.Empty(withAttrs.PostImages[0].Attributes);
     }
 
+    // Build() image backstop. The typed chain already prevents an invalid image at compile time for the
+    // modelled messages; the backstop catches the same rules when the modelled message reaches the builder
+    // through the permissive OnMessage(...) escape hatch (or reflection). Delete carries no attribute payload,
+    // so no filtering requirement masks the image check.
     [Fact]
-    public void Attributes_without_an_active_image_throws()
+    public void Build_backstop_rejects_an_unsupported_image_on_a_modelled_message()
     {
-        IStepImageBuilder<TestAccount> builder = (IStepImageBuilder<TestAccount>)New()
-            .OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
-            .FilteringAttributes(a => a.Name);
+        // Delete has a pre-image but no post-image.
+        Assert.Throws<InvalidOperationException>(() =>
+            New().OnMessage(PluginMessages.Delete).PostOperation().Mode(ExecutionMode.Synchronous).PostImage().Build());
 
-        Assert.Throws<InvalidOperationException>(() => builder.Attributes(a => a.Name));
+        StepDefinition ok = New().OnMessage(PluginMessages.Delete).PostOperation().Mode(ExecutionMode.Synchronous)
+            .PreImage().Build();
+        Assert.Single(ok.PreImages);
     }
 
-    [Theory]
-    // PostOperation: pre-image for Update, post-image for Create -> allowed.
-    [InlineData(PluginMessages.Update, PluginStages.PostOperation, true, true)]
-    [InlineData(PluginMessages.Create, PluginStages.PostOperation, false, true)]
-    // PreOperation: only a pre-image, and only for Update/Delete.
-    [InlineData(PluginMessages.Update, PluginStages.PreOperation, true, true)]
-    [InlineData(PluginMessages.Update, PluginStages.PreOperation, false, false)] // post-image rejected
-    // Bulk messages evaluate as their single-row counterpart at construction time (the harness simulates
-    // per-record bulk images from them); the CLI enforces the stricter no-bulk-image deploy rule separately.
-    [InlineData(PluginMessages.CreateMultiple, PluginStages.PostOperation, false, true)]
-    [InlineData(PluginMessages.UpdateMultiple, PluginStages.PostOperation, true, true)]
-    // PreValidation: no images at all.
-    [InlineData(PluginMessages.Update, PluginStages.PreValidation, true, false)]
-    public void Image_allowed_rules_match_the_platform_matrix(string message, PluginStages stage, bool preImage, bool allowed)
+    [Fact]
+    public void Build_backstop_is_permissive_for_a_non_modelled_message()
     {
-        StepBuilder<TestAccount> builder = New();
-        builder.OnMessage(message).Stage(stage); // mutates the shared builder's message + stage
+        // Vela does not model this message's image rules, so the builder does not reject it (the platform
+        // arbitrates at deploy time).
+        StepDefinition definition = New().OnMessage("acme_DoThing").PostOperation().Mode(ExecutionMode.Synchronous)
+            .PreImage().Attributes(a => a.Name)
+            .PostImage().Attributes(a => a.AccountId)
+            .Build();
 
-        if (allowed)
-        {
-            IStepImageBuilder<TestAccount> image = preImage ? builder.PreImage() : builder.PostImage();
-            Assert.NotNull(image);
-        }
-        else
-        {
-            Assert.Throws<InvalidOperationException>(() => { if (preImage) builder.PreImage(); else builder.PostImage(); });
-        }
+        Assert.Single(definition.PreImages);
+        Assert.Single(definition.PostImages);
     }
 
     [Fact]
     public void Build_rejects_duplicate_filtering_attributes_and_image_aliases()
     {
         Assert.Throws<InvalidOperationException>(() =>
-            New().OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+            New().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name, a => a.Name) // duplicate
                 .Build());
 
         StepBuilder<TestAccount> dupAlias = New();
-        dupAlias.OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+        dupAlias.OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
             .FilteringAttributes(a => a.Name)
             .PreImage("dup").Attributes(a => a.Name)
             .PostImage("dup").Attributes(a => a.AccountId); // duplicate alias across images
@@ -155,7 +141,7 @@ public sealed class StepBuilderCoverageTests
     public void Build_requires_a_filtering_attribute_for_create_and_update()
     {
         StepBuilder<TestAccount> builder = New();
-        builder.OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous); // mutates builder
+        builder.OnCreate().PostOperation().Mode(ExecutionMode.Synchronous); // mutates builder
         Assert.Throws<InvalidOperationException>(() => builder.Build());
     }
 }
