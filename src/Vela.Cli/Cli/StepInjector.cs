@@ -61,7 +61,9 @@ internal static class StepInjector
         // Create/Update steps require filtering attributes at compile time; we don't know the entity's
         // columns here, so emit a TODO placeholder on Id (present on every early-bound type) so it compiles.
         bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
-            || string.Equals(message, "Update", StringComparison.Ordinal);
+            || string.Equals(message, "Update", StringComparison.Ordinal)
+            || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
+            || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
         string filtering = needsFiltering
             ? "                .FilteringAttributes(e => e.Id /* TODO: choose the attributes that should trigger this step */)\n"
             : string.Empty;

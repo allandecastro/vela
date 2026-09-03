@@ -186,6 +186,21 @@ namespace Vela.Tests
             Assert.Single(definition.PostImages);
         }
 
+        // A filtering-required message reached through the permissive OnMessage(...) escape hatch cannot supply
+        // its filtering attribute (the permissive terminal has no FilteringAttributes), so Build() rejects it and
+        // the error points at the typed OnUpdate()/OnCreate()/... methods instead.
+        [Fact]
+        public void StepBuilder_Build_RejectsFilteringMessageReachedViaOnMessage_AndSignpostsTypedMethods()
+        {
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+                new StepBuilder<TestAccount>().OnMessage(PluginMessages.Update)
+                    .PostOperation()
+                    .Mode(ExecutionMode.Synchronous)
+                    .Build());
+
+            Assert.Contains("OnUpdate()", ex.Message);
+        }
+
         private void TestHandler(ILocalPluginContext ctx, TestAccount target)
         {
         }

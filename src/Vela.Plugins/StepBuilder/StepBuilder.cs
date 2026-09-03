@@ -159,49 +159,49 @@ public sealed class StepBuilder<TEntity> :
 
     // ---- Settings (IStepConfig, per capability terminal) -------------------------------------------
 
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.ExecutionOrder(int order) { _definition.ExecutionOrder = order; return this; }
+    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.ExecutionOrder(int order) { SetExecutionOrder(order); return this; }
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Key(string stepKey) { SetKey(stepKey); return this; }
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Description(string description) { _definition.Description = description ?? string.Empty; return this; }
+    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Description(string description) { SetDescription(description); return this; }
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Handler(string methodName) { SetHandler(methodName); return this; }
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Handler(Action<ILocalPluginContext, TEntity> handler) { SetHandler(handler); return this; }
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { _definition.ImpersonationSource = source; return this; }
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { _definition.SupportedDeployment = deployment; return this; }
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Disabled() { _definition.Enabled = false; return this; }
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.UnsecureConfig(string configuration) { _definition.UnsecureConfig = configuration ?? string.Empty; return this; }
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.SecureConfig(string configuration) { _definition.SecureConfig = configuration ?? string.Empty; return this; }
+    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { SetImpersonation(source); return this; }
+    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Disabled() { SetDisabled(); return this; }
+    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.UnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.SecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
 
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.ExecutionOrder(int order) { _definition.ExecutionOrder = order; return this; }
+    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.ExecutionOrder(int order) { SetExecutionOrder(order); return this; }
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Key(string stepKey) { SetKey(stepKey); return this; }
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Description(string description) { _definition.Description = description ?? string.Empty; return this; }
+    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Description(string description) { SetDescription(description); return this; }
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Handler(string methodName) { SetHandler(methodName); return this; }
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Handler(Action<ILocalPluginContext, TEntity> handler) { SetHandler(handler); return this; }
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { _definition.ImpersonationSource = source; return this; }
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { _definition.SupportedDeployment = deployment; return this; }
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Disabled() { _definition.Enabled = false; return this; }
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.UnsecureConfig(string configuration) { _definition.UnsecureConfig = configuration ?? string.Empty; return this; }
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.SecureConfig(string configuration) { _definition.SecureConfig = configuration ?? string.Empty; return this; }
+    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { SetImpersonation(source); return this; }
+    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Disabled() { SetDisabled(); return this; }
+    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.UnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.SecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
 
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.ExecutionOrder(int order) { _definition.ExecutionOrder = order; return this; }
+    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.ExecutionOrder(int order) { SetExecutionOrder(order); return this; }
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Key(string stepKey) { SetKey(stepKey); return this; }
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Description(string description) { _definition.Description = description ?? string.Empty; return this; }
+    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Description(string description) { SetDescription(description); return this; }
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Handler(string methodName) { SetHandler(methodName); return this; }
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Handler(Action<ILocalPluginContext, TEntity> handler) { SetHandler(handler); return this; }
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { _definition.ImpersonationSource = source; return this; }
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { _definition.SupportedDeployment = deployment; return this; }
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Disabled() { _definition.Enabled = false; return this; }
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.UnsecureConfig(string configuration) { _definition.UnsecureConfig = configuration ?? string.Empty; return this; }
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.SecureConfig(string configuration) { _definition.SecureConfig = configuration ?? string.Empty; return this; }
+    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { SetImpersonation(source); return this; }
+    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Disabled() { SetDisabled(); return this; }
+    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.UnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.SecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
 
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.ExecutionOrder(int order) { _definition.ExecutionOrder = order; return this; }
+    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.ExecutionOrder(int order) { SetExecutionOrder(order); return this; }
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Key(string stepKey) { SetKey(stepKey); return this; }
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Description(string description) { _definition.Description = description ?? string.Empty; return this; }
+    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Description(string description) { SetDescription(description); return this; }
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Handler(string methodName) { SetHandler(methodName); return this; }
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Handler(Action<ILocalPluginContext, TEntity> handler) { SetHandler(handler); return this; }
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { _definition.ImpersonationSource = source; return this; }
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { _definition.SupportedDeployment = deployment; return this; }
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Disabled() { _definition.Enabled = false; return this; }
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.UnsecureConfig(string configuration) { _definition.UnsecureConfig = configuration ?? string.Empty; return this; }
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.SecureConfig(string configuration) { _definition.SecureConfig = configuration ?? string.Empty; return this; }
+    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { SetImpersonation(source); return this; }
+    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Disabled() { SetDisabled(); return this; }
+    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.UnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.SecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
 
     // ---- Build (shared across all terminals) -------------------------------------------------------
 
@@ -228,7 +228,9 @@ public sealed class StepBuilder<TEntity> :
         {
             throw new InvalidOperationException(
                 $"Step on message '{_definition.Message}' must declare at least one filtering attribute via " +
-                "FilteringAttributes(...). An unfiltered Create/Update step fires on every change.");
+                "FilteringAttributes(...) after Mode(...). An unfiltered Create/Update step fires on every " +
+                "change. Use the typed OnCreate() / OnUpdate() / OnCreateMultiple() / OnUpdateMultiple() " +
+                "methods (which require the filtering attribute) rather than the permissive OnMessage(\"...\").");
         }
 
         // Image backstop: the typed chain already prevents an invalid image at compile time, but a step
@@ -307,6 +309,16 @@ public sealed class StepBuilder<TEntity> :
 
         SetHandler(handler.Method.Name);
     }
+
+    // Setting mutations centralised so the four per-terminal IStepConfig implementations stay in lockstep
+    // (each explicit implementation is just `Set...(value); return this;`).
+    private void SetExecutionOrder(int order) => _definition.ExecutionOrder = order;
+    private void SetDescription(string description) => _definition.Description = description ?? string.Empty;
+    private void SetImpersonation(ImpersonationSource source) => _definition.ImpersonationSource = source;
+    private void SetSupportedDeployment(SupportedDeployment deployment) => _definition.SupportedDeployment = deployment;
+    private void SetDisabled() => _definition.Enabled = false;
+    private void SetUnsecureConfig(string configuration) => _definition.UnsecureConfig = configuration ?? string.Empty;
+    private void SetSecureConfig(string configuration) => _definition.SecureConfig = configuration ?? string.Empty;
 
     private void StartImage(string alias, bool isPre)
     {
@@ -408,30 +420,34 @@ public sealed class StepBuilder<TEntity> :
             message = PluginMessages.Update;
         }
 
+        // Universal rules (platform-wide, independent of the message): no image exists before or outside the
+        // operation, and a post-image never exists before the write is committed. These bind even for a
+        // non-modelled message, so they are checked before the permissive short-circuit below.
+        if (stage == PluginStages.PreValidation || stage == PluginStages.MainOperation)
+        {
+            return false;
+        }
+        if (stage == PluginStages.PreOperation && !isPreImage)
+        {
+            return false;
+        }
+
         bool isCreate = string.Equals(message, PluginMessages.Create, StringComparison.OrdinalIgnoreCase);
         bool isUpdate = string.Equals(message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase);
         bool isDelete = string.Equals(message, PluginMessages.Delete, StringComparison.OrdinalIgnoreCase);
 
         // Permissive: a message Vela does not model (custom messages, custom APIs, or platform messages such
-        // as Merge/Route/Send that Vela does not expose as typed methods). Trust the developer; the platform
-        // rejects a genuinely invalid image at deploy time.
+        // as Merge/Route/Send that Vela does not expose as typed methods). The universal rules above still
+        // applied; the message-specific part is trusted here and the platform rejects a genuinely invalid
+        // image at deploy time.
         if (!isCreate && !isUpdate && !isDelete)
         {
             return true;
         }
 
-        if (stage == PluginStages.PreValidation || stage == PluginStages.MainOperation)
-        {
-            return false;
-        }
-
         if (stage == PluginStages.PreOperation)
         {
-            if (!isPreImage)
-            {
-                return false;
-            }
-
+            // isPreImage is guaranteed true here (the universal rule rejected a pre-operation post-image).
             return isUpdate || isDelete;
         }
 
