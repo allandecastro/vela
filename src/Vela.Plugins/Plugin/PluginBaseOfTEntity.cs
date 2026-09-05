@@ -165,10 +165,16 @@ namespace Vela.Plugin
 
             if (matchedDefinition != null && !string.IsNullOrWhiteSpace(matchedDefinition.HandlerMethodName))
             {
-                object? typedContext = BuildTypedContext(matchedDefinition.Message, ctx);
-                if (typedContext != null)
+                // A single-argument handler is the typed-context form (Action<I{Msg}Context> or
+                // Action<ILocalPluginContext>); a two-argument handler is the legacy (ctx, target) form. Branch
+                // on the resolved method's arity so both coexist during the transition.
+                MethodInfo? method = GetType().GetMethod(
+                    matchedDefinition.HandlerMethodName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (method != null && method.GetParameters().Length == 1)
                 {
-                    InvokeTypedHandler(matchedDefinition.HandlerMethodName, typedContext);
+                    object argument = BuildTypedContext(matchedDefinition.Message, ctx) ?? ctx;
+                    InvokeTypedHandler(matchedDefinition.HandlerMethodName, argument);
                 }
                 else
                 {
@@ -326,6 +332,11 @@ namespace Vela.Plugin
         {
             return message switch
             {
+                PluginMessages.Create => new CreateContext<TEntity>(ctx),
+                PluginMessages.Update => new UpdateContext<TEntity>(ctx),
+                PluginMessages.Delete => new DeleteContext<TEntity>(ctx),
+                PluginMessages.CreateMultiple => new CreateMultipleContext<TEntity>(ctx),
+                PluginMessages.UpdateMultiple => new UpdateMultipleContext<TEntity>(ctx),
                 PluginMessages.Merge => new MergeContext<TEntity>(ctx),
                 PluginMessages.Retrieve => new RetrieveContext<TEntity>(ctx),
                 PluginMessages.RetrieveMultiple => new RetrieveMultipleContext<TEntity>(ctx),

@@ -32,6 +32,39 @@ namespace Vela.Tests
             }
         }
 
+        private sealed class UpdateProbe : EntityPluginBase<TestAccount>
+        {
+            public string? CapturedName;
+
+            public UpdateProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+            {
+                RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
+                    .FilteringAttributes(a => a.Name).Handler(OnUpdated);
+            }
+
+            private void OnUpdated(IUpdateContext<TestAccount> ctx)
+            {
+                CapturedName = ctx.Request.Target.ToEntity<TestAccount>().Name;   // typed, inferred
+            }
+        }
+
+        [Fact]
+        public void Update_step_handler_receives_the_typed_update_context()
+        {
+            UpdateProbe probe = new UpdateProbe();
+
+            PluginContext.For<TestAccount>()
+                .OnUpdate()
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .WithTarget(new TestAccount { Id = Guid.NewGuid(), Name = "Renamed" })
+                .Execute(probe);
+
+            Assert.Equal("Renamed", probe.CapturedName);
+        }
+
         [Fact]
         public void Merge_step_handler_receives_the_typed_merge_context()
         {

@@ -20,13 +20,13 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     /// Configure step to trigger on the CreateMultiple (bulk create) message. The step fires once with the
     /// whole <c>Targets</c> collection (read it via <c>ctx.BulkTargets</c>). Filtering attributes are required.
     /// </summary>
-    ICreateStepStage<TEntity> OnCreateMultiple();
+    ICreateMultipleStepStage<TEntity> OnCreateMultiple();
 
     /// <summary>
     /// Configure step to trigger on the UpdateMultiple (bulk update) message. The step fires once with the
     /// whole <c>Targets</c> collection (read it via <c>ctx.BulkTargets</c>). Filtering attributes are required.
     /// </summary>
-    IUpdateStepStage<TEntity> OnUpdateMultiple();
+    IUpdateMultipleStepStage<TEntity> OnUpdateMultiple();
 
     /// <summary>Configure step to trigger on Delete message.</summary>
     IDeleteStepStage<TEntity> OnDelete();

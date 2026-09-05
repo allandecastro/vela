@@ -13,9 +13,9 @@ namespace Vela.Plugin
 
         public IUpdateStepStage<TEntity> OnUpdate() => BeginStep().OnUpdate();
 
-        public ICreateStepStage<TEntity> OnCreateMultiple() => BeginStep().OnCreateMultiple();
+        public ICreateMultipleStepStage<TEntity> OnCreateMultiple() => BeginStep().OnCreateMultiple();
 
-        public IUpdateStepStage<TEntity> OnUpdateMultiple() => BeginStep().OnUpdateMultiple();
+        public IUpdateMultipleStepStage<TEntity> OnUpdateMultiple() => BeginStep().OnUpdateMultiple();
 
         public IDeleteStepStage<TEntity> OnDelete() => BeginStep().OnDelete();
 
