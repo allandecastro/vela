@@ -366,10 +366,10 @@ public class AddCommandTests
 
             string content = File.ReadAllText(pluginPath);
             Assert.Contains("RegisterSteps().OnUpdate()", content);
-            Assert.Contains(".Handler(nameof(HandleUpdate));", content);
-            Assert.Contains("private void HandleUpdate(ILocalPluginContext ctx, Account target)", content);
+            Assert.Contains(".Handler(HandleUpdate);", content);
+            Assert.Contains("private void HandleUpdate(ILocalPluginContext ctx)", content);
             // The original step is preserved.
-            Assert.Contains(".Handler(nameof(HandleCreate));", content);
+            Assert.Contains(".Handler(HandleCreate);", content);
         });
     }
 
@@ -401,10 +401,10 @@ namespace Acme.Plugins.Account.Plugins
             RegisterSteps().OnCreate()
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
-                .Handler(nameof(HandleCreate));
+                .Handler(HandleCreate);
         }
 
-        private void HandleCreate(ILocalPluginContext ctx, Account target)
+        private void HandleCreate(ILocalPluginContext ctx)
         {
         }
     }

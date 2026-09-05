@@ -680,16 +680,19 @@ configures.
 
 ### Single-step vs multi-step
 
-- **Single-step** - register one step and override `Execute(ctx, target)`. See `AccountPostCreatePlugin`.
-- **Multi-step ("router")** - register several steps in one class, giving each a `.Handler(nameof(...))` bound
-  to a method; the framework dispatches to the right one. See `ContactRouterPlugin`. Every step in a
-  multi-step plugin **must** declare a handler - the build fails otherwise.
+- **Single-step** - register one step and override `Execute(ctx)`; read the record with `ctx.GetTarget<TEntity>()`
+  (or the message-specific request with `ctx.GetRequest<...>()`). See `AccountPostCreatePlugin`.
+- **Multi-step ("router")** - register several steps in one class, giving each a `.Handler(Method)` bound to a
+  method; the framework dispatches to the right one. Each handler takes the message-typed context (for example
+  `ICreateContext<TEntity>` / `IUpdateContext<TEntity>`), exposing a strongly-typed `ctx.Request` (and, in a
+  Post step, `ctx.Response`). See `ContactRouterPlugin`. Every step in a multi-step plugin **must** declare a
+  handler - the build fails otherwise.
 
 ```csharp
 RegisterSteps().OnUpdate()
     .PostOperation().Mode(ExecutionMode.Synchronous)
     .FilteringAttributes(c => c.LastName)            // (update) fire only when these columns change
-    .Handler(nameof(OnLastNameChanged))
+    .Handler(OnLastNameChanged)                      // void OnLastNameChanged(IUpdateContext<Contact> ctx)
     .PreImage().Attributes(c => c.LastName);         // before-snapshot for the handler
 ```
 
@@ -701,7 +704,7 @@ RegisterSteps().OnUpdate()
 | `.Stage(...)` | Pipeline stage: `PreValidation`, `PreOperation`, `PostOperation`. |
 | `.Mode(...)` | `Synchronous` or `Asynchronous`. |
 | `.FilteringAttributes(...)` | (update) fire only when one of the listed columns changes. |
-| `.Handler(nameof(M))` | Method to dispatch to (required for multi-step). |
+| `.Handler(M)` | Method to dispatch to (required for multi-step); takes the message-typed context. |
 | `.PreImage()` / `.PostImage()` + `.Attributes(...)` | Capture a before/after snapshot, scoped to named columns. |
 | `.ExecutionOrder(n)` | Step rank when several steps share a message + stage. |
 | `.ImpersonateUsing(...)` | Run as `CallingUser` or `PluginOwner`. |
@@ -763,8 +766,9 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
 ### Resolving and using a service
 
 ```csharp
-protected override void Execute(ILocalPluginContext ctx, Account target)
+protected override void Execute(ILocalPluginContext ctx)
 {
+    Account target = ctx.GetTarget<Account>();
     IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
     Guid taskId = followUp.CreateFollowUpTask(target.Id, target.Name);
     ctx.Trace("Created follow-up task {0}.", taskId);
@@ -1333,8 +1337,9 @@ namespace {{prefix}}.Plugins.Account.Plugins
                 .Description("Counts the contacts related to an account after it is updated.");
         }
 
-        protected override void Execute(ILocalPluginContext ctx, Account target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
+            Account target = ctx.GetTarget<Account>();
             string fetchXml = Query.For<Contact>()
                 .Select(c => c.FirstName, c => c.LastName)
                 .Where(c => c.ParentCustomerId, ConditionOperator.Equal, target.Id)
@@ -1429,12 +1434,12 @@ namespace {{prefix}}.Plugins.Account.Plugins
                     .Attributes(a => a.Name);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, Account target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
             Account postImage = ctx.GetPostImage<Account>();
             IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
 
-            Guid taskId = followUp.CreateFollowUpTask(target.Id, postImage.Name);
+            Guid taskId = followUp.CreateFollowUpTask(postImage.Id, postImage.Name);
             ctx.Trace("Created follow-up task {0} for account '{1}'.", taskId, postImage.Name);
         }
     }
@@ -1473,7 +1478,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
-                .Handler(nameof(OnCreatePost))
+                .Handler(OnCreatePost)
                 .Description("Handles contact creation.")
                 .PostImage()
                     .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
@@ -1482,28 +1487,32 @@ namespace {{prefix}}.Plugins.Contact.Plugins
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(c => c.LastName)
-                .Handler(nameof(OnUpdatePost))
+                .Handler(OnUpdatePost)
                 .Description("Handles contact last-name changes.")
                 .PreImage()
                     .Attributes(c => c.LastName);
         }
 
-        private void OnCreatePost(ILocalPluginContext ctx, Contact target)
+        // Each handler receives the message-typed context: ICreateContext exposes a CreateRequest, IUpdateContext
+        // an UpdateRequest (in a Post step, a matching Response too), each strongly typed to this message. The
+        // context is still an ILocalPluginContext, so images, services and tracing remain available.
+        private void OnCreatePost(ICreateContext<Contact> ctx)
         {
             Contact postImage = ctx.GetPostImage<Contact>();
             ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
 
             IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
-            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, target.Id);
+            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, ctx.Request.Target.Id);
             if (duplicateId.HasValue)
             {
                 ctx.Trace("Possible duplicate of contact {0} (same email).", duplicateId.Value);
             }
         }
 
-        private void OnUpdatePost(ILocalPluginContext ctx, Contact target)
+        private void OnUpdatePost(IUpdateContext<Contact> ctx)
         {
             Contact preImage = ctx.GetPreImage<Contact>();
+            Contact target = ctx.Request.Target.ToEntity<Contact>();
             ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, target.LastName);
         }
     }
@@ -1992,11 +2001,12 @@ namespace {{ns}}
                 .Description("{{message}} {{entityType}} handler.");
         }
 
-        protected override void Execute(ILocalPluginContext ctx, {{entityType}} target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
-            ctx.Trace("{{className}} executed for {0} '{1}'.", target.LogicalName, target.Id);
+            ctx.Trace("{{className}} executed for {0} '{1}'.", ctx.PrimaryEntityName, ctx.PrimaryEntityId);
 
-            // TODO: implement your logic.
+            // TODO: implement your logic. For a Create/Update message, read the typed record with
+            // ctx.GetTarget<{{entityType}}>(); or read the message-specific request via ctx.GetRequest<...>().
         }
     }
 }
@@ -2212,8 +2222,9 @@ namespace {{prefix}}.Integrations.Contact.Plugins
                     .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, Contact target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
+            Contact target = ctx.GetTarget<Contact>();
             IGreetingService greetings = ctx.GetRequiredService<IGreetingService>();
             ctx.Trace(greetings.BuildGreeting(target.FirstName));
         }
@@ -2243,7 +2254,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
                 .PostOperation()
                 .Mode(ExecutionMode.Asynchronous)
                 .FilteringAttributes(a => a.Name)
-                .Handler(nameof(OnAccountCreated))
+                .Handler(OnAccountCreated)
                 .Description("Pushes a newly created account downstream.")
                 .PostImage()
                     .Attributes(a => a.Name);
@@ -2252,19 +2263,19 @@ namespace {{prefix}}.Integrations.Account.Plugins
                 .PostOperation()
                 .Mode(ExecutionMode.Asynchronous)
                 .FilteringAttributes(a => a.Name, a => a.Telephone1)
-                .Handler(nameof(OnAccountChanged))
+                .Handler(OnAccountChanged)
                 .Description("Pushes account changes downstream.")
                 .PreImage()
                     .Attributes(a => a.Name, a => a.Telephone1);
         }
 
-        private void OnAccountCreated(ILocalPluginContext ctx, Account target)
+        private void OnAccountCreated(ICreateContext<Account> ctx)
         {
             Account postImage = ctx.GetPostImage<Account>();
             ctx.Trace("Sync: account created '{0}'", postImage.Name);
         }
 
-        private void OnAccountChanged(ILocalPluginContext ctx, Account target)
+        private void OnAccountChanged(IUpdateContext<Account> ctx)
         {
             Account preImage = ctx.GetPreImage<Account>();
             ctx.Trace("Sync: account '{0}' changed", preImage.Name);

@@ -25,10 +25,10 @@ namespace Acme.Plugins.Account.Plugins
             RegisterSteps().OnCreate()
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
-                .Handler(nameof(HandleCreate));
+                .Handler(HandleCreate);
         }
 
-        private void HandleCreate(ILocalPluginContext ctx, Account target)
+        private void HandleCreate(ILocalPluginContext ctx)
         {
         }
     }
@@ -56,7 +56,7 @@ namespace Acme.Plugins.Account.Plugins
                 .Mode(ExecutionMode.Synchronous);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, Account target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
         }
     }
@@ -70,10 +70,10 @@ namespace Acme.Plugins.Account.Plugins
 
         Assert.True(ok, error);
         Assert.Contains("RegisterSteps().OnUpdate()", result);
-        Assert.Contains(".Handler(nameof(HandleUpdate));", result);
-        Assert.Contains("private void HandleUpdate(ILocalPluginContext ctx, Account target)", result);
+        Assert.Contains(".Handler(HandleUpdate);", result);
+        Assert.Contains("private void HandleUpdate(ILocalPluginContext ctx)", result);
         // The original step is preserved.
-        Assert.Contains(".Handler(nameof(HandleCreate));", result);
+        Assert.Contains(".Handler(HandleCreate);", result);
         // Braces stay balanced — the edit didn't corrupt the file.
         Assert.Equal(result.Count(c => c == '{'), result.Count(c => c == '}'));
     }

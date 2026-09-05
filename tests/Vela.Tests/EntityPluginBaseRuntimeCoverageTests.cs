@@ -22,17 +22,7 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public bool Ran { get; private set; }
         protected override void RegisterPluginSteps()
             => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target) { Seen = target; Ran = true; }
-    }
-
-    // SetState carries an EntityMoniker rather than a Target.
-    private sealed class SetStateProbe(string u, string s) : EntityPluginBase<TestAccount>(u, s)
-    {
-        public SetStateProbe() : this(string.Empty, string.Empty) { }
-        public Guid SeenId { get; private set; }
-        protected override void RegisterPluginSteps()
-            => RegisterSteps().OnMessage(PluginMessages.SetState).PostOperation().Mode(ExecutionMode.Synchronous);
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target) => SeenId = target.Id;
+        protected override void Execute(ILocalPluginContext ctx) { Seen = ctx.GetTarget<TestAccount>(); Ran = true; }
     }
 
     // Two handler-backed steps (distinct triggers) so an unmatched message hits the "multiple steps" guard.
@@ -41,18 +31,18 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public TwoHandlerSteps() : this(string.Empty, string.Empty) { }
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(nameof(HandleA));
-            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(nameof(HandleB));
+            RegisterSteps().OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(HandleA);
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(HandleB);
         }
-        public void HandleA(ILocalPluginContext ctx, TestAccount target) { }
-        public void HandleB(ILocalPluginContext ctx, TestAccount target) { }
+        public void HandleA(ILocalPluginContext ctx) { }
+        public void HandleB(ILocalPluginContext ctx) { }
     }
 
     [Fact]
     public void Single_step_falls_back_to_Execute_when_no_step_matches_the_message()
     {
         Probe plugin = new Probe();
-        // The step is on Update; run a Create context -> 0 matches -> Execute(ctx, target) still runs.
+        // The step is on Update; run a Create context -> 0 matches -> Execute(ctx) still runs.
         IServiceProvider provider = PluginContext.For<TestAccount>()
             .OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
             .WithTarget(new TestAccount { Name = "Acme" })
@@ -60,34 +50,6 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
 
         plugin.Execute(provider);
         Assert.True(plugin.Ran);
-    }
-
-    [Fact]
-    public void Target_is_built_from_an_entity_moniker_for_set_state()
-    {
-        Guid id = Guid.NewGuid();
-        SetStateProbe plugin = new SetStateProbe();
-        IServiceProvider provider = PluginContext.For<TestAccount>()
-            .OnMessage(PluginMessages.SetState).Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
-            .WithInputParameter("EntityMoniker", new EntityReference("account", id))
-            .BuildServiceProvider();
-
-        plugin.Execute(provider);
-        Assert.Equal(id, plugin.SeenId);
-    }
-
-    [Fact]
-    public void Target_reference_with_blank_logical_name_falls_back_to_the_entity_type_name()
-    {
-        Guid id = Guid.NewGuid();
-        SetStateProbe plugin = new SetStateProbe();
-        IServiceProvider provider = PluginContext.For<TestAccount>()
-            .OnMessage(PluginMessages.SetState).Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
-            .WithInputParameter("EntityMoniker", new EntityReference(string.Empty, id)) // blank logical name
-            .BuildServiceProvider();
-
-        plugin.Execute(provider);
-        Assert.Equal(id, plugin.SeenId);
     }
 
     [Fact]

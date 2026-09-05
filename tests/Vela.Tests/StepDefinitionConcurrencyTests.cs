@@ -67,11 +67,11 @@ public sealed class StepDefinitionConcurrencyTests
                 .FilteringAttributes(a => a.Name).Handler(OnUpdate);
         }
 
-        private void OnCreate(ILocalPluginContext ctx, TestAccount target)
+        private void OnCreate(ILocalPluginContext ctx)
         {
         }
 
-        private void OnUpdate(ILocalPluginContext ctx, TestAccount target)
+        private void OnUpdate(ILocalPluginContext ctx)
         {
         }
     }

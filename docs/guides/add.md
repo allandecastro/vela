@@ -44,7 +44,7 @@ vela add --interactive
   `PluginContext.For<…>()…Execute(…)`. Run it inside the test project (its `RootNamespace` must end in `.Tests`);
   use `--kind customapi` for a Custom API test (and omit `--entity` for a global one).
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
-  `RegisterSteps().On<Message>()…Handler(nameof(Handle<Message>))` registration and a matching handler method
+  `RegisterSteps().On<Message>()…Handler(Handle<Message>)` registration and a matching handler method
   (`--message`, optional `--handler <Method>`). It refuses single-step plugins (those using the `Execute(...)`
   override) and any file it can't parse cleanly, so it never corrupts source.
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +

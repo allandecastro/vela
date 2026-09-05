@@ -80,8 +80,9 @@ namespace Vela.Testing.Tests
                 .FilteringAttributes(a => a.Name);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
+            FakeAccount target = ctx.GetTarget<FakeAccount>();
             LastName = target.Name;
         }
     }
@@ -103,7 +104,7 @@ namespace Vela.Testing.Tests
                 .FilteringAttributes(a => a.Name);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
             ctx.SystemService.Create(new Entity("task") { ["subject"] = ctx.Tag ?? "<no-tag>" });
         }
@@ -129,8 +130,9 @@ namespace Vela.Testing.Tests
                 .Handler(OnCreated);
         }
 
-        private void OnCreated(ILocalPluginContext ctx, FakeAccount target)
+        private void OnCreated(ILocalPluginContext ctx)
         {
+            FakeAccount target = ctx.GetTarget<FakeAccount>();
             Handled = target.Name;
         }
     }
@@ -235,8 +237,9 @@ namespace Vela.Testing.Tests
                 .FilteringAttributes(a => a.Name);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, FakeAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
+            FakeAccount target = ctx.GetTarget<FakeAccount>();
             ctx.Trace("Provisioning account {0}", target.Name);
 
             FakeTask task = new FakeTask

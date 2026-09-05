@@ -18,8 +18,9 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
 Resolve registered services from a handler:
 
 ```csharp
-protected override void Execute(ILocalPluginContext ctx, Account target)
+protected override void Execute(ILocalPluginContext ctx)
 {
+    var target = ctx.GetTarget<Account>();
     var pricing = ctx.GetRequiredService<IPricingService>();
     target["creditonhold"] = pricing.IsOverLimit(target);
 }

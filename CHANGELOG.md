@@ -22,7 +22,38 @@ All notable changes to Vela are documented here. The format is based on
 ## [Unreleased]
 
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
-(`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
+(`cli-vX.Y.Z` / `framework-vX.Y.Z`).
+
+### Framework (next `framework-vX.Y.Z`)
+
+#### Added
+
+- **Typed request/response per message.** A step handler now receives a message-typed context that exposes a
+  strongly-typed `ctx.Request` (and, in a `PostOperation` step, `ctx.Response`) for the modelled messages -
+  `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`, `Associate`,
+  `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`. `ctx.Request` is the standard SDK
+  request (`CreateRequest`, `UpdateRequest`, `MergeRequest`, ...), inferred from the message with no cast:
+  `void OnUpdated(IUpdateContext<Account> ctx)` reads `ctx.Request.Target`, `void OnMerged(IMergeContext<Account> ctx)`
+  reads `ctx.Request.SubordinateId`. New `ctx.GetRequest<TRequest>()` / `ctx.GetResponse<TResponse>()` context
+  helpers expose the same typed views over the pipeline's Input/Output parameters. A step registered through
+  `OnMessage("...")` (a message Vela does not model) still receives the plain `ILocalPluginContext`.
+
+#### Removed
+
+- **BREAKING - the untyped `target` handler parameter is gone.** Step handlers and the single-step `Execute`
+  override no longer receive a fabricated `TEntity target` second argument, and `.Handler(...)` no longer accepts
+  a method **name string** or an `Action<ILocalPluginContext, TEntity>`. Handlers are now bound by **method group**
+  to a message-typed context (`.Handler(OnUpdated)` where `void OnUpdated(IUpdateContext<Account> ctx)`), which is
+  checked at compile time - binding an `OnUpdate()` step to an `ICreateContext<Account>` handler no longer compiles.
+  The single-step override becomes `Execute(ILocalPluginContext ctx)`. Migration:
+  - Multi-step: change each handler from `void Handle(ILocalPluginContext ctx, TEntity target)` to
+    `void Handle(I<Message>Context<TEntity> ctx)` (or keep `ILocalPluginContext ctx` when you do not need the
+    typed request), and change `.Handler(nameof(Handle))` / `.Handler("Handle")` to `.Handler(Handle)`.
+  - Single-step: change `Execute(ILocalPluginContext ctx, TEntity target)` to `Execute(ILocalPluginContext ctx)`
+    and read the record with `ctx.GetTarget<TEntity>()` (Create/Update), `ctx.GetTargetRef()`
+    (Delete/Associate/Disassociate), or `ctx.GetRequest<TRequest>()`.
+  - The framework no longer materializes a typed target from an `EntityReference`/`EntityMoniker` or an empty
+    entity for target-less messages; read the id directly from the request or `ctx.GetTargetRef()` instead.
 
 ## [0.2.1] - 2026-09-03
 

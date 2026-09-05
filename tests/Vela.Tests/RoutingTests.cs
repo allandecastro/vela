@@ -81,21 +81,6 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void StepBuilder_CapturesHandlerMethod()
-        {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
-                .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(nameof(StepBuilder_CapturesHandlerMethod));
-
-            var definition = builder.Build();
-
-            Assert.Equal(nameof(StepBuilder_CapturesHandlerMethod), definition.HandlerMethodName);
-        }
-
-        [Fact]
         public void StepBuilder_CapturesHandlerMethod_FromMethodGroup()
         {
             var builder = new StepBuilder<TestAccount>();
@@ -201,7 +186,7 @@ namespace Vela.Tests
             Assert.Contains("OnUpdate()", ex.Message);
         }
 
-        private void TestHandler(ILocalPluginContext ctx, TestAccount target)
+        private void TestHandler(ILocalPluginContext ctx)
         {
         }
     }

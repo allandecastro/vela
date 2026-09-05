@@ -25,14 +25,6 @@ public interface IStepConfig<TEntity, TSelf> where TEntity : Entity
     /// <param name="description">A human-readable description.</param>
     TSelf Description(string description);
 
-    /// <summary>Configure the handler method name to execute for this step.</summary>
-    /// <param name="methodName">The instance method name on the plugin class.</param>
-    TSelf Handler(string methodName);
-
-    /// <summary>Configure the handler method to execute for this step.</summary>
-    /// <param name="handler">Instance method group with signature (ILocalPluginContext, TEntity).</param>
-    TSelf Handler(Action<ILocalPluginContext, TEntity> handler);
-
     /// <summary>Configure impersonation settings.</summary>
     /// <param name="source">The impersonation source.</param>
     TSelf ImpersonateUsing(ImpersonationSource source);

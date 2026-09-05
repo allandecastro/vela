@@ -143,43 +143,35 @@ namespace Vela.Plugin
         }
 
         /// <summary>
-        /// Execute the plugin business logic with a strongly-typed target entity.
+        /// Execute the plugin business logic for a single-step plugin. The message-specific request and
+        /// response are available through <paramref name="ctx"/> (for example <c>ctx.GetTarget&lt;TEntity&gt;()</c>
+        /// or <c>ctx.GetRequest&lt;UpdateRequest&gt;()</c>). Multi-step plugins bind a typed handler per step
+        /// instead of overriding this method.
         /// </summary>
         /// <param name="ctx">The local plugin context.</param>
-        /// <param name="target">The target entity (from InputParameters["Target"]).</param>
-        protected virtual void Execute(ILocalPluginContext ctx, TEntity target)
+        protected virtual void Execute(ILocalPluginContext ctx)
         {
             throw new InvalidPluginExecutionException(
-                $"Plugin '{GetType().FullName}' must override Execute(ILocalPluginContext, {typeof(TEntity).Name}) or configure handlers in RegisterPluginSteps().");
+                $"Plugin '{GetType().FullName}' must override Execute(ILocalPluginContext) or configure handlers in RegisterPluginSteps().");
         }
 
         /// <summary>
-        /// Executes the plugin after extracting the strongly-typed target.
+        /// Routes the current pipeline execution to the matching typed step handler, or to the single-step
+        /// <see cref="Execute(ILocalPluginContext)"/> override when no handler is bound.
         /// </summary>
         /// <param name="ctx">Local plugin context.</param>
         protected sealed override void ExecuteDataversePlugin(ILocalPluginContext ctx)
         {
-            TEntity target = ResolveTarget(ctx);
             StepDefinition[] definitions = GetStepDefinitions();
             StepDefinition? matchedDefinition = ResolveSingleMatchingStep(ctx, definitions);
 
             if (matchedDefinition != null && !string.IsNullOrWhiteSpace(matchedDefinition.HandlerMethodName))
             {
-                // A single-argument handler is the typed-context form (Action<I{Msg}Context> or
-                // Action<ILocalPluginContext>); a two-argument handler is the legacy (ctx, target) form. Branch
-                // on the resolved method's arity so both coexist during the transition.
-                MethodInfo? method = GetType().GetMethod(
-                    matchedDefinition.HandlerMethodName,
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (method != null && method.GetParameters().Length == 1)
-                {
-                    object argument = BuildTypedContext(matchedDefinition.Message, ctx) ?? ctx;
-                    InvokeTypedHandler(matchedDefinition.HandlerMethodName, argument);
-                }
-                else
-                {
-                    InvokeHandler(matchedDefinition.HandlerMethodName, ctx, target);
-                }
+                // Every handler takes a single strongly-typed argument: the per-message context for a modelled
+                // message (e.g. IMergeContext<TEntity>), or the plain ILocalPluginContext for a permissive
+                // OnMessage(...) step that Vela does not model.
+                object argument = BuildTypedContext(matchedDefinition.Message, ctx) ?? ctx;
+                InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
                 return;
             }
 
@@ -189,50 +181,7 @@ namespace Vela.Plugin
                     $"Plugin '{GetType().FullName}' has multiple steps and requires a handler for each matching step.");
             }
 
-            Execute(ctx, target);
-        }
-
-        // Logical name of TEntity, read once from its early-bound attribute (mirrors StepBuilder).
-        private static readonly string EntityLogicalName =
-            typeof(TEntity).GetCustomAttribute<EntityLogicalNameAttribute>()?.LogicalName
-            ?? typeof(TEntity).Name.ToLowerInvariant();
-
-        /// <summary>
-        /// Resolves the strongly-typed primary record for the current message. Create/Update carry a full
-        /// <see cref="Entity"/> in <c>Target</c>; Delete/Associate/Disassociate/Retrieve carry an
-        /// <see cref="EntityReference"/> in <c>Target</c> and SetState an <c>EntityMoniker</c> — for those we
-        /// materialize a typed entity holding just its id. Messages with no primary record (e.g.
-        /// RetrieveMultiple) yield an empty typed entity, so <see cref="Execute"/> and handlers never see null.
-        /// </summary>
-        private static TEntity ResolveTarget(ILocalPluginContext ctx)
-        {
-            ParameterCollection inputs = ctx.PluginExecutionContext.InputParameters;
-
-            if (inputs.TryGetValue("Target", out object? target))
-            {
-                if (target is Entity entity)
-                {
-                    return entity.ToEntity<TEntity>();
-                }
-
-                if (target is EntityReference targetRef)
-                {
-                    return FromReference(targetRef);
-                }
-            }
-
-            if (inputs.TryGetValue("EntityMoniker", out object? moniker) && moniker is EntityReference monikerRef)
-            {
-                return FromReference(monikerRef);
-            }
-
-            return new Entity(EntityLogicalName).ToEntity<TEntity>();
-        }
-
-        private static TEntity FromReference(EntityReference reference)
-        {
-            string logicalName = string.IsNullOrWhiteSpace(reference.LogicalName) ? EntityLogicalName : reference.LogicalName;
-            return new Entity(logicalName) { Id = reference.Id }.ToEntity<TEntity>();
+            Execute(ctx);
         }
 
         private static string GenerateAutoStepKey(StepDefinition definition)
@@ -305,29 +254,9 @@ namespace Vela.Plugin
             return matches[0];
         }
 
-        private void InvokeHandler(string methodName, ILocalPluginContext ctx, TEntity target)
-        {
-            HandlerInvoker.ResolveAndInvoke(
-                this,
-                methodName,
-                IsSupportedHandlerSignature,
-                [ctx, target],
-                subjectLabel: $"Plugin '{GetType().FullName}'",
-                handlerNoun: "step handler",
-                expectedSignature: $"void {methodName}(ILocalPluginContext, {typeof(TEntity).Name})");
-        }
-
-        private static bool IsSupportedHandlerSignature(MethodInfo method)
-        {
-            return HandlerSignature.IsSupported(
-                method,
-                contextType => typeof(ILocalPluginContext).IsAssignableFrom(contextType),
-                targetType => targetType.IsAssignableFrom(typeof(TEntity)));
-        }
-
         // Messages Vela models with a typed context: build the per-message context so its handler receives a
-        // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for messages without a
-        // typed context (they use the uniform (ctx, target) handler / Execute).
+        // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for a permissive
+        // OnMessage(...) step that Vela does not model, so its handler receives the plain ILocalPluginContext.
         private static object? BuildTypedContext(string? message, ILocalPluginContext ctx)
         {
             return message switch

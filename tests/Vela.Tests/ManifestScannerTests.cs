@@ -160,7 +160,7 @@ public sealed class ManifestScannerTests
                 .FilteringAttributes(a => a.Name);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
         }
     }
@@ -173,20 +173,20 @@ public sealed class ManifestScannerTests
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
-                .Handler("OnCreate");
+                .Handler(OnCreate);
 
             RegisterSteps().OnUpdate()
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name)
-                .Handler("OnUpdate");
+                .Handler(OnUpdate);
         }
 
-        private void OnCreate(ILocalPluginContext ctx, TestAccount target)
+        private void OnCreate(ILocalPluginContext ctx)
         {
         }
 
-        private void OnUpdate(ILocalPluginContext ctx, TestAccount target)
+        private void OnUpdate(ILocalPluginContext ctx)
         {
         }
     }
@@ -301,7 +301,7 @@ public sealed class ManifestScannerTests
             throw new InvalidOperationException("Intentional test failure.");
         }
 
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
         }
     }
