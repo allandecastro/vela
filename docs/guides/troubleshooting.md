@@ -3,7 +3,9 @@
 1. **`RegisterCustomApi(...) can only be called inside RegisterCustomApi()`**
    - Call it only from the override `RegisterCustomApi()` method.
 2. **Step handler not found / wrong signature**
-   - Ensure instance method signature is `void Handler(ILocalPluginContext, TEntity)`.
+   - Bind the handler by method group (`.Handler(OnUpdated)`), and give it the message-typed context:
+     `void OnUpdated(IUpdateContext<TEntity> ctx)` (or `void OnX(ILocalPluginContext ctx)` for an
+     `OnMessage("...")` step). The old two-argument `(ILocalPluginContext, TEntity)` signature is no longer used.
 3. **Custom API handler not found / wrong signature**
    - Ensure signature is `void Handler(ILocalPluginContext)` for lightweight mode.
 4. **No changes in `plan`**
