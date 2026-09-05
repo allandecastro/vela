@@ -165,7 +165,15 @@ namespace Vela.Plugin
 
             if (matchedDefinition != null && !string.IsNullOrWhiteSpace(matchedDefinition.HandlerMethodName))
             {
-                InvokeHandler(matchedDefinition.HandlerMethodName, ctx, target);
+                object? typedContext = BuildTypedContext(matchedDefinition.Message, ctx);
+                if (typedContext != null)
+                {
+                    InvokeTypedHandler(matchedDefinition.HandlerMethodName, typedContext);
+                }
+                else
+                {
+                    InvokeHandler(matchedDefinition.HandlerMethodName, ctx, target);
+                }
                 return;
             }
 
@@ -309,6 +317,31 @@ namespace Vela.Plugin
                 method,
                 contextType => typeof(ILocalPluginContext).IsAssignableFrom(contextType),
                 targetType => targetType.IsAssignableFrom(typeof(TEntity)));
+        }
+
+        // Messages Vela models with a typed context: build the per-message context so its handler receives a
+        // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for messages without a
+        // typed context (they use the uniform (ctx, target) handler / Execute).
+        private static object? BuildTypedContext(string? message, ILocalPluginContext ctx)
+        {
+            return message switch
+            {
+                PluginMessages.Merge => new MergeContext<TEntity>(ctx),
+                _ => null,
+            };
+        }
+
+        private void InvokeTypedHandler(string methodName, object typedContext)
+        {
+            Type contextType = typedContext.GetType();
+            HandlerInvoker.ResolveAndInvoke(
+                this,
+                methodName,
+                method => HandlerSignature.IsSupported(method, parameterType => parameterType.IsAssignableFrom(contextType)),
+                [typedContext],
+                subjectLabel: $"Plugin '{GetType().FullName}'",
+                handlerNoun: "step handler",
+                expectedSignature: $"void {methodName}(a typed message context)");
         }
     }
 }

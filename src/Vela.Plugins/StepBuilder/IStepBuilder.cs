@@ -43,6 +43,9 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     /// <summary>Configure step to trigger on Disassociate message.</summary>
     IReferenceStepStage<TEntity> OnDisassociate();
 
+    /// <summary>Configure step to trigger on the Merge message (handler receives an <c>IMergeContext</c>).</summary>
+    IMergeStepStage<TEntity> OnMerge();
+
     /// <summary>Configure step to trigger on a custom message. Image validity is enforced at runtime.</summary>
     /// <param name="messageName">The SDK message name.</param>
     IPermissiveStepStage<TEntity> OnMessage(string messageName);

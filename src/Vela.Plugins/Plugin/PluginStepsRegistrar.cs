@@ -27,6 +27,8 @@ namespace Vela.Plugin
 
         public IReferenceStepStage<TEntity> OnDisassociate() => BeginStep().OnDisassociate();
 
+        public IMergeStepStage<TEntity> OnMerge() => BeginStep().OnMerge();
+
         public IPermissiveStepStage<TEntity> OnMessage(string messageName) => BeginStep().OnMessage(messageName);
 
         public IPermissiveStepStage<TEntity> OnMessage<TMessage>() where TMessage : class => BeginStep().OnMessage<TMessage>();

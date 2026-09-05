@@ -81,5 +81,10 @@ namespace Vela.Constants
         /// ModifyAccess message.
         /// </summary>
         public const string ModifyAccess = "ModifyAccess";
+
+        /// <summary>
+        /// Merge message.
+        /// </summary>
+        public const string Merge = "Merge";
     }
 }

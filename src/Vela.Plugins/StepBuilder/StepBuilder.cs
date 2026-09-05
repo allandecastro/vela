@@ -23,6 +23,9 @@ public sealed class StepBuilder<TEntity> :
     IDeleteStepStage<TEntity>,
     IReferenceStepStage<TEntity>,
     IPermissiveStepStage<TEntity>,
+    IMergeStepStage<TEntity>,
+    IModeSelector<IMergeStep<TEntity>>,
+    IMergeStep<TEntity>,
     IModeSelector<IFilteringSelector<TEntity, INoImageStep<TEntity>>>,
     IModeSelector<IFilteringSelector<TEntity, IPreImageStep<TEntity>>>,
     IModeSelector<IFilteringSelector<TEntity, IPostImageStep<TEntity>>>,
@@ -67,6 +70,7 @@ public sealed class StepBuilder<TEntity> :
     public IReferenceStepStage<TEntity> OnRetrieveMultiple() { _definition.Message = PluginMessages.RetrieveMultiple; return this; }
     public IReferenceStepStage<TEntity> OnAssociate() { _definition.Message = PluginMessages.Associate; return this; }
     public IReferenceStepStage<TEntity> OnDisassociate() { _definition.Message = PluginMessages.Disassociate; return this; }
+    public IMergeStepStage<TEntity> OnMerge() { _definition.Message = PluginMessages.Merge; return this; }
 
     public IPermissiveStepStage<TEntity> OnMessage(string messageName)
     {
@@ -105,6 +109,14 @@ public sealed class StepBuilder<TEntity> :
     IModeSelector<INoImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
     IModeSelector<IPreImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
     IModeSelector<IPreAndPostImageStep<TEntity>> IPermissiveStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IMergeStep<TEntity>> IMergeStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IMergeStep<TEntity>> IMergeStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IMergeStep<TEntity>> IMergeStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IMergeStep<TEntity> IModeSelector<IMergeStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+
+    INoImageStep<TEntity> IMergeStep<TEntity>.Handler(Action<IMergeContext<TEntity>> handler) { SetHandler(handler); return this; }
 
     // ---- Mode selectors ----------------------------------------------------------------------------
 
@@ -295,7 +307,7 @@ public sealed class StepBuilder<TEntity> :
         _definition.HandlerMethodName = methodName.Trim();
     }
 
-    private void SetHandler(Action<ILocalPluginContext, TEntity> handler)
+    private void SetHandler(Delegate handler)
     {
         if (handler == null)
         {
