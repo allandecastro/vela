@@ -118,6 +118,27 @@ public class AddCommandTests
         });
     }
 
+    // Every message with a typed builder method (including the Tier-2 Merge / sharing messages) renders the
+    // strongly-typed On...() call rather than the permissive OnMessage("...") escape hatch.
+    [Theory]
+    [InlineData("Merge")]
+    [InlineData("GrantAccess")]
+    [InlineData("ModifyAccess")]
+    [InlineData("RevokeAccess")]
+    [InlineData("Delete")]
+    public void Add_Plugin_KnownMessage_RendersTypedOnCall(string message)
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--project", project, "--force"]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
+            Assert.Contains($"RegisterSteps().On{message}()", content);
+            Assert.DoesNotContain("OnMessage(", content);
+        });
+    }
+
     [Fact]
     public void Add_Plugin_WithoutEntity_Fails()
     {
