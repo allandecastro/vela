@@ -66,10 +66,17 @@ The tools tests include an **opt-in build smoke test** (`Generate_ThenDotnetBuil
 actually compiles the generated C#. It is skipped unless enabled (it restores/builds, so it needs the SDK
 and the Microsoft packages):
 
-```powershell
-$env:VELA_BUILD_SMOKE = "1"
-dotnet test .\tests\Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
+```bash
+rm -rf ~/.nuget/packages/vela.plugins ~/.nuget/packages/vela.testing   # see cache note below
+VELA_BUILD_SMOKE=1 dotnet test tests/Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
 ```
+
+> [!IMPORTANT]
+> The smoke test packs the framework into a local feed at version **1.0.0**, but the global NuGet cache
+> (`~/.nuget/packages/vela.plugins/1.0.0`, `.../vela.testing/1.0.0`) *shadows* that feed. If a stale 1.0.0 is
+> cached, the generated code is compiled against an **old framework** and you get misleading errors. Delete those
+> two cache folders before running the smoke test (or any manual compile of `vela init` / `vela add` output
+> against the local framework) so restore picks up the freshly packed sources.
 
 ## Release
 
