@@ -17,9 +17,9 @@ permissions:
 
 jobs:
   pack-and-publish:
-    # Self-hosted Windows runner: net462 (the harness) only builds on Windows, so packing must run there.
-    runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 30 # cap a hung restore/build/publish on the self-hosted (personal) machine
+    # GitHub-hosted Windows runner: net462 (the harness) only builds on Windows, so packing must run there.
+    runs-on: windows-latest
+    timeout-minutes: 30 # cap a hung restore/build/publish
     env:
       # The service account can't write to the default install root 'C:\Program Files\dotnet', so setup-dotnet
       # installs into the workspace instead (it adds this to PATH for the run steps). Same as ci.yml.
@@ -86,7 +86,7 @@ jobs:
         run: dotnet nuget push "artifacts\**\*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create GitHub Release with packages
-        # Use the action rather than `gh release create`: the self-hosted runner has no GitHub CLI installed.
+        # Use the action for a declarative, pinned release step (uploads the packed artifacts to the release).
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}

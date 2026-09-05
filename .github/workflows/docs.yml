@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build-deploy:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -38,9 +38,8 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
-      # actions/upload-pages-artifact shells out to `bash`+`tar`, which the self-hosted Windows runner
-      # doesn't have on PATH. Build the Pages artifact (a `github-pages` artifact containing `artifact.tar`)
-      # ourselves with the native Windows tar.exe, then let deploy-pages consume it.
+      # Build the Pages artifact (a `github-pages` artifact containing `artifact.tar`) ourselves with the
+      # native Windows tar.exe rather than actions/upload-pages-artifact, then let deploy-pages consume it.
       - name: Archive the Pages artifact (Windows tar)
         shell: powershell
         run: |
