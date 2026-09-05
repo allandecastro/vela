@@ -64,8 +64,9 @@ internal sealed record ScaffoldOptions(
 
     // Offline fallback only. `vela init` normally resolves the latest published Vela.Plugins version from
     // nuget.org (see ResolveLatestFrameworkVersion); this is used when that lookup fails or `--core-version`
-    // is not passed and the machine is offline. Keep it a real, published version.
-    public const string DefaultCoreVersion = "0.2.0";
+    // is not passed and the machine is offline. Keep it a real, published version - and at least the version
+    // whose API the scaffolded code needs (the typed message contexts landed in 0.3.0).
+    public const string DefaultCoreVersion = "0.3.0";
 
     /// <summary>True when the value is a valid solution name (folder / .sln-file safe).</summary>
     public static bool IsValidSolutionName(string value) =>

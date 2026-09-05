@@ -22,11 +22,13 @@ All notable changes to Vela are documented here. The format is based on
 ## [Unreleased]
 
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
-(`cli-vX.Y.Z` / `framework-vX.Y.Z`).
+(`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
-### Framework (next `framework-vX.Y.Z`)
+## [0.3.0] - 2026-09-05
 
-#### Added
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.3.0`.
+
+### Added
 
 - **Typed request/response per message.** A step handler now receives a message-typed context that exposes a
   strongly-typed `ctx.Request` (and, in a `PostOperation` step, `ctx.Response`) for the modelled messages -
@@ -42,7 +44,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   UpdateMultiple). A step registered through `OnMessage("...")` (a message Vela does not model) still receives the
   plain `ILocalPluginContext`.
 
-#### Removed
+### Removed
 
 - **BREAKING - the untyped `target` handler parameter is gone.** Step handlers and the single-step `Execute`
   override no longer receive a fabricated `TEntity target` second argument, and `.Handler(...)` no longer accepts
@@ -58,6 +60,27 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
     (Delete/Associate/Disassociate), or `ctx.GetRequest<TRequest>()`.
   - The framework no longer materializes a typed target from an `EntityReference`/`EntityMoniker` or an empty
     entity for target-less messages; read the id directly from the request or `ctx.GetTargetRef()` instead.
+
+## [0.1.18] - 2026-09-05
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.18`. Aligns scaffolding with the framework `0.3.0` typed-handler API.
+
+### Changed
+
+- Scaffolded plugins and `vela add` now use the typed-handler API: multi-step handlers bind by method group to the
+  message-typed context (`.Handler(OnX)` where `void OnX(IUpdateContext<Account> ctx)`), and single-step plugins
+  override `Execute(ILocalPluginContext ctx)` (reading the record via `ctx.GetTarget<T>()` / `ctx.GetRequest<...>()`).
+- `vela add plugin --message <M>` now emits the typed `On<M>()` for the newly modelled `Merge`, `GrantAccess`,
+  `ModifyAccess` and `RevokeAccess` messages (added to the CLI's known-message list); the deprecated `SetState` /
+  `SetStateDynamicEntity` / `Assign` still render `OnMessage("...")`.
+- The offline fallback framework version referenced by `vela init` is bumped to `0.3.0` (it normally resolves the
+  latest published version from nuget.org).
+
+### Added
+
+- `vela init` now generates an `AccountMessageReference.cs` cheat-sheet: one dormant (`.Disabled()`) handler per
+  modelled message, showcasing every typed context and the `ctx.Target` / `ctx.TargetReference` /
+  `ctx.TargetCollection` accessors. Safe to deploy (nothing fires) and meant to be copied then deleted.
 
 ## [0.2.1] - 2026-09-03
 
