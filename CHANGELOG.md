@@ -35,8 +35,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   request (`CreateRequest`, `UpdateRequest`, `MergeRequest`, ...), inferred from the message with no cast:
   `void OnUpdated(IUpdateContext<Account> ctx)` reads `ctx.Request.Target`, `void OnMerged(IMergeContext<Account> ctx)`
   reads `ctx.Request.SubordinateId`. New `ctx.GetRequest<TRequest>()` / `ctx.GetResponse<TResponse>()` context
-  helpers expose the same typed views over the pipeline's Input/Output parameters. A step registered through
-  `OnMessage("...")` (a message Vela does not model) still receives the plain `ILocalPluginContext`.
+  helpers expose the same typed views over the pipeline's Input/Output parameters. The primary record is also
+  exposed already typed on the context, with no cast or type argument: `ctx.Target` (the early-bound entity for
+  Create/Update), `ctx.TargetReference` (the `EntityReference` for Delete/Retrieve/Associate/Disassociate/Merge/
+  GrantAccess/ModifyAccess/RevokeAccess) and `ctx.TargetCollection` (the `EntityCollection` for CreateMultiple/
+  UpdateMultiple). A step registered through `OnMessage("...")` (a message Vela does not model) still receives the
+  plain `ILocalPluginContext`.
 
 #### Removed
 

@@ -62,5 +62,47 @@ namespace Vela.Tests
         {
             Assert.Throws<ArgumentNullException>(() => new MergeContext<TestAccount>(null!));
         }
+
+        [Fact]
+        public void EntityTargetContext_ExposesTheTypedTarget()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            Guid id = Guid.NewGuid();
+            inner.PluginExecutionContext.InputParameters["Target"] = new TestAccount { Id = id, Name = "Zava" };
+
+            IUpdateContext<TestAccount> ctx = new UpdateContext<TestAccount>(inner);
+
+            // ctx.Target is the early-bound entity - no cast, no type argument.
+            TestAccount target = ctx.Target;
+            Assert.Equal(id, target.Id);
+            Assert.Equal("Zava", target.Name);
+        }
+
+        [Fact]
+        public void ReferenceTargetContext_ExposesTheTargetReference()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            Guid id = Guid.NewGuid();
+            inner.PluginExecutionContext.InputParameters["Target"] = new EntityReference("account", id);
+
+            IDeleteContext<TestAccount> ctx = new DeleteContext<TestAccount>(inner);
+
+            Assert.Equal(id, ctx.TargetReference.Id);
+            Assert.Equal("account", ctx.TargetReference.LogicalName);
+        }
+
+        [Fact]
+        public void CollectionTargetContext_ExposesTheTargetsCollection()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            EntityCollection targets = new EntityCollection();
+            targets.Entities.Add(new TestAccount { Id = Guid.NewGuid(), Name = "A" });
+            targets.Entities.Add(new TestAccount { Id = Guid.NewGuid(), Name = "B" });
+            inner.PluginExecutionContext.InputParameters["Targets"] = targets;
+
+            ICreateMultipleContext<TestAccount> ctx = new CreateMultipleContext<TestAccount>(inner);
+
+            Assert.Equal(2, ctx.TargetCollection.Entities.Count);
+        }
     }
 }

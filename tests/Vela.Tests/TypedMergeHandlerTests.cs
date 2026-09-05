@@ -46,7 +46,7 @@ namespace Vela.Tests
 
             private void OnUpdated(IUpdateContext<TestAccount> ctx)
             {
-                CapturedName = ctx.Request.Target.ToEntity<TestAccount>().Name;   // typed, inferred
+                CapturedName = ctx.Target.Name;   // typed, inferred, no cast
             }
         }
 

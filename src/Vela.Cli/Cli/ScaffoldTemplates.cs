@@ -1446,6 +1446,104 @@ namespace {{prefix}}.Plugins.Account.Plugins
 }
 """;
 
+    public static string AccountMessageReference(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Account.Plugins
+{
+    using Vela.Constants;
+    using Vela.Context;
+    using Vela.Plugin;
+    using Vela.StepBuilder;
+    using {{prefix}}.Shared.Models.Generated;
+
+    /// <summary>
+    /// REFERENCE / CHEAT-SHEET - one handler per typed message Vela models, showing the strongly-typed context
+    /// each receives. Every step is registered <c>.Disabled()</c>, so this class is safe to deploy: nothing fires
+    /// until you enable a step. Copy the handler for the message you need into a real plugin, then delete this
+    /// file. Each handler infers its request/response from the message (no cast); the primary record is available
+    /// already typed as <c>ctx.Target</c> / <c>ctx.TargetReference</c> / <c>ctx.Targets</c>.
+    /// </summary>
+    public sealed class AccountMessageReference(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+    {
+        protected override void RegisterPluginSteps()
+        {
+            // Create / Update carry a full entity Target; both require at least one filtering attribute.
+            RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnCreate).Disabled();
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnUpdate).Disabled();
+
+            // Delete carries an EntityReference Target.
+            RegisterSteps().OnDelete().PreOperation().Mode(ExecutionMode.Synchronous).Handler(OnDelete).Disabled();
+
+            // Bulk messages carry a Targets collection; they also require a filtering attribute.
+            RegisterSteps().OnCreateMultiple().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnCreateMultiple).Disabled();
+            RegisterSteps().OnUpdateMultiple().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnUpdateMultiple).Disabled();
+
+            // Read messages.
+            RegisterSteps().OnRetrieve().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrieve).Disabled();
+            RegisterSteps().OnRetrieveMultiple().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrieveMultiple).Disabled();
+
+            // Relationship messages.
+            RegisterSteps().OnAssociate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAssociate).Disabled();
+            RegisterSteps().OnDisassociate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnDisassociate).Disabled();
+
+            // Merge and sharing (access) messages.
+            RegisterSteps().OnMerge().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnMerge).Disabled();
+            RegisterSteps().OnGrantAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnGrantAccess).Disabled();
+            RegisterSteps().OnModifyAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnModifyAccess).Disabled();
+            RegisterSteps().OnRevokeAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRevokeAccess).Disabled();
+        }
+
+        // ctx.Target is the early-bound Account; ctx.Response.id is the new record id (Post step).
+        private void OnCreate(ICreateContext<Account> ctx)
+            => ctx.Trace("Create {0} -> id {1}", ctx.Target.Name, ctx.Response.id);
+
+        // ctx.Target carries the columns that changed on this update.
+        private void OnUpdate(IUpdateContext<Account> ctx)
+            => ctx.Trace("Update {0}", ctx.Target.Id);
+
+        // Delete carries an EntityReference, exposed as ctx.TargetReference.
+        private void OnDelete(IDeleteContext<Account> ctx)
+            => ctx.Trace("Delete {0}", ctx.TargetReference.Id);
+
+        // Bulk create: ctx.TargetCollection is the whole batch; ctx.Response.Ids are the new ids.
+        private void OnCreateMultiple(ICreateMultipleContext<Account> ctx)
+            => ctx.Trace("CreateMultiple of {0}", ctx.TargetCollection.Entities.Count);
+
+        private void OnUpdateMultiple(IUpdateMultipleContext<Account> ctx)
+            => ctx.Trace("UpdateMultiple of {0}", ctx.TargetCollection.Entities.Count);
+
+        // Retrieve: ctx.TargetReference is the record read; ctx.Request.ColumnSet the requested columns.
+        private void OnRetrieve(IRetrieveContext<Account> ctx)
+            => ctx.Trace("Retrieve {0} ({1} columns)", ctx.TargetReference.Id, ctx.Request.ColumnSet.Columns.Count);
+
+        // RetrieveMultiple has no primary Target; the query is on ctx.Request.Query.
+        private void OnRetrieveMultiple(IRetrieveMultipleContext<Account> ctx)
+            => ctx.Trace("RetrieveMultiple, query type {0}", ctx.Request.Query.GetType().Name);
+
+        // Associate / Disassociate: ctx.TargetReference plus ctx.Request.Relationship / RelatedEntities.
+        private void OnAssociate(IAssociateContext<Account> ctx)
+            => ctx.Trace("Associate {0} via {1}", ctx.TargetReference.Id, ctx.Request.Relationship.SchemaName);
+
+        private void OnDisassociate(IDisassociateContext<Account> ctx)
+            => ctx.Trace("Disassociate {0} via {1}", ctx.TargetReference.Id, ctx.Request.Relationship.SchemaName);
+
+        // Merge: ctx.TargetReference is the master, ctx.Request.SubordinateId the record merged into it.
+        private void OnMerge(IMergeContext<Account> ctx)
+            => ctx.Trace("Merge {0} into {1}", ctx.Request.SubordinateId, ctx.TargetReference.Id);
+
+        // Sharing: ctx.Request.PrincipalAccess (grant/modify) and ctx.Request.Revokee (revoke).
+        private void OnGrantAccess(IGrantAccessContext<Account> ctx)
+            => ctx.Trace("Grant on {0} to {1}", ctx.TargetReference.Id, ctx.Request.PrincipalAccess.Principal.Id);
+
+        private void OnModifyAccess(IModifyAccessContext<Account> ctx)
+            => ctx.Trace("Modify access on {0}", ctx.TargetReference.Id);
+
+        private void OnRevokeAccess(IRevokeAccessContext<Account> ctx)
+            => ctx.Trace("Revoke on {0} from {1}", ctx.TargetReference.Id, ctx.Request.Revokee.Id);
+    }
+}
+""";
+
     public static string ContactRouterPlugin(string prefix) =>
 $$"""
 namespace {{prefix}}.Plugins.Contact.Plugins
@@ -1495,14 +1593,15 @@ namespace {{prefix}}.Plugins.Contact.Plugins
 
         // Each handler receives the message-typed context: ICreateContext exposes a CreateRequest, IUpdateContext
         // an UpdateRequest (in a Post step, a matching Response too), each strongly typed to this message. The
-        // context is still an ILocalPluginContext, so images, services and tracing remain available.
+        // record is available already typed as ctx.Target - no cast, no type argument. The context is still an
+        // ILocalPluginContext, so images, services and tracing remain available.
         private void OnCreatePost(ICreateContext<Contact> ctx)
         {
             Contact postImage = ctx.GetPostImage<Contact>();
             ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
 
             IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
-            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, ctx.Request.Target.Id);
+            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, ctx.Target.Id);
             if (duplicateId.HasValue)
             {
                 ctx.Trace("Possible duplicate of contact {0} (same email).", duplicateId.Value);
@@ -1512,8 +1611,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         private void OnUpdatePost(IUpdateContext<Contact> ctx)
         {
             Contact preImage = ctx.GetPreImage<Contact>();
-            Contact target = ctx.Request.Target.ToEntity<Contact>();
-            ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, target.LastName);
+            ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Target.LastName);
         }
     }
 }
