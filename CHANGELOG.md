@@ -42,7 +42,8 @@ Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.3.0
   Create/Update), `ctx.TargetReference` (the `EntityReference` for Delete/Retrieve/Associate/Disassociate/Merge/
   GrantAccess/ModifyAccess/RevokeAccess) and `ctx.TargetCollection` (the `EntityCollection` for CreateMultiple/
   UpdateMultiple). A step registered through `OnMessage("...")` (a message Vela does not model) still receives the
-  plain `ILocalPluginContext`.
+  plain `ILocalPluginContext` and binds an untyped `.Handler(Action<ILocalPluginContext>)` (so a permissive step
+  works inside a multi-step router; read its inputs with `ctx.GetRequest<TRequest>()` / `ctx.GetInputParameter`).
 
 ### Removed
 
