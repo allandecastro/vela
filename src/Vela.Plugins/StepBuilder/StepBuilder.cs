@@ -21,11 +21,24 @@ public sealed class StepBuilder<TEntity> :
     ICreateStepStage<TEntity>,
     IUpdateStepStage<TEntity>,
     IDeleteStepStage<TEntity>,
-    IReferenceStepStage<TEntity>,
+    IRetrieveStepStage<TEntity>,
+    IRetrieveMultipleStepStage<TEntity>,
+    IAssociateStepStage<TEntity>,
+    IDisassociateStepStage<TEntity>,
+    IGrantAccessStepStage<TEntity>,
+    IModifyAccessStepStage<TEntity>,
+    IRevokeAccessStepStage<TEntity>,
     IPermissiveStepStage<TEntity>,
     IMergeStepStage<TEntity>,
     IModeSelector<IMergeStep<TEntity>>,
     IMergeStep<TEntity>,
+    IModeSelector<IRetrieveStep<TEntity>>, IRetrieveStep<TEntity>,
+    IModeSelector<IRetrieveMultipleStep<TEntity>>, IRetrieveMultipleStep<TEntity>,
+    IModeSelector<IAssociateStep<TEntity>>, IAssociateStep<TEntity>,
+    IModeSelector<IDisassociateStep<TEntity>>, IDisassociateStep<TEntity>,
+    IModeSelector<IGrantAccessStep<TEntity>>, IGrantAccessStep<TEntity>,
+    IModeSelector<IModifyAccessStep<TEntity>>, IModifyAccessStep<TEntity>,
+    IModeSelector<IRevokeAccessStep<TEntity>>, IRevokeAccessStep<TEntity>,
     IModeSelector<IFilteringSelector<TEntity, INoImageStep<TEntity>>>,
     IModeSelector<IFilteringSelector<TEntity, IPreImageStep<TEntity>>>,
     IModeSelector<IFilteringSelector<TEntity, IPostImageStep<TEntity>>>,
@@ -66,11 +79,14 @@ public sealed class StepBuilder<TEntity> :
     public ICreateStepStage<TEntity> OnCreateMultiple() { _definition.Message = PluginMessages.CreateMultiple; return this; }
     public IUpdateStepStage<TEntity> OnUpdateMultiple() { _definition.Message = PluginMessages.UpdateMultiple; return this; }
     public IDeleteStepStage<TEntity> OnDelete() { _definition.Message = PluginMessages.Delete; return this; }
-    public IReferenceStepStage<TEntity> OnRetrieve() { _definition.Message = PluginMessages.Retrieve; return this; }
-    public IReferenceStepStage<TEntity> OnRetrieveMultiple() { _definition.Message = PluginMessages.RetrieveMultiple; return this; }
-    public IReferenceStepStage<TEntity> OnAssociate() { _definition.Message = PluginMessages.Associate; return this; }
-    public IReferenceStepStage<TEntity> OnDisassociate() { _definition.Message = PluginMessages.Disassociate; return this; }
+    public IRetrieveStepStage<TEntity> OnRetrieve() { _definition.Message = PluginMessages.Retrieve; return this; }
+    public IRetrieveMultipleStepStage<TEntity> OnRetrieveMultiple() { _definition.Message = PluginMessages.RetrieveMultiple; return this; }
+    public IAssociateStepStage<TEntity> OnAssociate() { _definition.Message = PluginMessages.Associate; return this; }
+    public IDisassociateStepStage<TEntity> OnDisassociate() { _definition.Message = PluginMessages.Disassociate; return this; }
     public IMergeStepStage<TEntity> OnMerge() { _definition.Message = PluginMessages.Merge; return this; }
+    public IGrantAccessStepStage<TEntity> OnGrantAccess() { _definition.Message = PluginMessages.GrantAccess; return this; }
+    public IModifyAccessStepStage<TEntity> OnModifyAccess() { _definition.Message = PluginMessages.ModifyAccess; return this; }
+    public IRevokeAccessStepStage<TEntity> OnRevokeAccess() { _definition.Message = PluginMessages.RevokeAccess; return this; }
 
     public IPermissiveStepStage<TEntity> OnMessage(string messageName)
     {
@@ -102,9 +118,33 @@ public sealed class StepBuilder<TEntity> :
     IModeSelector<IPreImageStep<TEntity>> IDeleteStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
     IModeSelector<IPreImageStep<TEntity>> IDeleteStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
 
-    IModeSelector<INoImageStep<TEntity>> IReferenceStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-    IModeSelector<INoImageStep<TEntity>> IReferenceStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-    IModeSelector<INoImageStep<TEntity>> IReferenceStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IModeSelector<IRetrieveStep<TEntity>> IRetrieveStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IRetrieveStep<TEntity>> IRetrieveStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IRetrieveStep<TEntity>> IRetrieveStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IRetrieveMultipleStep<TEntity>> IRetrieveMultipleStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IRetrieveMultipleStep<TEntity>> IRetrieveMultipleStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IRetrieveMultipleStep<TEntity>> IRetrieveMultipleStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IAssociateStep<TEntity>> IAssociateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IAssociateStep<TEntity>> IAssociateStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IAssociateStep<TEntity>> IAssociateStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IDisassociateStep<TEntity>> IDisassociateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IDisassociateStep<TEntity>> IDisassociateStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IDisassociateStep<TEntity>> IDisassociateStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IGrantAccessStep<TEntity>> IGrantAccessStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IGrantAccessStep<TEntity>> IGrantAccessStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IGrantAccessStep<TEntity>> IGrantAccessStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IModifyAccessStep<TEntity>> IModifyAccessStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IModifyAccessStep<TEntity>> IModifyAccessStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IModifyAccessStep<TEntity>> IModifyAccessStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IRevokeAccessStep<TEntity>> IRevokeAccessStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IRevokeAccessStep<TEntity>> IRevokeAccessStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IRevokeAccessStep<TEntity>> IRevokeAccessStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
 
     IModeSelector<INoImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
     IModeSelector<IPreImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
@@ -115,8 +155,22 @@ public sealed class StepBuilder<TEntity> :
     IModeSelector<IMergeStep<TEntity>> IMergeStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
 
     IMergeStep<TEntity> IModeSelector<IMergeStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IRetrieveStep<TEntity> IModeSelector<IRetrieveStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IRetrieveMultipleStep<TEntity> IModeSelector<IRetrieveMultipleStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IAssociateStep<TEntity> IModeSelector<IAssociateStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IDisassociateStep<TEntity> IModeSelector<IDisassociateStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IGrantAccessStep<TEntity> IModeSelector<IGrantAccessStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IModifyAccessStep<TEntity> IModeSelector<IModifyAccessStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IRevokeAccessStep<TEntity> IModeSelector<IRevokeAccessStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
 
     INoImageStep<TEntity> IMergeStep<TEntity>.Handler(Action<IMergeContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IRetrieveStep<TEntity>.Handler(Action<IRetrieveContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IRetrieveMultipleStep<TEntity>.Handler(Action<IRetrieveMultipleContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IAssociateStep<TEntity>.Handler(Action<IAssociateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IDisassociateStep<TEntity>.Handler(Action<IDisassociateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IGrantAccessStep<TEntity>.Handler(Action<IGrantAccessContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IModifyAccessStep<TEntity>.Handler(Action<IModifyAccessContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IRevokeAccessStep<TEntity>.Handler(Action<IRevokeAccessContext<TEntity>> handler) { SetHandler(handler); return this; }
 
     // ---- Mode selectors ----------------------------------------------------------------------------
 

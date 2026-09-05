@@ -32,19 +32,28 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     IDeleteStepStage<TEntity> OnDelete();
 
     /// <summary>Configure step to trigger on Retrieve message.</summary>
-    IReferenceStepStage<TEntity> OnRetrieve();
+    IRetrieveStepStage<TEntity> OnRetrieve();
 
     /// <summary>Configure step to trigger on RetrieveMultiple message.</summary>
-    IReferenceStepStage<TEntity> OnRetrieveMultiple();
+    IRetrieveMultipleStepStage<TEntity> OnRetrieveMultiple();
 
     /// <summary>Configure step to trigger on Associate message.</summary>
-    IReferenceStepStage<TEntity> OnAssociate();
+    IAssociateStepStage<TEntity> OnAssociate();
 
     /// <summary>Configure step to trigger on Disassociate message.</summary>
-    IReferenceStepStage<TEntity> OnDisassociate();
+    IDisassociateStepStage<TEntity> OnDisassociate();
 
     /// <summary>Configure step to trigger on the Merge message (handler receives an <c>IMergeContext</c>).</summary>
     IMergeStepStage<TEntity> OnMerge();
+
+    /// <summary>Configure step to trigger on the GrantAccess message.</summary>
+    IGrantAccessStepStage<TEntity> OnGrantAccess();
+
+    /// <summary>Configure step to trigger on the ModifyAccess message.</summary>
+    IModifyAccessStepStage<TEntity> OnModifyAccess();
+
+    /// <summary>Configure step to trigger on the RevokeAccess message.</summary>
+    IRevokeAccessStepStage<TEntity> OnRevokeAccess();
 
     /// <summary>Configure step to trigger on a custom message. Image validity is enforced at runtime.</summary>
     /// <param name="messageName">The SDK message name.</param>

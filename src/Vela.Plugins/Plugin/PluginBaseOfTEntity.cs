@@ -327,6 +327,13 @@ namespace Vela.Plugin
             return message switch
             {
                 PluginMessages.Merge => new MergeContext<TEntity>(ctx),
+                PluginMessages.Retrieve => new RetrieveContext<TEntity>(ctx),
+                PluginMessages.RetrieveMultiple => new RetrieveMultipleContext<TEntity>(ctx),
+                PluginMessages.Associate => new AssociateContext<TEntity>(ctx),
+                PluginMessages.Disassociate => new DisassociateContext<TEntity>(ctx),
+                PluginMessages.GrantAccess => new GrantAccessContext<TEntity>(ctx),
+                PluginMessages.ModifyAccess => new ModifyAccessContext<TEntity>(ctx),
+                PluginMessages.RevokeAccess => new RevokeAccessContext<TEntity>(ctx),
                 _ => null,
             };
         }
