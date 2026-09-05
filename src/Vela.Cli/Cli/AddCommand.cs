@@ -27,7 +27,7 @@ internal static class AddCommand
     private static readonly string[] KnownMessages =
     [
         "Create", "Update", "CreateMultiple", "UpdateMultiple", "Delete", "Retrieve", "RetrieveMultiple",
-        "Associate", "Disassociate",
+        "Associate", "Disassociate", "Merge", "GrantAccess", "ModifyAccess", "RevokeAccess",
     ];
 
     public static int Run(string[] args)

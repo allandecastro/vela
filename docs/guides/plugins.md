@@ -28,8 +28,9 @@ namespace Zava.Plugins.Account
                     .Attributes(a => a.Name);          // Include Name in post-image
         }
 
-        protected override void Execute(ILocalPluginContext ctx, Account target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
+            var target = ctx.GetTarget<Account>();
             var preImage = ctx.GetPreImage<Account>();
             ctx.Trace($"Name changed from {preImage.Name} to {target.Name}");
         }
@@ -67,13 +68,17 @@ public class AccountStepRouter : EntityPluginBase<Account>
                 .Attributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1);
     }
 
-    private void OnCreatePost(ILocalPluginContext ctx, Account target)
+    // Each handler takes the message-typed context: ICreateContext exposes a typed CreateRequest, IUpdateContext
+    // a typed UpdateRequest (plus, in a Post step, the matching Response). It is still an ILocalPluginContext, so
+    // images, services and tracing remain available.
+    private void OnCreatePost(ICreateContext<Account> ctx)
     {
+        var created = ctx.Target;                               // typed Account, no cast, no type argument
         var postImage = ctx.GetPostImage<Account>();
         ctx.Trace($"Account created: {postImage.Name} / {postImage.EmailAddress1}");
     }
 
-    private void OnUpdatePost(ILocalPluginContext ctx, Account target)
+    private void OnUpdatePost(IUpdateContext<Account> ctx)
     {
         var preImage = ctx.GetPreImage<Account>();
         var postImage = ctx.GetPostImage<Account>();
@@ -83,8 +88,11 @@ public class AccountStepRouter : EntityPluginBase<Account>
 ```
 
 Each step in a multi-step plugin must have a **distinct trigger** (message + stage + mode + entity) and its own
-`Handler(...)`. Two steps with the same trigger can't be told apart at runtime, so `Build()` rejects them - put
-the shared logic in one step (combine the filtering attributes) or use a different stage/mode.
+`Handler(...)` (bound by method group, not a string). Two steps with the same trigger can't be told apart at
+runtime, so `Build()` rejects them - put the shared logic in one step (combine the filtering attributes) or use a
+different stage/mode. Because the handler is bound as a method group, the message and the handler's context type
+are checked at compile time: binding an `OnUpdate()` step to a `void Handle(ICreateContext<Account> ctx)` method
+does not compile.
 
 ## Do / Don't (plugins)
 
@@ -119,10 +127,44 @@ The fluent builder enforces a specific order:
 
 Short aliases are available when you prefer action-style naming: `AddPreImage(...)`, `AddPostImage(...)`.
 
-**Target across message families** - `EntityPluginBase<T>` hands `Execute(ctx, target)` (and step handlers) a strongly-typed
-target for every message: a full entity for `Create`/`Update`, an id-only entity built from the `EntityReference` for
-`Delete`/`Associate`/`Disassociate`/`Retrieve` (and from the `EntityMoniker` for `SetState`), and an empty typed entity for
-messages with no primary record (e.g. `RetrieveMultiple`) so the target is never null.
+**Typed request and response** - a step handler takes the message-typed context, so `ctx.Request` is the
+strongly-typed SDK request for that message (`CreateRequest`, `UpdateRequest`, `MergeRequest`, `GrantAccessRequest`,
+...) and, in a `PostOperation` step, `ctx.Response` is the matching response - each inferred from the message, with no
+cast. Read message-specific fields off `ctx.Request` (for example the merge subordinate from
+`ctx.Request.SubordinateId`).
+
+For the primary record the context also carries it **already typed**, so a handler never re-states the entity type
+or casts: `ctx.Target` (the early-bound `TEntity` for `Create`/`Update`), `ctx.TargetReference` (the
+`EntityReference` for `Delete`/`Retrieve`/`Associate`/`Disassociate`/`Merge`/`GrantAccess`/`ModifyAccess`/
+`RevokeAccess`) and `ctx.TargetCollection` (the `EntityCollection` for `CreateMultiple`/`UpdateMultiple`). The modelled
+messages with a typed context are `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`,
+`RetrieveMultiple`, `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess` and `RevokeAccess`; a step
+registered through `OnMessage("...")` receives the plain `ILocalPluginContext`.
+
+A single-step `Execute(ctx)` override is not scoped to one message, so it does not expose `ctx.Request`. Read the
+record there with `ctx.GetTarget<T>()` (a full entity for `Create`/`Update`), `ctx.GetTargetRef()` (the
+`EntityReference` for `Delete`/`Associate`/`Disassociate`), or the message-specific `ctx.GetRequest<TRequest>()`.
+
+| Message method | Handler context | `ctx.Request` | Primary record |
+| --- | --- | --- | --- |
+| `OnCreate()` | `ICreateContext<T>` | `CreateRequest` | `ctx.Target` (`T`), `ctx.Response.id` |
+| `OnUpdate()` | `IUpdateContext<T>` | `UpdateRequest` | `ctx.Target` (`T`) |
+| `OnDelete()` | `IDeleteContext<T>` | `DeleteRequest` | `ctx.TargetReference` |
+| `OnCreateMultiple()` | `ICreateMultipleContext<T>` | `CreateMultipleRequest` | `ctx.TargetCollection`, `ctx.Response.Ids` |
+| `OnUpdateMultiple()` | `IUpdateMultipleContext<T>` | `UpdateMultipleRequest` | `ctx.TargetCollection` |
+| `OnRetrieve()` | `IRetrieveContext<T>` | `RetrieveRequest` | `ctx.TargetReference`, `ctx.Response.Entity` |
+| `OnRetrieveMultiple()` | `IRetrieveMultipleContext<T>` | `RetrieveMultipleRequest` | `ctx.Request.Query` |
+| `OnAssociate()` | `IAssociateContext<T>` | `AssociateRequest` | `ctx.TargetReference`, `ctx.Request.Relationship` |
+| `OnDisassociate()` | `IDisassociateContext<T>` | `DisassociateRequest` | `ctx.TargetReference` |
+| `OnMerge()` | `IMergeContext<T>` | `MergeRequest` | `ctx.TargetReference`, `ctx.Request.SubordinateId` |
+| `OnGrantAccess()` | `IGrantAccessContext<T>` | `GrantAccessRequest` | `ctx.TargetReference`, `ctx.Request.PrincipalAccess` |
+| `OnModifyAccess()` | `IModifyAccessContext<T>` | `ModifyAccessRequest` | `ctx.TargetReference` |
+| `OnRevokeAccess()` | `IRevokeAccessContext<T>` | `RevokeAccessRequest` | `ctx.TargetReference`, `ctx.Request.Revokee` |
+
+The scaffold generates an `AccountMessageReference.cs` cheat-sheet with one dormant (`Disabled()`) handler per
+row, so you can copy the exact shape for the message you need. The deprecated `SetState` / `SetStateDynamicEntity`
+and `Assign` messages are intentionally not modelled: update `statecode`/`statuscode` or `ownerid` with
+`OnUpdate()` instead.
 
 **Enabled / disabled** - steps are registered enabled by default. Mark a step `Disabled()` to register it dormant
 (kill-switch or phased rollout); `apply` sets the step's state accordingly and `plan` shows the transition. Re-enabling
@@ -196,8 +238,9 @@ own phase label - a checkpoint around a risky step. (The framework already cover
 point re-emitting `start` yourself.) Use the lighter `TraceMethod(...)` when you don't need the full payload:
 
 ```csharp
-protected override void Execute(ILocalPluginContext ctx, Account target)
+protected override void Execute(ILocalPluginContext ctx)
 {
+    var target = ctx.GetTarget<Account>();
     ctx.TraceMethod("computing credit limit");       // lightweight: method/message/stage/depth, no payload
     var limit = ComputeCreditLimit(target);
 

@@ -32,7 +32,7 @@ public sealed class EntityPluginBaseCoverageTests
         protected override void RegisterPluginSteps()
             => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(a => a.Name); // no .Key() -> auto-generated
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target) { }
+        protected override void Execute(ILocalPluginContext ctx) { }
     }
 
     private sealed class DuplicateTriggerSteps(string u, string s) : EntityPluginBase<TestAccount>(u, s)
@@ -43,7 +43,7 @@ public sealed class EntityPluginBaseCoverageTests
             RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
             RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.AccountId);
         }
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target) { }
+        protected override void Execute(ILocalPluginContext ctx) { }
     }
 
     private sealed class MultiStepMissingHandler(string u, string s) : EntityPluginBase<TestAccount>(u, s)
@@ -55,7 +55,7 @@ public sealed class EntityPluginBaseCoverageTests
             RegisterSteps().OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
             RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
         }
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target) { }
+        protected override void Execute(ILocalPluginContext ctx) { }
     }
 
     private sealed class NoNamePlugin(string u, string s) : EntityPluginBase<NoNameEntity>(u, s)
@@ -63,7 +63,7 @@ public sealed class EntityPluginBaseCoverageTests
         public NoNamePlugin() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
             => RegisterSteps().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous);
-        protected override void Execute(ILocalPluginContext ctx, NoNameEntity target) { }
+        protected override void Execute(ILocalPluginContext ctx) { }
     }
 
     private sealed class RegisterOutside(string u, string s) : EntityPluginBase<TestAccount>(u, s)
@@ -72,7 +72,7 @@ public sealed class EntityPluginBaseCoverageTests
         public void CallRegisterStepsOutside() => RegisterSteps(); // illegal: not inside RegisterPluginSteps()
         protected override void RegisterPluginSteps()
             => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target) { }
+        protected override void Execute(ILocalPluginContext ctx) { }
     }
 
     [Fact]

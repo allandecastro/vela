@@ -21,11 +21,11 @@ public sealed class StepBuilderCoverageTests
 
     private static StepBuilder<TestAccount> New() => new StepBuilder<TestAccount>();
 
-    private void InstanceHandler(ILocalPluginContext ctx, TestAccount target) { }
+    private void InstanceHandler(ILocalPluginContext ctx) { }
 
     private static class Holder
     {
-        public static void StaticHandler(ILocalPluginContext ctx, TestAccount target) { }
+        public static void StaticHandler(ILocalPluginContext ctx) { }
     }
 
     [Fact]
@@ -53,20 +53,22 @@ public sealed class StepBuilderCoverageTests
     [Fact]
     public void Key_Handler_and_config_guards_and_trimming()
     {
-        IPreImageStep<TestAccount> step = New().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous);
+        // Handler guards on the typed Delete step (which exposes .Handler(Action<IDeleteContext<TestAccount>>)).
+        Assert.Throws<ArgumentNullException>(() => New().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous)
+            .Handler((Action<IDeleteContext<TestAccount>>)null!));
+        Assert.Throws<ArgumentException>(() => New().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous)
+            .Handler(Holder.StaticHandler)); // must be an instance method
+
+        IPreImageStep<TestAccount> step = New().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous)
+            .Handler(InstanceHandler); // instance delegate -> method name
 
         Assert.Throws<ArgumentNullException>(() => step.Key("  "));
-        Assert.Throws<ArgumentNullException>(() => step.Handler((string)null!));
-        Assert.Throws<ArgumentNullException>(() => step.Handler((Action<ILocalPluginContext, TestAccount>)null!));
-        Assert.Throws<ArgumentException>(() => step.Handler(Holder.StaticHandler)); // must be an instance method
 
         StepDefinition definition = step
             .Key("  the-key  ")
-            .Handler("  Handle  ")
             .Description(null!)        // null -> empty
             .UnsecureConfig(null!)     // null -> empty
             .SecureConfig(null!)       // null -> empty
-            .Handler(InstanceHandler)  // instance delegate -> method name
             .Build();
 
         Assert.Equal("the-key", definition.StepKey);

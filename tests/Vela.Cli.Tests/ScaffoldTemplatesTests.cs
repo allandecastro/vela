@@ -93,6 +93,36 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
+    public void MessageReference_ShowcasesEveryTypedMessage_AsDisabledSteps()
+    {
+        string code = ScaffoldTemplates.AccountMessageReference("Zava");
+
+        // One typed handler per modelled message (13 total).
+        string[] contexts =
+        {
+            "ICreateContext<Account>", "IUpdateContext<Account>", "IDeleteContext<Account>",
+            "ICreateMultipleContext<Account>", "IUpdateMultipleContext<Account>",
+            "IRetrieveContext<Account>", "IRetrieveMultipleContext<Account>",
+            "IAssociateContext<Account>", "IDisassociateContext<Account>", "IMergeContext<Account>",
+            "IGrantAccessContext<Account>", "IModifyAccessContext<Account>", "IRevokeAccessContext<Account>",
+        };
+        foreach (string ctxType in contexts)
+        {
+            Assert.Contains(ctxType, code);
+        }
+
+        // Typed accessors are showcased rather than raw casts.
+        Assert.Contains("ctx.Target", code);
+        Assert.Contains("ctx.TargetReference", code);
+        Assert.Contains("ctx.TargetCollection", code);
+        Assert.DoesNotContain(".ToEntity<", code);
+
+        // Every step is dormant: each registration ends with .Disabled(); (13), and every step binds a handler.
+        Assert.Equal(13, CountOccurrences(code, ".Disabled();"));
+        Assert.Equal(13, CountOccurrences(code, ".Handler("));
+    }
+
+    [Fact]
     public void AccountFollowUpService_IsTableScoped_AndSchedulesSevenDaysOut()
     {
         string code = ScaffoldTemplates.AccountFollowUpService("Zava");

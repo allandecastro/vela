@@ -21,8 +21,41 @@ public sealed class StepBuilder<TEntity> :
     ICreateStepStage<TEntity>,
     IUpdateStepStage<TEntity>,
     IDeleteStepStage<TEntity>,
-    IReferenceStepStage<TEntity>,
+    IRetrieveStepStage<TEntity>,
+    IRetrieveMultipleStepStage<TEntity>,
+    IAssociateStepStage<TEntity>,
+    IDisassociateStepStage<TEntity>,
+    IGrantAccessStepStage<TEntity>,
+    IModifyAccessStepStage<TEntity>,
+    IRevokeAccessStepStage<TEntity>,
     IPermissiveStepStage<TEntity>,
+    IModeSelector<IPermissiveNoImageStep<TEntity>>, IPermissiveNoImageStep<TEntity>,
+    IModeSelector<IPermissivePreImageStep<TEntity>>, IPermissivePreImageStep<TEntity>,
+    IModeSelector<IPermissivePreAndPostStep<TEntity>>, IPermissivePreAndPostStep<TEntity>,
+    IMergeStepStage<TEntity>,
+    IModeSelector<IMergeStep<TEntity>>,
+    IMergeStep<TEntity>,
+    IModeSelector<IRetrieveStep<TEntity>>, IRetrieveStep<TEntity>,
+    IModeSelector<IRetrieveMultipleStep<TEntity>>, IRetrieveMultipleStep<TEntity>,
+    IModeSelector<IAssociateStep<TEntity>>, IAssociateStep<TEntity>,
+    IModeSelector<IDisassociateStep<TEntity>>, IDisassociateStep<TEntity>,
+    IModeSelector<IGrantAccessStep<TEntity>>, IGrantAccessStep<TEntity>,
+    IModeSelector<IModifyAccessStep<TEntity>>, IModifyAccessStep<TEntity>,
+    IModeSelector<IRevokeAccessStep<TEntity>>, IRevokeAccessStep<TEntity>,
+    ICreateMultipleStepStage<TEntity>,
+    IUpdateMultipleStepStage<TEntity>,
+    IModeSelector<IDeleteNoImageStep<TEntity>>, IDeleteNoImageStep<TEntity>,
+    IModeSelector<IDeletePreImageStep<TEntity>>, IDeletePreImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, ICreateNoImageStep<TEntity>>>, IFilteringSelector<TEntity, ICreateNoImageStep<TEntity>>, ICreateNoImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, ICreatePostImageStep<TEntity>>>, IFilteringSelector<TEntity, ICreatePostImageStep<TEntity>>, ICreatePostImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, ICreateMultipleNoImageStep<TEntity>>>, IFilteringSelector<TEntity, ICreateMultipleNoImageStep<TEntity>>, ICreateMultipleNoImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, ICreateMultiplePostImageStep<TEntity>>>, IFilteringSelector<TEntity, ICreateMultiplePostImageStep<TEntity>>, ICreateMultiplePostImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, IUpdateNoImageStep<TEntity>>>, IFilteringSelector<TEntity, IUpdateNoImageStep<TEntity>>, IUpdateNoImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, IUpdatePreImageStep<TEntity>>>, IFilteringSelector<TEntity, IUpdatePreImageStep<TEntity>>, IUpdatePreImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, IUpdatePreAndPostStep<TEntity>>>, IFilteringSelector<TEntity, IUpdatePreAndPostStep<TEntity>>, IUpdatePreAndPostStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, IUpdateMultipleNoImageStep<TEntity>>>, IFilteringSelector<TEntity, IUpdateMultipleNoImageStep<TEntity>>, IUpdateMultipleNoImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, IUpdateMultiplePreImageStep<TEntity>>>, IFilteringSelector<TEntity, IUpdateMultiplePreImageStep<TEntity>>, IUpdateMultiplePreImageStep<TEntity>,
+    IModeSelector<IFilteringSelector<TEntity, IUpdateMultiplePreAndPostStep<TEntity>>>, IFilteringSelector<TEntity, IUpdateMultiplePreAndPostStep<TEntity>>, IUpdateMultiplePreAndPostStep<TEntity>,
     IModeSelector<IFilteringSelector<TEntity, INoImageStep<TEntity>>>,
     IModeSelector<IFilteringSelector<TEntity, IPreImageStep<TEntity>>>,
     IModeSelector<IFilteringSelector<TEntity, IPostImageStep<TEntity>>>,
@@ -60,13 +93,17 @@ public sealed class StepBuilder<TEntity> :
 
     public ICreateStepStage<TEntity> OnCreate() { _definition.Message = PluginMessages.Create; return this; }
     public IUpdateStepStage<TEntity> OnUpdate() { _definition.Message = PluginMessages.Update; return this; }
-    public ICreateStepStage<TEntity> OnCreateMultiple() { _definition.Message = PluginMessages.CreateMultiple; return this; }
-    public IUpdateStepStage<TEntity> OnUpdateMultiple() { _definition.Message = PluginMessages.UpdateMultiple; return this; }
+    public ICreateMultipleStepStage<TEntity> OnCreateMultiple() { _definition.Message = PluginMessages.CreateMultiple; return this; }
+    public IUpdateMultipleStepStage<TEntity> OnUpdateMultiple() { _definition.Message = PluginMessages.UpdateMultiple; return this; }
     public IDeleteStepStage<TEntity> OnDelete() { _definition.Message = PluginMessages.Delete; return this; }
-    public IReferenceStepStage<TEntity> OnRetrieve() { _definition.Message = PluginMessages.Retrieve; return this; }
-    public IReferenceStepStage<TEntity> OnRetrieveMultiple() { _definition.Message = PluginMessages.RetrieveMultiple; return this; }
-    public IReferenceStepStage<TEntity> OnAssociate() { _definition.Message = PluginMessages.Associate; return this; }
-    public IReferenceStepStage<TEntity> OnDisassociate() { _definition.Message = PluginMessages.Disassociate; return this; }
+    public IRetrieveStepStage<TEntity> OnRetrieve() { _definition.Message = PluginMessages.Retrieve; return this; }
+    public IRetrieveMultipleStepStage<TEntity> OnRetrieveMultiple() { _definition.Message = PluginMessages.RetrieveMultiple; return this; }
+    public IAssociateStepStage<TEntity> OnAssociate() { _definition.Message = PluginMessages.Associate; return this; }
+    public IDisassociateStepStage<TEntity> OnDisassociate() { _definition.Message = PluginMessages.Disassociate; return this; }
+    public IMergeStepStage<TEntity> OnMerge() { _definition.Message = PluginMessages.Merge; return this; }
+    public IGrantAccessStepStage<TEntity> OnGrantAccess() { _definition.Message = PluginMessages.GrantAccess; return this; }
+    public IModifyAccessStepStage<TEntity> OnModifyAccess() { _definition.Message = PluginMessages.ModifyAccess; return this; }
+    public IRevokeAccessStepStage<TEntity> OnRevokeAccess() { _definition.Message = PluginMessages.RevokeAccess; return this; }
 
     public IPermissiveStepStage<TEntity> OnMessage(string messageName)
     {
@@ -86,25 +123,127 @@ public sealed class StepBuilder<TEntity> :
 
     // ---- Stage selectors ---------------------------------------------------------------------------
 
-    IModeSelector<IFilteringSelector<TEntity, INoImageStep<TEntity>>> ICreateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-    IModeSelector<IFilteringSelector<TEntity, INoImageStep<TEntity>>> ICreateStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-    IModeSelector<IFilteringSelector<TEntity, IPostImageStep<TEntity>>> ICreateStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, ICreateNoImageStep<TEntity>>> ICreateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, ICreateNoImageStep<TEntity>>> ICreateStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, ICreatePostImageStep<TEntity>>> ICreateStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
 
-    IModeSelector<IFilteringSelector<TEntity, INoImageStep<TEntity>>> IUpdateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-    IModeSelector<IFilteringSelector<TEntity, IPreImageStep<TEntity>>> IUpdateStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-    IModeSelector<IFilteringSelector<TEntity, IPreAndPostImageStep<TEntity>>> IUpdateStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, ICreateMultipleNoImageStep<TEntity>>> ICreateMultipleStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, ICreateMultipleNoImageStep<TEntity>>> ICreateMultipleStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, ICreateMultiplePostImageStep<TEntity>>> ICreateMultipleStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
 
-    IModeSelector<INoImageStep<TEntity>> IDeleteStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-    IModeSelector<IPreImageStep<TEntity>> IDeleteStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-    IModeSelector<IPreImageStep<TEntity>> IDeleteStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, IUpdateNoImageStep<TEntity>>> IUpdateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, IUpdatePreImageStep<TEntity>>> IUpdateStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, IUpdatePreAndPostStep<TEntity>>> IUpdateStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
 
-    IModeSelector<INoImageStep<TEntity>> IReferenceStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-    IModeSelector<INoImageStep<TEntity>> IReferenceStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-    IModeSelector<INoImageStep<TEntity>> IReferenceStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, IUpdateMultipleNoImageStep<TEntity>>> IUpdateMultipleStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, IUpdateMultiplePreImageStep<TEntity>>> IUpdateMultipleStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IFilteringSelector<TEntity, IUpdateMultiplePreAndPostStep<TEntity>>> IUpdateMultipleStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
 
-    IModeSelector<INoImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-    IModeSelector<IPreImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-    IModeSelector<IPreAndPostImageStep<TEntity>> IPermissiveStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IModeSelector<IDeleteNoImageStep<TEntity>> IDeleteStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IDeletePreImageStep<TEntity>> IDeleteStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IDeletePreImageStep<TEntity>> IDeleteStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IRetrieveStep<TEntity>> IRetrieveStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IRetrieveStep<TEntity>> IRetrieveStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IRetrieveStep<TEntity>> IRetrieveStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IRetrieveMultipleStep<TEntity>> IRetrieveMultipleStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IRetrieveMultipleStep<TEntity>> IRetrieveMultipleStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IRetrieveMultipleStep<TEntity>> IRetrieveMultipleStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IAssociateStep<TEntity>> IAssociateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IAssociateStep<TEntity>> IAssociateStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IAssociateStep<TEntity>> IAssociateStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IDisassociateStep<TEntity>> IDisassociateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IDisassociateStep<TEntity>> IDisassociateStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IDisassociateStep<TEntity>> IDisassociateStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IGrantAccessStep<TEntity>> IGrantAccessStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IGrantAccessStep<TEntity>> IGrantAccessStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IGrantAccessStep<TEntity>> IGrantAccessStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IModifyAccessStep<TEntity>> IModifyAccessStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IModifyAccessStep<TEntity>> IModifyAccessStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IModifyAccessStep<TEntity>> IModifyAccessStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IRevokeAccessStep<TEntity>> IRevokeAccessStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IRevokeAccessStep<TEntity>> IRevokeAccessStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IRevokeAccessStep<TEntity>> IRevokeAccessStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IModeSelector<IPermissiveNoImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IPermissivePreImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IPermissivePreAndPostStep<TEntity>> IPermissiveStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IPermissiveNoImageStep<TEntity> IModeSelector<IPermissiveNoImageStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IPermissivePreImageStep<TEntity> IModeSelector<IPermissivePreImageStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IPermissivePreAndPostStep<TEntity> IModeSelector<IPermissivePreAndPostStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+
+    INoImageStep<TEntity> IPermissiveNoImageStep<TEntity>.Handler(Action<ILocalPluginContext> handler) { SetHandler(handler); return this; }
+    IPreImageStep<TEntity> IPermissivePreImageStep<TEntity>.Handler(Action<ILocalPluginContext> handler) { SetHandler(handler); return this; }
+    IPreAndPostImageStep<TEntity> IPermissivePreAndPostStep<TEntity>.Handler(Action<ILocalPluginContext> handler) { SetHandler(handler); return this; }
+
+    IModeSelector<IMergeStep<TEntity>> IMergeStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IMergeStep<TEntity>> IMergeStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IMergeStep<TEntity>> IMergeStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+    IMergeStep<TEntity> IModeSelector<IMergeStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IRetrieveStep<TEntity> IModeSelector<IRetrieveStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IRetrieveMultipleStep<TEntity> IModeSelector<IRetrieveMultipleStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IAssociateStep<TEntity> IModeSelector<IAssociateStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IDisassociateStep<TEntity> IModeSelector<IDisassociateStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IGrantAccessStep<TEntity> IModeSelector<IGrantAccessStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IModifyAccessStep<TEntity> IModeSelector<IModifyAccessStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IRevokeAccessStep<TEntity> IModeSelector<IRevokeAccessStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+
+    INoImageStep<TEntity> IMergeStep<TEntity>.Handler(Action<IMergeContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IRetrieveStep<TEntity>.Handler(Action<IRetrieveContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IRetrieveMultipleStep<TEntity>.Handler(Action<IRetrieveMultipleContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IAssociateStep<TEntity>.Handler(Action<IAssociateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IDisassociateStep<TEntity>.Handler(Action<IDisassociateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IGrantAccessStep<TEntity>.Handler(Action<IGrantAccessContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IModifyAccessStep<TEntity>.Handler(Action<IModifyAccessContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IRevokeAccessStep<TEntity>.Handler(Action<IRevokeAccessContext<TEntity>> handler) { SetHandler(handler); return this; }
+
+    // ---- Imaged messages: mode selectors -----------------------------------------------------------
+    IDeleteNoImageStep<TEntity> IModeSelector<IDeleteNoImageStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IDeletePreImageStep<TEntity> IModeSelector<IDeletePreImageStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, ICreateNoImageStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, ICreateNoImageStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, ICreatePostImageStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, ICreatePostImageStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, ICreateMultipleNoImageStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, ICreateMultipleNoImageStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, ICreateMultiplePostImageStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, ICreateMultiplePostImageStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, IUpdateNoImageStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, IUpdateNoImageStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, IUpdatePreImageStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, IUpdatePreImageStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, IUpdatePreAndPostStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, IUpdatePreAndPostStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, IUpdateMultipleNoImageStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, IUpdateMultipleNoImageStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, IUpdateMultiplePreImageStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, IUpdateMultiplePreImageStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    IFilteringSelector<TEntity, IUpdateMultiplePreAndPostStep<TEntity>> IModeSelector<IFilteringSelector<TEntity, IUpdateMultiplePreAndPostStep<TEntity>>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+
+    // ---- Imaged messages: filtering selectors ------------------------------------------------------
+    ICreateNoImageStep<TEntity> IFilteringSelector<TEntity, ICreateNoImageStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    ICreatePostImageStep<TEntity> IFilteringSelector<TEntity, ICreatePostImageStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    ICreateMultipleNoImageStep<TEntity> IFilteringSelector<TEntity, ICreateMultipleNoImageStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    ICreateMultiplePostImageStep<TEntity> IFilteringSelector<TEntity, ICreateMultiplePostImageStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    IUpdateNoImageStep<TEntity> IFilteringSelector<TEntity, IUpdateNoImageStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    IUpdatePreImageStep<TEntity> IFilteringSelector<TEntity, IUpdatePreImageStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    IUpdatePreAndPostStep<TEntity> IFilteringSelector<TEntity, IUpdatePreAndPostStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    IUpdateMultipleNoImageStep<TEntity> IFilteringSelector<TEntity, IUpdateMultipleNoImageStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    IUpdateMultiplePreImageStep<TEntity> IFilteringSelector<TEntity, IUpdateMultiplePreImageStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+    IUpdateMultiplePreAndPostStep<TEntity> IFilteringSelector<TEntity, IUpdateMultiplePreAndPostStep<TEntity>>.FilteringAttributes(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
+
+    // ---- Imaged messages: typed handlers -----------------------------------------------------------
+    INoImageStep<TEntity> IDeleteNoImageStep<TEntity>.Handler(Action<IDeleteContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IPreImageStep<TEntity> IDeletePreImageStep<TEntity>.Handler(Action<IDeleteContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> ICreateNoImageStep<TEntity>.Handler(Action<ICreateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IPostImageStep<TEntity> ICreatePostImageStep<TEntity>.Handler(Action<ICreateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> ICreateMultipleNoImageStep<TEntity>.Handler(Action<ICreateMultipleContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IPostImageStep<TEntity> ICreateMultiplePostImageStep<TEntity>.Handler(Action<ICreateMultipleContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IUpdateNoImageStep<TEntity>.Handler(Action<IUpdateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IPreImageStep<TEntity> IUpdatePreImageStep<TEntity>.Handler(Action<IUpdateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IPreAndPostImageStep<TEntity> IUpdatePreAndPostStep<TEntity>.Handler(Action<IUpdateContext<TEntity>> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IUpdateMultipleNoImageStep<TEntity>.Handler(Action<IUpdateMultipleContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IPreImageStep<TEntity> IUpdateMultiplePreImageStep<TEntity>.Handler(Action<IUpdateMultipleContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IPreAndPostImageStep<TEntity> IUpdateMultiplePreAndPostStep<TEntity>.Handler(Action<IUpdateMultipleContext<TEntity>> handler) { SetHandler(handler); return this; }
 
     // ---- Mode selectors ----------------------------------------------------------------------------
 
@@ -162,8 +301,6 @@ public sealed class StepBuilder<TEntity> :
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.ExecutionOrder(int order) { SetExecutionOrder(order); return this; }
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Key(string stepKey) { SetKey(stepKey); return this; }
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Description(string description) { SetDescription(description); return this; }
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Handler(string methodName) { SetHandler(methodName); return this; }
-    INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Handler(Action<ILocalPluginContext, TEntity> handler) { SetHandler(handler); return this; }
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { SetImpersonation(source); return this; }
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
     INoImageStep<TEntity> IStepConfig<TEntity, INoImageStep<TEntity>>.Disabled() { SetDisabled(); return this; }
@@ -173,8 +310,6 @@ public sealed class StepBuilder<TEntity> :
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.ExecutionOrder(int order) { SetExecutionOrder(order); return this; }
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Key(string stepKey) { SetKey(stepKey); return this; }
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Description(string description) { SetDescription(description); return this; }
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Handler(string methodName) { SetHandler(methodName); return this; }
-    IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Handler(Action<ILocalPluginContext, TEntity> handler) { SetHandler(handler); return this; }
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { SetImpersonation(source); return this; }
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
     IPreImageStep<TEntity> IStepConfig<TEntity, IPreImageStep<TEntity>>.Disabled() { SetDisabled(); return this; }
@@ -184,8 +319,6 @@ public sealed class StepBuilder<TEntity> :
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.ExecutionOrder(int order) { SetExecutionOrder(order); return this; }
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Key(string stepKey) { SetKey(stepKey); return this; }
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Description(string description) { SetDescription(description); return this; }
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Handler(string methodName) { SetHandler(methodName); return this; }
-    IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Handler(Action<ILocalPluginContext, TEntity> handler) { SetHandler(handler); return this; }
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { SetImpersonation(source); return this; }
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
     IPostImageStep<TEntity> IStepConfig<TEntity, IPostImageStep<TEntity>>.Disabled() { SetDisabled(); return this; }
@@ -195,8 +328,6 @@ public sealed class StepBuilder<TEntity> :
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.ExecutionOrder(int order) { SetExecutionOrder(order); return this; }
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Key(string stepKey) { SetKey(stepKey); return this; }
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Description(string description) { SetDescription(description); return this; }
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Handler(string methodName) { SetHandler(methodName); return this; }
-    IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Handler(Action<ILocalPluginContext, TEntity> handler) { SetHandler(handler); return this; }
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.ImpersonateUsing(ImpersonationSource source) { SetImpersonation(source); return this; }
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.SupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
     IPreAndPostImageStep<TEntity> IStepConfig<TEntity, IPreAndPostImageStep<TEntity>>.Disabled() { SetDisabled(); return this; }
@@ -295,7 +426,7 @@ public sealed class StepBuilder<TEntity> :
         _definition.HandlerMethodName = methodName.Trim();
     }
 
-    private void SetHandler(Action<ILocalPluginContext, TEntity> handler)
+    private void SetHandler(Delegate handler)
     {
         if (handler == null)
         {

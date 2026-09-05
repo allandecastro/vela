@@ -26,8 +26,9 @@ public class AccountPostUpdate : EntityPluginBase<Account>
                 .Attributes(a => a.Name);
     }
 
-    protected override void Execute(ILocalPluginContext ctx, Account target)
+    protected override void Execute(ILocalPluginContext ctx)
     {
+        var target = ctx.GetTarget<Account>();
         var before = ctx.GetPreImage<Account>();
         ctx.Trace($"Account renamed from '{before.Name}' to '{target.Name}'");
     }

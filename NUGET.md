@@ -32,8 +32,8 @@ public class AccountPostUpdate : EntityPluginBase<Account>
                .Mode(ExecutionMode.Synchronous)
                .FilteringAttributes(a => a.Name);
 
-    protected override void Execute(ILocalPluginContext ctx, Account target)
-        => ctx.Trace($"Account renamed to '{target.Name}'");
+    protected override void Execute(ILocalPluginContext ctx)
+        => ctx.Trace($"Account renamed to '{ctx.GetTarget<Account>().Name}'");
 }
 ```
 

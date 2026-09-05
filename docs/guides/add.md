@@ -27,10 +27,13 @@ vela add --interactive
 - **Custom API ergonomics:** `--function`/`--action` choose the operation type (default `Action`), and
   `--bound`/`--global` make the binding explicit instead of inferring it from `--entity` (`--bound` requires
   `--entity`; `--global` is unbound).
-- `--message <Message>` (plugin, default `Create`): `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`/
-  `Associate`/`Disassociate`/`SetState` get a strongly-typed `On...()` call; any other name is registered as a
-  custom SDK message via `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the current
-  directory), `--force` (overwrite an existing file).
+- `--message <Message>` (plugin, default `Create`): the messages Vela models get a strongly-typed `On...()`
+  call - `Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`, `RetrieveMultiple`,
+  `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`; any other name is
+  registered as a custom SDK message via `OnMessage("...")`. The deprecated `SetState` / `SetStateDynamicEntity`
+  and `Assign` messages have no typed method (update `statecode`/`statuscode` or `ownerid` with `Update`
+  instead), so they too render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
+  current directory), `--force` (overwrite an existing file).
 - **Filtering attributes on a `Create`/`Update` plugin:** these messages require at least one filtering
   attribute, and the generator cannot know your model's columns, so the step is scaffolded with a
   `FilteringAttributes(e => e.REPLACE_WITH_A_FILTERING_ATTRIBUTE)` placeholder that does not compile. Replace it
@@ -44,7 +47,7 @@ vela add --interactive
   `PluginContext.For<…>()…Execute(…)`. Run it inside the test project (its `RootNamespace` must end in `.Tests`);
   use `--kind customapi` for a Custom API test (and omit `--entity` for a global one).
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
-  `RegisterSteps().On<Message>()…Handler(nameof(Handle<Message>))` registration and a matching handler method
+  `RegisterSteps().On<Message>()…Handler(Handle<Message>)` registration and a matching handler method
   (`--message`, optional `--handler <Method>`). It refuses single-step plugins (those using the `Execute(...)`
   override) and any file it can't parse cleanly, so it never corrupts source.
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +

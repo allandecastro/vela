@@ -12,7 +12,7 @@ public class AccountPostUpdate : EntityPluginBase<Account>
     protected override void RegisterPluginSteps() =>
         RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(a => a.Name);
 
-    protected override void Execute(ILocalPluginContext ctx, Account target) { /* ... */ }
+    protected override void Execute(ILocalPluginContext ctx) { /* ctx.GetTarget<Account>() ... */ }
 }
 ```
 

@@ -65,9 +65,9 @@ public sealed class MultiStepEntityPluginTests
     }
 
     [Fact]
-    public void EntityPluginBase_SuppliesEmptyTypedTarget_WhenMessageHasNoTarget()
+    public void EntityPluginBase_RunsSingleStep_WhenMessageHasNoTarget()
     {
-        // RetrieveMultiple carries no Target; the base must hand the handler a non-null typed entity.
+        // RetrieveMultiple carries no primary-entity Target; the single-step Execute(ctx) still runs.
         TargetProbePlugin plugin = new TargetProbePlugin();
         IServiceProvider provider = PluginContext.For<TestAccount>()
             .OnMessage(PluginMessages.RetrieveMultiple)
@@ -78,8 +78,6 @@ public sealed class MultiStepEntityPluginTests
         plugin.Execute(provider);
 
         Assert.True(plugin.Executed);
-        Assert.Equal("account", plugin.CapturedLogicalName);
-        Assert.Equal(Guid.Empty, plugin.CapturedId);
     }
 
     [Fact]
@@ -129,12 +127,12 @@ public sealed class MultiStepEntityPluginTests
                 .Handler(HandleUpdate);
         }
 
-        private void HandleCreate(ILocalPluginContext ctx, TestAccount target)
+        private void HandleCreate(ILocalPluginContext ctx)
         {
             LastHandler = "HandleCreate";
         }
 
-        private void HandleUpdate(ILocalPluginContext ctx, TestAccount target)
+        private void HandleUpdate(ILocalPluginContext ctx)
         {
             LastHandler = "HandleUpdate";
         }
@@ -156,7 +154,7 @@ public sealed class MultiStepEntityPluginTests
                 .FilteringAttributes(a => a.Name);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
             Executed = true;
         }
@@ -179,10 +177,10 @@ public sealed class MultiStepEntityPluginTests
                 .Mode(ExecutionMode.Synchronous);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
             Executed = true;
-            CapturedId = target.Id;
+            CapturedId = ctx.GetTargetRef().Id;
         }
     }
 
@@ -194,10 +192,6 @@ public sealed class MultiStepEntityPluginTests
 
         public bool Executed { get; private set; }
 
-        public Guid CapturedId { get; private set; }
-
-        public string CapturedLogicalName { get; private set; } = string.Empty;
-
         protected override void RegisterPluginSteps()
         {
             RegisterSteps().OnRetrieveMultiple()
@@ -205,11 +199,9 @@ public sealed class MultiStepEntityPluginTests
                 .Mode(ExecutionMode.Synchronous);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
             Executed = true;
-            CapturedId = target.Id;
-            CapturedLogicalName = target.LogicalName;
         }
     }
 
@@ -248,7 +240,7 @@ public sealed class MultiStepEntityPluginTests
         {
         }
 
-        protected override void Execute(ILocalPluginContext ctx, TestAccount target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
         }
     }

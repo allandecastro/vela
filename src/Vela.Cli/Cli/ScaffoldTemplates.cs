@@ -680,16 +680,19 @@ configures.
 
 ### Single-step vs multi-step
 
-- **Single-step** - register one step and override `Execute(ctx, target)`. See `AccountPostCreatePlugin`.
-- **Multi-step ("router")** - register several steps in one class, giving each a `.Handler(nameof(...))` bound
-  to a method; the framework dispatches to the right one. See `ContactRouterPlugin`. Every step in a
-  multi-step plugin **must** declare a handler - the build fails otherwise.
+- **Single-step** - register one step and override `Execute(ctx)`; read the record with `ctx.GetTarget<TEntity>()`
+  (or the message-specific request with `ctx.GetRequest<...>()`). See `AccountPostCreatePlugin`.
+- **Multi-step ("router")** - register several steps in one class, giving each a `.Handler(Method)` bound to a
+  method; the framework dispatches to the right one. Each handler takes the message-typed context (for example
+  `ICreateContext<TEntity>` / `IUpdateContext<TEntity>`), exposing a strongly-typed `ctx.Request` (and, in a
+  Post step, `ctx.Response`). See `ContactRouterPlugin`. Every step in a multi-step plugin **must** declare a
+  handler - the build fails otherwise.
 
 ```csharp
 RegisterSteps().OnUpdate()
     .PostOperation().Mode(ExecutionMode.Synchronous)
     .FilteringAttributes(c => c.LastName)            // (update) fire only when these columns change
-    .Handler(nameof(OnLastNameChanged))
+    .Handler(OnLastNameChanged)                      // void OnLastNameChanged(IUpdateContext<Contact> ctx)
     .PreImage().Attributes(c => c.LastName);         // before-snapshot for the handler
 ```
 
@@ -701,7 +704,7 @@ RegisterSteps().OnUpdate()
 | `.Stage(...)` | Pipeline stage: `PreValidation`, `PreOperation`, `PostOperation`. |
 | `.Mode(...)` | `Synchronous` or `Asynchronous`. |
 | `.FilteringAttributes(...)` | (update) fire only when one of the listed columns changes. |
-| `.Handler(nameof(M))` | Method to dispatch to (required for multi-step). |
+| `.Handler(M)` | Method to dispatch to (required for multi-step); takes the message-typed context. |
 | `.PreImage()` / `.PostImage()` + `.Attributes(...)` | Capture a before/after snapshot, scoped to named columns. |
 | `.ExecutionOrder(n)` | Step rank when several steps share a message + stage. |
 | `.ImpersonateUsing(...)` | Run as `CallingUser` or `PluginOwner`. |
@@ -763,8 +766,9 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
 ### Resolving and using a service
 
 ```csharp
-protected override void Execute(ILocalPluginContext ctx, Account target)
+protected override void Execute(ILocalPluginContext ctx)
 {
+    Account target = ctx.GetTarget<Account>();
     IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
     Guid taskId = followUp.CreateFollowUpTask(target.Id, target.Name);
     ctx.Trace("Created follow-up task {0}.", taskId);
@@ -1333,8 +1337,9 @@ namespace {{prefix}}.Plugins.Account.Plugins
                 .Description("Counts the contacts related to an account after it is updated.");
         }
 
-        protected override void Execute(ILocalPluginContext ctx, Account target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
+            Account target = ctx.GetTarget<Account>();
             string fetchXml = Query.For<Contact>()
                 .Select(c => c.FirstName, c => c.LastName)
                 .Where(c => c.ParentCustomerId, ConditionOperator.Equal, target.Id)
@@ -1429,14 +1434,112 @@ namespace {{prefix}}.Plugins.Account.Plugins
                     .Attributes(a => a.Name);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, Account target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
             Account postImage = ctx.GetPostImage<Account>();
             IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
 
-            Guid taskId = followUp.CreateFollowUpTask(target.Id, postImage.Name);
+            Guid taskId = followUp.CreateFollowUpTask(postImage.Id, postImage.Name);
             ctx.Trace("Created follow-up task {0} for account '{1}'.", taskId, postImage.Name);
         }
+    }
+}
+""";
+
+    public static string AccountMessageReference(string prefix) =>
+$$"""
+namespace {{prefix}}.Plugins.Account.Plugins
+{
+    using Vela.Constants;
+    using Vela.Context;
+    using Vela.Plugin;
+    using Vela.StepBuilder;
+    using {{prefix}}.Shared.Models.Generated;
+
+    /// <summary>
+    /// REFERENCE / CHEAT-SHEET - one handler per typed message Vela models, showing the strongly-typed context
+    /// each receives. Every step is registered <c>.Disabled()</c>, so this class is safe to deploy: nothing fires
+    /// until you enable a step. Copy the handler for the message you need into a real plugin, then delete this
+    /// file. Each handler infers its request/response from the message (no cast); the primary record is available
+    /// already typed as <c>ctx.Target</c> / <c>ctx.TargetReference</c> / <c>ctx.Targets</c>.
+    /// </summary>
+    public sealed class AccountMessageReference(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+    {
+        protected override void RegisterPluginSteps()
+        {
+            // Create / Update carry a full entity Target; both require at least one filtering attribute.
+            RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnCreate).Disabled();
+            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnUpdate).Disabled();
+
+            // Delete carries an EntityReference Target.
+            RegisterSteps().OnDelete().PreOperation().Mode(ExecutionMode.Synchronous).Handler(OnDelete).Disabled();
+
+            // Bulk messages carry a Targets collection; they also require a filtering attribute.
+            RegisterSteps().OnCreateMultiple().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnCreateMultiple).Disabled();
+            RegisterSteps().OnUpdateMultiple().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnUpdateMultiple).Disabled();
+
+            // Read messages.
+            RegisterSteps().OnRetrieve().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrieve).Disabled();
+            RegisterSteps().OnRetrieveMultiple().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrieveMultiple).Disabled();
+
+            // Relationship messages.
+            RegisterSteps().OnAssociate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAssociate).Disabled();
+            RegisterSteps().OnDisassociate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnDisassociate).Disabled();
+
+            // Merge and sharing (access) messages.
+            RegisterSteps().OnMerge().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnMerge).Disabled();
+            RegisterSteps().OnGrantAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnGrantAccess).Disabled();
+            RegisterSteps().OnModifyAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnModifyAccess).Disabled();
+            RegisterSteps().OnRevokeAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRevokeAccess).Disabled();
+        }
+
+        // ctx.Target is the early-bound Account; ctx.Response.id is the new record id (Post step).
+        private void OnCreate(ICreateContext<Account> ctx)
+            => ctx.Trace("Create {0} -> id {1}", ctx.Target.Name, ctx.Response.id);
+
+        // ctx.Target carries the columns that changed on this update.
+        private void OnUpdate(IUpdateContext<Account> ctx)
+            => ctx.Trace("Update {0}", ctx.Target.Id);
+
+        // Delete carries an EntityReference, exposed as ctx.TargetReference.
+        private void OnDelete(IDeleteContext<Account> ctx)
+            => ctx.Trace("Delete {0}", ctx.TargetReference.Id);
+
+        // Bulk create: ctx.TargetCollection is the whole batch; ctx.Response.Ids are the new ids.
+        private void OnCreateMultiple(ICreateMultipleContext<Account> ctx)
+            => ctx.Trace("CreateMultiple of {0}", ctx.TargetCollection.Entities.Count);
+
+        private void OnUpdateMultiple(IUpdateMultipleContext<Account> ctx)
+            => ctx.Trace("UpdateMultiple of {0}", ctx.TargetCollection.Entities.Count);
+
+        // Retrieve: ctx.TargetReference is the record read; ctx.Request.ColumnSet the requested columns.
+        private void OnRetrieve(IRetrieveContext<Account> ctx)
+            => ctx.Trace("Retrieve {0} ({1} columns)", ctx.TargetReference.Id, ctx.Request.ColumnSet.Columns.Count);
+
+        // RetrieveMultiple has no primary Target; the query is on ctx.Request.Query.
+        private void OnRetrieveMultiple(IRetrieveMultipleContext<Account> ctx)
+            => ctx.Trace("RetrieveMultiple, query type {0}", ctx.Request.Query.GetType().Name);
+
+        // Associate / Disassociate: ctx.TargetReference plus ctx.Request.Relationship / RelatedEntities.
+        private void OnAssociate(IAssociateContext<Account> ctx)
+            => ctx.Trace("Associate {0} via {1}", ctx.TargetReference.Id, ctx.Request.Relationship.SchemaName);
+
+        private void OnDisassociate(IDisassociateContext<Account> ctx)
+            => ctx.Trace("Disassociate {0} via {1}", ctx.TargetReference.Id, ctx.Request.Relationship.SchemaName);
+
+        // Merge: ctx.TargetReference is the master, ctx.Request.SubordinateId the record merged into it.
+        private void OnMerge(IMergeContext<Account> ctx)
+            => ctx.Trace("Merge {0} into {1}", ctx.Request.SubordinateId, ctx.TargetReference.Id);
+
+        // Sharing: ctx.Request.PrincipalAccess (grant/modify) and ctx.Request.Revokee (revoke).
+        private void OnGrantAccess(IGrantAccessContext<Account> ctx)
+            => ctx.Trace("Grant on {0} to {1}", ctx.TargetReference.Id, ctx.Request.PrincipalAccess.Principal.Id);
+
+        private void OnModifyAccess(IModifyAccessContext<Account> ctx)
+            => ctx.Trace("Modify access on {0}", ctx.TargetReference.Id);
+
+        private void OnRevokeAccess(IRevokeAccessContext<Account> ctx)
+            => ctx.Trace("Revoke on {0} from {1}", ctx.TargetReference.Id, ctx.Request.Revokee.Id);
     }
 }
 """;
@@ -1473,7 +1576,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
-                .Handler(nameof(OnCreatePost))
+                .Handler(OnCreatePost)
                 .Description("Handles contact creation.")
                 .PostImage()
                     .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
@@ -1482,29 +1585,33 @@ namespace {{prefix}}.Plugins.Contact.Plugins
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
                 .FilteringAttributes(c => c.LastName)
-                .Handler(nameof(OnUpdatePost))
+                .Handler(OnUpdatePost)
                 .Description("Handles contact last-name changes.")
                 .PreImage()
                     .Attributes(c => c.LastName);
         }
 
-        private void OnCreatePost(ILocalPluginContext ctx, Contact target)
+        // Each handler receives the message-typed context: ICreateContext exposes a CreateRequest, IUpdateContext
+        // an UpdateRequest (in a Post step, a matching Response too), each strongly typed to this message. The
+        // record is available already typed as ctx.Target - no cast, no type argument. The context is still an
+        // ILocalPluginContext, so images, services and tracing remain available.
+        private void OnCreatePost(ICreateContext<Contact> ctx)
         {
             Contact postImage = ctx.GetPostImage<Contact>();
             ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
 
             IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
-            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, target.Id);
+            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, ctx.Target.Id);
             if (duplicateId.HasValue)
             {
                 ctx.Trace("Possible duplicate of contact {0} (same email).", duplicateId.Value);
             }
         }
 
-        private void OnUpdatePost(ILocalPluginContext ctx, Contact target)
+        private void OnUpdatePost(IUpdateContext<Contact> ctx)
         {
             Contact preImage = ctx.GetPreImage<Contact>();
-            ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, target.LastName);
+            ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Target.LastName);
         }
     }
 }
@@ -1992,11 +2099,12 @@ namespace {{ns}}
                 .Description("{{message}} {{entityType}} handler.");
         }
 
-        protected override void Execute(ILocalPluginContext ctx, {{entityType}} target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
-            ctx.Trace("{{className}} executed for {0} '{1}'.", target.LogicalName, target.Id);
+            ctx.Trace("{{className}} executed for {0} '{1}'.", ctx.PrimaryEntityName, ctx.PrimaryEntityId);
 
-            // TODO: implement your logic.
+            // TODO: implement your logic. For a Create/Update message, read the typed record with
+            // ctx.GetTarget<{{entityType}}>(); or read the message-specific request via ctx.GetRequest<...>().
         }
     }
 }
@@ -2212,8 +2320,9 @@ namespace {{prefix}}.Integrations.Contact.Plugins
                     .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
         }
 
-        protected override void Execute(ILocalPluginContext ctx, Contact target)
+        protected override void Execute(ILocalPluginContext ctx)
         {
+            Contact target = ctx.GetTarget<Contact>();
             IGreetingService greetings = ctx.GetRequiredService<IGreetingService>();
             ctx.Trace(greetings.BuildGreeting(target.FirstName));
         }
@@ -2243,7 +2352,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
                 .PostOperation()
                 .Mode(ExecutionMode.Asynchronous)
                 .FilteringAttributes(a => a.Name)
-                .Handler(nameof(OnAccountCreated))
+                .Handler(OnAccountCreated)
                 .Description("Pushes a newly created account downstream.")
                 .PostImage()
                     .Attributes(a => a.Name);
@@ -2252,19 +2361,19 @@ namespace {{prefix}}.Integrations.Account.Plugins
                 .PostOperation()
                 .Mode(ExecutionMode.Asynchronous)
                 .FilteringAttributes(a => a.Name, a => a.Telephone1)
-                .Handler(nameof(OnAccountChanged))
+                .Handler(OnAccountChanged)
                 .Description("Pushes account changes downstream.")
                 .PreImage()
                     .Attributes(a => a.Name, a => a.Telephone1);
         }
 
-        private void OnAccountCreated(ILocalPluginContext ctx, Account target)
+        private void OnAccountCreated(ICreateContext<Account> ctx)
         {
             Account postImage = ctx.GetPostImage<Account>();
             ctx.Trace("Sync: account created '{0}'", postImage.Name);
         }
 
-        private void OnAccountChanged(ILocalPluginContext ctx, Account target)
+        private void OnAccountChanged(IUpdateContext<Account> ctx)
         {
             Account preImage = ctx.GetPreImage<Account>();
             ctx.Trace("Sync: account '{0}' changed", preImage.Name);

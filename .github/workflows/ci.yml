@@ -5,21 +5,18 @@ on:
     branches: [ main ]
   pull_request:
 
-# Use Windows PowerShell 5.1 (always present) rather than pwsh: the self-hosted runner's pwsh is the
-# WindowsApps stub, which the service account can't execute ("EACCES ... pwsh.EXE").
+# Windows PowerShell 5.1 is always present on the Windows runner; use it as the default shell for run steps.
 defaults:
   run:
     shell: powershell
 
 jobs:
   build-test-pack:
-    # Self-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run there.
-    # Security guard: never run untrusted fork-PR code on the self-hosted runner. Only same-repo branches
-    # (head repo == base repo) and pushes to main reach it; fork PRs are skipped (run them on a
-    # GitHub-hosted runner if they ever need validating).
+    # GitHub-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run there.
+    # Only same-repo branches (head repo == base repo) and pushes to main run CI; fork PRs are skipped.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 20 # build+test is fast; cap a hung run on the self-hosted (personal) machine
+    runs-on: windows-latest
+    timeout-minutes: 20 # build+test is fast; cap a hung run
     env:
       # The service account can't write to the default install root 'C:\Program Files\dotnet', so setup-dotnet
       # installs into the workspace instead (it adds this to PATH for the run steps).

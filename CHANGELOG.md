@@ -24,6 +24,65 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.3.0] - 2026-09-05
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.3.0`.
+
+### Added
+
+- **Typed request/response per message.** A step handler now receives a message-typed context that exposes a
+  strongly-typed `ctx.Request` (and, in a `PostOperation` step, `ctx.Response`) for the modelled messages -
+  `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`, `Associate`,
+  `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`. `ctx.Request` is the standard SDK
+  request (`CreateRequest`, `UpdateRequest`, `MergeRequest`, ...), inferred from the message with no cast:
+  `void OnUpdated(IUpdateContext<Account> ctx)` reads `ctx.Request.Target`, `void OnMerged(IMergeContext<Account> ctx)`
+  reads `ctx.Request.SubordinateId`. New `ctx.GetRequest<TRequest>()` / `ctx.GetResponse<TResponse>()` context
+  helpers expose the same typed views over the pipeline's Input/Output parameters. The primary record is also
+  exposed already typed on the context, with no cast or type argument: `ctx.Target` (the early-bound entity for
+  Create/Update), `ctx.TargetReference` (the `EntityReference` for Delete/Retrieve/Associate/Disassociate/Merge/
+  GrantAccess/ModifyAccess/RevokeAccess) and `ctx.TargetCollection` (the `EntityCollection` for CreateMultiple/
+  UpdateMultiple). A step registered through `OnMessage("...")` (a message Vela does not model) still receives the
+  plain `ILocalPluginContext` and binds an untyped `.Handler(Action<ILocalPluginContext>)` (so a permissive step
+  works inside a multi-step router; read its inputs with `ctx.GetRequest<TRequest>()` / `ctx.GetInputParameter`).
+
+### Removed
+
+- **BREAKING - the untyped `target` handler parameter is gone.** Step handlers and the single-step `Execute`
+  override no longer receive a fabricated `TEntity target` second argument, and `.Handler(...)` no longer accepts
+  a method **name string** or an `Action<ILocalPluginContext, TEntity>`. Handlers are now bound by **method group**
+  to a message-typed context (`.Handler(OnUpdated)` where `void OnUpdated(IUpdateContext<Account> ctx)`), which is
+  checked at compile time - binding an `OnUpdate()` step to an `ICreateContext<Account>` handler no longer compiles.
+  The single-step override becomes `Execute(ILocalPluginContext ctx)`. Migration:
+  - Multi-step: change each handler from `void Handle(ILocalPluginContext ctx, TEntity target)` to
+    `void Handle(I<Message>Context<TEntity> ctx)` (or keep `ILocalPluginContext ctx` when you do not need the
+    typed request), and change `.Handler(nameof(Handle))` / `.Handler("Handle")` to `.Handler(Handle)`.
+  - Single-step: change `Execute(ILocalPluginContext ctx, TEntity target)` to `Execute(ILocalPluginContext ctx)`
+    and read the record with `ctx.GetTarget<TEntity>()` (Create/Update), `ctx.GetTargetRef()`
+    (Delete/Associate/Disassociate), or `ctx.GetRequest<TRequest>()`.
+  - The framework no longer materializes a typed target from an `EntityReference`/`EntityMoniker` or an empty
+    entity for target-less messages; read the id directly from the request or `ctx.GetTargetRef()` instead.
+
+## [0.1.18] - 2026-09-05
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.18`. Aligns scaffolding with the framework `0.3.0` typed-handler API.
+
+### Changed
+
+- Scaffolded plugins and `vela add` now use the typed-handler API: multi-step handlers bind by method group to the
+  message-typed context (`.Handler(OnX)` where `void OnX(IUpdateContext<Account> ctx)`), and single-step plugins
+  override `Execute(ILocalPluginContext ctx)` (reading the record via `ctx.GetTarget<T>()` / `ctx.GetRequest<...>()`).
+- `vela add plugin --message <M>` now emits the typed `On<M>()` for the newly modelled `Merge`, `GrantAccess`,
+  `ModifyAccess` and `RevokeAccess` messages (added to the CLI's known-message list); the deprecated `SetState` /
+  `SetStateDynamicEntity` / `Assign` still render `OnMessage("...")`.
+- The offline fallback framework version referenced by `vela init` is bumped to `0.3.0` (it normally resolves the
+  latest published version from nuget.org).
+
+### Added
+
+- `vela init` now generates an `AccountMessageReference.cs` cheat-sheet: one dormant (`.Disabled()`) handler per
+  modelled message, showcasing every typed context and the `ctx.Target` / `ctx.TargetReference` /
+  `ctx.TargetCollection` accessors. Safe to deploy (nothing fires) and meant to be copied then deleted.
+
 ## [0.2.1] - 2026-09-03
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.2.1`.

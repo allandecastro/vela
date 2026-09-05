@@ -41,7 +41,7 @@ internal static class StepInjector
         string body = source.Substring(openBrace, closeBrace - openBrace + 1);
         if (!body.Contains(".Handler("))
         {
-            error = "Target plugin is single-step (it uses the Execute(...) override). Convert its existing step to .Handler(nameof(...)) first; 'vela add step' adds to handler-based multi-step plugins.";
+            error = "Target plugin is single-step (it uses the Execute(...) override). Convert its existing step to .Handler(...) first; 'vela add step' adds to handler-based multi-step plugins.";
             return false;
         }
 
@@ -73,12 +73,12 @@ internal static class StepInjector
             "                .PostOperation()\n" +
             "                .Mode(ExecutionMode.Synchronous)\n" +
             filtering +
-            $"                .Handler(nameof({handlerName}));";
+            $"                .Handler({handlerName});";
 
         string handler =
-            $"\n\n        private void {handlerName}(ILocalPluginContext ctx, {entityType} target)\n" +
+            $"\n\n        private void {handlerName}(ILocalPluginContext ctx)\n" +
             "        {\n" +
-            $"            // TODO: implement the {message} step.\n" +
+            $"            // TODO: implement the {message} step. Access the typed message via ctx (for example ctx.GetTarget<{entityType}>()).\n" +
             "        }";
 
         result = source.Substring(0, lineStart)

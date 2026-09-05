@@ -46,6 +46,7 @@ public class ProjectScaffolderTests
             AssertFileExists(root, "src", "Zava.Plugins", "Zava.Plugins.csproj");
             AssertFileExists(root, "src", "Zava.Plugins", "Account", "Plugins", "AccountPostCreatePlugin.cs");
             AssertFileExists(root, "src", "Zava.Plugins", "Account", "Plugins", "AccountRelatedContactsPlugin.cs");
+            AssertFileExists(root, "src", "Zava.Plugins", "Account", "Plugins", "AccountMessageReference.cs");
             AssertFileExists(root, "src", "Zava.Plugins", "Account", "Services", "AccountFollowUpService.cs");
             AssertFileExists(root, "src", "Zava.Plugins", "Account", "CustomApis", "AccountEstimateValueCustomApi.cs");
             AssertFileExists(root, "src", "Zava.Plugins", "Contact", "Plugins", "ContactRouterPlugin.cs");

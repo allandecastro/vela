@@ -90,6 +90,7 @@ internal static class ProjectScaffolder
         Write(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion));
         Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountPostCreatePlugin.cs"), AccountPostCreatePlugin(prefix));
         Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountRelatedContactsPlugin.cs"), AccountRelatedContactsPlugin(prefix));
+        Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountMessageReference.cs"), AccountMessageReference(prefix));
         Write(Path.Combine("src", pluginsName, "Account", "Services", "AccountFollowUpService.cs"), AccountFollowUpService(prefix));
         Write(Path.Combine("src", pluginsName, "Account", "CustomApis", "AccountEstimateValueCustomApi.cs"), AccountEstimateValueCustomApi(prefix));
         Write(Path.Combine("src", pluginsName, "Contact", "Plugins", "ContactRouterPlugin.cs"), ContactRouterPlugin(prefix));

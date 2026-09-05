@@ -53,12 +53,15 @@ namespace Vela.Constants
         public const string Disassociate = "Disassociate";
 
         /// <summary>
-        /// SetState message.
+        /// SetState message. Deprecated by the platform - update <c>statecode</c>/<c>statuscode</c> with an
+        /// Update instead. Vela does not expose a typed <c>OnSetState()</c> method; if you must target the
+        /// legacy message, register it via <c>OnMessage(PluginMessages.SetState)</c>.
         /// </summary>
         public const string SetState = "SetState";
 
         /// <summary>
-        /// SetStateDynamicEntity message.
+        /// SetStateDynamicEntity message. Deprecated by the platform (see <see cref="SetState"/>); no typed
+        /// method - register via <c>OnMessage(PluginMessages.SetStateDynamicEntity)</c> if required.
         /// </summary>
         public const string SetStateDynamicEntity = "SetStateDynamicEntity";
 
@@ -81,5 +84,10 @@ namespace Vela.Constants
         /// ModifyAccess message.
         /// </summary>
         public const string ModifyAccess = "ModifyAccess";
+
+        /// <summary>
+        /// Merge message.
+        /// </summary>
+        public const string Merge = "Merge";
     }
 }

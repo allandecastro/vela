@@ -118,6 +118,27 @@ public class AddCommandTests
         });
     }
 
+    // Every message with a typed builder method (including the Tier-2 Merge / sharing messages) renders the
+    // strongly-typed On...() call rather than the permissive OnMessage("...") escape hatch.
+    [Theory]
+    [InlineData("Merge")]
+    [InlineData("GrantAccess")]
+    [InlineData("ModifyAccess")]
+    [InlineData("RevokeAccess")]
+    [InlineData("Delete")]
+    public void Add_Plugin_KnownMessage_RendersTypedOnCall(string message)
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--project", project, "--force"]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
+            Assert.Contains($"RegisterSteps().On{message}()", content);
+            Assert.DoesNotContain("OnMessage(", content);
+        });
+    }
+
     [Fact]
     public void Add_Plugin_WithoutEntity_Fails()
     {
@@ -366,10 +387,10 @@ public class AddCommandTests
 
             string content = File.ReadAllText(pluginPath);
             Assert.Contains("RegisterSteps().OnUpdate()", content);
-            Assert.Contains(".Handler(nameof(HandleUpdate));", content);
-            Assert.Contains("private void HandleUpdate(ILocalPluginContext ctx, Account target)", content);
+            Assert.Contains(".Handler(HandleUpdate);", content);
+            Assert.Contains("private void HandleUpdate(ILocalPluginContext ctx)", content);
             // The original step is preserved.
-            Assert.Contains(".Handler(nameof(HandleCreate));", content);
+            Assert.Contains(".Handler(HandleCreate);", content);
         });
     }
 
@@ -401,10 +422,10 @@ namespace Acme.Plugins.Account.Plugins
             RegisterSteps().OnCreate()
                 .PostOperation()
                 .Mode(ExecutionMode.Synchronous)
-                .Handler(nameof(HandleCreate));
+                .Handler(HandleCreate);
         }
 
-        private void HandleCreate(ILocalPluginContext ctx, Account target)
+        private void HandleCreate(ILocalPluginContext ctx)
         {
         }
     }

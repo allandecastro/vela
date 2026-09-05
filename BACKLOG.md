@@ -27,16 +27,6 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Runtime (Vela.Plugins)
 
-- **P3 - message-dependent `Execute` target is a redesign, not a type-state tweak.** For **Delete** /
-  Associate / SetState the platform `Target` is an `EntityReference`, but `EntityPluginBase<TEntity>` exposes a
-  single `Execute(ILocalPluginContext, TEntity target)` and `ResolveTarget` materializes a typed `TEntity`
-  holding only the id. Typing `target` per message (an `EntityReference` for Delete, a full entity for
-  Create/Update) is **not reachable with the current design**: the message/stage are chosen dynamically in
-  `RegisterSteps()`, so the compiler cannot specialize `Execute`'s signature - it would need message/stage as
-  **generic type parameters** of the base, or **per-message typed handlers** (`OnDelete(ctx, EntityReference)` vs
-  `OnCreate(ctx, Account)`), i.e. a major redesign. Near-term: keep the uniform typed target (never null - a
-  deliberate choice), document it on `EntityPluginBase.Execute`, and consider a typed helper (e.g.
-  `ctx.TargetReference`) for reference messages. Related footgun: on PreValidation/PreOperation **Create** the
-  record is not yet committed, so `target.Id` is `Guid.Empty` (the scaffolded `AccountPostCreatePlugin` uses
-  `target.Id` and is PostOperation for that reason); a runtime trace/warning when `target.Id` is empty on a
-  Create pre-stage would help.
+_Nothing queued. The message-dependent typed target redesign shipped as per-message typed handler contexts
+(`I<Message>Context<TEntity>` exposing `ctx.Request`/`ctx.Response` and `ctx.Target`/`ctx.TargetReference`/
+`ctx.TargetCollection`); see the CHANGELOG._

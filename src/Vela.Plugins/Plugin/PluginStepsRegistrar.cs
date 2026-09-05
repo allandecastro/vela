@@ -13,19 +13,27 @@ namespace Vela.Plugin
 
         public IUpdateStepStage<TEntity> OnUpdate() => BeginStep().OnUpdate();
 
-        public ICreateStepStage<TEntity> OnCreateMultiple() => BeginStep().OnCreateMultiple();
+        public ICreateMultipleStepStage<TEntity> OnCreateMultiple() => BeginStep().OnCreateMultiple();
 
-        public IUpdateStepStage<TEntity> OnUpdateMultiple() => BeginStep().OnUpdateMultiple();
+        public IUpdateMultipleStepStage<TEntity> OnUpdateMultiple() => BeginStep().OnUpdateMultiple();
 
         public IDeleteStepStage<TEntity> OnDelete() => BeginStep().OnDelete();
 
-        public IReferenceStepStage<TEntity> OnRetrieve() => BeginStep().OnRetrieve();
+        public IRetrieveStepStage<TEntity> OnRetrieve() => BeginStep().OnRetrieve();
 
-        public IReferenceStepStage<TEntity> OnRetrieveMultiple() => BeginStep().OnRetrieveMultiple();
+        public IRetrieveMultipleStepStage<TEntity> OnRetrieveMultiple() => BeginStep().OnRetrieveMultiple();
 
-        public IReferenceStepStage<TEntity> OnAssociate() => BeginStep().OnAssociate();
+        public IAssociateStepStage<TEntity> OnAssociate() => BeginStep().OnAssociate();
 
-        public IReferenceStepStage<TEntity> OnDisassociate() => BeginStep().OnDisassociate();
+        public IDisassociateStepStage<TEntity> OnDisassociate() => BeginStep().OnDisassociate();
+
+        public IMergeStepStage<TEntity> OnMerge() => BeginStep().OnMerge();
+
+        public IGrantAccessStepStage<TEntity> OnGrantAccess() => BeginStep().OnGrantAccess();
+
+        public IModifyAccessStepStage<TEntity> OnModifyAccess() => BeginStep().OnModifyAccess();
+
+        public IRevokeAccessStepStage<TEntity> OnRevokeAccess() => BeginStep().OnRevokeAccess();
 
         public IPermissiveStepStage<TEntity> OnMessage(string messageName) => BeginStep().OnMessage(messageName);
 

@@ -44,9 +44,9 @@ public sealed class StepRegistrationGuardTests
                 .FilteringAttributes(a => a.Name).Handler(Second);
         }
 
-        private void First(ILocalPluginContext ctx, TestAccount target) { }
+        private void First(ILocalPluginContext ctx) { }
 
-        private void Second(ILocalPluginContext ctx, TestAccount target) { }
+        private void Second(ILocalPluginContext ctx) { }
     }
 
     private sealed class RouterPlugin : EntityPluginBase<TestAccount>
@@ -61,8 +61,8 @@ public sealed class StepRegistrationGuardTests
                 .FilteringAttributes(a => a.Name).Handler(OnUpdated);
         }
 
-        private void OnCreated(ILocalPluginContext ctx, TestAccount target) { }
+        private void OnCreated(ILocalPluginContext ctx) { }
 
-        private void OnUpdated(ILocalPluginContext ctx, TestAccount target) { }
+        private void OnUpdated(ILocalPluginContext ctx) { }
     }
 }
