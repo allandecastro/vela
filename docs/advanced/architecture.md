@@ -79,7 +79,7 @@ Dataverse pipeline  →  IPlugin.Execute(IServiceProvider)  →  PluginBase  →
    invalid image is a compile error, not a runtime surprise. `Build()` produces the immutable `StepDefinition`
    and re-checks the invariants as a backstop for reflection/out-of-order assembly.
 4. **Typed message contexts (the socle).** For a modelled message the router wraps the runtime context in an
-   `I<Message>Context<TEntity>` (for example `IUpdateContext<Account>`). That context is a thin, allocation-cheap
+   `I<Message>Context<TEntity>` (for example `IUpdatePostContext<Account>`). That context is a thin, allocation-cheap
    view: `ctx.Request` / `ctx.Response` are the **standard SDK request/response classes** (`UpdateRequest`,
    `CreateResponse`, ...) projected over the pipeline's `InputParameters` / `OutputParameters` `ParameterCollection`s,
    and `ctx.Target` / `ctx.TargetReference` / `ctx.TargetCollection` expose the primary record already typed. The

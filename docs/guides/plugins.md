@@ -68,17 +68,19 @@ public class AccountStepRouter : EntityPluginBase<Account>
                 .Attributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1);
     }
 
-    // Each handler takes the message-typed context: ICreateContext exposes a typed CreateRequest, IUpdateContext
-    // a typed UpdateRequest (plus, in a Post step, the matching Response). It is still an ILocalPluginContext, so
-    // images, services and tracing remain available.
-    private void OnCreatePost(ICreateContext<Account> ctx)
+    // Each handler takes the stage-typed message context. Both steps are PostOperation, so they get the Post
+    // context: ICreatePostContext exposes a typed CreateRequest + CreateResponse, IUpdatePostContext an
+    // UpdateRequest + UpdateResponse. A PreValidation/PreOperation step would get I{Message}PreContext instead
+    // (ctx.Request only - no ctx.Response, which the platform has not filled yet). It is still an
+    // ILocalPluginContext, so images, services and tracing remain available.
+    private void OnCreatePost(ICreatePostContext<Account> ctx)
     {
         var created = ctx.Target;                               // typed Account, no cast, no type argument
         var postImage = ctx.GetPostImage<Account>();
         ctx.Trace($"Account created: {postImage.Name} / {postImage.EmailAddress1}");
     }
 
-    private void OnUpdatePost(IUpdateContext<Account> ctx)
+    private void OnUpdatePost(IUpdatePostContext<Account> ctx)
     {
         var preImage = ctx.GetPreImage<Account>();
         var postImage = ctx.GetPostImage<Account>();
@@ -91,7 +93,7 @@ Each step in a multi-step plugin must have a **distinct trigger** (message + sta
 `Handler(...)` (bound by method group, not a string). Two steps with the same trigger can't be told apart at
 runtime, so `Build()` rejects them - put the shared logic in one step (combine the filtering attributes) or use a
 different stage/mode. Because the handler is bound as a method group, the message and the handler's context type
-are checked at compile time: binding an `OnUpdate()` step to a `void Handle(ICreateContext<Account> ctx)` method
+are checked at compile time: binding an `OnUpdate()` step to a `void Handle(ICreatePostContext<Account> ctx)` method
 does not compile.
 
 ## Do / Don't (plugins)
@@ -127,11 +129,19 @@ The fluent builder enforces a specific order:
 
 Short aliases are available when you prefer action-style naming: `AddPreImage(...)`, `AddPostImage(...)`.
 
-**Typed request and response** - a step handler takes the message-typed context, so `ctx.Request` is the
-strongly-typed SDK request for that message (`CreateRequest`, `UpdateRequest`, `MergeRequest`, `GrantAccessRequest`,
-...) and, in a `PostOperation` step, `ctx.Response` is the matching response - each inferred from the message, with no
-cast. Read message-specific fields off `ctx.Request` (for example the merge subordinate from
-`ctx.Request.SubordinateId`).
+**Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
+depends on the stage:
+
+- A **pre-stage** step (`PreValidation()` / `PreOperation()`) hands the handler an `I{Message}PreContext<TEntity>`:
+  it exposes the strongly-typed `ctx.Request` (`CreateRequest`, `UpdateRequest`, `MergeRequest`, ...) but **no**
+  `ctx.Response` - the platform only fills the response after the main operation, so reading it in a pre-stage
+  does not compile.
+- A **post-stage** step (`PostOperation()`) hands the handler an `I{Message}PostContext<TEntity>`: `ctx.Request`
+  **and** the matching `ctx.Response`.
+
+Both are inferred from the message with no cast; binding an `OnUpdate()` step to the wrong message's context, or
+reading `ctx.Response` on a pre-stage handler, does not compile. Read message-specific fields off `ctx.Request`
+(for example the merge subordinate from `ctx.Request.SubordinateId`).
 
 For the primary record the context also carries it **already typed**, so a handler never re-states the entity type
 or casts: `ctx.Target` (the early-bound `TEntity` for `Create`/`Update`), `ctx.TargetReference` (the
@@ -165,19 +175,19 @@ record there with `ctx.GetTarget<T>()` (a full entity for `Create`/`Update`), `c
 
 | Message method | Handler context | `ctx.Request` | Primary record |
 | --- | --- | --- | --- |
-| `OnCreate()` | `ICreateContext<T>` | `CreateRequest` | `ctx.Target` (`T`), `ctx.Response.id` |
-| `OnUpdate()` | `IUpdateContext<T>` | `UpdateRequest` | `ctx.Target` (`T`) |
-| `OnDelete()` | `IDeleteContext<T>` | `DeleteRequest` | `ctx.TargetReference` |
-| `OnCreateMultiple()` | `ICreateMultipleContext<T>` | `CreateMultipleRequest` | `ctx.TargetCollection`, `ctx.Response.Ids` |
-| `OnUpdateMultiple()` | `IUpdateMultipleContext<T>` | `UpdateMultipleRequest` | `ctx.TargetCollection` |
-| `OnRetrieve()` | `IRetrieveContext<T>` | `RetrieveRequest` | `ctx.TargetReference`, `ctx.Response.Entity` |
-| `OnRetrieveMultiple()` | `IRetrieveMultipleContext<T>` | `RetrieveMultipleRequest` | `ctx.Request.Query` |
-| `OnAssociate()` | `IAssociateContext<T>` | `AssociateRequest` | `ctx.TargetReference`, `ctx.Request.Relationship` |
-| `OnDisassociate()` | `IDisassociateContext<T>` | `DisassociateRequest` | `ctx.TargetReference` |
-| `OnMerge()` | `IMergeContext<T>` | `MergeRequest` | `ctx.TargetReference`, `ctx.Request.SubordinateId` |
-| `OnGrantAccess()` | `IGrantAccessContext<T>` | `GrantAccessRequest` | `ctx.TargetReference`, `ctx.Request.PrincipalAccess` |
-| `OnModifyAccess()` | `IModifyAccessContext<T>` | `ModifyAccessRequest` | `ctx.TargetReference` |
-| `OnRevokeAccess()` | `IRevokeAccessContext<T>` | `RevokeAccessRequest` | `ctx.TargetReference`, `ctx.Request.Revokee` |
+| `OnCreate()` | `ICreatePostContext<T>` | `CreateRequest` | `ctx.Target` (`T`), `ctx.Response.id` |
+| `OnUpdate()` | `IUpdatePostContext<T>` | `UpdateRequest` | `ctx.Target` (`T`) |
+| `OnDelete()` | `IDeletePostContext<T>` | `DeleteRequest` | `ctx.TargetReference` |
+| `OnCreateMultiple()` | `ICreateMultiplePostContext<T>` | `CreateMultipleRequest` | `ctx.TargetCollection`, `ctx.Response.Ids` |
+| `OnUpdateMultiple()` | `IUpdateMultiplePostContext<T>` | `UpdateMultipleRequest` | `ctx.TargetCollection` |
+| `OnRetrieve()` | `IRetrievePostContext<T>` | `RetrieveRequest` | `ctx.TargetReference`, `ctx.Response.Entity` |
+| `OnRetrieveMultiple()` | `IRetrieveMultiplePostContext<T>` | `RetrieveMultipleRequest` | `ctx.Request.Query` |
+| `OnAssociate()` | `IAssociatePostContext<T>` | `AssociateRequest` | `ctx.TargetReference`, `ctx.Request.Relationship` |
+| `OnDisassociate()` | `IDisassociatePostContext<T>` | `DisassociateRequest` | `ctx.TargetReference` |
+| `OnMerge()` | `IMergePostContext<T>` | `MergeRequest` | `ctx.TargetReference`, `ctx.Request.SubordinateId` |
+| `OnGrantAccess()` | `IGrantAccessPostContext<T>` | `GrantAccessRequest` | `ctx.TargetReference`, `ctx.Request.PrincipalAccess` |
+| `OnModifyAccess()` | `IModifyAccessPostContext<T>` | `ModifyAccessRequest` | `ctx.TargetReference` |
+| `OnRevokeAccess()` | `IRevokeAccessPostContext<T>` | `RevokeAccessRequest` | `ctx.TargetReference`, `ctx.Request.Revokee` |
 
 The scaffold generates an `AccountMessageReference.cs` cheat-sheet with one dormant (`Disabled()`) handler per
 row, so you can copy the exact shape for the message you need. The deprecated `SetState` / `SetStateDynamicEntity`

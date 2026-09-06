@@ -101,12 +101,12 @@ public class ScaffoldTemplatesTests
         // and the account-valid sharing reads).
         string[] contexts =
         {
-            "ICreateContext<Account>", "IUpdateContext<Account>", "IDeleteContext<Account>",
-            "ICreateMultipleContext<Account>", "IUpdateMultipleContext<Account>",
-            "IRetrieveContext<Account>", "IRetrieveMultipleContext<Account>",
-            "IAssociateContext<Account>", "IDisassociateContext<Account>", "IMergeContext<Account>",
-            "IGrantAccessContext<Account>", "IModifyAccessContext<Account>", "IRevokeAccessContext<Account>",
-            "IRetrievePrincipalAccessContext<Account>", "IRetrieveSharedPrincipalsAndAccessContext<Account>",
+            "ICreatePostContext<Account>", "IUpdatePostContext<Account>", "IDeletePreContext<Account>",
+            "ICreateMultiplePostContext<Account>", "IUpdateMultiplePostContext<Account>",
+            "IRetrievePostContext<Account>", "IRetrieveMultiplePostContext<Account>",
+            "IAssociatePostContext<Account>", "IDisassociatePostContext<Account>", "IMergePostContext<Account>",
+            "IGrantAccessPostContext<Account>", "IModifyAccessPostContext<Account>", "IRevokeAccessPostContext<Account>",
+            "IRetrievePrincipalAccessPostContext<Account>", "IRetrieveSharedPrincipalsAndAccessPostContext<Account>",
         };
         foreach (string ctxType in contexts)
         {
