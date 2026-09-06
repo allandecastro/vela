@@ -28,7 +28,7 @@ AccountPostUpdate plugin = PluginContext.For<Account>()
 
 // ...or build a LocalPluginContext for direct assertions (restate the trigger to override the default):
 LocalPluginContext ctx = PluginContext.For<Account>()
-    .OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+    .OnUpdate().Stage(PluginStages.PostOperation).Sync()
     .WithTarget(new Account { Name = "Zava" })
     .Build();
 ```

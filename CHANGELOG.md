@@ -24,6 +24,26 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.4.3] - 2026-09-06
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.3`. Additive.
+
+### Added
+
+- `.Sync()` / `.Async()` step-builder shortcuts for `.Mode(ExecutionMode.Synchronous)` /
+  `.Mode(ExecutionMode.Asynchronous)` - `RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(...)`.
+  The same shortcuts are on the `Vela.Testing` `PluginContextBuilder`. `.Mode(...)` still works.
+
+## [0.1.21] - 2026-09-06
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.21`.
+
+### Changed
+
+- Scaffolded plugins and `vela add` emit the `.Sync()` / `.Async()` shortcuts instead of
+  `.Mode(ExecutionMode.Synchronous)`. The offline fallback framework version is bumped to `0.4.3` (the release
+  that adds the shortcuts).
+
 ## [0.4.2] - 2026-09-06
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.2`. Additive.
