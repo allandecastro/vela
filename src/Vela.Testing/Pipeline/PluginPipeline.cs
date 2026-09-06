@@ -633,7 +633,104 @@ namespace Vela.Testing
                     return new SetStateResponse();
 
                 default:
-                    return _store.Execute(request);
+                    return ExecuteModelledMessage(request, shared);
+            }
+        }
+
+        // A message with no dedicated data simulation but with registered steps (for example QualifyLead,
+        // WinOpportunity, AddToQueue, SendEmail, CloseIncident, or the sharing messages) fires its Pre/Post steps
+        // like any other plugin: the request parameters become InputParameters (so ctx.Request is fully typed)
+        // and the response Results become OutputParameters in the Post stage. The data effect itself is not
+        // simulated - a fake cannot reproduce the server logic - so the store is asked to execute only if it
+        // recognises the request; otherwise the main operation is a no-op returning an empty response. A message
+        // with no registered steps falls through to the store unchanged (metadata, file protocol, or its own
+        // "unsupported message" error).
+        private OrganizationResponse ExecuteModelledMessage(OrganizationRequest request, ParameterCollection shared)
+        {
+            string message = request.RequestName;
+            bool hasSteps = _registrations.Any(registration =>
+                string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
+            if (!hasSteps)
+            {
+                return _store.Execute(request);
+            }
+
+            (string entityName, Guid entityId) = DerivePrimaryEntity(request);
+
+            return RunOperation(asyncQueue =>
+            {
+                FireStage(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), asyncQueue);
+                FireStage(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), asyncQueue);
+
+                OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = message };
+
+                FireStage(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), asyncQueue);
+                return response;
+            }, shared);
+        }
+
+        private static StageInvocation GenericInvocation(string message, PluginStages stage, string entityName, Guid entityId, ParameterCollection inputs, ParameterCollection? outputs)
+        {
+            return new StageInvocation
+            {
+                Message = message,
+                Stage = stage,
+                EntityLogicalName = entityName,
+                PrimaryId = entityId,
+                AllInputs = inputs,
+                Outputs = outputs,
+            };
+        }
+
+        // Best-effort primary entity for a generic message: an explicit Target, else the first EntityReference /
+        // Entity parameter (covers LeadId, Target, EntityMoniker, ...). When nothing resolves, the steps match by
+        // (message, stage) alone.
+        private static (string, Guid) DerivePrimaryEntity(OrganizationRequest request)
+        {
+            if (request.Parameters.TryGetValue("Target", out object? target))
+            {
+                if (target is Entity targetEntity)
+                {
+                    return (targetEntity.LogicalName, targetEntity.Id);
+                }
+
+                if (target is EntityReference targetReference)
+                {
+                    return (targetReference.LogicalName, targetReference.Id);
+                }
+            }
+
+            foreach (KeyValuePair<string, object> parameter in request.Parameters)
+            {
+                if (parameter.Value is EntityReference reference)
+                {
+                    return (reference.LogicalName, reference.Id);
+                }
+
+                if (parameter.Value is Entity entity)
+                {
+                    return (entity.LogicalName, entity.Id);
+                }
+            }
+
+            return (string.Empty, Guid.Empty);
+        }
+
+        // The store simulates a subset of messages (grant/modify/revoke access, sharing reads, ...). For a message
+        // it does not model it throws "unsupported"; the generic path still fires the steps around a no-op.
+        private OrganizationResponse? TryStoreExecute(OrganizationRequest request)
+        {
+            try
+            {
+                return _store.Execute(request);
+            }
+            catch (InvalidPluginExecutionException)
+            {
+                return null;
+            }
+            catch (NotSupportedException)
+            {
+                return null;
             }
         }
 
@@ -795,7 +892,10 @@ namespace Vela.Testing
             List<PipelineRegistration> steps = _registrations
                 .Where(registration => registration.Step.Stage == invocation.Stage
                     && string.Equals(registration.Step.Message, invocation.Message, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(registration.Step.EntityLogicalName, invocation.EntityLogicalName, StringComparison.OrdinalIgnoreCase))
+                    // A generic modelled message may not resolve a primary entity from the request; match its
+                    // steps by (message, stage) alone in that case.
+                    && (string.IsNullOrEmpty(invocation.EntityLogicalName)
+                        || string.Equals(registration.Step.EntityLogicalName, invocation.EntityLogicalName, StringComparison.OrdinalIgnoreCase)))
                 .Where(registration => !string.Equals(invocation.Message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase)
                     || FiltersMatch(registration.Step, invocation.ChangedAttributes))
                 .Where(registration => !_bypass.ShouldBypass(registration.Step))
@@ -939,7 +1039,12 @@ namespace Vela.Testing
                 Stage = (int)invocation.Stage,
                 Mode = (int)registration.Step.Mode,
                 Depth = _depth,
-                PrimaryEntityName = invocation.EntityLogicalName,
+                // When the invocation could not resolve a primary entity (a generic message with no Target), use
+                // the step's own entity so the plugin's own step matching (which compares PrimaryEntityName to the
+                // step's EntityLogicalName) still resolves this step.
+                PrimaryEntityName = string.IsNullOrEmpty(invocation.EntityLogicalName)
+                    ? registration.Step.EntityLogicalName
+                    : invocation.EntityLogicalName,
                 PrimaryEntityId = invocation.PrimaryId,
                 CorrelationId = _correlationId,
                 SharedVariables = _sharedVariables
@@ -959,6 +1064,24 @@ namespace Vela.Testing
                 foreach (KeyValuePair<string, object> input in invocation.ExtraInputs)
                 {
                     context.InputParameters[input.Key] = input.Value;
+                }
+            }
+
+            // Generic modelled message: surface the whole request as InputParameters (so ctx.Request is fully
+            // typed) and, in the Post stage, the response Results as OutputParameters (so ctx.Response works).
+            if (invocation.AllInputs != null)
+            {
+                foreach (KeyValuePair<string, object> input in invocation.AllInputs)
+                {
+                    context.InputParameters[input.Key] = input.Value;
+                }
+            }
+
+            if (invocation.Outputs != null)
+            {
+                foreach (KeyValuePair<string, object> output in invocation.Outputs)
+                {
+                    context.OutputParameters[output.Key] = output.Value;
                 }
             }
 
@@ -1109,6 +1232,10 @@ namespace Vela.Testing
             public Entity? PostState;
             public IDictionary<string, object>? ExtraInputs;
             public ISet<string>? ChangedAttributes;
+            // For a generic modelled message (no dedicated data simulation): the whole request parameter set to
+            // expose as InputParameters, and the response Results to expose as OutputParameters (Post stage).
+            public ParameterCollection? AllInputs;
+            public ParameterCollection? Outputs;
         }
     }
 }
