@@ -88,8 +88,10 @@ public class ScaffoldTemplatesTests
         Assert.Contains("(string unsecureConfig, string secureConfig)", code);
         Assert.Contains("ConfigureServices", code);
         Assert.Contains("GetRequiredService<IAccountFollowUpService>", code);
-        // Single-step plugins do not bind a handler.
-        Assert.DoesNotContain(".Handler(", code);
+        // Binds a typed post-stage handler that resolves the DI service and reads the typed response.
+        Assert.Contains(".Handler(OnAccountCreated)", code);
+        Assert.Contains("ICreatePostContext<Account>", code);
+        Assert.Contains("ctx.Response.id", code);
     }
 
     [Fact]
@@ -113,10 +115,14 @@ public class ScaffoldTemplatesTests
             Assert.Contains(ctxType, code);
         }
 
-        // Typed accessors are showcased rather than raw casts.
+        // The early-bound ctx.Target is showcased for entity-target messages; every other message reads its
+        // primary record via the SDK-typed ctx.Request.Target / ctx.Request.Targets (no ctx.TargetReference /
+        // ctx.TargetCollection accessors, and never a raw cast).
         Assert.Contains("ctx.Target", code);
-        Assert.Contains("ctx.TargetReference", code);
-        Assert.Contains("ctx.TargetCollection", code);
+        Assert.Contains("ctx.Request.Target", code);
+        Assert.Contains("ctx.Request.Targets", code);
+        Assert.DoesNotContain("ctx.TargetReference", code);
+        Assert.DoesNotContain("ctx.TargetCollection", code);
         Assert.DoesNotContain(".ToEntity<", code);
 
         // Every step is dormant: each registration ends with .Disabled(); (15), and every step binds a handler.

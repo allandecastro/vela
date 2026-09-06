@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 using Vela.Constants;
 using Vela.Context;
 using Vela.StepBuilder;
@@ -21,6 +22,26 @@ namespace Vela.Testing.Tests
                 .Execute<RecordingPlugin>();
 
             Assert.Equal("Zava", plugin.LastName);
+        }
+
+        [Fact]
+        public void Execute_CreatePostStep_SurfacesTheCreatedIdAsCtxResponse()
+        {
+            // The auto-derived Create/PostOperation trigger surfaces the Target id as OutputParameters["id"], as
+            // Dataverse does, so a post-create handler's ctx.Response.id resolves without restating the output.
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            Guid accountId = Guid.NewGuid();
+
+            PluginContext.For<FakeAccount>()
+                .WithPrimaryEntity(FakeAccount.EntityLogicalNameValue, accountId)
+                .WithTarget(new FakeAccount { Id = accountId, Name = "Zava" })
+                .WithOrganizationService(crm)
+                .Execute(new StampResponseIdOnCreate(string.Empty, string.Empty));
+
+            EntityCollection tasks = crm.RetrieveMultiple(
+                new QueryExpression("task") { ColumnSet = new ColumnSet(true) });
+            Entity task = Assert.Single(tasks.Entities);
+            Assert.Equal(accountId, task.GetAttributeValue<EntityReference>("regardingobjectid").Id);
         }
 
         [Fact]

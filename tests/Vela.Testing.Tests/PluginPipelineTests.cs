@@ -87,6 +87,19 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void CreatePostStep_SeesTheCreatedIdViaCtxResponse()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .Register<StampResponseIdOnCreate>();
+
+            Guid accountId = pipeline.Service.Create(new FakeAccount { Name = "Zava" });
+
+            // The Post handler read ctx.Response.id and stamped it onto the follow-up task's regarding lookup.
+            Entity task = Assert.Single(pipeline.GetAll("task"));
+            Assert.Equal(accountId, task.GetAttributeValue<EntityReference>("regardingobjectid").Id);
+        }
+
+        [Fact]
         public void FilteringAttributes_FireOnlyWhenAFilteredColumnChanges()
         {
             Guid id = Guid.NewGuid();
@@ -327,8 +340,8 @@ namespace Vela.Testing.Tests
         [Fact]
         public void ModelledMessage_WithTargetReference_DerivesEntityAndFires()
         {
-            // AddToQueue carries a Target EntityReference; the primary entity is derived from it and ctx.TargetReference
-            // / ctx.Request.DestinationQueueId are typed.
+            // AddToQueue carries a Target EntityReference; the primary entity is derived from it and
+            // ctx.Request.Target / ctx.Request.DestinationQueueId are typed.
             Guid recordId = Guid.NewGuid();
             Guid queueId = Guid.NewGuid();
             PluginPipeline pipeline = PluginPipeline.Empty().Register<OnAccountAddedToQueue>();
