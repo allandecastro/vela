@@ -39,6 +39,24 @@ namespace Vela.Testing.Tests
         }
     }
 
+    // Post-create typed handler that stamps ctx.Response.id onto a follow-up task's regarding lookup - proves the
+    // harness surfaces the created id as OutputParameters["id"] (exactly as Dataverse does) so ctx.Response.id
+    // resolves in a post-create handler, on both the crm.Create pipeline and the direct-execute paths.
+    public sealed class StampResponseIdOnCreate : EntityPluginBase<FakeAccount>
+    {
+        public StampResponseIdOnCreate(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreated);
+
+        private void OnCreated(ICreatePostContext<FakeAccount> ctx)
+            => ctx.SystemService.Create(new Entity("task")
+            {
+                ["subject"] = "follow-up",
+                ["regardingobjectid"] = new EntityReference("account", ctx.Response.id),
+            });
+    }
+
     // Cascade B: on task create, create a note (proves a cascaded plugin fires from another plugin's write).
     public sealed class CreateNoteOnTaskCreate : EntityPluginBase<FakeTask>
     {

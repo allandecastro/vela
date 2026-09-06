@@ -88,8 +88,10 @@ public class ScaffoldTemplatesTests
         Assert.Contains("(string unsecureConfig, string secureConfig)", code);
         Assert.Contains("ConfigureServices", code);
         Assert.Contains("GetRequiredService<IAccountFollowUpService>", code);
-        // Single-step plugins do not bind a handler.
-        Assert.DoesNotContain(".Handler(", code);
+        // Binds a typed post-stage handler that resolves the DI service and reads the typed response.
+        Assert.Contains(".Handler(OnAccountCreated)", code);
+        Assert.Contains("ICreatePostContext<Account>", code);
+        Assert.Contains("ctx.Response.id", code);
     }
 
     [Fact]

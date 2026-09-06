@@ -637,7 +637,7 @@ namespace matches its folder (the .NET default), so e.g. `Account/Plugins/` is `
 ```text
 {{prefix}}.Plugins/
   Account/
-    Plugins/AccountPostCreatePlugin.cs          # single-step plugin: schedules a 7-day follow-up task + DI
+    Plugins/AccountPostCreatePlugin.cs          # typed post-stage handler: schedules a 7-day follow-up task + DI
     Services/AccountFollowUpService.cs          # table-scoped service (only account plugins use it)
     CustomApis/AccountEstimateValueCustomApi.cs # Custom API bound to the account table (typed request/response)
   Contact/
@@ -681,7 +681,9 @@ configures.
 ### Single-step vs multi-step
 
 - **Single-step** - register one step and override `Execute(ctx)`; read the record with `ctx.GetTarget<TEntity>()`
-  (or the message-specific request with `ctx.GetRequest<...>()`). See `AccountPostCreatePlugin`.
+  (or the message-specific request with `ctx.GetRequest<...>()`). See `AccountRelatedContactsPlugin`. Even a
+  single step can instead bind a typed `.Handler(...)` to get the stage-typed context (`ctx.Request` / `ctx.Response`
+  / `ctx.Target`) - see `AccountPostCreatePlugin`.
 - **Multi-step ("router")** - register several steps in one class, giving each a `.Handler(Method)` bound to a
   method; the framework dispatches to the right one. Each handler takes the message-typed context (for example
   `ICreatePostContext<TEntity>` / `IUpdatePostContext<TEntity>`), exposing a strongly-typed `ctx.Request` (and, in a
@@ -1424,9 +1426,10 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Single-step plugin: after an account is created, schedules a follow-up task a week out.
-    /// Demonstrates dependency injection via <see cref="ConfigureServices"/> plus a table-scoped
-    /// service (<see cref="IAccountFollowUpService"/>) resolved with <c>ctx.GetRequiredService&lt;T&gt;()</c>.
+    /// After an account is created, schedules a follow-up task a week out. Uses a typed post-stage handler
+    /// (<see cref="ICreatePostContext{TEntity}"/>) so <c>ctx.Response.id</c> and <c>ctx.Target</c> are strongly
+    /// typed, and shows dependency injection via <see cref="ConfigureServices"/> plus a table-scoped service
+    /// (<see cref="IAccountFollowUpService"/>) resolved with <c>ctx.GetRequiredService&lt;T&gt;()</c>.
     /// </summary>
     public sealed class AccountPostCreatePlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
@@ -1443,17 +1446,21 @@ namespace {{prefix}}.Plugins.Account.Plugins
                 .PostOperation()
                 .Sync()
                 .FilteringAttributes(a => a.Name)
+                .Handler(OnAccountCreated)
                 .Description("Schedules a 7-day follow-up task after an account is created.")
                 .PostImage()
                     .Attributes(a => a.Name);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        // Typed handler: because the step is PostOperation, ctx is an ICreatePostContext<Account>, so ctx.Response
+        // (the CreateResponse) and ctx.Target (the created Account) are strongly typed. It is still an
+        // ILocalPluginContext, so images and services work as usual.
+        private void OnAccountCreated(ICreatePostContext<Account> ctx)
         {
             Account postImage = ctx.GetPostImage<Account>();
             IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
 
-            Guid taskId = followUp.CreateFollowUpTask(postImage.Id, postImage.Name);
+            Guid taskId = followUp.CreateFollowUpTask(ctx.Response.id, postImage.Name);
             ctx.Trace("Created follow-up task {0} for account '{1}'.", taskId, postImage.Name);
         }
     }

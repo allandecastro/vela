@@ -21,8 +21,23 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
-(`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
+### Framework line (`Vela.Plugins` + `Vela.Testing`, next `framework-vX.Y.Z`)
+
+#### Fixed
+
+- **The in-memory harness now surfaces the created id to a Create Post handler.** A `Create` PostOperation step's
+  context now exposes `OutputParameters["id"]` (and a `CreateMultiple` Post step exposes `OutputParameters["Ids"]`),
+  exactly as Dataverse does, so `ctx.Response.id` / `ctx.Response.Ids` resolve when testing a post-create handler -
+  on both the `crm.Create(...)` pipeline and the direct `PluginContext.For<T>()...Execute(plugin)` path. Previously
+  `ctx.Response.id` read back `Guid.Empty` in the harness.
+
+### CLI line (`Vela.Cli`, next `cli-vX.Y.Z`)
+
+#### Changed
+
+- The scaffolded `AccountPostCreatePlugin` is now a typed post-stage handler (`.Handler(OnAccountCreated)` with
+  `void OnAccountCreated(ICreatePostContext<Account> ctx)`) that reads `ctx.Response.id` and a post-image, instead of
+  the single-step `Execute(ILocalPluginContext)` override, so the scaffold showcases the stage-typed `ctx.Response`.
 
 ## [0.5.0] - 2026-09-06
 

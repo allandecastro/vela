@@ -968,6 +968,12 @@ namespace Vela.Testing
                         invocation.PreState = capturedItem.PreState;
                         invocation.PostState = capturedItem.PostState;
                         invocation.ChangedAttributes = capturedItem.ChangedAttributes;
+                        // A Create Post step sees the created id as OutputParameters["id"], exactly as Dataverse
+                        // surfaces it, so ctx.Response.id resolves in a post-create handler.
+                        if (!isUpdate && stage == PluginStages.PostOperation)
+                        {
+                            invocation.Outputs = new ParameterCollection { { "id", capturedItem.Target.Id } };
+                        }
                         Emit(captured, asyncQueue, () => Dispatch(captured, invocation));
                     }
                 }
@@ -1018,6 +1024,14 @@ namespace Vela.Testing
             context.InputParameters["Targets"] = targets;
             context.PreEntityImagesCollection = items.Select(item => BuildImageCollection(registration.Step.PreImages, item.PreState)).ToArray();
             context.PostEntityImagesCollection = items.Select(item => BuildImageCollection(registration.Step.PostImages, item.PostState)).ToArray();
+
+            // A CreateMultiple Post step sees the created ids as OutputParameters["Ids"], exactly as Dataverse
+            // surfaces them, so ctx.Response.Ids resolves in a post-create-multiple handler.
+            if (string.Equals(message, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase)
+                && stage == PluginStages.PostOperation)
+            {
+                context.OutputParameters["Ids"] = targets.Entities.Select(entity => entity.Id).ToArray();
+            }
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, message, stage, registration.Step.Mode, entityName, _depth));
             IPlugin plugin = registration.CreateInstance();
