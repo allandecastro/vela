@@ -80,6 +80,12 @@ namespace Vela.Testing
             return this;
         }
 
+        /// <summary>Sets the execution mode to synchronous (shortcut for <c>Mode(ExecutionMode.Synchronous)</c>).</summary>
+        public PluginContextBuilder<TEntity> Sync() => Mode(ExecutionMode.Synchronous);
+
+        /// <summary>Sets the execution mode to asynchronous (shortcut for <c>Mode(ExecutionMode.Asynchronous)</c>).</summary>
+        public PluginContextBuilder<TEntity> Async() => Mode(ExecutionMode.Asynchronous);
+
         /// <summary>Sets the execution depth.</summary>
         public PluginContextBuilder<TEntity> Depth(int depth)
         {

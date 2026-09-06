@@ -19,7 +19,7 @@ namespace Zava.Plugins.Account
         {
             RegisterSteps().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
+                .Sync()
                 .FilteringAttributes(a => a.Name)      // Only trigger when Name changes
                 .Description("Handles account updates")
                 .PreImage()
@@ -49,7 +49,7 @@ public class AccountStepRouter : EntityPluginBase<Account>
     {
         RegisterSteps().OnCreate()
             .PostOperation()
-            .Mode(ExecutionMode.Synchronous)
+            .Sync()
             .FilteringAttributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
             .Handler(OnCreatePost)
             .Description("Handles account creation after commit.")
@@ -58,7 +58,7 @@ public class AccountStepRouter : EntityPluginBase<Account>
 
         RegisterSteps().OnUpdate()
             .PostOperation()
-            .Mode(ExecutionMode.Synchronous)
+            .Sync()
             .FilteringAttributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
             .Handler(OnUpdatePost)
             .Description("Handles customer-facing account changes.")
@@ -117,7 +117,7 @@ The fluent builder enforces a specific order:
    instead, or register through `OnMessage("SetState")` if you must target the legacy message.
 2. **Stage** - `PreValidation()`, `PreOperation()`, or `PostOperation()` (typed methods; the stage you pick
    determines which images the rest of the chain will offer)
-3. **Mode** - `Mode(ExecutionMode.Synchronous)` or `Mode(ExecutionMode.Asynchronous)`
+3. **Mode** - `Sync()` / `Async()` (shortcuts for `Mode(ExecutionMode.Synchronous)` / `Mode(ExecutionMode.Asynchronous)`)
 4. **Filtering** - `FilteringAttributes(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
    `CreateMultiple` and `UpdateMultiple`** (at least one attribute) and must come immediately after `Mode(...)`;
    not offered on other messages. An unfiltered Create/Update step would fire on every change, so the builder

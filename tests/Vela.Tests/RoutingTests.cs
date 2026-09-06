@@ -95,6 +95,16 @@ namespace Vela.Tests
             Assert.Equal(nameof(TestHandler), definition.HandlerMethodName);
         }
 
+        [Fact]
+        public void Sync_and_Async_are_shortcuts_for_Mode()
+        {
+            StepDefinition sync = new StepBuilder<TestAccount>().OnDelete().PostOperation().Sync().Build();
+            Assert.Equal(ExecutionMode.Synchronous, sync.Mode);
+
+            StepDefinition async = new StepBuilder<TestAccount>().OnDelete().PostOperation().Async().Build();
+            Assert.Equal(ExecutionMode.Asynchronous, async.Mode);
+        }
+
         // The typed stage chain now prevents an invalid image at compile time (a pre-image in PreValidation,
         // a post-image on Delete, a pre-image on Create, etc. do not compile). These positive tests confirm
         // the valid combinations the chain does expose.

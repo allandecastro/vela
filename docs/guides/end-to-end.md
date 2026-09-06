@@ -20,7 +20,7 @@ public class AccountPostUpdate : EntityPluginBase<Account>
     {
         RegisterSteps().OnUpdate()
             .PostOperation()
-            .Mode(ExecutionMode.Synchronous)
+            .Sync()
             .FilteringAttributes(a => a.Name)   // only fire when Name changes
             .PreImage()
                 .Attributes(a => a.Name);

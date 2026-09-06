@@ -666,7 +666,7 @@ protected override void RegisterPluginSteps()
 {
     RegisterSteps().OnCreate()                       // message: OnCreate/OnUpdate/OnDelete/OnMessage("...")
         .PostOperation()                             // stage: .PreValidation() | .PreOperation() | .PostOperation()
-        .Mode(ExecutionMode.Synchronous)             // Synchronous | Asynchronous
+        .Sync()             // Synchronous | Asynchronous
         .FilteringAttributes(a => a.Name)            // (create/update) attributes that trigger the step
         .Description("Runs after an account is created.")
         .PostImage()                                 // snapshot after the operation...
@@ -690,7 +690,7 @@ configures.
 
 ```csharp
 RegisterSteps().OnUpdate()
-    .PostOperation().Mode(ExecutionMode.Synchronous)
+    .PostOperation().Sync()
     .FilteringAttributes(c => c.LastName)            // (update) fire only when these columns change
     .Handler(OnLastNameChanged)                      // void OnLastNameChanged(IUpdateContext<Contact> ctx)
     .PreImage().Attributes(c => c.LastName);         // before-snapshot for the handler
@@ -1332,7 +1332,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
         {
             RegisterSteps().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
+                .Sync()
                 .FilteringAttributes(a => a.Name)
                 .Description("Counts the contacts related to an account after it is updated.");
         }
@@ -1382,7 +1382,7 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
                 new Contact { Id = Guid.NewGuid(), FirstName = "John", ParentCustomerId = new EntityReference(Account.EntityLogicalNameValue, accountId) });
 
             PluginContextBuilder<Account> builder = PluginContext.For<Account>()
-                .OnUpdate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+                .OnUpdate().Stage(PluginStages.PostOperation).Sync()
                 .WithPrimaryEntity(Account.EntityLogicalNameValue, accountId)
                 .WithTarget(new Account { Id = accountId, Name = "Zava (renamed)" })
                 .WithOrganizationService(crm);
@@ -1427,7 +1427,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
         {
             RegisterSteps().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
+                .Sync()
                 .FilteringAttributes(a => a.Name)
                 .Description("Schedules a 7-day follow-up task after an account is created.")
                 .PostImage()
@@ -1468,33 +1468,33 @@ namespace {{prefix}}.Plugins.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             // Create / Update carry a full entity Target; both require at least one filtering attribute.
-            RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnCreate).Disabled();
-            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnUpdate).Disabled();
+            RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreate).Disabled();
+            RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdate).Disabled();
 
             // Delete carries an EntityReference Target.
-            RegisterSteps().OnDelete().PreOperation().Mode(ExecutionMode.Synchronous).Handler(OnDelete).Disabled();
+            RegisterSteps().OnDelete().PreOperation().Sync().Handler(OnDelete).Disabled();
 
             // Bulk messages carry a Targets collection; they also require a filtering attribute.
-            RegisterSteps().OnCreateMultiple().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnCreateMultiple).Disabled();
-            RegisterSteps().OnUpdateMultiple().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnUpdateMultiple).Disabled();
+            RegisterSteps().OnCreateMultiple().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreateMultiple).Disabled();
+            RegisterSteps().OnUpdateMultiple().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdateMultiple).Disabled();
 
             // Read messages.
-            RegisterSteps().OnRetrieve().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrieve).Disabled();
-            RegisterSteps().OnRetrieveMultiple().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrieveMultiple).Disabled();
+            RegisterSteps().OnRetrieve().PostOperation().Sync().Handler(OnRetrieve).Disabled();
+            RegisterSteps().OnRetrieveMultiple().PostOperation().Sync().Handler(OnRetrieveMultiple).Disabled();
 
             // Relationship messages.
-            RegisterSteps().OnAssociate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAssociate).Disabled();
-            RegisterSteps().OnDisassociate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnDisassociate).Disabled();
+            RegisterSteps().OnAssociate().PostOperation().Sync().Handler(OnAssociate).Disabled();
+            RegisterSteps().OnDisassociate().PostOperation().Sync().Handler(OnDisassociate).Disabled();
 
             // Merge and sharing (access) messages.
-            RegisterSteps().OnMerge().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnMerge).Disabled();
-            RegisterSteps().OnGrantAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnGrantAccess).Disabled();
-            RegisterSteps().OnModifyAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnModifyAccess).Disabled();
-            RegisterSteps().OnRevokeAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRevokeAccess).Disabled();
+            RegisterSteps().OnMerge().PostOperation().Sync().Handler(OnMerge).Disabled();
+            RegisterSteps().OnGrantAccess().PostOperation().Sync().Handler(OnGrantAccess).Disabled();
+            RegisterSteps().OnModifyAccess().PostOperation().Sync().Handler(OnModifyAccess).Disabled();
+            RegisterSteps().OnRevokeAccess().PostOperation().Sync().Handler(OnRevokeAccess).Disabled();
 
             // Sharing reads (also valid on account).
-            RegisterSteps().OnRetrievePrincipalAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrievePrincipalAccess).Disabled();
-            RegisterSteps().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrieveSharedPrincipalsAndAccess).Disabled();
+            RegisterSteps().OnRetrievePrincipalAccess().PostOperation().Sync().Handler(OnRetrievePrincipalAccess).Disabled();
+            RegisterSteps().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Handler(OnRetrieveSharedPrincipalsAndAccess).Disabled();
 
             // Many more messages are modelled but belong to other tables, so they are not shown here on account:
             // e.g. QualifyLead (lead); WinOpportunity / LoseOpportunity / Generate*/Convert* (opportunity / quote /
@@ -1591,7 +1591,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         {
             RegisterSteps().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
+                .Sync()
                 .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
                 .Handler(OnCreatePost)
                 .Description("Handles contact creation.")
@@ -1600,7 +1600,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
 
             RegisterSteps().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
+                .Sync()
                 .FilteringAttributes(c => c.LastName)
                 .Handler(OnUpdatePost)
                 .Description("Handles contact last-name changes.")
@@ -1984,7 +1984,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
             };
 
             PluginContextBuilder<Contact> builder = PluginContext.For<Contact>()
-                .OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
+                .OnCreate().Stage(PluginStages.PostOperation).Sync()
                 .WithPrimaryEntity(Contact.EntityLogicalNameValue, newContactId)
                 .WithTarget(created)
                 .WithPostImage(created)
@@ -2112,7 +2112,7 @@ namespace {{ns}}
         {
             RegisterSteps().{{registrationCall}}
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous){{filteringCall}}
+                .Sync(){{filteringCall}}
                 .Description("{{message}} {{entityType}} handler.");
         }
 
@@ -2330,7 +2330,7 @@ namespace {{prefix}}.Integrations.Contact.Plugins
         {
             RegisterSteps().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Asynchronous)
+                .Async()
                 .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
                 .Description("Runs after a contact is created.")
                 .PostImage()
@@ -2367,7 +2367,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
         {
             RegisterSteps().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Asynchronous)
+                .Async()
                 .FilteringAttributes(a => a.Name)
                 .Handler(OnAccountCreated)
                 .Description("Pushes a newly created account downstream.")
@@ -2376,7 +2376,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
 
             RegisterSteps().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Asynchronous)
+                .Async()
                 .FilteringAttributes(a => a.Name, a => a.Telephone1)
                 .Handler(OnAccountChanged)
                 .Description("Pushes account changes downstream.")

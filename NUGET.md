@@ -29,7 +29,7 @@ public class AccountPostUpdate : EntityPluginBase<Account>
     protected override void RegisterPluginSteps()
         => RegisterSteps().OnUpdate()
                .PostOperation()
-               .Mode(ExecutionMode.Synchronous)
+               .Sync()
                .FilteringAttributes(a => a.Name);
 
     protected override void Execute(ILocalPluginContext ctx)

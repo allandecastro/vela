@@ -71,7 +71,7 @@ internal static class StepInjector
         string registration =
             $"\n\n            RegisterSteps().{registrationCall}\n" +
             "                .PostOperation()\n" +
-            "                .Mode(ExecutionMode.Synchronous)\n" +
+            "                .Sync()\n" +
             filtering +
             $"                .Handler({handlerName});";
 
