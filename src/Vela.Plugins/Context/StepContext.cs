@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
+using Vela.DI;
 
 namespace Vela.Context
 {
@@ -13,7 +14,7 @@ namespace Vela.Context
     /// </summary>
     /// <typeparam name="TRequest">The SDK request type for the message.</typeparam>
     /// <typeparam name="TResponse">The SDK response type for the message.</typeparam>
-    public abstract class StepContext<TRequest, TResponse> : IStepContext<TRequest, TResponse>
+    public abstract class StepContext<TRequest, TResponse> : IStepContext<TRequest, TResponse>, IServiceResolverContext
         where TRequest : OrganizationRequest, new()
         where TResponse : OrganizationResponse, new()
     {
@@ -25,6 +26,13 @@ namespace Vela.Context
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         }
+
+        /// <inheritdoc />
+        IPluginServiceResolver IServiceResolverContext.Resolver =>
+            (_inner as IServiceResolverContext)?.Resolver
+            ?? throw new InvalidPluginExecutionException(
+                $"The wrapped context '{_inner.GetType().FullName}' does not expose a service resolver, so " +
+                "GetService/GetRequiredService are unavailable in this typed handler.");
 
         /// <inheritdoc />
         public TRequest Request => _inner.GetRequest<TRequest>();
