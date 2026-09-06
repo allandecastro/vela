@@ -24,6 +24,22 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.4.1] - 2026-09-06
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.1`.
+
+### Fixed
+
+- **Test harness fires plugin steps for every modelled message.** The in-memory pipeline
+  (`PluginPipeline` / `InMemoryOrganizationService`) previously only ran registered steps for
+  Create/Update/Delete/Associate/Disassociate/SetState; executing any other message (the sharing messages, and
+  the sales / queue / email / membership / case / contract messages added in 0.4.0) went straight to the store
+  and fired nothing. Now `crm.Execute(new <Message>Request { ... })` fires the registered Pre/Post steps like any
+  other plugin, with the request parameters exposed as `ctx.Request` (typed) and the response `Results` as
+  `ctx.Response` in the Post stage. The data effect is not simulated for messages the fake does not model (a fake
+  cannot reproduce the server logic), so the store still performs the operation when it recognises the request
+  and the steps otherwise fire around a no-op. Messages with no registered steps are unchanged.
+
 ## [0.4.0] - 2026-09-06
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.0`. Additive (non-breaking):

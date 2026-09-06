@@ -293,6 +293,31 @@ namespace Vela.Testing.Tests
         }
     }
 
+    // Fires on the SendEmail message (a modelled message with no data simulation): proves the pipeline fires
+    // registered steps for these messages like any other plugin, and that ctx.Request is the typed SendEmailRequest.
+    public sealed class OnAccountEmailSent : EntityPluginBase<FakeAccount>
+    {
+        public OnAccountEmailSent(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterSteps().OnSendEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnSent);
+
+        private void OnSent(ISendEmailContext<FakeAccount> ctx)
+            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"sent:{ctx.Request.EmailId}" });
+    }
+
+    // Fires on AddToQueue, whose request carries a Target EntityReference (so the primary entity is derived from it).
+    public sealed class OnAccountAddedToQueue : EntityPluginBase<FakeAccount>
+    {
+        public OnAccountAddedToQueue(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterSteps().OnAddToQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnQueued);
+
+        private void OnQueued(IAddToQueueContext<FakeAccount> ctx)
+            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"queue:{ctx.TargetReference.Id}:{ctx.Request.DestinationQueueId}" });
+    }
+
     // Lightweight Custom API for the Execute() path.
     public sealed class GreetApi : CustomApiBase
     {

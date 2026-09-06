@@ -310,6 +310,40 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void ModelledMessage_WithoutDataSimulation_StillFiresRegisteredSteps()
+        {
+            // SendEmail has no data simulation in the fake, but a registered SendEmail step must still fire like
+            // any other plugin when the message is executed, with ctx.Request typed as the SendEmailRequest.
+            Guid emailId = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnAccountEmailSent>();
+
+            pipeline.Service.Execute(new SendEmailRequest { EmailId = emailId, IssueSend = true });
+
+            Entity task = Assert.Single(pipeline.GetAll("task"));
+            Assert.Equal($"sent:{emailId}", task.GetAttributeValue<string>("subject"));
+            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("OnAccountEmailSent"));
+        }
+
+        [Fact]
+        public void ModelledMessage_WithTargetReference_DerivesEntityAndFires()
+        {
+            // AddToQueue carries a Target EntityReference; the primary entity is derived from it and ctx.TargetReference
+            // / ctx.Request.DestinationQueueId are typed.
+            Guid recordId = Guid.NewGuid();
+            Guid queueId = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnAccountAddedToQueue>();
+
+            pipeline.Service.Execute(new AddToQueueRequest
+            {
+                Target = new EntityReference("account", recordId),
+                DestinationQueueId = queueId
+            });
+
+            Entity task = Assert.Single(pipeline.GetAll("task"));
+            Assert.Equal($"queue:{recordId}:{queueId}", task.GetAttributeValue<string>("subject"));
+        }
+
+        [Fact]
         public void FromAssembly_AutoDiscoversAndFiresPlugins()
         {
             PluginPipeline pipeline = PluginPipeline.FromAssemblyOf<FakeAuto>();
