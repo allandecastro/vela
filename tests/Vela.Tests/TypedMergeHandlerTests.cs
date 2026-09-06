@@ -1,6 +1,7 @@
 using System;
 using Vela.Constants;
 using Vela.Context;
+using Vela.DI;
 using Vela.Plugin;
 using Vela.StepBuilder;
 using Vela.Testing;
@@ -81,6 +82,42 @@ namespace Vela.Tests
                 .Execute(probe);
 
             Assert.Equal(subordinate, probe.CapturedSubordinate);
+        }
+
+        private interface IGreeter { string Greet(); }
+
+        private sealed class Greeter : IGreeter { public string Greet() => "hi"; }
+
+        // Registers a service in ConfigureServices and resolves it inside a TYPED handler (ICreateContext) - the
+        // exact shape of the scaffolded ContactRouterPlugin. Regression: this used to throw "does not expose the
+        // execution service resolver" because the typed context did not forward the resolver.
+        private sealed class DiProbe : EntityPluginBase<TestAccount>
+        {
+            public string? Greeted;
+
+            public DiProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+                => services.AddScoped<IGreeter>(_ => new Greeter());
+
+            protected override void RegisterPluginSteps()
+                => RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreated);
+
+            private void OnCreated(ICreateContext<TestAccount> ctx)
+                => Greeted = ctx.GetRequiredService<IGreeter>().Greet();
+        }
+
+        [Fact]
+        public void Typed_handler_resolves_a_service_registered_in_ConfigureServices()
+        {
+            DiProbe probe = new DiProbe();
+
+            PluginContext.For<TestAccount>()
+                .OnCreate().Stage(PluginStages.PostOperation).Sync()
+                .WithTarget(new TestAccount { Id = Guid.NewGuid(), Name = "Zava" })
+                .Execute(probe);
+
+            Assert.Equal("hi", probe.Greeted);
         }
     }
 }

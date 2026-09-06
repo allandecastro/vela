@@ -24,6 +24,19 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.4.4] - 2026-09-06
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.4`.
+
+### Fixed
+
+- **Dependency injection now works inside typed message handlers.** `ctx.GetService<T>()` /
+  `ctx.GetRequiredService<T>()` threw `"Context type 'I{Message}Context' does not expose the execution service
+  resolver"` (or returned `null`) when called from a message-typed handler, because the resolver lookup was a
+  concrete `LocalPluginContext` type check that the typed `StepContext` wrapper failed. The wrapper now forwards
+  the per-execution resolver (via a new `IServiceResolverContext`), so DI resolves from any handler - typed or
+  plain. Affected 0.3.0-0.4.3 (any typed handler that resolves a service, e.g. the scaffolded `ContactRouterPlugin`).
+
 ## [0.4.3] - 2026-09-06
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.3`. Additive.

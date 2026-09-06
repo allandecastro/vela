@@ -12,7 +12,7 @@ namespace Vela.Context
     /// <summary>
     /// Runtime wrapper around IServiceProvider for Dataverse plugins.
     /// </summary>
-    public sealed class LocalPluginContext : ILocalPluginContext
+    public sealed class LocalPluginContext : ILocalPluginContext, IServiceResolverContext
     {
         private readonly ITracingService _safeTracingService;
         private readonly object? _pluginTelemetryLogger;
@@ -64,6 +64,9 @@ namespace Vela.Context
         /// Gets per-execution service resolver.
         /// </summary>
         public SimpleServiceResolver Resolver { get; }
+
+        /// <inheritdoc />
+        IPluginServiceResolver IServiceResolverContext.Resolver => Resolver;
 
         /// <inheritdoc />
         public IServiceProvider ServiceProvider { get; }

@@ -1,4 +1,5 @@
 using System;
+using Vela.Caching;
 using Vela.Context;
 using Vela.Testing;
 using Vela.Tests.TestSupport;
@@ -61,6 +62,19 @@ namespace Vela.Tests
         public void StepContext_NullInner_Throws()
         {
             Assert.Throws<ArgumentNullException>(() => new MergeContext<TestAccount>(null!));
+        }
+
+        [Fact]
+        public void TypedContext_ResolvesServices_ThroughTheWrappedResolver()
+        {
+            // Regression: dependency injection (ctx.GetService / ctx.GetRequiredService) must work from a typed
+            // handler, not only the plain LocalPluginContext. The StepContext wrapper forwards the resolver.
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            ICreateContext<TestAccount> ctx = new CreateContext<TestAccount>(inner);
+
+            // IPluginCacheService is a built-in service, always registered.
+            Assert.NotNull(ctx.GetService<IPluginCacheService>());
+            Assert.NotNull(ctx.GetRequiredService<IPluginCacheService>());
         }
 
         [Fact]

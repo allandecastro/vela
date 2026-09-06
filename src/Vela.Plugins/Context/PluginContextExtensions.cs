@@ -134,12 +134,12 @@ namespace Vela.Context
                 throw new ArgumentNullException(nameof(context));
             }
 
-            if (context is not LocalPluginContext localContext)
+            if (context is not IServiceResolverContext resolverContext)
             {
                 return null;
             }
 
-            return localContext.Resolver.GetService(typeof(T)) as T;
+            return resolverContext.Resolver.GetService(typeof(T)) as T;
         }
 
         /// <summary>
@@ -155,13 +155,13 @@ namespace Vela.Context
                 throw new ArgumentNullException(nameof(context));
             }
 
-            if (context is not LocalPluginContext localContext)
+            if (context is not IServiceResolverContext resolverContext)
             {
                 throw new InvalidPluginExecutionException(
                     $"Context type '{context.GetType().FullName}' does not expose the execution service resolver.");
             }
 
-            return localContext.Resolver.GetRequiredService<T>();
+            return resolverContext.Resolver.GetRequiredService<T>();
         }
 
         /// <summary>
