@@ -24,6 +24,26 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.4.2] - 2026-09-06
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.2`. Additive.
+
+### Added
+
+- Typed contexts for 7 more messages: `WhoAmI` (global message - `ctx.Response.UserId`/`BusinessUnitId`/
+  `OrganizationId`), `WinQuote` and `ReviseQuote` (like Win/LoseOpportunity), `FulfillSalesOrder`, and the
+  opportunity product-getters `GetQuoteProductsFromOpportunity`, `GetSalesOrderProductsFromOpportunity`,
+  `GetInvoiceProductsFromOpportunity`. None carry a primary `Target`, so their handlers read message-specific
+  request fields (`ctx.Request.QuoteClose`, `ctx.Request.OpportunityId`, ...) and, in a Post step, `ctx.Response`.
+
+## [0.1.20] - 2026-09-06
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.20`.
+
+### Changed
+
+- `vela add plugin --message <M>` emits the typed `On<M>()` for the 7 messages added in framework `0.4.2`.
+
 ## [0.4.1] - 2026-09-06
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.1`.

@@ -29,6 +29,7 @@ internal static class AddCommand
         "Create", "Update", "CreateMultiple", "UpdateMultiple", "Delete", "Retrieve", "RetrieveMultiple",
         "Associate", "Disassociate", "Merge", "GrantAccess", "ModifyAccess", "RevokeAccess",
         "QualifyLead", "WinOpportunity", "LoseOpportunity", "ConvertQuoteToSalesOrder", "ConvertSalesOrderToInvoice", "GenerateQuoteFromOpportunity", "GenerateSalesOrderFromOpportunity", "GenerateInvoiceFromOpportunity", "AddToQueue", "RemoveFromQueue", "PickFromQueue", "RouteTo", "ReleaseToQueue", "SendEmail", "SendEmailFromTemplate", "DeliverIncomingEmail", "DeliverPromoteEmail", "AddMembersTeam", "RemoveMembersTeam", "AddListMembersList", "AddMemberList", "RemoveMemberList", "CloseIncident", "CancelContract", "CloneContract", "RetrievePrincipalAccess", "RetrieveSharedPrincipalsAndAccess",
+        "WhoAmI", "WinQuote", "ReviseQuote", "FulfillSalesOrder", "GetQuoteProductsFromOpportunity", "GetSalesOrderProductsFromOpportunity", "GetInvoiceProductsFromOpportunity",
     ];
 
     public static int Run(string[] args)

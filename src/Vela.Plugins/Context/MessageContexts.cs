@@ -435,4 +435,68 @@ namespace Vela.Context
         public EntityReference TargetReference => this.GetTargetRef();
     }
 
+    /// <summary>Typed context for a WhoAmI step.</summary>
+    public interface IWhoAmIContext<TEntity> : IStepContext<WhoAmIRequest, WhoAmIResponse> where TEntity : Entity { }
+    /// <summary>Typed context for a WinQuote step.</summary>
+    public interface IWinQuoteContext<TEntity> : IStepContext<WinQuoteRequest, WinQuoteResponse> where TEntity : Entity { }
+    /// <summary>Typed context for a ReviseQuote step.</summary>
+    public interface IReviseQuoteContext<TEntity> : IStepContext<ReviseQuoteRequest, ReviseQuoteResponse> where TEntity : Entity { }
+    /// <summary>Typed context for a FulfillSalesOrder step.</summary>
+    public interface IFulfillSalesOrderContext<TEntity> : IStepContext<FulfillSalesOrderRequest, FulfillSalesOrderResponse> where TEntity : Entity { }
+    /// <summary>Typed context for a GetQuoteProductsFromOpportunity step.</summary>
+    public interface IGetQuoteProductsFromOpportunityContext<TEntity> : IStepContext<GetQuoteProductsFromOpportunityRequest, GetQuoteProductsFromOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Typed context for a GetSalesOrderProductsFromOpportunity step.</summary>
+    public interface IGetSalesOrderProductsFromOpportunityContext<TEntity> : IStepContext<GetSalesOrderProductsFromOpportunityRequest, GetSalesOrderProductsFromOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Typed context for a GetInvoiceProductsFromOpportunity step.</summary>
+    public interface IGetInvoiceProductsFromOpportunityContext<TEntity> : IStepContext<GetInvoiceProductsFromOpportunityRequest, GetInvoiceProductsFromOpportunityResponse> where TEntity : Entity { }
+
+    /// <summary>Runtime implementation of <see cref="IWhoAmIContext{TEntity}"/>.</summary>
+    public sealed class WhoAmIContext<TEntity> : StepContext<WhoAmIRequest, WhoAmIResponse>, IWhoAmIContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public WhoAmIContext(ILocalPluginContext inner) : base(inner) { }
+    }
+
+    /// <summary>Runtime implementation of <see cref="IWinQuoteContext{TEntity}"/>.</summary>
+    public sealed class WinQuoteContext<TEntity> : StepContext<WinQuoteRequest, WinQuoteResponse>, IWinQuoteContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public WinQuoteContext(ILocalPluginContext inner) : base(inner) { }
+    }
+
+    /// <summary>Runtime implementation of <see cref="IReviseQuoteContext{TEntity}"/>.</summary>
+    public sealed class ReviseQuoteContext<TEntity> : StepContext<ReviseQuoteRequest, ReviseQuoteResponse>, IReviseQuoteContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ReviseQuoteContext(ILocalPluginContext inner) : base(inner) { }
+    }
+
+    /// <summary>Runtime implementation of <see cref="IFulfillSalesOrderContext{TEntity}"/>.</summary>
+    public sealed class FulfillSalesOrderContext<TEntity> : StepContext<FulfillSalesOrderRequest, FulfillSalesOrderResponse>, IFulfillSalesOrderContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public FulfillSalesOrderContext(ILocalPluginContext inner) : base(inner) { }
+    }
+
+    /// <summary>Runtime implementation of <see cref="IGetQuoteProductsFromOpportunityContext{TEntity}"/>.</summary>
+    public sealed class GetQuoteProductsFromOpportunityContext<TEntity> : StepContext<GetQuoteProductsFromOpportunityRequest, GetQuoteProductsFromOpportunityResponse>, IGetQuoteProductsFromOpportunityContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetQuoteProductsFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
+    }
+
+    /// <summary>Runtime implementation of <see cref="IGetSalesOrderProductsFromOpportunityContext{TEntity}"/>.</summary>
+    public sealed class GetSalesOrderProductsFromOpportunityContext<TEntity> : StepContext<GetSalesOrderProductsFromOpportunityRequest, GetSalesOrderProductsFromOpportunityResponse>, IGetSalesOrderProductsFromOpportunityContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetSalesOrderProductsFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
+    }
+
+    /// <summary>Runtime implementation of <see cref="IGetInvoiceProductsFromOpportunityContext{TEntity}"/>.</summary>
+    public sealed class GetInvoiceProductsFromOpportunityContext<TEntity> : StepContext<GetInvoiceProductsFromOpportunityRequest, GetInvoiceProductsFromOpportunityResponse>, IGetInvoiceProductsFromOpportunityContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetInvoiceProductsFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
+    }
+
 }

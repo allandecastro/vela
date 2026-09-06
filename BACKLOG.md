@@ -27,6 +27,23 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Runtime (Vela.Plugins)
 
-_Nothing queued. The message-dependent typed target redesign shipped as per-message typed handler contexts
+The message-dependent typed target redesign shipped as per-message typed handler contexts
 (`I<Message>Context<TEntity>` exposing `ctx.Request`/`ctx.Response` and `ctx.Target`/`ctx.TargetReference`/
-`ctx.TargetCollection`); see the CHANGELOG._
+`ctx.TargetCollection`); see the CHANGELOG. 46 messages are modelled so far.
+
+- **P3 - candidate typed messages to model next.** All exist as `Microsoft.Crm.Sdk.Messages.*Request/*Response`
+  (verified by reflection) and are business/registerable; add on demand via the recipe in
+  `docs/contributing/extending-plugins.md`. Deferred because they are lower-frequency and the additive recipe makes
+  each cheap. Skip the long tail of metadata/customization/admin/read-only messages (`Publish*`, `*Solution`,
+  `Retrieve*Component`, licensing, provisioning, `Search*`/`Query*`): those stay on the permissive `OnMessage("...")`.
+  - **Service / contracts:** `RenewContract`, `RenewEntitlement`.
+  - **Marketing lists:** `QualifyMemberList` (the real "qualify member"; the singular `QualifyMember` does not exist
+    in the SDK), `AddItemCampaign`, `RemoveItemCampaign`, `CopyCampaignResponse`.
+  - **Process / automation:** `ExecuteWorkflow`, `SetProcess`, `Recalculate`.
+  - **Pricing locks:** `LockSalesOrderPricing`, `UnlockSalesOrderPricing`, `LockInvoicePricing`, `UnlockInvoicePricing`.
+  - **Scheduling:** `Reschedule`, `ImmediateBook`.
+  - **Comms:** `SendTemplate`, `SendBulkMail`, `SendFax`.
+  - **Ownership / records:** `ReassignObjectsOwner`, `InitializeFrom`.
+  - **Product kits:** `AddProductToKit`, `RemoveProductFromKit`, `ConvertProductToKit`, `ConvertKitToProduct`.
+  - **Deprecated - never model:** `SetState`, `SetStateDynamicEntity`, `Assign` (use an Update of
+    `statecode`/`statuscode`/`ownerid`).

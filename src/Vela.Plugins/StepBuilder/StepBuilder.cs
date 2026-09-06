@@ -87,6 +87,20 @@ public sealed class StepBuilder<TEntity> :
     IModeSelector<IRetrievePrincipalAccessStep<TEntity>>, IRetrievePrincipalAccessStep<TEntity>,
     IRetrieveSharedPrincipalsAndAccessStepStage<TEntity>,
     IModeSelector<IRetrieveSharedPrincipalsAndAccessStep<TEntity>>, IRetrieveSharedPrincipalsAndAccessStep<TEntity>,
+    IWhoAmIStepStage<TEntity>,
+    IModeSelector<IWhoAmIStep<TEntity>>, IWhoAmIStep<TEntity>,
+    IWinQuoteStepStage<TEntity>,
+    IModeSelector<IWinQuoteStep<TEntity>>, IWinQuoteStep<TEntity>,
+    IReviseQuoteStepStage<TEntity>,
+    IModeSelector<IReviseQuoteStep<TEntity>>, IReviseQuoteStep<TEntity>,
+    IFulfillSalesOrderStepStage<TEntity>,
+    IModeSelector<IFulfillSalesOrderStep<TEntity>>, IFulfillSalesOrderStep<TEntity>,
+    IGetQuoteProductsFromOpportunityStepStage<TEntity>,
+    IModeSelector<IGetQuoteProductsFromOpportunityStep<TEntity>>, IGetQuoteProductsFromOpportunityStep<TEntity>,
+    IGetSalesOrderProductsFromOpportunityStepStage<TEntity>,
+    IModeSelector<IGetSalesOrderProductsFromOpportunityStep<TEntity>>, IGetSalesOrderProductsFromOpportunityStep<TEntity>,
+    IGetInvoiceProductsFromOpportunityStepStage<TEntity>,
+    IModeSelector<IGetInvoiceProductsFromOpportunityStep<TEntity>>, IGetInvoiceProductsFromOpportunityStep<TEntity>,
     IModeSelector<IMergeStep<TEntity>>,
     IMergeStep<TEntity>,
     IModeSelector<IRetrieveStep<TEntity>>, IRetrieveStep<TEntity>,
@@ -186,6 +200,13 @@ public sealed class StepBuilder<TEntity> :
     public ICloneContractStepStage<TEntity> OnCloneContract() { _definition.Message = PluginMessages.CloneContract; return this; }
     public IRetrievePrincipalAccessStepStage<TEntity> OnRetrievePrincipalAccess() { _definition.Message = PluginMessages.RetrievePrincipalAccess; return this; }
     public IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> OnRetrieveSharedPrincipalsAndAccess() { _definition.Message = PluginMessages.RetrieveSharedPrincipalsAndAccess; return this; }
+    public IWhoAmIStepStage<TEntity> OnWhoAmI() { _definition.Message = PluginMessages.WhoAmI; return this; }
+    public IWinQuoteStepStage<TEntity> OnWinQuote() { _definition.Message = PluginMessages.WinQuote; return this; }
+    public IReviseQuoteStepStage<TEntity> OnReviseQuote() { _definition.Message = PluginMessages.ReviseQuote; return this; }
+    public IFulfillSalesOrderStepStage<TEntity> OnFulfillSalesOrder() { _definition.Message = PluginMessages.FulfillSalesOrder; return this; }
+    public IGetQuoteProductsFromOpportunityStepStage<TEntity> OnGetQuoteProductsFromOpportunity() { _definition.Message = PluginMessages.GetQuoteProductsFromOpportunity; return this; }
+    public IGetSalesOrderProductsFromOpportunityStepStage<TEntity> OnGetSalesOrderProductsFromOpportunity() { _definition.Message = PluginMessages.GetSalesOrderProductsFromOpportunity; return this; }
+    public IGetInvoiceProductsFromOpportunityStepStage<TEntity> OnGetInvoiceProductsFromOpportunity() { _definition.Message = PluginMessages.GetInvoiceProductsFromOpportunity; return this; }
 
     public IPermissiveStepStage<TEntity> OnMessage(string messageName)
     {
@@ -422,6 +443,41 @@ public sealed class StepBuilder<TEntity> :
     IModeSelector<IRetrieveSharedPrincipalsAndAccessStep<TEntity>> IRetrieveSharedPrincipalsAndAccessStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
     IRetrieveSharedPrincipalsAndAccessStep<TEntity> IModeSelector<IRetrieveSharedPrincipalsAndAccessStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
     INoImageStep<TEntity> IRetrieveSharedPrincipalsAndAccessStep<TEntity>.Handler(Action<IRetrieveSharedPrincipalsAndAccessContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IModeSelector<IWhoAmIStep<TEntity>> IWhoAmIStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IWhoAmIStep<TEntity>> IWhoAmIStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IWhoAmIStep<TEntity>> IWhoAmIStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IWhoAmIStep<TEntity> IModeSelector<IWhoAmIStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    INoImageStep<TEntity> IWhoAmIStep<TEntity>.Handler(Action<IWhoAmIContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IModeSelector<IWinQuoteStep<TEntity>> IWinQuoteStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IWinQuoteStep<TEntity>> IWinQuoteStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IWinQuoteStep<TEntity>> IWinQuoteStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IWinQuoteStep<TEntity> IModeSelector<IWinQuoteStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    INoImageStep<TEntity> IWinQuoteStep<TEntity>.Handler(Action<IWinQuoteContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IModeSelector<IReviseQuoteStep<TEntity>> IReviseQuoteStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IReviseQuoteStep<TEntity>> IReviseQuoteStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IReviseQuoteStep<TEntity>> IReviseQuoteStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IReviseQuoteStep<TEntity> IModeSelector<IReviseQuoteStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    INoImageStep<TEntity> IReviseQuoteStep<TEntity>.Handler(Action<IReviseQuoteContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IModeSelector<IFulfillSalesOrderStep<TEntity>> IFulfillSalesOrderStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IFulfillSalesOrderStep<TEntity>> IFulfillSalesOrderStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IFulfillSalesOrderStep<TEntity>> IFulfillSalesOrderStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IFulfillSalesOrderStep<TEntity> IModeSelector<IFulfillSalesOrderStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    INoImageStep<TEntity> IFulfillSalesOrderStep<TEntity>.Handler(Action<IFulfillSalesOrderContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IModeSelector<IGetQuoteProductsFromOpportunityStep<TEntity>> IGetQuoteProductsFromOpportunityStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IGetQuoteProductsFromOpportunityStep<TEntity>> IGetQuoteProductsFromOpportunityStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IGetQuoteProductsFromOpportunityStep<TEntity>> IGetQuoteProductsFromOpportunityStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IGetQuoteProductsFromOpportunityStep<TEntity> IModeSelector<IGetQuoteProductsFromOpportunityStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    INoImageStep<TEntity> IGetQuoteProductsFromOpportunityStep<TEntity>.Handler(Action<IGetQuoteProductsFromOpportunityContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IModeSelector<IGetSalesOrderProductsFromOpportunityStep<TEntity>> IGetSalesOrderProductsFromOpportunityStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IGetSalesOrderProductsFromOpportunityStep<TEntity>> IGetSalesOrderProductsFromOpportunityStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IGetSalesOrderProductsFromOpportunityStep<TEntity>> IGetSalesOrderProductsFromOpportunityStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IGetSalesOrderProductsFromOpportunityStep<TEntity> IModeSelector<IGetSalesOrderProductsFromOpportunityStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    INoImageStep<TEntity> IGetSalesOrderProductsFromOpportunityStep<TEntity>.Handler(Action<IGetSalesOrderProductsFromOpportunityContext<TEntity>> handler) { SetHandler(handler); return this; }
+    IModeSelector<IGetInvoiceProductsFromOpportunityStep<TEntity>> IGetInvoiceProductsFromOpportunityStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+    IModeSelector<IGetInvoiceProductsFromOpportunityStep<TEntity>> IGetInvoiceProductsFromOpportunityStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+    IModeSelector<IGetInvoiceProductsFromOpportunityStep<TEntity>> IGetInvoiceProductsFromOpportunityStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+    IGetInvoiceProductsFromOpportunityStep<TEntity> IModeSelector<IGetInvoiceProductsFromOpportunityStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
+    INoImageStep<TEntity> IGetInvoiceProductsFromOpportunityStep<TEntity>.Handler(Action<IGetInvoiceProductsFromOpportunityContext<TEntity>> handler) { SetHandler(handler); return this; }
 
     // ---- Imaged messages: mode selectors -----------------------------------------------------------
     IDeleteNoImageStep<TEntity> IModeSelector<IDeleteNoImageStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
