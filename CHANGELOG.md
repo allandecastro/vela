@@ -56,6 +56,9 @@ CLI line (`Vela.Cli`), published as `cli-v0.1.19`.
 - `vela add plugin --message <M>` now emits the typed `On<M>()` for the 27 messages modelled in framework
   `0.4.0` (sales lifecycle, queues, email, team/list membership, case/contract, access reads). Any unmodelled
   message still renders the permissive `OnMessage("...")`.
+- The generated `AccountMessageReference.cs` cheat-sheet also showcases the account-valid sharing reads
+  (`RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`) and points to the table-specific message
+  families modelled in 0.4.0.
 
 ## [0.3.0] - 2026-09-05
 
