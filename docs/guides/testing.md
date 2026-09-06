@@ -2,7 +2,7 @@
 
 `Vela.Testing` builds a fake plugin execution context and a stateful in-memory CRM, so you can unit-test
 plugins and Custom APIs **without a Dataverse connection** and **without any mocking library**. The fluent
-builder mirrors the registration DSL (`OnUpdate().Stage(...).Mode(...)`), and the primary entity name is
+builder mirrors the registration DSL (`OnUpdate().Stage(...).Sync()`), and the primary entity name is
 derived from `[EntityLogicalName]`. You can still inject your own `IOrganizationService` when you need
 behaviour the built-in fakes don't cover.
 

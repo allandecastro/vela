@@ -34,6 +34,16 @@ Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.3
   `.Mode(ExecutionMode.Asynchronous)` - `RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(...)`.
   The same shortcuts are on the `Vela.Testing` `PluginContextBuilder`. `.Mode(...)` still works.
 
+## [0.1.22] - 2026-09-06
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.22`.
+
+### Changed
+
+- The scaffolded `AccountRelatedContactsPlugin` now showcases two more built-ins: it runs a strongly-typed
+  **`QueryExpression`** (`Query.For<Contact>()...Build()`, alongside the existing `ToFetchXml()`) and serves the
+  result through the built-in **`IPluginCacheService`** (read-through, 5-minute TTL via `GetOrCreate(...)`).
+
 ## [0.1.21] - 2026-09-06
 
 CLI line (`Vela.Cli`), published as `cli-v0.1.21`.

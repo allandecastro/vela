@@ -1311,6 +1311,8 @@ $$"""
 $$"""
 namespace {{prefix}}.Plugins.Account.Plugins
 {
+    using System;
+    using Vela.Caching;
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
@@ -1321,10 +1323,12 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Single-step plugin: after an account is updated, counts the contacts that reference it. The query is authored
-    /// with the TYPED FetchXML builder - <c>Query.For&lt;Contact&gt;()</c> - so table and column names are checked at
-    /// compile time (a typo won't build), then emitted as FetchXML with <c>ToFetchXml()</c> and executed. It's the
-    /// same FetchXML you'd paste from FetchXML Builder, but refactor-safe.
+    /// Single-step plugin: after an account is updated, counts the contacts that reference it. The query is
+    /// authored with the TYPED query builder <c>Query.For&lt;Contact&gt;()</c> - table and column names are checked
+    /// at compile time (a typo won't build). The builder emits either FetchXML (<c>ToFetchXml()</c>) or a
+    /// <c>QueryExpression</c> (<c>Build()</c>); this sample runs the <c>QueryExpression</c>. The count is served
+    /// through the built-in <c>IPluginCacheService</c> (read-through, 5-minute TTL) so a hot account is not
+    /// re-queried on every update.
     /// </summary>
     public sealed class AccountRelatedContactsPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
@@ -1340,13 +1344,23 @@ namespace {{prefix}}.Plugins.Account.Plugins
         protected override void Execute(ILocalPluginContext ctx)
         {
             Account target = ctx.GetTarget<Account>();
-            string fetchXml = Query.For<Contact>()
+
+            // Typed query -> a strongly-typed QueryExpression (use ToFetchXml() instead for FetchXML).
+            QueryExpression query = Query.For<Contact>()
                 .Select(c => c.FirstName, c => c.LastName)
                 .Where(c => c.ParentCustomerId, ConditionOperator.Equal, target.Id)
-                .ToFetchXml();
+                .Build();
 
-            EntityCollection contacts = ctx.UserService.RetrieveMultiple(new FetchExpression(fetchXml));
-            ctx.Trace("Account {0} has {1} related contact(s).", target.Id, contacts.Entities.Count);
+            // Read-through cache with a short TTL: the RetrieveMultiple only runs on a cache miss (or after the
+            // entry expires). Key by account so entries never collide. IPluginCacheService is a built-in,
+            // process-level service - no registration needed.
+            IPluginCacheService cache = ctx.GetRequiredService<IPluginCacheService>();
+            int count = cache.GetOrCreate(
+                $"account:related-contacts:{target.Id}",
+                TimeSpan.FromMinutes(5),
+                () => ctx.UserService.RetrieveMultiple(query).Entities.Count);
+
+            ctx.Trace("Account {0} has {1} related contact(s).", target.Id, count);
         }
     }
 }
