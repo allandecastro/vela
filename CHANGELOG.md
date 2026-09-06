@@ -21,7 +21,21 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Framework line (`Vela.Plugins` + `Vela.Testing`, next `framework-vX.Y.Z`)
+### Framework line (`Vela.Plugins` + `Vela.Testing`, next `framework-vX.Y.Z` - minor bump, breaking)
+
+#### Changed
+
+- **BREAKING - `ctx.TargetReference` and `ctx.TargetCollection` are removed from the message contexts.** A handler now
+  reads a reference or bulk target straight off the SDK-typed request: `ctx.Request.Target` (the `EntityReference` for
+  `Delete`/`Retrieve`/`Associate`/`Disassociate`/`Merge`/`GrantAccess`/`ModifyAccess`/`RevokeAccess`/`AddToQueue`/
+  `RouteTo`/...) and `ctx.Request.Targets` (the `EntityCollection` for `CreateMultiple`/`UpdateMultiple`). `ctx.Target`
+  stays, but **only** on the messages whose request carries a full entity `Target` (`Create`/`Update`/
+  `SendEmailFromTemplate`), where it returns the early-bound `TEntity` the request's base `Entity` cannot. The two
+  removed accessors were pure aliases of `ctx.Request.Target` / `ctx.Request.Targets` (an `EntityReference` /
+  `EntityCollection` has no early-bound form, so they added no typing), and their per-message presence was the main
+  source of "why is `ctx.Target` missing here" confusion. Migration: `ctx.TargetReference` -> `ctx.Request.Target`,
+  `ctx.TargetCollection` -> `ctx.Request.Targets`. The `ctx.GetTargetRef()` / `ctx.GetTargets()` extension helpers are
+  unchanged.
 
 #### Fixed
 
@@ -38,6 +52,9 @@ All notable changes to Vela are documented here. The format is based on
 - The scaffolded `AccountPostCreatePlugin` is now a typed post-stage handler (`.Handler(OnAccountCreated)` with
   `void OnAccountCreated(ICreatePostContext<Account> ctx)`) that reads `ctx.Response.id` and a post-image, instead of
   the single-step `Execute(ILocalPluginContext)` override, so the scaffold showcases the stage-typed `ctx.Response`.
+- The `AccountMessageReference` cheat-sheet reads reference / bulk targets via `ctx.Request.Target` /
+  `ctx.Request.Targets` (the removed `ctx.TargetReference` / `ctx.TargetCollection` accessors), keeping `ctx.Target`
+  only where the message carries a full entity target.
 
 ## [0.5.0] - 2026-09-06
 

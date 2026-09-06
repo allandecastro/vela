@@ -93,7 +93,7 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void ReferenceTargetContext_ExposesTheTargetReference()
+        public void DeleteContext_ExposesTheReferenceTargetViaRequest()
         {
             LocalPluginContext inner = new PluginContextBuilder().Build();
             Guid id = Guid.NewGuid();
@@ -101,8 +101,8 @@ namespace Vela.Tests
 
             IDeletePostContext<TestAccount> ctx = new DeletePostContext<TestAccount>(inner);
 
-            Assert.Equal(id, ctx.TargetReference.Id);
-            Assert.Equal("account", ctx.TargetReference.LogicalName);
+            Assert.Equal(id, ctx.Request.Target.Id);
+            Assert.Equal("account", ctx.Request.Target.LogicalName);
         }
 
         [Fact]
@@ -119,7 +119,7 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void AddToQueueContext_ExposesTheTargetReference()
+        public void AddToQueueContext_ExposesTheReferenceTargetViaRequest()
         {
             LocalPluginContext inner = new PluginContextBuilder().Build();
             Guid id = Guid.NewGuid();
@@ -127,11 +127,11 @@ namespace Vela.Tests
 
             IAddToQueuePostContext<TestAccount> ctx = new AddToQueuePostContext<TestAccount>(inner);
 
-            Assert.Equal(id, ctx.TargetReference.Id);
+            Assert.Equal(id, ctx.Request.Target.Id);
         }
 
         [Fact]
-        public void CollectionTargetContext_ExposesTheTargetsCollection()
+        public void CreateMultipleContext_ExposesTheTargetsViaRequest()
         {
             LocalPluginContext inner = new PluginContextBuilder().Build();
             EntityCollection targets = new EntityCollection();
@@ -141,7 +141,7 @@ namespace Vela.Tests
 
             ICreateMultiplePostContext<TestAccount> ctx = new CreateMultiplePostContext<TestAccount>(inner);
 
-            Assert.Equal(2, ctx.TargetCollection.Entities.Count);
+            Assert.Equal(2, ctx.Request.Targets.Entities.Count);
         }
     }
 }

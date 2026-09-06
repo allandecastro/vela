@@ -143,12 +143,13 @@ Both are inferred from the message with no cast; binding an `OnUpdate()` step to
 reading `ctx.Response` on a pre-stage handler, does not compile. Read message-specific fields off `ctx.Request`
 (for example the merge subordinate from `ctx.Request.SubordinateId`).
 
-For the primary record the context also carries it **already typed**, so a handler never re-states the entity type
-or casts: `ctx.Target` (the early-bound `TEntity` for `Create`/`Update`), `ctx.TargetReference` (the
-`EntityReference` for `Delete`/`Retrieve`/`Associate`/`Disassociate`/`Merge`/`GrantAccess`/`ModifyAccess`/
-`RevokeAccess`, and also `SendEmailFromTemplate` via `ctx.Target`, `AddToQueue`/`RouteTo` via `ctx.TargetReference`)
-and `ctx.TargetCollection` (the `EntityCollection` for `CreateMultiple`/`UpdateMultiple`). Messages whose request has
-no primary record read their message-specific fields off `ctx.Request` instead.
+For the primary record the context exposes `ctx.Target` **only** where doing so saves a cast: the messages whose
+request carries a full entity `Target` (`Create`, `Update`, `SendEmailFromTemplate`), where `ctx.Target` returns the
+early-bound `TEntity` instead of the SDK's base `Entity`. Every other message reads its primary record straight off
+the already-typed `ctx.Request`: `ctx.Request.Target` (the `EntityReference` for `Delete`/`Retrieve`/`Associate`/
+`Disassociate`/`Merge`/`GrantAccess`/`ModifyAccess`/`RevokeAccess`/`AddToQueue`/`RouteTo`) or `ctx.Request.Targets`
+(the `EntityCollection` for `CreateMultiple`/`UpdateMultiple`). There is deliberately no `ctx.Target` for those:
+an `EntityReference`/`EntityCollection` has no early-bound form, so `ctx.Request.Target` is already the final type.
 
 The modelled messages with a typed context are:
 
@@ -177,17 +178,17 @@ record there with `ctx.GetTarget<T>()` (a full entity for `Create`/`Update`), `c
 | --- | --- | --- | --- |
 | `OnCreate()` | `ICreatePostContext<T>` | `CreateRequest` | `ctx.Target` (`T`), `ctx.Response.id` |
 | `OnUpdate()` | `IUpdatePostContext<T>` | `UpdateRequest` | `ctx.Target` (`T`) |
-| `OnDelete()` | `IDeletePostContext<T>` | `DeleteRequest` | `ctx.TargetReference` |
-| `OnCreateMultiple()` | `ICreateMultiplePostContext<T>` | `CreateMultipleRequest` | `ctx.TargetCollection`, `ctx.Response.Ids` |
-| `OnUpdateMultiple()` | `IUpdateMultiplePostContext<T>` | `UpdateMultipleRequest` | `ctx.TargetCollection` |
-| `OnRetrieve()` | `IRetrievePostContext<T>` | `RetrieveRequest` | `ctx.TargetReference`, `ctx.Response.Entity` |
+| `OnDelete()` | `IDeletePostContext<T>` | `DeleteRequest` | `ctx.Request.Target` |
+| `OnCreateMultiple()` | `ICreateMultiplePostContext<T>` | `CreateMultipleRequest` | `ctx.Request.Targets`, `ctx.Response.Ids` |
+| `OnUpdateMultiple()` | `IUpdateMultiplePostContext<T>` | `UpdateMultipleRequest` | `ctx.Request.Targets` |
+| `OnRetrieve()` | `IRetrievePostContext<T>` | `RetrieveRequest` | `ctx.Request.Target`, `ctx.Response.Entity` |
 | `OnRetrieveMultiple()` | `IRetrieveMultiplePostContext<T>` | `RetrieveMultipleRequest` | `ctx.Request.Query` |
-| `OnAssociate()` | `IAssociatePostContext<T>` | `AssociateRequest` | `ctx.TargetReference`, `ctx.Request.Relationship` |
-| `OnDisassociate()` | `IDisassociatePostContext<T>` | `DisassociateRequest` | `ctx.TargetReference` |
-| `OnMerge()` | `IMergePostContext<T>` | `MergeRequest` | `ctx.TargetReference`, `ctx.Request.SubordinateId` |
-| `OnGrantAccess()` | `IGrantAccessPostContext<T>` | `GrantAccessRequest` | `ctx.TargetReference`, `ctx.Request.PrincipalAccess` |
-| `OnModifyAccess()` | `IModifyAccessPostContext<T>` | `ModifyAccessRequest` | `ctx.TargetReference` |
-| `OnRevokeAccess()` | `IRevokeAccessPostContext<T>` | `RevokeAccessRequest` | `ctx.TargetReference`, `ctx.Request.Revokee` |
+| `OnAssociate()` | `IAssociatePostContext<T>` | `AssociateRequest` | `ctx.Request.Target`, `ctx.Request.Relationship` |
+| `OnDisassociate()` | `IDisassociatePostContext<T>` | `DisassociateRequest` | `ctx.Request.Target` |
+| `OnMerge()` | `IMergePostContext<T>` | `MergeRequest` | `ctx.Request.Target`, `ctx.Request.SubordinateId` |
+| `OnGrantAccess()` | `IGrantAccessPostContext<T>` | `GrantAccessRequest` | `ctx.Request.Target`, `ctx.Request.PrincipalAccess` |
+| `OnModifyAccess()` | `IModifyAccessPostContext<T>` | `ModifyAccessRequest` | `ctx.Request.Target` |
+| `OnRevokeAccess()` | `IRevokeAccessPostContext<T>` | `RevokeAccessRequest` | `ctx.Request.Target`, `ctx.Request.Revokee` |
 
 The scaffold generates an `AccountMessageReference.cs` cheat-sheet with one dormant (`Disabled()`) handler per
 row, so you can copy the exact shape for the message you need. The deprecated `SetState` / `SetStateDynamicEntity`

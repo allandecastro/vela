@@ -333,7 +333,7 @@ namespace Vela.Testing.Tests
             => RegisterSteps().OnAddToQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnQueued);
 
         private void OnQueued(IAddToQueuePostContext<FakeAccount> ctx)
-            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"queue:{ctx.TargetReference.Id}:{ctx.Request.DestinationQueueId}" });
+            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"queue:{ctx.Request.Target.Id}:{ctx.Request.DestinationQueueId}" });
     }
 
     // Lightweight Custom API for the Execute() path.

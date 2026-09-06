@@ -340,8 +340,8 @@ namespace Vela.Testing.Tests
         [Fact]
         public void ModelledMessage_WithTargetReference_DerivesEntityAndFires()
         {
-            // AddToQueue carries a Target EntityReference; the primary entity is derived from it and ctx.TargetReference
-            // / ctx.Request.DestinationQueueId are typed.
+            // AddToQueue carries a Target EntityReference; the primary entity is derived from it and
+            // ctx.Request.Target / ctx.Request.DestinationQueueId are typed.
             Guid recordId = Guid.NewGuid();
             Guid queueId = Guid.NewGuid();
             PluginPipeline pipeline = PluginPipeline.Empty().Register<OnAccountAddedToQueue>();
