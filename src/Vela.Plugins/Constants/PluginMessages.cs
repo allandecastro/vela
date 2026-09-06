@@ -161,6 +161,27 @@ namespace Vela.Constants
         /// <summary>RetrieveSharedPrincipalsAndAccess message.</summary>
         public const string RetrieveSharedPrincipalsAndAccess = "RetrieveSharedPrincipalsAndAccess";
 
+        /// <summary>WhoAmI message.</summary>
+        public const string WhoAmI = "WhoAmI";
+
+        /// <summary>WinQuote message.</summary>
+        public const string WinQuote = "WinQuote";
+
+        /// <summary>ReviseQuote message.</summary>
+        public const string ReviseQuote = "ReviseQuote";
+
+        /// <summary>FulfillSalesOrder message.</summary>
+        public const string FulfillSalesOrder = "FulfillSalesOrder";
+
+        /// <summary>GetQuoteProductsFromOpportunity message.</summary>
+        public const string GetQuoteProductsFromOpportunity = "GetQuoteProductsFromOpportunity";
+
+        /// <summary>GetSalesOrderProductsFromOpportunity message.</summary>
+        public const string GetSalesOrderProductsFromOpportunity = "GetSalesOrderProductsFromOpportunity";
+
+        /// <summary>GetInvoiceProductsFromOpportunity message.</summary>
+        public const string GetInvoiceProductsFromOpportunity = "GetInvoiceProductsFromOpportunity";
+
         /// <summary>
         /// ModifyAccess message.
         /// </summary>

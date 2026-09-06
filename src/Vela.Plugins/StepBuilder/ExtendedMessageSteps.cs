@@ -522,3 +522,136 @@ public interface IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> where TEnt
     IModeSelector<IRetrieveSharedPrincipalsAndAccessStep<TEntity>> PostOperation();
 }
 
+/// <summary>WhoAmI step: bind <c>.Handler(OnWhoAmI)</c> where the handler takes an <c>IWhoAmIContext</c>.</summary>
+public interface IWhoAmIStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
+{
+    /// <summary>Bind a typed handler (method group).</summary>
+    /// <param name="handler">Instance method with signature <c>(IWhoAmIContext&lt;TEntity&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler(Action<IWhoAmIContext<TEntity>> handler);
+}
+
+/// <summary>Stage selection for WhoAmI.</summary>
+public interface IWhoAmIStepStage<TEntity> where TEntity : Entity
+{
+    /// <summary>PreValidation.</summary>
+    IModeSelector<IWhoAmIStep<TEntity>> PreValidation();
+    /// <summary>PreOperation.</summary>
+    IModeSelector<IWhoAmIStep<TEntity>> PreOperation();
+    /// <summary>PostOperation.</summary>
+    IModeSelector<IWhoAmIStep<TEntity>> PostOperation();
+}
+
+/// <summary>WinQuote step: bind <c>.Handler(OnWinQuote)</c> where the handler takes an <c>IWinQuoteContext</c>.</summary>
+public interface IWinQuoteStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
+{
+    /// <summary>Bind a typed handler (method group).</summary>
+    /// <param name="handler">Instance method with signature <c>(IWinQuoteContext&lt;TEntity&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler(Action<IWinQuoteContext<TEntity>> handler);
+}
+
+/// <summary>Stage selection for WinQuote.</summary>
+public interface IWinQuoteStepStage<TEntity> where TEntity : Entity
+{
+    /// <summary>PreValidation.</summary>
+    IModeSelector<IWinQuoteStep<TEntity>> PreValidation();
+    /// <summary>PreOperation.</summary>
+    IModeSelector<IWinQuoteStep<TEntity>> PreOperation();
+    /// <summary>PostOperation.</summary>
+    IModeSelector<IWinQuoteStep<TEntity>> PostOperation();
+}
+
+/// <summary>ReviseQuote step: bind <c>.Handler(OnReviseQuote)</c> where the handler takes an <c>IReviseQuoteContext</c>.</summary>
+public interface IReviseQuoteStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
+{
+    /// <summary>Bind a typed handler (method group).</summary>
+    /// <param name="handler">Instance method with signature <c>(IReviseQuoteContext&lt;TEntity&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler(Action<IReviseQuoteContext<TEntity>> handler);
+}
+
+/// <summary>Stage selection for ReviseQuote.</summary>
+public interface IReviseQuoteStepStage<TEntity> where TEntity : Entity
+{
+    /// <summary>PreValidation.</summary>
+    IModeSelector<IReviseQuoteStep<TEntity>> PreValidation();
+    /// <summary>PreOperation.</summary>
+    IModeSelector<IReviseQuoteStep<TEntity>> PreOperation();
+    /// <summary>PostOperation.</summary>
+    IModeSelector<IReviseQuoteStep<TEntity>> PostOperation();
+}
+
+/// <summary>FulfillSalesOrder step: bind <c>.Handler(OnFulfillSalesOrder)</c> where the handler takes an <c>IFulfillSalesOrderContext</c>.</summary>
+public interface IFulfillSalesOrderStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
+{
+    /// <summary>Bind a typed handler (method group).</summary>
+    /// <param name="handler">Instance method with signature <c>(IFulfillSalesOrderContext&lt;TEntity&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler(Action<IFulfillSalesOrderContext<TEntity>> handler);
+}
+
+/// <summary>Stage selection for FulfillSalesOrder.</summary>
+public interface IFulfillSalesOrderStepStage<TEntity> where TEntity : Entity
+{
+    /// <summary>PreValidation.</summary>
+    IModeSelector<IFulfillSalesOrderStep<TEntity>> PreValidation();
+    /// <summary>PreOperation.</summary>
+    IModeSelector<IFulfillSalesOrderStep<TEntity>> PreOperation();
+    /// <summary>PostOperation.</summary>
+    IModeSelector<IFulfillSalesOrderStep<TEntity>> PostOperation();
+}
+
+/// <summary>GetQuoteProductsFromOpportunity step: bind <c>.Handler(OnGetQuoteProductsFromOpportunity)</c> where the handler takes an <c>IGetQuoteProductsFromOpportunityContext</c>.</summary>
+public interface IGetQuoteProductsFromOpportunityStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
+{
+    /// <summary>Bind a typed handler (method group).</summary>
+    /// <param name="handler">Instance method with signature <c>(IGetQuoteProductsFromOpportunityContext&lt;TEntity&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler(Action<IGetQuoteProductsFromOpportunityContext<TEntity>> handler);
+}
+
+/// <summary>Stage selection for GetQuoteProductsFromOpportunity.</summary>
+public interface IGetQuoteProductsFromOpportunityStepStage<TEntity> where TEntity : Entity
+{
+    /// <summary>PreValidation.</summary>
+    IModeSelector<IGetQuoteProductsFromOpportunityStep<TEntity>> PreValidation();
+    /// <summary>PreOperation.</summary>
+    IModeSelector<IGetQuoteProductsFromOpportunityStep<TEntity>> PreOperation();
+    /// <summary>PostOperation.</summary>
+    IModeSelector<IGetQuoteProductsFromOpportunityStep<TEntity>> PostOperation();
+}
+
+/// <summary>GetSalesOrderProductsFromOpportunity step: bind <c>.Handler(OnGetSalesOrderProductsFromOpportunity)</c> where the handler takes an <c>IGetSalesOrderProductsFromOpportunityContext</c>.</summary>
+public interface IGetSalesOrderProductsFromOpportunityStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
+{
+    /// <summary>Bind a typed handler (method group).</summary>
+    /// <param name="handler">Instance method with signature <c>(IGetSalesOrderProductsFromOpportunityContext&lt;TEntity&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler(Action<IGetSalesOrderProductsFromOpportunityContext<TEntity>> handler);
+}
+
+/// <summary>Stage selection for GetSalesOrderProductsFromOpportunity.</summary>
+public interface IGetSalesOrderProductsFromOpportunityStepStage<TEntity> where TEntity : Entity
+{
+    /// <summary>PreValidation.</summary>
+    IModeSelector<IGetSalesOrderProductsFromOpportunityStep<TEntity>> PreValidation();
+    /// <summary>PreOperation.</summary>
+    IModeSelector<IGetSalesOrderProductsFromOpportunityStep<TEntity>> PreOperation();
+    /// <summary>PostOperation.</summary>
+    IModeSelector<IGetSalesOrderProductsFromOpportunityStep<TEntity>> PostOperation();
+}
+
+/// <summary>GetInvoiceProductsFromOpportunity step: bind <c>.Handler(OnGetInvoiceProductsFromOpportunity)</c> where the handler takes an <c>IGetInvoiceProductsFromOpportunityContext</c>.</summary>
+public interface IGetInvoiceProductsFromOpportunityStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
+{
+    /// <summary>Bind a typed handler (method group).</summary>
+    /// <param name="handler">Instance method with signature <c>(IGetInvoiceProductsFromOpportunityContext&lt;TEntity&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler(Action<IGetInvoiceProductsFromOpportunityContext<TEntity>> handler);
+}
+
+/// <summary>Stage selection for GetInvoiceProductsFromOpportunity.</summary>
+public interface IGetInvoiceProductsFromOpportunityStepStage<TEntity> where TEntity : Entity
+{
+    /// <summary>PreValidation.</summary>
+    IModeSelector<IGetInvoiceProductsFromOpportunityStep<TEntity>> PreValidation();
+    /// <summary>PreOperation.</summary>
+    IModeSelector<IGetInvoiceProductsFromOpportunityStep<TEntity>> PreOperation();
+    /// <summary>PostOperation.</summary>
+    IModeSelector<IGetInvoiceProductsFromOpportunityStep<TEntity>> PostOperation();
+}
+

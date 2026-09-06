@@ -109,6 +109,20 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     IRetrievePrincipalAccessStepStage<TEntity> OnRetrievePrincipalAccess();
     /// <summary>Begin a RetrieveSharedPrincipalsAndAccess step.</summary>
     IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> OnRetrieveSharedPrincipalsAndAccess();
+    /// <summary>Begin a WhoAmI step.</summary>
+    IWhoAmIStepStage<TEntity> OnWhoAmI();
+    /// <summary>Begin a WinQuote step.</summary>
+    IWinQuoteStepStage<TEntity> OnWinQuote();
+    /// <summary>Begin a ReviseQuote step.</summary>
+    IReviseQuoteStepStage<TEntity> OnReviseQuote();
+    /// <summary>Begin a FulfillSalesOrder step.</summary>
+    IFulfillSalesOrderStepStage<TEntity> OnFulfillSalesOrder();
+    /// <summary>Begin a GetQuoteProductsFromOpportunity step.</summary>
+    IGetQuoteProductsFromOpportunityStepStage<TEntity> OnGetQuoteProductsFromOpportunity();
+    /// <summary>Begin a GetSalesOrderProductsFromOpportunity step.</summary>
+    IGetSalesOrderProductsFromOpportunityStepStage<TEntity> OnGetSalesOrderProductsFromOpportunity();
+    /// <summary>Begin a GetInvoiceProductsFromOpportunity step.</summary>
+    IGetInvoiceProductsFromOpportunityStepStage<TEntity> OnGetInvoiceProductsFromOpportunity();
 
     /// <summary>Configure step to trigger on a custom message. Image validity is enforced at runtime.</summary>
     /// <param name="messageName">The SDK message name.</param>

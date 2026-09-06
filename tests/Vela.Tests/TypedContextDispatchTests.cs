@@ -67,6 +67,13 @@ namespace Vela.Tests
                 RegisterSteps().OnCloneContract().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnRetrievePrincipalAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnWhoAmI().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnWinQuote().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnReviseQuote().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnFulfillSalesOrder().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnGetQuoteProductsFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnGetSalesOrderProductsFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnGetInvoiceProductsFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
             }
 
             // Bound to every step: contravariantly assignable to each Action<I{Msg}Context<TestAccount>> and to
@@ -115,6 +122,13 @@ namespace Vela.Tests
         [InlineData(PluginMessages.CloneContract)]
         [InlineData(PluginMessages.RetrievePrincipalAccess)]
         [InlineData(PluginMessages.RetrieveSharedPrincipalsAndAccess)]
+        [InlineData(PluginMessages.WhoAmI)]
+        [InlineData(PluginMessages.WinQuote)]
+        [InlineData(PluginMessages.ReviseQuote)]
+        [InlineData(PluginMessages.FulfillSalesOrder)]
+        [InlineData(PluginMessages.GetQuoteProductsFromOpportunity)]
+        [InlineData(PluginMessages.GetSalesOrderProductsFromOpportunity)]
+        [InlineData(PluginMessages.GetInvoiceProductsFromOpportunity)]
         [InlineData(AllMessagesProbe.CustomMessage)]
         public void Each_message_dispatches_to_its_handler(string message)
         {

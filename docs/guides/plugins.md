@@ -145,14 +145,17 @@ The modelled messages with a typed context are:
 - **CRUD & bulk:** `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`.
 - **Relationships & sharing:** `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`,
   `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`.
-- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `ConvertQuoteToSalesOrder`,
-  `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`, `GenerateSalesOrderFromOpportunity`,
-  `GenerateInvoiceFromOpportunity`.
+- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ReviseQuote`,
+  `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`,
+  `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity`, `GetQuoteProductsFromOpportunity`,
+  `GetSalesOrderProductsFromOpportunity`, `GetInvoiceProductsFromOpportunity`.
 - **Queues:** `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
 - **Email:** `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
 - **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`,
   `AddMemberList`, `RemoveMemberList`.
 - **Case / contract:** `CloseIncident`, `CancelContract`, `CloneContract`.
+- **System:** `WhoAmI` (a global message with no primary entity; `ctx.Response` carries the user/business-unit/
+  organization ids).
 
 A step registered through `OnMessage("...")` (any other message) receives the plain `ILocalPluginContext`.
 

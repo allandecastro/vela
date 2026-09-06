@@ -301,6 +301,13 @@ namespace Vela.Plugin
                 PluginMessages.CloneContract => new CloneContractContext<TEntity>(ctx),
                 PluginMessages.RetrievePrincipalAccess => new RetrievePrincipalAccessContext<TEntity>(ctx),
                 PluginMessages.RetrieveSharedPrincipalsAndAccess => new RetrieveSharedPrincipalsAndAccessContext<TEntity>(ctx),
+                PluginMessages.WhoAmI => new WhoAmIContext<TEntity>(ctx),
+                PluginMessages.WinQuote => new WinQuoteContext<TEntity>(ctx),
+                PluginMessages.ReviseQuote => new ReviseQuoteContext<TEntity>(ctx),
+                PluginMessages.FulfillSalesOrder => new FulfillSalesOrderContext<TEntity>(ctx),
+                PluginMessages.GetQuoteProductsFromOpportunity => new GetQuoteProductsFromOpportunityContext<TEntity>(ctx),
+                PluginMessages.GetSalesOrderProductsFromOpportunity => new GetSalesOrderProductsFromOpportunityContext<TEntity>(ctx),
+                PluginMessages.GetInvoiceProductsFromOpportunity => new GetInvoiceProductsFromOpportunityContext<TEntity>(ctx),
                 _ => null,
             };
         }

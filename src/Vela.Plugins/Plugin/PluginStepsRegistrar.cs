@@ -62,6 +62,13 @@ namespace Vela.Plugin
         public ICloneContractStepStage<TEntity> OnCloneContract() => BeginStep().OnCloneContract();
         public IRetrievePrincipalAccessStepStage<TEntity> OnRetrievePrincipalAccess() => BeginStep().OnRetrievePrincipalAccess();
         public IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> OnRetrieveSharedPrincipalsAndAccess() => BeginStep().OnRetrieveSharedPrincipalsAndAccess();
+        public IWhoAmIStepStage<TEntity> OnWhoAmI() => BeginStep().OnWhoAmI();
+        public IWinQuoteStepStage<TEntity> OnWinQuote() => BeginStep().OnWinQuote();
+        public IReviseQuoteStepStage<TEntity> OnReviseQuote() => BeginStep().OnReviseQuote();
+        public IFulfillSalesOrderStepStage<TEntity> OnFulfillSalesOrder() => BeginStep().OnFulfillSalesOrder();
+        public IGetQuoteProductsFromOpportunityStepStage<TEntity> OnGetQuoteProductsFromOpportunity() => BeginStep().OnGetQuoteProductsFromOpportunity();
+        public IGetSalesOrderProductsFromOpportunityStepStage<TEntity> OnGetSalesOrderProductsFromOpportunity() => BeginStep().OnGetSalesOrderProductsFromOpportunity();
+        public IGetInvoiceProductsFromOpportunityStepStage<TEntity> OnGetInvoiceProductsFromOpportunity() => BeginStep().OnGetInvoiceProductsFromOpportunity();
 
         public IPermissiveStepStage<TEntity> OnMessage(string messageName) => BeginStep().OnMessage(messageName);
 
