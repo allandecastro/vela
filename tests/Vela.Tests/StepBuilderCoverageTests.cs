@@ -53,9 +53,9 @@ public sealed class StepBuilderCoverageTests
     [Fact]
     public void Key_Handler_and_config_guards_and_trimming()
     {
-        // Handler guards on the typed Delete step (which exposes .Handler(Action<IDeleteContext<TestAccount>>)).
+        // Handler guards on the typed Delete step (which exposes .Handler(Action<IDeletePostContext<TestAccount>>)).
         Assert.Throws<ArgumentNullException>(() => New().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous)
-            .Handler((Action<IDeleteContext<TestAccount>>)null!));
+            .Handler((Action<IDeletePostContext<TestAccount>>)null!));
         Assert.Throws<ArgumentException>(() => New().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous)
             .Handler(Holder.StaticHandler)); // must be an instance method
 

@@ -12,7 +12,7 @@ using Xunit;
 namespace Vela.Tests
 {
     // Proves the Shape B vertical slice: a multi-step plugin binds an OnMerge step to a typed handler
-    // (IMergeContext<TestAccount>), and the base dispatch builds the typed context and hands it over - so the
+    // (IMergePostContext<TestAccount>), and the base dispatch builds the typed context and hands it over - so the
     // handler reads ctx.Request.SubordinateId (typed, inferred) at run time.
     public sealed class TypedMergeHandlerTests
     {
@@ -27,7 +27,7 @@ namespace Vela.Tests
                 RegisterSteps().OnMerge().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnMerged);
             }
 
-            private void OnMerged(IMergeContext<TestAccount> ctx)
+            private void OnMerged(IMergePostContext<TestAccount> ctx)
             {
                 CapturedSubordinate = ctx.Request.SubordinateId;   // inferred, typed
             }
@@ -45,10 +45,38 @@ namespace Vela.Tests
                     .FilteringAttributes(a => a.Name).Handler(OnUpdated);
             }
 
-            private void OnUpdated(IUpdateContext<TestAccount> ctx)
+            private void OnUpdated(IUpdatePostContext<TestAccount> ctx)
             {
                 CapturedName = ctx.Target.Name;   // typed, inferred, no cast
             }
+        }
+
+        // A PreOperation step receives the PRE context: ctx.Request/ctx.Target are available; ctx.Response is not
+        // even on the type (IUpdatePreContext has no Response), so reading it in a pre-stage does not compile.
+        private sealed class UpdatePreProbe : EntityPluginBase<TestAccount>
+        {
+            public string? CapturedName;
+
+            public UpdatePreProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterSteps().OnUpdate().PreOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdating);
+
+            private void OnUpdating(IUpdatePreContext<TestAccount> ctx)
+                => CapturedName = ctx.Target.Name;   // Request-side data, available in pre
+        }
+
+        [Fact]
+        public void Pre_stage_handler_receives_the_pre_context()
+        {
+            UpdatePreProbe probe = new UpdatePreProbe();
+
+            PluginContext.For<TestAccount>()
+                .OnUpdate().Stage(PluginStages.PreOperation).Sync()
+                .WithTarget(new TestAccount { Id = Guid.NewGuid(), Name = "Renamed" })
+                .Execute(probe);
+
+            Assert.Equal("Renamed", probe.CapturedName);
         }
 
         [Fact]
@@ -103,7 +131,7 @@ namespace Vela.Tests
             protected override void RegisterPluginSteps()
                 => RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreated);
 
-            private void OnCreated(ICreateContext<TestAccount> ctx)
+            private void OnCreated(ICreatePostContext<TestAccount> ctx)
                 => Greeted = ctx.GetRequiredService<IGreeter>().Greet();
         }
 

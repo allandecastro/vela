@@ -302,7 +302,7 @@ namespace Vela.Testing.Tests
         protected override void RegisterPluginSteps()
             => RegisterSteps().OnSendEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnSent);
 
-        private void OnSent(ISendEmailContext<FakeAccount> ctx)
+        private void OnSent(ISendEmailPostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"sent:{ctx.Request.EmailId}" });
     }
 
@@ -314,7 +314,7 @@ namespace Vela.Testing.Tests
         protected override void RegisterPluginSteps()
             => RegisterSteps().OnAddToQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnQueued);
 
-        private void OnQueued(IAddToQueueContext<FakeAccount> ctx)
+        private void OnQueued(IAddToQueuePostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"queue:{ctx.TargetReference.Id}:{ctx.Request.DestinationQueueId}" });
     }
 

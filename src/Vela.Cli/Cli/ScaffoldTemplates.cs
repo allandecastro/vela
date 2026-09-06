@@ -684,7 +684,7 @@ configures.
   (or the message-specific request with `ctx.GetRequest<...>()`). See `AccountPostCreatePlugin`.
 - **Multi-step ("router")** - register several steps in one class, giving each a `.Handler(Method)` bound to a
   method; the framework dispatches to the right one. Each handler takes the message-typed context (for example
-  `ICreateContext<TEntity>` / `IUpdateContext<TEntity>`), exposing a strongly-typed `ctx.Request` (and, in a
+  `ICreatePostContext<TEntity>` / `IUpdatePostContext<TEntity>`), exposing a strongly-typed `ctx.Request` (and, in a
   Post step, `ctx.Response`). See `ContactRouterPlugin`. Every step in a multi-step plugin **must** declare a
   handler - the build fails otherwise.
 
@@ -692,7 +692,7 @@ configures.
 RegisterSteps().OnUpdate()
     .PostOperation().Sync()
     .FilteringAttributes(c => c.LastName)            // (update) fire only when these columns change
-    .Handler(OnLastNameChanged)                      // void OnLastNameChanged(IUpdateContext<Contact> ctx)
+    .Handler(OnLastNameChanged)                      // void OnLastNameChanged(IUpdatePostContext<Contact> ctx)
     .PreImage().Attributes(c => c.LastName);         // before-snapshot for the handler
 ```
 
@@ -1518,58 +1518,59 @@ namespace {{prefix}}.Plugins.Account.Plugins
         }
 
         // ctx.Target is the early-bound Account; ctx.Response.id is the new record id (Post step).
-        private void OnCreate(ICreateContext<Account> ctx)
+        private void OnCreate(ICreatePostContext<Account> ctx)
             => ctx.Trace("Create {0} -> id {1}", ctx.Target.Name, ctx.Response.id);
 
         // ctx.Target carries the columns that changed on this update.
-        private void OnUpdate(IUpdateContext<Account> ctx)
+        private void OnUpdate(IUpdatePostContext<Account> ctx)
             => ctx.Trace("Update {0}", ctx.Target.Id);
 
-        // Delete carries an EntityReference, exposed as ctx.TargetReference.
-        private void OnDelete(IDeleteContext<Account> ctx)
+        // Delete carries an EntityReference, exposed as ctx.TargetReference. This step is PreOperation, so the
+        // handler receives the PRE context (ctx.Request but no ctx.Response - the record is not deleted yet).
+        private void OnDelete(IDeletePreContext<Account> ctx)
             => ctx.Trace("Delete {0}", ctx.TargetReference.Id);
 
         // Bulk create: ctx.TargetCollection is the whole batch; ctx.Response.Ids are the new ids.
-        private void OnCreateMultiple(ICreateMultipleContext<Account> ctx)
+        private void OnCreateMultiple(ICreateMultiplePostContext<Account> ctx)
             => ctx.Trace("CreateMultiple of {0}", ctx.TargetCollection.Entities.Count);
 
-        private void OnUpdateMultiple(IUpdateMultipleContext<Account> ctx)
+        private void OnUpdateMultiple(IUpdateMultiplePostContext<Account> ctx)
             => ctx.Trace("UpdateMultiple of {0}", ctx.TargetCollection.Entities.Count);
 
         // Retrieve: ctx.TargetReference is the record read; ctx.Request.ColumnSet the requested columns.
-        private void OnRetrieve(IRetrieveContext<Account> ctx)
+        private void OnRetrieve(IRetrievePostContext<Account> ctx)
             => ctx.Trace("Retrieve {0} ({1} columns)", ctx.TargetReference.Id, ctx.Request.ColumnSet.Columns.Count);
 
         // RetrieveMultiple has no primary Target; the query is on ctx.Request.Query.
-        private void OnRetrieveMultiple(IRetrieveMultipleContext<Account> ctx)
+        private void OnRetrieveMultiple(IRetrieveMultiplePostContext<Account> ctx)
             => ctx.Trace("RetrieveMultiple, query type {0}", ctx.Request.Query.GetType().Name);
 
         // Associate / Disassociate: ctx.TargetReference plus ctx.Request.Relationship / RelatedEntities.
-        private void OnAssociate(IAssociateContext<Account> ctx)
+        private void OnAssociate(IAssociatePostContext<Account> ctx)
             => ctx.Trace("Associate {0} via {1}", ctx.TargetReference.Id, ctx.Request.Relationship.SchemaName);
 
-        private void OnDisassociate(IDisassociateContext<Account> ctx)
+        private void OnDisassociate(IDisassociatePostContext<Account> ctx)
             => ctx.Trace("Disassociate {0} via {1}", ctx.TargetReference.Id, ctx.Request.Relationship.SchemaName);
 
         // Merge: ctx.TargetReference is the master, ctx.Request.SubordinateId the record merged into it.
-        private void OnMerge(IMergeContext<Account> ctx)
+        private void OnMerge(IMergePostContext<Account> ctx)
             => ctx.Trace("Merge {0} into {1}", ctx.Request.SubordinateId, ctx.TargetReference.Id);
 
         // Sharing: ctx.Request.PrincipalAccess (grant/modify) and ctx.Request.Revokee (revoke).
-        private void OnGrantAccess(IGrantAccessContext<Account> ctx)
+        private void OnGrantAccess(IGrantAccessPostContext<Account> ctx)
             => ctx.Trace("Grant on {0} to {1}", ctx.TargetReference.Id, ctx.Request.PrincipalAccess.Principal.Id);
 
-        private void OnModifyAccess(IModifyAccessContext<Account> ctx)
+        private void OnModifyAccess(IModifyAccessPostContext<Account> ctx)
             => ctx.Trace("Modify access on {0}", ctx.TargetReference.Id);
 
-        private void OnRevokeAccess(IRevokeAccessContext<Account> ctx)
+        private void OnRevokeAccess(IRevokeAccessPostContext<Account> ctx)
             => ctx.Trace("Revoke on {0} from {1}", ctx.TargetReference.Id, ctx.Request.Revokee.Id);
 
         // Sharing reads: ctx.Response.AccessRights (one principal) / ctx.Response.PrincipalAccesses (all shares).
-        private void OnRetrievePrincipalAccess(IRetrievePrincipalAccessContext<Account> ctx)
+        private void OnRetrievePrincipalAccess(IRetrievePrincipalAccessPostContext<Account> ctx)
             => ctx.Trace("Access of {0} on {1}: {2}", ctx.Request.Principal.Id, ctx.TargetReference.Id, ctx.Response.AccessRights);
 
-        private void OnRetrieveSharedPrincipalsAndAccess(IRetrieveSharedPrincipalsAndAccessContext<Account> ctx)
+        private void OnRetrieveSharedPrincipalsAndAccess(IRetrieveSharedPrincipalsAndAccessPostContext<Account> ctx)
             => ctx.Trace("{0} share(s) on {1}", ctx.Response.PrincipalAccesses.Length, ctx.TargetReference.Id);
     }
 }
@@ -1626,7 +1627,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         // an UpdateRequest (in a Post step, a matching Response too), each strongly typed to this message. The
         // record is available already typed as ctx.Target - no cast, no type argument. The context is still an
         // ILocalPluginContext, so images, services and tracing remain available.
-        private void OnCreatePost(ICreateContext<Contact> ctx)
+        private void OnCreatePost(ICreatePostContext<Contact> ctx)
         {
             Contact postImage = ctx.GetPostImage<Contact>();
             ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
@@ -1639,7 +1640,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
             }
         }
 
-        private void OnUpdatePost(IUpdateContext<Contact> ctx)
+        private void OnUpdatePost(IUpdatePostContext<Contact> ctx)
         {
             Contact preImage = ctx.GetPreImage<Contact>();
             ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Target.LastName);
@@ -2398,13 +2399,13 @@ namespace {{prefix}}.Integrations.Account.Plugins
                     .Attributes(a => a.Name, a => a.Telephone1);
         }
 
-        private void OnAccountCreated(ICreateContext<Account> ctx)
+        private void OnAccountCreated(ICreatePostContext<Account> ctx)
         {
             Account postImage = ctx.GetPostImage<Account>();
             ctx.Trace("Sync: account created '{0}'", postImage.Name);
         }
 
-        private void OnAccountChanged(IUpdateContext<Account> ctx)
+        private void OnAccountChanged(IUpdatePostContext<Account> ctx)
         {
             Account preImage = ctx.GetPreImage<Account>();
             ctx.Trace("Sync: account '{0}' changed", preImage.Name);

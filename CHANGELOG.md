@@ -24,6 +24,32 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.5.0] - 2026-09-06
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.5.0`.
+
+### Changed
+
+- **BREAKING - message contexts are split by stage.** The single `I{Message}Context<TEntity>` per message is
+  replaced by two: `I{Message}PreContext<TEntity>` (a pre-stage handler - `PreValidation` / `PreOperation` -
+  exposing `ctx.Request` and the typed target only) and `I{Message}PostContext<TEntity>` (a PostOperation
+  handler - `ctx.Request` **and** `ctx.Response`). The stage you pick determines which context the handler
+  receives, so reading `ctx.Response` from a pre-stage handler no longer compiles (before, it was accessible but
+  always empty). Migration: rename each handler's parameter from `I{Message}Context<TEntity>` to
+  `I{Message}PostContext<TEntity>` for a PostOperation step, or `I{Message}PreContext<TEntity>` for a
+  PreValidation/PreOperation step. A handler that only reads `ctx.Request` / `ctx.Target` needs the matching
+  Pre/Post type for its stage; the `.Handler(...)` binding, the target accessors and everything else are
+  unchanged. Permissive `OnMessage("...")` steps still take the plain `ILocalPluginContext`.
+
+## [0.1.23] - 2026-09-06
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.23`.
+
+### Changed
+
+- Scaffolded plugins use the stage-split contexts (`I{Message}PostContext` on PostOperation handlers,
+  `I{Message}PreContext` on the PreOperation Delete handler). Offline fallback framework version bumped to `0.5.0`.
+
 ## [0.4.4] - 2026-09-06
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.4`.

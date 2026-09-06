@@ -4,7 +4,7 @@
    - Call it only from the override `RegisterCustomApi()` method.
 2. **Step handler not found / wrong signature**
    - Bind the handler by method group (`.Handler(OnUpdated)`), and give it the message-typed context:
-     `void OnUpdated(IUpdateContext<TEntity> ctx)` (or `void OnX(ILocalPluginContext ctx)` for an
+     `void OnUpdated(IUpdatePostContext<TEntity> ctx)` (or `void OnX(ILocalPluginContext ctx)` for an
      `OnMessage("...")` step). The old two-argument `(ILocalPluginContext, TEntity)` signature is no longer used.
 3. **Custom API handler not found / wrong signature**
    - Ensure signature is `void Handler(ILocalPluginContext)` for lightweight mode.

@@ -21,7 +21,7 @@ namespace Vela.Tests
             inner.PluginExecutionContext.InputParameters["Target"] = new EntityReference("account", Guid.NewGuid());
             inner.PluginExecutionContext.InputParameters["SubordinateId"] = subordinate;
 
-            IMergeContext<TestAccount> ctx = new MergeContext<TestAccount>(inner);
+            IMergePostContext<TestAccount> ctx = new MergePostContext<TestAccount>(inner);
 
             // Inferred - no type argument on Request.
             var req = ctx.Request;
@@ -36,7 +36,7 @@ namespace Vela.Tests
             Guid id = Guid.NewGuid();
             inner.PluginExecutionContext.OutputParameters["id"] = id;
 
-            ICreateContext<TestAccount> ctx = new CreateContext<TestAccount>(inner);
+            ICreatePostContext<TestAccount> ctx = new CreatePostContext<TestAccount>(inner);
 
             Assert.Equal(id, ctx.Response.id);
         }
@@ -49,7 +49,7 @@ namespace Vela.Tests
                 .Stage(Vela.Constants.PluginStages.PostOperation)
                 .Build();
 
-            IUpdateContext<TestAccount> ctx = new UpdateContext<TestAccount>(inner);
+            IUpdatePostContext<TestAccount> ctx = new UpdatePostContext<TestAccount>(inner);
 
             // Delegated members reflect the wrapped context.
             Assert.Equal(inner.MessageName, ctx.MessageName);
@@ -61,7 +61,7 @@ namespace Vela.Tests
         [Fact]
         public void StepContext_NullInner_Throws()
         {
-            Assert.Throws<ArgumentNullException>(() => new MergeContext<TestAccount>(null!));
+            Assert.Throws<ArgumentNullException>(() => new MergePostContext<TestAccount>(null!));
         }
 
         [Fact]
@@ -70,7 +70,7 @@ namespace Vela.Tests
             // Regression: dependency injection (ctx.GetService / ctx.GetRequiredService) must work from a typed
             // handler, not only the plain LocalPluginContext. The StepContext wrapper forwards the resolver.
             LocalPluginContext inner = new PluginContextBuilder().Build();
-            ICreateContext<TestAccount> ctx = new CreateContext<TestAccount>(inner);
+            ICreatePostContext<TestAccount> ctx = new CreatePostContext<TestAccount>(inner);
 
             // IPluginCacheService is a built-in service, always registered.
             Assert.NotNull(ctx.GetService<IPluginCacheService>());
@@ -84,7 +84,7 @@ namespace Vela.Tests
             Guid id = Guid.NewGuid();
             inner.PluginExecutionContext.InputParameters["Target"] = new TestAccount { Id = id, Name = "Zava" };
 
-            IUpdateContext<TestAccount> ctx = new UpdateContext<TestAccount>(inner);
+            IUpdatePostContext<TestAccount> ctx = new UpdatePostContext<TestAccount>(inner);
 
             // ctx.Target is the early-bound entity - no cast, no type argument.
             TestAccount target = ctx.Target;
@@ -99,7 +99,7 @@ namespace Vela.Tests
             Guid id = Guid.NewGuid();
             inner.PluginExecutionContext.InputParameters["Target"] = new EntityReference("account", id);
 
-            IDeleteContext<TestAccount> ctx = new DeleteContext<TestAccount>(inner);
+            IDeletePostContext<TestAccount> ctx = new DeletePostContext<TestAccount>(inner);
 
             Assert.Equal(id, ctx.TargetReference.Id);
             Assert.Equal("account", ctx.TargetReference.LogicalName);
@@ -112,7 +112,7 @@ namespace Vela.Tests
             Guid id = Guid.NewGuid();
             inner.PluginExecutionContext.InputParameters["Target"] = new TestAccount { Id = id, Name = "Regarding" };
 
-            ISendEmailFromTemplateContext<TestAccount> ctx = new SendEmailFromTemplateContext<TestAccount>(inner);
+            ISendEmailFromTemplatePostContext<TestAccount> ctx = new SendEmailFromTemplatePostContext<TestAccount>(inner);
 
             Assert.Equal(id, ctx.Target.Id);
             Assert.Equal("Regarding", ctx.Target.Name);
@@ -125,7 +125,7 @@ namespace Vela.Tests
             Guid id = Guid.NewGuid();
             inner.PluginExecutionContext.InputParameters["Target"] = new EntityReference("account", id);
 
-            IAddToQueueContext<TestAccount> ctx = new AddToQueueContext<TestAccount>(inner);
+            IAddToQueuePostContext<TestAccount> ctx = new AddToQueuePostContext<TestAccount>(inner);
 
             Assert.Equal(id, ctx.TargetReference.Id);
         }
@@ -139,7 +139,7 @@ namespace Vela.Tests
             targets.Entities.Add(new TestAccount { Id = Guid.NewGuid(), Name = "B" });
             inner.PluginExecutionContext.InputParameters["Targets"] = targets;
 
-            ICreateMultipleContext<TestAccount> ctx = new CreateMultipleContext<TestAccount>(inner);
+            ICreateMultiplePostContext<TestAccount> ctx = new CreateMultiplePostContext<TestAccount>(inner);
 
             Assert.Equal(2, ctx.TargetCollection.Entities.Count);
         }

@@ -7,22 +7,21 @@ using Vela.DI;
 namespace Vela.Context
 {
     /// <summary>
-    /// Base for the per-message typed contexts: wraps the runtime <see cref="ILocalPluginContext"/> and forwards
-    /// its whole surface, adding the typed <see cref="Request"/> / <see cref="Response"/> (views over the live
-    /// <c>InputParameters</c> / <c>OutputParameters</c>). Message contexts derive this with the concrete request
-    /// / response types, so they only declare their specialization - the delegation lives here, once.
+    /// Base for the per-message <b>pre-stage</b> typed contexts: wraps the runtime <see cref="ILocalPluginContext"/>
+    /// and forwards its whole surface, adding the typed <see cref="Request"/> (a view over the live
+    /// <c>InputParameters</c>). The delegation lives here, once; message pre-contexts derive this with the concrete
+    /// request type. There is no <c>Response</c> here - it is only meaningful after the main operation, so it lives
+    /// on <see cref="PostStepContext{TRequest, TResponse}"/>.
     /// </summary>
     /// <typeparam name="TRequest">The SDK request type for the message.</typeparam>
-    /// <typeparam name="TResponse">The SDK response type for the message.</typeparam>
-    public abstract class StepContext<TRequest, TResponse> : IStepContext<TRequest, TResponse>, IServiceResolverContext
+    public abstract class PreStepContext<TRequest> : IStepRequestContext<TRequest>, IServiceResolverContext
         where TRequest : OrganizationRequest, new()
-        where TResponse : OrganizationResponse, new()
     {
         private readonly ILocalPluginContext _inner;
 
         /// <summary>Creates a typed context wrapping the runtime context.</summary>
         /// <param name="inner">The runtime plugin context to wrap.</param>
-        protected StepContext(ILocalPluginContext inner)
+        protected PreStepContext(ILocalPluginContext inner)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         }
@@ -36,9 +35,6 @@ namespace Vela.Context
 
         /// <inheritdoc />
         public TRequest Request => _inner.GetRequest<TRequest>();
-
-        /// <inheritdoc />
-        public TResponse Response => _inner.GetResponse<TResponse>();
 
         // ---- ILocalPluginContext (forwarded to the wrapped runtime context) ----------------------------
 
@@ -129,5 +125,24 @@ namespace Vela.Context
         public string AcquireManagedIdentityToken(IEnumerable<string> scopes) => _inner.AcquireManagedIdentityToken(scopes);
         /// <inheritdoc />
         public string AcquireManagedIdentityToken(Guid applicationUserId, IEnumerable<string> scopes) => _inner.AcquireManagedIdentityToken(applicationUserId, scopes);
+    }
+
+    /// <summary>
+    /// Base for the per-message <b>post-stage</b> typed contexts: everything a <see cref="PreStepContext{TRequest}"/>
+    /// has, plus the typed <see cref="Response"/> (a view over the live <c>OutputParameters</c>, filled by the
+    /// platform after the main operation).
+    /// </summary>
+    /// <typeparam name="TRequest">The SDK request type for the message.</typeparam>
+    /// <typeparam name="TResponse">The SDK response type for the message.</typeparam>
+    public abstract class PostStepContext<TRequest, TResponse> : PreStepContext<TRequest>, IStepResponseContext<TResponse>
+        where TRequest : OrganizationRequest, new()
+        where TResponse : OrganizationResponse, new()
+    {
+        /// <summary>Creates a typed post-stage context wrapping the runtime context.</summary>
+        /// <param name="inner">The runtime plugin context to wrap.</param>
+        protected PostStepContext(ILocalPluginContext inner) : base(inner) { }
+
+        /// <inheritdoc />
+        public TResponse Response => this.GetResponse<TResponse>();
     }
 }

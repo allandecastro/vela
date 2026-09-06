@@ -4,499 +4,852 @@ using Microsoft.Crm.Sdk.Messages;
 
 namespace Vela.Context
 {
-    // Per-message typed contexts. Each is a two-line specialization of StepContext / IStepContext with the
-    // message's SDK request/response types. TEntity ties the context to the step's entity (type-state), so a
-    // handler declared for the wrong message does not compile. Adding a message = one interface + one class.
-    //
-    // On top of the standard SDK request/response (ctx.Request / ctx.Response), each context also exposes the
-    // primary record already typed, so a handler never re-states the entity type or casts: ctx.Target (the
-    // early-bound entity, Create/Update), ctx.TargetReference (the EntityReference, Delete/Retrieve/Associate/
-    // Disassociate/Merge/*Access) and ctx.TargetCollection (the EntityCollection, CreateMultiple/UpdateMultiple).
+    // Per-message typed contexts, split by pipeline stage. A pre-stage handler (PreValidation / PreOperation)
+    // receives I<Message>PreContext (typed ctx.Request only); a post-stage handler receives I<Message>PostContext
+    // (ctx.Request + ctx.Response). Reading ctx.Response in a pre-stage does not compile. Each context also exposes
+    // the primary record already typed (ctx.Target / ctx.TargetReference / ctx.TargetCollection) per message shape.
 
-    /// <summary>A context whose message carries a full entity <c>Target</c> (Create, Update).</summary>
+    /// <summary>A context whose message carries a full entity <c>Target</c>.</summary>
     /// <typeparam name="TEntity">The step's entity type.</typeparam>
     public interface IEntityTargetContext<TEntity> where TEntity : Entity
     {
-        /// <summary>The message <c>Target</c> as the early-bound entity (no cast, no type argument).</summary>
+        /// <summary>The message <c>Target</c> as the early-bound entity.</summary>
         TEntity Target { get; }
     }
 
-    /// <summary>A context whose message carries an <c>EntityReference</c> Target (Delete, Retrieve, Associate,
-    /// Disassociate, Merge, GrantAccess, ModifyAccess, RevokeAccess).</summary>
+    /// <summary>A context whose message carries an <c>EntityReference</c> Target.</summary>
     public interface IReferenceTargetContext
     {
         /// <summary>The message <c>Target</c> as an <see cref="EntityReference"/>.</summary>
         EntityReference TargetReference { get; }
     }
 
-    /// <summary>A bulk context whose message carries a <c>Targets</c> collection (CreateMultiple, UpdateMultiple).</summary>
+    /// <summary>A bulk context whose message carries a <c>Targets</c> collection.</summary>
     public interface ICollectionTargetContext
     {
         /// <summary>The message <c>Targets</c> as an <see cref="EntityCollection"/>.</summary>
         EntityCollection TargetCollection { get; }
     }
 
-    /// <summary>Typed context for a Create step (<c>ctx.Target</c>, <c>ctx.Response.id</c>).</summary>
-    public interface ICreateContext<TEntity> : IStepContext<CreateRequest, CreateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
-    /// <summary>Typed context for an Update step (<c>ctx.Target</c>).</summary>
-    public interface IUpdateContext<TEntity> : IStepContext<UpdateRequest, UpdateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
-    /// <summary>Typed context for a Delete step (<c>ctx.TargetReference</c>).</summary>
-    public interface IDeleteContext<TEntity> : IStepContext<DeleteRequest, DeleteResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a CreateMultiple step (<c>ctx.TargetCollection</c>, <c>ctx.Response.Ids</c>).</summary>
-    public interface ICreateMultipleContext<TEntity> : IStepContext<CreateMultipleRequest, CreateMultipleResponse>, ICollectionTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for an UpdateMultiple step (<c>ctx.TargetCollection</c>).</summary>
-    public interface IUpdateMultipleContext<TEntity> : IStepContext<UpdateMultipleRequest, UpdateMultipleResponse>, ICollectionTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a Retrieve step (<c>ctx.TargetReference</c>, <c>ctx.Request.ColumnSet</c>, <c>ctx.Response.Entity</c>).</summary>
-    public interface IRetrieveContext<TEntity> : IStepContext<RetrieveRequest, RetrieveResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a RetrieveMultiple step (<c>ctx.Request.Query</c>).</summary>
-    public interface IRetrieveMultipleContext<TEntity> : IStepContext<RetrieveMultipleRequest, RetrieveMultipleResponse> where TEntity : Entity { }
-    /// <summary>Typed context for an Associate step (<c>ctx.TargetReference</c>, <c>ctx.Request.Relationship</c>, <c>RelatedEntities</c>).</summary>
-    public interface IAssociateContext<TEntity> : IStepContext<AssociateRequest, AssociateResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a Disassociate step (<c>ctx.TargetReference</c>).</summary>
-    public interface IDisassociateContext<TEntity> : IStepContext<DisassociateRequest, DisassociateResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a Merge step (<c>ctx.TargetReference</c>, <c>ctx.Request.SubordinateId</c>, <c>UpdateContent</c>…).</summary>
-    public interface IMergeContext<TEntity> : IStepContext<MergeRequest, MergeResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a GrantAccess step (<c>ctx.TargetReference</c>, <c>ctx.Request.PrincipalAccess</c>).</summary>
-    public interface IGrantAccessContext<TEntity> : IStepContext<GrantAccessRequest, GrantAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a ModifyAccess step (<c>ctx.TargetReference</c>).</summary>
-    public interface IModifyAccessContext<TEntity> : IStepContext<ModifyAccessRequest, ModifyAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a RevokeAccess step (<c>ctx.TargetReference</c>, <c>ctx.Request.Revokee</c>).</summary>
-    public interface IRevokeAccessContext<TEntity> : IStepContext<RevokeAccessRequest, RevokeAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Create step (<c>ctx.Request</c> only).</summary>
+    public interface ICreatePreContext<TEntity> : IStepRequestContext<CreateRequest>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Create step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ICreatePostContext<TEntity> : IStepRequestContext<CreateRequest>, IStepResponseContext<CreateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Update step (<c>ctx.Request</c> only).</summary>
+    public interface IUpdatePreContext<TEntity> : IStepRequestContext<UpdateRequest>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Update step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IUpdatePostContext<TEntity> : IStepRequestContext<UpdateRequest>, IStepResponseContext<UpdateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Delete step (<c>ctx.Request</c> only).</summary>
+    public interface IDeletePreContext<TEntity> : IStepRequestContext<DeleteRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Delete step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IDeletePostContext<TEntity> : IStepRequestContext<DeleteRequest>, IStepResponseContext<DeleteResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a CreateMultiple step (<c>ctx.Request</c> only).</summary>
+    public interface ICreateMultiplePreContext<TEntity> : IStepRequestContext<CreateMultipleRequest>, ICollectionTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a CreateMultiple step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ICreateMultiplePostContext<TEntity> : IStepRequestContext<CreateMultipleRequest>, IStepResponseContext<CreateMultipleResponse>, ICollectionTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a UpdateMultiple step (<c>ctx.Request</c> only).</summary>
+    public interface IUpdateMultiplePreContext<TEntity> : IStepRequestContext<UpdateMultipleRequest>, ICollectionTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a UpdateMultiple step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IUpdateMultiplePostContext<TEntity> : IStepRequestContext<UpdateMultipleRequest>, IStepResponseContext<UpdateMultipleResponse>, ICollectionTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Retrieve step (<c>ctx.Request</c> only).</summary>
+    public interface IRetrievePreContext<TEntity> : IStepRequestContext<RetrieveRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Retrieve step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRetrievePostContext<TEntity> : IStepRequestContext<RetrieveRequest>, IStepResponseContext<RetrieveResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RetrieveMultiple step (<c>ctx.Request</c> only).</summary>
+    public interface IRetrieveMultiplePreContext<TEntity> : IStepRequestContext<RetrieveMultipleRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RetrieveMultiple step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRetrieveMultiplePostContext<TEntity> : IStepRequestContext<RetrieveMultipleRequest>, IStepResponseContext<RetrieveMultipleResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Associate step (<c>ctx.Request</c> only).</summary>
+    public interface IAssociatePreContext<TEntity> : IStepRequestContext<AssociateRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Associate step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IAssociatePostContext<TEntity> : IStepRequestContext<AssociateRequest>, IStepResponseContext<AssociateResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Disassociate step (<c>ctx.Request</c> only).</summary>
+    public interface IDisassociatePreContext<TEntity> : IStepRequestContext<DisassociateRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Disassociate step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IDisassociatePostContext<TEntity> : IStepRequestContext<DisassociateRequest>, IStepResponseContext<DisassociateResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Merge step (<c>ctx.Request</c> only).</summary>
+    public interface IMergePreContext<TEntity> : IStepRequestContext<MergeRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Merge step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IMergePostContext<TEntity> : IStepRequestContext<MergeRequest>, IStepResponseContext<MergeResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a GrantAccess step (<c>ctx.Request</c> only).</summary>
+    public interface IGrantAccessPreContext<TEntity> : IStepRequestContext<GrantAccessRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a GrantAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IGrantAccessPostContext<TEntity> : IStepRequestContext<GrantAccessRequest>, IStepResponseContext<GrantAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a ModifyAccess step (<c>ctx.Request</c> only).</summary>
+    public interface IModifyAccessPreContext<TEntity> : IStepRequestContext<ModifyAccessRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a ModifyAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IModifyAccessPostContext<TEntity> : IStepRequestContext<ModifyAccessRequest>, IStepResponseContext<ModifyAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RevokeAccess step (<c>ctx.Request</c> only).</summary>
+    public interface IRevokeAccessPreContext<TEntity> : IStepRequestContext<RevokeAccessRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RevokeAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRevokeAccessPostContext<TEntity> : IStepRequestContext<RevokeAccessRequest>, IStepResponseContext<RevokeAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a QualifyLead step (<c>ctx.Request</c> only).</summary>
+    public interface IQualifyLeadPreContext<TEntity> : IStepRequestContext<QualifyLeadRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a QualifyLead step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IQualifyLeadPostContext<TEntity> : IStepRequestContext<QualifyLeadRequest>, IStepResponseContext<QualifyLeadResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a WinOpportunity step (<c>ctx.Request</c> only).</summary>
+    public interface IWinOpportunityPreContext<TEntity> : IStepRequestContext<WinOpportunityRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a WinOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IWinOpportunityPostContext<TEntity> : IStepRequestContext<WinOpportunityRequest>, IStepResponseContext<WinOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a LoseOpportunity step (<c>ctx.Request</c> only).</summary>
+    public interface ILoseOpportunityPreContext<TEntity> : IStepRequestContext<LoseOpportunityRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a LoseOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ILoseOpportunityPostContext<TEntity> : IStepRequestContext<LoseOpportunityRequest>, IStepResponseContext<LoseOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a ConvertQuoteToSalesOrder step (<c>ctx.Request</c> only).</summary>
+    public interface IConvertQuoteToSalesOrderPreContext<TEntity> : IStepRequestContext<ConvertQuoteToSalesOrderRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a ConvertQuoteToSalesOrder step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IConvertQuoteToSalesOrderPostContext<TEntity> : IStepRequestContext<ConvertQuoteToSalesOrderRequest>, IStepResponseContext<ConvertQuoteToSalesOrderResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a ConvertSalesOrderToInvoice step (<c>ctx.Request</c> only).</summary>
+    public interface IConvertSalesOrderToInvoicePreContext<TEntity> : IStepRequestContext<ConvertSalesOrderToInvoiceRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a ConvertSalesOrderToInvoice step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IConvertSalesOrderToInvoicePostContext<TEntity> : IStepRequestContext<ConvertSalesOrderToInvoiceRequest>, IStepResponseContext<ConvertSalesOrderToInvoiceResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a GenerateQuoteFromOpportunity step (<c>ctx.Request</c> only).</summary>
+    public interface IGenerateQuoteFromOpportunityPreContext<TEntity> : IStepRequestContext<GenerateQuoteFromOpportunityRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a GenerateQuoteFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IGenerateQuoteFromOpportunityPostContext<TEntity> : IStepRequestContext<GenerateQuoteFromOpportunityRequest>, IStepResponseContext<GenerateQuoteFromOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a GenerateSalesOrderFromOpportunity step (<c>ctx.Request</c> only).</summary>
+    public interface IGenerateSalesOrderFromOpportunityPreContext<TEntity> : IStepRequestContext<GenerateSalesOrderFromOpportunityRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a GenerateSalesOrderFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IGenerateSalesOrderFromOpportunityPostContext<TEntity> : IStepRequestContext<GenerateSalesOrderFromOpportunityRequest>, IStepResponseContext<GenerateSalesOrderFromOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a GenerateInvoiceFromOpportunity step (<c>ctx.Request</c> only).</summary>
+    public interface IGenerateInvoiceFromOpportunityPreContext<TEntity> : IStepRequestContext<GenerateInvoiceFromOpportunityRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a GenerateInvoiceFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IGenerateInvoiceFromOpportunityPostContext<TEntity> : IStepRequestContext<GenerateInvoiceFromOpportunityRequest>, IStepResponseContext<GenerateInvoiceFromOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a AddToQueue step (<c>ctx.Request</c> only).</summary>
+    public interface IAddToQueuePreContext<TEntity> : IStepRequestContext<AddToQueueRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a AddToQueue step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IAddToQueuePostContext<TEntity> : IStepRequestContext<AddToQueueRequest>, IStepResponseContext<AddToQueueResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RemoveFromQueue step (<c>ctx.Request</c> only).</summary>
+    public interface IRemoveFromQueuePreContext<TEntity> : IStepRequestContext<RemoveFromQueueRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RemoveFromQueue step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRemoveFromQueuePostContext<TEntity> : IStepRequestContext<RemoveFromQueueRequest>, IStepResponseContext<RemoveFromQueueResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a PickFromQueue step (<c>ctx.Request</c> only).</summary>
+    public interface IPickFromQueuePreContext<TEntity> : IStepRequestContext<PickFromQueueRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a PickFromQueue step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IPickFromQueuePostContext<TEntity> : IStepRequestContext<PickFromQueueRequest>, IStepResponseContext<PickFromQueueResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RouteTo step (<c>ctx.Request</c> only).</summary>
+    public interface IRouteToPreContext<TEntity> : IStepRequestContext<RouteToRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RouteTo step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRouteToPostContext<TEntity> : IStepRequestContext<RouteToRequest>, IStepResponseContext<RouteToResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a ReleaseToQueue step (<c>ctx.Request</c> only).</summary>
+    public interface IReleaseToQueuePreContext<TEntity> : IStepRequestContext<ReleaseToQueueRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a ReleaseToQueue step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IReleaseToQueuePostContext<TEntity> : IStepRequestContext<ReleaseToQueueRequest>, IStepResponseContext<ReleaseToQueueResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a SendEmail step (<c>ctx.Request</c> only).</summary>
+    public interface ISendEmailPreContext<TEntity> : IStepRequestContext<SendEmailRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a SendEmail step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ISendEmailPostContext<TEntity> : IStepRequestContext<SendEmailRequest>, IStepResponseContext<SendEmailResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a SendEmailFromTemplate step (<c>ctx.Request</c> only).</summary>
+    public interface ISendEmailFromTemplatePreContext<TEntity> : IStepRequestContext<SendEmailFromTemplateRequest>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a SendEmailFromTemplate step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ISendEmailFromTemplatePostContext<TEntity> : IStepRequestContext<SendEmailFromTemplateRequest>, IStepResponseContext<SendEmailFromTemplateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a DeliverIncomingEmail step (<c>ctx.Request</c> only).</summary>
+    public interface IDeliverIncomingEmailPreContext<TEntity> : IStepRequestContext<DeliverIncomingEmailRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a DeliverIncomingEmail step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IDeliverIncomingEmailPostContext<TEntity> : IStepRequestContext<DeliverIncomingEmailRequest>, IStepResponseContext<DeliverIncomingEmailResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a DeliverPromoteEmail step (<c>ctx.Request</c> only).</summary>
+    public interface IDeliverPromoteEmailPreContext<TEntity> : IStepRequestContext<DeliverPromoteEmailRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a DeliverPromoteEmail step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IDeliverPromoteEmailPostContext<TEntity> : IStepRequestContext<DeliverPromoteEmailRequest>, IStepResponseContext<DeliverPromoteEmailResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a AddMembersTeam step (<c>ctx.Request</c> only).</summary>
+    public interface IAddMembersTeamPreContext<TEntity> : IStepRequestContext<AddMembersTeamRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a AddMembersTeam step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IAddMembersTeamPostContext<TEntity> : IStepRequestContext<AddMembersTeamRequest>, IStepResponseContext<AddMembersTeamResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RemoveMembersTeam step (<c>ctx.Request</c> only).</summary>
+    public interface IRemoveMembersTeamPreContext<TEntity> : IStepRequestContext<RemoveMembersTeamRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RemoveMembersTeam step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRemoveMembersTeamPostContext<TEntity> : IStepRequestContext<RemoveMembersTeamRequest>, IStepResponseContext<RemoveMembersTeamResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a AddListMembersList step (<c>ctx.Request</c> only).</summary>
+    public interface IAddListMembersListPreContext<TEntity> : IStepRequestContext<AddListMembersListRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a AddListMembersList step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IAddListMembersListPostContext<TEntity> : IStepRequestContext<AddListMembersListRequest>, IStepResponseContext<AddListMembersListResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a AddMemberList step (<c>ctx.Request</c> only).</summary>
+    public interface IAddMemberListPreContext<TEntity> : IStepRequestContext<AddMemberListRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a AddMemberList step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IAddMemberListPostContext<TEntity> : IStepRequestContext<AddMemberListRequest>, IStepResponseContext<AddMemberListResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RemoveMemberList step (<c>ctx.Request</c> only).</summary>
+    public interface IRemoveMemberListPreContext<TEntity> : IStepRequestContext<RemoveMemberListRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RemoveMemberList step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRemoveMemberListPostContext<TEntity> : IStepRequestContext<RemoveMemberListRequest>, IStepResponseContext<RemoveMemberListResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a CloseIncident step (<c>ctx.Request</c> only).</summary>
+    public interface ICloseIncidentPreContext<TEntity> : IStepRequestContext<CloseIncidentRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a CloseIncident step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ICloseIncidentPostContext<TEntity> : IStepRequestContext<CloseIncidentRequest>, IStepResponseContext<CloseIncidentResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a CancelContract step (<c>ctx.Request</c> only).</summary>
+    public interface ICancelContractPreContext<TEntity> : IStepRequestContext<CancelContractRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a CancelContract step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ICancelContractPostContext<TEntity> : IStepRequestContext<CancelContractRequest>, IStepResponseContext<CancelContractResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a CloneContract step (<c>ctx.Request</c> only).</summary>
+    public interface ICloneContractPreContext<TEntity> : IStepRequestContext<CloneContractRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a CloneContract step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ICloneContractPostContext<TEntity> : IStepRequestContext<CloneContractRequest>, IStepResponseContext<CloneContractResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RetrievePrincipalAccess step (<c>ctx.Request</c> only).</summary>
+    public interface IRetrievePrincipalAccessPreContext<TEntity> : IStepRequestContext<RetrievePrincipalAccessRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RetrievePrincipalAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRetrievePrincipalAccessPostContext<TEntity> : IStepRequestContext<RetrievePrincipalAccessRequest>, IStepResponseContext<RetrievePrincipalAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RetrieveSharedPrincipalsAndAccess step (<c>ctx.Request</c> only).</summary>
+    public interface IRetrieveSharedPrincipalsAndAccessPreContext<TEntity> : IStepRequestContext<RetrieveSharedPrincipalsAndAccessRequest>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RetrieveSharedPrincipalsAndAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRetrieveSharedPrincipalsAndAccessPostContext<TEntity> : IStepRequestContext<RetrieveSharedPrincipalsAndAccessRequest>, IStepResponseContext<RetrieveSharedPrincipalsAndAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a WhoAmI step (<c>ctx.Request</c> only).</summary>
+    public interface IWhoAmIPreContext<TEntity> : IStepRequestContext<WhoAmIRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a WhoAmI step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IWhoAmIPostContext<TEntity> : IStepRequestContext<WhoAmIRequest>, IStepResponseContext<WhoAmIResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a WinQuote step (<c>ctx.Request</c> only).</summary>
+    public interface IWinQuotePreContext<TEntity> : IStepRequestContext<WinQuoteRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a WinQuote step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IWinQuotePostContext<TEntity> : IStepRequestContext<WinQuoteRequest>, IStepResponseContext<WinQuoteResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a ReviseQuote step (<c>ctx.Request</c> only).</summary>
+    public interface IReviseQuotePreContext<TEntity> : IStepRequestContext<ReviseQuoteRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a ReviseQuote step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IReviseQuotePostContext<TEntity> : IStepRequestContext<ReviseQuoteRequest>, IStepResponseContext<ReviseQuoteResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a FulfillSalesOrder step (<c>ctx.Request</c> only).</summary>
+    public interface IFulfillSalesOrderPreContext<TEntity> : IStepRequestContext<FulfillSalesOrderRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a FulfillSalesOrder step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IFulfillSalesOrderPostContext<TEntity> : IStepRequestContext<FulfillSalesOrderRequest>, IStepResponseContext<FulfillSalesOrderResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a GetQuoteProductsFromOpportunity step (<c>ctx.Request</c> only).</summary>
+    public interface IGetQuoteProductsFromOpportunityPreContext<TEntity> : IStepRequestContext<GetQuoteProductsFromOpportunityRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a GetQuoteProductsFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IGetQuoteProductsFromOpportunityPostContext<TEntity> : IStepRequestContext<GetQuoteProductsFromOpportunityRequest>, IStepResponseContext<GetQuoteProductsFromOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a GetSalesOrderProductsFromOpportunity step (<c>ctx.Request</c> only).</summary>
+    public interface IGetSalesOrderProductsFromOpportunityPreContext<TEntity> : IStepRequestContext<GetSalesOrderProductsFromOpportunityRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a GetSalesOrderProductsFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IGetSalesOrderProductsFromOpportunityPostContext<TEntity> : IStepRequestContext<GetSalesOrderProductsFromOpportunityRequest>, IStepResponseContext<GetSalesOrderProductsFromOpportunityResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a GetInvoiceProductsFromOpportunity step (<c>ctx.Request</c> only).</summary>
+    public interface IGetInvoiceProductsFromOpportunityPreContext<TEntity> : IStepRequestContext<GetInvoiceProductsFromOpportunityRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a GetInvoiceProductsFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IGetInvoiceProductsFromOpportunityPostContext<TEntity> : IStepRequestContext<GetInvoiceProductsFromOpportunityRequest>, IStepResponseContext<GetInvoiceProductsFromOpportunityResponse> where TEntity : Entity { }
 
-    // Each class forwards its typed target accessor to the existing context extensions (GetTarget / GetTargetRef
-    // / GetTargets), which read the pipeline InputParameters. The accessor is the only member beyond the ctor;
-    // Request/Response come from StepContext.
-
-    /// <summary>Runtime implementation of <see cref="ICreateContext{TEntity}"/>.</summary>
-    public sealed class CreateContext<TEntity> : StepContext<CreateRequest, CreateResponse>, ICreateContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for Create.</summary>
+    public sealed class CreatePreContext<TEntity> : PreStepContext<CreateRequest>, ICreatePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public CreateContext(ILocalPluginContext inner) : base(inner) { }
+        public CreatePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public TEntity Target => this.GetTarget<TEntity>();
     }
-
-    /// <summary>Runtime implementation of <see cref="IUpdateContext{TEntity}"/>.</summary>
-    public sealed class UpdateContext<TEntity> : StepContext<UpdateRequest, UpdateResponse>, IUpdateContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for Create.</summary>
+    public sealed class CreatePostContext<TEntity> : PostStepContext<CreateRequest, CreateResponse>, ICreatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public UpdateContext(ILocalPluginContext inner) : base(inner) { }
+        public CreatePostContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public TEntity Target => this.GetTarget<TEntity>();
     }
-
-    /// <summary>Runtime implementation of <see cref="IDeleteContext{TEntity}"/>.</summary>
-    public sealed class DeleteContext<TEntity> : StepContext<DeleteRequest, DeleteResponse>, IDeleteContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for Update.</summary>
+    public sealed class UpdatePreContext<TEntity> : PreStepContext<UpdateRequest>, IUpdatePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public DeleteContext(ILocalPluginContext inner) : base(inner) { }
+        public UpdatePreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity Target => this.GetTarget<TEntity>();
+    }
+    /// <summary>Runtime post-stage context for Update.</summary>
+    public sealed class UpdatePostContext<TEntity> : PostStepContext<UpdateRequest, UpdateResponse>, IUpdatePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public UpdatePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity Target => this.GetTarget<TEntity>();
+    }
+    /// <summary>Runtime pre-stage context for Delete.</summary>
+    public sealed class DeletePreContext<TEntity> : PreStepContext<DeleteRequest>, IDeletePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public DeletePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="ICreateMultipleContext{TEntity}"/>.</summary>
-    public sealed class CreateMultipleContext<TEntity> : StepContext<CreateMultipleRequest, CreateMultipleResponse>, ICreateMultipleContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for Delete.</summary>
+    public sealed class DeletePostContext<TEntity> : PostStepContext<DeleteRequest, DeleteResponse>, IDeletePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public CreateMultipleContext(ILocalPluginContext inner) : base(inner) { }
+        public DeletePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
+    }
+    /// <summary>Runtime pre-stage context for CreateMultiple.</summary>
+    public sealed class CreateMultiplePreContext<TEntity> : PreStepContext<CreateMultipleRequest>, ICreateMultiplePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public CreateMultiplePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityCollection TargetCollection => this.GetTargets();
     }
-
-    /// <summary>Runtime implementation of <see cref="IUpdateMultipleContext{TEntity}"/>.</summary>
-    public sealed class UpdateMultipleContext<TEntity> : StepContext<UpdateMultipleRequest, UpdateMultipleResponse>, IUpdateMultipleContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for CreateMultiple.</summary>
+    public sealed class CreateMultiplePostContext<TEntity> : PostStepContext<CreateMultipleRequest, CreateMultipleResponse>, ICreateMultiplePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public UpdateMultipleContext(ILocalPluginContext inner) : base(inner) { }
+        public CreateMultiplePostContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityCollection TargetCollection => this.GetTargets();
     }
-
-    /// <summary>Runtime implementation of <see cref="IRetrieveContext{TEntity}"/>.</summary>
-    public sealed class RetrieveContext<TEntity> : StepContext<RetrieveRequest, RetrieveResponse>, IRetrieveContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for UpdateMultiple.</summary>
+    public sealed class UpdateMultiplePreContext<TEntity> : PreStepContext<UpdateMultipleRequest>, IUpdateMultiplePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RetrieveContext(ILocalPluginContext inner) : base(inner) { }
+        public UpdateMultiplePreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityCollection TargetCollection => this.GetTargets();
+    }
+    /// <summary>Runtime post-stage context for UpdateMultiple.</summary>
+    public sealed class UpdateMultiplePostContext<TEntity> : PostStepContext<UpdateMultipleRequest, UpdateMultipleResponse>, IUpdateMultiplePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public UpdateMultiplePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityCollection TargetCollection => this.GetTargets();
+    }
+    /// <summary>Runtime pre-stage context for Retrieve.</summary>
+    public sealed class RetrievePreContext<TEntity> : PreStepContext<RetrieveRequest>, IRetrievePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RetrievePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IRetrieveMultipleContext{TEntity}"/>.</summary>
-    public sealed class RetrieveMultipleContext<TEntity> : StepContext<RetrieveMultipleRequest, RetrieveMultipleResponse>, IRetrieveMultipleContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for Retrieve.</summary>
+    public sealed class RetrievePostContext<TEntity> : PostStepContext<RetrieveRequest, RetrieveResponse>, IRetrievePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RetrieveMultipleContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IAssociateContext{TEntity}"/>.</summary>
-    public sealed class AssociateContext<TEntity> : StepContext<AssociateRequest, AssociateResponse>, IAssociateContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public AssociateContext(ILocalPluginContext inner) : base(inner) { }
+        public RetrievePostContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IDisassociateContext{TEntity}"/>.</summary>
-    public sealed class DisassociateContext<TEntity> : StepContext<DisassociateRequest, DisassociateResponse>, IDisassociateContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for RetrieveMultiple.</summary>
+    public sealed class RetrieveMultiplePreContext<TEntity> : PreStepContext<RetrieveMultipleRequest>, IRetrieveMultiplePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public DisassociateContext(ILocalPluginContext inner) : base(inner) { }
+        public RetrieveMultiplePreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for RetrieveMultiple.</summary>
+    public sealed class RetrieveMultiplePostContext<TEntity> : PostStepContext<RetrieveMultipleRequest, RetrieveMultipleResponse>, IRetrieveMultiplePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RetrieveMultiplePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for Associate.</summary>
+    public sealed class AssociatePreContext<TEntity> : PreStepContext<AssociateRequest>, IAssociatePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AssociatePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IMergeContext{TEntity}"/>.</summary>
-    public sealed class MergeContext<TEntity> : StepContext<MergeRequest, MergeResponse>, IMergeContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for Associate.</summary>
+    public sealed class AssociatePostContext<TEntity> : PostStepContext<AssociateRequest, AssociateResponse>, IAssociatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public MergeContext(ILocalPluginContext inner) : base(inner) { }
+        public AssociatePostContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IGrantAccessContext{TEntity}"/>.</summary>
-    public sealed class GrantAccessContext<TEntity> : StepContext<GrantAccessRequest, GrantAccessResponse>, IGrantAccessContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for Disassociate.</summary>
+    public sealed class DisassociatePreContext<TEntity> : PreStepContext<DisassociateRequest>, IDisassociatePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GrantAccessContext(ILocalPluginContext inner) : base(inner) { }
+        public DisassociatePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IModifyAccessContext{TEntity}"/>.</summary>
-    public sealed class ModifyAccessContext<TEntity> : StepContext<ModifyAccessRequest, ModifyAccessResponse>, IModifyAccessContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for Disassociate.</summary>
+    public sealed class DisassociatePostContext<TEntity> : PostStepContext<DisassociateRequest, DisassociateResponse>, IDisassociatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ModifyAccessContext(ILocalPluginContext inner) : base(inner) { }
+        public DisassociatePostContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IRevokeAccessContext{TEntity}"/>.</summary>
-    public sealed class RevokeAccessContext<TEntity> : StepContext<RevokeAccessRequest, RevokeAccessResponse>, IRevokeAccessContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for Merge.</summary>
+    public sealed class MergePreContext<TEntity> : PreStepContext<MergeRequest>, IMergePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RevokeAccessContext(ILocalPluginContext inner) : base(inner) { }
+        public MergePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-    /// <summary>Typed context for a QualifyLead step.</summary>
-    public interface IQualifyLeadContext<TEntity> : IStepContext<QualifyLeadRequest, QualifyLeadResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a WinOpportunity step.</summary>
-    public interface IWinOpportunityContext<TEntity> : IStepContext<WinOpportunityRequest, WinOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a LoseOpportunity step.</summary>
-    public interface ILoseOpportunityContext<TEntity> : IStepContext<LoseOpportunityRequest, LoseOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a ConvertQuoteToSalesOrder step.</summary>
-    public interface IConvertQuoteToSalesOrderContext<TEntity> : IStepContext<ConvertQuoteToSalesOrderRequest, ConvertQuoteToSalesOrderResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a ConvertSalesOrderToInvoice step.</summary>
-    public interface IConvertSalesOrderToInvoiceContext<TEntity> : IStepContext<ConvertSalesOrderToInvoiceRequest, ConvertSalesOrderToInvoiceResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a GenerateQuoteFromOpportunity step.</summary>
-    public interface IGenerateQuoteFromOpportunityContext<TEntity> : IStepContext<GenerateQuoteFromOpportunityRequest, GenerateQuoteFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a GenerateSalesOrderFromOpportunity step.</summary>
-    public interface IGenerateSalesOrderFromOpportunityContext<TEntity> : IStepContext<GenerateSalesOrderFromOpportunityRequest, GenerateSalesOrderFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a GenerateInvoiceFromOpportunity step.</summary>
-    public interface IGenerateInvoiceFromOpportunityContext<TEntity> : IStepContext<GenerateInvoiceFromOpportunityRequest, GenerateInvoiceFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a AddToQueue step.</summary>
-    public interface IAddToQueueContext<TEntity> : IStepContext<AddToQueueRequest, AddToQueueResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a RemoveFromQueue step.</summary>
-    public interface IRemoveFromQueueContext<TEntity> : IStepContext<RemoveFromQueueRequest, RemoveFromQueueResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a PickFromQueue step.</summary>
-    public interface IPickFromQueueContext<TEntity> : IStepContext<PickFromQueueRequest, PickFromQueueResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a RouteTo step.</summary>
-    public interface IRouteToContext<TEntity> : IStepContext<RouteToRequest, RouteToResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a ReleaseToQueue step.</summary>
-    public interface IReleaseToQueueContext<TEntity> : IStepContext<ReleaseToQueueRequest, ReleaseToQueueResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a SendEmail step.</summary>
-    public interface ISendEmailContext<TEntity> : IStepContext<SendEmailRequest, SendEmailResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a SendEmailFromTemplate step.</summary>
-    public interface ISendEmailFromTemplateContext<TEntity> : IStepContext<SendEmailFromTemplateRequest, SendEmailFromTemplateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
-    /// <summary>Typed context for a DeliverIncomingEmail step.</summary>
-    public interface IDeliverIncomingEmailContext<TEntity> : IStepContext<DeliverIncomingEmailRequest, DeliverIncomingEmailResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a DeliverPromoteEmail step.</summary>
-    public interface IDeliverPromoteEmailContext<TEntity> : IStepContext<DeliverPromoteEmailRequest, DeliverPromoteEmailResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a AddMembersTeam step.</summary>
-    public interface IAddMembersTeamContext<TEntity> : IStepContext<AddMembersTeamRequest, AddMembersTeamResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a RemoveMembersTeam step.</summary>
-    public interface IRemoveMembersTeamContext<TEntity> : IStepContext<RemoveMembersTeamRequest, RemoveMembersTeamResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a AddListMembersList step.</summary>
-    public interface IAddListMembersListContext<TEntity> : IStepContext<AddListMembersListRequest, AddListMembersListResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a AddMemberList step.</summary>
-    public interface IAddMemberListContext<TEntity> : IStepContext<AddMemberListRequest, AddMemberListResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a RemoveMemberList step.</summary>
-    public interface IRemoveMemberListContext<TEntity> : IStepContext<RemoveMemberListRequest, RemoveMemberListResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a CloseIncident step.</summary>
-    public interface ICloseIncidentContext<TEntity> : IStepContext<CloseIncidentRequest, CloseIncidentResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a CancelContract step.</summary>
-    public interface ICancelContractContext<TEntity> : IStepContext<CancelContractRequest, CancelContractResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a CloneContract step.</summary>
-    public interface ICloneContractContext<TEntity> : IStepContext<CloneContractRequest, CloneContractResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a RetrievePrincipalAccess step.</summary>
-    public interface IRetrievePrincipalAccessContext<TEntity> : IStepContext<RetrievePrincipalAccessRequest, RetrievePrincipalAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
-    /// <summary>Typed context for a RetrieveSharedPrincipalsAndAccess step.</summary>
-    public interface IRetrieveSharedPrincipalsAndAccessContext<TEntity> : IStepContext<RetrieveSharedPrincipalsAndAccessRequest, RetrieveSharedPrincipalsAndAccessResponse>, IReferenceTargetContext where TEntity : Entity { }
-
-    /// <summary>Runtime implementation of <see cref="IQualifyLeadContext{TEntity}"/>.</summary>
-    public sealed class QualifyLeadContext<TEntity> : StepContext<QualifyLeadRequest, QualifyLeadResponse>, IQualifyLeadContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for Merge.</summary>
+    public sealed class MergePostContext<TEntity> : PostStepContext<MergeRequest, MergeResponse>, IMergePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public QualifyLeadContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IWinOpportunityContext{TEntity}"/>.</summary>
-    public sealed class WinOpportunityContext<TEntity> : StepContext<WinOpportunityRequest, WinOpportunityResponse>, IWinOpportunityContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public WinOpportunityContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="ILoseOpportunityContext{TEntity}"/>.</summary>
-    public sealed class LoseOpportunityContext<TEntity> : StepContext<LoseOpportunityRequest, LoseOpportunityResponse>, ILoseOpportunityContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public LoseOpportunityContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IConvertQuoteToSalesOrderContext{TEntity}"/>.</summary>
-    public sealed class ConvertQuoteToSalesOrderContext<TEntity> : StepContext<ConvertQuoteToSalesOrderRequest, ConvertQuoteToSalesOrderResponse>, IConvertQuoteToSalesOrderContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ConvertQuoteToSalesOrderContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IConvertSalesOrderToInvoiceContext{TEntity}"/>.</summary>
-    public sealed class ConvertSalesOrderToInvoiceContext<TEntity> : StepContext<ConvertSalesOrderToInvoiceRequest, ConvertSalesOrderToInvoiceResponse>, IConvertSalesOrderToInvoiceContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ConvertSalesOrderToInvoiceContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IGenerateQuoteFromOpportunityContext{TEntity}"/>.</summary>
-    public sealed class GenerateQuoteFromOpportunityContext<TEntity> : StepContext<GenerateQuoteFromOpportunityRequest, GenerateQuoteFromOpportunityResponse>, IGenerateQuoteFromOpportunityContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GenerateQuoteFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IGenerateSalesOrderFromOpportunityContext{TEntity}"/>.</summary>
-    public sealed class GenerateSalesOrderFromOpportunityContext<TEntity> : StepContext<GenerateSalesOrderFromOpportunityRequest, GenerateSalesOrderFromOpportunityResponse>, IGenerateSalesOrderFromOpportunityContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GenerateSalesOrderFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IGenerateInvoiceFromOpportunityContext{TEntity}"/>.</summary>
-    public sealed class GenerateInvoiceFromOpportunityContext<TEntity> : StepContext<GenerateInvoiceFromOpportunityRequest, GenerateInvoiceFromOpportunityResponse>, IGenerateInvoiceFromOpportunityContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GenerateInvoiceFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IAddToQueueContext{TEntity}"/>.</summary>
-    public sealed class AddToQueueContext<TEntity> : StepContext<AddToQueueRequest, AddToQueueResponse>, IAddToQueueContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public AddToQueueContext(ILocalPluginContext inner) : base(inner) { }
+        public MergePostContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IRemoveFromQueueContext{TEntity}"/>.</summary>
-    public sealed class RemoveFromQueueContext<TEntity> : StepContext<RemoveFromQueueRequest, RemoveFromQueueResponse>, IRemoveFromQueueContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for GrantAccess.</summary>
+    public sealed class GrantAccessPreContext<TEntity> : PreStepContext<GrantAccessRequest>, IGrantAccessPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RemoveFromQueueContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IPickFromQueueContext{TEntity}"/>.</summary>
-    public sealed class PickFromQueueContext<TEntity> : StepContext<PickFromQueueRequest, PickFromQueueResponse>, IPickFromQueueContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public PickFromQueueContext(ILocalPluginContext inner) : base(inner) { }
-    }
-
-    /// <summary>Runtime implementation of <see cref="IRouteToContext{TEntity}"/>.</summary>
-    public sealed class RouteToContext<TEntity> : StepContext<RouteToRequest, RouteToResponse>, IRouteToContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RouteToContext(ILocalPluginContext inner) : base(inner) { }
+        public GrantAccessPreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IReleaseToQueueContext{TEntity}"/>.</summary>
-    public sealed class ReleaseToQueueContext<TEntity> : StepContext<ReleaseToQueueRequest, ReleaseToQueueResponse>, IReleaseToQueueContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for GrantAccess.</summary>
+    public sealed class GrantAccessPostContext<TEntity> : PostStepContext<GrantAccessRequest, GrantAccessResponse>, IGrantAccessPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ReleaseToQueueContext(ILocalPluginContext inner) : base(inner) { }
+        public GrantAccessPostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="ISendEmailContext{TEntity}"/>.</summary>
-    public sealed class SendEmailContext<TEntity> : StepContext<SendEmailRequest, SendEmailResponse>, ISendEmailContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for ModifyAccess.</summary>
+    public sealed class ModifyAccessPreContext<TEntity> : PreStepContext<ModifyAccessRequest>, IModifyAccessPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public SendEmailContext(ILocalPluginContext inner) : base(inner) { }
+        public ModifyAccessPreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="ISendEmailFromTemplateContext{TEntity}"/>.</summary>
-    public sealed class SendEmailFromTemplateContext<TEntity> : StepContext<SendEmailFromTemplateRequest, SendEmailFromTemplateResponse>, ISendEmailFromTemplateContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for ModifyAccess.</summary>
+    public sealed class ModifyAccessPostContext<TEntity> : PostStepContext<ModifyAccessRequest, ModifyAccessResponse>, IModifyAccessPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public SendEmailFromTemplateContext(ILocalPluginContext inner) : base(inner) { }
+        public ModifyAccessPostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
+    }
+    /// <summary>Runtime pre-stage context for RevokeAccess.</summary>
+    public sealed class RevokeAccessPreContext<TEntity> : PreStepContext<RevokeAccessRequest>, IRevokeAccessPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RevokeAccessPreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
+    }
+    /// <summary>Runtime post-stage context for RevokeAccess.</summary>
+    public sealed class RevokeAccessPostContext<TEntity> : PostStepContext<RevokeAccessRequest, RevokeAccessResponse>, IRevokeAccessPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RevokeAccessPostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
+    }
+    /// <summary>Runtime pre-stage context for QualifyLead.</summary>
+    public sealed class QualifyLeadPreContext<TEntity> : PreStepContext<QualifyLeadRequest>, IQualifyLeadPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public QualifyLeadPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for QualifyLead.</summary>
+    public sealed class QualifyLeadPostContext<TEntity> : PostStepContext<QualifyLeadRequest, QualifyLeadResponse>, IQualifyLeadPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public QualifyLeadPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for WinOpportunity.</summary>
+    public sealed class WinOpportunityPreContext<TEntity> : PreStepContext<WinOpportunityRequest>, IWinOpportunityPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public WinOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for WinOpportunity.</summary>
+    public sealed class WinOpportunityPostContext<TEntity> : PostStepContext<WinOpportunityRequest, WinOpportunityResponse>, IWinOpportunityPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public WinOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for LoseOpportunity.</summary>
+    public sealed class LoseOpportunityPreContext<TEntity> : PreStepContext<LoseOpportunityRequest>, ILoseOpportunityPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public LoseOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for LoseOpportunity.</summary>
+    public sealed class LoseOpportunityPostContext<TEntity> : PostStepContext<LoseOpportunityRequest, LoseOpportunityResponse>, ILoseOpportunityPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public LoseOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for ConvertQuoteToSalesOrder.</summary>
+    public sealed class ConvertQuoteToSalesOrderPreContext<TEntity> : PreStepContext<ConvertQuoteToSalesOrderRequest>, IConvertQuoteToSalesOrderPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ConvertQuoteToSalesOrderPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for ConvertQuoteToSalesOrder.</summary>
+    public sealed class ConvertQuoteToSalesOrderPostContext<TEntity> : PostStepContext<ConvertQuoteToSalesOrderRequest, ConvertQuoteToSalesOrderResponse>, IConvertQuoteToSalesOrderPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ConvertQuoteToSalesOrderPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for ConvertSalesOrderToInvoice.</summary>
+    public sealed class ConvertSalesOrderToInvoicePreContext<TEntity> : PreStepContext<ConvertSalesOrderToInvoiceRequest>, IConvertSalesOrderToInvoicePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ConvertSalesOrderToInvoicePreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for ConvertSalesOrderToInvoice.</summary>
+    public sealed class ConvertSalesOrderToInvoicePostContext<TEntity> : PostStepContext<ConvertSalesOrderToInvoiceRequest, ConvertSalesOrderToInvoiceResponse>, IConvertSalesOrderToInvoicePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ConvertSalesOrderToInvoicePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for GenerateQuoteFromOpportunity.</summary>
+    public sealed class GenerateQuoteFromOpportunityPreContext<TEntity> : PreStepContext<GenerateQuoteFromOpportunityRequest>, IGenerateQuoteFromOpportunityPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GenerateQuoteFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for GenerateQuoteFromOpportunity.</summary>
+    public sealed class GenerateQuoteFromOpportunityPostContext<TEntity> : PostStepContext<GenerateQuoteFromOpportunityRequest, GenerateQuoteFromOpportunityResponse>, IGenerateQuoteFromOpportunityPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GenerateQuoteFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for GenerateSalesOrderFromOpportunity.</summary>
+    public sealed class GenerateSalesOrderFromOpportunityPreContext<TEntity> : PreStepContext<GenerateSalesOrderFromOpportunityRequest>, IGenerateSalesOrderFromOpportunityPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GenerateSalesOrderFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for GenerateSalesOrderFromOpportunity.</summary>
+    public sealed class GenerateSalesOrderFromOpportunityPostContext<TEntity> : PostStepContext<GenerateSalesOrderFromOpportunityRequest, GenerateSalesOrderFromOpportunityResponse>, IGenerateSalesOrderFromOpportunityPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GenerateSalesOrderFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for GenerateInvoiceFromOpportunity.</summary>
+    public sealed class GenerateInvoiceFromOpportunityPreContext<TEntity> : PreStepContext<GenerateInvoiceFromOpportunityRequest>, IGenerateInvoiceFromOpportunityPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GenerateInvoiceFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for GenerateInvoiceFromOpportunity.</summary>
+    public sealed class GenerateInvoiceFromOpportunityPostContext<TEntity> : PostStepContext<GenerateInvoiceFromOpportunityRequest, GenerateInvoiceFromOpportunityResponse>, IGenerateInvoiceFromOpportunityPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GenerateInvoiceFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for AddToQueue.</summary>
+    public sealed class AddToQueuePreContext<TEntity> : PreStepContext<AddToQueueRequest>, IAddToQueuePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AddToQueuePreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
+    }
+    /// <summary>Runtime post-stage context for AddToQueue.</summary>
+    public sealed class AddToQueuePostContext<TEntity> : PostStepContext<AddToQueueRequest, AddToQueueResponse>, IAddToQueuePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AddToQueuePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
+    }
+    /// <summary>Runtime pre-stage context for RemoveFromQueue.</summary>
+    public sealed class RemoveFromQueuePreContext<TEntity> : PreStepContext<RemoveFromQueueRequest>, IRemoveFromQueuePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RemoveFromQueuePreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for RemoveFromQueue.</summary>
+    public sealed class RemoveFromQueuePostContext<TEntity> : PostStepContext<RemoveFromQueueRequest, RemoveFromQueueResponse>, IRemoveFromQueuePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RemoveFromQueuePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for PickFromQueue.</summary>
+    public sealed class PickFromQueuePreContext<TEntity> : PreStepContext<PickFromQueueRequest>, IPickFromQueuePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public PickFromQueuePreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for PickFromQueue.</summary>
+    public sealed class PickFromQueuePostContext<TEntity> : PostStepContext<PickFromQueueRequest, PickFromQueueResponse>, IPickFromQueuePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public PickFromQueuePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for RouteTo.</summary>
+    public sealed class RouteToPreContext<TEntity> : PreStepContext<RouteToRequest>, IRouteToPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RouteToPreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
+    }
+    /// <summary>Runtime post-stage context for RouteTo.</summary>
+    public sealed class RouteToPostContext<TEntity> : PostStepContext<RouteToRequest, RouteToResponse>, IRouteToPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RouteToPostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
+    }
+    /// <summary>Runtime pre-stage context for ReleaseToQueue.</summary>
+    public sealed class ReleaseToQueuePreContext<TEntity> : PreStepContext<ReleaseToQueueRequest>, IReleaseToQueuePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ReleaseToQueuePreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for ReleaseToQueue.</summary>
+    public sealed class ReleaseToQueuePostContext<TEntity> : PostStepContext<ReleaseToQueueRequest, ReleaseToQueueResponse>, IReleaseToQueuePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ReleaseToQueuePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for SendEmail.</summary>
+    public sealed class SendEmailPreContext<TEntity> : PreStepContext<SendEmailRequest>, ISendEmailPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public SendEmailPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for SendEmail.</summary>
+    public sealed class SendEmailPostContext<TEntity> : PostStepContext<SendEmailRequest, SendEmailResponse>, ISendEmailPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public SendEmailPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for SendEmailFromTemplate.</summary>
+    public sealed class SendEmailFromTemplatePreContext<TEntity> : PreStepContext<SendEmailFromTemplateRequest>, ISendEmailFromTemplatePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public SendEmailFromTemplatePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public TEntity Target => this.GetTarget<TEntity>();
     }
-
-    /// <summary>Runtime implementation of <see cref="IDeliverIncomingEmailContext{TEntity}"/>.</summary>
-    public sealed class DeliverIncomingEmailContext<TEntity> : StepContext<DeliverIncomingEmailRequest, DeliverIncomingEmailResponse>, IDeliverIncomingEmailContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for SendEmailFromTemplate.</summary>
+    public sealed class SendEmailFromTemplatePostContext<TEntity> : PostStepContext<SendEmailFromTemplateRequest, SendEmailFromTemplateResponse>, ISendEmailFromTemplatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public DeliverIncomingEmailContext(ILocalPluginContext inner) : base(inner) { }
+        public SendEmailFromTemplatePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity Target => this.GetTarget<TEntity>();
     }
-
-    /// <summary>Runtime implementation of <see cref="IDeliverPromoteEmailContext{TEntity}"/>.</summary>
-    public sealed class DeliverPromoteEmailContext<TEntity> : StepContext<DeliverPromoteEmailRequest, DeliverPromoteEmailResponse>, IDeliverPromoteEmailContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for DeliverIncomingEmail.</summary>
+    public sealed class DeliverIncomingEmailPreContext<TEntity> : PreStepContext<DeliverIncomingEmailRequest>, IDeliverIncomingEmailPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public DeliverPromoteEmailContext(ILocalPluginContext inner) : base(inner) { }
+        public DeliverIncomingEmailPreContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IAddMembersTeamContext{TEntity}"/>.</summary>
-    public sealed class AddMembersTeamContext<TEntity> : StepContext<AddMembersTeamRequest, AddMembersTeamResponse>, IAddMembersTeamContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for DeliverIncomingEmail.</summary>
+    public sealed class DeliverIncomingEmailPostContext<TEntity> : PostStepContext<DeliverIncomingEmailRequest, DeliverIncomingEmailResponse>, IDeliverIncomingEmailPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public AddMembersTeamContext(ILocalPluginContext inner) : base(inner) { }
+        public DeliverIncomingEmailPostContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IRemoveMembersTeamContext{TEntity}"/>.</summary>
-    public sealed class RemoveMembersTeamContext<TEntity> : StepContext<RemoveMembersTeamRequest, RemoveMembersTeamResponse>, IRemoveMembersTeamContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for DeliverPromoteEmail.</summary>
+    public sealed class DeliverPromoteEmailPreContext<TEntity> : PreStepContext<DeliverPromoteEmailRequest>, IDeliverPromoteEmailPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RemoveMembersTeamContext(ILocalPluginContext inner) : base(inner) { }
+        public DeliverPromoteEmailPreContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IAddListMembersListContext{TEntity}"/>.</summary>
-    public sealed class AddListMembersListContext<TEntity> : StepContext<AddListMembersListRequest, AddListMembersListResponse>, IAddListMembersListContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for DeliverPromoteEmail.</summary>
+    public sealed class DeliverPromoteEmailPostContext<TEntity> : PostStepContext<DeliverPromoteEmailRequest, DeliverPromoteEmailResponse>, IDeliverPromoteEmailPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public AddListMembersListContext(ILocalPluginContext inner) : base(inner) { }
+        public DeliverPromoteEmailPostContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IAddMemberListContext{TEntity}"/>.</summary>
-    public sealed class AddMemberListContext<TEntity> : StepContext<AddMemberListRequest, AddMemberListResponse>, IAddMemberListContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for AddMembersTeam.</summary>
+    public sealed class AddMembersTeamPreContext<TEntity> : PreStepContext<AddMembersTeamRequest>, IAddMembersTeamPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public AddMemberListContext(ILocalPluginContext inner) : base(inner) { }
+        public AddMembersTeamPreContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IRemoveMemberListContext{TEntity}"/>.</summary>
-    public sealed class RemoveMemberListContext<TEntity> : StepContext<RemoveMemberListRequest, RemoveMemberListResponse>, IRemoveMemberListContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for AddMembersTeam.</summary>
+    public sealed class AddMembersTeamPostContext<TEntity> : PostStepContext<AddMembersTeamRequest, AddMembersTeamResponse>, IAddMembersTeamPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RemoveMemberListContext(ILocalPluginContext inner) : base(inner) { }
+        public AddMembersTeamPostContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="ICloseIncidentContext{TEntity}"/>.</summary>
-    public sealed class CloseIncidentContext<TEntity> : StepContext<CloseIncidentRequest, CloseIncidentResponse>, ICloseIncidentContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for RemoveMembersTeam.</summary>
+    public sealed class RemoveMembersTeamPreContext<TEntity> : PreStepContext<RemoveMembersTeamRequest>, IRemoveMembersTeamPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public CloseIncidentContext(ILocalPluginContext inner) : base(inner) { }
+        public RemoveMembersTeamPreContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="ICancelContractContext{TEntity}"/>.</summary>
-    public sealed class CancelContractContext<TEntity> : StepContext<CancelContractRequest, CancelContractResponse>, ICancelContractContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for RemoveMembersTeam.</summary>
+    public sealed class RemoveMembersTeamPostContext<TEntity> : PostStepContext<RemoveMembersTeamRequest, RemoveMembersTeamResponse>, IRemoveMembersTeamPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public CancelContractContext(ILocalPluginContext inner) : base(inner) { }
+        public RemoveMembersTeamPostContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="ICloneContractContext{TEntity}"/>.</summary>
-    public sealed class CloneContractContext<TEntity> : StepContext<CloneContractRequest, CloneContractResponse>, ICloneContractContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for AddListMembersList.</summary>
+    public sealed class AddListMembersListPreContext<TEntity> : PreStepContext<AddListMembersListRequest>, IAddListMembersListPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public CloneContractContext(ILocalPluginContext inner) : base(inner) { }
+        public AddListMembersListPreContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IRetrievePrincipalAccessContext{TEntity}"/>.</summary>
-    public sealed class RetrievePrincipalAccessContext<TEntity> : StepContext<RetrievePrincipalAccessRequest, RetrievePrincipalAccessResponse>, IRetrievePrincipalAccessContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for AddListMembersList.</summary>
+    public sealed class AddListMembersListPostContext<TEntity> : PostStepContext<AddListMembersListRequest, AddListMembersListResponse>, IAddListMembersListPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RetrievePrincipalAccessContext(ILocalPluginContext inner) : base(inner) { }
+        public AddListMembersListPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for AddMemberList.</summary>
+    public sealed class AddMemberListPreContext<TEntity> : PreStepContext<AddMemberListRequest>, IAddMemberListPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AddMemberListPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for AddMemberList.</summary>
+    public sealed class AddMemberListPostContext<TEntity> : PostStepContext<AddMemberListRequest, AddMemberListResponse>, IAddMemberListPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AddMemberListPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for RemoveMemberList.</summary>
+    public sealed class RemoveMemberListPreContext<TEntity> : PreStepContext<RemoveMemberListRequest>, IRemoveMemberListPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RemoveMemberListPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for RemoveMemberList.</summary>
+    public sealed class RemoveMemberListPostContext<TEntity> : PostStepContext<RemoveMemberListRequest, RemoveMemberListResponse>, IRemoveMemberListPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RemoveMemberListPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for CloseIncident.</summary>
+    public sealed class CloseIncidentPreContext<TEntity> : PreStepContext<CloseIncidentRequest>, ICloseIncidentPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public CloseIncidentPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for CloseIncident.</summary>
+    public sealed class CloseIncidentPostContext<TEntity> : PostStepContext<CloseIncidentRequest, CloseIncidentResponse>, ICloseIncidentPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public CloseIncidentPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for CancelContract.</summary>
+    public sealed class CancelContractPreContext<TEntity> : PreStepContext<CancelContractRequest>, ICancelContractPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public CancelContractPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for CancelContract.</summary>
+    public sealed class CancelContractPostContext<TEntity> : PostStepContext<CancelContractRequest, CancelContractResponse>, ICancelContractPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public CancelContractPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for CloneContract.</summary>
+    public sealed class CloneContractPreContext<TEntity> : PreStepContext<CloneContractRequest>, ICloneContractPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public CloneContractPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for CloneContract.</summary>
+    public sealed class CloneContractPostContext<TEntity> : PostStepContext<CloneContractRequest, CloneContractResponse>, ICloneContractPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public CloneContractPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for RetrievePrincipalAccess.</summary>
+    public sealed class RetrievePrincipalAccessPreContext<TEntity> : PreStepContext<RetrievePrincipalAccessRequest>, IRetrievePrincipalAccessPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RetrievePrincipalAccessPreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IRetrieveSharedPrincipalsAndAccessContext{TEntity}"/>.</summary>
-    public sealed class RetrieveSharedPrincipalsAndAccessContext<TEntity> : StepContext<RetrieveSharedPrincipalsAndAccessRequest, RetrieveSharedPrincipalsAndAccessResponse>, IRetrieveSharedPrincipalsAndAccessContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for RetrievePrincipalAccess.</summary>
+    public sealed class RetrievePrincipalAccessPostContext<TEntity> : PostStepContext<RetrievePrincipalAccessRequest, RetrievePrincipalAccessResponse>, IRetrievePrincipalAccessPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public RetrieveSharedPrincipalsAndAccessContext(ILocalPluginContext inner) : base(inner) { }
+        public RetrievePrincipalAccessPostContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Typed context for a WhoAmI step.</summary>
-    public interface IWhoAmIContext<TEntity> : IStepContext<WhoAmIRequest, WhoAmIResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a WinQuote step.</summary>
-    public interface IWinQuoteContext<TEntity> : IStepContext<WinQuoteRequest, WinQuoteResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a ReviseQuote step.</summary>
-    public interface IReviseQuoteContext<TEntity> : IStepContext<ReviseQuoteRequest, ReviseQuoteResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a FulfillSalesOrder step.</summary>
-    public interface IFulfillSalesOrderContext<TEntity> : IStepContext<FulfillSalesOrderRequest, FulfillSalesOrderResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a GetQuoteProductsFromOpportunity step.</summary>
-    public interface IGetQuoteProductsFromOpportunityContext<TEntity> : IStepContext<GetQuoteProductsFromOpportunityRequest, GetQuoteProductsFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a GetSalesOrderProductsFromOpportunity step.</summary>
-    public interface IGetSalesOrderProductsFromOpportunityContext<TEntity> : IStepContext<GetSalesOrderProductsFromOpportunityRequest, GetSalesOrderProductsFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Typed context for a GetInvoiceProductsFromOpportunity step.</summary>
-    public interface IGetInvoiceProductsFromOpportunityContext<TEntity> : IStepContext<GetInvoiceProductsFromOpportunityRequest, GetInvoiceProductsFromOpportunityResponse> where TEntity : Entity { }
-
-    /// <summary>Runtime implementation of <see cref="IWhoAmIContext{TEntity}"/>.</summary>
-    public sealed class WhoAmIContext<TEntity> : StepContext<WhoAmIRequest, WhoAmIResponse>, IWhoAmIContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for RetrieveSharedPrincipalsAndAccess.</summary>
+    public sealed class RetrieveSharedPrincipalsAndAccessPreContext<TEntity> : PreStepContext<RetrieveSharedPrincipalsAndAccessRequest>, IRetrieveSharedPrincipalsAndAccessPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public WhoAmIContext(ILocalPluginContext inner) : base(inner) { }
+        public RetrieveSharedPrincipalsAndAccessPreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IWinQuoteContext{TEntity}"/>.</summary>
-    public sealed class WinQuoteContext<TEntity> : StepContext<WinQuoteRequest, WinQuoteResponse>, IWinQuoteContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for RetrieveSharedPrincipalsAndAccess.</summary>
+    public sealed class RetrieveSharedPrincipalsAndAccessPostContext<TEntity> : PostStepContext<RetrieveSharedPrincipalsAndAccessRequest, RetrieveSharedPrincipalsAndAccessResponse>, IRetrieveSharedPrincipalsAndAccessPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public WinQuoteContext(ILocalPluginContext inner) : base(inner) { }
+        public RetrieveSharedPrincipalsAndAccessPostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public EntityReference TargetReference => this.GetTargetRef();
     }
-
-    /// <summary>Runtime implementation of <see cref="IReviseQuoteContext{TEntity}"/>.</summary>
-    public sealed class ReviseQuoteContext<TEntity> : StepContext<ReviseQuoteRequest, ReviseQuoteResponse>, IReviseQuoteContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for WhoAmI.</summary>
+    public sealed class WhoAmIPreContext<TEntity> : PreStepContext<WhoAmIRequest>, IWhoAmIPreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ReviseQuoteContext(ILocalPluginContext inner) : base(inner) { }
+        public WhoAmIPreContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IFulfillSalesOrderContext{TEntity}"/>.</summary>
-    public sealed class FulfillSalesOrderContext<TEntity> : StepContext<FulfillSalesOrderRequest, FulfillSalesOrderResponse>, IFulfillSalesOrderContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for WhoAmI.</summary>
+    public sealed class WhoAmIPostContext<TEntity> : PostStepContext<WhoAmIRequest, WhoAmIResponse>, IWhoAmIPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public FulfillSalesOrderContext(ILocalPluginContext inner) : base(inner) { }
+        public WhoAmIPostContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IGetQuoteProductsFromOpportunityContext{TEntity}"/>.</summary>
-    public sealed class GetQuoteProductsFromOpportunityContext<TEntity> : StepContext<GetQuoteProductsFromOpportunityRequest, GetQuoteProductsFromOpportunityResponse>, IGetQuoteProductsFromOpportunityContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for WinQuote.</summary>
+    public sealed class WinQuotePreContext<TEntity> : PreStepContext<WinQuoteRequest>, IWinQuotePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetQuoteProductsFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
+        public WinQuotePreContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IGetSalesOrderProductsFromOpportunityContext{TEntity}"/>.</summary>
-    public sealed class GetSalesOrderProductsFromOpportunityContext<TEntity> : StepContext<GetSalesOrderProductsFromOpportunityRequest, GetSalesOrderProductsFromOpportunityResponse>, IGetSalesOrderProductsFromOpportunityContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime post-stage context for WinQuote.</summary>
+    public sealed class WinQuotePostContext<TEntity> : PostStepContext<WinQuoteRequest, WinQuoteResponse>, IWinQuotePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetSalesOrderProductsFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
+        public WinQuotePostContext(ILocalPluginContext inner) : base(inner) { }
     }
-
-    /// <summary>Runtime implementation of <see cref="IGetInvoiceProductsFromOpportunityContext{TEntity}"/>.</summary>
-    public sealed class GetInvoiceProductsFromOpportunityContext<TEntity> : StepContext<GetInvoiceProductsFromOpportunityRequest, GetInvoiceProductsFromOpportunityResponse>, IGetInvoiceProductsFromOpportunityContext<TEntity> where TEntity : Entity
+    /// <summary>Runtime pre-stage context for ReviseQuote.</summary>
+    public sealed class ReviseQuotePreContext<TEntity> : PreStepContext<ReviseQuoteRequest>, IReviseQuotePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetInvoiceProductsFromOpportunityContext(ILocalPluginContext inner) : base(inner) { }
+        public ReviseQuotePreContext(ILocalPluginContext inner) : base(inner) { }
     }
-
+    /// <summary>Runtime post-stage context for ReviseQuote.</summary>
+    public sealed class ReviseQuotePostContext<TEntity> : PostStepContext<ReviseQuoteRequest, ReviseQuoteResponse>, IReviseQuotePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ReviseQuotePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for FulfillSalesOrder.</summary>
+    public sealed class FulfillSalesOrderPreContext<TEntity> : PreStepContext<FulfillSalesOrderRequest>, IFulfillSalesOrderPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public FulfillSalesOrderPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for FulfillSalesOrder.</summary>
+    public sealed class FulfillSalesOrderPostContext<TEntity> : PostStepContext<FulfillSalesOrderRequest, FulfillSalesOrderResponse>, IFulfillSalesOrderPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public FulfillSalesOrderPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for GetQuoteProductsFromOpportunity.</summary>
+    public sealed class GetQuoteProductsFromOpportunityPreContext<TEntity> : PreStepContext<GetQuoteProductsFromOpportunityRequest>, IGetQuoteProductsFromOpportunityPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetQuoteProductsFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for GetQuoteProductsFromOpportunity.</summary>
+    public sealed class GetQuoteProductsFromOpportunityPostContext<TEntity> : PostStepContext<GetQuoteProductsFromOpportunityRequest, GetQuoteProductsFromOpportunityResponse>, IGetQuoteProductsFromOpportunityPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetQuoteProductsFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for GetSalesOrderProductsFromOpportunity.</summary>
+    public sealed class GetSalesOrderProductsFromOpportunityPreContext<TEntity> : PreStepContext<GetSalesOrderProductsFromOpportunityRequest>, IGetSalesOrderProductsFromOpportunityPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetSalesOrderProductsFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for GetSalesOrderProductsFromOpportunity.</summary>
+    public sealed class GetSalesOrderProductsFromOpportunityPostContext<TEntity> : PostStepContext<GetSalesOrderProductsFromOpportunityRequest, GetSalesOrderProductsFromOpportunityResponse>, IGetSalesOrderProductsFromOpportunityPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetSalesOrderProductsFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for GetInvoiceProductsFromOpportunity.</summary>
+    public sealed class GetInvoiceProductsFromOpportunityPreContext<TEntity> : PreStepContext<GetInvoiceProductsFromOpportunityRequest>, IGetInvoiceProductsFromOpportunityPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetInvoiceProductsFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for GetInvoiceProductsFromOpportunity.</summary>
+    public sealed class GetInvoiceProductsFromOpportunityPostContext<TEntity> : PostStepContext<GetInvoiceProductsFromOpportunityRequest, GetInvoiceProductsFromOpportunityResponse>, IGetInvoiceProductsFromOpportunityPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public GetInvoiceProductsFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
 }
