@@ -55,6 +55,61 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     /// <summary>Configure step to trigger on the RevokeAccess message.</summary>
     IRevokeAccessStepStage<TEntity> OnRevokeAccess();
 
+    /// <summary>Begin a QualifyLead step.</summary>
+    IQualifyLeadStepStage<TEntity> OnQualifyLead();
+    /// <summary>Begin a WinOpportunity step.</summary>
+    IWinOpportunityStepStage<TEntity> OnWinOpportunity();
+    /// <summary>Begin a LoseOpportunity step.</summary>
+    ILoseOpportunityStepStage<TEntity> OnLoseOpportunity();
+    /// <summary>Begin a ConvertQuoteToSalesOrder step.</summary>
+    IConvertQuoteToSalesOrderStepStage<TEntity> OnConvertQuoteToSalesOrder();
+    /// <summary>Begin a ConvertSalesOrderToInvoice step.</summary>
+    IConvertSalesOrderToInvoiceStepStage<TEntity> OnConvertSalesOrderToInvoice();
+    /// <summary>Begin a GenerateQuoteFromOpportunity step.</summary>
+    IGenerateQuoteFromOpportunityStepStage<TEntity> OnGenerateQuoteFromOpportunity();
+    /// <summary>Begin a GenerateSalesOrderFromOpportunity step.</summary>
+    IGenerateSalesOrderFromOpportunityStepStage<TEntity> OnGenerateSalesOrderFromOpportunity();
+    /// <summary>Begin a GenerateInvoiceFromOpportunity step.</summary>
+    IGenerateInvoiceFromOpportunityStepStage<TEntity> OnGenerateInvoiceFromOpportunity();
+    /// <summary>Begin a AddToQueue step.</summary>
+    IAddToQueueStepStage<TEntity> OnAddToQueue();
+    /// <summary>Begin a RemoveFromQueue step.</summary>
+    IRemoveFromQueueStepStage<TEntity> OnRemoveFromQueue();
+    /// <summary>Begin a PickFromQueue step.</summary>
+    IPickFromQueueStepStage<TEntity> OnPickFromQueue();
+    /// <summary>Begin a RouteTo step.</summary>
+    IRouteToStepStage<TEntity> OnRouteTo();
+    /// <summary>Begin a ReleaseToQueue step.</summary>
+    IReleaseToQueueStepStage<TEntity> OnReleaseToQueue();
+    /// <summary>Begin a SendEmail step.</summary>
+    ISendEmailStepStage<TEntity> OnSendEmail();
+    /// <summary>Begin a SendEmailFromTemplate step.</summary>
+    ISendEmailFromTemplateStepStage<TEntity> OnSendEmailFromTemplate();
+    /// <summary>Begin a DeliverIncomingEmail step.</summary>
+    IDeliverIncomingEmailStepStage<TEntity> OnDeliverIncomingEmail();
+    /// <summary>Begin a DeliverPromoteEmail step.</summary>
+    IDeliverPromoteEmailStepStage<TEntity> OnDeliverPromoteEmail();
+    /// <summary>Begin a AddMembersTeam step.</summary>
+    IAddMembersTeamStepStage<TEntity> OnAddMembersTeam();
+    /// <summary>Begin a RemoveMembersTeam step.</summary>
+    IRemoveMembersTeamStepStage<TEntity> OnRemoveMembersTeam();
+    /// <summary>Begin a AddListMembersList step.</summary>
+    IAddListMembersListStepStage<TEntity> OnAddListMembersList();
+    /// <summary>Begin a AddMemberList step.</summary>
+    IAddMemberListStepStage<TEntity> OnAddMemberList();
+    /// <summary>Begin a RemoveMemberList step.</summary>
+    IRemoveMemberListStepStage<TEntity> OnRemoveMemberList();
+    /// <summary>Begin a CloseIncident step.</summary>
+    ICloseIncidentStepStage<TEntity> OnCloseIncident();
+    /// <summary>Begin a CancelContract step.</summary>
+    ICancelContractStepStage<TEntity> OnCancelContract();
+    /// <summary>Begin a CloneContract step.</summary>
+    ICloneContractStepStage<TEntity> OnCloneContract();
+    /// <summary>Begin a RetrievePrincipalAccess step.</summary>
+    IRetrievePrincipalAccessStepStage<TEntity> OnRetrievePrincipalAccess();
+    /// <summary>Begin a RetrieveSharedPrincipalsAndAccess step.</summary>
+    IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> OnRetrieveSharedPrincipalsAndAccess();
+
     /// <summary>Configure step to trigger on a custom message. Image validity is enforced at runtime.</summary>
     /// <param name="messageName">The SDK message name.</param>
     IPermissiveStepStage<TEntity> OnMessage(string messageName);

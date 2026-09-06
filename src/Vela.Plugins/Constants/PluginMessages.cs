@@ -80,6 +80,87 @@ namespace Vela.Constants
         /// </summary>
         public const string RevokeAccess = "RevokeAccess";
 
+        /// <summary>QualifyLead message.</summary>
+        public const string QualifyLead = "QualifyLead";
+
+        /// <summary>WinOpportunity message.</summary>
+        public const string WinOpportunity = "WinOpportunity";
+
+        /// <summary>LoseOpportunity message.</summary>
+        public const string LoseOpportunity = "LoseOpportunity";
+
+        /// <summary>ConvertQuoteToSalesOrder message.</summary>
+        public const string ConvertQuoteToSalesOrder = "ConvertQuoteToSalesOrder";
+
+        /// <summary>ConvertSalesOrderToInvoice message.</summary>
+        public const string ConvertSalesOrderToInvoice = "ConvertSalesOrderToInvoice";
+
+        /// <summary>GenerateQuoteFromOpportunity message.</summary>
+        public const string GenerateQuoteFromOpportunity = "GenerateQuoteFromOpportunity";
+
+        /// <summary>GenerateSalesOrderFromOpportunity message.</summary>
+        public const string GenerateSalesOrderFromOpportunity = "GenerateSalesOrderFromOpportunity";
+
+        /// <summary>GenerateInvoiceFromOpportunity message.</summary>
+        public const string GenerateInvoiceFromOpportunity = "GenerateInvoiceFromOpportunity";
+
+        /// <summary>AddToQueue message.</summary>
+        public const string AddToQueue = "AddToQueue";
+
+        /// <summary>RemoveFromQueue message.</summary>
+        public const string RemoveFromQueue = "RemoveFromQueue";
+
+        /// <summary>PickFromQueue message.</summary>
+        public const string PickFromQueue = "PickFromQueue";
+
+        /// <summary>RouteTo message.</summary>
+        public const string RouteTo = "RouteTo";
+
+        /// <summary>ReleaseToQueue message.</summary>
+        public const string ReleaseToQueue = "ReleaseToQueue";
+
+        /// <summary>SendEmail message.</summary>
+        public const string SendEmail = "SendEmail";
+
+        /// <summary>SendEmailFromTemplate message.</summary>
+        public const string SendEmailFromTemplate = "SendEmailFromTemplate";
+
+        /// <summary>DeliverIncomingEmail message.</summary>
+        public const string DeliverIncomingEmail = "DeliverIncomingEmail";
+
+        /// <summary>DeliverPromoteEmail message.</summary>
+        public const string DeliverPromoteEmail = "DeliverPromoteEmail";
+
+        /// <summary>AddMembersTeam message.</summary>
+        public const string AddMembersTeam = "AddMembersTeam";
+
+        /// <summary>RemoveMembersTeam message.</summary>
+        public const string RemoveMembersTeam = "RemoveMembersTeam";
+
+        /// <summary>AddListMembersList message.</summary>
+        public const string AddListMembersList = "AddListMembersList";
+
+        /// <summary>AddMemberList message.</summary>
+        public const string AddMemberList = "AddMemberList";
+
+        /// <summary>RemoveMemberList message.</summary>
+        public const string RemoveMemberList = "RemoveMemberList";
+
+        /// <summary>CloseIncident message.</summary>
+        public const string CloseIncident = "CloseIncident";
+
+        /// <summary>CancelContract message.</summary>
+        public const string CancelContract = "CancelContract";
+
+        /// <summary>CloneContract message.</summary>
+        public const string CloneContract = "CloneContract";
+
+        /// <summary>RetrievePrincipalAccess message.</summary>
+        public const string RetrievePrincipalAccess = "RetrievePrincipalAccess";
+
+        /// <summary>RetrieveSharedPrincipalsAndAccess message.</summary>
+        public const string RetrieveSharedPrincipalsAndAccess = "RetrieveSharedPrincipalsAndAccess";
+
         /// <summary>
         /// ModifyAccess message.
         /// </summary>

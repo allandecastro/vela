@@ -97,7 +97,8 @@ public class ScaffoldTemplatesTests
     {
         string code = ScaffoldTemplates.AccountMessageReference("Zava");
 
-        // One typed handler per modelled message (13 total).
+        // One typed handler per modelled message shown on account (CRUD/bulk, relationships, merge, sharing,
+        // and the account-valid sharing reads).
         string[] contexts =
         {
             "ICreateContext<Account>", "IUpdateContext<Account>", "IDeleteContext<Account>",
@@ -105,6 +106,7 @@ public class ScaffoldTemplatesTests
             "IRetrieveContext<Account>", "IRetrieveMultipleContext<Account>",
             "IAssociateContext<Account>", "IDisassociateContext<Account>", "IMergeContext<Account>",
             "IGrantAccessContext<Account>", "IModifyAccessContext<Account>", "IRevokeAccessContext<Account>",
+            "IRetrievePrincipalAccessContext<Account>", "IRetrieveSharedPrincipalsAndAccessContext<Account>",
         };
         foreach (string ctxType in contexts)
         {
@@ -117,9 +119,9 @@ public class ScaffoldTemplatesTests
         Assert.Contains("ctx.TargetCollection", code);
         Assert.DoesNotContain(".ToEntity<", code);
 
-        // Every step is dormant: each registration ends with .Disabled(); (13), and every step binds a handler.
-        Assert.Equal(13, CountOccurrences(code, ".Disabled();"));
-        Assert.Equal(13, CountOccurrences(code, ".Handler("));
+        // Every step is dormant: each registration ends with .Disabled(); (15), and every step binds a handler.
+        Assert.Equal(15, CountOccurrences(code, ".Disabled();"));
+        Assert.Equal(15, CountOccurrences(code, ".Handler("));
     }
 
     [Fact]

@@ -40,6 +40,33 @@ namespace Vela.Tests
                 RegisterSteps().OnModifyAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnRevokeAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnMessage(CustomMessage).PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnQualifyLead().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnWinOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnLoseOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnConvertQuoteToSalesOrder().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnConvertSalesOrderToInvoice().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnGenerateQuoteFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnGenerateSalesOrderFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnGenerateInvoiceFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnAddToQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnRemoveFromQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnPickFromQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnRouteTo().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnReleaseToQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnSendEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnSendEmailFromTemplate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnDeliverIncomingEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnDeliverPromoteEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnAddMembersTeam().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnRemoveMembersTeam().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnAddListMembersList().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnAddMemberList().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnRemoveMemberList().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnCloseIncident().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnCancelContract().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnCloneContract().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnRetrievePrincipalAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterSteps().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
             }
 
             // Bound to every step: contravariantly assignable to each Action<I{Msg}Context<TestAccount>> and to
@@ -61,6 +88,33 @@ namespace Vela.Tests
         [InlineData(PluginMessages.GrantAccess)]
         [InlineData(PluginMessages.ModifyAccess)]
         [InlineData(PluginMessages.RevokeAccess)]
+        [InlineData(PluginMessages.QualifyLead)]
+        [InlineData(PluginMessages.WinOpportunity)]
+        [InlineData(PluginMessages.LoseOpportunity)]
+        [InlineData(PluginMessages.ConvertQuoteToSalesOrder)]
+        [InlineData(PluginMessages.ConvertSalesOrderToInvoice)]
+        [InlineData(PluginMessages.GenerateQuoteFromOpportunity)]
+        [InlineData(PluginMessages.GenerateSalesOrderFromOpportunity)]
+        [InlineData(PluginMessages.GenerateInvoiceFromOpportunity)]
+        [InlineData(PluginMessages.AddToQueue)]
+        [InlineData(PluginMessages.RemoveFromQueue)]
+        [InlineData(PluginMessages.PickFromQueue)]
+        [InlineData(PluginMessages.RouteTo)]
+        [InlineData(PluginMessages.ReleaseToQueue)]
+        [InlineData(PluginMessages.SendEmail)]
+        [InlineData(PluginMessages.SendEmailFromTemplate)]
+        [InlineData(PluginMessages.DeliverIncomingEmail)]
+        [InlineData(PluginMessages.DeliverPromoteEmail)]
+        [InlineData(PluginMessages.AddMembersTeam)]
+        [InlineData(PluginMessages.RemoveMembersTeam)]
+        [InlineData(PluginMessages.AddListMembersList)]
+        [InlineData(PluginMessages.AddMemberList)]
+        [InlineData(PluginMessages.RemoveMemberList)]
+        [InlineData(PluginMessages.CloseIncident)]
+        [InlineData(PluginMessages.CancelContract)]
+        [InlineData(PluginMessages.CloneContract)]
+        [InlineData(PluginMessages.RetrievePrincipalAccess)]
+        [InlineData(PluginMessages.RetrieveSharedPrincipalsAndAccess)]
         [InlineData(AllMessagesProbe.CustomMessage)]
         public void Each_message_dispatches_to_its_handler(string message)
         {

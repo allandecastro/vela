@@ -136,10 +136,25 @@ cast. Read message-specific fields off `ctx.Request` (for example the merge subo
 For the primary record the context also carries it **already typed**, so a handler never re-states the entity type
 or casts: `ctx.Target` (the early-bound `TEntity` for `Create`/`Update`), `ctx.TargetReference` (the
 `EntityReference` for `Delete`/`Retrieve`/`Associate`/`Disassociate`/`Merge`/`GrantAccess`/`ModifyAccess`/
-`RevokeAccess`) and `ctx.TargetCollection` (the `EntityCollection` for `CreateMultiple`/`UpdateMultiple`). The modelled
-messages with a typed context are `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`,
-`RetrieveMultiple`, `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess` and `RevokeAccess`; a step
-registered through `OnMessage("...")` receives the plain `ILocalPluginContext`.
+`RevokeAccess`, and also `SendEmailFromTemplate` via `ctx.Target`, `AddToQueue`/`RouteTo` via `ctx.TargetReference`)
+and `ctx.TargetCollection` (the `EntityCollection` for `CreateMultiple`/`UpdateMultiple`). Messages whose request has
+no primary record read their message-specific fields off `ctx.Request` instead.
+
+The modelled messages with a typed context are:
+
+- **CRUD & bulk:** `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`.
+- **Relationships & sharing:** `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`,
+  `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`.
+- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `ConvertQuoteToSalesOrder`,
+  `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`, `GenerateSalesOrderFromOpportunity`,
+  `GenerateInvoiceFromOpportunity`.
+- **Queues:** `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
+- **Email:** `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
+- **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`,
+  `AddMemberList`, `RemoveMemberList`.
+- **Case / contract:** `CloseIncident`, `CancelContract`, `CloneContract`.
+
+A step registered through `OnMessage("...")` (any other message) receives the plain `ILocalPluginContext`.
 
 A single-step `Execute(ctx)` override is not scoped to one message, so it does not expose `ctx.Request`. Read the
 record there with `ctx.GetTarget<T>()` (a full entity for `Create`/`Update`), `ctx.GetTargetRef()` (the

@@ -28,8 +28,12 @@ vela add --interactive
   `--bound`/`--global` make the binding explicit instead of inferring it from `--entity` (`--bound` requires
   `--entity`; `--global` is unbound).
 - `--message <Message>` (plugin, default `Create`): the messages Vela models get a strongly-typed `On...()`
-  call - `Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`, `RetrieveMultiple`,
-  `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`; any other name is
+  call - the CRUD/bulk set (`Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`,
+  `RetrieveMultiple`), relationships/sharing (`Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`,
+  `RevokeAccess`, `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`), sales lifecycle (`QualifyLead`,
+  `WinOpportunity`, `LoseOpportunity`, the `Convert*`/`Generate*` messages), queues (`AddToQueue`, `RouteTo`, …),
+  email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and case/contract messages (see the full
+  list in [Write a plugin](plugins.md)); any other name is
   registered as a custom SDK message via `OnMessage("...")`. The deprecated `SetState` / `SetStateDynamicEntity`
   and `Assign` messages have no typed method (update `statecode`/`statuscode` or `ownerid` with `Update`
   instead), so they too render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the

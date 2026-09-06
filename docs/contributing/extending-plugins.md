@@ -1,9 +1,9 @@
 # Add a typed plugin message
 
-Vela models a fixed set of Dataverse messages with a strongly-typed step context (`Create`, `Update`, `Delete`,
-`CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`, `Associate`, `Disassociate`, `Merge`,
-`GrantAccess`, `ModifyAccess`, `RevokeAccess`). Any other SDK message is reachable through the permissive
-`OnMessage("...")` escape hatch, which hands the handler a plain `ILocalPluginContext`.
+Vela models a fixed set of Dataverse messages with a strongly-typed step context - the CRUD/bulk, sharing, sales
+lifecycle, queue, email, membership and case/contract families (the full list is in
+[Write a plugin](../guides/plugins.md)). Any other SDK message is reachable through the permissive `OnMessage("...")`
+escape hatch, which hands the handler a plain `ILocalPluginContext`.
 
 Adding a new **modelled** message (so it gets its own `On<Message>()` builder method and an
 `I<Message>Context<TEntity>` with typed `ctx.Request` / `ctx.Response`) is a small but **multi-file** change. Miss

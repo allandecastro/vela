@@ -1491,6 +1491,16 @@ namespace {{prefix}}.Plugins.Account.Plugins
             RegisterSteps().OnGrantAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnGrantAccess).Disabled();
             RegisterSteps().OnModifyAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnModifyAccess).Disabled();
             RegisterSteps().OnRevokeAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRevokeAccess).Disabled();
+
+            // Sharing reads (also valid on account).
+            RegisterSteps().OnRetrievePrincipalAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrievePrincipalAccess).Disabled();
+            RegisterSteps().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnRetrieveSharedPrincipalsAndAccess).Disabled();
+
+            // Many more messages are modelled but belong to other tables, so they are not shown here on account:
+            // e.g. QualifyLead (lead); WinOpportunity / LoseOpportunity / Generate*/Convert* (opportunity / quote /
+            // order); AddToQueue / RouteTo (queue items); SendEmail / SendEmailFromTemplate (email); AddMembersTeam /
+            // AddListMembersList (team / marketing list); CloseIncident (case); CancelContract / CloneContract
+            // (contract). Register them the same way from the matching EntityPluginBase<T> with RegisterSteps().On<Message>().
         }
 
         // ctx.Target is the early-bound Account; ctx.Response.id is the new record id (Post step).
@@ -1540,6 +1550,13 @@ namespace {{prefix}}.Plugins.Account.Plugins
 
         private void OnRevokeAccess(IRevokeAccessContext<Account> ctx)
             => ctx.Trace("Revoke on {0} from {1}", ctx.TargetReference.Id, ctx.Request.Revokee.Id);
+
+        // Sharing reads: ctx.Response.AccessRights (one principal) / ctx.Response.PrincipalAccesses (all shares).
+        private void OnRetrievePrincipalAccess(IRetrievePrincipalAccessContext<Account> ctx)
+            => ctx.Trace("Access of {0} on {1}: {2}", ctx.Request.Principal.Id, ctx.TargetReference.Id, ctx.Response.AccessRights);
+
+        private void OnRetrieveSharedPrincipalsAndAccess(IRetrieveSharedPrincipalsAndAccessContext<Account> ctx)
+            => ctx.Trace("{0} share(s) on {1}", ctx.Response.PrincipalAccesses.Length, ctx.TargetReference.Id);
     }
 }
 """;

@@ -24,6 +24,42 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.4.0] - 2026-09-06
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.4.0`. Additive (non-breaking):
+extends the typed message set introduced in 0.3.0.
+
+### Added
+
+- **27 more modelled messages** get a typed `On<Message>()` builder and an `I<Message>Context<TEntity>` exposing
+  the standard SDK `ctx.Request` / `ctx.Response` (from `Microsoft.Crm.Sdk.Messages`), inferred with no cast:
+  - Sales lifecycle: `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `ConvertQuoteToSalesOrder`,
+    `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`, `GenerateSalesOrderFromOpportunity`,
+    `GenerateInvoiceFromOpportunity`.
+  - Queues: `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
+  - Email: `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
+  - Team / marketing-list membership: `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`,
+    `AddMemberList`, `RemoveMemberList`.
+  - Case / contract: `CloseIncident`, `CancelContract`, `CloneContract`.
+  - Access (read): `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`.
+- The messages whose request carries a primary record also expose it already typed: `ctx.Target`
+  (`SendEmailFromTemplate`), `ctx.TargetReference` (`AddToQueue`, `RouteTo`, `RetrievePrincipalAccess`,
+  `RetrieveSharedPrincipalsAndAccess`). The rest read message-specific request properties (for example
+  `ctx.Request.LeadId`, `ctx.Request.OpportunityClose`, `ctx.Request.QueueItemId`).
+
+## [0.1.19] - 2026-09-06
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.19`.
+
+### Changed
+
+- `vela add plugin --message <M>` now emits the typed `On<M>()` for the 27 messages modelled in framework
+  `0.4.0` (sales lifecycle, queues, email, team/list membership, case/contract, access reads). Any unmodelled
+  message still renders the permissive `OnMessage("...")`.
+- The generated `AccountMessageReference.cs` cheat-sheet also showcases the account-valid sharing reads
+  (`RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`) and points to the table-specific message
+  families modelled in 0.4.0.
+
 ## [0.3.0] - 2026-09-05
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.3.0`.
