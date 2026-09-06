@@ -35,6 +35,34 @@ namespace Vela.Plugin
 
         public IRevokeAccessStepStage<TEntity> OnRevokeAccess() => BeginStep().OnRevokeAccess();
 
+        public IQualifyLeadStepStage<TEntity> OnQualifyLead() => BeginStep().OnQualifyLead();
+        public IWinOpportunityStepStage<TEntity> OnWinOpportunity() => BeginStep().OnWinOpportunity();
+        public ILoseOpportunityStepStage<TEntity> OnLoseOpportunity() => BeginStep().OnLoseOpportunity();
+        public IConvertQuoteToSalesOrderStepStage<TEntity> OnConvertQuoteToSalesOrder() => BeginStep().OnConvertQuoteToSalesOrder();
+        public IConvertSalesOrderToInvoiceStepStage<TEntity> OnConvertSalesOrderToInvoice() => BeginStep().OnConvertSalesOrderToInvoice();
+        public IGenerateQuoteFromOpportunityStepStage<TEntity> OnGenerateQuoteFromOpportunity() => BeginStep().OnGenerateQuoteFromOpportunity();
+        public IGenerateSalesOrderFromOpportunityStepStage<TEntity> OnGenerateSalesOrderFromOpportunity() => BeginStep().OnGenerateSalesOrderFromOpportunity();
+        public IGenerateInvoiceFromOpportunityStepStage<TEntity> OnGenerateInvoiceFromOpportunity() => BeginStep().OnGenerateInvoiceFromOpportunity();
+        public IAddToQueueStepStage<TEntity> OnAddToQueue() => BeginStep().OnAddToQueue();
+        public IRemoveFromQueueStepStage<TEntity> OnRemoveFromQueue() => BeginStep().OnRemoveFromQueue();
+        public IPickFromQueueStepStage<TEntity> OnPickFromQueue() => BeginStep().OnPickFromQueue();
+        public IRouteToStepStage<TEntity> OnRouteTo() => BeginStep().OnRouteTo();
+        public IReleaseToQueueStepStage<TEntity> OnReleaseToQueue() => BeginStep().OnReleaseToQueue();
+        public ISendEmailStepStage<TEntity> OnSendEmail() => BeginStep().OnSendEmail();
+        public ISendEmailFromTemplateStepStage<TEntity> OnSendEmailFromTemplate() => BeginStep().OnSendEmailFromTemplate();
+        public IDeliverIncomingEmailStepStage<TEntity> OnDeliverIncomingEmail() => BeginStep().OnDeliverIncomingEmail();
+        public IDeliverPromoteEmailStepStage<TEntity> OnDeliverPromoteEmail() => BeginStep().OnDeliverPromoteEmail();
+        public IAddMembersTeamStepStage<TEntity> OnAddMembersTeam() => BeginStep().OnAddMembersTeam();
+        public IRemoveMembersTeamStepStage<TEntity> OnRemoveMembersTeam() => BeginStep().OnRemoveMembersTeam();
+        public IAddListMembersListStepStage<TEntity> OnAddListMembersList() => BeginStep().OnAddListMembersList();
+        public IAddMemberListStepStage<TEntity> OnAddMemberList() => BeginStep().OnAddMemberList();
+        public IRemoveMemberListStepStage<TEntity> OnRemoveMemberList() => BeginStep().OnRemoveMemberList();
+        public ICloseIncidentStepStage<TEntity> OnCloseIncident() => BeginStep().OnCloseIncident();
+        public ICancelContractStepStage<TEntity> OnCancelContract() => BeginStep().OnCancelContract();
+        public ICloneContractStepStage<TEntity> OnCloneContract() => BeginStep().OnCloneContract();
+        public IRetrievePrincipalAccessStepStage<TEntity> OnRetrievePrincipalAccess() => BeginStep().OnRetrievePrincipalAccess();
+        public IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> OnRetrieveSharedPrincipalsAndAccess() => BeginStep().OnRetrieveSharedPrincipalsAndAccess();
+
         public IPermissiveStepStage<TEntity> OnMessage(string messageName) => BeginStep().OnMessage(messageName);
 
         public IPermissiveStepStage<TEntity> OnMessage<TMessage>() where TMessage : class => BeginStep().OnMessage<TMessage>();

@@ -92,6 +92,31 @@ namespace Vela.Tests
         }
 
         [Fact]
+        public void SendEmailFromTemplateContext_ExposesTheTypedTarget()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            Guid id = Guid.NewGuid();
+            inner.PluginExecutionContext.InputParameters["Target"] = new TestAccount { Id = id, Name = "Regarding" };
+
+            ISendEmailFromTemplateContext<TestAccount> ctx = new SendEmailFromTemplateContext<TestAccount>(inner);
+
+            Assert.Equal(id, ctx.Target.Id);
+            Assert.Equal("Regarding", ctx.Target.Name);
+        }
+
+        [Fact]
+        public void AddToQueueContext_ExposesTheTargetReference()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            Guid id = Guid.NewGuid();
+            inner.PluginExecutionContext.InputParameters["Target"] = new EntityReference("account", id);
+
+            IAddToQueueContext<TestAccount> ctx = new AddToQueueContext<TestAccount>(inner);
+
+            Assert.Equal(id, ctx.TargetReference.Id);
+        }
+
+        [Fact]
         public void CollectionTargetContext_ExposesTheTargetsCollection()
         {
             LocalPluginContext inner = new PluginContextBuilder().Build();
