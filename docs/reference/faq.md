@@ -22,10 +22,12 @@ Call `RegisterCustomApi(...)` only from inside the `RegisterCustomApi()` overrid
 
 ### My step handler isn't found (or has the wrong signature) - what should it be?
 
-A plugin step handler is an instance method taking the message-typed context, bound by method group -
-`.Handler(OnUpdated)` where `void OnUpdated(IUpdateContext<TEntity> ctx)` (or `void OnX(ILocalPluginContext ctx)`
-for an `OnMessage("...")` step). The context type is checked against the message at compile time, so binding an
-`OnUpdate()` step to an `ICreateContext` handler does not build. A single-step plugin overrides
+A plugin step handler is an instance method taking the **stage-typed** message context, bound by method group -
+`.Handler(OnUpdated)` where `void OnUpdated(IUpdatePostContext<TEntity> ctx)` for a PostOperation step (or
+`IUpdatePreContext<TEntity>` for a PreValidation/PreOperation step, which has `ctx.Request` but no `ctx.Response`;
+or `void OnX(ILocalPluginContext ctx)` for an `OnMessage("...")` step). The context type is checked against the
+message and stage at compile time, so binding an `OnUpdate()` step to an `ICreatePostContext` handler - or reading
+`ctx.Response` from a pre-stage handler - does not build. A single-step plugin overrides
 `Execute(ILocalPluginContext ctx)` instead and reads the record with `ctx.GetTarget<T>()`.
 For a lightweight Custom API handler the signature is `void Handler(ILocalPluginContext)`.
 
