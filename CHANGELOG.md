@@ -21,9 +21,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Framework line (`Vela.Plugins` + `Vela.Testing`, next `framework-vX.Y.Z` - minor bump, breaking)
+The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
+(`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
-#### Changed
+## [0.6.0] - 2026-09-06
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.6.0`.
+
+### Changed
 
 - **BREAKING - `ctx.TargetReference` and `ctx.TargetCollection` are removed from the message contexts.** A handler now
   reads a reference or bulk target straight off the SDK-typed request: `ctx.Request.Target` (the `EntityReference` for
@@ -37,7 +42,7 @@ All notable changes to Vela are documented here. The format is based on
   `ctx.TargetCollection` -> `ctx.Request.Targets`. The `ctx.GetTargetRef()` / `ctx.GetTargets()` extension helpers are
   unchanged.
 
-#### Fixed
+### Fixed
 
 - **The in-memory harness now surfaces the created id to a Create Post handler.** A `Create` PostOperation step's
   context now exposes `OutputParameters["id"]` (and a `CreateMultiple` Post step exposes `OutputParameters["Ids"]`),
@@ -45,9 +50,11 @@ All notable changes to Vela are documented here. The format is based on
   on both the `crm.Create(...)` pipeline and the direct `PluginContext.For<T>()...Execute(plugin)` path. Previously
   `ctx.Response.id` read back `Guid.Empty` in the harness.
 
-### CLI line (`Vela.Cli`, next `cli-vX.Y.Z`)
+## [0.1.24] - 2026-09-06
 
-#### Changed
+CLI line (`Vela.Cli`), published as `cli-v0.1.24`.
+
+### Changed
 
 - The scaffolded `AccountPostCreatePlugin` is now a typed post-stage handler (`.Handler(OnAccountCreated)` with
   `void OnAccountCreated(ICreatePostContext<Account> ctx)`) that reads `ctx.Response.id` and a post-image, instead of
