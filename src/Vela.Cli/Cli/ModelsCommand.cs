@@ -198,6 +198,12 @@ internal static class ModelsCommand
                 RegistrationState scanned = PackageScanner.BuildLocalStateFromPackages(scanOptions, scanJson, tempDirectories);
                 authoredCustomApis = AuthoredCustomApiUniqueNames(scanned);
             }
+            catch (Exception ex)
+            {
+                // A bad/unreadable package must fail with a clean exit code, not a raw stack trace (mirrors how
+                // plan/apply surface a scan failure).
+                return Fail($"Could not scan the plugin package(s) to exclude authored Custom APIs: {ex.Message}", ExitParseError, includeUsage: false);
+            }
             finally
             {
                 CleanupTempDirectories(tempDirectories);
