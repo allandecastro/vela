@@ -71,6 +71,7 @@ namespace Vela.Tests
         {
             public string? CapturedPayload;
             public string? CapturedTargetName;
+            public string? CapturedPostImageName;
             public bool ResponseAvailable;
 
             public TypedTargetPostProbe() : base(string.Empty, string.Empty) { }
@@ -80,9 +81,10 @@ namespace Vela.Tests
 
             private void OnDoThing(IMessagePostContext<DoThingRequest, TestAccount> ctx)
             {
-                CapturedPayload = ctx.Request.Payload;    // typed, inferred
-                CapturedTargetName = ctx.Target.Name;     // early-bound TestAccount over the live Target
-                ResponseAvailable = ctx.Response != null; // base OrganizationResponse at post-stage
+                CapturedPayload = ctx.Request.Payload;      // typed, inferred
+                CapturedTargetName = ctx.Target.Name;       // early-bound TestAccount over the live Target
+                CapturedPostImageName = ctx.PostImage?.Name; // typed image, no <TestAccount> in the body
+                ResponseAvailable = ctx.Response != null;   // base OrganizationResponse at post-stage
             }
         }
 
@@ -113,11 +115,13 @@ namespace Vela.Tests
                 .Stage(PluginStages.PostOperation)
                 .Mode(ExecutionMode.Synchronous)
                 .WithTarget(new TestAccount { Name = "Acme" })
+                .WithPostImage(new TestAccount { Name = "AcmePost" })
                 .WithInputParameter(nameof(DoThingRequest.Payload), "hello")
                 .Execute(probe);
 
             Assert.Equal("hello", probe.CapturedPayload);
             Assert.Equal("Acme", probe.CapturedTargetName);
+            Assert.Equal("AcmePost", probe.CapturedPostImageName);
             Assert.True(probe.ResponseAvailable);
         }
 

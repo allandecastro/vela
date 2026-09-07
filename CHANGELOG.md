@@ -56,8 +56,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `OnMessage(...).Handler(ILocalPluginContext)` overload are unchanged.
   For a message whose request carries a full entity `Target`, bind the same `.Handler<TRequest>(...)` to a handler
   taking `IMessagePreContext<TRequest, TEntity>` / `IMessagePostContext<TRequest, TEntity>` to also get an
-  early-bound `ctx.Target` (the step's own `TEntity`, i.e. the plugin's entity - no extra type argument), on top of
-  the typed `ctx.Request`. Messages whose target is an `EntityReference` keep reading `ctx.Request.Target`.
+  early-bound `ctx.Target` (the step's own `TEntity`, i.e. the plugin's entity - no extra type argument) plus typed
+  `ctx.PreImage` / `ctx.PostImage` (no `<TEntity>` in the body), on top of the typed `ctx.Request`. Messages whose
+  target is an `EntityReference` keep reading `ctx.Request.Target`.
 
 ### Changed
 

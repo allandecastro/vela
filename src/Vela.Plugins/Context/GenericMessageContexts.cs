@@ -52,6 +52,8 @@ namespace Vela.Context
         where TRequest : OrganizationRequest
         where TEntity : Entity
     {
+        /// <summary>The registered pre-image as the early-bound entity, or null when none is registered.</summary>
+        TEntity? PreImage { get; }
     }
 
     /// <summary>Post-stage typed context for a custom message step with an early-bound <c>ctx.Target</c>.</summary>
@@ -61,6 +63,10 @@ namespace Vela.Context
         where TRequest : OrganizationRequest
         where TEntity : Entity
     {
+        /// <summary>The registered pre-image as the early-bound entity, or null when none is registered.</summary>
+        TEntity? PreImage { get; }
+        /// <summary>The registered post-image as the early-bound entity, or null when none is registered.</summary>
+        TEntity? PostImage { get; }
     }
 
     /// <summary>Runtime pre-stage context for a custom message step with an early-bound <c>ctx.Target</c>.</summary>
@@ -74,6 +80,8 @@ namespace Vela.Context
         public MessagePreContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public TEntity Target => this.GetTarget<TEntity>();
+        /// <inheritdoc/>
+        public TEntity? PreImage => this.GetPreImage<TEntity>();
     }
 
     /// <summary>Runtime post-stage context for a custom message step with an early-bound <c>ctx.Target</c>.</summary>
@@ -87,5 +95,9 @@ namespace Vela.Context
         public MessagePostContext(ILocalPluginContext inner) : base(inner) { }
         /// <inheritdoc/>
         public TEntity Target => this.GetTarget<TEntity>();
+        /// <inheritdoc/>
+        public TEntity? PreImage => this.GetPreImage<TEntity>();
+        /// <inheritdoc/>
+        public TEntity? PostImage => this.GetPostImage<TEntity>();
     }
 }
