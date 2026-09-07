@@ -196,6 +196,14 @@ public class ModelsCommandTests
     }
 
     [Fact]
+    public void Models_MessagesCountAsScope_ButUnresolvableNamespace_Fails_BeforeConnecting()
+    {
+        // --messages is a valid scope; the run only fails here because the namespace can't be inferred.
+        int exit = ModelsCommand.Run(["--messages", "QualifyLead", "--project", "/no/such/project.csproj"]);
+        Assert.Equal(ExitInvalidArguments, exit);
+    }
+
+    [Fact]
     public void Models_WithScope_ButUnresolvableNamespace_Fails_BeforeConnecting()
     {
         // Scope is valid, but the namespace can't be inferred (bad --project) → fails before connecting.

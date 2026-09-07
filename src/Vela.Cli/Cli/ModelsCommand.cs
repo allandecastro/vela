@@ -25,7 +25,7 @@ internal static class ModelsCommand
     // Dataverse via TryResolveConnection). Value options consume the next token; flags stand alone.
     private static readonly HashSet<string> ValueOptions = new(CommandLineOptions.ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
     {
-        "--solution", "--entities", "--custom-apis", "--roles", "--solution-roles", "--out", "--lang",
+        "--solution", "--entities", "--custom-apis", "--messages", "--roles", "--solution-roles", "--out", "--lang",
         "--namespace", "--project", "-p",
     };
 
@@ -63,6 +63,13 @@ internal static class ModelsCommand
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        string[] messages = (TryReadOption(args, "--messages") ?? string.Empty)
+            .Split([','], StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         string[] roles = (TryReadOption(args, "--roles") ?? string.Empty)
             .Split([','], StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
@@ -73,9 +80,9 @@ internal static class ModelsCommand
         // --solution-roles pulls every security role in --solution (like --solution does for tables).
         bool solutionRoles = HasFlag(args, "--solution-roles");
 
-        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && roles.Length == 0 && !solutionRoles)
+        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && messages.Length == 0 && roles.Length == 0 && !solutionRoles)
         {
-            return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis <a,b,c>, --roles <a,b,c> and/or --solution-roles. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
+            return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis <a,b,c>, --messages <a,b,c>, --roles <a,b,c> and/or --solution-roles. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
         }
 
         if (solutionRoles && string.IsNullOrWhiteSpace(solution))
@@ -116,9 +123,9 @@ internal static class ModelsCommand
             }
 
             // These scopes only read tables; anything else is ignored, so say so rather than dropping it silently.
-            if (customApis.Length > 0 || roles.Length > 0 || solutionRoles)
+            if (customApis.Length > 0 || messages.Length > 0 || roles.Length > 0 || solutionRoles)
             {
-                Console.Error.WriteLine($"Warning: {scope} generates TypeScript output only; --custom-apis / --roles / --solution-roles are ignored.");
+                Console.Error.WriteLine($"Warning: {scope} generates TypeScript output only; --custom-apis / --messages / --roles / --solution-roles are ignored.");
             }
 
             return RunTsModels(args, forms, tables, solution, entities, outDir, overwrite, interactive, json);
@@ -173,8 +180,14 @@ internal static class ModelsCommand
 
             if (customApis.Length > 0)
             {
-                CustomApiMessage[] messages = customApis.Select(name => ReadCustomApi(service, name)).ToArray();
-                models.AddRange(CustomApiMessageGenerator.Generate(messages, ns!));
+                CustomApiMessage[] customApiMessages = customApis.Select(name => ReadCustomApi(service, name)).ToArray();
+                models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!));
+            }
+
+            if (messages.Length > 0)
+            {
+                SdkMessage[] sdkMessages = messages.Select(name => SdkMessageReader.ReadSdkMessage(service, name)).ToArray();
+                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!));
             }
 
             if (roles.Length > 0 || solutionRoles)
@@ -642,6 +655,7 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --solution <uniquename> [connection options]");
         Console.WriteLine("  vela models --entities account,contact [connection options]");
         Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
+        Console.WriteLine("  vela models --messages QualifyLead,AddToQueue [connection options]");
         Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
         Console.WriteLine("  vela models --forms --entities account,contact [connection options]   (preview)");
         Console.WriteLine("  vela models --tables --entities account,contact [connection options]  (preview)");
@@ -651,6 +665,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
         Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
+        Console.WriteLine("  --messages <a,b,c>        SDK message names → typed Request/Response classes (any sdkmessage; pairs with OnMessage<TRequest>())");
         Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
         Console.WriteLine("  --forms                   (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
