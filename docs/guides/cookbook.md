@@ -10,9 +10,10 @@ Declare one step in `RegisterPluginSteps()`. See [Write a plugin](plugins.md).
 public class AccountPostUpdate : EntityPluginBase<Account>
 {
     protected override void RegisterPluginSteps() =>
-        RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(a => a.Name);
+        RegisterSteps().OnUpdate().PostOperation().Sync()
+            .FilteringAttributes(a => a.Name).Handler(OnAccountUpdated);
 
-    protected override void Execute(ILocalPluginContext ctx) { /* ctx.GetTarget<Account>() ... */ }
+    private void OnAccountUpdated(IUpdatePostContext<Account> ctx) { /* ctx.Target ... */ }
 }
 ```
 
