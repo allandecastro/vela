@@ -27,8 +27,10 @@ A plugin step handler is an instance method taking the **stage-typed** message c
 `IUpdatePreContext<TEntity>` for a PreValidation/PreOperation step, which has `ctx.Request` but no `ctx.Response`;
 or `void OnX(ILocalPluginContext ctx)` for an `OnMessage("...")` step). The context type is checked against the
 message and stage at compile time, so binding an `OnUpdate()` step to an `ICreatePostContext` handler - or reading
-`ctx.Response` from a pre-stage handler - does not build. A single-step plugin overrides
-`Execute(ILocalPluginContext ctx)` instead and reads the record with `ctx.GetTarget<T>()`.
+`ctx.Response` from a pre-stage handler - does not build. A single-step plugin binds the same typed
+`.Handler(...)` (its context is `I{Message}PostContext<T>` / `I{Message}PreContext<T>`) and reads the record
+with `ctx.Target`; overriding `Execute(ILocalPluginContext ctx)` and using `ctx.GetTarget<T>()` stays supported
+as an untyped fallback.
 For a lightweight Custom API handler the signature is `void Handler(ILocalPluginContext)`.
 
 ### I'm seeing unexpected legacy warnings - how do I clear them?

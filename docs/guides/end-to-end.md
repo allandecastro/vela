@@ -22,13 +22,14 @@ public class AccountPostUpdate : EntityPluginBase<Account>
             .PostOperation()
             .Sync()
             .FilteringAttributes(a => a.Name)   // only fire when Name changes
+            .Handler(OnAccountUpdated)          // stage-typed handler, bound by method group
             .PreImage()
                 .Attributes(a => a.Name);
     }
 
-    protected override void Execute(ILocalPluginContext ctx)
+    private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
     {
-        var target = ctx.GetTarget<Account>();
+        var target = ctx.Target;
         var before = ctx.GetPreImage<Account>();
         ctx.Trace($"Account renamed from '{before.Name}' to '{target.Name}'");
     }

@@ -302,7 +302,7 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
 
   ```csharp
   // plugin: read the client tag
-  protected override void Execute(ILocalPluginContext ctx)
+  private void OnAccountCreated(ICreatePostContext<Account> ctx)
   {
       if (ctx.Tag == "bulk-import") { /* skip enrichment for imports */ }
   }

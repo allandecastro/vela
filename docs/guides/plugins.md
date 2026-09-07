@@ -21,6 +21,7 @@ namespace Zava.Plugins.Account
                 .PostOperation()
                 .Sync()
                 .FilteringAttributes(a => a.Name)      // Only trigger when Name changes
+                .Handler(OnAccountUpdated)             // stage-typed handler, bound by method group
                 .Description("Handles account updates")
                 .PreImage()
                     .Attributes(a => a.Name)           // Include Name in pre-image
@@ -28,9 +29,11 @@ namespace Zava.Plugins.Account
                     .Attributes(a => a.Name);          // Include Name in post-image
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        // PostOperation Update step -> IUpdatePostContext<Account>: typed ctx.Request (and ctx.Response,
+        // filled by the platform at this stage). ctx.Target is the typed Account - no cast, no type argument.
+        private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
         {
-            var target = ctx.GetTarget<Account>();
+            var target = ctx.Target;
             var preImage = ctx.GetPreImage<Account>();
             ctx.Trace($"Name changed from {preImage.Name} to {target.Name}");
         }
@@ -267,9 +270,9 @@ own phase label - a checkpoint around a risky step. (The framework already cover
 point re-emitting `start` yourself.) Use the lighter `TraceMethod(...)` when you don't need the full payload:
 
 ```csharp
-protected override void Execute(ILocalPluginContext ctx)
+private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
 {
-    var target = ctx.GetTarget<Account>();
+    var target = ctx.Target;
     ctx.TraceMethod("computing credit limit");       // lightweight: method/message/stage/depth, no payload
     var limit = ComputeCreditLimit(target);
 
