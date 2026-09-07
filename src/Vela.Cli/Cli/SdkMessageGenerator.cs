@@ -39,7 +39,7 @@ public static class SdkMessageGenerator
         return messages
             .Where(m => !string.IsNullOrWhiteSpace(m?.Name))
             .OrderBy(m => m.Name, StringComparer.Ordinal)
-            .Select(m => new GeneratedModel($"{m.Name}.cs", GenerateOne(m, ns)))
+            .Select(m => new GeneratedModel($"Messages/{m.Name}.cs", GenerateOne(m, ns)))
             .ToList();
     }
 

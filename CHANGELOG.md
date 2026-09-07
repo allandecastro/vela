@@ -31,7 +31,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   from metadata and mapping each field's CLR type to a C# type. The output mirrors `--custom-apis` (a
   `RequestName`-setting `OrganizationRequest` over `Parameters` and an `OrganizationResponse` over `Results` with
   a `From(OrganizationResponse)` factory), so the generated request plugs straight into the Phase 1
-  `OnMessage(...).Handler<TRequest>(...)` typed handler. Combinable with the other `vela models` scopes over the
+  `OnMessage(...).Handler<TRequest>(...)` typed handler. Files are written into a `Messages/` subfolder of the
+  output directory to keep the Shared project tidy. Combinable with the other `vela models` scopes over the
   same connection.
 - **Framework: typed `ctx.Request` on the permissive `OnMessage(...)` path.** A custom or non-modelled message
   step can now bind `.Handler<TRequest>(...)` (where `TRequest` is any `OrganizationRequest` with a parameterless

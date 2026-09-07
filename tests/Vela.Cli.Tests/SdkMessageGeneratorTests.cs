@@ -76,13 +76,13 @@ public class SdkMessageGeneratorTests
     }
 
     [Fact]
-    public void FileName_IsMessageName()
+    public void FileName_IsMessageName_InMessagesFolder()
     {
         GeneratedModel model = SdkMessageGenerator
             .Generate(new[] { new SdkMessage("AddToQueue", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) }, "N")
             .Single();
 
-        Assert.Equal("AddToQueue.cs", model.FileName);
+        Assert.Equal("Messages/AddToQueue.cs", model.FileName);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class SdkMessageGeneratorTests
             },
             "N");
 
-        Assert.Equal(new[] { "Alpha.cs", "Zeta.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.Equal(new[] { "Messages/Alpha.cs", "Messages/Zeta.cs" }, models.Select(m => m.FileName).ToArray());
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public class SdkMessageGeneratorTests
             },
             "N");
 
-        Assert.Equal(new[] { "Real.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.Equal(new[] { "Messages/Real.cs" }, models.Select(m => m.FileName).ToArray());
     }
 
     [Fact]
