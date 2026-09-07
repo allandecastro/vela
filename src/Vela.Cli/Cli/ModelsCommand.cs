@@ -56,12 +56,17 @@ internal static class ModelsCommand
             .Where(x => x.Length > 0)
             .ToArray();
 
-        string[] customApis = (TryReadOption(args, "--custom-apis") ?? string.Empty)
+        // --custom-apis mirrors --messages: absent, targeted (a list), or bare (present with no value = all).
+        bool customApisRequested = HasFlag(args, "--custom-apis");
+        string[] customApis = (TryReadOptionValue(args, "--custom-apis") ?? string.Empty)
             .Split([','], StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
             .Where(x => x.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+        // Bare `--custom-apis` (present, no explicit list) = generate every Custom API in the environment.
+        bool allCustomApis = customApisRequested && customApis.Length == 0;
 
         // --messages has three states: absent, present-with-a-list (targeted), and present-with-no-value (all).
         // HasFlag detects presence; TryReadOptionValue reads the list only when the next token is a real value
@@ -87,9 +92,9 @@ internal static class ModelsCommand
         // --solution-roles pulls every security role in --solution (like --solution does for tables).
         bool solutionRoles = HasFlag(args, "--solution-roles");
 
-        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && messages.Length == 0 && !allMessages && roles.Length == 0 && !solutionRoles)
+        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && !allCustomApis && messages.Length == 0 && !allMessages && roles.Length == 0 && !solutionRoles)
         {
-            return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis <a,b,c>, --messages <a,b,c>, --roles <a,b,c> and/or --solution-roles. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
+            return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis [<a,b,c>], --messages [<a,b,c>], --roles <a,b,c> and/or --solution-roles. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
         }
 
         if (solutionRoles && string.IsNullOrWhiteSpace(solution))
@@ -130,7 +135,7 @@ internal static class ModelsCommand
             }
 
             // These scopes only read tables; anything else is ignored, so say so rather than dropping it silently.
-            if (customApis.Length > 0 || messages.Length > 0 || allMessages || roles.Length > 0 || solutionRoles)
+            if (customApis.Length > 0 || allCustomApis || messages.Length > 0 || allMessages || roles.Length > 0 || solutionRoles)
             {
                 Console.Error.WriteLine($"Warning: {scope} generates TypeScript output only; --custom-apis / --messages / --roles / --solution-roles are ignored.");
             }
@@ -185,9 +190,11 @@ internal static class ModelsCommand
                 models.AddRange(ModelGenerator.Generate(metadata, new ModelGenOptions(ns!, dataAnnotations)));
             }
 
-            if (customApis.Length > 0)
+            if (customApis.Length > 0 || allCustomApis)
             {
-                CustomApiMessage[] customApiMessages = customApis.Select(name => ReadCustomApi(service, name)).ToArray();
+                // Bare --custom-apis = every Custom API in the environment; a list = exactly those.
+                IEnumerable<string> customApiNames = allCustomApis ? ListAllCustomApiNames(service) : customApis;
+                CustomApiMessage[] customApiMessages = customApiNames.Select(name => ReadCustomApi(service, name)).ToArray();
                 models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!));
             }
 
@@ -522,6 +529,20 @@ internal static class ModelsCommand
         return response.EntityMetadata;
     }
 
+    // Every Custom API in the environment, by unique name. Used by bare `--custom-apis` (all mode). Excluding the
+    // developer's own authored Custom APIs would require scanning the built plugin assembly (as `plan`/`apply` do)
+    // and is a follow-up; today ALL mode generates typed caller classes for every Custom API present.
+    private static IReadOnlyList<string> ListAllCustomApiNames(IOrganizationService service)
+    {
+        QueryExpression query = new QueryExpression("customapi") { ColumnSet = new ColumnSet("uniquename") };
+        return service.RetrieveAll(query)
+            .Select(e => e.GetAttributeValue<string>("uniquename"))
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+    }
+
     private static CustomApiMessage ReadCustomApi(IOrganizationService service, string uniqueName)
     {
         QueryExpression query = new QueryExpression("customapi") { ColumnSet = new ColumnSet("customapiid", "bindingtype"), TopCount = 1 };
@@ -700,6 +721,7 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --solution <uniquename> [connection options]");
         Console.WriteLine("  vela models --entities account,contact [connection options]");
         Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
+        Console.WriteLine("  vela models --custom-apis [connection options]   (no value: every Custom API in the environment)");
         Console.WriteLine("  vela models --messages QualifyLead,AddToQueue [connection options]");
         Console.WriteLine("  vela models --messages [connection options]   (no value: all consumable messages, filtered)");
         Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");

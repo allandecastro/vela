@@ -57,6 +57,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **CLI: `vela models --custom-apis` now writes into `Messages/`.** Generated Custom API request/response files
   land in the `Messages/` subfolder of the output directory (previously flat), unifying them with `--messages`
   output - a Custom API is a message.
+- **CLI: `vela models --custom-apis` with no value generates every Custom API.** A bare `--custom-apis` (no list)
+  now generates typed request/response for every Custom API in the environment, mirroring bare `--messages`. A
+  list still generates exactly the named ones. (Together, bare `--messages` + bare `--custom-apis` cover the whole
+  consumable surface with no overlap: `--messages` excludes Custom-API-backed messages, `--custom-apis` owns them.)
 - CLI: the offline-fallback framework version (`DefaultCoreVersion`, used only when the nuget.org lookup fails
   and no `--core-version` is passed) is bumped from `0.5.0` to `0.6.0` to match the current framework line.
 

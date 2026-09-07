@@ -17,6 +17,9 @@ vela models --entities account,contact --namespace Zava.Shared.Models.Generated 
 # typed Request/Response message classes for Custom APIs (into Messages/)
 vela models --custom-apis zava_Recalculate --interactive
 
+# ...or every Custom API in the environment, with no value
+vela models --custom-apis --interactive
+
 # typed Request/Response classes for specific SDK messages (into Messages/)
 vela models --messages AddToQueue,RouteTo --interactive
 
@@ -39,7 +42,8 @@ the table, global option sets as shared enums; multi-select choices become an `I
 columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail), and exposes alternate keys as typed factories
 (`Account.ByAccountNumberKey("A-001")` returns a key-based `EntityReference`). `--custom-apis` instead generates typed
 `OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`),
-written into a `Messages/` subfolder of the output. `--messages a,b,c` does the same for any SDK message
+written into a `Messages/` subfolder of the output; with **no value**, `--custom-apis` generates every Custom API
+in the environment. `--messages a,b,c` does the same for any SDK message
 (`sdkmessage`), also into `Messages/`; `--messages` with **no value** generates every registerable message in the
 environment (Microsoft's "available events": non-private messages with a visible, custom-step-allowed
 `sdkmessagefilter`), skipping messages backed by a Custom API (owned by `--custom-apis`) and messages that

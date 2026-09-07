@@ -93,6 +93,28 @@ public sealed class ModelsLangOptionalTests
     }
 
     [Fact]
+    public void CustomApis_BareFlag_CountsAsScope_ReachesConnectionGate()
+    {
+        // A bare --custom-apis (no list) = ALL mode (every Custom API). It must clear the scope gate and, with a
+        // namespace given, reach the connection gate; --namespace after it proves the bare flag does not swallow it.
+        string stderr = RunCapturingStderr(["--custom-apis", "--namespace", "Acme.Models"], out int exitCode);
+
+        Assert.Equal(ExitInvalidArguments, exitCode);
+        Assert.Contains("Missing Dataverse auth", stderr);
+        Assert.DoesNotContain("Specify a scope", stderr);
+    }
+
+    [Fact]
+    public void CustomApis_Targeted_CountsAsScope_ReachesConnectionGate()
+    {
+        string stderr = RunCapturingStderr(["--custom-apis", "zava_DoThing", "--namespace", "Acme.Models"], out int exitCode);
+
+        Assert.Equal(ExitInvalidArguments, exitCode);
+        Assert.Contains("Missing Dataverse auth", stderr);
+        Assert.DoesNotContain("Specify a scope", stderr);
+    }
+
+    [Fact]
     public void NoScope_Fails_WithSpecifyScope()
     {
         // Sanity check the other side of the gate: with no scope at all, the scope error is what surfaces.
