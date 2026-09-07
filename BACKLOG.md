@@ -27,14 +27,22 @@ Priority legend: **P1** high value / clear need · **P2** worthwhile · **P3** n
 
 ## Runtime (Vela.Plugins)
 
-The message-dependent typed target redesign shipped as per-message typed handler contexts
-(`I<Message>Context<TEntity>` exposing `ctx.Request`/`ctx.Response` and `ctx.Target`/`ctx.TargetReference`/
-`ctx.TargetCollection`); see the CHANGELOG. 46 messages are modelled so far.
+The message-dependent typed target redesign shipped as per-message, stage-split typed handler contexts
+(`I<Message>PreContext<TEntity>` / `I<Message>PostContext<TEntity>` exposing `ctx.Request`/`ctx.Response`, with
+reference / bulk targets read via `ctx.Request.Target` / `ctx.Request.Targets`); see the CHANGELOG. 46 messages
+are modelled so far.
 
-- **P3 - candidate typed messages to model next.** All exist as `Microsoft.Crm.Sdk.Messages.*Request/*Response`
-  (verified by reflection) and are business/registerable; add on demand via the recipe in
-  `docs/contributing/extending-plugins.md`. Deferred because they are lower-frequency and the additive recipe makes
-  each cheap. Skip the long tail of metadata/customization/admin/read-only messages (`Publish*`, `*Solution`,
+- **P1 - environment-driven message generation (early-bound style).** The typed message surface is hand-authored
+  and curated in the framework today; the plan is to derive typed request/response from metadata (so the long tail
+  of SDK messages and consumed Custom APIs get typed without a framework release), while keeping the curated core
+  and the code-first Custom API declare-then-provision flow. Full design, roles (implement vs react) and phases:
+  `.context/message-generation-plan.md`.
+
+- **P3 - candidate typed messages to model next.** Superseded in spirit by the P1 generation item above (which
+  covers the long tail from metadata); this list stays as the hand-add fallback for the curated core. All exist as
+  `Microsoft.Crm.Sdk.Messages.*Request/*Response` (verified by reflection) and are business/registerable; add on
+  demand via the recipe in `docs/contributing/extending-plugins.md`. Deferred because they are lower-frequency and
+  the additive recipe makes each cheap. Skip the long tail of metadata/customization/admin/read-only messages (`Publish*`, `*Solution`,
   `Retrieve*Component`, licensing, provisioning, `Search*`/`Query*`): those stay on the permissive `OnMessage("...")`.
   - **Service / contracts:** `RenewContract`, `RenewEntitlement`.
   - **Marketing lists:** `QualifyMemberList` (the real "qualify member"; the singular `QualifyMember` does not exist

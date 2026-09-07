@@ -170,7 +170,9 @@ namespace Vela.Plugin
                 // Every handler takes a single strongly-typed argument: the per-message context for a modelled
                 // message (e.g. IMergeContext<TEntity>), or the plain ILocalPluginContext for a permissive
                 // OnMessage(...) step that Vela does not model.
-                object argument = BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx) ?? ctx;
+                object argument = BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
+                    ?? BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
+                    ?? ctx;
                 InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
                 return;
             }
@@ -311,6 +313,56 @@ namespace Vela.Plugin
                 PluginMessages.GetInvoiceProductsFromOpportunity => post ? (object)new GetInvoiceProductsFromOpportunityPostContext<TEntity>(ctx) : new GetInvoiceProductsFromOpportunityPreContext<TEntity>(ctx),
                 _ => null,
             };
+        }
+
+        // A permissive OnMessage(...) step whose handler takes a generic message context
+        // (IMessagePreContext<TRequest> / IMessagePostContext<TRequest>) does not carry TRequest in the message
+        // name, so it is resolved from the handler method's single parameter type. The matching concrete context
+        // (MessagePreContext<TRequest> / MessagePostContext<TRequest>) is then built over the live pipeline
+        // context. Returns null when the handler takes the plain ILocalPluginContext (the untyped permissive path),
+        // so dispatch falls back to passing ctx.
+        private object? BuildGenericMessageContext(string methodName, ILocalPluginContext ctx)
+        {
+            foreach (MethodInfo method in HandlerResolver.GetNamedMethods(GetType(), methodName))
+            {
+                if (method.ReturnType != typeof(void))
+                {
+                    continue;
+                }
+
+                ParameterInfo[] parameters = method.GetParameters();
+                if (parameters.Length != 1)
+                {
+                    continue;
+                }
+
+                Type parameterType = parameters[0].ParameterType;
+                if (!parameterType.IsGenericType)
+                {
+                    continue;
+                }
+
+                Type definition = parameterType.GetGenericTypeDefinition();
+                Type contextDefinition;
+                if (definition == typeof(IMessagePreContext<>))
+                {
+                    contextDefinition = typeof(MessagePreContext<>);
+                }
+                else if (definition == typeof(IMessagePostContext<>))
+                {
+                    contextDefinition = typeof(MessagePostContext<>);
+                }
+                else
+                {
+                    continue;
+                }
+
+                Type requestType = parameterType.GetGenericArguments()[0];
+                Type contextType = contextDefinition.MakeGenericType(requestType);
+                return Activator.CreateInstance(contextType, ctx);
+            }
+
+            return null;
         }
 
         private void InvokeTypedHandler(string methodName, object typedContext)

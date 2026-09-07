@@ -24,6 +24,17 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added
+
+- **Framework: typed `ctx.Request` on the permissive `OnMessage(...)` path.** A custom or non-modelled message
+  step can now bind `.Handler<TRequest>(...)` (where `TRequest` is any `OrganizationRequest` with a parameterless
+  constructor - an SDK request or a Vela-generated Custom API request) and receive a strongly-typed context:
+  `IMessagePreContext<TRequest>` (pre-stage, typed `ctx.Request`) or `IMessagePostContext<TRequest>` (post-stage,
+  typed `ctx.Request` plus a base `OrganizationResponse` `ctx.Response`). The handler's context is built from the
+  request type declared on its parameter, so the long tail of messages and consumed Custom APIs get a typed
+  request without a hand-authored per-message context. The curated `On<Message>()` surface and the untyped
+  `OnMessage(...).Handler(ILocalPluginContext)` overload are unchanged.
+
 ### Changed
 
 - CLI: the offline-fallback framework version (`DefaultCoreVersion`, used only when the nuget.org lookup fails
