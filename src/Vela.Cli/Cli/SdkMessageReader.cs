@@ -22,13 +22,16 @@ internal static class SdkMessageReader
         Entity message = service.RetrieveMultiple(messageQuery).Entities.FirstOrDefault()
             ?? throw new InvalidOperationException($"SDK message '{messageName}' was not found.");
 
-        // A message can have more than one pair (e.g. an internal endpoint variant). Prefer the one whose
-        // namespace looks like the Organization endpoint, otherwise take the first.
+        // A message has several pairs, one per SOAP contract version, and the field CLR types differ by pair:
+        // the legacy 2007/WebServices pair carries null or pre-Xrm types (e.g. Microsoft.Crm.Sdk.SecurityPrincipal)
+        // while 2011/Contracts (and xrm/*/Contracts) carry the modern Microsoft.Xrm.Sdk.* types. The pair order is
+        // not stable across environments, so we cannot take the first - prefer 2011/Contracts, then any other
+        // Contracts (7.1/...), and only fall back to the legacy pair when nothing else exists. (Validated live
+        // against two environments.)
         QueryExpression pairQuery = new QueryExpression("sdkmessagepair") { ColumnSet = new ColumnSet("sdkmessagepairid", "namespace") };
         pairQuery.Criteria.AddCondition("sdkmessageid", ConditionOperator.Equal, message.Id);
         List<Entity> pairs = service.RetrieveAll(pairQuery);
-        Entity pair = pairs.FirstOrDefault(p => LooksLikeOrganizationEndpoint(p.GetAttributeValue<string>("namespace")))
-            ?? pairs.FirstOrDefault()
+        Entity pair = SelectBestPair(pairs)
             ?? throw new InvalidOperationException($"SDK message '{messageName}' has no message pair.");
 
         QueryExpression requestQuery = new QueryExpression("sdkmessagerequest") { ColumnSet = new ColumnSet("sdkmessagerequestid"), TopCount = 1 };
@@ -86,8 +89,22 @@ internal static class SdkMessageReader
             .ToList();
     }
 
-    // The Organization endpoint pair carries the request/response contract we generate against; other pairs
-    // (e.g. discovery/internal variants) are less useful. Loose match — the schema needs live validation.
-    private static bool LooksLikeOrganizationEndpoint(string? ns) =>
-        !string.IsNullOrWhiteSpace(ns) && ns.IndexOf("Organization", StringComparison.OrdinalIgnoreCase) >= 0;
+    // Picks the pair whose field CLR types are the modern Microsoft.Xrm.Sdk.* ones: prefer 2011/Contracts, then
+    // any other *Contracts (e.g. xrm/7.1/Contracts), avoiding the legacy 2007/WebServices pair unless it is the
+    // only one present.
+    private static Entity? SelectBestPair(List<Entity> pairs)
+    {
+        if (pairs.Count == 0)
+        {
+            return null;
+        }
+
+        static bool Has(Entity p, string token) =>
+            (p.GetAttributeValue<string>("namespace") ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        return pairs.FirstOrDefault(p => Has(p, "2011/Contracts"))
+            ?? pairs.FirstOrDefault(p => Has(p, "Contracts"))
+            ?? pairs.FirstOrDefault(p => !Has(p, "2007/WebServices"))
+            ?? pairs[0];
+    }
 }
