@@ -67,4 +67,38 @@ public sealed class ModelsLangOptionalTests
         Assert.Contains("Missing Dataverse auth", stderr);
         Assert.DoesNotContain("not both", stderr);
     }
+
+    [Fact]
+    public void Messages_BareFlag_CountsAsScope_ReachesConnectionGate()
+    {
+        // A bare --messages (no list) = ALL mode. It must clear the scope gate (not "Specify a scope") and, with a
+        // namespace given, reach the connection gate. --namespace after --messages also proves the bare flag does
+        // not swallow the following option as its value.
+        string stderr = RunCapturingStderr(["--messages", "--namespace", "Acme.Models"], out int exitCode);
+
+        Assert.Equal(ExitInvalidArguments, exitCode);
+        Assert.Contains("Missing Dataverse auth", stderr);
+        Assert.DoesNotContain("Specify a scope", stderr);
+    }
+
+    [Fact]
+    public void Messages_Targeted_CountsAsScope_ReachesConnectionGate()
+    {
+        // A targeted --messages list is a scope too; it clears the scope gate and reaches the connection gate.
+        string stderr = RunCapturingStderr(["--messages", "QualifyLead,AddToQueue", "--namespace", "Acme.Models"], out int exitCode);
+
+        Assert.Equal(ExitInvalidArguments, exitCode);
+        Assert.Contains("Missing Dataverse auth", stderr);
+        Assert.DoesNotContain("Specify a scope", stderr);
+    }
+
+    [Fact]
+    public void NoScope_Fails_WithSpecifyScope()
+    {
+        // Sanity check the other side of the gate: with no scope at all, the scope error is what surfaces.
+        string stderr = RunCapturingStderr(["--namespace", "Acme.Models"], out int exitCode);
+
+        Assert.Equal(ExitInvalidArguments, exitCode);
+        Assert.Contains("Specify a scope", stderr);
+    }
 }

@@ -63,12 +63,19 @@ internal static class ModelsCommand
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        string[] messages = (TryReadOption(args, "--messages") ?? string.Empty)
+        // --messages has three states: absent, present-with-a-list (targeted), and present-with-no-value (all).
+        // HasFlag detects presence; TryReadOptionValue reads the list only when the next token is a real value
+        // (not another option), so a bare `--messages` (all mode) doesn't swallow the following flag as its value.
+        bool messagesRequested = HasFlag(args, "--messages");
+        string[] messages = (TryReadOptionValue(args, "--messages") ?? string.Empty)
             .Split([','], StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
             .Where(x => x.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+        // Bare `--messages` (present, but no explicit list) = generate all consumable messages, filtered.
+        bool allMessages = messagesRequested && messages.Length == 0;
 
         string[] roles = (TryReadOption(args, "--roles") ?? string.Empty)
             .Split([','], StringSplitOptions.RemoveEmptyEntries)
@@ -80,7 +87,7 @@ internal static class ModelsCommand
         // --solution-roles pulls every security role in --solution (like --solution does for tables).
         bool solutionRoles = HasFlag(args, "--solution-roles");
 
-        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && messages.Length == 0 && roles.Length == 0 && !solutionRoles)
+        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && messages.Length == 0 && !allMessages && roles.Length == 0 && !solutionRoles)
         {
             return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis <a,b,c>, --messages <a,b,c>, --roles <a,b,c> and/or --solution-roles. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
         }
@@ -123,7 +130,7 @@ internal static class ModelsCommand
             }
 
             // These scopes only read tables; anything else is ignored, so say so rather than dropping it silently.
-            if (customApis.Length > 0 || messages.Length > 0 || roles.Length > 0 || solutionRoles)
+            if (customApis.Length > 0 || messages.Length > 0 || allMessages || roles.Length > 0 || solutionRoles)
             {
                 Console.Error.WriteLine($"Warning: {scope} generates TypeScript output only; --custom-apis / --messages / --roles / --solution-roles are ignored.");
             }
@@ -184,9 +191,47 @@ internal static class ModelsCommand
                 models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!));
             }
 
-            if (messages.Length > 0)
+            if (allMessages)
             {
-                SdkMessage[] sdkMessages = messages.Select(name => SdkMessageReader.ReadSdkMessage(service, name)).ToArray();
+                // ALL mode: every non-private, non-Custom-API-backed message (filtered by the reader), minus any
+                // that already has an SDK request class (skipped here to avoid a duplicate/collision with the SDK
+                // type). A single unreadable message is skipped with a warning rather than aborting the batch.
+                List<SdkMessage> sdkMessages = new List<SdkMessage>();
+                foreach (GeneratableMessage candidate in SdkMessageReader.ListGeneratableMessages(service))
+                {
+                    string name = candidate.Name;
+                    if (SdkMessageClassResolver.HasSdkRequestClass(name))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Warning: skipping message '{name}' (could not read its contract): {ex.Message}");
+                    }
+                }
+
+                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!));
+            }
+            else if (messages.Length > 0)
+            {
+                // Targeted: the user asked for these by name, so generate exactly them — never silently skipped. If
+                // one already has an SDK request class, warn (suggest the SDK type) but still generate the wrapper.
+                List<SdkMessage> sdkMessages = new List<SdkMessage>();
+                foreach (string name in messages)
+                {
+                    if (SdkMessageClassResolver.HasSdkRequestClass(name))
+                    {
+                        Console.Error.WriteLine($"Warning: '{name}' already has an SDK request class (Microsoft.Xrm.Sdk.Messages.{name}Request); generating a duplicate. Prefer the SDK type via OnMessage<{name}Request>().");
+                    }
+
+                    sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));
+                }
+
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!));
             }
 
@@ -656,6 +701,7 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --entities account,contact [connection options]");
         Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
         Console.WriteLine("  vela models --messages QualifyLead,AddToQueue [connection options]");
+        Console.WriteLine("  vela models --messages [connection options]   (no value: all consumable messages, filtered)");
         Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
         Console.WriteLine("  vela models --forms --entities account,contact [connection options]   (preview)");
         Console.WriteLine("  vela models --tables --entities account,contact [connection options]  (preview)");
@@ -664,8 +710,9 @@ internal static class ModelsCommand
         Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
         Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
-        Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response message classes");
-        Console.WriteLine("  --messages <a,b,c>        SDK message names → typed Request/Response classes (any sdkmessage; pairs with OnMessage<TRequest>())");
+        Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response classes (into Messages/)");
+        Console.WriteLine("  --messages [a,b,c]        SDK message names → typed Request/Response classes into Messages/ (any sdkmessage; pairs with OnMessage<TRequest>())");
+        Console.WriteLine("                            with no value: generate ALL consumable messages, skipping internal/private, Custom-API-backed, and messages that already have an SDK request class");
         Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
         Console.WriteLine("  --solution-roles          also generate every security role in --solution");
         Console.WriteLine("  --forms                   (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");

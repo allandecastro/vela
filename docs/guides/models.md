@@ -14,8 +14,14 @@ vela models --solution ZavaSales --url https://zava.crm.dynamics.com --interacti
 # or an explicit list, with an explicit namespace/output
 vela models --entities account,contact --namespace Zava.Shared.Models.Generated --out src/Zava.Shared/Models/Generated --overwrite
 
-# typed Request/Response message classes for Custom APIs
+# typed Request/Response message classes for Custom APIs (into Messages/)
 vela models --custom-apis zava_Recalculate --interactive
+
+# typed Request/Response classes for specific SDK messages (into Messages/)
+vela models --messages AddToQueue,RouteTo --interactive
+
+# ...or every consumable message in the environment (filtered), with no value
+vela models --messages --interactive
 
 # security roles → a dependency-light Roles class in Shared.Models.Generated (real privileges + root role id)
 vela models --roles "Salesperson,Sales Manager" --namespace Zava.Shared.Models.Generated --out src/Zava.Shared/Models/Generated
@@ -32,7 +38,13 @@ required level and lookup targets with no hand-written overrides. `vela models` 
 the table, global option sets as shared enums; multi-select choices become an `IList<Enum>`), types **File**
 columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail), and exposes alternate keys as typed factories
 (`Account.ByAccountNumberKey("A-001")` returns a key-based `EntityReference`). `--custom-apis` instead generates typed
-`OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`).
+`OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`),
+written into a `Messages/` subfolder of the output. `--messages a,b,c` does the same for any SDK message
+(`sdkmessage`), also into `Messages/`; `--messages` with **no value** generates every registerable message in the
+environment (Microsoft's "available events": non-private messages with a visible, custom-step-allowed
+`sdkmessagefilter`), skipping messages backed by a Custom API (owned by `--custom-apis`) and messages that
+already ship an SDK request class (e.g. `CreateRequest`). The generated requests pair with the
+permissive `OnMessage(...).Handler<TRequest>()` typed handler.
 Connection flags are the same as `plan`/`apply`
 (`--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or `--interactive`).
 

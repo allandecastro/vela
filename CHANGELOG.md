@@ -34,6 +34,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `OnMessage(...).Handler<TRequest>(...)` typed handler. Files are written into a `Messages/` subfolder of the
   output directory to keep the Shared project tidy. Combinable with the other `vela models` scopes over the
   same connection.
+- **CLI: `vela models --messages` with no value generates all consumable messages.** A bare `--messages`
+  (no list) now generates every registerable message in the environment - Microsoft's Event Framework
+  "available events" set: non-private messages that have a visible `sdkmessagefilter` allowing a custom
+  processing step (minus the deprecated `SetStateDynamicEntity`/`RemoveRelated`/`SetRelated`/`Execute`). It
+  then skips messages backed by a Custom API (owned by `--custom-apis`, which also keeps your own authored
+  Custom APIs out), and messages that already ship an SDK request class (reflected over the referenced
+  `Microsoft.Xrm.Sdk` assembly, e.g. `CreateRequest`).
+  A targeted `--messages a,b,c` still generates exactly the named messages, only warning (never skipping) when
+  one already has an SDK request class.
 - **Framework: typed `ctx.Request` on the permissive `OnMessage(...)` path.** A custom or non-modelled message
   step can now bind `.Handler<TRequest>(...)` (where `TRequest` is any `OrganizationRequest` with a parameterless
   constructor - an SDK request or a Vela-generated Custom API request) and receive a strongly-typed context:
@@ -45,6 +54,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed
 
+- **CLI: `vela models --custom-apis` now writes into `Messages/`.** Generated Custom API request/response files
+  land in the `Messages/` subfolder of the output directory (previously flat), unifying them with `--messages`
+  output - a Custom API is a message.
 - CLI: the offline-fallback framework version (`DefaultCoreVersion`, used only when the nuget.org lookup fails
   and no `--core-version` is passed) is bumped from `0.5.0` to `0.6.0` to match the current framework line.
 

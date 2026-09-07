@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 using Vela.Cli;
 using Vela.Cli.Tests.TestSupport;
 using Xunit;
@@ -155,6 +156,75 @@ public class SdkMessageReaderTests
         SdkMessageField only = Assert.Single(message.RequestFields);
         Assert.Equal("Dup", only.Name);
         Assert.Equal("string", only.CSharpType);
+    }
+
+    // Simulates a joined sdkmessage row: the name plus the aliased primaryobjecttypecode from the linked filter.
+    private static Entity JoinedRow(string name, string entity) =>
+        Row("sdkmessage", ("name", name), ("filter.primaryobjecttypecode", new AliasedValue("sdkmessagefilter", "primaryobjecttypecode", entity)));
+
+    [Fact]
+    public void ListGeneratableMessages_FiltersPrivate_ExcludesCustomApis_AggregatesEntities_OrdersAndDedupes()
+    {
+        var svc = new FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                // The inner join to sdkmessagefilter yields one row per (message, entity). "Whatever" applies to two
+                // entities; "zava_Api" matches a customapi uniquename and must be dropped.
+                "sdkmessage" => FakeOrgService.Collection(
+                    JoinedRow("Whatever", "account"),
+                    JoinedRow("AddToQueue", "queue"),
+                    JoinedRow("zava_Api", "account"),
+                    JoinedRow("Whatever", "contact")),
+                "customapi" => FakeOrgService.Collection(Row("customapi", ("uniquename", "zava_Api"))),
+                _ => new EntityCollection(),
+            },
+        };
+
+        IReadOnlyList<GeneratableMessage> messages = SdkMessageReader.ListGeneratableMessages(svc);
+
+        // Custom-API-backed "zava_Api" excluded; grouped by name; ordered.
+        Assert.Equal(new[] { "AddToQueue", "Whatever" }, messages.Select(m => m.Name).ToArray());
+        // Entities aggregated across the joined rows, deduped and ordered.
+        Assert.Equal(new[] { "account", "contact" }, messages.Single(m => m.Name == "Whatever").Entities.ToArray());
+        Assert.Equal(new[] { "queue" }, messages.Single(m => m.Name == "AddToQueue").Entities.ToArray());
+
+        // The message query is the Event Framework "available events" shape: distinct, non-private, the deprecated
+        // name exclusions, and an inner join to sdkmessagefilter requiring a visible, step-allowed filter.
+        QueryExpression messageQuery = svc.Queries.Single(q => q.EntityName == "sdkmessage");
+        Assert.True(messageQuery.Distinct);
+        ConditionExpression isPrivate = messageQuery.Criteria.Conditions.Single(c => c.AttributeName == "isprivate");
+        Assert.Equal(ConditionOperator.Equal, isPrivate.Operator);
+        Assert.Equal(false, isPrivate.Values.Single());
+        ConditionExpression nameExclusions = messageQuery.Criteria.Conditions.Single(c => c.AttributeName == "name");
+        Assert.Equal(ConditionOperator.NotIn, nameExclusions.Operator);
+        Assert.Contains("Execute", nameExclusions.Values.Cast<string>());
+        Assert.Contains("SetStateDynamicEntity", nameExclusions.Values.Cast<string>());
+
+        LinkEntity filter = messageQuery.LinkEntities.Single();
+        Assert.Equal("sdkmessagefilter", filter.LinkToEntityName);
+        Assert.Equal(JoinOperator.Inner, filter.JoinOperator);
+        Assert.Equal(true, filter.LinkCriteria.Conditions.Single(c => c.AttributeName == "iscustomprocessingstepallowed").Values.Single());
+        Assert.Equal(true, filter.LinkCriteria.Conditions.Single(c => c.AttributeName == "isvisible").Values.Single());
+    }
+
+    [Fact]
+    public void ListGeneratableMessages_NoCustomApis_ReturnsAllEligible()
+    {
+        var svc = new FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => FakeOrgService.Collection(
+                    JoinedRow("AddToQueue", "queue"),
+                    JoinedRow("RouteTo", "queue")),
+                _ => new EntityCollection(),
+            },
+        };
+
+        IReadOnlyList<GeneratableMessage> messages = SdkMessageReader.ListGeneratableMessages(svc);
+
+        Assert.Equal(new[] { "AddToQueue", "RouteTo" }, messages.Select(m => m.Name).ToArray());
     }
 
     [Fact]

@@ -48,6 +48,6 @@ public class CustomApiMessageGeneratorTests
             .Generate(new[] { new CustomApiMessage("zava_X", false, Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>()) }, "N")
             .Single();
 
-        Assert.Equal("zava_X.cs", model.FileName);
+        Assert.Equal("Messages/zava_X.cs", model.FileName);
     }
 }
