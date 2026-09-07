@@ -50,6 +50,44 @@ public sealed class PackageScannerBuildStateTests : IDisposable
     }
 
     [Fact]
+    public void ModelsCommand_extracts_authored_custom_api_names_and_excludes_them_from_all_mode()
+    {
+        // Follow-up #1: pointing `vela models --custom-apis` (ALL) at a built package must not regenerate the Custom
+        // APIs the developer authored in code. Scan the fixture (its SampleCustomApi has uniqueName "sample_DoThing")
+        // and confirm the name is extracted, then removed from a simulated ALL-mode Custom API name list.
+        string nupkg = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture");
+
+        RegistrationState state = PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg), Web, _temps);
+        HashSet<string> authored = ModelsCommand.AuthoredCustomApiUniqueNames(state);
+
+        Assert.Contains("sample_DoThing", authored);
+
+        // Case-insensitive match against the environment's uniquename, and other Custom APIs are kept.
+        string[] allInEnvironment = { "sample_DoThing", "zava_KeepMe", "other_KeepMeToo" };
+        IReadOnlyList<string> kept = ModelsCommand.ExcludeAuthoredCustomApis(allInEnvironment, authored, out int excluded);
+
+        Assert.Equal(1, excluded);
+        Assert.Equal(new[] { "zava_KeepMe", "other_KeepMeToo" }, kept.ToArray());
+    }
+
+    [Fact]
+    public void ExcludeAuthoredCustomApis_is_case_insensitive_and_reports_zero_when_nothing_authored()
+    {
+        string[] all = { "zava_Alpha", "zava_Beta" };
+
+        // No authored names -> nothing excluded (the no-package default: ALL = every Custom API).
+        IReadOnlyList<string> unfiltered = ModelsCommand.ExcludeAuthoredCustomApis(all, new HashSet<string>(), out int noneExcluded);
+        Assert.Equal(0, noneExcluded);
+        Assert.Equal(all, unfiltered.ToArray());
+
+        // A differently-cased authored name still matches and is removed.
+        HashSet<string> authored = new(StringComparer.OrdinalIgnoreCase) { "ZAVA_ALPHA" };
+        IReadOnlyList<string> filtered = ModelsCommand.ExcludeAuthoredCustomApis(all, authored, out int oneExcluded);
+        Assert.Equal(1, oneExcluded);
+        Assert.Equal(new[] { "zava_Beta" }, filtered.ToArray());
+    }
+
+    [Fact]
     public void Scanning_leaves_the_extracted_temp_folders_deletable()
     {
         // The scanner byte-loads the package assemblies so the extracted .dll files are never locked. On Windows

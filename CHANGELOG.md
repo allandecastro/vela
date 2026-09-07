@@ -39,8 +39,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   "available events" set: non-private messages that have a visible `sdkmessagefilter` allowing a custom
   processing step (minus the deprecated `SetStateDynamicEntity`/`RemoveRelated`/`SetRelated`/`Execute`). It
   then skips messages backed by a Custom API (owned by `--custom-apis`, which also keeps your own authored
-  Custom APIs out), and messages that already ship an SDK request class (reflected over the referenced
-  `Microsoft.Xrm.Sdk` assembly, e.g. `CreateRequest`).
+  Custom APIs out), and messages that already ship an SDK request class - both the core
+  `Microsoft.Xrm.Sdk.Messages.*` types (reflected over the referenced `Microsoft.Xrm.Sdk` assembly, e.g.
+  `CreateRequest`) and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (e.g. `QualifyLeadRequest`,
+  `WinOpportunityRequest`), matched against a curated, non-exhaustive supplement because `Vela.Cli` does not
+  reference `Microsoft.CrmSdk.CoreAssemblies`; an unlisted Crm.Sdk message simply generates a harmless duplicate.
   A targeted `--messages a,b,c` still generates exactly the named messages, only warning (never skipping) when
   one already has an SDK request class.
 - **Framework: typed `ctx.Request` on the permissive `OnMessage(...)` path.** A custom or non-modelled message
@@ -61,6 +64,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   now generates typed request/response for every Custom API in the environment, mirroring bare `--messages`. A
   list still generates exactly the named ones. (Together, bare `--messages` + bare `--custom-apis` cover the whole
   consumable surface with no overlap: `--messages` excludes Custom-API-backed messages, `--custom-apis` owns them.)
+  Pass your built plugin package(s) with `--package <file.nupkg>` (repeatable) and/or `--packages-dir <folder>`
+  (plus `--package-assembly <name>`) to exclude the Custom APIs you authored in code from bare `--custom-apis` -
+  you already have those classes, so they are scanned out of the ALL set (a note reports how many were excluded).
+  A targeted `--custom-apis a,b,c` is never filtered - the named ones are always generated.
 - CLI: the offline-fallback framework version (`DefaultCoreVersion`, used only when the nuget.org lookup fails
   and no `--core-version` is passed) is bumped from `0.5.0` to `0.6.0` to match the current framework line.
 
