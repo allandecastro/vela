@@ -65,6 +65,79 @@ namespace Vela.Tests
                 => CapturedPayload = ctx.Request.Payload;   // typed, inferred, Request-side data in pre
         }
 
+        // Entity-typed variants: the two-arg Handler<TRequest, TEntity>(...) overload adds an early-bound
+        // ctx.Target (the plugin's TEntity over the live 'Target' InputParameter) on top of the typed ctx.Request.
+        private sealed class TypedTargetPostProbe : EntityPluginBase<TestAccount>
+        {
+            public string? CapturedPayload;
+            public string? CapturedTargetName;
+            public bool ResponseAvailable;
+
+            public TypedTargetPostProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterSteps().OnMessage(CustomMessage).PostOperation().Sync().Handler<DoThingRequest>(OnDoThing);
+
+            private void OnDoThing(IMessagePostContext<DoThingRequest, TestAccount> ctx)
+            {
+                CapturedPayload = ctx.Request.Payload;    // typed, inferred
+                CapturedTargetName = ctx.Target.Name;     // early-bound TestAccount over the live Target
+                ResponseAvailable = ctx.Response != null; // base OrganizationResponse at post-stage
+            }
+        }
+
+        private sealed class TypedTargetPreProbe : EntityPluginBase<TestAccount>
+        {
+            public string? CapturedPayload;
+            public string? CapturedTargetName;
+
+            public TypedTargetPreProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterSteps().OnMessage(CustomMessage).PreOperation().Sync().Handler<DoThingRequest>(OnDoThing);
+
+            private void OnDoThing(IMessagePreContext<DoThingRequest, TestAccount> ctx)
+            {
+                CapturedPayload = ctx.Request.Payload;
+                CapturedTargetName = ctx.Target.Name;
+            }
+        }
+
+        [Fact]
+        public void Post_stage_entity_typed_handler_receives_typed_request_response_and_target()
+        {
+            TypedTargetPostProbe probe = new TypedTargetPostProbe();
+
+            PluginContext.For<TestAccount>()
+                .OnMessage(CustomMessage)
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .WithTarget(new TestAccount { Name = "Acme" })
+                .WithInputParameter(nameof(DoThingRequest.Payload), "hello")
+                .Execute(probe);
+
+            Assert.Equal("hello", probe.CapturedPayload);
+            Assert.Equal("Acme", probe.CapturedTargetName);
+            Assert.True(probe.ResponseAvailable);
+        }
+
+        [Fact]
+        public void Pre_stage_entity_typed_handler_receives_typed_request_and_target()
+        {
+            TypedTargetPreProbe probe = new TypedTargetPreProbe();
+
+            PluginContext.For<TestAccount>()
+                .OnMessage(CustomMessage)
+                .Stage(PluginStages.PreOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .WithTarget(new TestAccount { Name = "Globex" })
+                .WithInputParameter(nameof(DoThingRequest.Payload), "world")
+                .Execute(probe);
+
+            Assert.Equal("world", probe.CapturedPayload);
+            Assert.Equal("Globex", probe.CapturedTargetName);
+        }
+
         [Fact]
         public void Post_stage_generic_handler_receives_typed_request_and_response()
         {

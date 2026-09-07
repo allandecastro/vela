@@ -40,4 +40,52 @@ namespace Vela.Context
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public MessagePostContext(ILocalPluginContext inner) : base(inner) { }
     }
+
+    // Entity-typed variants add an early-bound ctx.Target (the plugin's TEntity over the live 'Target'
+    // InputParameter) on top of the request-typed generic context, mirroring the curated
+    // IEntityTargetContext<TEntity> pattern. Bound with the Handler<TRequest, TEntity>(...) permissive overload.
+
+    /// <summary>Pre-stage typed context for a custom message step with an early-bound <c>ctx.Target</c>.</summary>
+    /// <typeparam name="TRequest">The request type over the live <c>InputParameters</c>.</typeparam>
+    /// <typeparam name="TEntity">The early-bound entity type over the live <c>Target</c> InputParameter.</typeparam>
+    public interface IMessagePreContext<out TRequest, TEntity> : IMessagePreContext<TRequest>, IEntityTargetContext<TEntity>
+        where TRequest : OrganizationRequest
+        where TEntity : Entity
+    {
+    }
+
+    /// <summary>Post-stage typed context for a custom message step with an early-bound <c>ctx.Target</c>.</summary>
+    /// <typeparam name="TRequest">The request type over the live <c>InputParameters</c>.</typeparam>
+    /// <typeparam name="TEntity">The early-bound entity type over the live <c>Target</c> InputParameter.</typeparam>
+    public interface IMessagePostContext<out TRequest, TEntity> : IMessagePostContext<TRequest>, IEntityTargetContext<TEntity>
+        where TRequest : OrganizationRequest
+        where TEntity : Entity
+    {
+    }
+
+    /// <summary>Runtime pre-stage context for a custom message step with an early-bound <c>ctx.Target</c>.</summary>
+    /// <typeparam name="TRequest">The request type over the live <c>InputParameters</c>.</typeparam>
+    /// <typeparam name="TEntity">The early-bound entity type over the live <c>Target</c> InputParameter.</typeparam>
+    public sealed class MessagePreContext<TRequest, TEntity> : PreStepContext<TRequest>, IMessagePreContext<TRequest, TEntity>
+        where TRequest : OrganizationRequest, new()
+        where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public MessagePreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity Target => this.GetTarget<TEntity>();
+    }
+
+    /// <summary>Runtime post-stage context for a custom message step with an early-bound <c>ctx.Target</c>.</summary>
+    /// <typeparam name="TRequest">The request type over the live <c>InputParameters</c>.</typeparam>
+    /// <typeparam name="TEntity">The early-bound entity type over the live <c>Target</c> InputParameter.</typeparam>
+    public sealed class MessagePostContext<TRequest, TEntity> : PostStepContext<TRequest, OrganizationResponse>, IMessagePostContext<TRequest, TEntity>
+        where TRequest : OrganizationRequest, new()
+        where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public MessagePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity Target => this.GetTarget<TEntity>();
+    }
 }

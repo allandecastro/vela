@@ -342,9 +342,22 @@ namespace Vela.Plugin
                     continue;
                 }
 
+                // Disambiguate by the parameter's own generic type definition. A two-arg entity-typed context
+                // (IMessagePreContext<TRequest, TEntity>) is preferred, and it is matched here directly because
+                // the parameter type is that two-arg interface - even though it also implements the one-arg
+                // IMessagePreContext<TRequest>, the parameter's GetGenericTypeDefinition() reports the two-arg form.
                 Type definition = parameterType.GetGenericTypeDefinition();
                 Type contextDefinition;
-                if (definition == typeof(IMessagePreContext<>))
+                Type[] parameterArguments = parameterType.GetGenericArguments();
+                if (definition == typeof(IMessagePreContext<,>))
+                {
+                    contextDefinition = typeof(MessagePreContext<,>);
+                }
+                else if (definition == typeof(IMessagePostContext<,>))
+                {
+                    contextDefinition = typeof(MessagePostContext<,>);
+                }
+                else if (definition == typeof(IMessagePreContext<>))
                 {
                     contextDefinition = typeof(MessagePreContext<>);
                 }
@@ -357,8 +370,7 @@ namespace Vela.Plugin
                     continue;
                 }
 
-                Type requestType = parameterType.GetGenericArguments()[0];
-                Type contextType = contextDefinition.MakeGenericType(requestType);
+                Type contextType = contextDefinition.MakeGenericType(parameterArguments);
                 return Activator.CreateInstance(contextType, ctx);
             }
 
