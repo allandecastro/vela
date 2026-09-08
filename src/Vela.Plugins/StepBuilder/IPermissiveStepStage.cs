@@ -35,6 +35,16 @@ public interface IPermissiveNoImageStep<TEntity> : INoImageStep<TEntity> where T
     /// <summary>Bind an untyped handler, e.g. <c>.Handler(OnCustom)</c> where <c>void OnCustom(ILocalPluginContext ctx)</c>.</summary>
     /// <param name="handler">Instance method with signature <c>(ILocalPluginContext)</c>.</param>
     INoImageStep<TEntity> Handler(Action<ILocalPluginContext> handler);
+
+    /// <summary>Bind a typed handler, e.g. <c>.Handler&lt;XxxRequest&gt;(OnCustom)</c> where <c>void OnCustom(IMessagePreContext&lt;XxxRequest&gt; ctx)</c>. <c>ctx.Request</c> is <typeparamref name="TRequest"/> over the live <c>InputParameters</c>.</summary>
+    /// <typeparam name="TRequest">Any <see cref="OrganizationRequest"/>-derived type with a parameterless constructor (an SDK request or a generated Custom API request).</typeparam>
+    /// <param name="handler">Instance method with signature <c>(IMessagePreContext&lt;TRequest&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler<TRequest>(Action<IMessagePreContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
+
+    /// <summary>Bind an entity-typed handler, e.g. <c>.Handler&lt;XxxRequest&gt;(OnCustom)</c> where <c>void OnCustom(IMessagePreContext&lt;XxxRequest, TEntity&gt; ctx)</c>. Adds an early-bound <c>ctx.Target</c> (the step's own <typeparamref name="TEntity"/>) on top of the typed <c>ctx.Request</c>.</summary>
+    /// <typeparam name="TRequest">Any <see cref="OrganizationRequest"/>-derived type with a parameterless constructor (an SDK request or a generated Custom API request).</typeparam>
+    /// <param name="handler">Instance method with signature <c>(IMessagePreContext&lt;TRequest, TEntity&gt;)</c>.</param>
+    INoImageStep<TEntity> Handler<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) where TRequest : OrganizationRequest, new();
 }
 
 /// <summary>Permissive step at a stage that supports a pre-image (PreOperation).</summary>
@@ -44,6 +54,16 @@ public interface IPermissivePreImageStep<TEntity> : IPreImageStep<TEntity> where
     /// <summary>Bind an untyped handler, e.g. <c>.Handler(OnCustom)</c> where <c>void OnCustom(ILocalPluginContext ctx)</c>.</summary>
     /// <param name="handler">Instance method with signature <c>(ILocalPluginContext)</c>.</param>
     IPreImageStep<TEntity> Handler(Action<ILocalPluginContext> handler);
+
+    /// <summary>Bind a typed handler, e.g. <c>.Handler&lt;XxxRequest&gt;(OnCustom)</c> where <c>void OnCustom(IMessagePreContext&lt;XxxRequest&gt; ctx)</c>. <c>ctx.Request</c> is <typeparamref name="TRequest"/> over the live <c>InputParameters</c>.</summary>
+    /// <typeparam name="TRequest">Any <see cref="OrganizationRequest"/>-derived type with a parameterless constructor (an SDK request or a generated Custom API request).</typeparam>
+    /// <param name="handler">Instance method with signature <c>(IMessagePreContext&lt;TRequest&gt;)</c>.</param>
+    IPreImageStep<TEntity> Handler<TRequest>(Action<IMessagePreContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
+
+    /// <summary>Bind an entity-typed handler, e.g. <c>.Handler&lt;XxxRequest&gt;(OnCustom)</c> where <c>void OnCustom(IMessagePreContext&lt;XxxRequest, TEntity&gt; ctx)</c>. Adds an early-bound <c>ctx.Target</c> (the step's own <typeparamref name="TEntity"/>) on top of the typed <c>ctx.Request</c>.</summary>
+    /// <typeparam name="TRequest">Any <see cref="OrganizationRequest"/>-derived type with a parameterless constructor (an SDK request or a generated Custom API request).</typeparam>
+    /// <param name="handler">Instance method with signature <c>(IMessagePreContext&lt;TRequest, TEntity&gt;)</c>.</param>
+    IPreImageStep<TEntity> Handler<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) where TRequest : OrganizationRequest, new();
 }
 
 /// <summary>Permissive step at a stage that supports a pre-image and a post-image (PostOperation).</summary>
@@ -53,4 +73,14 @@ public interface IPermissivePreAndPostStep<TEntity> : IPreAndPostImageStep<TEnti
     /// <summary>Bind an untyped handler, e.g. <c>.Handler(OnCustom)</c> where <c>void OnCustom(ILocalPluginContext ctx)</c>.</summary>
     /// <param name="handler">Instance method with signature <c>(ILocalPluginContext)</c>.</param>
     IPreAndPostImageStep<TEntity> Handler(Action<ILocalPluginContext> handler);
+
+    /// <summary>Bind a typed handler, e.g. <c>.Handler&lt;XxxRequest&gt;(OnCustom)</c> where <c>void OnCustom(IMessagePostContext&lt;XxxRequest&gt; ctx)</c>. <c>ctx.Request</c> is <typeparamref name="TRequest"/> and <c>ctx.Response</c> a base <see cref="OrganizationResponse"/>, both over the live parameters.</summary>
+    /// <typeparam name="TRequest">Any <see cref="OrganizationRequest"/>-derived type with a parameterless constructor (an SDK request or a generated Custom API request).</typeparam>
+    /// <param name="handler">Instance method with signature <c>(IMessagePostContext&lt;TRequest&gt;)</c>.</param>
+    IPreAndPostImageStep<TEntity> Handler<TRequest>(Action<IMessagePostContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
+
+    /// <summary>Bind an entity-typed handler, e.g. <c>.Handler&lt;XxxRequest&gt;(OnCustom)</c> where <c>void OnCustom(IMessagePostContext&lt;XxxRequest, TEntity&gt; ctx)</c>. Adds an early-bound <c>ctx.Target</c> (the step's own <typeparamref name="TEntity"/>) on top of the typed <c>ctx.Request</c> / <c>ctx.Response</c>.</summary>
+    /// <typeparam name="TRequest">Any <see cref="OrganizationRequest"/>-derived type with a parameterless constructor (an SDK request or a generated Custom API request).</typeparam>
+    /// <param name="handler">Instance method with signature <c>(IMessagePostContext&lt;TRequest, TEntity&gt;)</c>.</param>
+    IPreAndPostImageStep<TEntity> Handler<TRequest>(Action<IMessagePostContext<TRequest, TEntity>> handler) where TRequest : OrganizationRequest, new();
 }

@@ -38,7 +38,7 @@ public static class CustomApiMessageGenerator
         return messages
             .Where(m => !string.IsNullOrWhiteSpace(m?.UniqueName))
             .OrderBy(m => m.UniqueName, StringComparer.Ordinal)
-            .Select(m => new GeneratedModel($"{m.UniqueName}.cs", GenerateOne(m, ns)))
+            .Select(m => new GeneratedModel($"Messages/{m.UniqueName}.cs", GenerateOne(m, ns)))
             .ToList();
     }
 

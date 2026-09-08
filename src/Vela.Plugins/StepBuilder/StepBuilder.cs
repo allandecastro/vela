@@ -275,6 +275,15 @@ public sealed class StepBuilder<TEntity> :
     INoImageStep<TEntity> IPermissiveNoImageStep<TEntity>.Handler(Action<ILocalPluginContext> handler) { SetHandler(handler); return this; }
     IPreImageStep<TEntity> IPermissivePreImageStep<TEntity>.Handler(Action<ILocalPluginContext> handler) { SetHandler(handler); return this; }
     IPreAndPostImageStep<TEntity> IPermissivePreAndPostStep<TEntity>.Handler(Action<ILocalPluginContext> handler) { SetHandler(handler); return this; }
+    INoImageStep<TEntity> IPermissiveNoImageStep<TEntity>.Handler<TRequest>(Action<IMessagePreContext<TRequest>> handler) { SetHandler(handler); return this; }
+    IPreImageStep<TEntity> IPermissivePreImageStep<TEntity>.Handler<TRequest>(Action<IMessagePreContext<TRequest>> handler) { SetHandler(handler); return this; }
+    IPreAndPostImageStep<TEntity> IPermissivePreAndPostStep<TEntity>.Handler<TRequest>(Action<IMessagePostContext<TRequest>> handler) { SetHandler(handler); return this; }
+    // The entity-typed permissive overloads name their target-entity type parameter TEntity to match the public
+    // surface, which shadows the builder's own TEntity. The Target is always the plugin's own entity, so the two
+    // coincide at every real call site and returning this back through the shadowed terminal type is safe.
+    INoImageStep<TEntity> IPermissiveNoImageStep<TEntity>.Handler<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) { SetHandler(handler); return this; }
+    IPreImageStep<TEntity> IPermissivePreImageStep<TEntity>.Handler<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) { SetHandler(handler); return this; }
+    IPreAndPostImageStep<TEntity> IPermissivePreAndPostStep<TEntity>.Handler<TRequest>(Action<IMessagePostContext<TRequest, TEntity>> handler) { SetHandler(handler); return this; }
 
     // ---- Per-message stage selectors / mode / filtering / handler -----
     IModeSelector<IFilteringSelector<TEntity, ICreatePreStep<TEntity>>> ICreateStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }

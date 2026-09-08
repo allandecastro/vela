@@ -435,6 +435,26 @@ internal static class CommandLineOptions
         return null;
     }
 
+    /// <summary>
+    /// Reads a value option's value, but only when the next token is a real value (not another dash-prefixed option
+    /// and not absent). Unlike <see cref="TryReadOption"/>, a bare <c>--messages</c> (last token, or followed by
+    /// another option) returns null. Combined with <see cref="HasFlag"/> this lets a caller distinguish
+    /// "flag present with no value" from "flag present with a value" (used for <c>--messages</c> all-vs-targeted).
+    /// </summary>
+    public static string? TryReadOptionValue(string[] args, string optionName)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], optionName, StringComparison.OrdinalIgnoreCase))
+            {
+                string next = args[i + 1];
+                return next.StartsWith("-", StringComparison.Ordinal) ? null : next;
+            }
+        }
+
+        return null;
+    }
+
     public static List<string> ReadMultiOption(string[] args, string optionName)
     {
         List<string> values = [];

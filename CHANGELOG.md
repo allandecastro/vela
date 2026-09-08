@@ -22,10 +22,67 @@ All notable changes to Vela are documented here. The format is based on
 ## [Unreleased]
 
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
-(`cli-vX.Y.Z` / `framework-vX.Y.Z`).
+(`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
 
+## [0.7.0] - 2026-09-08
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.7.0`.
+
+### Added
+
+- **Framework: typed `ctx.Request` on the permissive `OnMessage(...)` path.** A custom or non-modelled message
+  step can now bind `.Handler<TRequest>(...)` (where `TRequest` is any `OrganizationRequest` with a parameterless
+  constructor - an SDK request or a Vela-generated Custom API request) and receive a strongly-typed context:
+  `IMessagePreContext<TRequest>` (pre-stage, typed `ctx.Request`) or `IMessagePostContext<TRequest>` (post-stage,
+  typed `ctx.Request` plus a base `OrganizationResponse` `ctx.Response`). The handler's context is built from the
+  request type declared on its parameter, so the long tail of messages and consumed Custom APIs get a typed
+  request without a hand-authored per-message context. The curated `On<Message>()` surface and the untyped
+  `OnMessage(...).Handler(ILocalPluginContext)` overload are unchanged.
+  For a message whose request carries a full entity `Target`, bind the same `.Handler<TRequest>(...)` to a handler
+  taking `IMessagePreContext<TRequest, TEntity>` / `IMessagePostContext<TRequest, TEntity>` to also get an
+  early-bound `ctx.Target` (the step's own `TEntity`, i.e. the plugin's entity - no extra type argument) plus typed
+  `ctx.PreImage` / `ctx.PostImage` (no `<TEntity>` in the body), on top of the typed `ctx.Request`. Messages whose
+  target is an `EntityReference` keep reading `ctx.Request.Target`.
+
+## [0.1.25] - 2026-09-08
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.25`.
+
+### Added
+
+- **CLI: `vela models --messages <a,b,c>`.** Generates typed `XxxRequest` / `XxxResponse` classes for any
+  Dataverse SDK message (`sdkmessage`), not just Custom APIs, by reading the message's request/response fields
+  from metadata and mapping each field's CLR type to a C# type. The output mirrors `--custom-apis` (a
+  `RequestName`-setting `OrganizationRequest` over `Parameters` and an `OrganizationResponse` over `Results` with
+  a `From(OrganizationResponse)` factory), so the generated request plugs straight into the Phase 1
+  `OnMessage(...).Handler<TRequest>(...)` typed handler. Files are written into a `Messages/` subfolder of the
+  output directory to keep the Shared project tidy. Combinable with the other `vela models` scopes over the
+  same connection.
+- **CLI: `vela models --messages` with no value generates all consumable messages.** A bare `--messages`
+  (no list) now generates every registerable message in the environment - Microsoft's Event Framework
+  "available events" set: non-private messages that have a visible `sdkmessagefilter` allowing a custom
+  processing step (minus the deprecated `SetStateDynamicEntity`/`RemoveRelated`/`SetRelated`/`Execute`). It
+  then skips messages backed by a Custom API (owned by `--custom-apis`, which also keeps your own authored
+  Custom APIs out), and messages that already ship an SDK request class - both the core
+  `Microsoft.Xrm.Sdk.Messages.*` types (reflected over the referenced `Microsoft.Xrm.Sdk` assembly, e.g.
+  `CreateRequest`) and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (e.g. `QualifyLeadRequest`,
+  `WinOpportunityRequest`), matched against a curated, non-exhaustive supplement because `Vela.Cli` does not
+  reference `Microsoft.CrmSdk.CoreAssemblies`; an unlisted Crm.Sdk message simply generates a harmless duplicate.
+  A targeted `--messages a,b,c` still generates exactly the named messages, only warning (never skipping) when
+  one already has an SDK request class.
 ### Changed
 
+- **CLI: `vela models --custom-apis` now writes into `Messages/`.** Generated Custom API request/response files
+  land in the `Messages/` subfolder of the output directory (previously flat), unifying them with `--messages`
+  output - a Custom API is a message.
+- **CLI: `vela models --custom-apis` with no value generates every Custom API.** A bare `--custom-apis` (no list)
+  now generates typed request/response for every Custom API in the environment, mirroring bare `--messages`. A
+  list still generates exactly the named ones. (Together, bare `--messages` + bare `--custom-apis` cover the whole
+  consumable surface with no overlap: `--messages` excludes Custom-API-backed messages, `--custom-apis` owns them.)
+  Pass your built plugin package(s) with `--package <file.nupkg>` (repeatable) and/or `--packages-dir <folder>`
+  (plus `--package-assembly <name>`) to exclude the Custom APIs you authored in code from bare `--custom-apis` -
+  you already have those classes, so they are scanned out of the ALL set (a note reports how many were excluded).
+  A targeted `--custom-apis a,b,c` is never filtered - the named ones are always generated.
 - CLI: the offline-fallback framework version (`DefaultCoreVersion`, used only when the nuget.org lookup fails
   and no `--core-version` is passed) is bumped from `0.5.0` to `0.6.0` to match the current framework line.
 

@@ -117,6 +117,45 @@ public class CommandLineOptionsTests
     }
 
     [Fact]
+    public void TryReadOptionValue_ReturnsValue_WhenNextTokenIsAValue()
+    {
+        // Targeted --messages: the following token is a real value, so it is returned.
+        string[] args = ["--messages", "QualifyLead,AddToQueue", "--out", "gen"];
+
+        Assert.Equal("QualifyLead,AddToQueue", CommandLineOptions.TryReadOptionValue(args, "--messages"));
+        Assert.True(CommandLineOptions.HasFlag(args, "--messages"));
+    }
+
+    [Fact]
+    public void TryReadOptionValue_ReturnsNull_WhenBareFlagIsLastArg()
+    {
+        // ALL mode: bare --messages with nothing after it. Present (HasFlag) but no value.
+        string[] args = ["--messages"];
+
+        Assert.Null(CommandLineOptions.TryReadOptionValue(args, "--messages"));
+        Assert.True(CommandLineOptions.HasFlag(args, "--messages"));
+    }
+
+    [Fact]
+    public void TryReadOptionValue_ReturnsNull_WhenNextTokenIsAnotherOption()
+    {
+        // ALL mode: bare --messages followed by another option must not swallow that option as its value.
+        string[] args = ["--messages", "--out", "gen"];
+
+        Assert.Null(CommandLineOptions.TryReadOptionValue(args, "--messages"));
+        Assert.True(CommandLineOptions.HasFlag(args, "--messages"));
+    }
+
+    [Fact]
+    public void TryReadOptionValue_ReturnsNull_WhenFlagAbsent()
+    {
+        string[] args = ["--out", "gen"];
+
+        Assert.Null(CommandLineOptions.TryReadOptionValue(args, "--messages"));
+        Assert.False(CommandLineOptions.HasFlag(args, "--messages"));
+    }
+
+    [Fact]
     public void ReadMultiOption_CollectsAllOccurrences()
     {
         string[] args = ["--package", "a.nupkg", "--package", "b.nupkg", "--strict"];

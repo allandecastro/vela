@@ -14,8 +14,20 @@ vela models --solution ZavaSales --url https://zava.crm.dynamics.com --interacti
 # or an explicit list, with an explicit namespace/output
 vela models --entities account,contact --namespace Zava.Shared.Models.Generated --out src/Zava.Shared/Models/Generated --overwrite
 
-# typed Request/Response message classes for Custom APIs
+# typed Request/Response message classes for Custom APIs (into Messages/)
 vela models --custom-apis zava_Recalculate --interactive
+
+# ...or every Custom API in the environment, with no value
+vela models --custom-apis --interactive
+
+# ...every Custom API except the ones you authored in code (pass your built package)
+vela models --custom-apis --package bin/Release/Zava.Plugins.nupkg --interactive
+
+# typed Request/Response classes for specific SDK messages (into Messages/)
+vela models --messages AddToQueue,RouteTo --interactive
+
+# ...or every consumable message in the environment (filtered), with no value
+vela models --messages --interactive
 
 # security roles → a dependency-light Roles class in Shared.Models.Generated (real privileges + root role id)
 vela models --roles "Salesperson,Sales Manager" --namespace Zava.Shared.Models.Generated --out src/Zava.Shared/Models/Generated
@@ -32,7 +44,22 @@ required level and lookup targets with no hand-written overrides. `vela models` 
 the table, global option sets as shared enums; multi-select choices become an `IList<Enum>`), types **File**
 columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail), and exposes alternate keys as typed factories
 (`Account.ByAccountNumberKey("A-001")` returns a key-based `EntityReference`). `--custom-apis` instead generates typed
-`OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`).
+`OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`),
+written into a `Messages/` subfolder of the output; with **no value**, `--custom-apis` generates every Custom API
+in the environment. To keep the Custom APIs you **authored in code** out of that all set (you already have those
+classes), pass your built plugin package with `--package <file.nupkg>` (repeatable) and/or `--packages-dir <folder>`
+(plus `--package-assembly <name>` if the primary assembly needs disambiguating): their unique names are scanned
+from the package - the same offline scan `plan`/`apply` use - and removed, and a note reports how many were
+excluded. Excluding authored Custom APIs requires passing the package; without one, `--custom-apis` with no value
+generates every Custom API present. A targeted `--custom-apis a,b,c` is never filtered - the named ones are always
+generated. `--messages a,b,c` does the same for any SDK message
+(`sdkmessage`), also into `Messages/`; `--messages` with **no value** generates every registerable message in the
+environment (Microsoft's "available events": non-private messages with a visible, custom-step-allowed
+`sdkmessagefilter`), skipping messages backed by a Custom API (owned by `--custom-apis`) and messages that
+already ship an SDK request class - both the core `Microsoft.Xrm.Sdk.Messages.*` types (e.g. `CreateRequest`) and
+the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (e.g. `QualifyLeadRequest`), the latter matched against a
+curated, non-exhaustive supplement (an unlisted one generates a harmless duplicate). The generated requests pair
+with the permissive `OnMessage(...).Handler<TRequest>()` typed handler.
 Connection flags are the same as `plan`/`apply`
 (`--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or `--interactive`).
 
