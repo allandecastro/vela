@@ -22,7 +22,31 @@ All notable changes to Vela are documented here. The format is based on
 ## [Unreleased]
 
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
-(`cli-vX.Y.Z` / `framework-vX.Y.Z`).
+(`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
+
+## [0.7.0] - 2026-09-08
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.7.0`.
+
+### Added
+
+- **Framework: typed `ctx.Request` on the permissive `OnMessage(...)` path.** A custom or non-modelled message
+  step can now bind `.Handler<TRequest>(...)` (where `TRequest` is any `OrganizationRequest` with a parameterless
+  constructor - an SDK request or a Vela-generated Custom API request) and receive a strongly-typed context:
+  `IMessagePreContext<TRequest>` (pre-stage, typed `ctx.Request`) or `IMessagePostContext<TRequest>` (post-stage,
+  typed `ctx.Request` plus a base `OrganizationResponse` `ctx.Response`). The handler's context is built from the
+  request type declared on its parameter, so the long tail of messages and consumed Custom APIs get a typed
+  request without a hand-authored per-message context. The curated `On<Message>()` surface and the untyped
+  `OnMessage(...).Handler(ILocalPluginContext)` overload are unchanged.
+  For a message whose request carries a full entity `Target`, bind the same `.Handler<TRequest>(...)` to a handler
+  taking `IMessagePreContext<TRequest, TEntity>` / `IMessagePostContext<TRequest, TEntity>` to also get an
+  early-bound `ctx.Target` (the step's own `TEntity`, i.e. the plugin's entity - no extra type argument) plus typed
+  `ctx.PreImage` / `ctx.PostImage` (no `<TEntity>` in the body), on top of the typed `ctx.Request`. Messages whose
+  target is an `EntityReference` keep reading `ctx.Request.Target`.
+
+## [0.1.25] - 2026-09-08
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.25`.
 
 ### Added
 
@@ -46,20 +70,6 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   reference `Microsoft.CrmSdk.CoreAssemblies`; an unlisted Crm.Sdk message simply generates a harmless duplicate.
   A targeted `--messages a,b,c` still generates exactly the named messages, only warning (never skipping) when
   one already has an SDK request class.
-- **Framework: typed `ctx.Request` on the permissive `OnMessage(...)` path.** A custom or non-modelled message
-  step can now bind `.Handler<TRequest>(...)` (where `TRequest` is any `OrganizationRequest` with a parameterless
-  constructor - an SDK request or a Vela-generated Custom API request) and receive a strongly-typed context:
-  `IMessagePreContext<TRequest>` (pre-stage, typed `ctx.Request`) or `IMessagePostContext<TRequest>` (post-stage,
-  typed `ctx.Request` plus a base `OrganizationResponse` `ctx.Response`). The handler's context is built from the
-  request type declared on its parameter, so the long tail of messages and consumed Custom APIs get a typed
-  request without a hand-authored per-message context. The curated `On<Message>()` surface and the untyped
-  `OnMessage(...).Handler(ILocalPluginContext)` overload are unchanged.
-  For a message whose request carries a full entity `Target`, bind the same `.Handler<TRequest>(...)` to a handler
-  taking `IMessagePreContext<TRequest, TEntity>` / `IMessagePostContext<TRequest, TEntity>` to also get an
-  early-bound `ctx.Target` (the step's own `TEntity`, i.e. the plugin's entity - no extra type argument) plus typed
-  `ctx.PreImage` / `ctx.PostImage` (no `<TEntity>` in the body), on top of the typed `ctx.Request`. Messages whose
-  target is an `EntityReference` keep reading `ctx.Request.Target`.
-
 ### Changed
 
 - **CLI: `vela models --custom-apis` now writes into `Messages/`.** Generated Custom API request/response files
