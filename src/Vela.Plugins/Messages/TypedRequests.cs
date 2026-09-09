@@ -25,4 +25,22 @@ namespace Vela.Messages
             set => Parameters["Target"] = value;
         }
     }
+
+    /// <summary>A typed Update request whose <c>Target</c> is the early-bound <typeparamref name="TEntity"/>.</summary>
+    /// <typeparam name="TEntity">The step's entity type.</typeparam>
+    public sealed class UpdateRequest<TEntity> : OrganizationRequest where TEntity : Entity
+    {
+        /// <summary>Creates an Update request over the live <c>InputParameters</c>.</summary>
+        public UpdateRequest()
+        {
+            RequestName = "Update";
+        }
+
+        /// <summary>The record being updated, early-bound. Reads/writes <c>Parameters["Target"]</c>.</summary>
+        public TEntity Target
+        {
+            get => Parameters.Contains("Target") && Parameters["Target"] is Entity entity ? entity.ToEntity<TEntity>() : null!;
+            set => Parameters["Target"] = value;
+        }
+    }
 }

@@ -22,7 +22,18 @@ All notable changes to Vela are documented here. The format is based on
 ## [Unreleased]
 
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
-(`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
+(`cli-vX.Y.Z` / `framework-vX.Y.Z`).
+
+### Added
+
+- **Framework: early-bound `ctx.Request.Target` on Create/Update.** `ctx.Request` on `ICreatePreContext` /
+  `ICreatePostContext` / `IUpdatePreContext` / `IUpdatePostContext` is now a Vela-owned typed request
+  (`Vela.Messages.CreateRequest<TEntity>` / `UpdateRequest<TEntity>`) whose `Target` is the early-bound
+  `TEntity`, so a handler reads `ctx.Request.Target` typed instead of the SDK request's base `Entity`. This is
+  the single typed target that will replace `ctx.Target` (kept and still working for now; a later phase
+  deprecates it). Reading `ctx.Request.Target` as a base `Entity` still compiles (`TEntity : Entity`). The raw
+  SDK request stays reachable via `ctx.GetRequest<CreateRequest>()`. First step of the typed-requests design
+  (`.context/typed-requests-design.md`).
 
 ## [0.7.0] - 2026-09-08
 

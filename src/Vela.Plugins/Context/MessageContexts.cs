@@ -20,13 +20,13 @@ namespace Vela.Context
     }
 
     /// <summary>Pre-stage typed context for a Create step (<c>ctx.Request</c> only).</summary>
-    public interface ICreatePreContext<TEntity> : IStepRequestContext<CreateRequest>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    public interface ICreatePreContext<TEntity> : IStepRequestContext<Vela.Messages.CreateRequest<TEntity>>, IEntityTargetContext<TEntity> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a Create step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface ICreatePostContext<TEntity> : IStepRequestContext<CreateRequest>, IStepResponseContext<CreateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    public interface ICreatePostContext<TEntity> : IStepRequestContext<Vela.Messages.CreateRequest<TEntity>>, IStepResponseContext<CreateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a Update step (<c>ctx.Request</c> only).</summary>
-    public interface IUpdatePreContext<TEntity> : IStepRequestContext<UpdateRequest>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    public interface IUpdatePreContext<TEntity> : IStepRequestContext<Vela.Messages.UpdateRequest<TEntity>>, IEntityTargetContext<TEntity> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a Update step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IUpdatePostContext<TEntity> : IStepRequestContext<UpdateRequest>, IStepResponseContext<UpdateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
+    public interface IUpdatePostContext<TEntity> : IStepRequestContext<Vela.Messages.UpdateRequest<TEntity>>, IStepResponseContext<UpdateResponse>, IEntityTargetContext<TEntity> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a Delete step (<c>ctx.Request</c> only).</summary>
     public interface IDeletePreContext<TEntity> : IStepRequestContext<DeleteRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a Delete step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
@@ -209,7 +209,7 @@ namespace Vela.Context
     public interface IGetInvoiceProductsFromOpportunityPostContext<TEntity> : IStepRequestContext<GetInvoiceProductsFromOpportunityRequest>, IStepResponseContext<GetInvoiceProductsFromOpportunityResponse> where TEntity : Entity { }
 
     /// <summary>Runtime pre-stage context for Create.</summary>
-    public sealed class CreatePreContext<TEntity> : PreStepContext<CreateRequest>, ICreatePreContext<TEntity> where TEntity : Entity
+    public sealed class CreatePreContext<TEntity> : PreStepContext<Vela.Messages.CreateRequest<TEntity>>, ICreatePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public CreatePreContext(ILocalPluginContext inner) : base(inner) { }
@@ -217,7 +217,7 @@ namespace Vela.Context
         public TEntity Target => this.GetTarget<TEntity>();
     }
     /// <summary>Runtime post-stage context for Create.</summary>
-    public sealed class CreatePostContext<TEntity> : PostStepContext<CreateRequest, CreateResponse>, ICreatePostContext<TEntity> where TEntity : Entity
+    public sealed class CreatePostContext<TEntity> : PostStepContext<Vela.Messages.CreateRequest<TEntity>, CreateResponse>, ICreatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public CreatePostContext(ILocalPluginContext inner) : base(inner) { }
@@ -225,7 +225,7 @@ namespace Vela.Context
         public TEntity Target => this.GetTarget<TEntity>();
     }
     /// <summary>Runtime pre-stage context for Update.</summary>
-    public sealed class UpdatePreContext<TEntity> : PreStepContext<UpdateRequest>, IUpdatePreContext<TEntity> where TEntity : Entity
+    public sealed class UpdatePreContext<TEntity> : PreStepContext<Vela.Messages.UpdateRequest<TEntity>>, IUpdatePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public UpdatePreContext(ILocalPluginContext inner) : base(inner) { }
@@ -233,7 +233,7 @@ namespace Vela.Context
         public TEntity Target => this.GetTarget<TEntity>();
     }
     /// <summary>Runtime post-stage context for Update.</summary>
-    public sealed class UpdatePostContext<TEntity> : PostStepContext<UpdateRequest, UpdateResponse>, IUpdatePostContext<TEntity> where TEntity : Entity
+    public sealed class UpdatePostContext<TEntity> : PostStepContext<Vela.Messages.UpdateRequest<TEntity>, UpdateResponse>, IUpdatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public UpdatePostContext(ILocalPluginContext inner) : base(inner) { }
