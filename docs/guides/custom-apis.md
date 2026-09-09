@@ -1,6 +1,11 @@
 # Write a Custom API
 
-For Custom APIs, use `CustomApiBase<TRequest, TResponse>` and the fluent registration hook:
+For Custom APIs, use `CustomApiBase<TRequest, TResponse>` and the fluent registration hook. The request and
+response derive from `OrganizationRequest`/`OrganizationResponse`: their typed properties read and write the
+underlying `Parameters`/`Results` bags. A single generated type therefore serves all three usages - authoring
+the Custom API, calling it (`service.Execute(new ScoreRequest { ... })`), and reacting to it
+(`OnMessage<ScoreRequest>()...Handler<ScoreRequest>(...)`). Generate these types with
+[`vela models --custom-apis`](models.md) or write them by hand as shown below:
 
 ```csharp
 public class CalculateAccountScore : CustomApiBase<ScoreRequest, ScoreResponse>
@@ -25,11 +30,33 @@ public class CalculateAccountScore : CustomApiBase<ScoreRequest, ScoreResponse>
     }
 }
 
-public class ScoreRequest { public Guid AccountId { get; set; } }
-public class ScoreResponse { public int Score { get; set; } }
+public class ScoreRequest : OrganizationRequest
+{
+    public ScoreRequest() { RequestName = "zava_CalculateAccountScore"; }
+
+    public Guid AccountId
+    {
+        get => Parameters.Contains("AccountId") ? (Guid)Parameters["AccountId"] : default;
+        set => Parameters["AccountId"] = value;
+    }
+}
+
+public class ScoreResponse : OrganizationResponse
+{
+    public int Score
+    {
+        get => Results.Contains("Score") ? (int)Results["Score"] : default;
+        set => Results["Score"] = value;
+    }
+}
 ```
 
-The generic base exposes `RegisterCustomApi(...)`, and the same shape is available from `Register.RegisterCustomApi<TRequest, TResponse>()` when you want to build manifests or scripts directly.
+The framework hydrates the request over the live `InputParameters` (so `request.AccountId` reads the actual
+input) and copies the response's `Results` back to `OutputParameters` after `Execute` returns. The generic base
+exposes `RegisterCustomApi(...)`, and the same shape is available from
+`Register.RegisterCustomApi<TRequest, TResponse>()` when you want to build manifests or scripts directly. Only
+the request/response's own declared properties become Custom API parameters; the inherited
+`OrganizationRequest`/`OrganizationResponse` members (`RequestName`, `Parameters`, `Results`, ...) never do.
 
 For small Custom APIs, you can also choose the lightweight mode and declare parameters directly without dedicated request/response CLR models:
 

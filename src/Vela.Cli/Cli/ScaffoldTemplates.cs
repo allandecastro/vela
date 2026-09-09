@@ -1662,13 +1662,15 @@ $$"""
 namespace {{prefix}}.Plugins.Account.CustomApis
 {
     using System;
+    using Microsoft.Xrm.Sdk;
     using Vela.Context;
     using Vela.CustomApi;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Custom API <b>bound</b> to the <c>account</c> table. Typed request/response models are mapped
-    /// automatically by the framework.
+    /// Custom API <b>bound</b> to the <c>account</c> table. The request/response derive from
+    /// <see cref="OrganizationRequest"/>/<see cref="OrganizationResponse"/> so the same type serves authoring,
+    /// calling (<c>service.Execute(new EstimateValueRequest { ... })</c>), and reacting.
     /// </summary>
     public sealed class AccountEstimateValueCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<EstimateValueRequest, EstimateValueResponse>(unsecureConfig, secureConfig)
     {
@@ -1694,15 +1696,28 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     }
 
     /// <summary>Request parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
-    public sealed class EstimateValueRequest
+    public sealed class EstimateValueRequest : OrganizationRequest
     {
-        public Guid AccountId { get; set; }
+        public EstimateValueRequest()
+        {
+            RequestName = "{{ApiPrefix(prefix)}}_AccountEstimateValue";
+        }
+
+        public Guid AccountId
+        {
+            get => Parameters.Contains("AccountId") ? (Guid)Parameters["AccountId"] : default;
+            set => Parameters["AccountId"] = value;
+        }
     }
 
     /// <summary>Response parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
-    public sealed class EstimateValueResponse
+    public sealed class EstimateValueResponse : OrganizationResponse
     {
-        public decimal EstimatedValue { get; set; }
+        public decimal EstimatedValue
+        {
+            get => Results.Contains("EstimatedValue") ? (decimal)Results["EstimatedValue"] : default;
+            set => Results["EstimatedValue"] = value;
+        }
     }
 }
 """;
@@ -1712,13 +1727,15 @@ $$"""
 namespace {{prefix}}.Plugins.Contact.CustomApis
 {
     using System;
+    using Microsoft.Xrm.Sdk;
     using Vela.Context;
     using Vela.CustomApi;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Custom API <b>bound</b> to the <c>contact</c> table. Typed request/response models are mapped
-    /// automatically by the framework.
+    /// Custom API <b>bound</b> to the <c>contact</c> table. The request/response derive from
+    /// <see cref="OrganizationRequest"/>/<see cref="OrganizationResponse"/> so the same type serves authoring,
+    /// calling (<c>service.Execute(new ContactValidateRequest { ... })</c>), and reacting.
     /// </summary>
     public sealed class ContactValidateCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<ContactValidateRequest, ContactValidateResponse>(unsecureConfig, secureConfig)
     {
@@ -1744,15 +1761,28 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     }
 
     /// <summary>Request parameters for <see cref="ContactValidateCustomApi"/>.</summary>
-    public sealed class ContactValidateRequest
+    public sealed class ContactValidateRequest : OrganizationRequest
     {
-        public Guid ContactId { get; set; }
+        public ContactValidateRequest()
+        {
+            RequestName = "{{ApiPrefix(prefix)}}_ContactValidate";
+        }
+
+        public Guid ContactId
+        {
+            get => Parameters.Contains("ContactId") ? (Guid)Parameters["ContactId"] : default;
+            set => Parameters["ContactId"] = value;
+        }
     }
 
     /// <summary>Response parameters for <see cref="ContactValidateCustomApi"/>.</summary>
-    public sealed class ContactValidateResponse
+    public sealed class ContactValidateResponse : OrganizationResponse
     {
-        public bool IsValid { get; set; }
+        public bool IsValid
+        {
+            get => Results.Contains("IsValid") ? (bool)Results["IsValid"] : default;
+            set => Results["IsValid"] = value;
+        }
     }
 }
 """;
@@ -2287,6 +2317,7 @@ namespace {{ns}}
 $$"""
 namespace {{ns}}
 {
+    using Microsoft.Xrm.Sdk;
     using Vela.Context;
     using Vela.CustomApi;
     using {{modelsNamespace}};
@@ -2306,19 +2337,44 @@ namespace {{ns}}
 
         protected override {{className}}Response Execute(ILocalPluginContext ctx, {{className}}Request request)
         {
-            // TODO: implement your logic. Add request/response properties below and map them with
-            // .Request(r => r.Add(x => x.Foo)) / .Response(r => r.Add(x => x.Bar)) in RegisterCustomApi().
+            // TODO: implement your logic. Add typed properties (over Parameters/Results) to the request/response
+            // classes below and map them with .Request(r => r.Add(x => x.Foo)) / .Response(r => r.Add(x => x.Bar)).
             return new {{className}}Response();
         }
     }
 
-    /// <summary>Request parameters for <see cref="{{className}}"/>.</summary>
-    public sealed class {{className}}Request
+    /// <summary>
+    /// Request for <see cref="{{className}}"/>. Derives from <see cref="OrganizationRequest"/> so the same type
+    /// serves authoring, calling (<c>service.Execute(new {{className}}Request { ... })</c>), and reacting. Add
+    /// typed properties over <c>Parameters</c>, for example:
+    /// <code>
+    /// public Guid RecordId
+    /// {
+    ///     get => Parameters.Contains("RecordId") ? (Guid)Parameters["RecordId"] : default;
+    ///     set => Parameters["RecordId"] = value;
+    /// }
+    /// </code>
+    /// </summary>
+    public sealed class {{className}}Request : OrganizationRequest
     {
+        public {{className}}Request()
+        {
+            RequestName = "{{uniqueName}}";
+        }
     }
 
-    /// <summary>Response parameters for <see cref="{{className}}"/>.</summary>
-    public sealed class {{className}}Response
+    /// <summary>
+    /// Response for <see cref="{{className}}"/>. Derives from <see cref="OrganizationResponse"/>. Add typed
+    /// properties over <c>Results</c>, for example:
+    /// <code>
+    /// public string Status
+    /// {
+    ///     get => Results.Contains("Status") ? (string)Results["Status"] : default;
+    ///     set => Results["Status"] = value;
+    /// }
+    /// </code>
+    /// </summary>
+    public sealed class {{className}}Response : OrganizationResponse
     {
     }
 }
@@ -2427,6 +2483,7 @@ $$"""
 namespace {{prefix}}.Integrations.Contact.CustomApis
 {
     using System;
+    using Microsoft.Xrm.Sdk;
     using Vela.Context;
     using Vela.CustomApi;
     using {{prefix}}.Shared.Models.Generated;
@@ -2456,15 +2513,28 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     }
 
     /// <summary>Request parameters for <see cref="ContactExportCustomApi"/>.</summary>
-    public sealed class ContactExportRequest
+    public sealed class ContactExportRequest : OrganizationRequest
     {
-        public Guid ContactId { get; set; }
+        public ContactExportRequest()
+        {
+            RequestName = "{{ApiPrefix(prefix)}}_ContactExport";
+        }
+
+        public Guid ContactId
+        {
+            get => Parameters.Contains("ContactId") ? (Guid)Parameters["ContactId"] : default;
+            set => Parameters["ContactId"] = value;
+        }
     }
 
     /// <summary>Response parameters for <see cref="ContactExportCustomApi"/>.</summary>
-    public sealed class ContactExportResponse
+    public sealed class ContactExportResponse : OrganizationResponse
     {
-        public string ExternalId { get; set; }
+        public string ExternalId
+        {
+            get => Results.Contains("ExternalId") ? (string)Results["ExternalId"] : default;
+            set => Results["ExternalId"] = value;
+        }
     }
 }
 """;
@@ -2474,6 +2544,7 @@ $$"""
 namespace {{prefix}}.Integrations.Account.CustomApis
 {
     using System;
+    using Microsoft.Xrm.Sdk;
     using Vela.Context;
     using Vela.CustomApi;
     using {{prefix}}.Shared.Models.Generated;
@@ -2503,15 +2574,28 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     }
 
     /// <summary>Request parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
-    public sealed class AccountReconcileRequest
+    public sealed class AccountReconcileRequest : OrganizationRequest
     {
-        public Guid AccountId { get; set; }
+        public AccountReconcileRequest()
+        {
+            RequestName = "{{ApiPrefix(prefix)}}_AccountReconcile";
+        }
+
+        public Guid AccountId
+        {
+            get => Parameters.Contains("AccountId") ? (Guid)Parameters["AccountId"] : default;
+            set => Parameters["AccountId"] = value;
+        }
     }
 
     /// <summary>Response parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
-    public sealed class AccountReconcileResponse
+    public sealed class AccountReconcileResponse : OrganizationResponse
     {
-        public string Status { get; set; }
+        public string Status
+        {
+            get => Results.Contains("Status") ? (string)Results["Status"] : default;
+            set => Results["Status"] = value;
+        }
     }
 }
 """;

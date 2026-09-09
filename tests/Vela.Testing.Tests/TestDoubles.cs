@@ -164,17 +164,30 @@ namespace Vela.Testing.Tests
         }
     }
 
-    public sealed class ScoreRequest
+    public sealed class ScoreRequest : OrganizationRequest
     {
-        public int AccountId { get; set; }
+        public ScoreRequest()
+        {
+            RequestName = "zava_Score";
+        }
+
+        public int AccountId
+        {
+            get => Parameters.Contains(nameof(AccountId)) ? (int)Parameters[nameof(AccountId)] : default;
+            set => Parameters[nameof(AccountId)] = value;
+        }
     }
 
-    public sealed class ScoreResponse
+    public sealed class ScoreResponse : OrganizationResponse
     {
-        public int Score { get; set; }
+        public int Score
+        {
+            get => Results.Contains(nameof(Score)) ? (int)Results[nameof(Score)] : default;
+            set => Results[nameof(Score)] = value;
+        }
     }
 
-    // Typed Custom API: maps input -> request, response -> output via the framework's reflection mapping.
+    // Typed Custom API: hydrates the request over InputParameters, then copies the response Results to OutputParameters.
     public sealed class ScoringApi : CustomApiBase<ScoreRequest, ScoreResponse>
     {
         public ScoringApi()

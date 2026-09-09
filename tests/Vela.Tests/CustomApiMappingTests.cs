@@ -1,3 +1,4 @@
+using Microsoft.Xrm.Sdk;
 using Vela.Context;
 using Vela.CustomApi;
 using Vela.Testing;
@@ -7,20 +8,39 @@ namespace Vela.Tests
 {
     public sealed class CustomApiMappingTests
     {
-        public sealed class ScoreRequest
+        // Request/response derive from OrganizationRequest/OrganizationResponse: the typed properties read and
+        // write the underlying Parameters/Results bags, matching the CustomApiMessageGenerator shape.
+        public sealed class ScoreRequest : OrganizationRequest
         {
-            public int AccountId { get; set; }
+            public ScoreRequest()
+            {
+                RequestName = "zava_Score";
+            }
+
+            public int AccountId
+            {
+                get => Parameters.Contains(nameof(AccountId)) ? (int)Parameters[nameof(AccountId)] : default;
+                set => Parameters[nameof(AccountId)] = value;
+            }
         }
 
-        public sealed class ScoreResponse
+        public sealed class ScoreResponse : OrganizationResponse
         {
-            public int Score { get; set; }
+            public int Score
+            {
+                get => Results.Contains(nameof(Score)) ? (int)Results[nameof(Score)] : default;
+                set => Results[nameof(Score)] = value;
+            }
 
-            public string Rating { get; set; } = string.Empty;
+            public string Rating
+            {
+                get => Results.Contains(nameof(Rating)) ? (string)Results[nameof(Rating)] : string.Empty;
+                set => Results[nameof(Rating)] = value;
+            }
         }
 
-        // Minimal typed Custom API: the mapping (input params -> request, response -> output params)
-        // is driven by reflection over the cached PropertyInfo[] arrays, independent of registration.
+        // Minimal typed Custom API: the request is hydrated over the live InputParameters and the response's
+        // Results are copied back to OutputParameters, independent of registration.
         private sealed class ScoringApi : CustomApiBase<ScoreRequest, ScoreResponse>
         {
             public ScoringApi() : base(string.Empty, string.Empty)

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.Xrm.Sdk;
 using Vela.Context;
 using Vela.CustomApi;
@@ -7,33 +8,51 @@ using Xunit;
 
 namespace Vela.Tests;
 
-// Drives Custom API execution to cover CustomApiBase<TRequest,TResponse> value conversion / response mapping
-// and the lightweight CustomApiBase handler dispatch.
+// Drives Custom API execution to cover CustomApiBase<TRequest,TResponse> request hydration / response mapping,
+// the derived metadata (which must exclude the OrganizationRequest/OrganizationResponse base members), and the
+// lightweight CustomApiBase handler dispatch.
 public sealed class CustomApiExecutionCoverageTests
 {
-    public sealed class Nested
+    public sealed class ConvRequest : OrganizationRequest
     {
-        public string V { get; set; } = string.Empty;
+        public ConvRequest()
+        {
+            RequestName = "vela_Conv";
+        }
+
+        public int Number
+        {
+            get => Parameters.Contains(nameof(Number)) ? (int)Parameters[nameof(Number)] : default;
+            set => Parameters[nameof(Number)] = value;
+        }
+
+        public string Text
+        {
+            get => Parameters.Contains(nameof(Text)) ? (string)Parameters[nameof(Text)] : string.Empty;
+            set => Parameters[nameof(Text)] = value;
+        }
+
+        public EntityReference? Target
+        {
+            get => Parameters.Contains(nameof(Target)) ? (EntityReference)Parameters[nameof(Target)] : null;
+            set => Parameters[nameof(Target)] = value;
+        }
     }
 
-    public sealed class ConvRequest
+    public sealed class ConvResponse : OrganizationResponse
     {
-        public int Number { get; set; }       // int input -> directly assignable
-        public long Big { get; set; }          // int input -> Convert.ChangeType
-        public DayOfWeek Day { get; set; }     // int input -> Enum.ToObject
-        public Nested? Obj { get; set; }       // JSON string input -> deserialize
-    }
-
-    public sealed class ConvResponse
-    {
-        public string Out { get; set; } = string.Empty;
+        public string Out
+        {
+            get => Results.Contains(nameof(Out)) ? (string)Results[nameof(Out)] : string.Empty;
+            set => Results[nameof(Out)] = value;
+        }
     }
 
     private sealed class ConvApi : CustomApiBase<ConvRequest, ConvResponse>
     {
         public ConvApi() : base(string.Empty, string.Empty) { }
         protected override ConvResponse Execute(ILocalPluginContext ctx, ConvRequest request)
-            => new ConvResponse { Out = $"{request.Number}/{request.Big}/{request.Day}/{request.Obj?.V}" };
+            => new ConvResponse { Out = $"{request.Number}/{request.Text}/{request.Target?.Id}" };
     }
 
     private sealed class NullResponseApi : CustomApiBase<ConvRequest, ConvResponse>
@@ -50,19 +69,19 @@ public sealed class CustomApiExecutionCoverageTests
     }
 
     [Fact]
-    public void Typed_api_converts_every_input_kind_and_maps_the_response()
+    public void Typed_api_reads_live_input_parameters_and_maps_the_response()
     {
+        Guid targetId = Guid.NewGuid();
         ConvApi api = new ConvApi();
         LocalPluginContext context = PluginContext.ForMessage("vela_Conv").Build();
         var inputs = context.PluginExecutionContext.InputParameters;
-        inputs["Number"] = 5;                       // assignable
-        inputs["Big"] = 3;                          // int -> long via Convert.ChangeType
-        inputs["Day"] = 2;                          // int -> DayOfWeek via Enum.ToObject
-        inputs["Obj"] = "{\"V\":\"hi\"}";           // JSON string -> Nested
+        inputs["Number"] = 5;
+        inputs["Text"] = "hi";
+        inputs["Target"] = new EntityReference("account", targetId);
 
         api.Execute(context.ServiceProvider);
 
-        Assert.Equal("5/3/Tuesday/hi", context.PluginExecutionContext.OutputParameters["Out"]);
+        Assert.Equal($"5/hi/{targetId}", context.PluginExecutionContext.OutputParameters["Out"]);
     }
 
     [Fact]
@@ -75,6 +94,28 @@ public sealed class CustomApiExecutionCoverageTests
         api.Execute(context.ServiceProvider);
 
         Assert.Empty(context.PluginExecutionContext.OutputParameters);
+    }
+
+    [Fact]
+    public void Derived_metadata_reflects_declared_properties_and_excludes_base_members()
+    {
+        CustomApiDefinition definition = Vela.Register.RegisterCustomApi<ConvRequest, ConvResponse>()
+            .UniqueName("vela_Conv")
+            .AsAction()
+            .Build();
+
+        string[] inputNames = definition.InputParameters.Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        string[] outputNames = definition.OutputParameters.Select(p => p.Name).ToArray();
+
+        Assert.Equal(new[] { "Number", "Target", "Text" }, inputNames);
+        Assert.Equal(new[] { "Out" }, outputNames);
+
+        // The OrganizationRequest/OrganizationResponse infrastructure members must never leak in as parameters.
+        foreach (string leaked in new[] { "RequestName", "RequestId", "Parameters", "ResponseName", "Results", "ExtensionData", "Item" })
+        {
+            Assert.DoesNotContain(leaked, inputNames);
+            Assert.DoesNotContain(leaked, outputNames);
+        }
     }
 
     [Fact]

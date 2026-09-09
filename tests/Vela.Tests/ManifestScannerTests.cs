@@ -191,17 +191,34 @@ public sealed class ManifestScannerTests
         }
     }
 
-    private sealed class CalculateScoreRequest
+    private sealed class CalculateScoreRequest : OrganizationRequest
     {
-        [Required]
-        public Guid AccountId { get; set; }
+        public CalculateScoreRequest()
+        {
+            RequestName = "zava_CalculateScore";
+        }
 
-        public bool IncludeHistory { get; set; }
+        [Required]
+        public Guid AccountId
+        {
+            get => Parameters.Contains(nameof(AccountId)) ? (Guid)Parameters[nameof(AccountId)] : default;
+            set => Parameters[nameof(AccountId)] = value;
+        }
+
+        public bool IncludeHistory
+        {
+            get => Parameters.Contains(nameof(IncludeHistory)) ? (bool)Parameters[nameof(IncludeHistory)] : default;
+            set => Parameters[nameof(IncludeHistory)] = value;
+        }
     }
 
-    private sealed class CalculateScoreResponse
+    private sealed class CalculateScoreResponse : OrganizationResponse
     {
-        public int Score { get; set; }
+        public int Score
+        {
+            get => Results.Contains(nameof(Score)) ? (int)Results[nameof(Score)] : default;
+            set => Results[nameof(Score)] = value;
+        }
     }
 
     private sealed class CalculateScoreApi(string unsecureConfig, string secureConfig) : CustomApiBase<CalculateScoreRequest, CalculateScoreResponse>(unsecureConfig, secureConfig)

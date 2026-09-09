@@ -27,8 +27,8 @@ public static class Register
     /// <typeparam name="TResponse">The response model type.</typeparam>
     /// <returns>A fluent Custom API builder.</returns>
     public static ICustomApiBuilder<TRequest, TResponse> RegisterCustomApi<TRequest, TResponse>()
-        where TRequest : class, new()
-        where TResponse : class, new()
+        where TRequest : OrganizationRequest, new()
+        where TResponse : OrganizationResponse, new()
     {
         return new CustomApiBuilder<TRequest, TResponse>();
     }

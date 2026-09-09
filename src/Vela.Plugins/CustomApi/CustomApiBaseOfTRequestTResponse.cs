@@ -1,35 +1,33 @@
 using System;
-using System.Reflection;
+using System.Collections.Generic;
 using Vela.Context;
 using Vela.Constants;
 using Vela.StepBuilder;
-using Newtonsoft.Json;
+using Microsoft.Xrm.Sdk;
 
 namespace Vela.CustomApi
 {
     /// <summary>
     /// Base class for Custom API plugins with strongly-typed request and response objects.
     /// </summary>
-    /// <typeparam name="TRequest">The request parameter type.</typeparam>
-    /// <typeparam name="TResponse">The response parameter type.</typeparam>
+    /// <typeparam name="TRequest">The request type, derived from <see cref="OrganizationRequest"/>.</typeparam>
+    /// <typeparam name="TResponse">The response type, derived from <see cref="OrganizationResponse"/>.</typeparam>
     /// <remarks>
+    /// <para>
+    /// The request and response are <see cref="OrganizationRequest"/>/<see cref="OrganizationResponse"/>-derived
+    /// types whose typed properties read and write the underlying <c>Parameters</c>/<c>Results</c> bags. A single
+    /// generated type therefore serves all three usages: authoring the Custom API (this base), calling it
+    /// (<c>service.Execute(new XxxRequest { ... })</c>), and reacting to it (<c>OnMessage(...).Handler&lt;XxxRequest&gt;()</c>).
+    /// </para>
     /// Initializes a new instance of the <see cref="CustomApiBase{TRequest, TResponse}"/> class.
     /// </remarks>
     /// <param name="unsecureConfig">Unsecure JSON configuration.</param>
     /// <param name="secureConfig">Secure JSON configuration.</param>
     /// <param name="maxDepth">Depth guard threshold.</param>
     public abstract class CustomApiBase<TRequest, TResponse>(string unsecureConfig, string secureConfig, int maxDepth = 8) : CustomApiBase(unsecureConfig, secureConfig, maxDepth)
-        where TRequest : class, new()
-        where TResponse : class, new()
+        where TRequest : OrganizationRequest, new()
+        where TResponse : OrganizationResponse, new()
     {
-        // Reflected once per closed generic type (static initialization is thread-safe), rather than on
-        // every execution. Public instance properties only, which the plugin sandbox permits.
-        private static readonly PropertyInfo[] RequestProperties =
-            typeof(TRequest).GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-        private static readonly PropertyInfo[] ResponseProperties =
-            typeof(TResponse).GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
         private ICustomApiBuilder<TRequest, TResponse>? _activeBuilder;
 
         /// <summary>
@@ -104,37 +102,22 @@ namespace Vela.CustomApi
         }
 
         /// <summary>
-        /// Maps input parameters to the request object.
+        /// Maps input parameters to the request object by hydrating a request over the live
+        /// <see cref="Microsoft.Xrm.Sdk.IExecutionContext.InputParameters"/>, so the request's typed
+        /// properties read the actual inputs.
         /// Override to customize mapping behavior.
         /// </summary>
         /// <param name="ctx">The local plugin context.</param>
         /// <returns>The populated request object.</returns>
         protected virtual TRequest MapInputToRequest(ILocalPluginContext ctx)
         {
-            var request = new TRequest();
-            var inputParams = ctx.PluginExecutionContext.InputParameters;
-
-            foreach (var property in RequestProperties)
-            {
-                if (!property.CanWrite)
-                {
-                    continue;
-                }
-
-                var paramName = property.Name;
-                if (inputParams.Contains(paramName))
-                {
-                    var value = inputParams[paramName];
-                    var convertedValue = ConvertValue(value, property.PropertyType);
-                    property.SetValue(request, convertedValue);
-                }
-            }
-
-            return request;
+            return new TRequest { Parameters = ctx.PluginExecutionContext.InputParameters };
         }
 
         /// <summary>
-        /// Maps the response object to output parameters.
+        /// Maps the response object to output parameters by copying its <c>Results</c> - written through the
+        /// response's typed setters - into the context's
+        /// <see cref="Microsoft.Xrm.Sdk.IExecutionContext.OutputParameters"/>.
         /// Override to customize mapping behavior.
         /// </summary>
         /// <param name="ctx">The local plugin context.</param>
@@ -146,57 +129,11 @@ namespace Vela.CustomApi
                 return;
             }
 
-            var outputParams = ctx.PluginExecutionContext.OutputParameters;
-
-            foreach (var property in ResponseProperties)
+            var outputParameters = ctx.PluginExecutionContext.OutputParameters;
+            foreach (KeyValuePair<string, object> result in response.Results)
             {
-                if (!property.CanRead)
-                {
-                    continue;
-                }
-
-                var paramName = property.Name;
-                var value = property.GetValue(response);
-                if (value != null)
-                {
-                    outputParams[paramName] = value;
-                }
+                outputParameters[result.Key] = result.Value;
             }
-        }
-
-        /// <summary>
-        /// Converts a value to the target type.
-        /// Override to add custom type conversions.
-        /// </summary>
-        /// <param name="value">The value to convert.</param>
-        /// <param name="targetType">The target type.</param>
-        /// <returns>The converted value.</returns>
-        protected virtual object? ConvertValue(object? value, Type targetType)
-        {
-            if (value == null)
-            {
-                return null;
-            }
-
-            var valueType = value.GetType();
-            if (targetType.IsAssignableFrom(valueType))
-            {
-                return value;
-            }
-
-            // Handle JSON strings to complex objects
-            if (value is string jsonString && targetType.IsClass && targetType != typeof(string))
-            {
-                return JsonConvert.DeserializeObject(jsonString, targetType);
-            }
-
-            // Handle simple type conversions
-            if (targetType.IsEnum)
-            {
-                return Enum.ToObject(targetType, value);
-            }
-
-            return Convert.ChangeType(value, targetType);
         }
     }
 }

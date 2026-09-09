@@ -17,9 +17,23 @@ namespace Vela.CustomApi;
 /// <typeparam name="TRequest">The request model type.</typeparam>
 /// <typeparam name="TResponse">The response model type.</typeparam>
 public sealed class CustomApiBuilder<TRequest, TResponse> : ICustomApiBuilder<TRequest, TResponse>
-    where TRequest : class, new()
-    where TResponse : class, new()
+    where TRequest : OrganizationRequest, new()
+    where TResponse : OrganizationResponse, new()
 {
+    // Members inherited from OrganizationRequest/OrganizationResponse are infrastructure, never Custom API
+    // parameters. DeclaredOnly already excludes them; this set is a defensive backstop should a generated
+    // type re-declare one of them.
+    private static readonly HashSet<string> BaseMemberNames = new(StringComparer.Ordinal)
+    {
+        nameof(OrganizationRequest.RequestId),
+        nameof(OrganizationRequest.RequestName),
+        nameof(OrganizationRequest.Parameters),
+        nameof(OrganizationResponse.ResponseName),
+        nameof(OrganizationResponse.Results),
+        "ExtensionData",
+        "Item",
+    };
+
     private readonly CustomApiDefinition _definition = new()
     {
         RequestTypeName = typeof(TRequest).FullName ?? typeof(TRequest).Name,
@@ -187,8 +201,16 @@ public sealed class CustomApiBuilder<TRequest, TResponse> : ICustomApiBuilder<TR
     private static CustomApiParameterDefinition[] BuildParameters(Type parameterType, bool isOutput)
     {
         List<CustomApiParameterDefinition> parameters = new List<CustomApiParameterDefinition>();
-        foreach (PropertyInfo property in parameterType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+
+        // DeclaredOnly reflects only the request/response's own typed properties, never the inherited
+        // OrganizationRequest/OrganizationResponse members (RequestName, Parameters, Results, the indexer, ...).
+        foreach (PropertyInfo property in parameterType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
         {
+            if (property.GetIndexParameters().Length > 0 || BaseMemberNames.Contains(property.Name))
+            {
+                continue;
+            }
+
             if (!property.CanRead || (!isOutput && !property.CanWrite))
             {
                 continue;

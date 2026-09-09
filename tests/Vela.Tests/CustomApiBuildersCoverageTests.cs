@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using Microsoft.Xrm.Sdk;
 using Vela.Constants;
 using Vela.Context;
 using Vela.CustomApi;
@@ -14,22 +15,47 @@ namespace Vela.Tests;
 // (reflection-based default parameters + the typed parameter builder) and the CustomApiLightBuilder.
 public sealed class CustomApiBuildersCoverageTests
 {
-    private sealed class SampleRequest
+    private sealed class SampleRequest : OrganizationRequest
     {
+        public SampleRequest()
+        {
+            RequestName = "vela_Sample";
+        }
+
         [Required]
-        public string Name { get; set; } = string.Empty;
+        public string Name
+        {
+            get => Parameters.Contains(nameof(Name)) ? (string)Parameters[nameof(Name)] : string.Empty;
+            set => Parameters[nameof(Name)] = value;
+        }
 
-        public int? Count { get; set; }
+        public int? Count
+        {
+            get => Parameters.Contains(nameof(Count)) ? (int?)Parameters[nameof(Count)] : null;
+            set => Parameters[nameof(Count)] = value;
+        }
 
-        public string[] Tags { get; set; } = Array.Empty<string>();
+        public string[] Tags
+        {
+            get => Parameters.Contains(nameof(Tags)) ? (string[])Parameters[nameof(Tags)] : Array.Empty<string>();
+            set => Parameters[nameof(Tags)] = value;
+        }
 
         [Description("a note")]
-        public string Note { get; set; } = string.Empty;
+        public string Note
+        {
+            get => Parameters.Contains(nameof(Note)) ? (string)Parameters[nameof(Note)] : string.Empty;
+            set => Parameters[nameof(Note)] = value;
+        }
     }
 
-    private sealed class SampleResponse
+    private sealed class SampleResponse : OrganizationResponse
     {
-        public string Message { get; set; } = string.Empty;
+        public string Message
+        {
+            get => Results.Contains(nameof(Message)) ? (string)Results[nameof(Message)] : string.Empty;
+            set => Results[nameof(Message)] = value;
+        }
     }
 
     private static CustomApiBuilder<SampleRequest, SampleResponse> Typed() => new CustomApiBuilder<SampleRequest, SampleResponse>();

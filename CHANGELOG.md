@@ -35,6 +35,23 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   SDK request stays reachable via `ctx.GetRequest<CreateRequest>()`. First step of the typed-requests design
   (`.context/typed-requests-design.md`).
 
+### Changed
+
+- **Framework (BREAKING): `CustomApiBase<TRequest, TResponse>` now requires `OrganizationRequest`/`OrganizationResponse`
+  types instead of POCOs.** The type constraints move from `where TRequest : class, new()` /
+  `where TResponse : class, new()` to `where TRequest : OrganizationRequest, new()` /
+  `where TResponse : OrganizationResponse, new()` (and likewise on `Register.RegisterCustomApi<TRequest, TResponse>()`
+  and `ICustomApiBuilder<TRequest, TResponse>`). The request/response now expose typed properties over the SDK
+  `Parameters`/`Results` bags, so a **single** generated type serves all three usages: authoring the Custom API,
+  calling it (`service.Execute(new XxxRequest { ... })`), and reacting to it (`OnMessage<XxxRequest>()...Handler<XxxRequest>(...)`).
+  This unifies the authoring surface with the `vela models --custom-apis` output. At execution the framework now
+  hydrates the request over the live `InputParameters` and copies the response's `Results` back to `OutputParameters`
+  (the previous reflect-and-convert POCO mapping, including JSON-string coercion, is removed). Only the request/response's
+  own declared properties become Custom API parameters; the inherited `OrganizationRequest`/`OrganizationResponse`
+  members never do. Migration: change each `XxxRequest`/`XxxResponse` to derive from `OrganizationRequest`/`OrganizationResponse`
+  and expose properties over `Parameters`/`Results` (set `RequestName` in the constructor), as the scaffold and the
+  [Custom API guide](guides/custom-apis.md) now show. Part of the typed-requests design (`.context/typed-requests-design.md`).
+
 ## [0.7.0] - 2026-09-08
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.7.0`.

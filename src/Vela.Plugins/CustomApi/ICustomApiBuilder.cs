@@ -9,8 +9,8 @@ namespace Vela.CustomApi;
 /// <typeparam name="TRequest">The request model type.</typeparam>
 /// <typeparam name="TResponse">The response model type.</typeparam>
 public interface ICustomApiBuilder<TRequest, TResponse>
-    where TRequest : class, new()
-    where TResponse : class, new()
+    where TRequest : OrganizationRequest, new()
+    where TResponse : OrganizationResponse, new()
 {
     /// <summary>
     /// Sets the unique name.
