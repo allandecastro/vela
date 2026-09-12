@@ -11,10 +11,10 @@ using Xunit;
 
 namespace Vela.Tests
 {
-    // Phase 0 POC for the typed-requests design (.context/typed-requests-design.md): a Vela-owned generic request
+    // Typed-requests design (.context/typed-requests-design.md): a Vela-owned generic request
     // (Vela.Messages.CreateRequest<TEntity>) exposes an early-bound ctx.Request.Target end-to-end through the
-    // in-memory pipeline - the single typed accessor that will replace ctx.Target. Non-breaking: it rides the
-    // existing OnMessage(...).Handler<TRequest>() path, nothing curated is touched yet.
+    // in-memory pipeline - the single typed accessor for the primary record. It rides the existing
+    // OnMessage(...).Handler<TRequest>() path.
     public sealed class TypedRequestsPocTests
     {
         private const string Message = "vela_TypedReqPoc";
@@ -29,7 +29,7 @@ namespace Vela.Tests
                 => RegisterSteps().OnMessage(Message).PostOperation().Sync().Handler<CreateRequest<TestAccount>>(OnMessageReceived);
 
             private void OnMessageReceived(IMessagePostContext<CreateRequest<TestAccount>> ctx)
-                => TargetName = ctx.Request.Target.Name;   // typed Request.Target - no ctx.Target
+                => TargetName = ctx.Request.Target.Name;   // typed Request.Target
         }
 
         [Fact]

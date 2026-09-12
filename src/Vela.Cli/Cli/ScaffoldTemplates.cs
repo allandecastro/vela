@@ -682,8 +682,8 @@ configures.
 
 - **Single-step** - register one step and override `Execute(ctx)`; read the record with `ctx.GetTarget<TEntity>()`
   (or the message-specific request with `ctx.GetRequest<...>()`). See `AccountRelatedContactsPlugin`. Even a
-  single step can instead bind a typed `.Handler(...)` to get the stage-typed context (`ctx.Request` / `ctx.Response`
-  / `ctx.Target`) - see `AccountPostCreatePlugin`.
+  single step can instead bind a typed `.Handler(...)` to get the stage-typed context (`ctx.Request` / `ctx.Response`,
+  with the record at `ctx.Request.Target`) - see `AccountPostCreatePlugin`.
 - **Multi-step ("router")** - register several steps in one class, giving each a `.Handler(Method)` bound to a
   method; the framework dispatches to the right one. Each handler takes the message-typed context (for example
   `ICreatePostContext<TEntity>` / `IUpdatePostContext<TEntity>`), exposing a strongly-typed `ctx.Request` (and, in a
@@ -1427,7 +1427,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
 
     /// <summary>
     /// After an account is created, schedules a follow-up task a week out. Uses a typed post-stage handler
-    /// (<see cref="ICreatePostContext{TEntity}"/>) so <c>ctx.Response.id</c> and <c>ctx.Target</c> are strongly
+    /// (<see cref="ICreatePostContext{TEntity}"/>) so <c>ctx.Response.id</c> and <c>ctx.Request.Target</c> are strongly
     /// typed, and shows dependency injection via <see cref="ConfigureServices"/> plus a table-scoped service
     /// (<see cref="IAccountFollowUpService"/>) resolved with <c>ctx.GetRequiredService&lt;T&gt;()</c>.
     /// </summary>
@@ -1453,7 +1453,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
         }
 
         // Typed handler: because the step is PostOperation, ctx is an ICreatePostContext<Account>, so ctx.Response
-        // (the CreateResponse) and ctx.Target (the created Account) are strongly typed. It is still an
+        // (the CreateResponse) and ctx.Request.Target (the created Account) are strongly typed. It is still an
         // ILocalPluginContext, so images and services work as usual.
         private void OnAccountCreated(ICreatePostContext<Account> ctx)
         {
@@ -1481,9 +1481,9 @@ namespace {{prefix}}.Plugins.Account.Plugins
     /// REFERENCE / CHEAT-SHEET - one handler per typed message Vela models, showing the strongly-typed context
     /// each receives. Every step is registered <c>.Disabled()</c>, so this class is safe to deploy: nothing fires
     /// until you enable a step. Copy the handler for the message you need into a real plugin, then delete this
-    /// file. Each handler infers its request/response from the message (no cast); the primary record is available
-    /// already typed as <c>ctx.Target</c> (Create / Update, an early-bound entity) or via <c>ctx.Request.Target</c>
-    /// / <c>ctx.Request.Targets</c> (the SDK-typed <c>EntityReference</c> / <c>EntityCollection</c>) for the rest.
+    /// file. Each handler infers its request/response from the message (no cast); the primary record is read via
+    /// <c>ctx.Request.Target</c> (Create / Update, an early-bound entity) / <c>ctx.Request.Targets</c> (the
+    /// SDK-typed <c>EntityReference</c> / <c>EntityCollection</c> for the rest).
     /// </summary>
     public sealed class AccountMessageReference(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
@@ -1525,13 +1525,13 @@ namespace {{prefix}}.Plugins.Account.Plugins
             // (contract). Register them the same way from the matching EntityPluginBase<T> with RegisterSteps().On<Message>().
         }
 
-        // ctx.Target is the early-bound Account; ctx.Response.id is the new record id (Post step).
+        // ctx.Request.Target is the early-bound Account; ctx.Response.id is the new record id (Post step).
         private void OnCreate(ICreatePostContext<Account> ctx)
-            => ctx.Trace("Create {0} -> id {1}", ctx.Target.Name, ctx.Response.id);
+            => ctx.Trace("Create {0} -> id {1}", ctx.Request.Target.Name, ctx.Response.id);
 
-        // ctx.Target carries the columns that changed on this update.
+        // ctx.Request.Target carries the columns that changed on this update.
         private void OnUpdate(IUpdatePostContext<Account> ctx)
-            => ctx.Trace("Update {0}", ctx.Target.Id);
+            => ctx.Trace("Update {0}", ctx.Request.Target.Id);
 
         // Delete carries an EntityReference, exposed as ctx.Request.Target. This step is PreOperation, so the
         // handler receives the PRE context (ctx.Request but no ctx.Response - the record is not deleted yet).
@@ -1633,7 +1633,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
 
         // Each handler receives the message-typed context: ICreateContext exposes a CreateRequest, IUpdateContext
         // an UpdateRequest (in a Post step, a matching Response too), each strongly typed to this message. The
-        // record is available already typed as ctx.Target - no cast, no type argument. The context is still an
+        // record is available already typed as ctx.Request.Target - no cast, no type argument. The context is still an
         // ILocalPluginContext, so images, services and tracing remain available.
         private void OnCreatePost(ICreatePostContext<Contact> ctx)
         {
@@ -1641,7 +1641,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
             ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
 
             IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
-            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, ctx.Target.Id);
+            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, ctx.Request.Target.Id);
             if (duplicateId.HasValue)
             {
                 ctx.Trace("Possible duplicate of contact {0} (same email).", duplicateId.Value);
@@ -1651,7 +1651,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         private void OnUpdatePost(IUpdatePostContext<Contact> ctx)
         {
             Contact preImage = ctx.GetPreImage<Contact>();
-            ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Target.LastName);
+            ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Request.Target.LastName);
         }
     }
 }

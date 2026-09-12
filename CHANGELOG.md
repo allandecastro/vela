@@ -30,13 +30,21 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ICreatePostContext` / `IUpdatePreContext` / `IUpdatePostContext` is now a Vela-owned typed request
   (`Vela.Messages.CreateRequest<TEntity>` / `UpdateRequest<TEntity>`) whose `Target` is the early-bound
   `TEntity`, so a handler reads `ctx.Request.Target` typed instead of the SDK request's base `Entity`. This is
-  the single typed target that will replace `ctx.Target` (kept and still working for now; a later phase
-  deprecates it). Reading `ctx.Request.Target` as a base `Entity` still compiles (`TEntity : Entity`). The raw
+  the single typed target accessor (see the Changed entry below removing `ctx.Target`). Reading
+  `ctx.Request.Target` as a base `Entity` still compiles (`TEntity : Entity`). The raw
   SDK request stays reachable via `ctx.GetRequest<CreateRequest>()`. First step of the typed-requests design
   (`.context/typed-requests-design.md`).
 
 ### Changed
 
+- **Framework (BREAKING): `ctx.Target` removed from all message contexts.** The `Target` context property (and the
+  `IEntityTargetContext<TEntity>` interface behind it) is gone from the curated Create/Update/SendEmailFromTemplate
+  contexts and from the two-argument generic `IMessagePreContext<TRequest, TEntity>` /
+  `IMessagePostContext<TRequest, TEntity>`. Read the primary record via `ctx.Request.Target` (early-bound `TEntity`
+  on Create/Update, where `ctx.Request` is a Vela-owned typed request; the SDK's `Entity` / `EntityReference` for the
+  rest). The `ctx.GetTarget<T>()` extension remains as the message-agnostic early-bound accessor (for example on
+  `SendEmailFromTemplate`, whose `ctx.Request.Target` is the base SDK `Entity`). Part of the typed-requests design
+  (`.context/typed-requests-design.md`).
 - **Framework (BREAKING): `CustomApiBase<TRequest, TResponse>` now requires `OrganizationRequest`/`OrganizationResponse`
   types instead of POCOs.** The type constraints move from `where TRequest : class, new()` /
   `where TResponse : class, new()` to `where TRequest : OrganizationRequest, new()` /

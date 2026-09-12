@@ -16,11 +16,12 @@ these, in this order:
    `IStepRequestContext<TRequest>`, and `I<Message>PostContext<TEntity>` over
    `IStepRequestContext<TRequest>` + `IStepResponseContext<TResponse>`) and **two** sealed classes
    (`<Message>PreContext : PreStepContext<TRequest>`, `<Message>PostContext : PostStepContext<TRequest, TResponse>`).
-   Attach `IEntityTargetContext<TEntity>` **only** when the message carries a full entity `Target`
-   (`Create`/`Update`/`SendEmailFromTemplate`): it exposes `ctx.Target`, forwarding to the `GetTarget<T>()` extension
-   so the handler gets the early-bound `TEntity` instead of the SDK's base `Entity`. For every other message add no
-   target-capability interface: an `EntityReference` `Target` or a bulk `Targets` collection has no early-bound form,
-   so the handler reads it straight off the already-typed `ctx.Request.Target` / `ctx.Request.Targets`.
+   The handler reads the primary record straight off the already-typed `ctx.Request.Target` / `ctx.Request.Targets`
+   (an `EntityReference`, a bulk `Targets` collection, or - for a Vela-owned typed request like `Create`/`Update` -
+   an early-bound `TEntity`). To expose the target early-bound for a message that carries a full entity `Target`,
+   model a Vela-owned request generic over `TEntity` (see `Vela.Messages.CreateRequest<TEntity>`) so its
+   `ctx.Request.Target` is the early-bound `TEntity` instead of the SDK's base `Entity`; otherwise the handler can
+   always fall back to the `ctx.GetTarget<T>()` extension.
 2. **Step interfaces** - `src/Vela.Plugins/StepBuilder/MessageSteps.cs`: a pre-stage step (its `.Handler` takes
    `Action<I<Message>PreContext<TEntity>>`) and a post-stage step (`Action<I<Message>PostContext<TEntity>>`), each
    extending the shared image terminal the (message, stage) supports (`INoImageStep` / `IPreImageStep` /

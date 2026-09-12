@@ -29,8 +29,8 @@ or `void OnX(ILocalPluginContext ctx)` for an `OnMessage("...")` step). The cont
 message and stage at compile time, so binding an `OnUpdate()` step to an `ICreatePostContext` handler - or reading
 `ctx.Response` from a pre-stage handler - does not build. A single-step plugin binds the same typed
 `.Handler(...)` (its context is `I{Message}PostContext<T>` / `I{Message}PreContext<T>`) and reads the record
-with `ctx.Target`; overriding `Execute(ILocalPluginContext ctx)` and using `ctx.GetTarget<T>()` stays supported
-as an untyped fallback.
+with `ctx.Request.Target`; overriding `Execute(ILocalPluginContext ctx)` and using `ctx.GetTarget<T>()` stays
+supported as an untyped fallback.
 For a lightweight Custom API handler the signature is `void Handler(ILocalPluginContext)`.
 
 ### I'm seeing unexpected legacy warnings - how do I clear them?

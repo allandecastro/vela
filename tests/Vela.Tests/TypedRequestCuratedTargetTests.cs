@@ -9,9 +9,9 @@ using Xunit;
 
 namespace Vela.Tests
 {
-    // P1: the curated Create/Update contexts now expose an early-bound ctx.Request.Target (ctx.Request is Vela's
-    // CreateRequest<TEntity>/UpdateRequest<TEntity>, not the SDK request). ctx.Target still works (deprecation is a
-    // later phase); this asserts the new typed request path end-to-end through the in-memory pipeline.
+    // The curated Create/Update contexts expose an early-bound ctx.Request.Target (ctx.Request is Vela's
+    // CreateRequest<TEntity>/UpdateRequest<TEntity>, not the SDK request). This asserts the typed request path
+    // end-to-end through the in-memory pipeline.
     public sealed class TypedRequestCuratedTargetTests
     {
         private sealed class CreateProbe : EntityPluginBase<TestAccount>
@@ -25,8 +25,8 @@ namespace Vela.Tests
 
             private void OnCreated(ICreatePostContext<TestAccount> ctx)
             {
-                ViaRequest = ctx.Request.Target.Name;   // NEW: early-bound via ctx.Request.Target
-                ViaTarget = ctx.Target.Name;            // existing ctx.Target still works
+                ViaRequest = ctx.Request.Target.Name;   // early-bound via ctx.Request.Target
+                ViaTarget = ctx.Request.Target.Name;    // the single typed target accessor
             }
         }
 
