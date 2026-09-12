@@ -34,6 +34,16 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ctx.Request.Target` as a base `Entity` still compiles (`TEntity : Entity`). The raw
   SDK request stays reachable via `ctx.GetRequest<CreateRequest>()`. First step of the typed-requests design
   (`.context/typed-requests-design.md`).
+- **Framework: `On<TRequest>()` step entry - typed message, no magic string.** Register a step with the message
+  derived from the request type: `RegisterSteps().On<CalculateAccountScoreRequest>().PostOperation().Sync().Handler(OnScore)`
+  where `void OnScore(IMessagePostContext<CalculateAccountScoreRequest> ctx)`. The message name comes from the
+  request's `RequestName` (no string literal), and the request type is stated once (the handler's context type is
+  inferred - no restating on `Handler`). `OnMessage("...")` / `OnMessage<T>()` / `.Handler<TRequest>(...)` remain.
+- **Framework: `TypedRequest` / `TypedResponse` base + `ToResponse<T>()`.** Authoring or generating a message
+  request/response is now one line per property via `get => Get<T>(); set => Set(value);` (over `Parameters` /
+  `Results`, `[CallerMemberName]`-backed) instead of hand-rolled `Parameters.Contains(...)` blocks. Call a message
+  and type its result with `service.Execute(new XxxRequest{...}).ToResponse<XxxResponse>()`. `vela models`
+  generation, the scaffold, and `CreateRequest<TEntity>` / `UpdateRequest<TEntity>` all use this shape.
 
 ### Changed
 

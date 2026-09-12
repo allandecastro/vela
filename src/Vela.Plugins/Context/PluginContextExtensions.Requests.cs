@@ -49,5 +49,26 @@ namespace Vela.Context
 
             return new TResponse { Results = context.PluginExecutionContext.OutputParameters };
         }
+
+        /// <summary>
+        /// Views a base <see cref="OrganizationResponse"/> as a typed response. A custom message executed via
+        /// <see cref="Microsoft.Xrm.Sdk.IOrganizationService.Execute(OrganizationRequest)"/> returns a base
+        /// <see cref="OrganizationResponse"/> that cannot be cast to the generated derived type, so wrap it:
+        /// <c>service.Execute(new XxxRequest { ... }).ToResponse&lt;XxxResponse&gt;()</c>. The typed response reads
+        /// the same <c>Results</c> bag, so its typed properties return the real output values.
+        /// </summary>
+        /// <typeparam name="T">The typed response type (an <see cref="OrganizationResponse"/> subclass).</typeparam>
+        /// <param name="response">The base response returned by <c>service.Execute(...)</c>.</param>
+        /// <returns>A typed response backed by the same <c>Results</c>.</returns>
+        public static T ToResponse<T>(this OrganizationResponse response)
+            where T : OrganizationResponse, new()
+        {
+            if (response == null)
+            {
+                throw new ArgumentNullException(nameof(response));
+            }
+
+            return new T { Results = response.Results };
+        }
     }
 }

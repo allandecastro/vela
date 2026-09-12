@@ -1,10 +1,11 @@
 # Write a Custom API
 
 For Custom APIs, use `CustomApiBase<TRequest, TResponse>` and the fluent registration hook. The request and
-response derive from `OrganizationRequest`/`OrganizationResponse`: their typed properties read and write the
+response derive from `TypedRequest`/`TypedResponse`: each typed property is a one-liner over the base
+`Get<T>()` / `Set(value)` helpers (the parameter key defaults to the property name), reading and writing the
 underlying `Parameters`/`Results` bags. A single generated type therefore serves all three usages - authoring
-the Custom API, calling it (`service.Execute(new ScoreRequest { ... })`), and reacting to it
-(`OnMessage<ScoreRequest>()...Handler<ScoreRequest>(...)`). Generate these types with
+the Custom API, calling it (`service.Execute(new ScoreRequest { ... }).ToResponse<ScoreResponse>()`), and
+reacting to it (`On<ScoreRequest>()...Handler(...)`). Generate these types with
 [`vela models --custom-apis`](models.md) or write them by hand as shown below:
 
 ```csharp
@@ -30,33 +31,37 @@ public class CalculateAccountScore : CustomApiBase<ScoreRequest, ScoreResponse>
     }
 }
 
-public class ScoreRequest : OrganizationRequest
+public class ScoreRequest : TypedRequest
 {
     public ScoreRequest() { RequestName = "zava_CalculateAccountScore"; }
 
     public Guid AccountId
     {
-        get => Parameters.Contains("AccountId") ? (Guid)Parameters["AccountId"] : default;
-        set => Parameters["AccountId"] = value;
+        get => Get<Guid>();
+        set => Set(value);
     }
 }
 
-public class ScoreResponse : OrganizationResponse
+public class ScoreResponse : TypedResponse
 {
     public int Score
     {
-        get => Results.Contains("Score") ? (int)Results["Score"] : default;
-        set => Results["Score"] = value;
+        get => Get<int>();
+        set => Set(value);
     }
 }
 ```
+
+`TypedRequest` / `TypedResponse` live in `Vela.Messages`. The `Get<T>()` / `Set(value)` helpers infer the
+parameter key from the property name, so a property is a plain one-liner - no `Parameters.Contains(...)`
+boilerplate. A read-only response property can drop the setter: `public int Score => Get<int>();`.
 
 The framework hydrates the request over the live `InputParameters` (so `request.AccountId` reads the actual
 input) and copies the response's `Results` back to `OutputParameters` after `Execute` returns. The generic base
 exposes `RegisterCustomApi(...)`, and the same shape is available from
 `Register.RegisterCustomApi<TRequest, TResponse>()` when you want to build manifests or scripts directly. Only
 the request/response's own declared properties become Custom API parameters; the inherited
-`OrganizationRequest`/`OrganizationResponse` members (`RequestName`, `Parameters`, `Results`, ...) never do.
+`TypedRequest`/`TypedResponse` members (`RequestName`, `Parameters`, `Results`, ...) never do.
 
 For small Custom APIs, you can also choose the lightweight mode and declare parameters directly without dedicated request/response CLR models:
 
@@ -93,7 +98,7 @@ Call a Custom API through `IOrganizationService.Execute`. Generate typed request
 [`vela models --custom-apis`](models.md) so the call is strongly typed:
 
 ```csharp
-var response = (zava_RecalculateResponse)service.Execute(new zava_RecalculateRequest { Target = accountRef });
+var response = service.Execute(new zava_RecalculateRequest { Target = accountRef }).ToResponse<zava_RecalculateResponse>();
 ```
 
 Run the handler with no connection using the [test harness](testing.md) - the same `Execute` call works

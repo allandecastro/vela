@@ -264,6 +264,15 @@ public sealed class StepBuilder<TEntity> :
         return this;
     }
 
+    public ITypedMessageStepStage<TEntity, TRequest> On<TRequest>() where TRequest : OrganizationRequest, new()
+    {
+        // The message name comes from the request type itself (its RequestName), so the type is stated once and
+        // no magic string is needed. The returned adapter carries TRequest to the handler (its ctx.Request is
+        // IMessagePre/PostContext<TRequest>) while the mutable step state stays on this builder.
+        _definition.Message = ExpressionHelper.GetMessageName<TRequest>();
+        return new TypedMessageStep<TEntity, TRequest>(this);
+    }
+
     IModeSelector<IPermissiveNoImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
     IModeSelector<IPermissivePreImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
     IModeSelector<IPermissivePreAndPostStep<TEntity>> IPermissiveStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
@@ -827,6 +836,13 @@ public sealed class StepBuilder<TEntity> :
 
         SetHandler(handler.Method.Name);
     }
+
+    // Mutation hooks for the generic typed-message adapter (TypedMessageStep<TEntity, TRequest>), which cannot see
+    // the private _definition / SetHandler directly. Same effect as the explicit-interface stage/mode/handler
+    // transitions of the permissive chain, just reached from the adapter.
+    internal void SetStageInternal(PluginStages stage) => _definition.Stage = stage;
+    internal void SetModeInternal(ExecutionMode mode) => _definition.Mode = mode;
+    internal void SetHandlerInternal(Delegate handler) => SetHandler(handler);
 
     // Setting mutations centralised so the four per-terminal IStepConfig implementations stay in lockstep
     // (each explicit implementation is just `Set...(value); return this;`).

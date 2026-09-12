@@ -131,4 +131,14 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     /// <summary>Configure step to trigger on a typed custom message. Image validity is enforced at runtime.</summary>
     /// <typeparam name="TMessage">The message marker type.</typeparam>
     IPermissiveStepStage<TEntity> OnMessage<TMessage>() where TMessage : class;
+
+    /// <summary>
+    /// Configure step to trigger on the message named by <typeparamref name="TRequest"/> (its
+    /// <c>RequestName</c>), stating the request type once. The handler bound at the end of the chain is pre-typed:
+    /// <c>ctx.Request</c> is <c>IMessagePre/PostContext&lt;TRequest&gt;</c> without restating the type on
+    /// <c>Handler</c>. Image validity is enforced at runtime (permissive, like <see cref="OnMessage(string)"/>).
+    /// </summary>
+    /// <typeparam name="TRequest">A request type (an SDK request, a generated Custom API request, or a
+    /// <c>TypedRequest</c>) with a public parameterless constructor.</typeparam>
+    ITypedMessageStepStage<TEntity, TRequest> On<TRequest>() where TRequest : OrganizationRequest, new();
 }

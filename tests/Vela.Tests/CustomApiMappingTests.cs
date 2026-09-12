@@ -1,6 +1,6 @@
-using Microsoft.Xrm.Sdk;
 using Vela.Context;
 using Vela.CustomApi;
+using Vela.Messages;
 using Vela.Testing;
 using Xunit;
 
@@ -8,9 +8,9 @@ namespace Vela.Tests
 {
     public sealed class CustomApiMappingTests
     {
-        // Request/response derive from OrganizationRequest/OrganizationResponse: the typed properties read and
-        // write the underlying Parameters/Results bags, matching the CustomApiMessageGenerator shape.
-        public sealed class ScoreRequest : OrganizationRequest
+        // Request/response derive from TypedRequest/TypedResponse: each typed property is a one-liner over the
+        // base Get<T>() / Set(value) helpers (key defaults to the property name), matching the generator shape.
+        public sealed class ScoreRequest : TypedRequest
         {
             public ScoreRequest()
             {
@@ -19,23 +19,23 @@ namespace Vela.Tests
 
             public int AccountId
             {
-                get => Parameters.Contains(nameof(AccountId)) ? (int)Parameters[nameof(AccountId)] : default;
-                set => Parameters[nameof(AccountId)] = value;
+                get => Get<int>();
+                set => Set(value);
             }
         }
 
-        public sealed class ScoreResponse : OrganizationResponse
+        public sealed class ScoreResponse : TypedResponse
         {
             public int Score
             {
-                get => Results.Contains(nameof(Score)) ? (int)Results[nameof(Score)] : default;
-                set => Results[nameof(Score)] = value;
+                get => Get<int>();
+                set => Set(value);
             }
 
             public string Rating
             {
-                get => Results.Contains(nameof(Rating)) ? (string)Results[nameof(Rating)] : string.Empty;
-                set => Results[nameof(Rating)] = value;
+                get => Get<string>();
+                set => Set(value);
             }
         }
 
