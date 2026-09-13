@@ -43,8 +43,11 @@ internal sealed record ScaffoldOptions(
     string WebResourcesFolder = "dist",
     bool Json = false)
 {
-    // Solution name doubles as a folder + file name, so keep it to filename-safe characters.
-    private static readonly Regex SolutionNamePattern = new("^[A-Za-z0-9._-]+$", RegexOptions.Compiled);
+    // Solution name doubles as a folder + file name, so keep it to filename-safe characters. The first character
+    // must be alphanumeric so the name can never be a path-traversal segment (".", "..", ".hidden"): the solution
+    // name is combined into the output path and a --force regeneration deletes managed sub-folders under it, so a
+    // traversal name could delete directories outside the target tree.
+    private static readonly Regex SolutionNamePattern = new("^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
 
     // Prefix becomes C# namespaces and assembly names: a dotted identifier (e.g. Zava or Zava.CRM).
     private static readonly Regex PrefixPattern = new("^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$", RegexOptions.Compiled);
@@ -52,8 +55,14 @@ internal sealed record ScaffoldOptions(
     // The JS global name is a dotted identifier (esbuild globalName), e.g. `adc` or `adc.sales`.
     private static readonly Regex GlobalNamePattern = new("^[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*$", RegexOptions.Compiled);
 
-    // A web-resources output folder is a simple relative directory name (no separators or traversal).
-    private static readonly Regex FolderPattern = new("^[A-Za-z0-9._-]+$", RegexOptions.Compiled);
+    // --core-version is interpolated verbatim into the generated .csproj PackageReference, so it must be a real
+    // NuGet version (major.minor[.patch[.revision]] with optional -prerelease / +metadata). This both blocks XML
+    // injection (a value with a quote) and catches typos that would silently fail `dotnet restore`.
+    private static readonly Regex CoreVersionPattern = new("^[0-9]+\\.[0-9]+(\\.[0-9]+){0,2}(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\\+[0-9A-Za-z][0-9A-Za-z.-]*)?$", RegexOptions.Compiled);
+
+    // A web-resources output folder is a simple relative directory name (no separators or traversal). The first
+    // character must be alphanumeric so the segment can never be "." or ".." (traversal).
+    private static readonly Regex FolderPattern = new("^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
 
     /// <summary>True when the value is a valid JS global name (dotted identifier).</summary>
     public static bool IsValidGlobalName(string value) =>
@@ -165,6 +174,12 @@ internal sealed record ScaffoldOptions(
         }
 
         string coreVersion = TryReadOption(args, "--core-version") ?? DefaultCoreVersion;
+        if (!CoreVersionPattern.IsMatch(coreVersion))
+        {
+            exitCode = Fail($"Invalid --core-version '{coreVersion}'. Use a NuGet version such as '0.8.0' or '1.2.3-preview'.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
         bool force = HasFlag(args, "--force");
 
         // Managed-identity signing only applies to the Integrations project; if it is excluded, the flag is a no-op.

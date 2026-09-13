@@ -6,6 +6,29 @@ namespace Vela.Cli.Tests;
 
 public class ScaffoldOptionsTests
 {
+    [Theory]
+    [InlineData("..")]     // A1: path traversal - would delete outside the target tree on --force
+    [InlineData(".")]
+    [InlineData("...")]
+    [InlineData("-x")]
+    [InlineData(".hidden")]
+    public void IsValidSolutionName_RejectsTraversalAndLeadingPunctuation(string name) =>
+        Assert.False(ScaffoldOptions.IsValidSolutionName(name));
+
+    [Theory]
+    [InlineData("ZavaSales")]
+    [InlineData("Zava.Sales")]
+    [InlineData("zava-sales_1")]
+    public void IsValidSolutionName_AcceptsNormalNames(string name) =>
+        Assert.True(ScaffoldOptions.IsValidSolutionName(name));
+
+    [Fact]
+    public void TryParse_RejectsInvalidCoreVersion()   // A13
+    {
+        Assert.False(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--core-version", "abc\" /><Foo"], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
     [Fact]
     public void TryParse_RejectsUnknownOption()
     {

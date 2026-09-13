@@ -19,6 +19,15 @@ internal static class ProjectScaffolder
     {
         string root = Path.GetFullPath(Path.Combine(options.OutputDirectory, options.SolutionName));
 
+        // Defense in depth (see SolutionNamePattern): the resolved target must stay strictly under the output
+        // directory. A traversal solution name would otherwise let --force delete managed folders outside the tree.
+        string outputRoot = Path.GetFullPath(options.OutputDirectory);
+        string outputRootWithSep = outputRoot.EndsWith(Path.DirectorySeparatorChar) ? outputRoot : outputRoot + Path.DirectorySeparatorChar;
+        if (!root.StartsWith(outputRootWithSep, StringComparison.Ordinal))
+        {
+            return Fail($"Refusing to scaffold outside the output directory: '{root}' is not under '{outputRoot}'.", ExitInvalidArguments, includeUsage: false);
+        }
+
         if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any() && !options.Force)
         {
             return Fail($"Target directory already exists and is not empty: {root}. Use --force to overwrite.", ExitInvalidArguments, includeUsage: false);

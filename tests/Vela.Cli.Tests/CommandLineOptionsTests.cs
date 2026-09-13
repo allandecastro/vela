@@ -7,6 +7,21 @@ namespace Vela.Cli.Tests;
 public class CommandLineOptionsTests
 {
     [Fact]
+    public void TryReadFirstPositional_BooleanFlag_DoesNotSwallowPositional()   // A11
+    {
+        System.Collections.Generic.HashSet<string> valueOpts =
+            new(System.StringComparer.OrdinalIgnoreCase) { "--out" };
+
+        // --strict is not a value option, so the positional after it must survive.
+        Assert.Equal("foo.nupkg", CommandLineOptions.TryReadFirstPositional(["--strict", "foo.nupkg"], valueOpts));
+        // --out is a value option, so its value is skipped and the later token is the positional.
+        Assert.Equal("bar.nupkg", CommandLineOptions.TryReadFirstPositional(["--out", "gen", "bar.nupkg"], valueOpts));
+        // Legacy overload (no set) keeps its heuristic.
+        Assert.Equal("baz.nupkg", CommandLineOptions.TryReadFirstPositional(["baz.nupkg"]));
+    }
+
+
+    [Fact]
     public void TryValidateKnownOptions_Rejects_UnknownOption()
     {
         // The reported typo: --packages-dur instead of --packages-dir must fail fast, not be silently ignored.

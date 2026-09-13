@@ -35,6 +35,26 @@ internal static class DiffEngine
         return $"{item.Kind}:{GetIdentity(item)}";
     }
 
+    // Builds an identity -> item map, failing with a clear, actionable message on a duplicate identity instead of
+    // the opaque "An item with the same key has already been added" that ToDictionary throws (A5). Two entries with
+    // the same identity (e.g. two plugin classes declaring the same Custom API uniqueName, or two local files
+    // mapping to the same web-resource name) cannot be told apart, so we stop rather than silently drop one.
+    private static Dictionary<string, RegistrationItem> BuildIdentityMap(IEnumerable<RegistrationItem> items, string sideLabel)
+    {
+        Dictionary<string, RegistrationItem> map = new(StringComparer.OrdinalIgnoreCase);
+        foreach (RegistrationItem item in items)
+        {
+            string key = GetIdentityKey(item);
+            if (!map.TryAdd(key, item))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate {sideLabel} identity '{key}'. Two entries resolve to the same identity; make their unique names / names distinct.");
+            }
+        }
+
+        return map;
+    }
+
     public static string GetIdentity(RegistrationItem item)
     {
         if (string.Equals(item.Kind, "custom-api", StringComparison.OrdinalIgnoreCase))
@@ -92,8 +112,8 @@ internal static class DiffEngine
 
         List<RegistrationItem> localCustomApis = local.Items.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
         List<RegistrationItem> currentCustomApis = current.Items.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
-        Dictionary<string, RegistrationItem> localCustomApiMap = localCustomApis.ToDictionary(GetIdentityKey, StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, RegistrationItem> currentCustomApiMap = currentCustomApis.ToDictionary(GetIdentityKey, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, RegistrationItem> localCustomApiMap = BuildIdentityMap(localCustomApis, "local Custom API");
+        Dictionary<string, RegistrationItem> currentCustomApiMap = BuildIdentityMap(currentCustomApis, "live Custom API");
 
         foreach (KeyValuePair<string, RegistrationItem> pair in localCustomApiMap)
         {
@@ -122,6 +142,20 @@ internal static class DiffEngine
         List<RegistrationItem> localSteps = local.Items.Where(IsStep).ToList();
         List<RegistrationItem> currentSteps = current.Items.Where(IsStep).ToList();
         bool[] currentStepMatched = new bool[currentSteps.Count];
+
+        // A6: two local steps that share a (non-empty) step key are indistinguishable - the matching below would
+        // pair the first and then silently drop the second (the legacy pass skips any key already present). Fail
+        // with a clear message instead of quietly losing a step.
+        HashSet<string> seenLocalStepKeys = new(StringComparer.OrdinalIgnoreCase);
+        foreach (RegistrationItem step in localSteps)
+        {
+            string key = GetStepKey(step);
+            if (!string.IsNullOrWhiteSpace(key) && !seenLocalStepKeys.Add(key))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate local step key '{key}'. Two registered steps resolve to the same step key; give each a distinct trigger (message + stage + mode + entity + filtering) or step key.");
+            }
+        }
 
         Dictionary<string, int> currentByStepKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < currentSteps.Count; i++)
@@ -220,8 +254,8 @@ internal static class DiffEngine
         // have none on either side and produce no web-resource diff here.
         List<RegistrationItem> localWebResources = local.Items.Where(IsWebResource).ToList();
         List<RegistrationItem> currentWebResources = current.Items.Where(IsWebResource).ToList();
-        Dictionary<string, RegistrationItem> localWebResourceMap = localWebResources.ToDictionary(GetIdentityKey, StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, RegistrationItem> currentWebResourceMap = currentWebResources.ToDictionary(GetIdentityKey, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, RegistrationItem> localWebResourceMap = BuildIdentityMap(localWebResources, "local web resource");
+        Dictionary<string, RegistrationItem> currentWebResourceMap = BuildIdentityMap(currentWebResources, "live web resource");
 
         foreach (KeyValuePair<string, RegistrationItem> pair in localWebResourceMap)
         {

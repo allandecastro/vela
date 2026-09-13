@@ -31,6 +31,33 @@ public class DiffEngineTests
     }
 
     [Fact]
+    public void BuildDiff_throws_on_duplicate_local_step_key()   // A6
+    {
+        // Same plugin type + same step key => same step key identity (a plugin declaring two indistinguishable steps).
+        RegistrationState local = State(
+            Step(new { pluginTypeName = "Step.A", stepKey = "dup", executionOrder = 0 }, "Step.A"),
+            Step(new { pluginTypeName = "Step.A", stepKey = "dup", executionOrder = 9 }, "Step.A"));
+        RegistrationState current = State();
+
+        var ex = Assert.Throws<System.InvalidOperationException>(() => DiffEngine.BuildDiff(local, current));
+        Assert.Contains("Duplicate local step key", ex.Message);
+        Assert.Contains("dup", ex.Message);
+    }
+
+    [Fact]
+    public void BuildDiff_throws_on_duplicate_local_custom_api_identity()   // A5
+    {
+        RegistrationState local = State(
+            CustomApi(new { uniqueName = "zava_Dup" }, "Api.One"),
+            CustomApi(new { uniqueName = "zava_Dup" }, "Api.Two"));
+        RegistrationState current = State();
+
+        var ex = Assert.Throws<System.InvalidOperationException>(() => DiffEngine.BuildDiff(local, current));
+        Assert.Contains("Duplicate", ex.Message);
+        Assert.Contains("zava_Dup", ex.Message);
+    }
+
+    [Fact]
     public void Diff_collections_are_ordered_by_kind_then_type()
     {
         // Changed pairs: same identity (stepKey / uniqueName), different definition — spanning two kinds and,

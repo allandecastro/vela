@@ -136,4 +136,55 @@ public class CustomApiMessageGeneratorTests
         Assert.DoesNotContain("StepExtensions", code);
         Assert.Contains("is private", code);
     }
+
+    [Fact]
+    public void Bound_UsesSchemaNameTypeFromMap_NotNaivePascalCase()   // A12
+    {
+        var map = new System.Collections.Generic.Dictionary<string, string> { ["new_customentity"] = "new_CustomEntity" };
+        string code = CustomApiMessageGenerator.Generate(
+            new[]
+            {
+                new CustomApiMessage("zava_Recalc", IsBoundToEntity: true,
+                    Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>(),
+                    AllowedStepType: 2, BoundEntityLogicalName: "new_customentity"),
+            },
+            "N",
+            map).Single().Code;
+
+        Assert.Contains("IStepBuilder<new_CustomEntity>", code);   // exact generated model type
+        Assert.DoesNotContain("NewCustomentity", code);            // not the naive PascalCase
+    }
+
+    [Fact]
+    public void CrossPublisher_SameSuffix_IsDisambiguatedWithFullName()   // A18
+    {
+        var models = CustomApiMessageGenerator.Generate(
+            new[]
+            {
+                new CustomApiMessage("zava_Calc", false, Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>()),
+                new CustomApiMessage("acme_Calc", false, Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>()),
+            },
+            "N");
+
+        string all = string.Join("\n", models.Select(m => m.Code));
+        Assert.Contains("OnZavaCalc<", all);
+        Assert.Contains("OnAcmeCalc<", all);
+        // The bare colliding name must not be emitted as a standalone method (would be CS0121).
+        Assert.DoesNotContain(" OnCalc<", all);
+        Assert.DoesNotContain(" OnCalc(", all);
+    }
+
+    [Fact]
+    public void KeywordParameterName_IsEscaped_WithoutBreakingTheRuntimeKey()   // A17
+    {
+        string code = Generate(new CustomApiMessage(
+            "zava_X",
+            IsBoundToEntity: false,
+            RequestParameters: new[] { new CustomApiParameter("object", 10) },   // C# keyword, String
+            ResponseProperties: Array.Empty<CustomApiParameter>()));
+
+        Assert.Contains("public string @object", code);   // escaped member
+        // @object's CallerMemberName is "object", so no explicit key needed - stays keyless.
+        Assert.Contains("get => Get<string>();", code);
+    }
 }

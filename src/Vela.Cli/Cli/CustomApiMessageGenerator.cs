@@ -37,7 +37,10 @@ public sealed record CustomApiMessage(
 /// </summary>
 public static class CustomApiMessageGenerator
 {
-    public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<CustomApiMessage> messages, string ns)
+    /// <param name="entityTypeNames">Optional map from an entity logical name to its early-bound C# type name (its
+    /// SchemaName). Used so a bound Custom API's <c>On&lt;Message&gt;()</c> extension references the exact generated
+    /// type; falls back to PascalCase when null or missing.</param>
+    public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<CustomApiMessage> messages, string ns, IReadOnlyDictionary<string, string>? entityTypeNames = null)
     {
         if (messages == null)
         {
@@ -49,14 +52,27 @@ public static class CustomApiMessageGenerator
             throw new ArgumentException("A target namespace is required.", nameof(ns));
         }
 
-        return messages
+        List<CustomApiMessage> ordered = messages
             .Where(m => !string.IsNullOrWhiteSpace(m?.UniqueName))
             .OrderBy(m => m.UniqueName, StringComparer.Ordinal)
-            .Select(m => new GeneratedModel($"Messages/{m.UniqueName}.cs", GenerateOne(m, ns)))
+            .ToList();
+
+        // Two Custom APIs from different publisher prefixes (zava_Calc, acme_Calc) would both produce an OnCalc(...)
+        // extension method and collide (CS0121). Detect the suffixes that appear more than once so the generator can
+        // disambiguate those with the full, prefixed name (OnZavaCalc / OnAcmeCalc) while keeping the short name for
+        // the common, non-colliding case.
+        HashSet<string> collidingSuffixes = ordered
+            .GroupBy(m => MethodSuffix(m.UniqueName), StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return ordered
+            .Select(m => new GeneratedModel($"Messages/{m.UniqueName}.cs", GenerateOne(m, ns, collidingSuffixes, entityTypeNames)))
             .ToList();
     }
 
-    private static string GenerateOne(CustomApiMessage message, string ns)
+    private static string GenerateOne(CustomApiMessage message, string ns, HashSet<string> collidingSuffixes, IReadOnlyDictionary<string, string>? entityTypeNames)
     {
         string request = $"{message.UniqueName}Request";
         string response = $"{message.UniqueName}Response";
@@ -103,7 +119,7 @@ public static class CustomApiMessageGenerator
 
         sb.AppendLine("    }");
 
-        AppendStepExtensions(sb, message);
+        AppendStepExtensions(sb, message, collidingSuffixes, entityTypeNames);
 
         sb.AppendLine("}");
         return sb.ToString();
@@ -117,9 +133,13 @@ public static class CustomApiMessageGenerator
     // not compile - the generic On<XxxRequest>() escape hatch stays for explicit use, and Dataverse rejects an
     // invalid registration at deploy time regardless. The referenced early-bound entity type is assumed to be
     // generated into this same namespace.
-    private static void AppendStepExtensions(StringBuilder sb, CustomApiMessage message)
+    private static void AppendStepExtensions(StringBuilder sb, CustomApiMessage message, HashSet<string> collidingSuffixes, IReadOnlyDictionary<string, string>? entityTypeNames)
     {
         string request = $"{message.UniqueName}Request";
+        // Short name (publisher prefix stripped) unless it would collide with another API's; then use the full,
+        // prefixed name to keep the extension methods unambiguous (A18).
+        string suffix = MethodSuffix(message.UniqueName);
+        string methodBase = collidingSuffixes.Contains(suffix) ? PascalCase(message.UniqueName) : suffix;
 
         // The request class name ({UniqueName}Request) must be a valid identifier to be referenced at all.
         if (!IsValidIdentifier(message.UniqueName))
@@ -134,7 +154,7 @@ public static class CustomApiMessageGenerator
         {
             string reason = message.IsPrivate ? "is private" : "allows no processing step";
             sb.AppendLine();
-            sb.AppendLine($"    // No On{MethodSuffix(message.UniqueName)}() step extension: Custom API '{message.UniqueName}' {reason}. Use On<{request}>() explicitly if you really intend to register a step.");
+            sb.AppendLine($"    // No On{methodBase}() step extension: Custom API '{message.UniqueName}' {reason}. Use On<{request}>() explicitly if you really intend to register a step.");
             return;
         }
 
@@ -143,7 +163,7 @@ public static class CustomApiMessageGenerator
             ? $"Vela.StepBuilder.IAsyncOnlyTypedMessageStepStage"
             : $"Vela.StepBuilder.ITypedMessageStepStage";
         string entry = asyncOnly ? $"OnAsyncOnly<{request}>" : $"On<{request}>";
-        string method = $"On{MethodSuffix(message.UniqueName)}";
+        string method = $"On{methodBase}";
         bool bound = !string.IsNullOrWhiteSpace(message.BoundEntityLogicalName);
 
         sb.AppendLine();
@@ -153,7 +173,10 @@ public static class CustomApiMessageGenerator
 
         if (bound)
         {
-            string pascal = PascalCase(message.BoundEntityLogicalName!);
+            string logical = message.BoundEntityLogicalName!;
+            string pascal = entityTypeNames != null && entityTypeNames.TryGetValue(logical, out string? typeName) && !string.IsNullOrEmpty(typeName)
+                ? typeName!
+                : PascalCase(logical);
             sb.AppendLine($"        public static {stageType}<{pascal}, {request}> {method}(this Vela.StepBuilder.IStepBuilder<{pascal}> builder) => builder.{entry}();");
         }
         else
@@ -211,17 +234,19 @@ public static class CustomApiMessageGenerator
     private static void AppendParameter(StringBuilder sb, CustomApiParameter parameter, bool readOnly)
     {
         string type = MapType(parameter.FieldType);
+        (string member, string key) = CSharpIdentifier.Member(parameter.Name);
+        string setArgs = key.Length > 0 ? "value, " + key : "value";
         sb.AppendLine();
         if (readOnly)
         {
-            sb.AppendLine($"        public {type} {parameter.Name} => Get<{type}>();");
+            sb.AppendLine($"        public {type} {member} => Get<{type}>({key});");
         }
         else
         {
-            sb.AppendLine($"        public {type} {parameter.Name}");
+            sb.AppendLine($"        public {type} {member}");
             sb.AppendLine("        {");
-            sb.AppendLine($"            get => Get<{type}>();");
-            sb.AppendLine("            set => Set(value);");
+            sb.AppendLine($"            get => Get<{type}>({key});");
+            sb.AppendLine($"            set => Set({setArgs});");
             sb.AppendLine("        }");
         }
     }

@@ -145,14 +145,14 @@ internal static class OptionSetsTs
         string filtered = new string((label ?? string.Empty).Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
         if (filtered.Length == 0 || !(char.IsLetter(filtered[0]) || filtered[0] == '_'))
         {
-            filtered = "_" + (filtered.Length == 0 ? value.ToString(CultureInfo.InvariantCulture) : filtered);
+            filtered = "_" + (filtered.Length == 0 ? CSharpIdentifier.NumericToken(value) : filtered);
         }
 
         string candidate = filtered;
         int suffix = value;
         while (!used.Add(candidate))
         {
-            candidate = filtered + "_" + suffix++;
+            candidate = filtered + "_" + CSharpIdentifier.NumericToken(suffix++);
         }
 
         return candidate;

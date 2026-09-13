@@ -17,14 +17,17 @@ internal static class StepInjector
         result = source;
         error = string.Empty;
 
-        int methodIdx = source.IndexOf("RegisterPluginSteps", StringComparison.Ordinal);
-        if (methodIdx < 0)
+        // Anchor on the method declaration (return type + name + empty parens), not the first textual mention:
+        // a doc-comment, a base.RegisterPluginSteps() call, or a string reference would otherwise mis-anchor the
+        // injection into the wrong brace block.
+        Match method = Regex.Match(source, @"\bvoid\s+RegisterPluginSteps\s*\(\s*\)");
+        if (!method.Success)
         {
             error = "No RegisterPluginSteps() method found — 'vela add step' targets a plugin that overrides RegisterPluginSteps().";
             return false;
         }
 
-        int openBrace = source.IndexOf('{', methodIdx);
+        int openBrace = source.IndexOf('{', method.Index + method.Length);
         if (openBrace < 0)
         {
             error = "Could not locate the RegisterPluginSteps() body.";

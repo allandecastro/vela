@@ -80,6 +80,16 @@ internal static partial class DataverseRegistration
     string secureConfig = secureConfigByStepKey != null && secureConfigByStepKey.TryGetValue(definition.StepKey, out string? rawSecureConfig)
         ? rawSecureConfig
         : definition.SecureConfig ?? string.Empty;
+
+    // A2: if the plaintext secret did not round-trip (no stable step key to carry it through the scan-time side
+    // channel), the only value left is the redacted digest. Writing that to Dataverse would hand the plugin the
+    // literal hash and make every later plan report the step as "changed". Fail clearly instead of corrupting it.
+    if (!string.IsNullOrEmpty(secureConfig) && secureConfig.StartsWith(DefinitionNormalizer.SecretDigestPrefix, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"Cannot register the secure configuration for step '{BuildStepName(definition)}': only its redacted digest is available at apply time. This happens when the step has no stable step key to carry the plaintext secret; give the step a step key so the secret can round-trip.");
+    }
+
     SyncStepSecureConfig(service, stepId, secureConfig);
     SyncStepState(service, stepId, definition.Enabled);
     SyncStepImages(service, stepId, definition.Message, definition.PreImages, definition.PostImages);

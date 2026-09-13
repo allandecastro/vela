@@ -79,19 +79,33 @@ public class JsonReaderTests
     [Fact]
     public void CustomApiParameterShapes_fall_back_to_typeName_and_drop_blank_names()
     {
-        // parameterTypeName absent -> falls back to the legacy "typeName"; a blank-named param is dropped.
+        // parameterTypeName absent -> falls back to the legacy "typeName"; a blank-named param is dropped. The type
+        // is canonicalized to the code->name form the live read produces (A4), so "String" -> "System.String".
         object[] inputs = JsonReader.TryGetCustomApiInputShapes(
             Json(new { ps = new object[] { new { name = "A", typeName = "String" }, new { name = "" } } }), "ps");
         JsonElement input = JsonSerializer.SerializeToElement(Assert.Single(inputs));
         Assert.Equal("A", input.GetProperty("name").GetString());
-        Assert.Equal("String", input.GetProperty("parameterTypeName").GetString());
+        Assert.Equal("System.String", input.GetProperty("parameterTypeName").GetString());
 
         object[] outputs = JsonReader.TryGetCustomApiOutputShapes(
             Json(new { ps = new object[] { new { name = "B", typeName = "Integer" } } }), "ps");
         JsonElement output = JsonSerializer.SerializeToElement(Assert.Single(outputs));
-        Assert.Equal("Integer", output.GetProperty("parameterTypeName").GetString());
+        Assert.Equal("System.Int32", output.GetProperty("parameterTypeName").GetString());
 
         Assert.Empty(JsonReader.TryGetCustomApiInputShapes(Json(new { ps = "notArray" }), "ps"));
+    }
+
+    [Theory]
+    [InlineData("System.Int64", "System.Int32")]     // A4: equivalent integer types collapse to the stored form
+    [InlineData("long", "System.Int32")]
+    [InlineData("System.Single", "System.Double")]
+    [InlineData("System.Int32", "System.Int32")]     // already canonical -> unchanged (idempotent)
+    public void CustomApiParameterType_isCanonicalized_toTheLiveForm(string declared, string expected)
+    {
+        object[] inputs = JsonReader.TryGetCustomApiInputShapes(
+            Json(new { ps = new object[] { new { name = "A", parameterTypeName = declared } } }), "ps");
+        JsonElement input = JsonSerializer.SerializeToElement(Assert.Single(inputs));
+        Assert.Equal(expected, input.GetProperty("parameterTypeName").GetString());
     }
 
     [Fact]
