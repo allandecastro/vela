@@ -236,6 +236,12 @@ internal static class ModelsCommand
 
             List<GeneratedModel> models = new List<GeneratedModel>();
 
+            // Lazily resolved logical-name -> early-bound type-name (SchemaName) map, so the generated
+            // On<Message>() step extensions reference the exact model type (e.g. new_CustomEntity), not a naive
+            // PascalCase of the logical name. Built once, only when a message/custom-api generation needs it.
+            IReadOnlyDictionary<string, string>? entityTypeNamesCache = null;
+            IReadOnlyDictionary<string, string> EntityTypeNames() => entityTypeNamesCache ??= BuildEntityTypeNameMap(service);
+
             List<string> logicalNames = ResolveLogicalNames(service, solution, entities);
             if (logicalNames.Count > 0)
             {
@@ -263,7 +269,7 @@ internal static class ModelsCommand
                 }
 
                 CustomApiMessage[] customApiMessages = customApiNames.Select(name => ReadCustomApi(service, name)).ToArray();
-                models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!));
+                models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!, EntityTypeNames()));
             }
 
             if (allMessages)
@@ -293,7 +299,7 @@ internal static class ModelsCommand
                     }
                 }
 
-                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!));
+                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames()));
             }
             else if (messages.Length > 0)
             {
@@ -310,7 +316,7 @@ internal static class ModelsCommand
                     sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));
                 }
 
-                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!));
+                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames()));
             }
 
             if (roles.Length > 0 || solutionRoles)
@@ -598,6 +604,33 @@ internal static class ModelsCommand
         RetrieveEntityResponse response = (RetrieveEntityResponse)service.Execute(
             new RetrieveEntityRequest { LogicalName = logicalName, EntityFilters = EntityFilters.Attributes | EntityFilters.Entity });
         return response.EntityMetadata;
+    }
+
+    // Maps every entity's logical name to the early-bound C# type name the model generator emits for it (its
+    // SchemaName, escaped the same way as ModelGenerator.ClassName). One lightweight RetrieveAllEntities (Entity
+    // filter only). Keys are case-insensitive because sdkmessagefilter.primaryobjecttypecode /
+    // customapi.boundentitylogicalname casing is not guaranteed. Used to wire generated On<Message>() step
+    // extensions to the exact model type (e.g. new_CustomEntity, not NewCustomentity).
+    private static IReadOnlyDictionary<string, string> BuildEntityTypeNameMap(IOrganizationService service)
+    {
+        RetrieveAllEntitiesResponse all = (RetrieveAllEntitiesResponse)service.Execute(
+            new RetrieveAllEntitiesRequest { EntityFilters = EntityFilters.Entity, RetrieveAsIfPublished = true });
+
+        Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (EntityMetadata entity in all.EntityMetadata)
+        {
+            if (string.IsNullOrWhiteSpace(entity.LogicalName))
+            {
+                continue;
+            }
+
+            string typeName = !string.IsNullOrWhiteSpace(entity.SchemaName)
+                ? entity.SchemaName
+                : char.ToUpperInvariant(entity.LogicalName[0]) + entity.LogicalName.Substring(1);
+            map[entity.LogicalName] = CSharpIdentifier.EscapeKeyword(typeName);
+        }
+
+        return map;
     }
 
     // Every Custom API in the environment, by unique name. Used by bare `--custom-apis` (all mode). To keep the

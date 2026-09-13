@@ -327,7 +327,7 @@ public static class ModelGenerator
         string filtered = new string((label ?? string.Empty).Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
         if (filtered.Length == 0 || !(char.IsLetter(filtered[0]) || filtered[0] == '_'))
         {
-            filtered = "_" + (filtered.Length == 0 ? value.ToString(CultureInfo.InvariantCulture) : filtered);
+            filtered = "_" + (filtered.Length == 0 ? CSharpIdentifier.NumericToken(value) : filtered);
         }
 
         string name = Keywords.Contains(filtered) ? "@" + filtered : filtered;
@@ -335,7 +335,7 @@ public static class ModelGenerator
         int suffix = value;
         while (!used.Add(candidate))
         {
-            candidate = name.TrimStart('@') + "_" + suffix++;
+            candidate = name.TrimStart('@') + "_" + CSharpIdentifier.NumericToken(suffix++);
         }
 
         return candidate;

@@ -31,7 +31,11 @@ public sealed record SdkMessage(
 /// </summary>
 public static class SdkMessageGenerator
 {
-    public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<SdkMessage> messages, string ns)
+    /// <param name="entityTypeNames">Optional map from an entity logical name to its early-bound C# type name
+    /// (its SchemaName, as the model generator emits it). Used so the entity-constrained <c>On&lt;Message&gt;()</c>
+    /// extension references the exact generated type (e.g. <c>new_CustomEntity</c>), not a naive PascalCase of the
+    /// logical name (<c>NewCustomentity</c>). When null or missing an entry, falls back to PascalCase.</param>
+    public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<SdkMessage> messages, string ns, IReadOnlyDictionary<string, string>? entityTypeNames = null)
     {
         if (messages == null)
         {
@@ -46,11 +50,11 @@ public static class SdkMessageGenerator
         return messages
             .Where(m => !string.IsNullOrWhiteSpace(m?.Name))
             .OrderBy(m => m.Name, StringComparer.Ordinal)
-            .Select(m => new GeneratedModel($"Messages/{m.Name}.cs", GenerateOne(m, ns)))
+            .Select(m => new GeneratedModel($"Messages/{m.Name}.cs", GenerateOne(m, ns, entityTypeNames)))
             .ToList();
     }
 
-    private static string GenerateOne(SdkMessage message, string ns)
+    private static string GenerateOne(SdkMessage message, string ns, IReadOnlyDictionary<string, string>? entityTypeNames)
     {
         string request = $"{message.Name}Request";
         string response = $"{message.Name}Response";
@@ -92,11 +96,19 @@ public static class SdkMessageGenerator
 
         sb.AppendLine("    }");
 
-        AppendStepExtensions(sb, message);
+        AppendStepExtensions(sb, message, entityTypeNames);
 
         sb.AppendLine("}");
         return sb.ToString();
     }
+
+    // The early-bound C# type name for an entity logical name: its generated model type (SchemaName) when known,
+    // else a best-effort PascalCase of the logical name (correct for standard entities, whose SchemaName has no
+    // underscore).
+    private static string EntityTypeName(string logicalName, IReadOnlyDictionary<string, string>? entityTypeNames) =>
+        entityTypeNames != null && entityTypeNames.TryGetValue(logicalName, out string? typeName) && !string.IsNullOrEmpty(typeName)
+            ? typeName!
+            : PascalCase(logicalName);
 
     // Fan-out ceiling: at or below this many applicable entities we emit one On<Message>() overload per entity;
     // above it (or with no applicable entity, i.e. an all-entity message) we emit a single generic extension.
@@ -110,7 +122,7 @@ public static class SdkMessageGenerator
     /// The early-bound entity types are referenced by PascalCase of their logical name and are ASSUMED to be
     /// generated into this same target namespace (the models namespace <c>ns</c>).
     /// </summary>
-    private static void AppendStepExtensions(StringBuilder sb, SdkMessage message)
+    private static void AppendStepExtensions(StringBuilder sb, SdkMessage message, IReadOnlyDictionary<string, string>? entityTypeNames)
     {
         // A message name that is not a valid C# identifier cannot form a usable On<Name>() method or class name.
         // Leave the (unchanged) typed Request/Response above as-is and skip the extension rather than emit code
@@ -148,7 +160,7 @@ public static class SdkMessageGenerator
                 }
 
                 first = false;
-                string pascal = PascalCase(entity);
+                string pascal = EntityTypeName(entity, entityTypeNames);
                 sb.AppendLine($"        public static Vela.StepBuilder.ITypedMessageStepStage<{pascal}, {request}> On{message.Name}(this Vela.StepBuilder.IStepBuilder<{pascal}> builder) => builder.On<{request}>();");
             }
         }
@@ -192,17 +204,19 @@ public static class SdkMessageGenerator
     private static void AppendParameter(StringBuilder sb, SdkMessageField field, bool readOnly)
     {
         string type = field.CSharpType;
+        (string member, string key) = CSharpIdentifier.Member(field.Name);
+        string setArgs = key.Length > 0 ? "value, " + key : "value";
         sb.AppendLine();
         if (readOnly)
         {
-            sb.AppendLine($"        public {type} {field.Name} => Get<{type}>();");
+            sb.AppendLine($"        public {type} {member} => Get<{type}>({key});");
         }
         else
         {
-            sb.AppendLine($"        public {type} {field.Name}");
+            sb.AppendLine($"        public {type} {member}");
             sb.AppendLine("        {");
-            sb.AppendLine($"            get => Get<{type}>();");
-            sb.AppendLine("            set => Set(value);");
+            sb.AppendLine($"            get => Get<{type}>({key});");
+            sb.AppendLine($"            set => Set({setArgs});");
             sb.AppendLine("        }");
         }
     }
