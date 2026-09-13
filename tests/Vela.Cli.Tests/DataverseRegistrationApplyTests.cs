@@ -311,6 +311,51 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void UpsertPluginPackage_skips_update_when_version_and_content_unchanged()
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes("pkg-bytes-same");
+        string path = NewTempFile(bytes);
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("pluginpackage", existingId);
+        existing["version"] = "9.9.9";
+        existing["content"] = Convert.ToBase64String(bytes);
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
+        };
+
+        var payload = new PluginPackagePayload("acme_Pkg", "9.9.9", path);
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
+
+        Assert.Equal(existingId, result);
+        // Unchanged content + version -> no Update (which would otherwise bump modifiedon on every apply).
+        Assert.Empty(svc.Updated);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
+    public void UpsertPluginPackage_updates_when_content_changed_even_if_version_matches()
+    {
+        byte[] oldBytes = Encoding.UTF8.GetBytes("pkg-old");
+        byte[] newBytes = Encoding.UTF8.GetBytes("pkg-new");
+        string path = NewTempFile(newBytes);
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("pluginpackage", existingId);
+        existing["version"] = "9.9.9";
+        existing["content"] = Convert.ToBase64String(oldBytes);
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
+        };
+
+        var payload = new PluginPackagePayload("acme_Pkg", "9.9.9", path);
+        DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
+
+        Entity updated = Assert.Single(svc.Updated);
+        Assert.Equal(Convert.ToBase64String(newBytes), updated.GetAttributeValue<string>("content"));
+    }
+
+    [Fact]
     public void UpsertPluginPackage_throws_when_package_file_missing()
     {
         var svc = new TestSupport.FakeOrgService();

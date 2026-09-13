@@ -318,6 +318,17 @@ internal static partial class DataverseRegistration
         return service.Create(create);
     }
 
+    // Skip a no-op Update: if the stored version and content already match, updating would only bump
+    // modifiedon (Last Modified) on every apply --execute, making the package look churned when nothing changed.
+    string existingVersion = existing.GetAttributeValue<string>("version") ?? string.Empty;
+    string existingContent = existing.GetAttributeValue<string>("content") ?? string.Empty;
+    if (string.Equals(existingVersion, package.Version, StringComparison.Ordinal) &&
+        string.Equals(existingContent, packageContent, StringComparison.Ordinal))
+    {
+        LogOperation("package", "unchanged", desiredPackageName, $"v{package.Version}", verbose);
+        return existing.Id;
+    }
+
     LogOperation("package", "update", desiredPackageName, $"v{package.Version}", verbose);
     Entity update = new Entity("pluginpackage")
     {
@@ -438,7 +449,9 @@ internal static partial class DataverseRegistration
 {
     QueryExpression query = new QueryExpression("pluginpackage")
     {
-        ColumnSet = new ColumnSet("pluginpackageid", "name"),
+        // version + content are read so UpsertPluginPackage can skip a no-op Update (which would otherwise
+        // bump modifiedon on every apply --execute even when nothing changed).
+        ColumnSet = new ColumnSet("pluginpackageid", "name", "version", "content"),
         TopCount = 1
     };
     query.Criteria.AddCondition("name", ConditionOperator.Equal, packageName);
