@@ -24,16 +24,12 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.8.0] - 2026-09-13
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.8.0`.
+
 ### Added
 
-- **CLI: `vela models --messages` emits an entity-constrained `On<Message>()` step extension.** Alongside the
-  typed `XxxRequest`/`XxxResponse`, the generator now emits an `On<Message>()` builder extension per applicable
-  entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), constrained to `IStepBuilder<TEntity>`
-  and delegating to `On<XxxRequest>()`. This gives **compile-time entity-applicability** for generated messages
-  (e.g. `OnQualifyLead()` only compiles on an `EntityPluginBase<Lead>`), matching the curated messages. A global
-  message (`primaryobjecttypecode` `none`) or one applying to more than 8 entities emits a single generic
-  `On<Message><TEntity>()` instead. The early-bound entity types are assumed to be generated into the same
-  namespace.
 - **Framework: early-bound `ctx.Request.Target` on Create/Update.** `ctx.Request` on `ICreatePreContext` /
   `ICreatePostContext` / `IUpdatePreContext` / `IUpdatePostContext` is now a Vela-owned typed request
   (`Vela.Messages.CreateRequest<TEntity>` / `UpdateRequest<TEntity>`) whose `Target` is the early-bound
@@ -81,6 +77,29 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   members never do. Migration: change each `XxxRequest`/`XxxResponse` to derive from `OrganizationRequest`/`OrganizationResponse`
   and expose properties over `Parameters`/`Results` (set `RequestName` in the constructor), as the scaffold and the
   [Custom API guide](guides/custom-apis.md) now show. Part of the typed-requests design (`.context/typed-requests-design.md`).
+
+## [0.1.26] - 2026-09-13
+
+CLI line (`Vela.Cli`), published as `cli-v0.1.26`.
+
+### Added
+
+- **CLI: `vela models --messages` emits an entity-constrained `On<Message>()` step extension.** Alongside the
+  typed `XxxRequest`/`XxxResponse`, the generator now emits an `On<Message>()` builder extension per applicable
+  entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), constrained to `IStepBuilder<TEntity>`
+  and delegating to `On<XxxRequest>()`. This gives **compile-time entity-applicability** for generated messages
+  (e.g. `OnQualifyLead()` only compiles on an `EntityPluginBase<Lead>`), matching the curated messages. A global
+  message (`primaryobjecttypecode` `none`) or one applying to more than 8 entities emits a single generic
+  `On<Message><TEntity>()` instead. The early-bound entity types are assumed to be generated into the same
+  namespace.
+
+### Changed
+
+- **CLI: scaffold's offline framework-version fallback is now `0.8.0`.** When the latest published framework
+  version cannot be resolved online, `vela new` falls back to this default for the `Vela.Plugins` / `Vela.Testing`
+  package references. Bumped from `0.6.0` so an offline scaffold references a framework that includes
+  `Vela.Messages.TypedRequest` (required by the request/response classes `vela models --messages`/`--custom-apis`
+  generate). Override with `--core-version`.
 
 ## [0.7.0] - 2026-09-08
 
