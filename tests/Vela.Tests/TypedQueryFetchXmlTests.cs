@@ -27,6 +27,40 @@ public sealed class TypedQueryFetchXmlTests
     }
 
     [Fact]
+    public void In_with_a_single_value_uses_value_child_elements()   // A3
+    {
+        string xml = Query.For<TestAccount>()
+            .Select(a => a.Name)
+            .Where(a => a.Name, ConditionOperator.In, "Zava")
+            .ToFetchXml();
+
+        Assert.Contains("operator=\"in\"", xml);
+        Assert.Contains("<value>Zava</value>", xml);          // list operator -> child element even for one value
+        Assert.DoesNotContain("value=\"Zava\"", xml);          // never the compact attribute form
+    }
+
+    [Theory]                                                    // A15: irregular operators map to their FetchXML names
+    [InlineData(ConditionOperator.EqualUserId, "eq-userid")]
+    [InlineData(ConditionOperator.NotEqualUserId, "ne-userid")]
+    [InlineData(ConditionOperator.EqualBusinessId, "eq-businessid")]
+    public void Irregular_zero_arg_operators_map_to_fetch_names(ConditionOperator op, string expected)
+    {
+        string xml = Query.For<TestAccount>().Select(a => a.Name).Where(a => a.Name, op).ToFetchXml();
+        Assert.Contains($"operator=\"{expected}\"", xml);
+    }
+
+    [Fact]
+    public void OlderThanX_operators_map_to_olderthan_x_unit()   // A15
+    {
+        string xml = Query.For<TestAccount>().Select(a => a.Name)
+            .Where(a => a.Name, ConditionOperator.OlderThanXMonths, 6)
+            .ToFetchXml();
+
+        Assert.Contains("operator=\"olderthan-x-months\"", xml);
+        Assert.Contains("value=\"6\"", xml);
+    }
+
+    [Fact]
     public void Fetchxml_only_knob_is_emitted()
     {
         string xml = Query.For<TestAccount>().Select(a => a.Name).LateMaterialize().ToFetchXml();

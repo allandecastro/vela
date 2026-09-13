@@ -278,11 +278,14 @@ public static class FetchXmlWriter
             return element;
         }
 
-        if (values.Count == 1)
+        // in / not-in / between / not-between always use <value> child elements, even with a single value: Dataverse
+        // rejects the value="x" attribute form for these list operators (A3). Every other operator uses the compact
+        // attribute form for a single value.
+        if (values.Count == 1 && !RequiresValueElements(condition.Operator))
         {
             element.SetAttributeValue("value", FormatValue(values[0]));
         }
-        else if (values.Count > 1)
+        else if (values.Count >= 1)
         {
             foreach (object value in values)
             {
@@ -393,9 +396,18 @@ public static class FetchXmlWriter
         _ => "day"
     };
 
+    // The list operators whose values must be written as <value> child elements (never the value="x" attribute
+    // form), regardless of how many values are supplied (A3).
+    private static bool RequiresValueElements(ConditionOperator op) => op
+        is ConditionOperator.In
+        or ConditionOperator.NotIn
+        or ConditionOperator.Between
+        or ConditionOperator.NotBetween;
+
     // Irregular short operators are mapped explicitly; the rest fall back to kebab-case, which matches most
-    // date/relative operators (on-or-after, last-x-days, this-month, in-fiscal-year…). A few irregular ones
-    // (eq-userid family, olderthan-x-*) would need explicit cases if used.
+    // date/relative operators (on-or-after, last-x-days, this-month, in-fiscal-year…). The eq-userid /
+    // *-businessid / olderthan-x-* families are irregular (kebab-case would emit equal-user-id / older-than-x-months,
+    // which Dataverse does not recognize), so they are listed explicitly here (A15).
     private static string OperatorName(ConditionOperator op) => op switch
     {
         ConditionOperator.Equal => "eq",
@@ -416,6 +428,26 @@ public static class FetchXmlWriter
         ConditionOperator.DoesNotBeginWith => "not-begin-with",
         ConditionOperator.EndsWith => "ends-with",
         ConditionOperator.DoesNotEndWith => "not-end-with",
+
+        // "who / which business" operators.
+        ConditionOperator.EqualUserId => "eq-userid",
+        ConditionOperator.NotEqualUserId => "ne-userid",
+        ConditionOperator.EqualBusinessId => "eq-businessid",
+        ConditionOperator.NotEqualBusinessId => "ne-businessid",
+        ConditionOperator.EqualUserLanguage => "eq-userlanguage",
+        ConditionOperator.EqualUserTeams => "eq-userteams",
+        ConditionOperator.EqualUserOrUserTeams => "eq-useroruserteams",
+        ConditionOperator.EqualUserOrUserHierarchy => "eq-useroruserhierarchy",
+        ConditionOperator.EqualUserOrUserHierarchyAndTeams => "eq-useroruserhierarchyandteams",
+
+        // "older than X <unit>" relative-date operators.
+        ConditionOperator.OlderThanXMonths => "olderthan-x-months",
+        ConditionOperator.OlderThanXYears => "olderthan-x-years",
+        ConditionOperator.OlderThanXWeeks => "olderthan-x-weeks",
+        ConditionOperator.OlderThanXDays => "olderthan-x-days",
+        ConditionOperator.OlderThanXHours => "olderthan-x-hours",
+        ConditionOperator.OlderThanXMinutes => "olderthan-x-minutes",
+
         _ => KebabCase(op.ToString())
     };
 

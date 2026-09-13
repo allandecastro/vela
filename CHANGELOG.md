@@ -44,6 +44,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed
 
+- **Framework: FetchXML list operators emit `<value>` child elements even for a single value.** `In` / `NotIn` /
+  `Between` / `NotBetween` no longer emit the `value="x"` attribute form (which Dataverse rejects) when given one
+  value.
+- **Framework: FetchXML operator names for the `eq-userid` / `*-businessid` / `olderthan-x-*` families.** These
+  irregular operators are now mapped explicitly instead of falling back to kebab-case (which produced unrecognized
+  names such as `equal-user-id` / `older-than-x-months`).
+- **Testing: `WinOpportunity` / `LoseOpportunity` resolve the primary entity to the opportunity.** The in-memory
+  pipeline now derives the primary record from the request's `OpportunityClose.opportunityid` instead of picking the
+  `opportunityclose` activity, so an entity-filtered step registered on these messages fires as expected.
 - **CLI: `vela new` / `init` can no longer scaffold outside the target directory.** A solution or web-resources
   folder name is rejected unless it starts with an alphanumeric character (so it can never be `.`/`..`), and a
   defense-in-depth check refuses to write when the resolved target is not under the output directory, so a
