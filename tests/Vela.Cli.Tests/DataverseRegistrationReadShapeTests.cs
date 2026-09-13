@@ -125,10 +125,11 @@ public sealed class DataverseRegistrationReadShapeTests
         var handlerId = Guid.NewGuid();
         var pluginTypes = new Dictionary<Guid, string> { [handlerId] = "Zava.Plugins.AccountPlugin" };
 
-        // Main-operation step (managed by the customapi entity) — skipped.
+        // Internal Custom API main-operation step (its message is the Custom API's unique name) — skipped.
         var mainOp = new Entity("sdkmessageprocessingstep", Guid.NewGuid())
         {
             ["eventhandler"] = new EntityReference("plugintype", handlerId),
+            ["msg.name"] = new AliasedValue("sdkmessage", "name", "zava_DoThing"),
             ["stage"] = new OptionSetValue(SdkConstants.PipelineStage.MainOperation),
             ["mode"] = new OptionSetValue(0),
             ["statecode"] = new OptionSetValue(0),
@@ -141,9 +142,15 @@ public sealed class DataverseRegistrationReadShapeTests
             ["mode"] = new OptionSetValue(0),
             ["statecode"] = new OptionSetValue(0),
         };
+        var customApi = new Entity("customapi", Guid.NewGuid()) { ["uniquename"] = "zava_DoThing" };
         var svc = new TestSupport.FakeOrgService
         {
-            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(mainOp, unknown) : new EntityCollection(),
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(mainOp, unknown),
+                "customapi" => TestSupport.FakeOrgService.Collection(customApi),
+                _ => new EntityCollection(),
+            },
         };
 
         Assert.Empty(DataverseRegistration.GetStepItems(svc, pluginTypes, Json));

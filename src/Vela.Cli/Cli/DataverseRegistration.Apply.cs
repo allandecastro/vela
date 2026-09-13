@@ -240,18 +240,25 @@ internal static partial class DataverseRegistration
     }
 }
 
+    // Dataverse error code for the "Invalid plug-in registration stage" validation (captured live: the Web API
+    // returns error code 0x80044184 for a step create/update at MainOperation). Matching on the code is
+    // locale-independent, unlike the message text.
+    private const int InvalidPluginRegistrationStageErrorCode = unchecked((int)0x80044184);
+
     internal static bool IsIgnorableCustomApiStageException(Exception ex)
 {
     // Only a genuine Dataverse platform fault for the "invalid plug-in registration stage"
     // validation is ignorable (the custom-API main-operation step is managed by the platform).
     // Gating on FaultException<OrganizationServiceFault> ensures a generic programming error whose
-    // message merely contains the phrase is never silently swallowed. We walk the InnerException
-    // chain because ServiceClient often wraps the fault in an outer operation exception.
+    // message merely contains the phrase is never silently swallowed. We match on the locale-independent
+    // error code first, falling back to the message text (older SDKs / wrapped faults without a Detail).
+    // We walk the InnerException chain because ServiceClient often wraps the fault in an outer exception.
     Exception? current = ex;
     while (current != null)
     {
         if (current is FaultException<OrganizationServiceFault> fault &&
-            (fault.Message ?? string.Empty).Contains("Invalid plug-in registration stage", StringComparison.OrdinalIgnoreCase))
+            (fault.Detail?.ErrorCode == InvalidPluginRegistrationStageErrorCode
+                || (fault.Message ?? string.Empty).Contains("Invalid plug-in registration stage", StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }

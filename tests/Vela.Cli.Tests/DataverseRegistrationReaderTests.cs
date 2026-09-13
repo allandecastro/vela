@@ -472,10 +472,10 @@ public class DataverseRegistrationReaderTests
         Guid mainOpStepId = Guid.NewGuid();
         var pluginTypes = new Dictionary<Guid, string> { [pluginTypeId] = "Zava.Plugins.AccountPlugin" };
 
-        Entity StepRow(Guid id, int stage) => new Entity("sdkmessageprocessingstep", id)
+        Entity StepRow(Guid id, int stage, string message) => new Entity("sdkmessageprocessingstep", id)
         {
             ["eventhandler"] = new EntityReference("plugintype", pluginTypeId),
-            ["msg.name"] = new AliasedValue("sdkmessage", "name", "Update"),
+            ["msg.name"] = new AliasedValue("sdkmessage", "name", message),
             ["filter.primaryobjecttypecode"] = new AliasedValue("sdkmessagefilter", "primaryobjecttypecode", "account"),
             ["stage"] = Opt(stage),
             ["mode"] = Opt(0),
@@ -489,9 +489,14 @@ public class DataverseRegistrationReaderTests
             .Returns((QueryBase q) =>
             {
                 string? entity = (q as QueryExpression)?.EntityName;
-                return entity == "sdkmessageprocessingstep"
-                    ? Collection(StepRow(stepId, 40), StepRow(mainOpStepId, 30)) // 30 = MainOperation, skipped
-                    : new EntityCollection();
+                return entity switch
+                {
+                    // The stage-30 step is the internal Custom API step (message == the Custom API unique name),
+                    // so it is skipped; the stage-40 Update step is kept.
+                    "sdkmessageprocessingstep" => Collection(StepRow(stepId, 40, "Update"), StepRow(mainOpStepId, 30, "zava_DoThing")),
+                    "customapi" => Collection(new Entity("customapi", Guid.NewGuid()) { ["uniquename"] = "zava_DoThing" }),
+                    _ => new EntityCollection(),
+                };
             });
 
         List<RegistrationItem> items = DataverseRegistration.GetStepItems(mock.Object, pluginTypes, new JsonSerializerOptions());
@@ -503,6 +508,38 @@ public class DataverseRegistrationReaderTests
         Assert.Equal("account", item.Definition.GetProperty("entityLogicalName").GetString());
         Assert.Equal("my-key", item.Definition.GetProperty("stepKey").GetString());
         Assert.Equal(40, item.Definition.GetProperty("stage").GetInt32());
+    }
+
+    [Fact]
+    public void GetStepItems_keeps_a_main_operation_step_on_a_non_custom_api_message()   // A7
+    {
+        Guid pluginTypeId = Guid.NewGuid();
+        var pluginTypes = new Dictionary<Guid, string> { [pluginTypeId] = "Zava.Plugins.AccountPlugin" };
+
+        Entity Step(Guid id, int stage, string message) => new Entity("sdkmessageprocessingstep", id)
+        {
+            ["eventhandler"] = new EntityReference("plugintype", pluginTypeId),
+            ["msg.name"] = new AliasedValue("sdkmessage", "name", message),
+            ["stage"] = Opt(stage),
+            ["mode"] = Opt(0),
+            ["rank"] = 1,
+            ["name"] = "Zava.Plugins.AccountPlugin - MainOp: k",
+            ["statecode"] = Opt(0),
+        };
+
+        var mock = new Mock<IOrganizationService>(MockBehavior.Strict);
+        mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
+            .Returns((QueryBase q) => (q as QueryExpression)?.EntityName switch
+            {
+                // A stage-30 step on a standard message with NO matching Custom API must be kept (not skipped).
+                "sdkmessageprocessingstep" => Collection(Step(Guid.NewGuid(), 30, "Create")),
+                "customapi" => new EntityCollection(),   // no Custom APIs
+                _ => new EntityCollection(),
+            });
+
+        RegistrationItem item = Assert.Single(DataverseRegistration.GetStepItems(mock.Object, pluginTypes, new JsonSerializerOptions()));
+        Assert.Equal("Create", item.Definition.GetProperty("message").GetString());
+        Assert.Equal(30, item.Definition.GetProperty("stage").GetInt32());
     }
 
     [Fact]

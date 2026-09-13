@@ -47,4 +47,16 @@ public class IgnorableExceptionTests
 
         Assert.False(DataverseRegistration.IsIgnorableCustomApiStageException(fault));
     }
+
+    [Fact]
+    public void Dataverse_fault_is_ignorable_by_error_code_even_without_the_english_message()   // A8
+    {
+        // A non-English org returns the same error code (0x80044184) with localized text; matching on the code
+        // keeps the fault ignorable regardless of locale.
+        var fault = new FaultException<OrganizationServiceFault>(
+            new OrganizationServiceFault { ErrorCode = unchecked((int)0x80044184) },
+            "Etape d'enregistrement du plug-in non valide.");
+
+        Assert.True(DataverseRegistration.IsIgnorableCustomApiStageException(fault));
+    }
 }

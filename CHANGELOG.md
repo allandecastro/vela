@@ -44,6 +44,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed
 
+- **CLI: `plan`/`apply` only skips the platform-managed Custom API step, not every main-operation step.** When
+  reading live steps, only the internal Custom API handler step (its message is the Custom API's unique name) at
+  MainOperation is skipped; a genuine step at MainOperation on a standard message is kept so it diffs correctly
+  instead of showing as a perpetual "added".
+- **CLI: the ignorable "Invalid plug-in registration stage" fault is matched by error code.** `apply` recognizes it
+  by the Dataverse error code (`0x80044184`) rather than the English message text, so it stays ignorable on
+  non-English organizations (the message match remains as a fallback).
 - **Framework: FetchXML list operators emit `<value>` child elements even for a single value.** `In` / `NotIn` /
   `Between` / `NotBetween` no longer emit the `value="x"` attribute form (which Dataverse rejects) when given one
   value.
