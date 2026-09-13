@@ -55,6 +55,10 @@ string fetchXml = Query.For<Contact>()
 `ToFetchXml()` is also an extension on a plain `QueryExpression`. A table/column typo is a build error, not a
 runtime `FaultException`.
 
+Condition values that are Dataverse types (`OptionSetValue`, `Money`, `EntityReference`) emit their underlying
+value - the choice integer, the money decimal, the lookup GUID - and a query's `NoLock` is carried through as
+`no-lock='true'`.
+
 ## See also
 
 - [Write a plugin](plugins.md) - where these queries run.

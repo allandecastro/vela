@@ -377,6 +377,53 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Emits_dataverse_value_types_as_their_underlying_scalar()
+        {
+            Guid owner = Guid.NewGuid();
+            QueryExpression query = new QueryExpression("account");
+            query.Criteria.AddCondition("statuscode", ConditionOperator.Equal, new OptionSetValue(1));
+            query.Criteria.AddCondition("revenue", ConditionOperator.GreaterThan, new Money(500m));
+            query.Criteria.AddCondition("ownerid", ConditionOperator.Equal, new EntityReference("systemuser", owner));
+
+            string xml = query.ToFetchXml();
+            Assert.Contains("attribute=\"statuscode\" operator=\"eq\" value=\"1\"", xml);        // OptionSetValue -> int
+            Assert.Contains("attribute=\"revenue\" operator=\"gt\" value=\"500\"", xml);          // Money -> decimal
+            Assert.Contains($"attribute=\"ownerid\" operator=\"eq\" value=\"{owner:D}\"", xml);   // EntityReference -> GUID
+            Assert.DoesNotContain("Microsoft.Xrm.Sdk", xml);                                      // never the type name
+        }
+
+        [Fact]
+        public void Emits_the_irregular_hierarchy_and_choice_operators()
+        {
+            (ConditionOperator Op, string Fetch)[] operators =
+            {
+                (ConditionOperator.Above, "above"), (ConditionOperator.Under, "under"), (ConditionOperator.NotUnder, "not-under"),
+                (ConditionOperator.AboveOrEqual, "eq-or-above"), (ConditionOperator.UnderOrEqual, "eq-or-under"),
+                (ConditionOperator.ContainValues, "contain-values"), (ConditionOperator.DoesNotContainValues, "not-contain-values"),
+                (ConditionOperator.Last7Days, "last-seven-days"), (ConditionOperator.Next7Days, "next-seven-days"),
+            };
+
+            QueryExpression query = new QueryExpression("account");
+            foreach ((ConditionOperator op, string _) in operators)
+            {
+                query.Criteria.AddCondition("createdon", op, 1);
+            }
+
+            string xml = query.ToFetchXml();
+            foreach ((ConditionOperator _, string fetch) in operators)
+            {
+                Assert.Contains($"operator=\"{fetch}\"", xml);
+            }
+        }
+
+        [Fact]
+        public void Emits_no_lock_only_when_requested()
+        {
+            Assert.Contains("no-lock=\"true\"", new QueryExpression("account") { NoLock = true }.ToFetchXml());
+            Assert.DoesNotContain("no-lock", new QueryExpression("account").ToFetchXml());
+        }
+
+        [Fact]
         public void Emits_set_and_null_operators()
         {
             QueryExpression query = new QueryExpression("account");

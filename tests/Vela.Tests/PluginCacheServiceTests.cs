@@ -148,6 +148,30 @@ public sealed class PluginCacheServiceTests
     }
 
     [Fact]
+    public void GetOrCreate_DoesNotCacheFailedFactory()
+    {
+        // A failed factory must not poison the slot: the thrown Lazy is evicted, so a later call rebuilds.
+        PluginCacheService cache = new PluginCacheService();
+        int calls = 0;
+
+        Assert.Throws<InvalidOperationException>(() =>
+            cache.GetOrCreate<int>("token:key", TimeSpan.FromMinutes(1), () =>
+            {
+                calls++;
+                throw new InvalidOperationException("boom");
+            }));
+
+        int recovered = cache.GetOrCreate("token:key", TimeSpan.FromMinutes(1), () =>
+        {
+            calls++;
+            return 123;
+        });
+
+        Assert.Equal(123, recovered);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
     public void Clear_RemovesAllEntries()
     {
         PluginCacheService cache = new PluginCacheService();
@@ -163,8 +187,8 @@ public sealed class PluginCacheServiceTests
     [Fact]
     public void GetOrCreate_WithManyDistinctKeys_KeepsPerKeyValues()
     {
-        // Many distinct keys each resolve and cache their own value independently (the per-key monitor is
-        // created on demand from a ConcurrentDictionary - one lock per live key, by design).
+        // Many distinct keys each resolve and cache their own value independently (each key owns its Lazy slot;
+        // the slot is reclaimed with the entry on expiry/invalidate, so nothing accumulates beyond live entries).
         PluginCacheService cache = new PluginCacheService();
 
         for (int i = 0; i < 500; i++)
@@ -185,7 +209,7 @@ public sealed class PluginCacheServiceTests
     [Fact]
     public async Task GetOrCreate_ConcurrentAccessToSameKey_InvokesFactoryOnce()
     {
-        // Concurrent callers of the same key serialize on its monitor, so the factory runs exactly once.
+        // Concurrent callers of the same key block on the slot's Lazy, so the factory runs exactly once.
         PluginCacheService cache = new PluginCacheService();
         int calls = 0;
         using ManualResetEventSlim start = new ManualResetEventSlim(false);
