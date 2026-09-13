@@ -1,3 +1,4 @@
+using Microsoft.Xrm.Sdk;
 using Vela.Context;
 using Vela.CustomApi;
 using Vela.Messages;
@@ -64,6 +65,47 @@ namespace Vela.Tests
 
             Assert.Equal(50, context.PluginExecutionContext.OutputParameters["Score"]);
             Assert.Equal("High", context.PluginExecutionContext.OutputParameters["Rating"]);
+        }
+
+        // A request whose property is a plain auto-property: nothing populates its backing field under the
+        // bag-hydration model, so an input value would silently bind to its default.
+        public sealed class AutoPropRequest : OrganizationRequest
+        {
+            public AutoPropRequest()
+            {
+                RequestName = "zava_Legacy";
+            }
+
+            public int AccountId { get; set; }
+        }
+
+        public sealed class EmptyResponse : OrganizationResponse
+        {
+        }
+
+        private sealed class LegacyApi : CustomApiBase<AutoPropRequest, EmptyResponse>
+        {
+            public LegacyApi() : base(string.Empty, string.Empty)
+            {
+            }
+
+            protected override EmptyResponse Execute(ILocalPluginContext ctx, AutoPropRequest request)
+            {
+                return new EmptyResponse();
+            }
+        }
+
+        [Fact]
+        public void TypedCustomApi_AutoPropertyRequest_FailsLoudlyInsteadOfBindingDefault()
+        {
+            LegacyApi api = new LegacyApi();
+            LocalPluginContext context = PluginContext.ForMessage("zava_Legacy").Build();
+            context.PluginExecutionContext.InputParameters["AccountId"] = 7;
+
+            InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
+                () => api.Execute(context.ServiceProvider));
+            Assert.Contains("AccountId", ex.Message);
+            Assert.Contains("auto-property", ex.Message);
         }
     }
 }

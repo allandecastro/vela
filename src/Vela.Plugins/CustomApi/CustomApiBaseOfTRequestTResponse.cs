@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Vela.Context;
 using Vela.Constants;
 using Vela.StepBuilder;
@@ -111,7 +113,35 @@ namespace Vela.CustomApi
         /// <returns>The populated request object.</returns>
         protected virtual TRequest MapInputToRequest(ILocalPluginContext ctx)
         {
-            return new TRequest { Parameters = ctx.PluginExecutionContext.InputParameters };
+            ParameterCollection inputParameters = ctx.PluginExecutionContext.InputParameters;
+            var request = new TRequest { Parameters = inputParameters };
+            VerifyRequestBindsToParameters(request, inputParameters);
+            return request;
+        }
+
+        /// <summary>
+        /// Guard-rail: the request is hydrated by aliasing its <c>Parameters</c> bag onto the live
+        /// <c>InputParameters</c>, so a typed property must read through that bag (e.g. <c>get =&gt; Get&lt;T&gt;();</c>,
+        /// as generated types and <see cref="Vela.Messages.TypedRequest"/> do). A plain auto-property has its own
+        /// backing field that nothing populates, so an input value would silently bind to its default. Detect that
+        /// precisely - an input key matching an auto-property - and fail loudly instead of returning wrong data.
+        /// </summary>
+        private static void VerifyRequestBindsToParameters(TRequest request, ParameterCollection inputParameters)
+        {
+            Type type = request.GetType();
+            foreach (KeyValuePair<string, object> input in inputParameters)
+            {
+                PropertyInfo? property = type.GetProperty(input.Key, BindingFlags.Public | BindingFlags.Instance);
+                MethodInfo? getter = property?.GetGetMethod();
+                if (getter != null && getter.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+                {
+                    throw new InvalidPluginExecutionException(
+                        $"Custom API request '{type.FullName}' declares '{property!.Name}' as a plain auto-property, so the " +
+                        $"input parameter '{input.Key}' would silently bind to its default. Back the property with the " +
+                        $"Parameters bag instead (e.g. 'get => Get<{property.PropertyType.Name}>(); set => Set(value);') " +
+                        "or derive the request from Vela.Messages.TypedRequest, then regenerate with the current CLI.");
+                }
+            }
         }
 
         /// <summary>
