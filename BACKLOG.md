@@ -55,3 +55,16 @@ are modelled so far.
   - **Product kits:** `AddProductToKit`, `RemoveProductFromKit`, `ConvertProductToKit`, `ConvertKitToProduct`.
   - **Deprecated - never model:** `SetState`, `SetStateDynamicEntity`, `Assign` (use an Update of
     `statecode`/`statuscode`/`ownerid`).
+
+- **P3 - SQL query surface over the Web API SQL endpoint.** Dataverse exposes a read-only T-SQL subset through
+  the Web API `sql` query option (`GET [Org]/api/data/v9.2/accounts?sql=SELECT name FROM account WHERE ...`),
+  returning the same JSON as the equivalent OData/FetchXML query. Docs:
+  https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query/sql. Candidate for a typed
+  query surface alongside the existing FetchXML builder (`Query.For<T>()` in `src/Vela.Plugins/Querying`), and/or
+  a vela-client angle. Constraints to honour if we build it: read-only; a single `SELECT` per command; no
+  `SELECT *` (name every column); `INNER`/`LEFT JOIN` only (no `RIGHT`/`FULL`/`CROSS`); `WHERE` limited to a
+  boolean tree of column-vs-constant comparisons (`=`,`!=`,`<`,`>`,`<=`,`>=`,`LIKE`,`IN`,`BETWEEN`,`IS [NOT] NULL`),
+  no subqueries/CTE/`HAVING`/`UNION`/`CASE`/window/string-date-math functions (only `DATEADD`/`GETUTCDATE` on
+  literals in `WHERE`/`ON`); `GROUP BY` with `COUNT/SUM/AVG/MIN/MAX`; paging via `Prefer: odata.maxpagesize`
+  (`TOP`/`OFFSET ... FETCH` not supported); aggregate queries capped at 50k evaluated rows. Evaluate value versus
+  the existing FetchXML path (which already covers most of this) before committing.
