@@ -42,7 +42,17 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>` whose stages yield an `IAsyncOnlyModeSelector<TNext>`
   (a `.Async()` method, and no `.Sync()` path). Additive; `On<TRequest>()` is unchanged.
 
-## [0.8.0] - 2026-09-13
+### Fixed
+
+- **Framework: FetchXML list operators emit `<value>` child elements even for a single value.** `In` / `NotIn` /
+  `Between` / `NotBetween` no longer emit the `value="x"` attribute form (which Dataverse rejects) when given one
+  value.
+- **Framework: FetchXML operator names for the `eq-userid` / `*-businessid` / `olderthan-x-*` families.** These
+  irregular operators are now mapped explicitly instead of falling back to kebab-case (which produced unrecognized
+  names such as `equal-user-id` / `older-than-x-months`).
+- **Testing: `WinOpportunity` / `LoseOpportunity` resolve the primary entity to the opportunity.** The in-memory
+  pipeline now derives the primary record from the request's `OpportunityClose.opportunityid` instead of picking the
+  `opportunityclose` activity, so an entity-filtered step registered on these messages fires as expected.
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.8.0`.
 

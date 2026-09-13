@@ -700,6 +700,19 @@ namespace Vela.Testing
                 }
             }
 
+            // Messages whose primary record is not the first entity-typed parameter: derive it explicitly so an
+            // entity-filtered step still matches. WinOpportunity/LoseOpportunity carry an OpportunityClose activity
+            // whose opportunityid points at the real primary (opportunity); the generic scan below would otherwise
+            // pick the activity ("opportunityclose") and the step would silently not fire (A15).
+            if (request.RequestName is "WinOpportunity" or "LoseOpportunity"
+                && request.Parameters.TryGetValue("OpportunityClose", out object? close)
+                && close is Entity closeEntity
+                && closeEntity.Attributes.TryGetValue("opportunityid", out object? opportunityId)
+                && opportunityId is EntityReference opportunityRef)
+            {
+                return (opportunityRef.LogicalName, opportunityRef.Id);
+            }
+
             foreach (KeyValuePair<string, object> parameter in request.Parameters)
             {
                 if (parameter.Value is EntityReference reference)
