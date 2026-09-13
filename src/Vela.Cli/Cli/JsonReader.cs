@@ -116,6 +116,7 @@ internal static class JsonReader
                 string? parameterTypeName = TryGetString(value, "parameterTypeName") ?? TryGetString(value, "typeName");
                 bool isCollection = TryGetBool(value, "isCollection");
                 string? logicalEntityName = TryGetString(value, "logicalEntityName");
+                (parameterTypeName, isCollection) = CanonicalizeCustomApiType(parameterTypeName, isCollection, logicalEntityName);
                 return new { name, isOptional, parameterTypeName, isCollection, logicalEntityName };
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.name))
@@ -137,11 +138,22 @@ internal static class JsonReader
                 string? parameterTypeName = TryGetString(value, "parameterTypeName") ?? TryGetString(value, "typeName");
                 bool isCollection = TryGetBool(value, "isCollection");
                 string? logicalEntityName = TryGetString(value, "logicalEntityName");
+                (parameterTypeName, isCollection) = CanonicalizeCustomApiType(parameterTypeName, isCollection, logicalEntityName);
                 return new { name, parameterTypeName, isCollection, logicalEntityName };
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.name))
             .OrderBy(x => x.name, StringComparer.Ordinal)
             .ToArray<object>();
+    }
+
+    // A4: canonicalize a Custom API parameter type name to the same code->name form the live read produces (e.g.
+    // System.Int64 / long -> System.Int32, System.Single -> System.Double, and the collection flag normalized), so an
+    // equivalent local declaration does not diff as a perpetual "changed" against the live state. Round-trips through
+    // the same resolvers apply uses, so it is idempotent on an already-canonical (live) shape.
+    private static (string typeName, bool isCollection) CanonicalizeCustomApiType(string? parameterTypeName, bool isCollection, string? logicalEntityName)
+    {
+        int typeCode = DataverseRegistration.ResolveCustomApiTypeCode(parameterTypeName, isCollection);
+        return DataverseRegistration.ResolveCustomApiTypeName(typeCode, logicalEntityName);
     }
 
     public static string[] SplitCsv(string? value)
