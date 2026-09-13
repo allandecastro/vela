@@ -167,11 +167,15 @@ namespace Vela.Plugin
 
             if (matchedDefinition != null && !string.IsNullOrWhiteSpace(matchedDefinition.HandlerMethodName))
             {
-                // Every handler takes a single strongly-typed argument: the per-message context for a modelled
-                // message (e.g. IMergeContext<TEntity>), or the plain ILocalPluginContext for a permissive
-                // OnMessage(...) step that Vela does not model.
-                object argument = BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
-                    ?? BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
+                // Every handler takes a single strongly-typed argument. Resolution order matters when a typed
+                // request's name collides with a modelled message (e.g. On<MergeRequest>() resolves to "Merge"):
+                // that handler's parameter is IMessagePre/PostContext<TRequest>, which the modelled
+                // MergePreContext<TEntity> does NOT implement, so passing the modelled context throws. The generic
+                // message context (built from the handler's own parameter type) is therefore tried first; it
+                // returns null for a modelled handler (e.g. IMergeContext<TEntity>) and for the untyped permissive
+                // path, falling back to the per-message modelled context, then to the plain ILocalPluginContext.
+                object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
+                    ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
                     ?? ctx;
                 InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
                 return;

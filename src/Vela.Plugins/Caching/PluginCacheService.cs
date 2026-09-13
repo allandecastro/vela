@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace Vela.Caching
 {
@@ -7,58 +9,82 @@ namespace Vela.Caching
     /// Global process-level cache service with TTL-based expiration.
     /// </summary>
     /// <remarks>
-    /// Synchronisation uses plain <see cref="object"/> monitors (the C# <c>lock</c> statement) only,
-    /// which are fully supported under the Dataverse plugin sandbox's partial-trust permission set.
+    /// Each slot folds a <see cref="Lazy{T}"/> in <see cref="LazyThreadSafetyMode.ExecutionAndPublication"/> mode,
+    /// so a cache-miss factory runs exactly once per key under contention while unrelated keys never serialize.
+    /// The synchronisation lives inside the slot, so it is reclaimed together with the entry on expiration,
+    /// <see cref="Invalidate"/> or <see cref="Clear"/> - there is no separate lock registry to grow unbounded.
+    /// <see cref="Lazy{T}"/> synchronises with plain monitors (the C# <c>lock</c> statement), which are fully
+    /// supported under the Dataverse plugin sandbox's partial-trust permission set.
     /// </remarks>
     public sealed class PluginCacheService : IPluginCacheService
     {
-        private readonly ConcurrentDictionary<string, CacheEntry> _cache = new ConcurrentDictionary<string, CacheEntry>(StringComparer.Ordinal);
-
-        // One monitor per cache key, so a cache-miss factory runs once per key (double-checked below) without
-        // serializing unrelated keys. GetOrAdd hands every thread for a key the same object, so it is a correct
-        // per-key lock. Lock objects are never removed (that would let two threads lock different objects for the
-        // same key) - they are tiny and bounded by the number of distinct keys, which is the caller's concern.
-        private readonly ConcurrentDictionary<string, object> _keyLocks = new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, Lazy<CacheEntry>> _cache =
+            new ConcurrentDictionary<string, Lazy<CacheEntry>>(StringComparer.Ordinal);
 
         public T GetOrCreate<T>(string key, TimeSpan ttl, Func<T> factory)
         {
+            EnsureKey(key);
             if (factory == null)
             {
                 throw new ArgumentNullException(nameof(factory));
             }
 
-            if (TryGetValue<T>(key, out T cached))
-            {
-                return cached;
-            }
+            EnsureTtl(ttl);
 
-            lock (GetKeyLock(key))
+            while (true)
             {
-                // Double-check inside the lock: another thread may have populated the key while we waited.
-                if (TryGetValue<T>(key, out cached))
+                Lazy<CacheEntry> slot = _cache.GetOrAdd(key, _ => NewSlot(ttl, factory));
+
+                CacheEntry entry;
+                try
                 {
-                    return cached;
+                    // The factory runs at most once for this slot; every other caller blocks on the same Lazy and
+                    // then observes the identical result.
+                    entry = slot.Value;
+                }
+                catch
+                {
+                    // ExecutionAndPublication caches a thrown exception for the slot's lifetime, so drop this exact
+                    // slot on failure - the next caller rebuilds instead of replaying the failure forever.
+                    RemoveSlot(key, slot);
+                    throw;
                 }
 
-                T value = factory();
-                SetValue(key, ttl, value);
-                return value;
+                if (entry.ExpiresAtUtc > DateTimeOffset.UtcNow)
+                {
+                    return Cast<T>(entry, key);
+                }
+
+                // Expired: remove this exact slot (never a fresher one another thread may have installed) and retry.
+                RemoveSlot(key, slot);
             }
         }
 
         public T Refresh<T>(string key, TimeSpan ttl, Func<T> factory)
         {
+            EnsureKey(key);
             if (factory == null)
             {
                 throw new ArgumentNullException(nameof(factory));
             }
 
-            lock (GetKeyLock(key))
+            EnsureTtl(ttl);
+
+            Lazy<CacheEntry> slot = NewSlot(ttl, factory);
+            _cache[key] = slot;
+
+            CacheEntry entry;
+            try
             {
-                T value = factory();
-                SetValue(key, ttl, value);
-                return value;
+                entry = slot.Value;
             }
+            catch
+            {
+                RemoveSlot(key, slot);
+                throw;
+            }
+
+            return Cast<T>(entry, key);
         }
 
         public bool Invalidate(string key)
@@ -72,50 +98,27 @@ namespace Vela.Caching
             _cache.Clear();
         }
 
-        private bool TryGetValue<T>(string key, out T value)
+        private static Lazy<CacheEntry> NewSlot<T>(TimeSpan ttl, Func<T> factory) =>
+            new Lazy<CacheEntry>(
+                () => new CacheEntry(factory(), DateTimeOffset.UtcNow.Add(ttl)),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+
+        // Remove the slot only when it is still the one we hold, so a concurrent Refresh/rebuild is never discarded.
+        // net462's ConcurrentDictionary has no TryRemove(KeyValuePair) overload, so go through the ICollection one,
+        // which removes only on a key AND value match (Lazy compared by reference).
+        private void RemoveSlot(string key, Lazy<CacheEntry> slot) =>
+            ((ICollection<KeyValuePair<string, Lazy<CacheEntry>>>)_cache)
+                .Remove(new KeyValuePair<string, Lazy<CacheEntry>>(key, slot));
+
+        private static T Cast<T>(CacheEntry entry, string key)
         {
-            EnsureKey(key);
-            if (!_cache.TryGetValue(key, out CacheEntry entry))
-            {
-                value = default!;
-                return false;
-            }
-
-            if (entry.ExpiresAtUtc <= DateTimeOffset.UtcNow)
-            {
-                _cache.TryRemove(key, out _);
-                value = default!;
-                return false;
-            }
-
             if (entry.Value is not T typedValue)
             {
                 throw new InvalidOperationException(
                     $"Cache key '{key}' contains '{entry.Value?.GetType().FullName ?? "null"}' but requested '{typeof(T).FullName}'.");
             }
 
-            value = typedValue;
-            return true;
-        }
-
-        private void SetValue<T>(string key, TimeSpan ttl, T value)
-        {
-            if (ttl <= TimeSpan.Zero)
-            {
-                throw new ArgumentOutOfRangeException(nameof(ttl), "TTL must be greater than zero.");
-            }
-
-            DateTimeOffset expiresAt = DateTimeOffset.UtcNow.Add(ttl);
-            _cache[key] = new CacheEntry(value, expiresAt);
-        }
-
-        private object GetKeyLock(string key)
-        {
-            EnsureKey(key);
-
-            // Same object for every thread that asks for this key (the factory may create a throwaway under
-            // contention, but only the stored one is returned), so it is a correct per-key monitor.
-            return _keyLocks.GetOrAdd(key, _ => new object());
+            return typedValue;
         }
 
         private static void EnsureKey(string key)
@@ -123,6 +126,14 @@ namespace Vela.Caching
             if (string.IsNullOrWhiteSpace(key))
             {
                 throw new ArgumentNullException(nameof(key));
+            }
+        }
+
+        private static void EnsureTtl(TimeSpan ttl)
+        {
+            if (ttl <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ttl), "TTL must be greater than zero.");
             }
         }
 

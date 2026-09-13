@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
+using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace Vela.Querying;
@@ -78,6 +79,11 @@ public static class FetchXmlWriter
         if (query.Distinct)
         {
             fetch.SetAttributeValue("distinct", "true");
+        }
+
+        if (query.NoLock)
+        {
+            fetch.SetAttributeValue("no-lock", "true");
         }
 
         if (query.TopCount.HasValue)
@@ -354,6 +360,12 @@ public static class FetchXmlWriter
         null => string.Empty,
         bool b => b ? "true" : "false",
         DateTime dt => dt.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture),
+        // Dataverse value types carry their comparable value in a property, not in ToString() (which yields the
+        // type name). FetchXML expects the underlying scalar: the choice's integer, the money's decimal, the
+        // reference's GUID.
+        OptionSetValue optionSet => optionSet.Value.ToString(CultureInfo.InvariantCulture),
+        Money money => money.Value.ToString(CultureInfo.InvariantCulture),
+        EntityReference reference => reference.Id.ToString(),
         IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
         _ => value.ToString() ?? string.Empty
     };
@@ -428,6 +440,19 @@ public static class FetchXmlWriter
         ConditionOperator.DoesNotBeginWith => "not-begin-with",
         ConditionOperator.EndsWith => "ends-with",
         ConditionOperator.DoesNotEndWith => "not-end-with",
+
+        // Hierarchy operators whose FetchXML names invert the enum's word order (kebab-case would emit
+        // above-or-equal / under-or-equal, which Dataverse does not recognize).
+        ConditionOperator.AboveOrEqual => "eq-or-above",
+        ConditionOperator.UnderOrEqual => "eq-or-under",
+
+        // Multi-select choice operators. ContainValues kebab-cases correctly (contain-values), but
+        // DoesNotContainValues does not (kebab would emit does-not-contain-values).
+        ConditionOperator.DoesNotContainValues => "not-contain-values",
+
+        // Fixed seven-day windows spelled out in FetchXML (kebab would emit last7-days / next7-days).
+        ConditionOperator.Last7Days => "last-seven-days",
+        ConditionOperator.Next7Days => "next-seven-days",
 
         // "who / which business" operators.
         ConditionOperator.EqualUserId => "eq-userid",
