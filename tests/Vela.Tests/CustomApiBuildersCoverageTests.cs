@@ -134,6 +134,30 @@ public sealed class CustomApiBuildersCoverageTests
         Assert.Throws<ArgumentException>(() => Typed().UniqueName("x").Request(b => b.Add(r => "literal")));
     }
 
+    [Fact]
+    public void Separate_request_and_response_calls_accumulate_instead_of_overwriting()
+    {
+        // Two separate .Request(...)/.Response(...) calls must keep every parameter, not just the last call.
+        CustomApiDefinition definition = Typed()
+            .UniqueName("vela_Custom")
+            .Request(b => b.Add(r => r.Name))
+            .Request(b => b.Add(r => r.Count))
+            .Response(b => b.Add(r => r.Message))
+            .Build();
+
+        Assert.Equal(new[] { "Name", "Count" }, definition.InputParameters.Select(p => p.Name).ToArray());
+        Assert.Equal("Message", definition.OutputParameters.Single().Name);
+    }
+
+    [Fact]
+    public void Adding_the_same_parameter_twice_throws_instead_of_failing_silently()
+    {
+        Assert.Throws<InvalidOperationException>(() => Typed()
+            .UniqueName("vela_Custom")
+            .Request(b => b.Add(r => r.Name))
+            .Request(b => b.Add(r => r.Name)));
+    }
+
     // ---- CustomApiLightBuilder -----------------------------------------------------------------------
 
     [Fact]
