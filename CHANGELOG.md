@@ -24,6 +24,33 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.9.0] - 2026-09-13
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.9.0`.
+
+### Added
+
+- **Framework: async-only typed-message step (`IAsyncOnlyModeSelector` / `OnAsyncOnly<TRequest>()`).** New public
+  surface backing the CLI's AsyncOnly gate above: `IStepBuilder<TEntity>.OnAsyncOnly<TRequest>()` returns an
+  `IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>` whose stages yield an `IAsyncOnlyModeSelector<TNext>`
+  (a `.Async()` method, and no `.Sync()` path). Additive; `On<TRequest>()` is unchanged.
+
+### Fixed
+
+- **Framework: FetchXML list operators emit `<value>` child elements even for a single value.** `In` / `NotIn` /
+  `Between` / `NotBetween` no longer emit the `value="x"` attribute form (which Dataverse rejects) when given one
+  value.
+- **Framework: FetchXML operator names for the `eq-userid` / `*-businessid` / `olderthan-x-*` families.** These
+  irregular operators are now mapped explicitly instead of falling back to kebab-case (which produced unrecognized
+  names such as `equal-user-id` / `older-than-x-months`).
+- **Testing: `WinOpportunity` / `LoseOpportunity` resolve the primary entity to the opportunity.** The in-memory
+  pipeline now derives the primary record from the request's `OpportunityClose.opportunityid` instead of picking the
+  `opportunityclose` activity, so an entity-filtered step registered on these messages fires as expected.
+
+## [0.2.0] - 2026-09-13
+
+CLI line (`Vela.Cli`), published as `cli-v0.2.0`.
+
 ### Added
 
 - **CLI: `vela models --custom-apis` emits a registrability-gated `On<Message>()` step extension (Phase 3c).**
@@ -37,10 +64,19 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `On<XxxRequest>()` escape hatch stays for explicit use, and Dataverse still rejects an invalid registration at
   deploy time. The method name is the unique name minus its publisher prefix, PascalCased
   (`zava_AccountEstimateValue` -> `OnAccountEstimateValue`). See `.context/phase3c-customapi-registrability.md`.
-- **Framework: async-only typed-message step (`IAsyncOnlyModeSelector` / `OnAsyncOnly<TRequest>()`).** New public
-  surface backing the CLI's AsyncOnly gate above: `IStepBuilder<TEntity>.OnAsyncOnly<TRequest>()` returns an
-  `IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>` whose stages yield an `IAsyncOnlyModeSelector<TNext>`
-  (a `.Async()` method, and no `.Sync()` path). Additive; `On<TRequest>()` is unchanged.
+- **CLI: `--option=value` inline form and clearer option errors (shared tokenizer).** Every command now accepts the
+  `--option=value` form in addition to `--option value`. A misspelled option is still rejected up front, and a
+  value option missing its value (last token, or followed by another known option) now fails with
+  `Option '--x' requires a value.` instead of silently binding to the next option or dropping the value. Options
+  that may legitimately appear bare (`vela models --messages` / `--custom-apis` = all) keep working, and a value
+  that itself starts with `-` is still accepted.
+- **CLI: the interactive menu offers `models` and `logout`.** Running `vela` with no arguments now includes
+  "Generate models" (prompts for a solution or a table list, over an interactive connection) and "Sign out"
+  alongside init/add/plan/apply/inspect.
+- **CLI: an upgrade notice when a newer version is on nuget.org.** After a command runs, the CLI prints a
+  one-line "a newer version is available - run `dotnet tool update -g Vela.Cli`" notice to stderr. The nuget.org
+  check is throttled to once per 24h (cached in the user config), best-effort (never blocks or fails a command),
+  and silent for `--json` output, a local/dev build, or when `VELA_NO_UPDATE_CHECK` is set.
 
 ### Fixed
 
@@ -62,15 +98,6 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **CLI: the ignorable "Invalid plug-in registration stage" fault is matched by error code.** `apply` recognizes it
   by the Dataverse error code (`0x80044184`) rather than the English message text, so it stays ignorable on
   non-English organizations (the message match remains as a fallback).
-- **Framework: FetchXML list operators emit `<value>` child elements even for a single value.** `In` / `NotIn` /
-  `Between` / `NotBetween` no longer emit the `value="x"` attribute form (which Dataverse rejects) when given one
-  value.
-- **Framework: FetchXML operator names for the `eq-userid` / `*-businessid` / `olderthan-x-*` families.** These
-  irregular operators are now mapped explicitly instead of falling back to kebab-case (which produced unrecognized
-  names such as `equal-user-id` / `older-than-x-months`).
-- **Testing: `WinOpportunity` / `LoseOpportunity` resolve the primary entity to the opportunity.** The in-memory
-  pipeline now derives the primary record from the request's `OpportunityClose.opportunityid` instead of picking the
-  `opportunityclose` activity, so an entity-filtered step registered on these messages fires as expected.
 - **CLI: `vela new` / `init` can no longer scaffold outside the target directory.** A solution or web-resources
   folder name is rejected unless it starts with an alphanumeric character (so it can never be `.`/`..`), and a
   defense-in-depth check refuses to write when the resolved target is not under the output directory, so a
@@ -105,22 +132,6 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **CLI: clearer diagnostics.** An unknown option no longer dumps the generic top-level usage (the message already
   points at the right `vela <command> --help`), and a `.csproj` whose `RootNamespace`/`AssemblyName` cannot be read
   now warns (with the reason) instead of silently falling back to the file name.
-
-### Added
-
-- **CLI: `--option=value` inline form and clearer option errors (shared tokenizer).** Every command now accepts the
-  `--option=value` form in addition to `--option value`. A misspelled option is still rejected up front, and a
-  value option missing its value (last token, or followed by another known option) now fails with
-  `Option '--x' requires a value.` instead of silently binding to the next option or dropping the value. Options
-  that may legitimately appear bare (`vela models --messages` / `--custom-apis` = all) keep working, and a value
-  that itself starts with `-` is still accepted.
-- **CLI: the interactive menu offers `models` and `logout`.** Running `vela` with no arguments now includes
-  "Generate models" (prompts for a solution or a table list, over an interactive connection) and "Sign out"
-  alongside init/add/plan/apply/inspect.
-- **CLI: an upgrade notice when a newer version is on nuget.org.** After a command runs, the CLI prints a
-  one-line "a newer version is available - run `dotnet tool update -g Vela.Cli`" notice to stderr. The nuget.org
-  check is throttled to once per 24h (cached in the user config), best-effort (never blocks or fails a command),
-  and silent for `--json` output, a local/dev build, or when `VELA_NO_UPDATE_CHECK` is set.
 
 ## [0.8.0] - 2026-09-13
 

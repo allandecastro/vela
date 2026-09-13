@@ -75,8 +75,9 @@ internal sealed record ScaffoldOptions(
     // nuget.org (see ResolveLatestFrameworkVersion); this is used when that lookup fails or `--core-version`
     // is not passed and the machine is offline. Keep it a real, published version - and at least the version
     // whose API the scaffolded code needs (the typed message contexts landed in 0.3.0; the typed-requests
-    // surface generated code depends on - Vela.Messages.TypedRequest - landed in 0.8.0).
-    public const string DefaultCoreVersion = "0.8.0";
+    // surface - Vela.Messages.TypedRequest - landed in 0.8.0; the async-only Custom API step surface the
+    // generated On<Message>() extensions can emit - OnAsyncOnly / IAsyncOnlyModeSelector - landed in 0.9.0).
+    public const string DefaultCoreVersion = "0.9.0";
 
     // Windows reserved device names: unusable as a folder / file name on Windows even with a valid character set.
     private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
