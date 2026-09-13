@@ -44,6 +44,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed
 
+- **CLI: a step's identity survives a rename.** `plan`/`apply` now recover a step's key from a stable
+  `[vela:stepkey=...]` marker written into the step description, falling back to parsing the display name for steps
+  registered before this change. Renaming a step (or its plugin type) in Dataverse no longer breaks the match and
+  causes a delete-and-recreate that loses the step's id and history; the step is updated in place instead. Existing
+  steps pick up the marker the next time they are written (no forced migration).
 - **CLI: `vela new --force` preserves user-edited root files.** A regeneration no longer overwrites an existing
   `README.md`, `.gitignore`, or `Directory.Build.props` (they are written only when absent); the managed `.sln` and
   project files are still regenerated, matching the "user files at the solution root are preserved" contract.

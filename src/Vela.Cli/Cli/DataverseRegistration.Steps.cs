@@ -53,7 +53,7 @@ internal static partial class DataverseRegistration
     step["filteringattributes"] = filteringAttributes;
     step["supporteddeployment"] = new OptionSetValue(0);
     step["name"] = BuildStepName(definition);
-    step["description"] = BuildStepName(definition);
+    step["description"] = BuildStepDescription(definition);
     step["configuration"] = definition.UnsecureConfig ?? string.Empty;
     if (filterId.HasValue)
     {
@@ -216,7 +216,7 @@ internal static partial class DataverseRegistration
 {
     QueryExpression query = new QueryExpression("sdkmessageprocessingstep")
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "name", "stage", "mode")
+        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "name", "description", "stage", "mode")
     };
     query.Criteria.AddCondition("eventhandler", ConditionOperator.Equal, pluginTypeId);
 
@@ -234,7 +234,8 @@ internal static partial class DataverseRegistration
         string entity = GetAliasedString(row, "filter.primaryobjecttypecode") ?? string.Empty;
         int stage = row.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 0;
         int mode = row.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0;
-        string parsedStepKey = ParseStepKey(row.GetAttributeValue<string>("name"), definition.PluginTypeName);
+        string parsedStepKey = DefinitionParser.ResolveStepKey(
+            row.GetAttributeValue<string>("description"), row.GetAttributeValue<string>("name"), definition.PluginTypeName);
 
         if (!string.IsNullOrWhiteSpace(definition.StepKey) &&
             string.Equals(parsedStepKey, definition.StepKey, StringComparison.OrdinalIgnoreCase))
@@ -461,6 +462,16 @@ internal static partial class DataverseRegistration
 
     string entity = string.IsNullOrWhiteSpace(definition.EntityLogicalName) ? string.Empty : $" of {definition.EntityLogicalName}";
     return $"{definition.PluginTypeName} - {lifecycle}: {definition.Message}{entity}";
+}
+
+    // The step description: the human-readable name plus a stable [vela:stepkey=...] marker (B4). The marker lets a
+    // later read recover the step key even if the display name is changed, so the step's identity survives a rename.
+    internal static string BuildStepDescription(StepApplyDefinition definition)
+{
+    string name = BuildStepName(definition);
+    return string.IsNullOrWhiteSpace(definition.StepKey)
+        ? name
+        : $"{name}\n{DefinitionParser.StepKeyMarker(definition.StepKey)}";
 }
 
 }

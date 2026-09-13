@@ -102,6 +102,42 @@ internal static class DefinitionParser
         return result.OrderBy(x => x.Name, StringComparer.Ordinal).ToArray();
     }
 
+    // A stable, machine-parseable marker for the step key, embedded in the step's description. Unlike the display
+    // name, the description is not shown/edited in the plugin registration UI's step row, so the key survives an
+    // admin renaming the step or the plugin type (B4). Reading keys off this marker keeps the step's identity
+    // stable, so apply updates the step in place instead of delete+recreating it (which loses its id/history).
+    internal const string StepKeyMarkerPrefix = "[vela:stepkey=";
+    private const string StepKeyMarkerSuffix = "]";
+
+    /// <summary>The stable step-key marker to embed in a step's description.</summary>
+    internal static string StepKeyMarker(string stepKey) => $"{StepKeyMarkerPrefix}{stepKey}{StepKeyMarkerSuffix}";
+
+    /// <summary>Extracts the step key from the stable marker in <paramref name="text"/>, or null when absent.</summary>
+    internal static string? ExtractStepKeyFromMarker(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return null;
+        }
+
+        int start = text!.IndexOf(StepKeyMarkerPrefix, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        start += StepKeyMarkerPrefix.Length;
+        int end = text.IndexOf(StepKeyMarkerSuffix, start, StringComparison.Ordinal);
+        return end < 0 ? null : text.Substring(start, end - start);
+    }
+
+    /// <summary>
+    /// Resolves a live step's key from the stable description marker first (rename-proof), falling back to parsing
+    /// the display name for steps written before the marker existed (graceful migration).
+    /// </summary>
+    internal static string ResolveStepKey(string? description, string? stepName, string pluginTypeName) =>
+        ExtractStepKeyFromMarker(description) ?? ParseStepKey(stepName, pluginTypeName);
+
     internal static string ParseStepKey(string? stepName, string pluginTypeName)
     {
         if (string.IsNullOrWhiteSpace(stepName))
