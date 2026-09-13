@@ -24,6 +24,30 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed
+
+- **Framework: `On<TRequest>()` (and permissive typed `OnMessage` handlers) whose request name matches a modelled
+  message.** A step registered with `On<TRequest>()` binds a handler taking `IMessagePre/PostContext<TRequest>`.
+  When `TRequest.RequestName` collided with a Vela-modelled message (e.g. `MergeRequest` -> `Merge`), dispatch
+  built the modelled per-message context (`IMergeContext<TEntity>`), which does not implement
+  `IMessagePreContext<TRequest>`, so a correctly-written handler threw at runtime. Dispatch now resolves the
+  handler's own parameter type first, so these steps fire as documented.
+- **Framework: FetchXML condition values of Dataverse types serialize to their underlying value.** An
+  `OptionSetValue` / `Money` / `EntityReference` in a `ConditionExpression` was emitted via `ToString()` (the type
+  name, e.g. `value="Microsoft.Xrm.Sdk.OptionSetValue"`). `ToFetchXml()` now emits the choice integer, the money
+  decimal and the lookup GUID respectively.
+- **Framework: FetchXML operator names for the hierarchy, multi-select-choice and fixed-window families.**
+  `AboveOrEqual` (`eq-or-above`), `UnderOrEqual` (`eq-or-under`), `DoesNotContainValues` (`not-contain-values`),
+  `Last7Days` (`last-seven-days`) and `Next7Days` (`next-seven-days`) are now mapped explicitly instead of falling
+  back to kebab-case (which produced unrecognized names such as `above-or-equal` / `does-not-contain-values` /
+  `last7-days`).
+- **Framework: FetchXML preserves `QueryExpression.NoLock`.** `ToFetchXml()` now emits `no-lock='true'` when the
+  query sets `NoLock`, instead of silently dropping the hint.
+- **Framework: `IPluginCacheService` no longer retains a per-key lock object for the lifetime of the AppDomain.**
+  Cache-miss synchronisation now lives inside each entry (a `Lazy<T>` slot) and is reclaimed together with the
+  entry on expiration / `Invalidate` / `Clear`, so a workload using high-cardinality keys no longer accumulates
+  lock objects. The factory still runs at most once per key under contention.
+
 ## [0.9.0] - 2026-09-13
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.9.0`.
