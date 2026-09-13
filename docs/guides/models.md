@@ -58,8 +58,15 @@ environment (Microsoft's "available events": non-private messages with a visible
 `sdkmessagefilter`), skipping messages backed by a Custom API (owned by `--custom-apis`) and messages that
 already ship an SDK request class - both the core `Microsoft.Xrm.Sdk.Messages.*` types (e.g. `CreateRequest`) and
 the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (e.g. `QualifyLeadRequest`), the latter matched against a
-curated, non-exhaustive supplement (an unlisted one generates a harmless duplicate). The generated requests pair
-with the permissive `OnMessage(...).Handler<TRequest>()` typed handler.
+curated, non-exhaustive supplement (an unlisted one generates a harmless duplicate). Alongside each
+`XxxRequest`/`XxxResponse`, `--messages` also emits an entity-constrained `On<Message>()` step extension per
+applicable entity (read from the message's `sdkmessagefilter` `primaryobjecttypecode`), constrained to
+`IStepBuilder<TEntity>` and delegating to `On<XxxRequest>()`. This gives **compile-time entity applicability**:
+`steps.OnQualifyLead()` only compiles inside an `EntityPluginBase<Lead>`, exactly like the curated `On<Message>()`
+methods. A global message (`primaryobjecttypecode` `none`) or one applying to more than eight entities emits a
+single generic `On<Message><TEntity>()` instead. The generated requests also pair with the permissive
+`OnMessage(...).Handler<TRequest>()` typed handler and with `On<TRequest>()` directly. The early-bound entity
+types are assumed to be generated into the same namespace (`vela models --tables`).
 Connection flags are the same as `plan`/`apply`
 (`--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or `--interactive`).
 

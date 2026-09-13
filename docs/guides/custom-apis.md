@@ -56,6 +56,13 @@ public class ScoreResponse : TypedResponse
 parameter key from the property name, so a property is a plain one-liner - no `Parameters.Contains(...)`
 boilerplate. A read-only response property can drop the setter: `public int Score => Get<int>();`.
 
+`CustomApiBase<TRequest, TResponse>` constrains `TRequest : OrganizationRequest` and
+`TResponse : OrganizationResponse` (the same constraint on `Register.RegisterCustomApi<TRequest, TResponse>()`
+and `ICustomApiBuilder<TRequest, TResponse>`). Deriving from `TypedRequest` / `TypedResponse` satisfies it, since
+those bases are themselves an `OrganizationRequest` / `OrganizationResponse`. This is why one generated type serves
+authoring, calling, and reacting: the request you build to `service.Execute(...)` and the request you bind with
+`On<TRequest>()` are the exact type the Custom API is authored with.
+
 The framework hydrates the request over the live `InputParameters` (so `request.AccountId` reads the actual
 input) and copies the response's `Results` back to `OutputParameters` after `Execute` returns. The generic base
 exposes `RegisterCustomApi(...)`, and the same shape is available from

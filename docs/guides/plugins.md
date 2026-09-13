@@ -147,12 +147,18 @@ reading `ctx.Response` on a pre-stage handler, does not compile. Read message-sp
 (for example the merge subordinate from `ctx.Request.SubordinateId`).
 
 Every message reads its primary record off the already-typed `ctx.Request`. For `Create`, `Update` and
-`SendEmailFromTemplate`, `ctx.Request` is a Vela-owned typed request whose `ctx.Request.Target` returns the
+`SendEmailFromTemplate`, `ctx.Request` is a Vela-owned typed request (`Vela.Messages.CreateRequest<TEntity>`,
+`UpdateRequest<TEntity>`, `SendEmailFromTemplateRequest<TEntity>`) whose `ctx.Request.Target` returns the
 early-bound `TEntity` instead of the SDK's base `Entity`. Every other message uses the SDK request:
 `ctx.Request.Target` (the `EntityReference` for `Delete`/`Retrieve`/`Associate`/`Disassociate`/`Merge`/
 `GrantAccess`/`ModifyAccess`/`RevokeAccess`/`AddToQueue`/`RouteTo`) or `ctx.Request.Targets` (the
 `EntityCollection` for `CreateMultiple`/`UpdateMultiple`). To read any target early-bound regardless of message,
 the `ctx.GetTarget<T>()` extension stays available.
+
+Vela also owns `UpsertRequest<TEntity>` / `UpsertResponse` for **calling** Upsert from plugin code:
+`service.Execute(new UpsertRequest<Account> { Target = account }).ToResponse<UpsertResponse>()` returns
+`RecordCreated` (whether the row was inserted or updated) and the affected `Target` reference. Upsert is a message
+you call rather than register a step on, so it has no curated `On...()` method.
 
 The modelled messages with a typed context are:
 
@@ -207,6 +213,9 @@ private void OnScore(IMessagePostContext<CalculateAccountScoreRequest> ctx)
 untyped `OnMessage("...")` / marker `OnMessage<TMarker>()` when you do not have a request type in hand.
 
 This is the same typing the curated `On<Message>()` methods give, without a hand-authored per-message context.
+`vela models --messages` extends this to generated messages: it emits an entity-constrained `On<Message>()`
+extension per applicable entity (compile-time entity applicability, so `steps.OnQualifyLead()` only compiles on an
+`EntityPluginBase<Lead>`), delegating to `On<XxxRequest>()`. See [Generate models](models.md).
 
 A single-step `Execute(ctx)` override is not scoped to one message, so it does not expose `ctx.Request`. Read the
 record there with `ctx.GetTarget<T>()` (a full entity for `Create`/`Update`), `ctx.GetTargetRef()` (the
@@ -214,8 +223,8 @@ record there with `ctx.GetTarget<T>()` (a full entity for `Create`/`Update`), `c
 
 | Message method | Handler context | `ctx.Request` | Primary record |
 | --- | --- | --- | --- |
-| `OnCreate()` | `ICreatePostContext<T>` | `CreateRequest` | `ctx.Request.Target` (`T`), `ctx.Response.id` |
-| `OnUpdate()` | `IUpdatePostContext<T>` | `UpdateRequest` | `ctx.Request.Target` (`T`) |
+| `OnCreate()` | `ICreatePostContext<T>` | `CreateRequest<T>` | `ctx.Request.Target` (`T`), `ctx.Response.id` |
+| `OnUpdate()` | `IUpdatePostContext<T>` | `UpdateRequest<T>` | `ctx.Request.Target` (`T`) |
 | `OnDelete()` | `IDeletePostContext<T>` | `DeleteRequest` | `ctx.Request.Target` |
 | `OnCreateMultiple()` | `ICreateMultiplePostContext<T>` | `CreateMultipleRequest` | `ctx.Request.Targets`, `ctx.Response.Ids` |
 | `OnUpdateMultiple()` | `IUpdateMultiplePostContext<T>` | `UpdateMultipleRequest` | `ctx.Request.Targets` |
