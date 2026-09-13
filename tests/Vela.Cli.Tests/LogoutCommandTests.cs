@@ -7,6 +7,7 @@ using static Vela.Cli.CliExitCodes;
 namespace Vela.Cli.Tests;
 
 /// <summary>Covers <c>vela logout</c>: it clears the token cache + remembered URL and validates its args.</summary>
+[Xunit.Collection("ConfigDir")]
 public class LogoutCommandTests
 {
     [Fact]
