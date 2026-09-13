@@ -32,7 +32,7 @@ internal static class InteractiveMenu
 
         string choice = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
-                .Title("[bold]vela[/] — what would you like to do?")
+                .Title("[bold #6366f1]vela[/] — what would you like to do?")
                 .AddChoices(Init, Add, Models, Plan, Apply, Inspect, Logout, Exit));
 
         return choice switch
@@ -230,8 +230,9 @@ internal static class InteractiveMenu
 
     private static void WriteBanner()
     {
-        AnsiConsole.Write(new FigletText(ToolInfo.ToolName).LeftJustified().Color(Color.Teal));
-        AnsiConsole.MarkupLine($"[grey]{ToolInfo.ProductName}[/]  [green]v{ToolInfo.Version}[/]  [grey]by {ToolInfo.Author}[/]");
+        // Brand indigo (#6366F1) for the wordmark; cyan (#22D3EE) version tag echoes the brand gradient.
+        AnsiConsole.Write(new FigletText(ToolInfo.ToolName).LeftJustified().Color(new Color(99, 102, 241)));
+        AnsiConsole.MarkupLine($"[grey]{ToolInfo.ProductName}[/]  [#22d3ee]v{ToolInfo.Version}[/]  [grey]by {ToolInfo.Author}[/]");
         AnsiConsole.WriteLine();
     }
 }

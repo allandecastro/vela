@@ -546,7 +546,14 @@ internal static class ModelsCommand
             written++;
         }
 
-        Console.WriteLine(json ? BuildGenerationReport(outDir, models) : $"Generated {written} file(s) into {outDir}{summarySuffix}.");
+        if (json)
+        {
+            Console.WriteLine(BuildGenerationReport(outDir, models));
+        }
+        else
+        {
+            ConsoleTheme.WriteSuccessLine($"Generated {written} file(s) into {outDir}{summarySuffix}.");
+        }
         return ExitSuccess;
     }
 

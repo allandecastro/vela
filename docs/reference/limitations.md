@@ -73,9 +73,9 @@ untouched.
   connection** (managed identity is only relevant to `vela sign` for MI plugins). Prefer `DATAVERSE_CLIENT_SECRET`
   or `--client-secret-stdin` (piped) over `--client-secret` (exposed to shell history / process listings; the
   CLI warns). `--client-secret-stdin` requires stdin to be piped, not an interactive terminal.
-- **Secrets in output.** Secure step configuration is **redacted to a hash** in `plan`/`inspect` JSON (and any
-  `-o` plan file) - changes are still detected, but the value never appears. Unsecure config is shown verbatim
-  (non-sensitive by design).
+- **Secrets in output.** Secure step configuration is **redacted to a hash** in all `plan`/`inspect` output -
+  the terminal summary, the JSON, and any `--out` plan file - changes are still detected, but the value never
+  appears. Unsecure config is shown verbatim (non-sensitive by design).
 - **No cross-operation transaction.** A partway failure leaves partial state; the resume report lists what
   completed. Upserts are idempotent - fix the cause and re-run. Interactive mode needs a real terminal (not
   CI/piped).

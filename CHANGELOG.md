@@ -24,6 +24,23 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added
+
+- **CLI: brand-aligned terminal styling.** Command output now uses the Vela palette (indigo/cyan) with a
+  colorized `plan`/`apply`/`inspect` diff (green added, red removed, amber changed), green `✓` completion
+  lines for `init`/`add`/`models`/`sign`, a red `✗ Error:` prefix on failures, and an animated spinner while
+  the CLI connects to and reads from Dataverse. Color is emitted only on a real terminal and is disabled by
+  `NO_COLOR` / `VELA_NO_COLOR`, so piped, redirected, and CI output stays plain text.
+- **CLI: `--json` on `plan`/`apply`/`inspect`.** Forces JSON output even on a terminal (equivalent to piping
+  or `--out <file>`).
+
+### Changed
+
+- **CLI: `plan`/`apply`/`inspect` print a human-readable summary by default on a terminal.** When stdout is a
+  terminal and neither `--json` nor `--out` is given, these commands render the styled summary that previously
+  required `--verbose`. Piped/redirected runs, `--json`, and `--out` are unchanged and still emit JSON, so
+  scripts and coding agents parse the same contract as before.
+
 ### Fixed
 
 - **Framework: `On<TRequest>()` (and permissive typed `OnMessage` handlers) whose request name matches a modelled

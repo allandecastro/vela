@@ -186,7 +186,9 @@ static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptio
     try
     {
         RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
-        RegistrationState current = BuildDataverseState(local.SourceAssemblies, options, jsonOptions);
+        RegistrationState current = ConsoleStatus.Run(
+            "Connecting to Dataverse and reading current registrations…",
+            () => BuildDataverseState(local.SourceAssemblies, options, jsonOptions));
 
         var localSteps = local.Items.Where(IsStep)
             .OrderBy(x => x.Type, StringComparer.Ordinal)
@@ -217,9 +219,15 @@ static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptio
             diagnostics = local.Diagnostics.Concat(current.Diagnostics).ToArray()
         };
 
+        if (WantsHumanOutput(options))
+        {
+            WriteInspectSummary(local, current, options.Environment, Console.Out, ConsoleTheme.StdoutColor);
+            return ExitSuccess;
+        }
+
         if (options.Verbose)
         {
-            WriteVerboseInspectSummary(local, current, options.Environment);
+            WriteInspectSummary(local, current, options.Environment, Console.Error, ConsoleTheme.StderrColor);
             if (string.IsNullOrWhiteSpace(options.OutPath))
             {
                 return ExitSuccess;
@@ -254,7 +262,9 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
     try
     {
         RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
-        RegistrationState current = BuildDataverseState(local.SourceAssemblies, options, jsonOptions);
+        RegistrationState current = ConsoleStatus.Run(
+            "Connecting to Dataverse and reading current registrations…",
+            () => BuildDataverseState(local.SourceAssemblies, options, jsonOptions));
         RegistrationDiff diff = BuildDiff(local, current);
         PlanPreview preview = BuildPlanPreview("apply-execute-preview", options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && preview.Diagnostics.Length > 0)
@@ -264,12 +274,19 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
 
         if (!preview.HasChanges)
         {
+            if (WantsHumanOutput(options))
+            {
+                WritePlanSummary(preview with { Mode = "apply-execute" }, Console.Out, ConsoleTheme.StdoutColor);
+                Console.Out.WriteLine(ConsoleTheme.Success("No changes detected; nothing executed.", ConsoleTheme.StdoutColor));
+                return ExitSuccess;
+            }
+
             if (options.Verbose)
             {
-                WriteVerbosePlanSummary(preview with
+                WritePlanSummary(preview with
                 {
                     Mode = "apply-execute"
-                });
+                }, Console.Error, ConsoleTheme.StderrColor);
                 Console.Error.WriteLine("no changes detected");
                 if (string.IsNullOrWhiteSpace(options.OutPath))
                 {
@@ -290,7 +307,9 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         IOrganizationService service = client;
         ApplyDiff(service, diff, local.SourceAssemblyPayloads, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey);
 
-        RegistrationState after = BuildDataverseState(local.SourceAssemblies, options, jsonOptions);
+        RegistrationState after = ConsoleStatus.Run(
+            "Re-reading Dataverse state…",
+            () => BuildDataverseState(local.SourceAssemblies, options, jsonOptions));
         RegistrationDiff afterDiff = BuildDiff(local, after);
         PlanPreview result = BuildPlanPreview("apply-execute", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics) with
         {
@@ -307,11 +326,18 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
             return Fail($"Strict mode failed with {result.Diagnostics.Length} diagnostic(s) after apply.", ExitError, includeUsage: false);
         }
 
+        if (WantsHumanOutput(options))
+        {
+            Console.Out.WriteLine(ConsoleTheme.Success("Apply complete.", ConsoleTheme.StdoutColor));
+            WritePlanSummary(result, Console.Out, ConsoleTheme.StdoutColor);
+            return ExitSuccess;
+        }
+
         if (options.Verbose)
         {
             Console.Error.WriteLine();
             Console.Error.WriteLine("Apply complete.");
-            WriteVerbosePlanSummary(result);
+            WritePlanSummary(result, Console.Error, ConsoleTheme.StderrColor);
             if (string.IsNullOrWhiteSpace(options.OutPath))
             {
                 return ExitSuccess;
@@ -347,16 +373,28 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
     try
     {
         RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
-        RegistrationState current = BuildDataverseState(local.SourceAssemblies, options, jsonOptions);
+        RegistrationState current = ConsoleStatus.Run(
+            "Connecting to Dataverse and reading current registrations…",
+            () => BuildDataverseState(local.SourceAssemblies, options, jsonOptions));
         RegistrationDiff diff = BuildDiff(local, current);
         PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && plan.Diagnostics.Length > 0)
         {
             return Fail($"Strict mode failed with {plan.Diagnostics.Length} diagnostic(s).", ExitError, includeUsage: false);
         }
+
+        // On an interactive terminal (no --out, no --json), the styled human summary is the primary output on
+        // stdout in place of JSON. Piped/redirected/--json/--out runs keep emitting JSON so scripts and agents
+        // are unaffected.
+        if (WantsHumanOutput(options))
+        {
+            WritePlanSummary(plan, Console.Out, ConsoleTheme.StdoutColor);
+            return ExitSuccess;
+        }
+
         if (options.Verbose)
         {
-            WriteVerbosePlanSummary(plan);
+            WritePlanSummary(plan, Console.Error, ConsoleTheme.StderrColor);
             if (string.IsNullOrWhiteSpace(options.OutPath))
             {
                 return ExitSuccess;
@@ -385,6 +423,12 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
         CleanupTempDirectories(tempDirectories);
     }
 }
+
+// Whether plan/apply/inspect should print a styled human summary to stdout instead of JSON. True only on a
+// real terminal with neither --json nor --out: piped/redirected runs, --json, and file output all keep JSON so
+// scripts and coding agents parse the same contract they always have.
+static bool WantsHumanOutput(SharedOptions options) =>
+    !options.Json && string.IsNullOrWhiteSpace(options.OutPath) && !Console.IsOutputRedirected;
 
 // Best-effort cleanup of the temp directories created while extracting/transforming packages.
 // Failures are surfaced to stderr rather than silently swallowed so a leaked directory is visible.
