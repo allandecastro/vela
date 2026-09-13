@@ -114,6 +114,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `Option '--x' requires a value.` instead of silently binding to the next option or dropping the value. Options
   that may legitimately appear bare (`vela models --messages` / `--custom-apis` = all) keep working, and a value
   that itself starts with `-` is still accepted.
+- **CLI: the interactive menu offers `models` and `logout`.** Running `vela` with no arguments now includes
+  "Generate models" (prompts for a solution or a table list, over an interactive connection) and "Sign out"
+  alongside init/add/plan/apply/inspect.
 
 ## [0.8.0] - 2026-09-13
 
