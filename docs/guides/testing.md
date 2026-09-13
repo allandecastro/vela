@@ -46,8 +46,8 @@ chain, so plugins reading newer context members work.
 | Type | Purpose |
 | --- | --- |
 | `FakePluginExecutionContext` | mutable execution context (full interface chain) |
-| `FakeOrganizationService` | delegate hooks `OnCreate`/`OnRetrieve`/... (no-op by default) |
-| `FakeOrganizationServiceFactory` | hands out user/system services |
+| `HookOrganizationService` | delegate hooks `OnCreate`/`OnRetrieve`/... (no-op by default) |
+| `HookOrganizationServiceFactory` | hands out user/system services |
 | `RecordingTracingService` | captures `ctx.Trace(...)` for assertions |
 | `InMemoryOrganizationService` | **stateful** CRM (see below) |
 

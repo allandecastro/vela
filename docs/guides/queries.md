@@ -4,7 +4,7 @@ Use typed extensions on `QueryExpression` to avoid string literals:
 
 ```csharp
 using Vela.Querying;
-using Zava.Shared.Models;
+using Zava.Shared.Models.Generated;
 using Microsoft.Xrm.Sdk.Query;
 
 QueryExpression query = new QueryExpression(Account.EntityLogicalName)

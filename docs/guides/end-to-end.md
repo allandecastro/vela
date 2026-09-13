@@ -10,7 +10,7 @@ using Vela.Context;
 using Vela.Constants;
 using Vela.Plugin;
 using Vela.StepBuilder;
-using Zava.Shared.Models;
+using Zava.Shared.Models.Generated;
 
 public class AccountPostUpdate : EntityPluginBase<Account>
 {

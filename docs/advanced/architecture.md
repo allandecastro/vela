@@ -58,7 +58,7 @@ Dataverse pipeline  →  IPlugin.Execute(IServiceProvider)  →  PluginBase  →
                                         EntityPluginBase.ExecuteDataversePlugin(ctx)
                                                                  │  match the pipeline execution to one StepDefinition
                                                                  ▼
-                            BuildTypedContext(message, ctx)  →  I<Message>Context<TEntity>  →  .Handler(OnX) method
+                        BuildTypedContext(message, stage, ctx)  →  I<Message>Context<TEntity>  →  .Handler(OnX) method
 ```
 
 ### The layers, bottom to top
@@ -80,10 +80,12 @@ Dataverse pipeline  →  IPlugin.Execute(IServiceProvider)  →  PluginBase  →
    and re-checks the invariants as a backstop for reflection/out-of-order assembly.
 4. **Typed message contexts (the socle).** For a modelled message the router wraps the runtime context in an
    `I<Message>Context<TEntity>` (for example `IUpdatePostContext<Account>`). That context is a thin, allocation-cheap
-   view: `ctx.Request` / `ctx.Response` are the **standard SDK request/response classes** (`UpdateRequest`,
-   `CreateResponse`, ...) projected over the pipeline's `InputParameters` / `OutputParameters` `ParameterCollection`s,
-   and every message reads its primary record off the typed `ctx.Request.Target` / `ctx.Request.Targets` (an
-   early-bound `TEntity` on `Create`/`Update`, where `ctx.Request` is a Vela-owned typed request; the SDK's `Entity` /
+   view: `ctx.Response` is the **standard SDK response class** (`CreateResponse`, `UpdateResponse`, ...) and
+   `ctx.Request` is a **Vela-owned typed request** for `Create` / `Update` / `SendEmailFromTemplate`
+   (`Vela.Messages.CreateRequest<TEntity>` / `UpdateRequest<TEntity>` / `SendEmailFromTemplateRequest<TEntity>`) or the
+   standard SDK request for every other message, each projected over the pipeline's `InputParameters` /
+   `OutputParameters` `ParameterCollection`s, and every message reads its primary record off the typed
+   `ctx.Request.Target` / `ctx.Request.Targets` (an early-bound `TEntity` on `Create` / `Update`; the SDK's `Entity` /
    `EntityReference` / `EntityCollection` otherwise). The
    handler is bound by **method group**, so the message and the handler's context type are checked by the compiler:
    an `OnUpdate()` step bound to an `ICreateContext` handler does not build. A non-modelled `OnMessage("...")` step
@@ -94,6 +96,7 @@ Dataverse pipeline  →  IPlugin.Execute(IServiceProvider)  →  PluginBase  →
 Keeping registration metadata (`StepDefinition`) separate from execution is what lets the **same source** drive
 both the deployment (`plan`/`apply` diff the definitions against the environment) and the runtime dispatch, with no
 duplicated "where does this fire" configuration. Pushing image/stage validity into the *types* moves a whole class
-of registration mistakes from a failed deploy to a failed compile. And reusing the standard SDK request/response
-classes (rather than inventing parallel DTOs) means the typed context is a convenience layer over the real pipeline
-data, never a copy that can drift from it.
+of registration mistakes from a failed deploy to a failed compile. And projecting the typed context over the
+pipeline's own `ParameterCollection`s (SDK responses, and thin typed requests over the live `InputParameters`,
+rather than parallel DTOs) means the typed context is a convenience layer over the real pipeline data, never a copy
+that can drift from it.

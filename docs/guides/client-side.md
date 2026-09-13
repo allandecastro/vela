@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > Preview / work in progress. This is the .NET/CLI side of the client-side initiative for the
-> [vela-client](https://github.com/allandecastro/vela) TypeScript runtime, and it may change.
+> **vela-client** (separate) TypeScript runtime, and it may change.
 
 Vela's client-side support lets you author **model-driven form scripts** in TypeScript against typed,
 generated form models, build them into a single bundle, and deploy them (and any static web resources) to

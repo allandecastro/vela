@@ -24,8 +24,8 @@ Register several steps on one class and route each to its handler. See [Write a 
 ```csharp
 protected override void RegisterPluginSteps()
 {
-    RegisterSteps().OnCreate().PostOperation().Handler(OnCreate);
-    RegisterSteps().OnUpdate().PostOperation().Handler(OnUpdate);
+    RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreate);
+    RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdate);
 }
 ```
 

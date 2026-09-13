@@ -51,7 +51,7 @@ from `tests/Vela.Cli.Tests`:
 dotnet-stryker --mutate "**/<file>.cs"
 ```
 
-All jobs run on the self-hosted Windows runner.
+All jobs run on GitHub-hosted `windows-latest` runners.
 
 ## Gated cores and approximate scores
 
