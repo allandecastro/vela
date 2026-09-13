@@ -101,7 +101,33 @@ internal static class SdkMessageReader
         return new SdkMessage(
             messageName,
             ReadRequestFields(service, request.Id),
-            ReadResponseFields(service, request.Id));
+            ReadResponseFields(service, request.Id))
+        {
+            Entities = ReadApplicableEntities(service, message.Id),
+        };
+    }
+
+    // The entities a message applies to (its step-eligible, visible sdkmessagefilter rows'
+    // primaryobjecttypecode), captured so the generator can emit an entity-constrained On<Message>() step
+    // extension per entity (Phase 3b). Mirrors the filter conditions in ListGeneratableMessages; skips
+    // null/empty codes, dedupes and orders.
+    private static IReadOnlyList<string> ReadApplicableEntities(IOrganizationService service, Guid messageId)
+    {
+        QueryExpression query = new QueryExpression("sdkmessagefilter") { ColumnSet = new ColumnSet("primaryobjecttypecode") };
+        query.Criteria.AddCondition("sdkmessageid", ConditionOperator.Equal, messageId);
+        query.Criteria.AddCondition("iscustomprocessingstepallowed", ConditionOperator.Equal, true);
+        query.Criteria.AddCondition("isvisible", ConditionOperator.Equal, true);
+
+        // A global (entity-agnostic) message uses the sentinel primaryobjecttypecode "none" (verified live); it is
+        // NOT a concrete entity, so drop it - an empty result makes the generator emit the generic On<TEntity>()
+        // extension instead of referencing a non-existent "None" early-bound type.
+        return service.RetrieveAll(query)
+            .Select(e => e.GetAttributeValue<string>("primaryobjecttypecode"))
+            .Where(x => !string.IsNullOrWhiteSpace(x) && !string.Equals(x, "none", StringComparison.OrdinalIgnoreCase))
+            .Select(x => x!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static IReadOnlyList<SdkMessageField> ReadRequestFields(IOrganizationService service, Guid requestId)

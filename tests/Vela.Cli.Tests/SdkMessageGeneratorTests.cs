@@ -113,6 +113,108 @@ public class SdkMessageGeneratorTests
     }
 
     [Fact]
+    public void SingleEntity_EmitsEntityConstrainedOnExtension()
+    {
+        string code = Generate(new SdkMessage(
+            "QualifyLead",
+            Array.Empty<SdkMessageField>(),
+            Array.Empty<SdkMessageField>())
+        {
+            Entities = new[] { "lead" },
+        });
+
+        Assert.Contains("public static class QualifyLeadStepExtensions", code);
+        Assert.Contains(
+            "public static Vela.StepBuilder.ITypedMessageStepStage<Lead, QualifyLeadRequest> OnQualifyLead(this Vela.StepBuilder.IStepBuilder<Lead> builder) => builder.On<QualifyLeadRequest>();",
+            code);
+        // A concrete single-entity message does not emit the generic <TEntity> form.
+        Assert.DoesNotContain("OnQualifyLead<TEntity>", code);
+    }
+
+    [Fact]
+    public void TwoEntities_EmitsTwoOverloads_PascalCased()
+    {
+        string code = Generate(new SdkMessage(
+            "Merge",
+            Array.Empty<SdkMessageField>(),
+            Array.Empty<SdkMessageField>())
+        {
+            Entities = new[] { "account", "contact" },
+        });
+
+        Assert.Contains(
+            "public static Vela.StepBuilder.ITypedMessageStepStage<Account, MergeRequest> OnMerge(this Vela.StepBuilder.IStepBuilder<Account> builder) => builder.On<MergeRequest>();",
+            code);
+        Assert.Contains(
+            "public static Vela.StepBuilder.ITypedMessageStepStage<Contact, MergeRequest> OnMerge(this Vela.StepBuilder.IStepBuilder<Contact> builder) => builder.On<MergeRequest>();",
+            code);
+    }
+
+    [Fact]
+    public void UnderscoredLogicalName_IsPascalCased()
+    {
+        string code = Generate(new SdkMessage(
+            "DoThing",
+            Array.Empty<SdkMessageField>(),
+            Array.Empty<SdkMessageField>())
+        {
+            Entities = new[] { "new_customentity" },
+        });
+
+        Assert.Contains(
+            "ITypedMessageStepStage<NewCustomentity, DoThingRequest> OnDoThing(this Vela.StepBuilder.IStepBuilder<NewCustomentity> builder)",
+            code);
+    }
+
+    [Fact]
+    public void NoEntities_EmitsGenericExtension()
+    {
+        string code = Generate(new SdkMessage(
+            "Create",
+            Array.Empty<SdkMessageField>(),
+            Array.Empty<SdkMessageField>()));   // Entities defaults to empty -> all-entity message.
+
+        Assert.Contains(
+            "public static Vela.StepBuilder.ITypedMessageStepStage<TEntity, CreateRequest> OnCreate<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<CreateRequest>();",
+            code);
+    }
+
+    [Fact]
+    public void MoreThanEightEntities_FallsBackToGenericExtension()
+    {
+        string[] many = Enumerable.Range(0, 9).Select(i => "entity" + i).ToArray();
+
+        string code = Generate(new SdkMessage(
+            "Update",
+            Array.Empty<SdkMessageField>(),
+            Array.Empty<SdkMessageField>())
+        {
+            Entities = many,
+        });
+
+        Assert.Contains("OnUpdate<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
+        // No per-entity overload was emitted.
+        Assert.DoesNotContain("IStepBuilder<Entity0>", code);
+    }
+
+    [Fact]
+    public void ExactlyEightEntities_EmitsPerEntityOverloads()
+    {
+        string[] eight = Enumerable.Range(0, 8).Select(i => "entity" + i).ToArray();
+
+        string code = Generate(new SdkMessage(
+            "Assign",
+            Array.Empty<SdkMessageField>(),
+            Array.Empty<SdkMessageField>())
+        {
+            Entities = eight,
+        });
+
+        Assert.Contains("ITypedMessageStepStage<Entity0, AssignRequest> OnAssign(this Vela.StepBuilder.IStepBuilder<Entity0> builder)", code);
+        Assert.DoesNotContain("OnAssign<TEntity>", code);
+    }
+
+    [Fact]
     public void Generate_NullMessages_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => SdkMessageGenerator.Generate(null!, "N"));

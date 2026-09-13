@@ -12,7 +12,13 @@ public sealed record SdkMessageField(string Name, string CSharpType);
 public sealed record SdkMessage(
     string Name,
     IReadOnlyList<SdkMessageField> RequestFields,
-    IReadOnlyList<SdkMessageField> ResponseFields);
+    IReadOnlyList<SdkMessageField> ResponseFields)
+{
+    /// <summary>The entity logical names the message applies to (<c>sdkmessagefilter.primaryobjecttypecode</c>).
+    /// Drives the generated entity-constrained <c>On&lt;Message&gt;()</c> step extension(s); an empty list (or a
+    /// large fan-out) yields a single generic extension instead (see <see cref="SdkMessageGenerator"/>).</summary>
+    public IReadOnlyList<string> Entities { get; init; } = Array.Empty<string>();
+}
 
 /// <summary>
 /// Pure generator for arbitrary SDK message classes: a typed <c>Vela.Messages.TypedRequest</c> (one read-write
@@ -85,8 +91,102 @@ public static class SdkMessageGenerator
         }
 
         sb.AppendLine("    }");
+
+        AppendStepExtensions(sb, message);
+
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    // Fan-out ceiling: at or below this many applicable entities we emit one On<Message>() overload per entity;
+    // above it (or with no applicable entity, i.e. an all-entity message) we emit a single generic extension.
+    private const int EntityFanoutThreshold = 8;
+
+    /// <summary>
+    /// Appends the Phase 3b entity-constrained step extension(s) for the message (see
+    /// <c>.context/phase3b-compile-time-design.md</c>). Because <c>On{Name}()</c> extends
+    /// <c>IStepBuilder&lt;TEntity&gt;</c> for a concrete entity, it is only in scope on a plugin for that entity,
+    /// giving compile-time entity-applicability; it delegates to the existing permissive <c>On&lt;{Name}Request&gt;()</c>.
+    /// The early-bound entity types are referenced by PascalCase of their logical name and are ASSUMED to be
+    /// generated into this same target namespace (the models namespace <c>ns</c>).
+    /// </summary>
+    private static void AppendStepExtensions(StringBuilder sb, SdkMessage message)
+    {
+        // A message name that is not a valid C# identifier cannot form a usable On<Name>() method or class name.
+        // Leave the (unchanged) typed Request/Response above as-is and skip the extension rather than emit code
+        // that would not compile.
+        if (!IsValidIdentifier(message.Name))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    // No On{message.Name}() step extension: '{message.Name}' is not a valid C# identifier.");
+            return;
+        }
+
+        string request = $"{message.Name}Request";
+        IReadOnlyList<string> entities = message.Entities ?? Array.Empty<string>();
+        bool generic = entities.Count == 0 || entities.Count > EntityFanoutThreshold;
+
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>Entity-constrained <c>On{message.Name}()</c> step extension(s) for the <c>{message.Name}</c> message (compile-time entity-applicability). The referenced early-bound entity types are assumed to live in this same namespace.</summary>");
+        sb.AppendLine($"    public static class {message.Name}StepExtensions");
+        sb.AppendLine("    {");
+
+        if (generic)
+        {
+            // All-entity or large fan-out: a single generic extension over IStepBuilder<TEntity> instead of one
+            // overload per entity (avoids referencing many early-bound types).
+            sb.AppendLine($"        public static Vela.StepBuilder.ITypedMessageStepStage<TEntity, {request}> On{message.Name}<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<{request}>();");
+        }
+        else
+        {
+            bool first = true;
+            foreach (string entity in entities)
+            {
+                if (!first)
+                {
+                    sb.AppendLine();
+                }
+
+                first = false;
+                string pascal = PascalCase(entity);
+                sb.AppendLine($"        public static Vela.StepBuilder.ITypedMessageStepStage<{pascal}, {request}> On{message.Name}(this Vela.StepBuilder.IStepBuilder<{pascal}> builder) => builder.On<{request}>();");
+            }
+        }
+
+        sb.AppendLine("    }");
+    }
+
+    // PascalCase of an entity logical name for referencing its early-bound type: split on '_', capitalise the
+    // first letter of each part, keep the rest. Deterministic and simple (e.g. "lead" -> "Lead",
+    // "new_customentity" -> "NewCustomentity").
+    private static string PascalCase(string logicalName)
+    {
+        if (string.IsNullOrWhiteSpace(logicalName))
+        {
+            return logicalName ?? string.Empty;
+        }
+
+        return string.Concat(logicalName
+            .Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => char.ToUpperInvariant(part[0]) + part.Substring(1)));
+    }
+
+    private static bool IsValidIdentifier(string name)
+    {
+        if (string.IsNullOrEmpty(name) || !(char.IsLetter(name[0]) || name[0] == '_'))
+        {
+            return false;
+        }
+
+        foreach (char c in name)
+        {
+            if (!(char.IsLetterOrDigit(c) || c == '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void AppendParameter(StringBuilder sb, SdkMessageField field, bool readOnly)
