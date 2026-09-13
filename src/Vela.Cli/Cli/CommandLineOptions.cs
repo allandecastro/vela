@@ -456,7 +456,10 @@ internal static class CommandLineOptions
     // The Microsoft-provided sample public client (AppId + RedirectUri) for Dataverse interactive OAuth flows,
     // documented for development use. It is the same client the previous custom MSAL flow used.
     public const string DefaultInteractiveClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
-    private const string DefaultInteractiveRedirectUri = "app://58145B91-0C36-4500-8554-080854F2AC97";
+    // Must be a loopback URI: MSAL's system-browser interactive flow rejects any non-loopback redirect
+    // ("Only loopback redirect uri is supported ..."), which broke the default --interactive path. The
+    // well-known public client above has http://localhost registered for exactly this flow.
+    private const string DefaultInteractiveRedirectUri = "http://localhost";
 
     /// <summary>
     /// Builds the interactive OAuth connection string. The Dataverse SDK opens the browser on first use and, via

@@ -2770,8 +2770,9 @@ if (string.IsNullOrWhiteSpace(url))
 }
 
 // Well-known Microsoft public client registered for interactive Dataverse sign-in.
+// The redirect URI must be loopback: MSAL's system-browser flow rejects non-loopback redirects.
 const string publicAppId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
-const string redirectUri = "app://58145B91-0C36-4500-8554-080854F2AC97";
+const string redirectUri = "http://localhost";
 string connectionString =
     $"AuthType=OAuth;Url={url};AppId={publicAppId};RedirectUri={redirectUri};LoginPrompt=Auto";
 

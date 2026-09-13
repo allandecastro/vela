@@ -270,7 +270,8 @@ public class CommandLineOptionsTests
         Assert.Contains("AuthType=OAuth", cs);
         Assert.Contains("Url=https://zava.crm.dynamics.com", cs);
         Assert.Contains($"AppId={CommandLineOptions.DefaultInteractiveClientId}", cs);
-        Assert.Contains("RedirectUri=app://", cs);
+        // Loopback redirect: MSAL's system-browser interactive flow rejects non-loopback redirect URIs.
+        Assert.Contains("RedirectUri=http://localhost", cs);
         Assert.Contains("TokenCacheStorePath=/home/u/.vela/token.dat", cs);
         Assert.Contains("LoginPrompt=Auto", cs);
     }
