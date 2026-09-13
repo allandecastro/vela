@@ -123,7 +123,7 @@ static int RunNew(string[] args)
     }
     catch (Exception ex)
     {
-        return FailWithException(ex, ExitParseError, verbose);
+        return FailWithException(ex, ExitError, verbose);
     }
 }
 
@@ -239,7 +239,7 @@ static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptio
     }
     catch (Exception ex)
     {
-        return FailWithException(ex, ExitParseError, options.Verbose);
+        return FailWithException(ex, ExitError, options.Verbose);
     }
     finally
     {
@@ -259,7 +259,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         PlanPreview preview = BuildPlanPreview("apply-execute-preview", options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && preview.Diagnostics.Length > 0)
         {
-            return Fail($"Strict mode failed with {preview.Diagnostics.Length} diagnostic(s).", ExitParseError, includeUsage: false);
+            return Fail($"Strict mode failed with {preview.Diagnostics.Length} diagnostic(s).", ExitError, includeUsage: false);
         }
 
         if (!preview.HasChanges)
@@ -304,7 +304,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
 
         if (options.Strict && result.Diagnostics.Length > 0)
         {
-            return Fail($"Strict mode failed with {result.Diagnostics.Length} diagnostic(s) after apply.", ExitParseError, includeUsage: false);
+            return Fail($"Strict mode failed with {result.Diagnostics.Length} diagnostic(s) after apply.", ExitError, includeUsage: false);
         }
 
         if (options.Verbose)
@@ -332,7 +332,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
     }
     catch (Exception ex)
     {
-        return FailWithException(ex, ExitParseError, options.Verbose);
+        return FailWithException(ex, ExitError, options.Verbose);
     }
     finally
     {
@@ -352,7 +352,7 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
         PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && plan.Diagnostics.Length > 0)
         {
-            return Fail($"Strict mode failed with {plan.Diagnostics.Length} diagnostic(s).", ExitParseError, includeUsage: false);
+            return Fail($"Strict mode failed with {plan.Diagnostics.Length} diagnostic(s).", ExitError, includeUsage: false);
         }
         if (options.Verbose)
         {
@@ -378,7 +378,7 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
     }
     catch (Exception ex)
     {
-        return FailWithException(ex, ExitParseError, options.Verbose);
+        return FailWithException(ex, ExitError, options.Verbose);
     }
     finally
     {

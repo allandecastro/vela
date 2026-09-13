@@ -212,7 +212,7 @@ internal static class ModelsCommand
             {
                 // A bad/unreadable package must fail with a clean exit code, not a raw stack trace (mirrors how
                 // plan/apply surface a scan failure).
-                return Fail($"Could not scan the plugin package(s) to exclude authored Custom APIs: {ex.Message}", ExitParseError, includeUsage: false);
+                return Fail($"Could not scan the plugin package(s) to exclude authored Custom APIs: {ex.Message}", ExitError, includeUsage: false);
             }
             finally
             {
@@ -355,7 +355,7 @@ internal static class ModelsCommand
         }
         catch (Exception ex)
         {
-            return FailWithException(ex, ExitParseError, options.Verbose);
+            return FailWithException(ex, ExitError, options.Verbose);
         }
     }
 
@@ -500,7 +500,7 @@ internal static class ModelsCommand
         }
         catch (Exception ex)
         {
-            return FailWithException(ex, ExitParseError, options.Verbose);
+            return FailWithException(ex, ExitError, options.Verbose);
         }
     }
 

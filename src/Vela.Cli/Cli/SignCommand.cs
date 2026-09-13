@@ -178,13 +178,13 @@ internal static class SignCommand
                 {
                     if (!OperatingSystem.IsWindows())
                     {
-                        return Fail("--pfx-credential reads the Windows Credential Manager and is supported on Windows only.", ExitParseError, includeUsage: false);
+                        return Fail("--pfx-credential reads the Windows Credential Manager and is supported on Windows only.", ExitError, includeUsage: false);
                     }
 
                     password = WindowsCredential.ReadPassword(options.PfxCredentialTarget!);
                     if (string.IsNullOrEmpty(password))
                     {
-                        return Fail($"Credential '{options.PfxCredentialTarget}' not found in Windows Credential Manager, or its password is empty.", ExitParseError, includeUsage: false);
+                        return Fail($"Credential '{options.PfxCredentialTarget}' not found in Windows Credential Manager, or its password is empty.", ExitError, includeUsage: false);
                     }
                 }
 
@@ -210,7 +210,7 @@ internal static class SignCommand
             using Process? process = Process.Start(psi);
             if (process is null)
             {
-                return Fail("Failed to start 'dotnet nuget sign'.", ExitParseError, includeUsage: false);
+                return Fail("Failed to start 'dotnet nuget sign'.", ExitError, includeUsage: false);
             }
 
             // Read both streams to completion before waiting, so the child can't block on a full output buffer.
@@ -222,7 +222,7 @@ internal static class SignCommand
                 // Surface the child's stderr (the actual signing error) — it carries the failure reason, not the
                 // certificate or password (those are passed as arguments, never echoed back).
                 string detail = string.IsNullOrWhiteSpace(standardError) ? string.Empty : " " + standardError.Trim();
-                return Fail($"dotnet nuget sign failed (exit {process.ExitCode}).{detail}", ExitParseError, includeUsage: false);
+                return Fail($"dotnet nuget sign failed (exit {process.ExitCode}).{detail}", ExitError, includeUsage: false);
             }
 
             Console.WriteLine(options.Json ? BuildSignReport(options) : $"Signed: {options.PackagePath}");
@@ -230,7 +230,7 @@ internal static class SignCommand
         }
         catch (Exception ex)
         {
-            return Fail($"dotnet nuget sign failed: {ex.Message}", ExitParseError, includeUsage: false);
+            return Fail($"dotnet nuget sign failed: {ex.Message}", ExitError, includeUsage: false);
         }
         finally
         {
