@@ -117,6 +117,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **CLI: the interactive menu offers `models` and `logout`.** Running `vela` with no arguments now includes
   "Generate models" (prompts for a solution or a table list, over an interactive connection) and "Sign out"
   alongside init/add/plan/apply/inspect.
+- **CLI: an upgrade notice when a newer version is on nuget.org.** After a command runs, the CLI prints a
+  one-line "a newer version is available - run `dotnet tool update -g Vela.Cli`" notice to stderr. The nuget.org
+  check is throttled to once per 24h (cached in the user config), best-effort (never blocks or fails a command),
+  and silent for `--json` output, a local/dev build, or when `VELA_NO_UPDATE_CHECK` is set.
 
 ## [0.8.0] - 2026-09-13
 

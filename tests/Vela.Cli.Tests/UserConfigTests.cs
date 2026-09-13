@@ -10,6 +10,24 @@ namespace Vela.Cli.Tests;
 public class UserConfigTests
 {
     [Fact]
+    public void UpdateCheckState_RoundTrips()
+    {
+        InTempConfigDir(_ =>
+        {
+            (System.DateTimeOffset? last, string? latest) = UserConfig.GetUpdateCheckState();
+            Assert.Null(last);
+            Assert.Null(latest);
+
+            System.DateTimeOffset when = System.DateTimeOffset.UtcNow;
+            UserConfig.SetUpdateCheckState(when, "0.1.27");
+
+            (System.DateTimeOffset? last2, string? latest2) = UserConfig.GetUpdateCheckState();
+            Assert.Equal(when, last2);
+            Assert.Equal("0.1.27", latest2);
+        });
+    }
+
+    [Fact]
     public void SetThenGet_RoundTripsTheLastUrl()
     {
         InTempConfigDir(dir =>
