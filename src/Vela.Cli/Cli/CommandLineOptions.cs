@@ -73,7 +73,15 @@ internal static class CommandLineOptions
 
             if (valueOptions.Contains(token))
             {
-                i++; // its value is not an option
+                // Skip the following token as this option's value, UNLESS it is itself a known option: then this
+                // value option is missing its value and the next known option must be validated on its own rather
+                // than silently swallowed (A10). An unknown dash-looking token stays allowed as a value (e.g. a name
+                // or a connection string that starts with '-').
+                if (i + 1 < args.Length && !IsKnownOption(args[i + 1], valueOptions, flagOptions))
+                {
+                    i++;
+                }
+
                 continue;
             }
 
@@ -143,7 +151,7 @@ internal static class CommandLineOptions
 
         if (packagePaths.Count == 0)
         {
-            string? positional = TryReadFirstPositional(args);
+            string? positional = TryReadFirstPositional(args, SharedValueOptions);
             if (!string.IsNullOrWhiteSpace(positional))
             {
                 packagePaths.Add(positional);
@@ -422,6 +430,16 @@ internal static class CommandLineOptions
         return result.AccessToken;
     }
 
+    // A dash-prefixed token that is an option (excludes a lone "-" and the bare "--" separator).
+    private static bool IsOption(string token) =>
+        token.Length >= 2 && token[0] == '-' && token != "--";
+
+    // A dash-prefixed token that is a KNOWN option in either set (so it is definitely not a value). Unknown
+    // dash-looking tokens are deliberately allowed as option values (e.g. a name or connection string), so they
+    // are not treated as options here.
+    private static bool IsKnownOption(string token, HashSet<string> valueOptions, HashSet<string> flagOptions) =>
+        IsOption(token) && (valueOptions.Contains(token) || flagOptions.Contains(token));
+
     public static string? TryReadOption(string[] args, string optionName)
     {
         for (int i = 0; i < args.Length - 1; i++)
@@ -470,13 +488,19 @@ internal static class CommandLineOptions
         return values;
     }
 
-    public static string? TryReadFirstPositional(string[] args)
+    public static string? TryReadFirstPositional(string[] args, HashSet<string>? valueOptions = null)
     {
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i].StartsWith("-", StringComparison.Ordinal))
             {
-                if (i + 1 < args.Length && !args[i + 1].StartsWith("-", StringComparison.Ordinal))
+                // Skip the following token only when this option actually takes a value. With a known value-option
+                // set we consult it, so a boolean flag (e.g. --strict) never swallows the positional after it (A11);
+                // without one we fall back to the legacy heuristic (next token is not itself an option).
+                bool skipNext = valueOptions != null
+                    ? valueOptions.Contains(args[i])
+                    : (i + 1 < args.Length && !args[i + 1].StartsWith("-", StringComparison.Ordinal));
+                if (skipNext && i + 1 < args.Length && !args[i + 1].StartsWith("-", StringComparison.Ordinal))
                 {
                     i++;
                 }
