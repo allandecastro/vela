@@ -71,17 +71,46 @@ public interface ITypedMessagePreAndPostStep<TEntity, TRequest>
 }
 
 /// <summary>
+/// Stage selection for a typed message that may only be registered asynchronously (a Custom API whose
+/// <c>allowedcustomprocessingsteptype</c> is <c>AsyncOnly</c>, Phase 3c). Identical to
+/// <see cref="ITypedMessageStepStage{TEntity, TRequest}"/> except each stage returns an
+/// <see cref="IAsyncOnlyModeSelector{TNext}"/>, so only <c>.Async()</c> compiles.
+/// </summary>
+/// <typeparam name="TEntity">The entity type for this step.</typeparam>
+/// <typeparam name="TRequest">The request type stated on the generated <c>On&lt;Message&gt;()</c> call.</typeparam>
+public interface IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>
+    where TEntity : Entity
+    where TRequest : OrganizationRequest, new()
+{
+    /// <summary>Register in the PreValidation stage (outside the transaction, before security checks).</summary>
+    IAsyncOnlyModeSelector<ITypedMessageNoImageStep<TEntity, TRequest>> PreValidation();
+
+    /// <summary>Register in the PreOperation stage (inside the transaction, before the operation).</summary>
+    IAsyncOnlyModeSelector<ITypedMessagePreImageStep<TEntity, TRequest>> PreOperation();
+
+    /// <summary>Register in the PostOperation stage (inside the transaction, after the operation).</summary>
+    IAsyncOnlyModeSelector<ITypedMessagePreAndPostStep<TEntity, TRequest>> PostOperation();
+}
+
+/// <summary>
 /// Generic adapter that carries <typeparamref name="TRequest"/> through the typed-message chain while the mutable
 /// step state lives on the shared <see cref="StepBuilder{TEntity}"/>. Stage/mode set on the builder; on
 /// <c>Handler(...)</c> the builder's real image/settings terminal is returned so the fluent chain continues.
+/// The same adapter serves both the permissive <c>On&lt;TRequest&gt;()</c> chain and the async-only chain
+/// (<see cref="IAsyncOnlyTypedMessageStepStage{TEntity, TRequest}"/>); which stage interface the caller holds
+/// decides whether <c>.Sync()</c> is reachable.
 /// </summary>
 /// <typeparam name="TEntity">The entity type for this step.</typeparam>
 /// <typeparam name="TRequest">The request type stated on <c>On&lt;TRequest&gt;()</c>.</typeparam>
 internal sealed class TypedMessageStep<TEntity, TRequest> :
     ITypedMessageStepStage<TEntity, TRequest>,
+    IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>,
     IModeSelector<ITypedMessageNoImageStep<TEntity, TRequest>>,
     IModeSelector<ITypedMessagePreImageStep<TEntity, TRequest>>,
     IModeSelector<ITypedMessagePreAndPostStep<TEntity, TRequest>>,
+    IAsyncOnlyModeSelector<ITypedMessageNoImageStep<TEntity, TRequest>>,
+    IAsyncOnlyModeSelector<ITypedMessagePreImageStep<TEntity, TRequest>>,
+    IAsyncOnlyModeSelector<ITypedMessagePreAndPostStep<TEntity, TRequest>>,
     ITypedMessageNoImageStep<TEntity, TRequest>,
     ITypedMessagePreImageStep<TEntity, TRequest>,
     ITypedMessagePreAndPostStep<TEntity, TRequest>
@@ -99,12 +128,26 @@ internal sealed class TypedMessageStep<TEntity, TRequest> :
     IModeSelector<ITypedMessagePreAndPostStep<TEntity, TRequest>> ITypedMessageStepStage<TEntity, TRequest>.PostOperation()
     { _builder.SetStageInternal(PluginStages.PostOperation); return this; }
 
+    IAsyncOnlyModeSelector<ITypedMessageNoImageStep<TEntity, TRequest>> IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>.PreValidation()
+    { _builder.SetStageInternal(PluginStages.PreValidation); return this; }
+    IAsyncOnlyModeSelector<ITypedMessagePreImageStep<TEntity, TRequest>> IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>.PreOperation()
+    { _builder.SetStageInternal(PluginStages.PreOperation); return this; }
+    IAsyncOnlyModeSelector<ITypedMessagePreAndPostStep<TEntity, TRequest>> IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>.PostOperation()
+    { _builder.SetStageInternal(PluginStages.PostOperation); return this; }
+
     ITypedMessageNoImageStep<TEntity, TRequest> IModeSelector<ITypedMessageNoImageStep<TEntity, TRequest>>.Mode(ExecutionMode mode)
     { _builder.SetModeInternal(mode); return this; }
     ITypedMessagePreImageStep<TEntity, TRequest> IModeSelector<ITypedMessagePreImageStep<TEntity, TRequest>>.Mode(ExecutionMode mode)
     { _builder.SetModeInternal(mode); return this; }
     ITypedMessagePreAndPostStep<TEntity, TRequest> IModeSelector<ITypedMessagePreAndPostStep<TEntity, TRequest>>.Mode(ExecutionMode mode)
     { _builder.SetModeInternal(mode); return this; }
+
+    ITypedMessageNoImageStep<TEntity, TRequest> IAsyncOnlyModeSelector<ITypedMessageNoImageStep<TEntity, TRequest>>.Async()
+    { _builder.SetModeInternal(ExecutionMode.Asynchronous); return this; }
+    ITypedMessagePreImageStep<TEntity, TRequest> IAsyncOnlyModeSelector<ITypedMessagePreImageStep<TEntity, TRequest>>.Async()
+    { _builder.SetModeInternal(ExecutionMode.Asynchronous); return this; }
+    ITypedMessagePreAndPostStep<TEntity, TRequest> IAsyncOnlyModeSelector<ITypedMessagePreAndPostStep<TEntity, TRequest>>.Async()
+    { _builder.SetModeInternal(ExecutionMode.Asynchronous); return this; }
 
     INoImageStep<TEntity> ITypedMessageNoImageStep<TEntity, TRequest>.Handler(Action<IMessagePreContext<TRequest>> handler)
     { _builder.SetHandlerInternal(handler); return _builder; }

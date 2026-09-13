@@ -8,12 +8,25 @@ namespace Vela.Cli;
 /// <summary>A Custom API parameter/property: its name and Dataverse <c>customapifieldtype</c> value.</summary>
 public sealed record CustomApiParameter(string Name, int FieldType);
 
-/// <summary>A Custom API message to generate typed Request/Response classes for.</summary>
+/// <summary>
+/// A Custom API message to generate typed Request/Response classes for. <paramref name="AllowedStepType"/>,
+/// <paramref name="IsPrivate"/> and <paramref name="BoundEntityLogicalName"/> drive the Phase 3c compile-time
+/// registrability of the generated <c>On&lt;Message&gt;()</c> step extension (see
+/// <c>.context/phase3c-customapi-registrability.md</c>). They default to a permissive, global shape so callers
+/// that do not care keep working.
+/// </summary>
+/// <param name="AllowedStepType">Dataverse <c>allowedcustomprocessingsteptype</c>: 0 None, 1 AsyncOnly, 2 SyncAndAsync.</param>
+/// <param name="IsPrivate">Dataverse <c>isprivate</c>: a private Custom API is not meant to be extended by steps.</param>
+/// <param name="BoundEntityLogicalName">Dataverse <c>boundentitylogicalname</c> (null/empty for a global API); when
+/// set, the generated step extension is constrained to that entity for compile-time applicability.</param>
 public sealed record CustomApiMessage(
     string UniqueName,
     bool IsBoundToEntity,
     IReadOnlyList<CustomApiParameter> RequestParameters,
-    IReadOnlyList<CustomApiParameter> ResponseProperties);
+    IReadOnlyList<CustomApiParameter> ResponseProperties,
+    int AllowedStepType = 2,
+    bool IsPrivate = false,
+    string? BoundEntityLogicalName = null);
 
 /// <summary>
 /// Pure generator for Custom API message classes: a typed <c>Vela.Messages.TypedRequest</c> (one read-write
@@ -89,8 +102,110 @@ public static class CustomApiMessageGenerator
         }
 
         sb.AppendLine("    }");
+
+        AppendStepExtensions(sb, message);
+
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    // Phase 3c: emit a registrability-gated On<Message>() step extension for the Custom API (see
+    // .context/phase3c-customapi-registrability.md). A bound API (boundentitylogicalname set) constrains the
+    // extension to IStepBuilder<BoundEntity> for compile-time entity applicability; a global one emits a generic
+    // On<Message><TEntity>(). An AsyncOnly API (allowedcustomprocessingsteptype == 1) returns an async-only stage
+    // (no .Sync()); a None (0) or private API emits no extension at all (only a comment), so the blessed path does
+    // not compile - the generic On<XxxRequest>() escape hatch stays for explicit use, and Dataverse rejects an
+    // invalid registration at deploy time regardless. The referenced early-bound entity type is assumed to be
+    // generated into this same namespace.
+    private static void AppendStepExtensions(StringBuilder sb, CustomApiMessage message)
+    {
+        string request = $"{message.UniqueName}Request";
+
+        // The request class name ({UniqueName}Request) must be a valid identifier to be referenced at all.
+        if (!IsValidIdentifier(message.UniqueName))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    // No step extension: Custom API '{message.UniqueName}' is not a valid C# identifier.");
+            return;
+        }
+
+        // None or private: no blessed On<Message>() extension (use On<{UniqueName}Request>() explicitly if intended).
+        if (message.IsPrivate || message.AllowedStepType == 0)
+        {
+            string reason = message.IsPrivate ? "is private" : "allows no processing step";
+            sb.AppendLine();
+            sb.AppendLine($"    // No On{MethodSuffix(message.UniqueName)}() step extension: Custom API '{message.UniqueName}' {reason}. Use On<{request}>() explicitly if you really intend to register a step.");
+            return;
+        }
+
+        bool asyncOnly = message.AllowedStepType == 1;
+        string stageType = asyncOnly
+            ? $"Vela.StepBuilder.IAsyncOnlyTypedMessageStepStage"
+            : $"Vela.StepBuilder.ITypedMessageStepStage";
+        string entry = asyncOnly ? $"OnAsyncOnly<{request}>" : $"On<{request}>";
+        string method = $"On{MethodSuffix(message.UniqueName)}";
+        bool bound = !string.IsNullOrWhiteSpace(message.BoundEntityLogicalName);
+
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>Registrability-gated <c>{method}()</c> step extension for the <c>{message.UniqueName}</c> Custom API (Phase 3c: compile-time entity applicability{(asyncOnly ? "; async-only, no .Sync()" : string.Empty)}). The referenced early-bound entity type is assumed to live in this same namespace.</summary>");
+        sb.AppendLine($"    public static class {message.UniqueName}StepExtensions");
+        sb.AppendLine("    {");
+
+        if (bound)
+        {
+            string pascal = PascalCase(message.BoundEntityLogicalName!);
+            sb.AppendLine($"        public static {stageType}<{pascal}, {request}> {method}(this Vela.StepBuilder.IStepBuilder<{pascal}> builder) => builder.{entry}();");
+        }
+        else
+        {
+            sb.AppendLine($"        public static {stageType}<TEntity, {request}> {method}<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.{entry}();");
+        }
+
+        sb.AppendLine("    }");
+    }
+
+    // The On<Message>() method-name suffix: the Custom API unique name minus its publisher prefix (the text up to
+    // and including the first '_'), PascalCased. E.g. "zava_CalculateAccountScore" -> "CalculateAccountScore",
+    // "acme_recalc_score" -> "RecalcScore". A name with no '_' is used whole.
+    private static string MethodSuffix(string uniqueName)
+    {
+        int underscore = uniqueName.IndexOf('_');
+        string withoutPrefix = underscore >= 0 && underscore < uniqueName.Length - 1
+            ? uniqueName.Substring(underscore + 1)
+            : uniqueName;
+        return PascalCase(withoutPrefix);
+    }
+
+    // PascalCase for referencing an early-bound entity type / building a method name: split on '_', capitalise the
+    // first letter of each part, keep the rest (e.g. "lead" -> "Lead", "new_customentity" -> "NewCustomentity").
+    private static string PascalCase(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value ?? string.Empty;
+        }
+
+        return string.Concat(value
+            .Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => char.ToUpperInvariant(part[0]) + part.Substring(1)));
+    }
+
+    private static bool IsValidIdentifier(string name)
+    {
+        if (string.IsNullOrEmpty(name) || !(char.IsLetter(name[0]) || name[0] == '_'))
+        {
+            return false;
+        }
+
+        foreach (char c in name)
+        {
+            if (!(char.IsLetterOrDigit(c) || c == '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void AppendParameter(StringBuilder sb, CustomApiParameter parameter, bool readOnly)

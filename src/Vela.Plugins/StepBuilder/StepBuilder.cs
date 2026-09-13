@@ -273,6 +273,14 @@ public sealed class StepBuilder<TEntity> :
         return new TypedMessageStep<TEntity, TRequest>(this);
     }
 
+    public IAsyncOnlyTypedMessageStepStage<TEntity, TRequest> OnAsyncOnly<TRequest>() where TRequest : OrganizationRequest, new()
+    {
+        // Same adapter as On<TRequest>(); the async-only stage interface it is handed back through is what hides
+        // .Sync(). Used by the generated On<Message>() extension of an AsyncOnly Custom API (Phase 3c).
+        _definition.Message = ExpressionHelper.GetMessageName<TRequest>();
+        return new TypedMessageStep<TEntity, TRequest>(this);
+    }
+
     IModeSelector<IPermissiveNoImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
     IModeSelector<IPermissivePreImageStep<TEntity>> IPermissiveStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
     IModeSelector<IPermissivePreAndPostStep<TEntity>> IPermissiveStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }

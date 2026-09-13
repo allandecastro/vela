@@ -717,17 +717,28 @@ internal static class ModelsCommand
 
     private static CustomApiMessage ReadCustomApi(IOrganizationService service, string uniqueName)
     {
-        QueryExpression query = new QueryExpression("customapi") { ColumnSet = new ColumnSet("customapiid", "bindingtype"), TopCount = 1 };
+        QueryExpression query = new QueryExpression("customapi")
+        {
+            ColumnSet = new ColumnSet("customapiid", "bindingtype", "boundentitylogicalname", "allowedcustomprocessingsteptype", "isprivate"),
+            TopCount = 1,
+        };
         query.Criteria.AddCondition("uniquename", ConditionOperator.Equal, uniqueName);
         Entity api = service.RetrieveMultiple(query).Entities.FirstOrDefault()
             ?? throw new InvalidOperationException($"Custom API '{uniqueName}' was not found.");
 
-        bool boundToEntity = (api.GetAttributeValue<OptionSetValue>("bindingtype")?.Value ?? 0) == 1;
+        // bindingtype: 0 Global, 1 Entity, 2 EntityCollection. Only type 1 auto-adds a single-record Target input,
+        // so IsBoundToEntity (which drives that Target property) stays == 1; the extension constraint keys off
+        // boundEntity being set instead, so a collection-bound (type 2) API is still entity-constrained (Phase 3c).
+        int bindingType = api.GetAttributeValue<OptionSetValue>("bindingtype")?.Value ?? 0;
+        string? boundEntity = api.GetAttributeValue<string>("boundentitylogicalname");
         return new CustomApiMessage(
             uniqueName,
-            boundToEntity,
+            IsBoundToEntity: bindingType == 1,
             ReadCustomApiParameters(service, "customapirequestparameter", api.Id),
-            ReadCustomApiParameters(service, "customapiresponseproperty", api.Id));
+            ReadCustomApiParameters(service, "customapiresponseproperty", api.Id),
+            AllowedStepType: api.GetAttributeValue<OptionSetValue>("allowedcustomprocessingsteptype")?.Value ?? 2,
+            IsPrivate: api.GetAttributeValue<bool>("isprivate"),
+            BoundEntityLogicalName: string.IsNullOrWhiteSpace(boundEntity) ? null : boundEntity);
     }
 
     internal static List<CustomApiParameter> ReadCustomApiParameters(IOrganizationService service, string entity, Guid customApiId)

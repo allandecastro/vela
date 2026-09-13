@@ -51,4 +51,89 @@ public class CustomApiMessageGeneratorTests
 
         Assert.Equal("Messages/zava_X.cs", model.FileName);
     }
+
+    // ---- Phase 3c: registrability-gated On<Message>() step extension ----
+
+    [Fact]
+    public void Bound_SyncAndAsync_EmitsEntityConstrainedExtension_StrippingPublisherPrefix()
+    {
+        string code = Generate(new CustomApiMessage(
+            "zava_AccountEstimateValue",
+            IsBoundToEntity: true,
+            RequestParameters: Array.Empty<CustomApiParameter>(),
+            ResponseProperties: Array.Empty<CustomApiParameter>(),
+            AllowedStepType: 2,
+            BoundEntityLogicalName: "account"));
+
+        Assert.Contains("public static class zava_AccountEstimateValueStepExtensions", code);
+        // Method name strips the publisher prefix; constrained to IStepBuilder<Account>; normal (Sync+Async) stage.
+        Assert.Contains(
+            "public static Vela.StepBuilder.ITypedMessageStepStage<Account, zava_AccountEstimateValueRequest> OnAccountEstimateValue(this Vela.StepBuilder.IStepBuilder<Account> builder) => builder.On<zava_AccountEstimateValueRequest>();",
+            code);
+        Assert.DoesNotContain("Onzava_", code);
+        Assert.DoesNotContain("IAsyncOnly", code);
+    }
+
+    [Fact]
+    public void AsyncOnly_EmitsAsyncOnlyStageAndEntry()
+    {
+        string code = Generate(new CustomApiMessage(
+            "zava_Recalc",
+            IsBoundToEntity: true,
+            RequestParameters: Array.Empty<CustomApiParameter>(),
+            ResponseProperties: Array.Empty<CustomApiParameter>(),
+            AllowedStepType: 1,   // AsyncOnly
+            BoundEntityLogicalName: "account"));
+
+        Assert.Contains(
+            "public static Vela.StepBuilder.IAsyncOnlyTypedMessageStepStage<Account, zava_RecalcRequest> OnRecalc(this Vela.StepBuilder.IStepBuilder<Account> builder) => builder.OnAsyncOnly<zava_RecalcRequest>();",
+            code);
+    }
+
+    [Fact]
+    public void Global_SyncAndAsync_EmitsGenericExtension()
+    {
+        string code = Generate(new CustomApiMessage(
+            "zava_Ping",
+            IsBoundToEntity: false,
+            RequestParameters: Array.Empty<CustomApiParameter>(),
+            ResponseProperties: Array.Empty<CustomApiParameter>(),
+            AllowedStepType: 2,
+            BoundEntityLogicalName: null));
+
+        Assert.Contains(
+            "public static Vela.StepBuilder.ITypedMessageStepStage<TEntity, zava_PingRequest> OnPing<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<zava_PingRequest>();",
+            code);
+    }
+
+    [Fact]
+    public void None_EmitsNoExtension_ButExplanatoryComment()
+    {
+        string code = Generate(new CustomApiMessage(
+            "zava_Internal",
+            IsBoundToEntity: false,
+            RequestParameters: Array.Empty<CustomApiParameter>(),
+            ResponseProperties: Array.Empty<CustomApiParameter>(),
+            AllowedStepType: 0));   // None
+
+        Assert.DoesNotContain("StepExtensions", code);
+        Assert.Contains("No OnInternal() step extension", code);
+        Assert.Contains("allows no processing step", code);
+        Assert.Contains("Use On<zava_InternalRequest>() explicitly", code);
+    }
+
+    [Fact]
+    public void Private_EmitsNoExtension_ButExplanatoryComment()
+    {
+        string code = Generate(new CustomApiMessage(
+            "zava_Secret",
+            IsBoundToEntity: false,
+            RequestParameters: Array.Empty<CustomApiParameter>(),
+            ResponseProperties: Array.Empty<CustomApiParameter>(),
+            AllowedStepType: 2,
+            IsPrivate: true));
+
+        Assert.DoesNotContain("StepExtensions", code);
+        Assert.Contains("is private", code);
+    }
 }
