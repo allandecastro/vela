@@ -141,4 +141,14 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     /// <typeparam name="TRequest">A request type (an SDK request, a generated Custom API request, or a
     /// <c>TypedRequest</c>) with a public parameterless constructor.</typeparam>
     ITypedMessageStepStage<TEntity, TRequest> On<TRequest>() where TRequest : OrganizationRequest, new();
+
+    /// <summary>
+    /// Like <see cref="On{TRequest}"/> but returns an async-only stage (no <c>.Sync()</c>): the entry point the
+    /// generated <c>On&lt;Message&gt;()</c> extension of a Custom API whose <c>allowedcustomprocessingsteptype</c>
+    /// is <c>AsyncOnly</c> delegates to (Phase 3c). Not intended to be called by hand - the mode restriction is a
+    /// property of the Custom API, discovered by <c>vela models --custom-apis</c>, not a per-step choice.
+    /// </summary>
+    /// <typeparam name="TRequest">A request type with a public parameterless constructor.</typeparam>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    IAsyncOnlyTypedMessageStepStage<TEntity, TRequest> OnAsyncOnly<TRequest>() where TRequest : OrganizationRequest, new();
 }

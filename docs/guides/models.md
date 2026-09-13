@@ -46,7 +46,10 @@ columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbna
 (`Account.ByAccountNumberKey("A-001")` returns a key-based `EntityReference`). `--custom-apis` instead generates typed
 `OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`),
 written into a `Messages/` subfolder of the output; with **no value**, `--custom-apis` generates every Custom API
-in the environment. To keep the Custom APIs you **authored in code** out of that all set (you already have those
+in the environment. Each also gets a **registrability-gated `On<Message>()` step extension**: bound to the API's
+entity when it has one (compile-time entity applicability), async-only when the API's
+`allowedcustomprocessingsteptype` is AsyncOnly (only `.Async()` compiles), and omitted entirely for a None/private
+API. See [Write a Custom API](custom-apis.md). To keep the Custom APIs you **authored in code** out of that all set (you already have those
 classes), pass your built plugin package with `--package <file.nupkg>` (repeatable) and/or `--packages-dir <folder>`
 (plus `--package-assembly <name>` if the primary assembly needs disambiguating): their unique names are scanned
 from the package - the same offline scan `plan`/`apply` use - and removed, and a note reports how many were

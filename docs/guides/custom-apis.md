@@ -111,6 +111,36 @@ var response = service.Execute(new zava_RecalculateRequest { Target = accountRef
 Run the handler with no connection using the [test harness](testing.md) - the same `Execute` call works
 against the in-memory `IOrganizationService`.
 
+## React with a plugin step (registrability-gated)
+
+To run your own step when a Custom API executes, `vela models --custom-apis` emits an `On<Message>()` builder
+extension next to the generated request/response. Its shape is driven by the API's Dataverse metadata, so an
+invalid registration does not compile:
+
+```csharp
+public sealed class AfterEstimate : EntityPluginBase<Account>   // API bound to account
+{
+    protected override void RegisterPluginSteps()
+        => RegisterSteps().OnAccountEstimateValue()   // only exists on IStepBuilder<Account>
+            .PostOperation().Async()                  // AsyncOnly API: .Sync() does not compile
+            .Handler(OnEstimated);
+
+    private void OnEstimated(IMessagePostContext<zava_AccountEstimateValueRequest> ctx) { /* ... */ }
+}
+```
+
+- **Entity applicability.** A bound (or collection-bound) API constrains the extension to `IStepBuilder<TEntity>`
+  for its entity, so `OnAccountEstimateValue()` only compiles inside an `EntityPluginBase<Account>`; on any other
+  entity it does not exist (a compile error). A global API emits a generic `On<Message><TEntity>()` instead.
+- **Allowed step type.** An **AsyncOnly** API returns an async-only stage that exposes only `.Async()`, so a
+  synchronous registration does not compile. A **None** or **private** API emits no extension at all (only a
+  comment), so there is no blessed way to register a step on it.
+- **Escape hatch.** The generic `On<zava_AccountEstimateValueRequest>()` entry stays available for explicit,
+  unchecked use. Dataverse also rejects an invalid registration at deploy time regardless.
+
+The method name is the unique name minus its publisher prefix, PascalCased (`zava_AccountEstimateValue` becomes
+`OnAccountEstimateValue`).
+
 ## Do / Don't (Custom APIs)
 
 **Do**

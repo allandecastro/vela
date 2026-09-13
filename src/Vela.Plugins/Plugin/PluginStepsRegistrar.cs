@@ -76,6 +76,8 @@ namespace Vela.Plugin
 
         public ITypedMessageStepStage<TEntity, TRequest> On<TRequest>() where TRequest : OrganizationRequest, new() => BeginStep().On<TRequest>();
 
+        public IAsyncOnlyTypedMessageStepStage<TEntity, TRequest> OnAsyncOnly<TRequest>() where TRequest : OrganizationRequest, new() => BeginStep().OnAsyncOnly<TRequest>();
+
         private StepBuilder<TEntity> BeginStep()
         {
             StepBuilder<TEntity> step = new StepBuilder<TEntity>();

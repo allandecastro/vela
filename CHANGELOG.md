@@ -24,6 +24,24 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added
+
+- **CLI: `vela models --custom-apis` emits a registrability-gated `On<Message>()` step extension (Phase 3c).**
+  Alongside the typed `XxxRequest`/`XxxResponse`, the generator now emits an `On<Message>()` builder extension whose
+  shape is driven by the Custom API's Dataverse metadata, giving **compile-time registrability**: (1) a
+  bound/collection-bound API (`boundentitylogicalname` set) constrains the extension to `IStepBuilder<TEntity>` for
+  that entity, so it only compiles on the matching `EntityPluginBase<TEntity>` (a global API emits a generic
+  `On<Message><TEntity>()`); (2) an **AsyncOnly** API (`allowedcustomprocessingsteptype`) returns an async-only
+  stage exposing only `.Async()`, so a synchronous registration does not compile; (3) a **None** or **private** API
+  emits no extension at all (only an explanatory comment), so the blessed path does not compile. The generic
+  `On<XxxRequest>()` escape hatch stays for explicit use, and Dataverse still rejects an invalid registration at
+  deploy time. The method name is the unique name minus its publisher prefix, PascalCased
+  (`zava_AccountEstimateValue` -> `OnAccountEstimateValue`). See `.context/phase3c-customapi-registrability.md`.
+- **Framework: async-only typed-message step (`IAsyncOnlyModeSelector` / `OnAsyncOnly<TRequest>()`).** New public
+  surface backing the CLI's AsyncOnly gate above: `IStepBuilder<TEntity>.OnAsyncOnly<TRequest>()` returns an
+  `IAsyncOnlyTypedMessageStepStage<TEntity, TRequest>` whose stages yield an `IAsyncOnlyModeSelector<TNext>`
+  (a `.Async()` method, and no `.Sync()` path). Additive; `On<TRequest>()` is unchanged.
+
 ## [0.8.0] - 2026-09-13
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.8.0`.
