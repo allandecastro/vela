@@ -84,6 +84,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   form, so `--entities Account` resolves the same as `account`.
 - **CLI: `RetrieveAll` no longer mutates the caller's `QueryExpression`.** Its `PageInfo` is restored after paging,
   so a query object reused after a read is unaffected.
+- **CLI: clearer diagnostics.** An unknown option no longer dumps the generic top-level usage (the message already
+  points at the right `vela <command> --help`), and a `.csproj` whose `RootNamespace`/`AssemblyName` cannot be read
+  now warns (with the reason) instead of silently falling back to the file name.
 
 ## [0.8.0] - 2026-09-13
 

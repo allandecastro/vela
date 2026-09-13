@@ -90,7 +90,9 @@ internal static class CommandLineOptions
                 continue;
             }
 
-            exitCode = Fail($"Unknown option '{token}'. Run 'vela <command> --help' to see the available options.", ExitInvalidArguments);
+            // Don't dump the generic top-level usage here (it is not this command's usage and only adds noise); the
+            // message already points at the right per-command help (B5).
+            exitCode = Fail($"Unknown option '{token}'. Run 'vela <command> --help' to see the available options.", ExitInvalidArguments, includeUsage: false);
             return false;
         }
 
@@ -542,9 +544,11 @@ internal static class CommandLineOptions
                 return assemblyName!.Trim();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fall through to the file-name default if the project XML cannot be read.
+            // Fall through to the file-name default if the project XML cannot be read, but surface why rather than
+            // swallowing it silently (a malformed .csproj otherwise yields a surprising namespace with no clue).
+            Console.Error.WriteLine($"Warning: could not read RootNamespace/AssemblyName from '{projectFile}' ({ex.Message}); using the file name.");
         }
 
         return Path.GetFileNameWithoutExtension(projectFile);
