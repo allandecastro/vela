@@ -44,6 +44,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed
 
+- **CLI: `vela new --force` preserves user-edited root files.** A regeneration no longer overwrites an existing
+  `README.md`, `.gitignore`, or `Directory.Build.props` (they are written only when absent); the managed `.sln` and
+  project files are still regenerated, matching the "user files at the solution root are preserved" contract.
+- **CLI: TypeScript barrel imports use forward slashes.** The generated `index.ts` builds each module specifier with
+  `/` and drops a trailing `.ts` only when present, so a generated file whose path carries OS separators still emits
+  a valid import.
 - **CLI: `plan`/`apply` only skips the platform-managed Custom API step, not every main-operation step.** When
   reading live steps, only the internal Custom API handler step (its message is the Custom API's unique name) at
   MainOperation is skipped; a genuine step at MainOperation on a standard message is kept so it diffs correctly

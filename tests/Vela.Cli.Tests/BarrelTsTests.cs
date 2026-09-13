@@ -28,6 +28,21 @@ public class BarrelTsTests
     }
 
     [Fact]
+    public void Module_specifier_uses_forward_slashes_for_a_nested_windows_path()   // B11
+    {
+        var files = new[]
+        {
+            new GeneratedModel("forms\\account\\main.form.ts", "export const A = 1;\n"),
+        };
+
+        GeneratedModel? barrel = BarrelTs.Build(files);
+
+        Assert.NotNull(barrel);
+        Assert.Contains("from './forms/account/main.form';", barrel!.Code);   // forward slashes, .ts dropped
+        Assert.DoesNotContain("\\", barrel.Code);
+    }
+
+    [Fact]
     public void Dedups_A_Name_To_The_First_Occurrence()
     {
         var files = new[]
