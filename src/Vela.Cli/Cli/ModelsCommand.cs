@@ -904,7 +904,7 @@ internal static class ModelsCommand
         return map;
     }
 
-    private static string? ResolveNamespace(string[] args)
+    internal static string? ResolveNamespace(string[] args)
     {
         string? explicitNs = TryReadOption(args, "--namespace");
         if (!string.IsNullOrWhiteSpace(explicitNs))
@@ -933,19 +933,100 @@ internal static class ModelsCommand
 
             if (Directory.Exists(requested))
             {
-                return SingleCsproj(requested);
+                return FindProjectInDirectory(requested);
             }
 
             return null;
         }
 
-        return SingleCsproj(Directory.GetCurrentDirectory());
+        return FindProjectInDirectory(Directory.GetCurrentDirectory());
+    }
+
+    private static string? FindProjectInDirectory(string directory)
+    {
+        // A single top-level .csproj is the unambiguous project (running from a project folder).
+        string? single = SingleCsproj(directory);
+        if (single != null)
+        {
+            return single;
+        }
+
+        // Otherwise, when run from a solution root, derive the namespace from a representative project listed
+        // in the .sln so `vela models` "just works" from the root like plan/apply do.
+        return ProjectFromSolution(directory);
     }
 
     private static string? SingleCsproj(string directory)
     {
         string[] candidates = Directory.GetFiles(directory, "*.csproj", SearchOption.TopDirectoryOnly);
         return candidates.Length == 1 ? candidates[0] : null;
+    }
+
+    // Picks a representative project from a single .sln in the directory. Any role-suffixed project yields the
+    // same base namespace via StripRoleSuffix, but prefer .Shared/.Plugins/.Integrations (and avoid the test
+    // project) so the derived shared-models namespace is the expected one.
+    private static string? ProjectFromSolution(string directory)
+    {
+        string[] solutions = Directory.GetFiles(directory, "*.sln", SearchOption.TopDirectoryOnly);
+        if (solutions.Length != 1)
+        {
+            return null;
+        }
+
+        string[] projects = ReadSolutionProjectPaths(solutions[0]);
+        if (projects.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (string preferred in new[] { ".Shared.csproj", ".Plugins.csproj", ".Integrations.csproj" })
+        {
+            string? match = projects.FirstOrDefault(p => p.EndsWith(preferred, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        return projects.FirstOrDefault(p => !p.EndsWith(".Tests.csproj", StringComparison.OrdinalIgnoreCase))
+            ?? projects[0];
+    }
+
+    // Parses the project .csproj paths out of a .sln. Project lines look like:
+    //   Project("{TypeGuid}") = "Name", "relative\Path.csproj", "{ProjectGuid}"
+    private static string[] ReadSolutionProjectPaths(string solutionFile)
+    {
+        string solutionDir = Path.GetDirectoryName(solutionFile) ?? Directory.GetCurrentDirectory();
+        List<string> paths = new List<string>();
+        foreach (string line in File.ReadLines(solutionFile))
+        {
+            if (!line.StartsWith("Project(", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string[] parts = line.Split(',');
+            if (parts.Length < 2)
+            {
+                continue;
+            }
+
+            string rawPath = parts[1].Trim().Trim('"');
+            if (!rawPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // .sln paths always use backslashes; normalize for non-Windows hosts.
+            string relativePath = rawPath.Replace('\\', Path.DirectorySeparatorChar);
+            string full = Path.GetFullPath(Path.Combine(solutionDir, relativePath));
+            if (File.Exists(full))
+            {
+                paths.Add(full);
+            }
+        }
+
+        return paths.ToArray();
     }
 
     private static void PrintModelsUsage()
