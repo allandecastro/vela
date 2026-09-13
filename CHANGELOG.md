@@ -24,6 +24,10 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.3.0] - 2026-09-13 (Vela.Cli)
+
+CLI line (`Vela.Cli`), published as `cli-v0.3.0`.
+
 ### Added
 
 - **CLI: brand-aligned terminal styling.** Command output now uses the Vela palette (indigo/cyan) with a
@@ -59,6 +63,25 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed
 
+- **CLI: interactive OAuth sign-in uses a loopback redirect URI.** `plan`/`apply --interactive` (and the
+  scaffolded sign-in script) built the OAuth connection string with a non-loopback redirect URI, so MSAL's
+  system-browser flow failed with "Only loopback redirect uri is supported" before the browser opened. It now
+  uses `http://localhost`.
+- **CLI: plugin steps on the `Associate`/`Disassociate` messages converge in `plan`/`apply`.** These global
+  messages carry no primary entity on their `sdkmessagefilter` (`primaryobjecttypecode` is `none`), so the live
+  read always returned an empty `entityLogicalName` while the local definition declared one (e.g. `account`),
+  reporting the step as changed on every run. The field is now neutralized for these messages in the diff shape.
+- **CLI: the plugin package is no longer re-uploaded on every `apply`.** `UpsertPluginPackage` unconditionally
+  wrote the package `content`/`version`, bumping `modifiedon` even when the bytes were identical (and invisible
+  in the diff, since packages reconcile out-of-band). It now skips the update when the stored version and
+  content already match.
+
+## [0.10.0] - 2026-09-13
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.10.0`.
+
+### Fixed
+
 - **Framework: `On<TRequest>()` (and permissive typed `OnMessage` handlers) whose request name matches a modelled
   message.** A step registered with `On<TRequest>()` binds a handler taking `IMessagePre/PostContext<TRequest>`.
   When `TRequest.RequestName` collided with a Vela-modelled message (e.g. `MergeRequest` -> `Merge`), dispatch
@@ -80,18 +103,6 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   Cache-miss synchronisation now lives inside each entry (a `Lazy<T>` slot) and is reclaimed together with the
   entry on expiration / `Invalidate` / `Clear`, so a workload using high-cardinality keys no longer accumulates
   lock objects. The factory still runs at most once per key under contention.
-- **CLI: interactive OAuth sign-in uses a loopback redirect URI.** `plan`/`apply --interactive` (and the
-  scaffolded sign-in script) built the OAuth connection string with a non-loopback redirect URI, so MSAL's
-  system-browser flow failed with "Only loopback redirect uri is supported" before the browser opened. It now
-  uses `http://localhost`.
-- **CLI: plugin steps on the `Associate`/`Disassociate` messages converge in `plan`/`apply`.** These global
-  messages carry no primary entity on their `sdkmessagefilter` (`primaryobjecttypecode` is `none`), so the live
-  read always returned an empty `entityLogicalName` while the local definition declared one (e.g. `account`),
-  reporting the step as changed on every run. The field is now neutralized for these messages in the diff shape.
-- **CLI: the plugin package is no longer re-uploaded on every `apply`.** `UpsertPluginPackage` unconditionally
-  wrote the package `content`/`version`, bumping `modifiedon` even when the bytes were identical (and invisible
-  in the diff, since packages reconcile out-of-band). It now skips the update when the stored version and
-  content already match.
 - **Framework: Custom API `.Request(...)`/`.Response(...)` accumulate across calls.** A second `.Request(...)`
   (or `.Response(...)`) call cleared the parameters the previous call had added, so only the last call
   survived, silently dropping parameters (and the whole Custom API) from the plan. Multiple calls now
