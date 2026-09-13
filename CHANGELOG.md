@@ -88,6 +88,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   points at the right `vela <command> --help`), and a `.csproj` whose `RootNamespace`/`AssemblyName` cannot be read
   now warns (with the reason) instead of silently falling back to the file name.
 
+### Added
+
+- **CLI: `--option=value` inline form and clearer option errors (shared tokenizer).** Every command now accepts the
+  `--option=value` form in addition to `--option value`. A misspelled option is still rejected up front, and a
+  value option missing its value (last token, or followed by another known option) now fails with
+  `Option '--x' requires a value.` instead of silently binding to the next option or dropping the value. Options
+  that may legitimately appear bare (`vela models --messages` / `--custom-apis` = all) keep working, and a value
+  that itself starts with `-` is still accepted.
+
 ## [0.8.0] - 2026-09-13
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.8.0`.

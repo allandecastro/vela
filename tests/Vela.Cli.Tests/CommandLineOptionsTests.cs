@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Vela.Cli;
 using Xunit;
 using static Vela.Cli.CliExitCodes;
@@ -6,6 +8,60 @@ namespace Vela.Cli.Tests;
 
 public class CommandLineOptionsTests
 {
+    private static HashSet<string> Set(params string[] values) => new(values, StringComparer.OrdinalIgnoreCase);
+
+    [Fact]
+    public void TryTokenize_expands_inline_equals_value_form()   // B2
+    {
+        bool ok = CommandLineOptions.TryTokenize(
+            ["--out=gen", "--strict"], Set("--out"), Set("--strict"), out string[] normalized, out int exit);
+
+        Assert.True(ok);
+        Assert.Equal(ExitSuccess, exit);
+        Assert.Equal(["--out", "gen", "--strict"], normalized);
+    }
+
+    [Fact]
+    public void TryTokenize_errors_when_a_required_value_option_has_no_value()   // B1
+    {
+        Assert.False(CommandLineOptions.TryTokenize(["--out"], Set("--out"), Set(), out _, out int exit));
+        Assert.Equal(ExitInvalidArguments, exit);
+    }
+
+    [Fact]
+    public void TryTokenize_errors_when_a_value_option_is_followed_by_a_known_option()   // A9
+    {
+        // --url has no value: the next token is a known option, not a value.
+        Assert.False(CommandLineOptions.TryTokenize(
+            ["--url", "--tenant-id", "t"], Set("--url", "--tenant-id"), Set(), out _, out int exit));
+        Assert.Equal(ExitInvalidArguments, exit);
+    }
+
+    [Fact]
+    public void TryTokenize_allows_a_bare_optional_value_option()   // --messages = all
+    {
+        bool ok = CommandLineOptions.TryTokenize(
+            ["--messages"], Set("--messages"), Set(), Set("--messages"), out _, out int exit);
+        Assert.True(ok);
+        Assert.Equal(ExitSuccess, exit);
+    }
+
+    [Fact]
+    public void TryTokenize_allows_a_dash_looking_value()
+    {
+        // -weird is not a known option, so it is accepted as --out's value (a name/connection string may start with '-').
+        bool ok = CommandLineOptions.TryTokenize(["--out", "-weird"], Set("--out"), Set(), out string[] normalized, out _);
+        Assert.True(ok);
+        Assert.Equal(["--out", "-weird"], normalized);
+    }
+
+    [Fact]
+    public void TryTokenize_rejects_an_unknown_option()
+    {
+        Assert.False(CommandLineOptions.TryTokenize(["--bogus"], Set("--out"), Set("--strict"), out _, out int exit));
+        Assert.Equal(ExitInvalidArguments, exit);
+    }
+
     [Fact]
     public void TryReadFirstPositional_BooleanFlag_DoesNotSwallowPositional()   // A11
     {

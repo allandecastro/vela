@@ -24,7 +24,7 @@ internal static class LogoutCommand
             return ExitSuccess;
         }
 
-        if (!TryValidateKnownOptions(args, ValueOptions, FlagOptions, out int exitCode))
+        if (!TryTokenize(args, ValueOptions, FlagOptions, out args, out int exitCode))
         {
             return exitCode;
         }
