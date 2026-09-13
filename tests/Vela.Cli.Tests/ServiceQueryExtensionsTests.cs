@@ -65,6 +65,23 @@ public class ServiceQueryExtensionsTests
     }
 
     [Fact]
+    public void RetrieveAll_DoesNotMutateCallersQuery()   // B12
+    {
+        Mock<IOrganizationService> service = new Mock<IOrganizationService>(MockBehavior.Strict);
+        service.SetupSequence(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
+            .Returns(Page(more: true, new Entity("account", Guid.NewGuid())))
+            .Returns(Page(more: false, new Entity("account", Guid.NewGuid())));
+
+        QueryExpression query = new QueryExpression("account");
+        PagingInfo? original = query.PageInfo;
+
+        service.Object.RetrieveAll(query);
+
+        // The caller's PageInfo must be restored to exactly what it was - RetrieveAll has no lasting side effect.
+        Assert.Same(original, query.PageInfo);
+    }
+
+    [Fact]
     public void RetrieveAll_HonoursTopCount_WithASinglePage()
     {
         Mock<IOrganizationService> service = new Mock<IOrganizationService>(MockBehavior.Strict);

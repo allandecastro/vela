@@ -55,7 +55,9 @@ internal static class ModelsCommand
         string? solution = TryReadOption(args, "--solution");
         string[] entities = (TryReadOption(args, "--entities") ?? string.Empty)
             .Split([','], StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim())
+            // Dataverse entity logical names are lower-case; normalize so `--entities Account` resolves the same as
+            // `account` (B7 - matches how add form-script/ribbon-script already lower-case the entity name).
+            .Select(x => x.Trim().ToLowerInvariant())
             .Where(x => x.Length > 0)
             .ToArray();
 

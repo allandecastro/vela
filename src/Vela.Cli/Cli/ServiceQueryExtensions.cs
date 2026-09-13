@@ -29,25 +29,35 @@ internal static class ServiceQueryExtensions
             return all;
         }
 
-        query.PageInfo = new PagingInfo
+        // Paging sets query.PageInfo; restore the caller's original when done so RetrieveAll has no side effect on
+        // the passed-in QueryExpression (B12).
+        PagingInfo? originalPaging = query.PageInfo;
+        try
         {
-            Count = DefaultPageSize,
-            PageNumber = 1,
-            PagingCookie = null,
-        };
-
-        while (true)
-        {
-            EntityCollection page = service.RetrieveMultiple(query);
-            all.AddRange(page.Entities);
-
-            if (!page.MoreRecords)
+            query.PageInfo = new PagingInfo
             {
-                return all;
-            }
+                Count = DefaultPageSize,
+                PageNumber = 1,
+                PagingCookie = null,
+            };
 
-            query.PageInfo.PageNumber++;
-            query.PageInfo.PagingCookie = page.PagingCookie;
+            while (true)
+            {
+                EntityCollection page = service.RetrieveMultiple(query);
+                all.AddRange(page.Entities);
+
+                if (!page.MoreRecords)
+                {
+                    return all;
+                }
+
+                query.PageInfo.PageNumber++;
+                query.PageInfo.PagingCookie = page.PagingCookie;
+            }
+        }
+        finally
+        {
+            query.PageInfo = originalPaging;
         }
     }
 }

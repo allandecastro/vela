@@ -22,6 +22,15 @@ public class ScaffoldOptionsTests
     public void IsValidSolutionName_AcceptsNormalNames(string name) =>
         Assert.True(ScaffoldOptions.IsValidSolutionName(name));
 
+    [Theory]
+    [InlineData("CON")]        // B9: Windows reserved device names are unusable as folder/file names
+    [InlineData("nul")]
+    [InlineData("COM1")]
+    [InlineData("LPT9")]
+    [InlineData("CON.txt")]    // reserved even with an extension
+    public void IsValidSolutionName_RejectsWindowsReservedNames(string name) =>
+        Assert.False(ScaffoldOptions.IsValidSolutionName(name));
+
     [Fact]
     public void TryParse_RejectsInvalidCoreVersion()   // A13
     {
