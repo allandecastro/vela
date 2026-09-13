@@ -85,7 +85,7 @@ public sealed class DataverseRegistrationStepsTests
         Assert.Equal(row.Id, found);
 
         // Query shape: filtered by eventhandler, with message + filter links.
-        Assert.Equal(new[] { "sdkmessageprocessingstepid", "name", "stage", "mode" }, captured!.ColumnSet.Columns);
+        Assert.Equal(new[] { "sdkmessageprocessingstepid", "name", "description", "stage", "mode" }, captured!.ColumnSet.Columns);
         Assert.Equal("eventhandler", captured.Criteria.Conditions.Single().AttributeName);
         LinkEntity msg = captured.LinkEntities.Single(l => l.EntityAlias == "msg");
         Assert.Equal("sdkmessage", msg.LinkToEntityName);
@@ -505,7 +505,9 @@ public sealed class DataverseRegistrationStepsTests
         Assert.Equal(0, step.GetAttributeValue<OptionSetValue>("supporteddeployment").Value);
         Assert.Equal("unsec", step.GetAttributeValue<string>("configuration"));
         Assert.Contains("dv-key", step.GetAttributeValue<string>("name"));
-        Assert.Equal(step.GetAttributeValue<string>("name"), step.GetAttributeValue<string>("description")); // description mirrors name
+        // description = the human-readable name plus the stable step-key marker (B4).
+        Assert.StartsWith(step.GetAttributeValue<string>("name"), step.GetAttributeValue<string>("description"));
+        Assert.Contains("[vela:stepkey=dv-key]", step.GetAttributeValue<string>("description"));
     }
 
     [Fact]

@@ -30,6 +30,31 @@ public class DefinitionParserTests
     }
 
     [Fact]
+    public void ResolveStepKey_prefers_the_description_marker_over_a_renamed_name()   // B4
+    {
+        // The step was renamed in Dataverse (name no longer parses), but the stable marker in the description
+        // still carries the key, so identity survives.
+        string description = "Anything the admin typed\n[vela:stepkey=provision]";
+        Assert.Equal("provision", DefinitionParser.ResolveStepKey(description, "Renamed by an admin", "Zava.MyPlugin"));
+    }
+
+    [Fact]
+    public void ResolveStepKey_falls_back_to_the_name_when_no_marker_present()   // B4 graceful migration
+    {
+        // A step written before the marker existed: no marker in the description, so parse the name as before.
+        Assert.Equal("provision", DefinitionParser.ResolveStepKey(null, "Zava.MyPlugin - 40Sync: provision", "Zava.MyPlugin"));
+        Assert.Equal("provision", DefinitionParser.ResolveStepKey("old description", "Zava.MyPlugin - 40Sync: provision", "Zava.MyPlugin"));
+    }
+
+    [Fact]
+    public void StepKeyMarker_roundtrips_through_ExtractStepKeyFromMarker()
+    {
+        Assert.Equal("my-key", DefinitionParser.ExtractStepKeyFromMarker(DefinitionParser.StepKeyMarker("my-key")));
+        Assert.Null(DefinitionParser.ExtractStepKeyFromMarker("no marker here"));
+        Assert.Null(DefinitionParser.ExtractStepKeyFromMarker(null));
+    }
+
+    [Fact]
     public void ParseCustomApiParameters_OrdersByName_SkipsBlank_AndFallsBackToTypeName()
     {
         JsonElement definition = Json(new

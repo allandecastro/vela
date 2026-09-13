@@ -211,7 +211,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression stepsQuery = new QueryExpression("sdkmessageprocessingstep")
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid")
+        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid")
     };
     stepsQuery.Criteria.AddCondition("eventhandler", ConditionOperator.In, pluginTypeIds.Cast<object>().ToArray());
 
@@ -259,7 +259,7 @@ internal static partial class DataverseRegistration
 
         int executionOrder = step.GetAttributeValue<int?>("rank") ?? 1;
         string? stepName = step.GetAttributeValue<string>("name");
-        string stepKey = ParseStepKey(stepName, pluginTypeName);
+        string stepKey = DefinitionParser.ResolveStepKey(step.GetAttributeValue<string>("description"), stepName, pluginTypeName);
         string[] filteringAttributes = SplitCsv(step.GetAttributeValue<string>("filteringattributes"));
         bool enabled = (step.GetAttributeValue<OptionSetValue>("statecode")?.Value ?? 0) == 0;
         string unsecureConfig = step.GetAttributeValue<string>("configuration") ?? string.Empty;
