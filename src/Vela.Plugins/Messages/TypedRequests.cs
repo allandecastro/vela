@@ -82,4 +82,59 @@ namespace Vela.Messages
             set => Parameters["Target"] = value;
         }
     }
+
+    /// <summary>A typed SendEmailFromTemplate request whose <c>Target</c> (the email) is early-bound.</summary>
+    /// <typeparam name="TEntity">The step's entity type (the email record).</typeparam>
+    public sealed class SendEmailFromTemplateRequest<TEntity> : TypedRequest where TEntity : Entity
+    {
+        /// <summary>Creates a SendEmailFromTemplate request over the live <c>InputParameters</c>.</summary>
+        public SendEmailFromTemplateRequest()
+        {
+            RequestName = "SendEmailFromTemplate";
+        }
+
+        /// <summary>The email record, early-bound. Reads/writes <c>Parameters["Target"]</c>.</summary>
+        public TEntity Target
+        {
+            get => Parameters.Contains("Target") && Parameters["Target"] is Entity entity ? entity.ToEntity<TEntity>() : null!;
+            set => Parameters["Target"] = value;
+        }
+
+        /// <summary>The email template id.</summary>
+        public System.Guid TemplateId { get => Get<System.Guid>(); set => Set(value); }
+
+        /// <summary>The id of the record the email is regarding.</summary>
+        public System.Guid RegardingId { get => Get<System.Guid>(); set => Set(value); }
+
+        /// <summary>The entity type of the record the email is regarding.</summary>
+        public string RegardingType { get => Get<string>(); set => Set(value); }
+    }
+
+    /// <summary>A typed Upsert request whose <c>Target</c> is the early-bound <typeparamref name="TEntity"/>.</summary>
+    /// <typeparam name="TEntity">The step's entity type.</typeparam>
+    public sealed class UpsertRequest<TEntity> : TypedRequest where TEntity : Entity
+    {
+        /// <summary>Creates an Upsert request over the live <c>InputParameters</c>.</summary>
+        public UpsertRequest()
+        {
+            RequestName = "Upsert";
+        }
+
+        /// <summary>The record being upserted, early-bound. Reads/writes <c>Parameters["Target"]</c>.</summary>
+        public TEntity Target
+        {
+            get => Parameters.Contains("Target") && Parameters["Target"] is Entity entity ? entity.ToEntity<TEntity>() : null!;
+            set => Parameters["Target"] = value;
+        }
+    }
+
+    /// <summary>The typed Upsert response: whether a record was created, and a reference to it.</summary>
+    public sealed class UpsertResponse : TypedResponse
+    {
+        /// <summary>True when a new record was created; false when an existing record was updated.</summary>
+        public bool RecordCreated { get => Get<bool>(); set => Set(value); }
+
+        /// <summary>A reference to the created or updated record.</summary>
+        public EntityReference Target { get => Get<EntityReference>(); set => Set(value); }
+    }
 }

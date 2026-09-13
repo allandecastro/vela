@@ -44,6 +44,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `Results`, `[CallerMemberName]`-backed) instead of hand-rolled `Parameters.Contains(...)` blocks. Call a message
   and type its result with `service.Execute(new XxxRequest{...}).ToResponse<XxxResponse>()`. `vela models`
   generation, the scaffold, and `CreateRequest<TEntity>` / `UpdateRequest<TEntity>` all use this shape.
+- **Framework: SendEmailFromTemplate has an early-bound `ctx.Request.Target`; `Upsert` typed request/response.**
+  `ISendEmailFromTemplatePreContext`/`PostContext` now use a Vela-owned `SendEmailFromTemplateRequest<TEntity>`
+  (typed `Target` plus typed `TemplateId`/`RegardingId`/`RegardingType`). New `Vela.Messages.UpsertRequest<TEntity>`
+  (typed `Target`) and `UpsertResponse` (`RecordCreated`, `Target`), reachable via `On<UpsertRequest<TEntity>>()`.
 
 ### Changed
 

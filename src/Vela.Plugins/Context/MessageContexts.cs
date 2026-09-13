@@ -119,9 +119,9 @@ namespace Vela.Context
     /// <summary>Post-stage typed context for a SendEmail step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
     public interface ISendEmailPostContext<TEntity> : IStepRequestContext<SendEmailRequest>, IStepResponseContext<SendEmailResponse> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a SendEmailFromTemplate step (<c>ctx.Request</c> only).</summary>
-    public interface ISendEmailFromTemplatePreContext<TEntity> : IStepRequestContext<SendEmailFromTemplateRequest> where TEntity : Entity { }
+    public interface ISendEmailFromTemplatePreContext<TEntity> : IStepRequestContext<Vela.Messages.SendEmailFromTemplateRequest<TEntity>> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a SendEmailFromTemplate step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface ISendEmailFromTemplatePostContext<TEntity> : IStepRequestContext<SendEmailFromTemplateRequest>, IStepResponseContext<SendEmailFromTemplateResponse> where TEntity : Entity { }
+    public interface ISendEmailFromTemplatePostContext<TEntity> : IStepRequestContext<Vela.Messages.SendEmailFromTemplateRequest<TEntity>>, IStepResponseContext<SendEmailFromTemplateResponse> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a DeliverIncomingEmail step (<c>ctx.Request</c> only).</summary>
     public interface IDeliverIncomingEmailPreContext<TEntity> : IStepRequestContext<DeliverIncomingEmailRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a DeliverIncomingEmail step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
@@ -524,13 +524,13 @@ namespace Vela.Context
         public SendEmailPostContext(ILocalPluginContext inner) : base(inner) { }
     }
     /// <summary>Runtime pre-stage context for SendEmailFromTemplate.</summary>
-    public sealed class SendEmailFromTemplatePreContext<TEntity> : PreStepContext<SendEmailFromTemplateRequest>, ISendEmailFromTemplatePreContext<TEntity> where TEntity : Entity
+    public sealed class SendEmailFromTemplatePreContext<TEntity> : PreStepContext<Vela.Messages.SendEmailFromTemplateRequest<TEntity>>, ISendEmailFromTemplatePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public SendEmailFromTemplatePreContext(ILocalPluginContext inner) : base(inner) { }
     }
     /// <summary>Runtime post-stage context for SendEmailFromTemplate.</summary>
-    public sealed class SendEmailFromTemplatePostContext<TEntity> : PostStepContext<SendEmailFromTemplateRequest, SendEmailFromTemplateResponse>, ISendEmailFromTemplatePostContext<TEntity> where TEntity : Entity
+    public sealed class SendEmailFromTemplatePostContext<TEntity> : PostStepContext<Vela.Messages.SendEmailFromTemplateRequest<TEntity>, SendEmailFromTemplateResponse>, ISendEmailFromTemplatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public SendEmailFromTemplatePostContext(ILocalPluginContext inner) : base(inner) { }
