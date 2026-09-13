@@ -41,7 +41,8 @@ Then preview and apply against your environment:
 
 ```powershell
 vela plan  --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --execute
+# apply writes by default (prompts on a terminal); add --auto-approve for CI / unattended runs.
+vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
 ```
 
 The `vela` CLI does more than deploy:

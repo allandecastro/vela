@@ -41,6 +41,16 @@ internal static class DefinitionNormalizer
         string secureConfig,
         JsonSerializerOptions jsonOptions)
     {
+        // Global (entity-agnostic) messages such as Associate/Disassociate cannot carry a primary entity on
+        // their sdkmessagefilter (primaryobjecttypecode is "none"), so the live read always comes back with an
+        // empty entityLogicalName. A local declaration of "account" would therefore diverge on every diff and
+        // the step would never converge (perpetual "changed"). Neutralize the field for these messages so both
+        // sides compare equal; the entity is still reflected in the step name, which matches on both sides.
+        if (IsGlobalMessage(message))
+        {
+            entityLogicalName = string.Empty;
+        }
+
         var shape = new
         {
             pluginTypeName,
@@ -66,6 +76,13 @@ internal static class DefinitionNormalizer
 
         return JsonSerializer.SerializeToElement(shape, jsonOptions);
     }
+
+    // Messages that are not bound to a primary entity via the sdkmessagefilter (its primaryobjecttypecode is
+    // "none"). Steps on these read back with an empty entityLogicalName regardless of what was declared, so the
+    // field must be excluded from the diff to keep plan/apply idempotent.
+    internal static bool IsGlobalMessage(string message) =>
+        string.Equals(message, "Associate", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(message, "Disassociate", StringComparison.OrdinalIgnoreCase);
 
     // Redacts a secret to a stable digest so it never lands in plan output while staying change-detectable.
     // Empty stays empty (no secret to hide), so "no secure config" reads cleanly rather than as a hash.

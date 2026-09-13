@@ -75,8 +75,10 @@ dotnet build ZavaSales.sln -c Release
 # 4. Preview what would change in your environment (read-only)
 vela plan  --packages-dir artifacts --interactive
 
-# 5. Apply the changes (idempotent create/update/delete)
-vela apply --packages-dir artifacts --interactive --execute
+# 5. Apply the changes (idempotent create/update/delete).
+#    apply writes by default: on a terminal it shows the plan and asks you to confirm.
+#    Add --auto-approve to skip the prompt in CI / unattended runs.
+vela apply --packages-dir artifacts --interactive
 ```
 
 Then head to the **[documentation](https://allandecastro.github.io/vela/)** for guides on writing plugins,

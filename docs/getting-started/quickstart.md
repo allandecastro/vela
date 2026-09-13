@@ -16,8 +16,10 @@ dotnet build ZavaSales.sln -c Release
 # 4. Preview what would change in your environment (read-only)
 vela plan  --packages-dir artifacts --interactive
 
-# 5. Apply the changes (idempotent create/update/delete) into an existing Dataverse solution
-vela apply --packages-dir artifacts --solution ZavaSales --interactive --execute
+# 5. Apply the changes (idempotent create/update/delete) into an existing Dataverse solution.
+#    apply writes by default: on a terminal it shows the plan and asks you to confirm (type "yes").
+#    Add --auto-approve to skip the prompt in CI / unattended runs.
+vela apply --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
 What you get from `vela init`: a solution that references `Vela.Plugins` as a NuGet package, with seeded

@@ -204,7 +204,7 @@ to a dotted global by `bootstrapCommands`. In the Command Designer, point the bu
 ## Deploy
 
 ```powershell
-vela apply --webresources ./{{folder}} --solution <name> --execute --interactive
+vela apply --webresources ./{{folder}} --solution <name> --interactive
 ```
 """;
     }
@@ -624,8 +624,9 @@ during the build (from the publish output), so a cold `dotnet pack` emits an ass
 # Preview (read-only)
 vela plan --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
 
-# Apply (idempotent create/update/delete)
-vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --execute --verbose
+# Apply (idempotent create/update/delete). apply writes by default and prompts on a terminal;
+# add --auto-approve to skip the prompt in CI.
+vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
 ```
 
 ## What's inside the plugin project
@@ -2770,8 +2771,9 @@ if (string.IsNullOrWhiteSpace(url))
 }
 
 // Well-known Microsoft public client registered for interactive Dataverse sign-in.
+// The redirect URI must be loopback: MSAL's system-browser flow rejects non-loopback redirects.
 const string publicAppId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
-const string redirectUri = "app://58145B91-0C36-4500-8554-080854F2AC97";
+const string redirectUri = "http://localhost";
 string connectionString =
     $"AuthType=OAuth;Url={url};AppId={publicAppId};RedirectUri={redirectUri};LoginPrompt=Auto";
 

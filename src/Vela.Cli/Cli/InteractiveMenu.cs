@@ -224,9 +224,10 @@ internal static class InteractiveMenu
         return [.. args];
     }
 
-    /// <summary>Builds the <c>apply</c> argument array. Pure, for testability.</summary>
+    /// <summary>Builds the argument array for the apply choice. Pure, for testability. The menu already asked
+    /// for confirmation, so "execute" applies non-interactively (--auto-approve); "No" previews via plan.</summary>
     public static string[] ComposeApplyArgs(bool execute) =>
-        execute ? ["apply", "--interactive", "--execute"] : ["apply", "--interactive"];
+        execute ? ["apply", "--interactive", "--auto-approve"] : ["plan", "--interactive"];
 
     private static void WriteBanner()
     {

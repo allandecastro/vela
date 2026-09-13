@@ -49,7 +49,7 @@ internal static class ApplyResumeReport
             }
         }
 
-        lines.Add("  operations are idempotent (upserts and already-applied deletes are safe to repeat): fix the cause and re-run 'apply --execute' to resume.");
+        lines.Add("  operations are idempotent (upserts and already-applied deletes are safe to repeat): fix the cause and re-run 'apply' (add --auto-approve in CI) to resume.");
         return lines;
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using Vela.Constants;
@@ -151,7 +152,8 @@ public sealed class CustomApiBuilder<TRequest, TResponse> : ICustomApiBuilder<TR
     {
         configure = configure ?? throw new ArgumentNullException(nameof(configure));
         _requestConfigured = true;
-        _requestParameters.Clear();
+        // Accumulate across calls: a second .Request(...) must add to the parameters, not replace them.
+        // Clearing here silently dropped everything a prior call had added (only the last call survived).
         configure(new CustomApiParameterBuilder<TRequest>(_requestParameters));
         return this;
     }
@@ -161,7 +163,7 @@ public sealed class CustomApiBuilder<TRequest, TResponse> : ICustomApiBuilder<TR
     {
         configure = configure ?? throw new ArgumentNullException(nameof(configure));
         _responseConfigured = true;
-        _responseParameters.Clear();
+        // Accumulate across calls (see Request): a second .Response(...) adds to the properties, not replaces them.
         configure(new CustomApiParameterBuilder<TResponse>(_responseParameters));
         return this;
     }
@@ -262,6 +264,12 @@ public sealed class CustomApiBuilder<TRequest, TResponse> : ICustomApiBuilder<TR
             if (member == null || member.Member is not PropertyInfo propertyInfo)
             {
                 throw new ArgumentException("Expression must target a property.", nameof(property));
+            }
+
+            if (_parameters.Any(p => string.Equals(p.Name, propertyInfo.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"Custom API parameter '{propertyInfo.Name}' was added more than once. Each request/response parameter must be added exactly once (across all .Request()/.Response() calls).");
             }
 
             Type propertyType = propertyInfo.PropertyType;

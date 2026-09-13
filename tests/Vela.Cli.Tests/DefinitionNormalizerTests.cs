@@ -24,6 +24,40 @@ public class DefinitionNormalizerTests
     }
 
     [Fact]
+    public void Global_message_step_ignores_entityLogicalName_so_it_converges()
+    {
+        // Associate/Disassociate steps read back from Dataverse with an empty entityLogicalName (their
+        // sdkmessagefilter carries no primary entity), so a local declaration of "account" must not produce a
+        // perpetual "changed" diff. The live side and the local side must yield the same shape.
+        JsonElement local = DefinitionNormalizer.BuildStepShape(
+            "P", "Associate", "account", stepKey: "", name: "P - PostOpSync: Associate of account",
+            stage: 40, mode: 0, executionOrder: 1,
+            filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
+            enabled: true, unsecureConfig: "", secureConfig: "", Options);
+        JsonElement live = DefinitionNormalizer.BuildStepShape(
+            "P", "Associate", "", stepKey: "", name: "P - PostOpSync: Associate of account",
+            stage: 40, mode: 0, executionOrder: 1,
+            filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
+            enabled: true, unsecureConfig: "", secureConfig: "", Options);
+
+        Assert.Equal(JsonSerializer.Serialize(local), JsonSerializer.Serialize(live));
+    }
+
+    [Fact]
+    public void Non_global_message_step_still_diffs_on_entityLogicalName()
+    {
+        // Entity-specific messages (Create/Update/...) must keep entityLogicalName in the compared shape.
+        JsonElement a = DefinitionNormalizer.BuildStepShape(
+            "P", "Update", "account", "", "n", 40, 0, 1,
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", Options);
+        JsonElement b = DefinitionNormalizer.BuildStepShape(
+            "P", "Update", "", "", "n", 40, 0, 1,
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", Options);
+
+        Assert.NotEqual(JsonSerializer.Serialize(a), JsonSerializer.Serialize(b));
+    }
+
+    [Fact]
     public void Step_pre_and_post_images_are_alias_order_insensitive()
     {
         // Image ordering is owned by the shared shape builder (DefinitionNormalizer.BuildStepShape), used by

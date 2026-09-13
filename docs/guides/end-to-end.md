@@ -56,9 +56,9 @@ and makes no changes. Piped or redirected (or with `--json`), it emits JSON inst
 **4. Apply** the changes (idempotent create/update/delete):
 
 ```powershell
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive --execute
+vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive
 ```
 
-`--solution` is an existing unmanaged Dataverse solution: importing a plugin package requires it, both because the package name is prefixed with the solution publisher's customization prefix and because every registered component (package, assembly, steps, Custom APIs) is added to that solution. `apply --execute` uploads the plugin package into it, ensures the plugin type exists, then registers the step and its image. Re-running with no local changes is a no-op. If a run fails partway, the resume report on stderr lists which operations completed and which did not - fix the cause and re-run (upserts are idempotent).
+`apply` writes by default: on a terminal it shows the plan and asks you to confirm (type `yes`); add `--auto-approve` to skip the prompt in CI. `--solution` is an existing unmanaged Dataverse solution: importing a plugin package requires it, both because the package name is prefixed with the solution publisher's customization prefix and because every registered component (package, assembly, steps, Custom APIs) is added to that solution. `apply` uploads the plugin package into it, ensures the plugin type exists, then registers the step and its image. Re-running with no local changes is a no-op. If a run fails partway, the resume report on stderr lists which operations completed and which did not - fix the cause and re-run (upserts are idempotent).
 
 **5. Verify** in Dataverse: update an account's name and confirm the step fires (its message appears in the plugin trace log).

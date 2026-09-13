@@ -147,7 +147,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         SolutionUniqueName: null,
         Environment: null,
         OutPath: null,
-        Execute: false,
+        AutoApprove: false,
         Interactive: false,
         Strict: false,
         Verbose: false);

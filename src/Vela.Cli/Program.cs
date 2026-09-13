@@ -156,12 +156,9 @@ static int RunApply(string[] args, JsonSerializerOptions jsonOptions)
         return exitCode;
     }
 
-    if (options.Execute)
-    {
-        return ExecuteApply(options, jsonOptions);
-    }
-
-    return ExecutePlanLike("apply-dry-run", options, jsonOptions);
+    // apply executes by default. The confirmation gate (interactive prompt / --auto-approve requirement in a
+    // non-interactive session) lives in ExecuteApply, after the plan is computed. Use `vela plan` to preview.
+    return ExecuteApply(options, jsonOptions);
 }
 
 static int RunInspect(string[] args, JsonSerializerOptions jsonOptions)
@@ -301,6 +298,29 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
             }, jsonOptions);
             WriteOutput(options.OutPath, unchanged);
             return ExitSuccess;
+        }
+
+        // Confirmation gate: apply writes by default. In a terminal, show the plan and require a typed "yes".
+        // In a non-interactive session (no stdin TTY) refuse unless --auto-approve/--yes was passed, so a
+        // script can never write unattended by accident.
+        if (!options.AutoApprove)
+        {
+            if (Console.IsInputRedirected)
+            {
+                return Fail(
+                    "Refusing to apply without confirmation in a non-interactive session. Re-run with --auto-approve (or --yes), or use 'vela plan' to preview.",
+                    ExitError, includeUsage: false);
+            }
+
+            WritePlanSummary(preview with { Mode = "apply" }, Console.Error, ConsoleTheme.StderrColor);
+            Console.Error.Write(
+                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
+            string? answer = Console.ReadLine();
+            if (!string.Equals(answer?.Trim(), "yes", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine("Apply cancelled.");
+                return ExitSuccess;
+            }
         }
 
         using ServiceClient client = CreateDataverseClient(options);

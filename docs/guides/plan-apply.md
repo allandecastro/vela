@@ -17,15 +17,16 @@ vela plan `
   --client-id <app-id> `
   --client-secret <client-secret>
 
-# 3) Preview apply operations (dry-run) against the same environment
-vela apply `
+# 3) Preview the apply operations without writing (dry-run) - use plan
+vela plan `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `
   --tenant-id <tenant-id> `
   --client-id <app-id> `
   --client-secret <client-secret>
 
-# 3b) Execute apply operations (idempotent upsert/delete) into an existing Dataverse solution
+# 3b) Apply (idempotent upsert/delete) into an existing Dataverse solution.
+#     On a terminal, apply shows the plan and asks for confirmation; add --auto-approve for CI / unattended runs.
 vela apply `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `
@@ -33,7 +34,7 @@ vela apply `
   --client-id <app-id> `
   --client-secret <client-secret> `
   --solution ZavaSales `
-  --execute
+  --auto-approve
 
 # 4) Interactive local mode (wizard prompts)
 vela plan --interactive
@@ -50,7 +51,7 @@ vela plan `
 
 `plan` compares local plugin/custom-api metadata extracted from `.nupkg` against Dataverse and returns a preview of the ordered `create` / `update` / `delete` operations plus a detailed diff. At a terminal this is a colorized human summary; piped, redirected, or with `--json`, it is JSON with `hasChanges`, `summary`, `operations`, and `diff` fields.
 
-`apply --execute` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff (human summary at a terminal, JSON when piped or with `--json`).
+`apply` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff (human summary at a terminal, JSON when piped or with `--json`). It writes by default: on a terminal it shows the plan and asks you to type `yes`; in a non-interactive session (no stdin TTY) it refuses unless you pass `--auto-approve` (alias `--yes`), so a script never writes unattended by accident. Use `vela plan` to preview without writing.
 
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
@@ -67,7 +68,7 @@ alongside or instead of plugins:
 vela plan --webresources ./dist --solution ZavaSales --interactive
 
 # apply them (and publish the changes so they go live)
-vela apply --webresources ./dist --solution ZavaSales --execute --interactive
+vela apply --webresources ./dist --solution ZavaSales --interactive
 ```
 
 The folder is mirrored **verbatim**: each file's unique name is its path relative to the root, with forward
@@ -88,7 +89,7 @@ clear message otherwise. Generate the TypeScript form models the scripts build o
 
 ## Resuming a failed apply
 
-`apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. The output is an ordered resume report listing what was applied and what was not, then the failing operation and its reason. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply --execute`: the operations that already succeeded become no-ops and the run continues from where it stopped, converging to a clean `plan`.
+`apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. The output is an ordered resume report listing what was applied and what was not, then the failing operation and its reason. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply` (add `--auto-approve` in CI): the operations that already succeeded become no-ops and the run continues from where it stopped, converging to a clean `plan`.
 
 ## Registration manifest
 

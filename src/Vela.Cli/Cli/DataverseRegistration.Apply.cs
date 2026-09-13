@@ -281,7 +281,7 @@ internal static partial class DataverseRegistration
         {
             throw new InvalidOperationException(
                 $"Plugin package '{unprefixed.PackageName}' has no solution publisher prefix, which Dataverse requires " +
-                "to import a package. Re-run 'apply --execute' with --solution <uniqueName> so the prefix is applied.");
+                "to import a package. Re-run 'apply' with --solution <uniqueName> so the prefix is applied.");
         }
     }
 
@@ -316,6 +316,17 @@ internal static partial class DataverseRegistration
         create["version"] = package.Version;
         create["content"] = packageContent;
         return service.Create(create);
+    }
+
+    // Skip a no-op Update: if the stored version and content already match, updating would only bump
+    // modifiedon (Last Modified) on every apply, making the package look churned when nothing changed.
+    string existingVersion = existing.GetAttributeValue<string>("version") ?? string.Empty;
+    string existingContent = existing.GetAttributeValue<string>("content") ?? string.Empty;
+    if (string.Equals(existingVersion, package.Version, StringComparison.Ordinal) &&
+        string.Equals(existingContent, packageContent, StringComparison.Ordinal))
+    {
+        LogOperation("package", "unchanged", desiredPackageName, $"v{package.Version}", verbose);
+        return existing.Id;
     }
 
     LogOperation("package", "update", desiredPackageName, $"v{package.Version}", verbose);
@@ -438,7 +449,9 @@ internal static partial class DataverseRegistration
 {
     QueryExpression query = new QueryExpression("pluginpackage")
     {
-        ColumnSet = new ColumnSet("pluginpackageid", "name"),
+        // version + content are read so UpsertPluginPackage can skip a no-op Update (which would otherwise
+        // bump modifiedon on every apply even when nothing changed).
+        ColumnSet = new ColumnSet("pluginpackageid", "name", "version", "content"),
         TopCount = 1
     };
     query.Criteria.AddCondition("name", ConditionOperator.Equal, packageName);

@@ -243,7 +243,7 @@ internal static class ProjectScaffolder
         {
             Console.WriteLine($"  cd src/{webResourcesName} && npm install && npm run build   # bundle the form web resources");
             Console.WriteLine("  vela add ribbon-script <entity>   # add a typed ribbon command (wire the button in the Command Designer)");
-            Console.WriteLine($"  vela apply --webresources src/{webResourcesName}/{options.WebResourcesFolder} --solution <name> --execute --interactive   # deploy them");
+            Console.WriteLine($"  vela apply --webresources src/{webResourcesName}/{options.WebResourcesFolder} --solution <name> --interactive   # deploy them");
         }
 
         return ExitSuccess;

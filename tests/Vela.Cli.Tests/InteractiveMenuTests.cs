@@ -54,8 +54,8 @@ public class InteractiveMenuTests
     }
 
     [Theory]
-    [InlineData(true, new[] { "apply", "--interactive", "--execute" })]
-    [InlineData(false, new[] { "apply", "--interactive" })]
+    [InlineData(true, new[] { "apply", "--interactive", "--auto-approve" })]
+    [InlineData(false, new[] { "plan", "--interactive" })]
     public void ComposeApplyArgs_TogglesExecute(bool execute, string[] expected)
     {
         Assert.Equal(expected, InteractiveMenu.ComposeApplyArgs(execute));

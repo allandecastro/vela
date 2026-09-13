@@ -63,6 +63,51 @@ public class ModelsCommandTests
     }
 
     [Fact]
+    public void ResolveNamespace_InfersFromSolutionRoot_PreferringSharedProject()
+    {
+        // A solution root has no top-level .csproj (they live under src/*), so the namespace must be derived
+        // from the sibling .sln - preferring the .Shared project - instead of failing "Could not infer".
+        string root = TempDir();
+        try
+        {
+            string plugins = System.IO.Path.Combine(root, "src", "Acme.Plugins");
+            string shared = System.IO.Path.Combine(root, "src", "Acme.Shared");
+            System.IO.Directory.CreateDirectory(plugins);
+            System.IO.Directory.CreateDirectory(shared);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(plugins, "Acme.Plugins.csproj"),
+                "<Project><PropertyGroup><RootNamespace>Acme.Plugins</RootNamespace></PropertyGroup></Project>");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(shared, "Acme.Shared.csproj"),
+                "<Project><PropertyGroup><RootNamespace>Acme.Shared</RootNamespace></PropertyGroup></Project>");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(root, "Acme.sln"),
+                "Microsoft Visual Studio Solution File, Format Version 12.00\n" +
+                "Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Acme.Plugins\", \"src\\Acme.Plugins\\Acme.Plugins.csproj\", \"{11111111-1111-1111-1111-111111111111}\"\nEndProject\n" +
+                "Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Acme.Shared\", \"src\\Acme.Shared\\Acme.Shared.csproj\", \"{22222222-2222-2222-2222-222222222222}\"\nEndProject\n");
+
+            string? ns = ModelsCommand.ResolveNamespace(new[] { "--project", root });
+
+            Assert.Equal("Acme.Shared.Models.Generated", ns);
+        }
+        finally
+        {
+            System.IO.Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveNamespace_ReturnsNull_WhenNoProjectOrSolution()
+    {
+        string root = TempDir();
+        try
+        {
+            Assert.Null(ModelsCommand.ResolveNamespace(new[] { "--project", root }));
+        }
+        finally
+        {
+            System.IO.Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void WriteModels_Writes_All_Files_And_Returns_Success()
     {
         string dir = TempDir();
