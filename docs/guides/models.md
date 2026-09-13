@@ -8,7 +8,8 @@ orthogonal to wanting it in the model (standard columns are never in a solution;
 translation), so scoping columns to the solution would drop the ones you actually use.
 
 ```powershell
-# from the solution's components, into <prefix>.Shared.Models.Generated (inferred from the project)
+# from the solution's components, into <prefix>.Shared.Models.Generated (namespace inferred from the project,
+# or from the solution's .sln when run at the solution root; override with --namespace)
 vela models --solution ZavaSales --url https://zava.crm.dynamics.com --interactive
 
 # or an explicit list, with an explicit namespace/output

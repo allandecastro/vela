@@ -181,7 +181,7 @@ co-located test) and registers its entry.
 
 ```powershell
 vela plan  --webresources src/Zava.WebResources/dist --solution ZavaSales --interactive
-vela apply --webresources src/Zava.WebResources/dist --solution ZavaSales --execute --interactive
+vela apply --webresources src/Zava.WebResources/dist --solution ZavaSales --interactive
 ```
 
 The folder is mirrored **verbatim**: each file's unique name is its path relative to the root, so the

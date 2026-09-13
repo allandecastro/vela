@@ -36,7 +36,7 @@ vela apply `
   --client-id <app-id> `
   --client-secret <client-secret> `
   --solution ZavaSales `
-  --execute
+  --auto-approve
 ```
 
 ## CI strict mode
@@ -80,5 +80,5 @@ Add `--verbose` for full exception stack traces on failure (and the human summar
 when output is piped):
 
 ```powershell
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive --execute --verbose
+vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive --verbose
 ```

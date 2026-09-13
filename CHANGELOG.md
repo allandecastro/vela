@@ -40,6 +40,22 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   terminal and neither `--json` nor `--out` is given, these commands render the styled summary that previously
   required `--verbose`. Piped/redirected runs, `--json`, and `--out` are unchanged and still emit JSON, so
   scripts and coding agents parse the same contract as before.
+- **CLI: `apply` writes to Dataverse by default (BREAKING).** Previously `apply` only previewed unless
+  `--execute` was given. It now applies: on a terminal it shows the plan and requires a typed `yes`; in a
+  non-interactive session (no stdin TTY) it refuses unless `--auto-approve` (alias `--yes`) is passed, so a
+  script never writes unattended by accident. Use `vela plan` to preview, and `vela apply --auto-approve` for
+  non-interactive writes. The interactive menu's "No, preview" choice now runs `plan`. The `plan` note no
+  longer contains the misleading substring "Dataverse changes were executed" (now "This is a preview; nothing
+  was written to Dataverse.").
+- **CLI: `models` infers the namespace from the solution `.sln`.** When run at the solution root (no single
+  `.csproj` in the current directory) it derives the namespace from a representative project in the sibling
+  `.sln` (preferring the `.Shared`/`.Plugins` project), instead of failing with "Could not infer a namespace",
+  so it works from the root like `plan`/`apply`. `--namespace` still overrides.
+
+### Removed
+
+- **CLI: the `apply --execute` flag.** Replaced by default execution plus a confirmation gate (see Changed).
+  Migrate CI/scripts from `vela apply --execute` to `vela apply --auto-approve` (or `--yes`).
 
 ### Fixed
 
@@ -64,6 +80,26 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   Cache-miss synchronisation now lives inside each entry (a `Lazy<T>` slot) and is reclaimed together with the
   entry on expiration / `Invalidate` / `Clear`, so a workload using high-cardinality keys no longer accumulates
   lock objects. The factory still runs at most once per key under contention.
+- **CLI: interactive OAuth sign-in uses a loopback redirect URI.** `plan`/`apply --interactive` (and the
+  scaffolded sign-in script) built the OAuth connection string with a non-loopback redirect URI, so MSAL's
+  system-browser flow failed with "Only loopback redirect uri is supported" before the browser opened. It now
+  uses `http://localhost`.
+- **CLI: plugin steps on the `Associate`/`Disassociate` messages converge in `plan`/`apply`.** These global
+  messages carry no primary entity on their `sdkmessagefilter` (`primaryobjecttypecode` is `none`), so the live
+  read always returned an empty `entityLogicalName` while the local definition declared one (e.g. `account`),
+  reporting the step as changed on every run. The field is now neutralized for these messages in the diff shape.
+- **CLI: the plugin package is no longer re-uploaded on every `apply`.** `UpsertPluginPackage` unconditionally
+  wrote the package `content`/`version`, bumping `modifiedon` even when the bytes were identical (and invisible
+  in the diff, since packages reconcile out-of-band). It now skips the update when the stored version and
+  content already match.
+- **Framework: Custom API `.Request(...)`/`.Response(...)` accumulate across calls.** A second `.Request(...)`
+  (or `.Response(...)`) call cleared the parameters the previous call had added, so only the last call
+  survived, silently dropping parameters (and the whole Custom API) from the plan. Multiple calls now
+  accumulate, and adding the same parameter twice throws instead of failing silently.
+- **Framework: a Custom API request that uses plain auto-properties fails loudly.** The typed request binds its
+  input parameters through the `Parameters` bag (`get => Get<T>()`), so a plain auto-property (`{ get; set; }`)
+  silently read its default (`Guid.Empty` / `null`). `MapInputToRequest` now detects an input key matching an
+  auto-property and throws a clear `InvalidPluginExecutionException` naming the property instead.
 
 ## [0.9.0] - 2026-09-13
 
