@@ -65,7 +65,7 @@ if (command is "version" or "--version")
 
 string[] commandArgs = effectiveArgs.Skip(1).ToArray();
 
-return command switch
+int exitCode = command switch
 {
     "plan" => RunPlan(commandArgs, jsonOptions),
     "apply" => RunApply(commandArgs, jsonOptions),
@@ -77,6 +77,12 @@ return command switch
     "logout" => LogoutCommand.Run(commandArgs),
     _ => Fail($"Unknown command '{effectiveArgs[0]}'.", ExitInvalidArguments)
 };
+
+// After the command runs, best-effort notice if a newer CLI is on nuget.org (throttled, silent for --json / dev
+// builds / VELA_NO_UPDATE_CHECK). Never affects the command's exit code.
+UpdateNotifier.MaybeNotify(ToolInfo.Version, commandArgs.Any(a => string.Equals(a, "--json", StringComparison.OrdinalIgnoreCase)));
+
+return exitCode;
 
 // `init` scaffolds a new solution on disk. Unlike plan/apply/inspect it never connects to Dataverse,
 // so it has its own option parser instead of TryParseSharedOptions.

@@ -90,6 +90,22 @@ internal static class UserConfig
         Write(data);
     }
 
+    /// <summary>The cached update-check state: when nuget.org was last queried and the latest CLI version it reported.</summary>
+    public static (DateTimeOffset? LastCheckUtc, string? LatestVersion) GetUpdateCheckState()
+    {
+        ConfigData? data = Read();
+        return (data?.LastUpdateCheckUtc, data?.LatestKnownCliVersion);
+    }
+
+    /// <summary>Records an update check (timestamp + the latest CLI version seen). Best-effort.</summary>
+    public static void SetUpdateCheckState(DateTimeOffset checkedUtc, string? latestVersion)
+    {
+        ConfigData data = Read() ?? new ConfigData();
+        data.LastUpdateCheckUtc = checkedUtc;
+        data.LatestKnownCliVersion = latestVersion;
+        Write(data);
+    }
+
     /// <summary>Clears all persisted preferences (deletes config.json). Best-effort.</summary>
     public static void Clear()
     {
@@ -140,5 +156,11 @@ internal static class UserConfig
     {
         [JsonPropertyName("lastDataverseUrl")]
         public string? LastDataverseUrl { get; set; }
+
+        [JsonPropertyName("lastUpdateCheckUtc")]
+        public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+
+        [JsonPropertyName("latestKnownCliVersion")]
+        public string? LatestKnownCliVersion { get; set; }
     }
 }
