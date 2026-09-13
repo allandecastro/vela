@@ -18,10 +18,11 @@ Core commands:
 | `vela apply --execute` | Apply those operations (idempotent upsert/delete). See [CLI automation](plan-apply.md). |
 | `vela inspect` | Report local package registrations alongside live Dataverse state, with diagnostics (read-only). |
 | `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
+| `vela logout` | Clear the cached interactive token and remembered Dataverse URL. |
 
 > [!NOTE]
-> **Client-side (preview / work in progress).** For the [vela-client](https://github.com/allandecastro/vela)
-> runtime, `vela models --forms` generates [TypeScript FormModel files](models.md) and
+> **Client-side (preview / work in progress).** For the **vela-client** (separate) runtime,
+> `vela models --forms` generates [TypeScript FormModel files](models.md) and
 > `vela models --tables` [TypeScript Web API record interfaces](models.md),
 > `vela init --web-resources` [scaffolds a web resources project](scaffold.md), and `vela plan` /
 > `apply --webresources` [deploy web resources](plan-apply.md). These are new and may change. Most commands also

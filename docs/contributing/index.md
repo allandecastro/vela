@@ -50,7 +50,9 @@ Thresholds are set just below current coverage to catch regressions without chur
 Two gate families guard the correctness-critical cores, and both follow the same policy:
 
 - **Branch coverage** (`ci.yml`) - diff engine, in-memory harness, and the plugin runtime (`Vela.Plugins`).
-- **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine + normalizer, and the harness query core.
+- **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine and normalizer, the CLI reconciliation and
+  security cores, and the harness query core (see [Mutation testing](../advanced/mutation-testing.md) for the full
+  gated set).
 
 **Policy - 80% floor, ratcheted above it.** Every gated core stays at **≥ 80%** on *both* metrics; `80` is a hard
 minimum, never to be lowered below. On top of that floor the enforced threshold is **ratcheted to just under the

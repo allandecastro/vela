@@ -136,7 +136,9 @@ public sealed class AfterEstimate : EntityPluginBase<Account>   // API bound to 
   synchronous registration does not compile. A **None** or **private** API emits no extension at all (only a
   comment), so there is no blessed way to register a step on it.
 - **Escape hatch.** The generic `On<zava_AccountEstimateValueRequest>()` entry stays available for explicit,
-  unchecked use. Dataverse also rejects an invalid registration at deploy time regardless.
+  unchecked use (it always allows `.Sync()`); for a compile-time-safe manual async-only registration use
+  `OnAsyncOnly<zava_AccountEstimateValueRequest>()`, which returns the same async-only stage as the generated
+  extension. Dataverse also rejects an invalid registration at deploy time regardless.
 
 The method name is the unique name minus its publisher prefix, PascalCased (`zava_AccountEstimateValue` becomes
 `OnAccountEstimateValue`).
