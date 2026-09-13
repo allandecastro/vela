@@ -38,6 +38,13 @@ internal static class ModelsCommand
         "--interactive", "-i", "--help", "-h",
     };
 
+    // Value options that may appear bare (present with no value = "all"): --messages / --custom-apis. Every other
+    // value option requires a value.
+    private static readonly HashSet<string> OptionalValueOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--messages", "--custom-apis",
+    };
+
     public static int Run(string[] args)
     {
         if ((args.Length > 0 && args[0] is "help") || CommandLineOptions.IsHelpRequested(args))
@@ -46,8 +53,9 @@ internal static class ModelsCommand
             return ExitSuccess;
         }
 
-        // Fail fast on a misspelled/unknown option before connecting to Dataverse or generating anything.
-        if (!CommandLineOptions.TryValidateKnownOptions(args, ValueOptions, FlagOptions, out int optExit))
+        // Tokenize: expand --opt=value, reject unknown options and required value options missing their value, and
+        // normalize the inline form so the readers below see a consistent shape.
+        if (!CommandLineOptions.TryTokenize(args, ValueOptions, FlagOptions, OptionalValueOptions, out args, out int optExit))
         {
             return optExit;
         }

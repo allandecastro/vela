@@ -104,7 +104,7 @@ internal sealed record ScaffoldOptions(
         exitCode = ExitSuccess;
 
         // Fail fast on a misspelled/unknown option (e.g. --prefx) before prompting or scaffolding anything.
-        if (!CommandLineOptions.TryValidateKnownOptions(args, ValueOptions, FlagOptions, out exitCode))
+        if (!CommandLineOptions.TryTokenize(args, ValueOptions, FlagOptions, out args, out exitCode))
         {
             return false;
         }

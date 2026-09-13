@@ -100,13 +100,120 @@ internal static class CommandLineOptions
         return true;
     }
 
+    /// <summary>
+    /// The shared front-door tokenizer for a command's arguments. It (1) expands the <c>--opt=value</c> inline form
+    /// of a known value option into two tokens (<c>--opt</c> <c>value</c>) so every reader sees the same shape, and
+    /// (2) validates: an unknown dash option fails, and a required value option missing its value (last token, or
+    /// followed by another known option) fails with "requires a value". Value options listed in
+    /// <paramref name="optionalValueOptions"/> may appear bare (e.g. <c>--messages</c> = all). An unknown
+    /// dash-looking token is still accepted as a value (a name / connection string may start with <c>-</c>).
+    /// The <paramref name="normalized"/> array (with <c>=</c> expanded) is what the caller should read from.
+    /// </summary>
+    public static bool TryTokenize(
+        string[] args,
+        HashSet<string> valueOptions,
+        HashSet<string> flagOptions,
+        HashSet<string> optionalValueOptions,
+        out string[] normalized,
+        out int exitCode)
+    {
+        normalized = ExpandInlineValues(args, valueOptions, flagOptions);
+        exitCode = ExitSuccess;
+
+        for (int i = 0; i < normalized.Length; i++)
+        {
+            string token = normalized[i];
+            if (token.Length < 2 || token[0] != '-' || token == "--")
+            {
+                continue; // positional, lone '-', or the bare '--' separator
+            }
+
+            if (valueOptions.Contains(token))
+            {
+                bool hasValue = i + 1 < normalized.Length && !IsKnownOption(normalized[i + 1], valueOptions, flagOptions);
+                if (hasValue)
+                {
+                    i++; // consume the value
+                    continue;
+                }
+
+                // No value present. That is fine for an optional-value option (bare = a mode, e.g. --messages);
+                // otherwise it is an error rather than a silent mis-bind to the following option (B1 / A9).
+                if (optionalValueOptions.Contains(token))
+                {
+                    continue;
+                }
+
+                exitCode = Fail($"Option '{token}' requires a value.", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+
+            if (flagOptions.Contains(token))
+            {
+                continue;
+            }
+
+            exitCode = Fail($"Unknown option '{token}'. Run 'vela <command> --help' to see the available options.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>Overload with no optional-value options (every value option requires a value).</summary>
+    public static bool TryTokenize(string[] args, HashSet<string> valueOptions, HashSet<string> flagOptions, out string[] normalized, out int exitCode) =>
+        TryTokenize(args, valueOptions, flagOptions, EmptyOptionSet, out normalized, out exitCode);
+
+    private static readonly HashSet<string> EmptyOptionSet = new(StringComparer.OrdinalIgnoreCase);
+
+    // Expands a "--opt=value" token into "--opt", "value" when --opt is a known value option, so all the readers
+    // (which match "--opt" then take the next token) transparently support the inline form (B2). A flag written as
+    // "--flag=..." is left intact (it will be reported as an unknown option, since a flag takes no value). Tokens
+    // after a bare "--" are passed through unchanged.
+    private static string[] ExpandInlineValues(string[] args, HashSet<string> valueOptions, HashSet<string> flagOptions)
+    {
+        List<string> result = new List<string>(args.Length + 4);
+        bool afterSeparator = false;
+        foreach (string arg in args)
+        {
+            if (afterSeparator)
+            {
+                result.Add(arg);
+                continue;
+            }
+
+            if (arg == "--")
+            {
+                afterSeparator = true;
+                result.Add(arg);
+                continue;
+            }
+
+            int eq = arg.IndexOf('=');
+            if (eq > 0 && arg[0] == '-')
+            {
+                string name = arg.Substring(0, eq);
+                if (valueOptions.Contains(name))
+                {
+                    result.Add(name);
+                    result.Add(arg.Substring(eq + 1));
+                    continue;
+                }
+            }
+
+            result.Add(arg);
+        }
+
+        return result.ToArray();
+    }
+
     public static bool TryParseSharedOptions(string[] args, out SharedOptions options, out int exitCode)
     {
         options = default!;
         exitCode = ExitSuccess;
 
         // Fail fast on a misspelled/unknown option before prompting or reading anything else.
-        if (!TryValidateKnownOptions(args, out exitCode))
+        if (!TryTokenize(args, SharedValueOptions, SharedFlagOptions, out args, out exitCode))
         {
             return false;
         }

@@ -62,7 +62,7 @@ internal static class AddCommand
 
         // Fail fast on an unknown/misspelled option. The kind and name are positionals, so they pass; the
         // allowlist is the union over all add kinds (per-kind option validity is enforced further down).
-        if (!CommandLineOptions.TryValidateKnownOptions(args, ValueOptions, FlagOptions, out int optExit))
+        if (!CommandLineOptions.TryTokenize(args, ValueOptions, FlagOptions, out args, out int optExit))
         {
             return optExit;
         }

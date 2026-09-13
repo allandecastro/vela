@@ -37,7 +37,7 @@ internal static class SignCommand
         }
 
         // Fail fast on a misspelled/unknown option before touching the package.
-        if (!TryValidateKnownOptions(args, ValueOptions, FlagOptions, out int optExit))
+        if (!TryTokenize(args, ValueOptions, FlagOptions, out args, out int optExit))
         {
             return optExit;
         }
