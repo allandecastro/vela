@@ -12,9 +12,11 @@ internal static class InteractiveMenu
 {
     private const string Init = "Scaffold a new solution (init)";
     private const string Add = "Add to a project (add)";
+    private const string Models = "Generate models (models)";
     private const string Plan = "Preview changes (plan)";
     private const string Apply = "Apply changes (apply)";
     private const string Inspect = "Inspect environment (inspect)";
+    private const string Logout = "Sign out (logout)";
     private const string Exit = "Exit";
 
     private static readonly System.Text.RegularExpressions.Regex Identifier =
@@ -31,18 +33,45 @@ internal static class InteractiveMenu
         string choice = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold]vela[/] — what would you like to do?")
-                .AddChoices(Init, Add, Plan, Apply, Inspect, Exit));
+                .AddChoices(Init, Add, Models, Plan, Apply, Inspect, Logout, Exit));
 
         return choice switch
         {
             Init => PromptInit(),
             Add => ["add", .. PromptAdd()],
+            Models => PromptModels(),
             Plan => ["plan", "--interactive"],
             Apply => ComposeApplyArgs(AnsiConsole.Confirm("Execute changes against Dataverse now? (No = dry-run preview)", false)),
             Inspect => ["inspect", "--interactive"],
+            Logout => ["logout"],
             _ => null,
         };
     }
+
+    /// <summary>Prompts for a <c>vela models</c> scope and returns the argument array (interactive connection).</summary>
+    public static string[] PromptModels()
+    {
+        string scope = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Generate models for...")
+                .AddChoices("A solution", "Specific tables"));
+
+        if (scope == "A solution")
+        {
+            string solution = AnsiConsole.Prompt(new TextPrompt<string>("Solution unique name:"));
+            return ComposeModelsArgs(bySolution: true, solution);
+        }
+
+        string entities = AnsiConsole.Prompt(
+            new TextPrompt<string>("Tables (comma-separated logical names, e.g. account,contact):"));
+        return ComposeModelsArgs(bySolution: false, entities);
+    }
+
+    /// <summary>Builds the <c>models</c> argument array from a scope choice. Pure, for testability.</summary>
+    public static string[] ComposeModelsArgs(bool bySolution, string value) =>
+        bySolution
+            ? ["models", "--solution", value, "--interactive"]
+            : ["models", "--entities", value, "--interactive"];
 
     /// <summary>
     /// Prompts for a <c>vela add</c> operation and returns the subcommand args (without the leading

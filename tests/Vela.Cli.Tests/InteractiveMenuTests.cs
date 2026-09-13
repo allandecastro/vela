@@ -6,6 +6,20 @@ namespace Vela.Cli.Tests;
 public class InteractiveMenuTests
 {
     [Fact]
+    public void ComposeModelsArgs_BySolution_UsesSolutionScopeAndInteractive()   // B8
+    {
+        Assert.Equal(["models", "--solution", "zava_core", "--interactive"],
+            InteractiveMenu.ComposeModelsArgs(bySolution: true, "zava_core"));
+    }
+
+    [Fact]
+    public void ComposeModelsArgs_ByTables_UsesEntitiesScopeAndInteractive()   // B8
+    {
+        Assert.Equal(["models", "--entities", "account,contact", "--interactive"],
+            InteractiveMenu.ComposeModelsArgs(bySolution: false, "account,contact"));
+    }
+
+    [Fact]
     public void ComposeInitArgs_IncludesAllProjects_ByDefault()
     {
         string[] args = InteractiveMenu.ComposeInitArgs("ZavaSales", "Zava", ".", integrations: true, tests: true, console: true);
