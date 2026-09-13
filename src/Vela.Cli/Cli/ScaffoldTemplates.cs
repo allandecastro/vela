@@ -204,7 +204,7 @@ to a dotted global by `bootstrapCommands`. In the Command Designer, point the bu
 ## Deploy
 
 ```powershell
-vela apply --webresources ./{{folder}} --solution <name> --execute --interactive
+vela apply --webresources ./{{folder}} --solution <name> --interactive
 ```
 """;
     }
@@ -624,8 +624,9 @@ during the build (from the publish output), so a cold `dotnet pack` emits an ass
 # Preview (read-only)
 vela plan --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
 
-# Apply (idempotent create/update/delete)
-vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --execute --verbose
+# Apply (idempotent create/update/delete). apply writes by default and prompts on a terminal;
+# add --auto-approve to skip the prompt in CI.
+vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
 ```
 
 ## What's inside the plugin project
