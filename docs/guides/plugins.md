@@ -146,13 +146,13 @@ Both are inferred from the message with no cast; binding an `OnUpdate()` step to
 reading `ctx.Response` on a pre-stage handler, does not compile. Read message-specific fields off `ctx.Request`
 (for example the merge subordinate from `ctx.Request.SubordinateId`).
 
-Every message reads its primary record off the already-typed `ctx.Request`. For `Create` and `Update`, `ctx.Request`
-is a Vela-owned typed request whose `ctx.Request.Target` returns the early-bound `TEntity` instead of the SDK's base
-`Entity`. Every other message uses the SDK request: `ctx.Request.Target` (the `EntityReference` for `Delete`/
-`Retrieve`/`Associate`/`Disassociate`/`Merge`/`GrantAccess`/`ModifyAccess`/`RevokeAccess`/`AddToQueue`/`RouteTo`, and
-the base `Entity` for `SendEmailFromTemplate`) or `ctx.Request.Targets` (the `EntityCollection` for `CreateMultiple`/
-`UpdateMultiple`). To read any target early-bound regardless of message, the `ctx.GetTarget<T>()` extension stays
-available (for example to get a typed record on `SendEmailFromTemplate`).
+Every message reads its primary record off the already-typed `ctx.Request`. For `Create`, `Update` and
+`SendEmailFromTemplate`, `ctx.Request` is a Vela-owned typed request whose `ctx.Request.Target` returns the
+early-bound `TEntity` instead of the SDK's base `Entity`. Every other message uses the SDK request:
+`ctx.Request.Target` (the `EntityReference` for `Delete`/`Retrieve`/`Associate`/`Disassociate`/`Merge`/
+`GrantAccess`/`ModifyAccess`/`RevokeAccess`/`AddToQueue`/`RouteTo`) or `ctx.Request.Targets` (the
+`EntityCollection` for `CreateMultiple`/`UpdateMultiple`). To read any target early-bound regardless of message,
+the `ctx.GetTarget<T>()` extension stays available.
 
 The modelled messages with a typed context are:
 
