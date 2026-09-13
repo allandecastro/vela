@@ -40,3 +40,13 @@ Core commands:
 > cached (`~/.vela/token.dat`, DPAPI-encrypted on Windows) so later runs are silent, and the last Dataverse
 > URL is offered as the prompt default. Use `--fresh-login` to force a new prompt, or `vela logout` to clear
 > the cached token and remembered URL. Override the config location with `$VELA_CONFIG_DIR`.
+
+> [!TIP]
+> **Option syntax.** Every option accepts both `--option value` and `--option=value`. A misspelled option is
+> rejected up front, and an option that needs a value but has none (it is the last token, or is followed by
+> another known option) fails with `Option '--x' requires a value.` rather than silently doing the wrong thing.
+
+> [!NOTE]
+> **Update notice.** After a command runs, the CLI checks nuget.org at most once a day and prints a one-line
+> notice to stderr when a newer version is available (`dotnet tool update -g Vela.Cli`). It never blocks or fails a
+> command, and is silent for `--json` output. Set `VELA_NO_UPDATE_CHECK` to disable it.
