@@ -228,6 +228,58 @@ public class SdkMessageReaderTests
     }
 
     [Fact]
+    public void ReadSdkMessage_PopulatesApplicableEntities_FromSdkMessageFilter_DedupedAndOrdered()
+    {
+        var svc = new FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "QualifyLead"))),
+                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
+                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
+                // Two filter rows for 'lead' (deduped), one for 'account', one blank (skipped), one "none"
+                // (the global sentinel - skipped so the message falls into the generic On<TEntity>() path).
+                "sdkmessagefilter" => FakeOrgService.Collection(
+                    Row("sdkmessagefilter", ("primaryobjecttypecode", "lead")),
+                    Row("sdkmessagefilter", ("primaryobjecttypecode", "account")),
+                    Row("sdkmessagefilter", ("primaryobjecttypecode", "lead")),
+                    Row("sdkmessagefilter", ("primaryobjecttypecode", "none")),
+                    Row("sdkmessagefilter", ("primaryobjecttypecode", "  "))),
+                _ => new EntityCollection(),
+            },
+        };
+
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "QualifyLead");
+
+        Assert.Equal(new[] { "account", "lead" }, message.Entities.ToArray());
+
+        // The filter query carries the sdkmessageid plus the step-eligibility conditions (mirrors the ALL-mode list).
+        QueryExpression filterQuery = svc.Queries.Single(q => q.EntityName == "sdkmessagefilter");
+        Assert.Contains(filterQuery.Criteria.Conditions, c => c.AttributeName == "sdkmessageid");
+        Assert.Equal(true, filterQuery.Criteria.Conditions.Single(c => c.AttributeName == "iscustomprocessingstepallowed").Values.Single());
+        Assert.Equal(true, filterQuery.Criteria.Conditions.Single(c => c.AttributeName == "isvisible").Values.Single());
+    }
+
+    [Fact]
+    public void ReadSdkMessage_NoSdkMessageFilter_YieldsEmptyEntities()
+    {
+        var svc = new FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "M"))),
+                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
+                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
+                _ => new EntityCollection(),
+            },
+        };
+
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
+
+        Assert.Empty(message.Entities);
+    }
+
+    [Fact]
     public void ReadSdkMessage_UnknownMessage_Throws()
     {
         var svc = new FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };

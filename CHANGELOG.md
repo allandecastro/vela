@@ -26,6 +26,14 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added
 
+- **CLI: `vela models --messages` emits an entity-constrained `On<Message>()` step extension.** Alongside the
+  typed `XxxRequest`/`XxxResponse`, the generator now emits an `On<Message>()` builder extension per applicable
+  entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), constrained to `IStepBuilder<TEntity>`
+  and delegating to `On<XxxRequest>()`. This gives **compile-time entity-applicability** for generated messages
+  (e.g. `OnQualifyLead()` only compiles on an `EntityPluginBase<Lead>`), matching the curated messages. A global
+  message (`primaryobjecttypecode` `none`) or one applying to more than 8 entities emits a single generic
+  `On<Message><TEntity>()` instead. The early-bound entity types are assumed to be generated into the same
+  namespace.
 - **Framework: early-bound `ctx.Request.Target` on Create/Update.** `ctx.Request` on `ICreatePreContext` /
   `ICreatePostContext` / `IUpdatePreContext` / `IUpdatePostContext` is now a Vela-owned typed request
   (`Vela.Messages.CreateRequest<TEntity>` / `UpdateRequest<TEntity>`) whose `Target` is the early-bound
