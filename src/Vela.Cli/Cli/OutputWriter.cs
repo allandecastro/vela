@@ -189,7 +189,7 @@ internal static class OutputWriter
             Notes:
             [
                 "Compared local .nupkg plugin metadata with live Dataverse state.",
-                "No Dataverse changes were executed."
+                "This is a preview; nothing was written to Dataverse."
             ]);
     }
 
@@ -211,8 +211,8 @@ internal static class OutputWriter
         console.MarkupLine("[bold]Commands:[/]");
         WriteCommand(console, "plan", "Preview registration changes; never writes to Dataverse.");
         Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--webresources <folder> (preview)] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose] [--json]");
-        WriteCommand(console, "apply", "Same inputs as plan; add --execute to write the changes.");
-        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--execute] [--strict] [--verbose] [--json]");
+        WriteCommand(console, "apply", "Same inputs as plan; writes the changes (prompts for confirmation).");
+        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--auto-approve|--yes] [--strict] [--verbose] [--json]");
         WriteCommand(console, "inspect", "Compare local packages with the live environment.");
         Console.WriteLine("      [same args as plan] [--verbose] [--json]");
         WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");

@@ -24,7 +24,7 @@ public class ApplyResumeReportTests
         Assert.Contains("    + delete step S1", text);
         Assert.Contains("not applied (1):", text);
         Assert.Contains("    - create step Zava.AccountPlugin", text);
-        Assert.Contains("re-run 'apply --execute' to resume", text);
+        Assert.Contains("re-run 'apply' (add --auto-approve in CI) to resume", text);
     }
 
     [Fact]

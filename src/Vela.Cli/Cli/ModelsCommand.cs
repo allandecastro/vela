@@ -197,7 +197,7 @@ internal static class ModelsCommand
                     SolutionUniqueName: null,
                     Environment: null,
                     OutPath: null,
-                    Execute: false,
+                    AutoApprove: false,
                     Interactive: false,
                     Strict: false,
                     Verbose: false);
@@ -234,7 +234,7 @@ internal static class ModelsCommand
             SolutionUniqueName: solution,
             Environment: url,
             OutPath: outDir,
-            Execute: false,
+            AutoApprove: false,
             Interactive: interactive,
             Strict: false,
             Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
@@ -379,7 +379,7 @@ internal static class ModelsCommand
             SolutionUniqueName: solution,
             Environment: url,
             OutPath: outDir,
-            Execute: false,
+            AutoApprove: false,
             Interactive: interactive,
             Strict: false,
             Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));

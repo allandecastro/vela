@@ -265,6 +265,6 @@ public class ApplyEngineTests
         Assert.Contains($"update step {PluginType}", stderr);
         // The publish/resolve phase completed before the failure.
         Assert.Contains("publish plugin package(s) and resolve plugin types", stderr);
-        Assert.Contains("re-run 'apply --execute' to resume", stderr);
+        Assert.Contains("re-run 'apply' (add --auto-approve in CI) to resume", stderr);
     }
 }
