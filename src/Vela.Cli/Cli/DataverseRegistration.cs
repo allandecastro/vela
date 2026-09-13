@@ -187,6 +187,19 @@ internal static partial class DataverseRegistration
     return result;
 }
 
+    // The unique names of every Custom API in the environment (case-insensitive). A Custom API's message name
+    // equals its unique name, so this is the set used to recognize (and skip) the platform-managed internal
+    // main-operation step of a Custom API when reading steps (A7).
+    private static HashSet<string> GetCustomApiMessageNames(IOrganizationService service)
+{
+    QueryExpression query = new QueryExpression("customapi") { ColumnSet = new ColumnSet("uniquename") };
+    return service.RetrieveAll(query)
+        .Select(e => e.GetAttributeValue<string>("uniquename"))
+        .Where(n => !string.IsNullOrWhiteSpace(n))
+        .Select(n => n!)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+}
+
     internal static List<RegistrationItem> GetStepItems(IOrganizationService service, Dictionary<Guid, string> pluginTypes, JsonSerializerOptions jsonOptions)
 {
     List<RegistrationItem> items = [];
@@ -211,6 +224,7 @@ internal static partial class DataverseRegistration
     filterLink.Columns = new ColumnSet("primaryobjecttypecode");
 
     List<Entity> stepRows = service.RetrieveAll(stepsQuery);
+    HashSet<string> customApiMessageNames = GetCustomApiMessageNames(service);
     Dictionary<Guid, Entity[]> imagesByStep = GetStepImages(service, stepRows.Select(x => x.Id).ToArray());
     Dictionary<Guid, string> secureConfigsById = GetSecureConfigs(
         service,
@@ -233,8 +247,12 @@ internal static partial class DataverseRegistration
         int stage = step.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 0;
         int mode = step.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0;
 
-        // Skip internal Custom API handler steps (MainOperation) — managed by the customapi entity
-        if (stage == SdkConstants.PipelineStage.MainOperation)
+        // Skip only the internal Custom API handler step - the one whose message is a Custom API's unique name,
+        // which the platform manages (verified live: it is a stage-30 step named "CustomApi '<uniquename>'
+        // implementation" whose message equals the uniquename). A genuine user step at MainOperation on a standard
+        // message (rare, and not producible via Vela's fluent API) is now kept so it diffs correctly instead of
+        // showing as a perpetual "added" (A7).
+        if (stage == SdkConstants.PipelineStage.MainOperation && customApiMessageNames.Contains(message))
         {
             continue;
         }
