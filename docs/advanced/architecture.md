@@ -82,9 +82,9 @@ Dataverse pipeline  →  IPlugin.Execute(IServiceProvider)  →  PluginBase  →
    `I<Message>Context<TEntity>` (for example `IUpdatePostContext<Account>`). That context is a thin, allocation-cheap
    view: `ctx.Request` / `ctx.Response` are the **standard SDK request/response classes** (`UpdateRequest`,
    `CreateResponse`, ...) projected over the pipeline's `InputParameters` / `OutputParameters` `ParameterCollection`s,
-   and `ctx.Target` exposes the primary record early-bound for the entity-`Target` messages (`Create`/`Update`/
-   `SendEmailFromTemplate`); every other message reads its primary record off the typed `ctx.Request.Target` /
-   `ctx.Request.Targets`. The
+   and every message reads its primary record off the typed `ctx.Request.Target` / `ctx.Request.Targets` (an
+   early-bound `TEntity` on `Create`/`Update`, where `ctx.Request` is a Vela-owned typed request; the SDK's `Entity` /
+   `EntityReference` / `EntityCollection` otherwise). The
    handler is bound by **method group**, so the message and the handler's context type are checked by the compiler:
    an `OnUpdate()` step bound to an `ICreateContext` handler does not build. A non-modelled `OnMessage("...")` step
    receives the plain `ILocalPluginContext`.

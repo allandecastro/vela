@@ -86,8 +86,8 @@ namespace Vela.Tests
 
             IUpdatePostContext<TestAccount> ctx = new UpdatePostContext<TestAccount>(inner);
 
-            // ctx.Target is the early-bound entity - no cast, no type argument.
-            TestAccount target = ctx.Target;
+            // ctx.Request.Target is the early-bound entity - no cast, no type argument.
+            TestAccount target = ctx.Request.Target;
             Assert.Equal(id, target.Id);
             Assert.Equal("Zava", target.Name);
         }
@@ -114,8 +114,10 @@ namespace Vela.Tests
 
             ISendEmailFromTemplatePostContext<TestAccount> ctx = new SendEmailFromTemplatePostContext<TestAccount>(inner);
 
-            Assert.Equal(id, ctx.Target.Id);
-            Assert.Equal("Regarding", ctx.Target.Name);
+            // ctx.Request.Target is the base SDK Entity; read the record early-bound via the GetTarget<T> extension.
+            TestAccount target = ctx.GetTarget<TestAccount>();
+            Assert.Equal(id, target.Id);
+            Assert.Equal("Regarding", target.Name);
         }
 
         [Fact]

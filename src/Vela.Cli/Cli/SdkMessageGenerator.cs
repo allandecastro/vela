@@ -15,10 +15,11 @@ public sealed record SdkMessage(
     IReadOnlyList<SdkMessageField> ResponseFields);
 
 /// <summary>
-/// Pure generator for arbitrary SDK message classes: a typed <c>OrganizationRequest</c> (one property per request
-/// field, over <c>Parameters</c>) and a typed <c>OrganizationResponse</c> (one read-only property per response
-/// field, over <c>Results</c>) with a <c>From(OrganizationResponse)</c> factory — because a message executed via
-/// <c>IOrganizationService</c> returns a base <c>OrganizationResponse</c> that can't be cast to the derived type.
+/// Pure generator for arbitrary SDK message classes: a typed <c>Vela.Messages.TypedRequest</c> (one read-write
+/// property per request field, over <c>Parameters</c>) and a typed <c>Vela.Messages.TypedResponse</c> (one
+/// read-only property per response field, over <c>Results</c>). Each property is a one-liner over the base
+/// <c>Get&lt;T&gt;()</c> / <c>Set(value)</c> helpers. Wrap a base response returned by <c>IOrganizationService</c>
+/// with <c>service.Execute(new XxxRequest { ... }).ToResponse&lt;XxxResponse&gt;()</c>.
 /// Mirrors <see cref="CustomApiMessageGenerator"/>; the difference is only the metadata source (a message's
 /// request/response fields, with CLR types already resolved to C# by <see cref="ClrTypeNameMapper"/>).
 /// </summary>
@@ -58,7 +59,7 @@ public static class SdkMessageGenerator
 
         // Request
         sb.AppendLine($"    /// <summary>Typed request for the <c>{message.Name}</c> message.</summary>");
-        sb.AppendLine($"    public partial class {request} : OrganizationRequest");
+        sb.AppendLine($"    public partial class {request} : Vela.Messages.TypedRequest");
         sb.AppendLine("    {");
         sb.AppendLine($"        public {request}()");
         sb.AppendLine("        {");
@@ -67,7 +68,7 @@ public static class SdkMessageGenerator
 
         foreach (SdkMessageField field in message.RequestFields)
         {
-            AppendParameter(sb, field, readOnly: false, "Parameters");
+            AppendParameter(sb, field, readOnly: false);
         }
 
         sb.AppendLine("    }");
@@ -75,23 +76,12 @@ public static class SdkMessageGenerator
 
         // Response
         sb.AppendLine($"    /// <summary>Typed response for the <c>{message.Name}</c> message.</summary>");
-        sb.AppendLine($"    public partial class {response} : OrganizationResponse");
+        sb.AppendLine($"    public partial class {response} : Vela.Messages.TypedResponse");
         sb.AppendLine("    {");
-        sb.AppendLine($"        /// <summary>Wraps the raw response so the typed properties read its results.</summary>");
-        sb.AppendLine($"        public static {response} From(OrganizationResponse response)");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            {response} typed = new {response}();");
-        sb.AppendLine("            foreach (System.Collections.Generic.KeyValuePair<string, object> result in response.Results)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                typed.Results[result.Key] = result.Value;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            return typed;");
-        sb.AppendLine("        }");
 
         foreach (SdkMessageField field in message.ResponseFields)
         {
-            AppendParameter(sb, field, readOnly: true, "Results");
+            AppendParameter(sb, field, readOnly: true);
         }
 
         sb.AppendLine("    }");
@@ -99,20 +89,20 @@ public static class SdkMessageGenerator
         return sb.ToString();
     }
 
-    private static void AppendParameter(StringBuilder sb, SdkMessageField field, bool readOnly, string bag)
+    private static void AppendParameter(StringBuilder sb, SdkMessageField field, bool readOnly)
     {
         string type = field.CSharpType;
         sb.AppendLine();
         if (readOnly)
         {
-            sb.AppendLine($"        public {type} {field.Name} => {bag}.Contains(\"{field.Name}\") ? ({type}){bag}[\"{field.Name}\"] : default;");
+            sb.AppendLine($"        public {type} {field.Name} => Get<{type}>();");
         }
         else
         {
             sb.AppendLine($"        public {type} {field.Name}");
             sb.AppendLine("        {");
-            sb.AppendLine($"            get => {bag}.Contains(\"{field.Name}\") ? ({type}){bag}[\"{field.Name}\"] : default;");
-            sb.AppendLine($"            set => {bag}[\"{field.Name}\"] = value;");
+            sb.AppendLine($"            get => Get<{type}>();");
+            sb.AppendLine("            set => Set(value);");
             sb.AppendLine("        }");
         }
     }

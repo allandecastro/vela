@@ -115,10 +115,9 @@ public class ScaffoldTemplatesTests
             Assert.Contains(ctxType, code);
         }
 
-        // The early-bound ctx.Target is showcased for entity-target messages; every other message reads its
-        // primary record via the SDK-typed ctx.Request.Target / ctx.Request.Targets (no ctx.TargetReference /
-        // ctx.TargetCollection accessors, and never a raw cast).
-        Assert.Contains("ctx.Target", code);
+        // Every message reads its primary record via ctx.Request.Target (early-bound on Create / Update) /
+        // ctx.Request.Targets (the SDK-typed EntityReference / EntityCollection for the rest); there is no
+        // ctx.Target context property, no ctx.TargetReference / ctx.TargetCollection accessors, and never a raw cast.
         Assert.Contains("ctx.Request.Target", code);
         Assert.Contains("ctx.Request.Targets", code);
         Assert.DoesNotContain("ctx.TargetReference", code);

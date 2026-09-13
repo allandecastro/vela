@@ -29,7 +29,7 @@ public class AccountPostUpdate : EntityPluginBase<Account>
 
     private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
     {
-        var target = ctx.Target;
+        var target = ctx.Request.Target;
         var before = ctx.GetPreImage<Account>();
         ctx.Trace($"Account renamed from '{before.Name}' to '{target.Name}'");
     }

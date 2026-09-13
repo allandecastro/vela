@@ -47,11 +47,11 @@ namespace Vela.Tests
 
             private void OnUpdated(IUpdatePostContext<TestAccount> ctx)
             {
-                CapturedName = ctx.Target.Name;   // typed, inferred, no cast
+                CapturedName = ctx.Request.Target.Name;   // typed, inferred, no cast
             }
         }
 
-        // A PreOperation step receives the PRE context: ctx.Request/ctx.Target are available; ctx.Response is not
+        // A PreOperation step receives the PRE context: ctx.Request is available; ctx.Response is not
         // even on the type (IUpdatePreContext has no Response), so reading it in a pre-stage does not compile.
         private sealed class UpdatePreProbe : EntityPluginBase<TestAccount>
         {
@@ -63,7 +63,7 @@ namespace Vela.Tests
                 => RegisterSteps().OnUpdate().PreOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdating);
 
             private void OnUpdating(IUpdatePreContext<TestAccount> ctx)
-                => CapturedName = ctx.Target.Name;   // Request-side data, available in pre
+                => CapturedName = ctx.Request.Target.Name;   // Request-side data, available in pre
         }
 
         [Fact]

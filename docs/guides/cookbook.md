@@ -13,7 +13,7 @@ public class AccountPostUpdate : EntityPluginBase<Account>
         RegisterSteps().OnUpdate().PostOperation().Sync()
             .FilteringAttributes(a => a.Name).Handler(OnAccountUpdated);
 
-    private void OnAccountUpdated(IUpdatePostContext<Account> ctx) { /* ctx.Target ... */ }
+    private void OnAccountUpdated(IUpdatePostContext<Account> ctx) { /* ctx.Request.Target ... */ }
 }
 ```
 

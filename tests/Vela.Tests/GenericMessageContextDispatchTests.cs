@@ -65,8 +65,9 @@ namespace Vela.Tests
                 => CapturedPayload = ctx.Request.Payload;   // typed, inferred, Request-side data in pre
         }
 
-        // Entity-typed variants: the two-arg Handler<TRequest, TEntity>(...) overload adds an early-bound
-        // ctx.Target (the plugin's TEntity over the live 'Target' InputParameter) on top of the typed ctx.Request.
+        // Entity-typed variants: the two-arg Handler<TRequest, TEntity>(...) overload adds early-bound typed
+        // images (ctx.PreImage / ctx.PostImage) on top of the typed ctx.Request. The primary record is read via
+        // the ctx.GetTarget<TEntity>() extension.
         private sealed class TypedTargetPostProbe : EntityPluginBase<TestAccount>
         {
             public string? CapturedPayload;
@@ -82,7 +83,7 @@ namespace Vela.Tests
             private void OnDoThing(IMessagePostContext<DoThingRequest, TestAccount> ctx)
             {
                 CapturedPayload = ctx.Request.Payload;      // typed, inferred
-                CapturedTargetName = ctx.Target.Name;       // early-bound TestAccount over the live Target
+                CapturedTargetName = ctx.GetTarget<TestAccount>().Name; // early-bound TestAccount over the live Target
                 CapturedPostImageName = ctx.PostImage?.Name; // typed image, no <TestAccount> in the body
                 ResponseAvailable = ctx.Response != null;   // base OrganizationResponse at post-stage
             }
@@ -101,7 +102,7 @@ namespace Vela.Tests
             private void OnDoThing(IMessagePreContext<DoThingRequest, TestAccount> ctx)
             {
                 CapturedPayload = ctx.Request.Payload;
-                CapturedTargetName = ctx.Target.Name;
+                CapturedTargetName = ctx.GetTarget<TestAccount>().Name;
             }
         }
 

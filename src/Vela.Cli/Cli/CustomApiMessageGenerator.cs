@@ -16,10 +16,11 @@ public sealed record CustomApiMessage(
     IReadOnlyList<CustomApiParameter> ResponseProperties);
 
 /// <summary>
-/// Pure generator for Custom API message classes: a typed <c>OrganizationRequest</c> (one property per request
-/// parameter, over <c>Parameters</c>) and a typed <c>OrganizationResponse</c> (one read-only property per output,
-/// over <c>Results</c>) with a <c>From(OrganizationResponse)</c> factory — because a custom message executed via
-/// <c>IOrganizationService</c> returns a base <c>OrganizationResponse</c> that can't be cast to the derived type.
+/// Pure generator for Custom API message classes: a typed <c>Vela.Messages.TypedRequest</c> (one read-write
+/// property per request parameter, over <c>Parameters</c>) and a typed <c>Vela.Messages.TypedResponse</c> (one
+/// read-only property per output, over <c>Results</c>). Each property is a one-liner over the base
+/// <c>Get&lt;T&gt;()</c> / <c>Set(value)</c> helpers. Wrap a base response returned by <c>IOrganizationService</c>
+/// with <c>service.Execute(new XxxRequest { ... }).ToResponse&lt;XxxResponse&gt;()</c>.
 /// </summary>
 public static class CustomApiMessageGenerator
 {
@@ -57,7 +58,7 @@ public static class CustomApiMessageGenerator
 
         // Request
         sb.AppendLine($"    /// <summary>Typed request for the <c>{message.UniqueName}</c> Custom API.</summary>");
-        sb.AppendLine($"    public partial class {request} : OrganizationRequest");
+        sb.AppendLine($"    public partial class {request} : Vela.Messages.TypedRequest");
         sb.AppendLine("    {");
         sb.AppendLine($"        public {request}()");
         sb.AppendLine("        {");
@@ -66,12 +67,12 @@ public static class CustomApiMessageGenerator
 
         if (message.IsBoundToEntity)
         {
-            AppendParameter(sb, new CustomApiParameter("Target", 5), readOnly: false, "Parameters");
+            AppendParameter(sb, new CustomApiParameter("Target", 5), readOnly: false);
         }
 
         foreach (CustomApiParameter parameter in message.RequestParameters)
         {
-            AppendParameter(sb, parameter, readOnly: false, "Parameters");
+            AppendParameter(sb, parameter, readOnly: false);
         }
 
         sb.AppendLine("    }");
@@ -79,23 +80,12 @@ public static class CustomApiMessageGenerator
 
         // Response
         sb.AppendLine($"    /// <summary>Typed response for the <c>{message.UniqueName}</c> Custom API.</summary>");
-        sb.AppendLine($"    public partial class {response} : OrganizationResponse");
+        sb.AppendLine($"    public partial class {response} : Vela.Messages.TypedResponse");
         sb.AppendLine("    {");
-        sb.AppendLine($"        /// <summary>Wraps the raw response so the typed properties read its results.</summary>");
-        sb.AppendLine($"        public static {response} From(OrganizationResponse response)");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            {response} typed = new {response}();");
-        sb.AppendLine("            foreach (System.Collections.Generic.KeyValuePair<string, object> result in response.Results)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                typed.Results[result.Key] = result.Value;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            return typed;");
-        sb.AppendLine("        }");
 
         foreach (CustomApiParameter property in message.ResponseProperties)
         {
-            AppendParameter(sb, property, readOnly: true, "Results");
+            AppendParameter(sb, property, readOnly: true);
         }
 
         sb.AppendLine("    }");
@@ -103,20 +93,20 @@ public static class CustomApiMessageGenerator
         return sb.ToString();
     }
 
-    private static void AppendParameter(StringBuilder sb, CustomApiParameter parameter, bool readOnly, string bag)
+    private static void AppendParameter(StringBuilder sb, CustomApiParameter parameter, bool readOnly)
     {
         string type = MapType(parameter.FieldType);
         sb.AppendLine();
         if (readOnly)
         {
-            sb.AppendLine($"        public {type} {parameter.Name} => {bag}.Contains(\"{parameter.Name}\") ? ({type}){bag}[\"{parameter.Name}\"] : default;");
+            sb.AppendLine($"        public {type} {parameter.Name} => Get<{type}>();");
         }
         else
         {
             sb.AppendLine($"        public {type} {parameter.Name}");
             sb.AppendLine("        {");
-            sb.AppendLine($"            get => {bag}.Contains(\"{parameter.Name}\") ? ({type}){bag}[\"{parameter.Name}\"] : default;");
-            sb.AppendLine($"            set => {bag}[\"{parameter.Name}\"] = value;");
+            sb.AppendLine($"            get => Get<{type}>();");
+            sb.AppendLine("            set => Set(value);");
             sb.AppendLine("        }");
         }
     }

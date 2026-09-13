@@ -20,17 +20,30 @@ public sealed class CoverageFinishingTests
         public Plain() : base("plain") { }
     }
 
-    private sealed class Req
+    private sealed class Req : OrganizationRequest
     {
         [Required]
-        public string Name { get; set; } = string.Empty;
+        public string Name
+        {
+            get => Parameters.Contains(nameof(Name)) ? (string)Parameters[nameof(Name)] : string.Empty;
+            set => Parameters[nameof(Name)] = value;
+        }
 
-        public string Note { get; set; } = string.Empty; // not required -> optional via the null-attribute branch
+        // not required -> optional via the null-attribute branch
+        public string Note
+        {
+            get => Parameters.Contains(nameof(Note)) ? (string)Parameters[nameof(Note)] : string.Empty;
+            set => Parameters[nameof(Note)] = value;
+        }
     }
 
-    private sealed class Resp
+    private sealed class Resp : OrganizationResponse
     {
-        public string Message { get; set; } = string.Empty;
+        public string Message
+        {
+            get => Results.Contains(nameof(Message)) ? (string)Results[nameof(Message)] : string.Empty;
+            set => Results[nameof(Message)] = value;
+        }
     }
 
     [Fact]

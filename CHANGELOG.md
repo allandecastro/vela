@@ -22,7 +22,53 @@ All notable changes to Vela are documented here. The format is based on
 ## [Unreleased]
 
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
-(`cli-vX.Y.Z` / `framework-vX.Y.Z`). Nothing is queued for the next tag right now.
+(`cli-vX.Y.Z` / `framework-vX.Y.Z`).
+
+### Added
+
+- **Framework: early-bound `ctx.Request.Target` on Create/Update.** `ctx.Request` on `ICreatePreContext` /
+  `ICreatePostContext` / `IUpdatePreContext` / `IUpdatePostContext` is now a Vela-owned typed request
+  (`Vela.Messages.CreateRequest<TEntity>` / `UpdateRequest<TEntity>`) whose `Target` is the early-bound
+  `TEntity`, so a handler reads `ctx.Request.Target` typed instead of the SDK request's base `Entity`. This is
+  the single typed target accessor (see the Changed entry below removing `ctx.Target`). Reading
+  `ctx.Request.Target` as a base `Entity` still compiles (`TEntity : Entity`). The raw
+  SDK request stays reachable via `ctx.GetRequest<CreateRequest>()`. First step of the typed-requests design
+  (`.context/typed-requests-design.md`).
+- **Framework: `On<TRequest>()` step entry - typed message, no magic string.** Register a step with the message
+  derived from the request type: `RegisterSteps().On<CalculateAccountScoreRequest>().PostOperation().Sync().Handler(OnScore)`
+  where `void OnScore(IMessagePostContext<CalculateAccountScoreRequest> ctx)`. The message name comes from the
+  request's `RequestName` (no string literal), and the request type is stated once (the handler's context type is
+  inferred - no restating on `Handler`). `OnMessage("...")` / `OnMessage<T>()` / `.Handler<TRequest>(...)` remain.
+- **Framework: `TypedRequest` / `TypedResponse` base + `ToResponse<T>()`.** Authoring or generating a message
+  request/response is now one line per property via `get => Get<T>(); set => Set(value);` (over `Parameters` /
+  `Results`, `[CallerMemberName]`-backed) instead of hand-rolled `Parameters.Contains(...)` blocks. Call a message
+  and type its result with `service.Execute(new XxxRequest{...}).ToResponse<XxxResponse>()`. `vela models`
+  generation, the scaffold, and `CreateRequest<TEntity>` / `UpdateRequest<TEntity>` all use this shape.
+
+### Changed
+
+- **Framework (BREAKING): `ctx.Target` removed from all message contexts.** The `Target` context property (and the
+  `IEntityTargetContext<TEntity>` interface behind it) is gone from the curated Create/Update/SendEmailFromTemplate
+  contexts and from the two-argument generic `IMessagePreContext<TRequest, TEntity>` /
+  `IMessagePostContext<TRequest, TEntity>`. Read the primary record via `ctx.Request.Target` (early-bound `TEntity`
+  on Create/Update, where `ctx.Request` is a Vela-owned typed request; the SDK's `Entity` / `EntityReference` for the
+  rest). The `ctx.GetTarget<T>()` extension remains as the message-agnostic early-bound accessor (for example on
+  `SendEmailFromTemplate`, whose `ctx.Request.Target` is the base SDK `Entity`). Part of the typed-requests design
+  (`.context/typed-requests-design.md`).
+- **Framework (BREAKING): `CustomApiBase<TRequest, TResponse>` now requires `OrganizationRequest`/`OrganizationResponse`
+  types instead of POCOs.** The type constraints move from `where TRequest : class, new()` /
+  `where TResponse : class, new()` to `where TRequest : OrganizationRequest, new()` /
+  `where TResponse : OrganizationResponse, new()` (and likewise on `Register.RegisterCustomApi<TRequest, TResponse>()`
+  and `ICustomApiBuilder<TRequest, TResponse>`). The request/response now expose typed properties over the SDK
+  `Parameters`/`Results` bags, so a **single** generated type serves all three usages: authoring the Custom API,
+  calling it (`service.Execute(new XxxRequest { ... })`), and reacting to it (`OnMessage<XxxRequest>()...Handler<XxxRequest>(...)`).
+  This unifies the authoring surface with the `vela models --custom-apis` output. At execution the framework now
+  hydrates the request over the live `InputParameters` and copies the response's `Results` back to `OutputParameters`
+  (the previous reflect-and-convert POCO mapping, including JSON-string coercion, is removed). Only the request/response's
+  own declared properties become Custom API parameters; the inherited `OrganizationRequest`/`OrganizationResponse`
+  members never do. Migration: change each `XxxRequest`/`XxxResponse` to derive from `OrganizationRequest`/`OrganizationResponse`
+  and expose properties over `Parameters`/`Results` (set `RequestName` in the constructor), as the scaffold and the
+  [Custom API guide](guides/custom-apis.md) now show. Part of the typed-requests design (`.context/typed-requests-design.md`).
 
 ## [0.7.0] - 2026-09-08
 

@@ -80,12 +80,26 @@ internal static class ExpressionHelper
     }
 
     /// <summary>
-    /// Gets the custom message name for a typed message marker.
+    /// Resolves the message name for a typed message type. When <typeparamref name="TMessage"/> is an
+    /// <see cref="OrganizationRequest"/>-derived type with a public parameterless constructor (an SDK request,
+    /// a generated Custom API request, or a <c>TypedRequest</c>), the name is taken from its
+    /// <see cref="OrganizationRequest.RequestName"/> - so <c>On&lt;XxxRequest&gt;()</c> needs no magic string. It
+    /// falls back to a <see cref="CustomMessageAttribute"/> marker, then to the type name.
     /// </summary>
-    /// <typeparam name="TMessage">The message marker type.</typeparam>
+    /// <typeparam name="TMessage">The message type (a request type, or a marker type).</typeparam>
     /// <returns>The message name.</returns>
     public static string GetMessageName<TMessage>() where TMessage : class
     {
+        if (typeof(OrganizationRequest).IsAssignableFrom(typeof(TMessage))
+            && typeof(TMessage).GetConstructor(Type.EmptyTypes) != null)
+        {
+            var request = (OrganizationRequest)Activator.CreateInstance(typeof(TMessage))!;
+            if (!string.IsNullOrWhiteSpace(request.RequestName))
+            {
+                return request.RequestName;
+            }
+        }
+
         var attribute = typeof(TMessage).GetCustomAttribute<CustomMessageAttribute>();
         if (attribute != null)
         {

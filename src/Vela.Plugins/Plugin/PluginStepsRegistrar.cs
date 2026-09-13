@@ -74,6 +74,8 @@ namespace Vela.Plugin
 
         public IPermissiveStepStage<TEntity> OnMessage<TMessage>() where TMessage : class => BeginStep().OnMessage<TMessage>();
 
+        public ITypedMessageStepStage<TEntity, TRequest> On<TRequest>() where TRequest : OrganizationRequest, new() => BeginStep().On<TRequest>();
+
         private StepBuilder<TEntity> BeginStep()
         {
             StepBuilder<TEntity> step = new StepBuilder<TEntity>();

@@ -20,7 +20,7 @@ Resolve registered services from a handler:
 ```csharp
 private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
 {
-    var target = ctx.Target;
+    var target = ctx.Request.Target;
     var pricing = ctx.GetRequiredService<IPricingService>();
     target["creditonhold"] = pricing.IsOverLimit(target);
 }

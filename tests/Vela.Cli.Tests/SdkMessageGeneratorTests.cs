@@ -27,16 +27,15 @@ public class SdkMessageGeneratorTests
 
         string code = Generate(message);
 
-        Assert.Contains("public partial class QualifyLeadRequest : OrganizationRequest", code);
+        Assert.Contains("public partial class QualifyLeadRequest : Vela.Messages.TypedRequest", code);
         Assert.Contains("RequestName = \"QualifyLead\";", code);
         Assert.Contains("public EntityReference LeadId", code);
-        Assert.Contains("Parameters[\"LeadId\"] = value;", code);
+        Assert.Contains("set => Set(value);", code);
         Assert.Contains("public bool CreateAccount", code);
 
-        Assert.Contains("public partial class QualifyLeadResponse : OrganizationResponse", code);
-        Assert.Contains("public static QualifyLeadResponse From(OrganizationResponse response)", code);
-        Assert.Contains("public EntityCollection CreatedEntities =>", code);
-        Assert.Contains("Results.Contains(\"CreatedEntities\")", code);
+        Assert.Contains("public partial class QualifyLeadResponse : Vela.Messages.TypedResponse", code);
+        Assert.DoesNotContain("From(OrganizationResponse", code);   // wrap via ToResponse<T>() instead
+        Assert.Contains("public EntityCollection CreatedEntities => Get<EntityCollection>();", code);
     }
 
     [Fact]
@@ -47,8 +46,8 @@ public class SdkMessageGeneratorTests
             new[] { new SdkMessageField("Value", "int") },
             Array.Empty<SdkMessageField>()));
 
-        Assert.Contains("get => Parameters.Contains(\"Value\") ? (int)Parameters[\"Value\"] : default;", code);
-        Assert.Contains("set => Parameters[\"Value\"] = value;", code);
+        Assert.Contains("get => Get<int>();", code);
+        Assert.Contains("set => Set(value);", code);
     }
 
     [Fact]
@@ -59,9 +58,9 @@ public class SdkMessageGeneratorTests
             Array.Empty<SdkMessageField>(),
             new[] { new SdkMessageField("Total", "decimal") }));
 
-        Assert.Contains("public decimal Total => Results.Contains(\"Total\") ? (decimal)Results[\"Total\"] : default;", code);
-        // Read-only: no setter into Results.
-        Assert.DoesNotContain("Results[\"Total\"] = value;", code);
+        // Expression-bodied read-only property: no setter emitted for a response field.
+        Assert.Contains("public decimal Total => Get<decimal>();", code);
+        Assert.DoesNotContain("set => Set(value);", code);
     }
 
     [Fact]
@@ -69,10 +68,10 @@ public class SdkMessageGeneratorTests
     {
         string code = Generate(new SdkMessage("WhoAmI", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()));
 
-        Assert.Contains("public partial class WhoAmIRequest : OrganizationRequest", code);
+        Assert.Contains("public partial class WhoAmIRequest : Vela.Messages.TypedRequest", code);
         Assert.Contains("RequestName = \"WhoAmI\";", code);
-        Assert.Contains("public partial class WhoAmIResponse : OrganizationResponse", code);
-        Assert.Contains("public static WhoAmIResponse From(OrganizationResponse response)", code);
+        Assert.Contains("public partial class WhoAmIResponse : Vela.Messages.TypedResponse", code);
+        Assert.DoesNotContain("From(OrganizationResponse", code);
     }
 
     [Fact]
