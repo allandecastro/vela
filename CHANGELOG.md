@@ -47,7 +47,7 @@ Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.9.0
   pipeline now derives the primary record from the request's `OpportunityClose.opportunityid` instead of picking the
   `opportunityclose` activity, so an entity-filtered step registered on these messages fires as expected.
 
-## [0.2.0] - 2026-09-13
+## [0.2.0] - 2026-09-13 (Vela.Cli)
 
 CLI line (`Vela.Cli`), published as `cli-v0.2.0`.
 
@@ -521,7 +521,7 @@ Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.2.1
   (`.PostOperation()` instead of `.Stage(PluginStages.PostOperation)`), matching the 0.2.0 API. No code change;
   `Vela.Testing` is re-published only to keep the two framework packages in lockstep.
 
-## [0.2.0] - 2026-09-03
+## [0.2.0] - 2026-09-03 (Vela.Plugins + Vela.Testing)
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.2.0`.
 
