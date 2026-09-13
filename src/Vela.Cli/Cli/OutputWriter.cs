@@ -29,76 +29,94 @@ internal static class OutputWriter
         Console.WriteLine($"Plan written: {outputPath}");
     }
 
-    public static void WriteVerbosePlanSummary(PlanPreview preview)
+    /// <summary>
+    /// Renders a human-readable plan/apply summary to <paramref name="writer"/>. Used both for the
+    /// <c>--verbose</c> summary (stderr, alongside JSON on stdout) and for the default terminal output on a TTY
+    /// (stdout, in place of JSON). Pass <c>color</c> from the matching stream's <see cref="ConsoleTheme"/> flag.
+    /// </summary>
+    public static void WritePlanSummary(PlanPreview preview, TextWriter writer, bool color)
     {
-        Console.Error.WriteLine($"{preview.Mode} {preview.Environment}");
-        Console.Error.WriteLine($"summary: +{preview.Summary.Added} -{preview.Summary.Removed} ~{preview.Summary.Changed}");
+        writer.WriteLine(ConsoleTheme.Heading($"{preview.Mode} {preview.Environment}", color));
+        string added = ConsoleTheme.Added($"+{preview.Summary.Added}", color);
+        string removed = ConsoleTheme.Removed($"-{preview.Summary.Removed}", color);
+        string changed = ConsoleTheme.Changed($"~{preview.Summary.Changed}", color);
+        writer.WriteLine($"{ConsoleTheme.Muted("summary:", color)} {added} {removed} {changed}");
 
         if (preview.Operations.Length > 0)
         {
-            Console.Error.WriteLine("operations:");
+            writer.WriteLine(ConsoleTheme.Muted("operations:", color));
             foreach (ApplyOperation operation in preview.Operations)
             {
-                Console.Error.WriteLine($"  - {operation.Action} {operation.Kind}: {operation.Type}");
+                writer.WriteLine($"  - {ColorAction(operation.Action, color)} {operation.Kind}: {operation.Type}");
             }
         }
 
         if (preview.Diff.Added.Length > 0)
         {
-            Console.Error.WriteLine("added:");
+            writer.WriteLine(ConsoleTheme.Added("added:", color));
             foreach (RegistrationItem item in preview.Diff.Added)
             {
-                Console.Error.WriteLine($"  + {item.Kind}: {DescribeItem(item)}");
+                writer.WriteLine(ConsoleTheme.Added($"  + {item.Kind}: {DescribeItem(item)}", color));
             }
         }
 
         if (preview.Diff.Removed.Length > 0)
         {
-            Console.Error.WriteLine("removed:");
+            writer.WriteLine(ConsoleTheme.Removed("removed:", color));
             foreach (RegistrationItem item in preview.Diff.Removed)
             {
-                Console.Error.WriteLine($"  - {item.Kind}: {DescribeItem(item)}");
+                writer.WriteLine(ConsoleTheme.Removed($"  - {item.Kind}: {DescribeItem(item)}", color));
             }
         }
 
         if (preview.Diff.Changed.Length > 0)
         {
-            Console.Error.WriteLine("changes:");
+            writer.WriteLine(ConsoleTheme.Changed("changes:", color));
             foreach (RegistrationChange change in preview.Diff.Changed)
             {
                 string before = DescribeDefinition(change.Before);
                 string after = DescribeDefinition(change.After);
-                Console.Error.WriteLine($"  - {change.Kind}: {change.Type}");
-                Console.Error.WriteLine($"    before: {before}");
-                Console.Error.WriteLine($"    after : {after}");
+                writer.WriteLine(ConsoleTheme.Changed($"  ~ {change.Kind}: {change.Type}", color));
+                writer.WriteLine($"    before: {ConsoleTheme.Removed(before, color)}");
+                writer.WriteLine($"    after : {ConsoleTheme.Added(after, color)}");
             }
         }
     }
 
-    public static void WriteVerboseInspectSummary(RegistrationState local, RegistrationState current, string? environment)
+    // Colors a diff verb (create/update/delete) to match the added/changed/removed palette; other verbs
+    // are left unstyled. No-ops to plain text when the target stream is not a terminal.
+    private static string ColorAction(string action, bool color) => action switch
     {
-        Console.Error.WriteLine($"inspect {environment}");
-        WriteVerboseStateSummary("local", local);
-        WriteVerboseStateSummary("current", current);
+        "create" => ConsoleTheme.Added(action, color),
+        "update" => ConsoleTheme.Changed(action, color),
+        "delete" => ConsoleTheme.Removed(action, color),
+        _ => action,
+    };
+
+    public static void WriteInspectSummary(RegistrationState local, RegistrationState current, string? environment, TextWriter writer, bool color)
+    {
+        writer.WriteLine(ConsoleTheme.Heading($"inspect {environment}", color));
+        WriteStateSummary("local", local, writer, color);
+        WriteStateSummary("current", current, writer, color);
     }
 
-    public static void WriteVerboseStateSummary(string label, RegistrationState state)
+    public static void WriteStateSummary(string label, RegistrationState state, TextWriter writer, bool color)
     {
-        Console.Error.WriteLine($"{label} assemblies: {string.Join(", ", state.SourceAssemblies)}");
+        writer.WriteLine($"{ConsoleTheme.Accent(label, color)} assemblies: {string.Join(", ", state.SourceAssemblies)}");
 
         RegistrationItem[] steps = state.Items.Where(IsStep).OrderBy(x => x.Type, StringComparer.Ordinal).ToArray();
         RegistrationItem[] customApis = state.Items.Where(x => !IsStep(x)).OrderBy(x => x.Type, StringComparer.Ordinal).ToArray();
 
-        Console.Error.WriteLine($"{label} steps: {steps.Length}");
+        writer.WriteLine($"{ConsoleTheme.Accent(label, color)} steps: {ConsoleTheme.Bold(steps.Length.ToString(), color)}");
         foreach (RegistrationItem item in steps)
         {
-            Console.Error.WriteLine($"  - {DescribeItem(item)}");
+            writer.WriteLine($"  {ConsoleTheme.Muted("-", color)} {DescribeItem(item)}");
         }
 
-        Console.Error.WriteLine($"{label} custom-apis: {customApis.Length}");
+        writer.WriteLine($"{ConsoleTheme.Accent(label, color)} custom-apis: {ConsoleTheme.Bold(customApis.Length.ToString(), color)}");
         foreach (RegistrationItem item in customApis)
         {
-            Console.Error.WriteLine($"  - {DescribeItem(item)}");
+            writer.WriteLine($"  {ConsoleTheme.Muted("-", color)} {DescribeItem(item)}");
         }
     }
 
@@ -184,7 +202,7 @@ internal static class OutputWriter
     {
         IAnsiConsole console = AnsiConsole.Console;
 
-        console.MarkupLine($"[bold teal]{Markup.Escape(ToolInfo.ProductName)}[/]  [green]v{Markup.Escape(ToolInfo.Version)}[/]");
+        console.MarkupLine($"[bold #6366f1]{Markup.Escape(ToolInfo.ProductName)}[/]  [#22d3ee]v{Markup.Escape(ToolInfo.Version)}[/]");
         console.MarkupLine("[grey]Register Dataverse plugins and Custom APIs from your build packages.[/]");
         console.WriteLine();
         console.MarkupLine("[bold]Usage:[/] vela <command> [[options]]");
@@ -192,11 +210,11 @@ internal static class OutputWriter
 
         console.MarkupLine("[bold]Commands:[/]");
         WriteCommand(console, "plan", "Preview registration changes; never writes to Dataverse.");
-        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--webresources <folder> (preview)] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose]");
+        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--webresources <folder> (preview)] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose] [--json]");
         WriteCommand(console, "apply", "Same inputs as plan; add --execute to write the changes.");
-        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--execute] [--strict] [--verbose]");
+        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--execute] [--strict] [--verbose] [--json]");
         WriteCommand(console, "inspect", "Compare local packages with the live environment.");
-        Console.WriteLine("      [same args as plan] [--verbose]");
+        Console.WriteLine("      [same args as plan] [--verbose] [--json]");
         WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");
         Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--web-resources (preview) [--web-resources-namespace <name>] [--web-resources-folder <dir>]] [--json] [--force] [--interactive]");
         WriteCommand(console, "add", "Add a plugin, service, Custom API, test, or step to a project.");
@@ -208,6 +226,11 @@ internal static class OutputWriter
         WriteCommand(console, "logout", "Clear the cached interactive-login token and remembered Dataverse URL.");
         WriteCommand(console, "menu", "Launch the interactive menu (default with no args).");
         WriteCommand(console, "version", "Print the tool version.");
+        console.WriteLine();
+
+        console.MarkupLine("[bold]Output:[/]");
+        Console.WriteLine("  plan/apply/inspect print a styled human summary on a terminal, and JSON when piped/redirected.");
+        Console.WriteLine("  Force JSON on a terminal with --json (or --out <file>); NO_COLOR / VELA_NO_COLOR disable colors.");
         console.WriteLine();
 
         console.MarkupLine("[bold]Auth options:[/]");
@@ -237,12 +260,16 @@ internal static class OutputWriter
     // fixed width so summaries line up; the padding is applied before markup so styling doesn't skew it.
     private static void WriteCommand(IAnsiConsole console, string name, string summary)
     {
-        console.MarkupLine($"  [aqua]{name.PadRight(9)}[/] [grey]{Markup.Escape(summary)}[/]");
+        console.MarkupLine($"  [#22d3ee]{name.PadRight(9)}[/] [grey]{Markup.Escape(summary)}[/]");
     }
 
     public static int Fail(string message, int exitCode, bool includeUsage = true)
     {
-        Console.Error.WriteLine(message);
+        // On a real terminal, prefix failures with a red "Error:" so they stand out; when stderr is
+        // redirected (pipes, CI, tests) keep the bare message so scripted/asserted output is unchanged.
+        Console.Error.WriteLine(ConsoleTheme.StderrColor
+            ? $"{ConsoleTheme.Failure("Error:", true)} {message}"
+            : message);
         if (includeUsage)
         {
             PrintUsage();

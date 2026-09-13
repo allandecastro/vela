@@ -63,14 +63,21 @@ var manifest = FrameworkManifestScanner.Scan(
     new FrameworkManifestScanOptions { Strict = true });
 ```
 
-## Verbose output
+## Output: terminal vs piped
 
-Add `--verbose` for human-readable summaries and full exception stack traces on
-failure:
+`plan`, `apply`, and `inspect` print a colorized, human-readable summary when stdout is a terminal, and JSON
+when the output is piped or redirected (as it is in CI). This means the same command gives a readable preview
+at the keyboard and a machine-readable contract in a pipeline, with no flag change:
 
 ```powershell
-vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive --verbose
+vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
 ```
+
+To force JSON at a terminal (for example, to pipe into `jq` or save it), pass `--json` or `--out <file>`. To
+turn colors off, set `NO_COLOR` or `VELA_NO_COLOR`.
+
+Add `--verbose` for full exception stack traces on failure (and the human summary on stderr alongside the JSON
+when output is piped):
 
 ```powershell
 vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive --execute --verbose

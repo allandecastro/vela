@@ -217,7 +217,7 @@ internal static class ProjectScaffolder
             return ExitSuccess;
         }
 
-        Console.WriteLine($"Created {options.SolutionName} ({fileCount} files) at {root}");
+        ConsoleTheme.WriteSuccessLine($"Created {options.SolutionName} ({fileCount} files) at {root}");
         Console.WriteLine("Projects:");
         foreach (ProjectEntry project in projects)
         {

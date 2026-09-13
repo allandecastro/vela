@@ -195,7 +195,7 @@ internal static class AddCommand
         }
         else
         {
-            Console.WriteLine($"Added form-script for '{entity}'");
+            ConsoleTheme.WriteSuccessLine($"Added form-script for '{entity}'");
             foreach (string path in created)
             {
                 Console.WriteLine($"  {path}");
@@ -288,7 +288,7 @@ internal static class AddCommand
         }
         else
         {
-            Console.WriteLine($"Added ribbon commands for '{entity}'");
+            ConsoleTheme.WriteSuccessLine($"Added ribbon commands for '{entity}'");
             foreach (string path in created)
             {
                 Console.WriteLine($"  {path}");
@@ -378,7 +378,7 @@ internal static class AddCommand
         }
         else
         {
-            Console.WriteLine($"Added step {message} ({handler}) to {name}");
+            ConsoleTheme.WriteSuccessLine($"Added step {message} ({handler}) to {name}");
             Console.WriteLine($"  {filePath}");
         }
 
@@ -580,7 +580,7 @@ internal static class AddCommand
         }
         else
         {
-            Console.WriteLine($"Created {description}");
+            ConsoleTheme.WriteSuccessLine($"Created {description}");
             Console.WriteLine($"  {fullPath}");
         }
 

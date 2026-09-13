@@ -225,7 +225,14 @@ internal static class SignCommand
                 return Fail($"dotnet nuget sign failed (exit {process.ExitCode}).{detail}", ExitError, includeUsage: false);
             }
 
-            Console.WriteLine(options.Json ? BuildSignReport(options) : $"Signed: {options.PackagePath}");
+            if (options.Json)
+            {
+                Console.WriteLine(BuildSignReport(options));
+            }
+            else
+            {
+                ConsoleTheme.WriteSuccessLine($"Signed: {options.PackagePath}");
+            }
             return ExitSuccess;
         }
         catch (Exception ex)

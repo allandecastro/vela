@@ -28,12 +28,19 @@ Core commands:
 > `apply --webresources` [deploy web resources](plan-apply.md). These are new and may change. Most commands also
 > take `--json` for machine-readable output.
 
+> [!NOTE]
+> **Output: human on a terminal, JSON when piped.** `plan`, `apply`, and `inspect` print a colorized,
+> human-readable summary when stdout is a terminal, and machine-readable JSON when the output is piped,
+> redirected, or written with `--out <file>`. Pass `--json` to force JSON even on a terminal. Color is
+> disabled automatically for non-terminal output and can be turned off with the `NO_COLOR` or `VELA_NO_COLOR`
+> environment variables. Scripts and coding agents that consume the JSON are unaffected.
+
 > [!TIP]
 > **Secrets:** prefer the `DATAVERSE_CLIENT_SECRET` environment variable or `--client-secret-stdin`
 > over `--client-secret`, which is exposed to shell history and process listings (the CLI warns when
 > you use it). For sovereign clouds / custom app registrations under `--interactive`, override the
-> MSAL login with `--auth-client-id` and `--authority`. Add `--verbose` for human-readable summaries
-> and full exception stack traces on failure.
+> MSAL login with `--auth-client-id` and `--authority`. Add `--verbose` for full exception stack traces
+> on failure.
 
 > [!TIP]
 > **Interactive login is remembered.** The first `--interactive` run opens a browser; the token is then

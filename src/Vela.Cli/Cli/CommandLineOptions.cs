@@ -40,7 +40,7 @@ internal static class CommandLineOptions
 
     private static readonly HashSet<string> SharedFlagOptions = new(ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
     {
-        "--interactive", "-i", "--execute", "--strict", "--verbose", "-v", "--help", "-h",
+        "--interactive", "-i", "--execute", "--strict", "--verbose", "-v", "--json", "--help", "-h",
     };
 
     // The tokens that request usage on any command; handled (print usage, exit success) before the option guard.
@@ -340,7 +340,8 @@ internal static class CommandLineOptions
             Interactive: interactive,
             Strict: args.Any(x => string.Equals(x, "--strict", StringComparison.OrdinalIgnoreCase)),
             Verbose: args.Any(x => string.Equals(x, "--verbose", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-v", StringComparison.OrdinalIgnoreCase)),
-            WebResourcesRoot: webResourcesRoot);
+            WebResourcesRoot: webResourcesRoot,
+            Json: args.Any(x => string.Equals(x, "--json", StringComparison.OrdinalIgnoreCase)));
         return true;
     }
 

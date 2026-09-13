@@ -48,9 +48,9 @@ vela plan `
   --strict
 ```
 
-`plan` compares local plugin/custom-api metadata extracted from `.nupkg` against Dataverse and returns a preview: `hasChanges`, `summary`, and ordered `operations` (`create`, `update`, `delete`) plus detailed `diff`.
+`plan` compares local plugin/custom-api metadata extracted from `.nupkg` against Dataverse and returns a preview of the ordered `create` / `update` / `delete` operations plus a detailed diff. At a terminal this is a colorized human summary; piped, redirected, or with `--json`, it is JSON with `hasChanges`, `summary`, `operations`, and `diff` fields.
 
-`apply --execute` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff.
+`apply --execute` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff (human summary at a terminal, JSON when piped or with `--json`).
 
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
