@@ -79,6 +79,20 @@ internal static class ProjectScaffolder
             fileCount++;
         }
 
+        // For user-editable root files (README, .gitignore, Directory.Build.props): write only when absent, so a
+        // --force regeneration preserves the user's customizations rather than clobbering them (the managed .sln and
+        // project files are always (re)written via Write).
+        void WriteIfAbsent(string relativeToRoot, string content)
+        {
+            string fullPath = Path.Combine(root, relativeToRoot);
+            if (File.Exists(fullPath))
+            {
+                return;
+            }
+
+            Write(relativeToRoot, content);
+        }
+
         // Solution files canonically use backslash separators; dotnet accepts them on every platform.
         // The .sln lives at the solution root, so paths are prefixed with the project's folder (src/ or tests/).
         void AddProject(string name, string folder) =>
@@ -190,12 +204,12 @@ internal static class ProjectScaffolder
         }
 
         // ---- Solution-wide files ----
-        Write("Directory.Build.props", DirectoryBuildProps());
+        WriteIfAbsent("Directory.Build.props", DirectoryBuildProps());
         Write($"{options.SolutionName}.sln", Solution(projects));
-        Write(".gitignore", Gitignore());
+        WriteIfAbsent(".gitignore", Gitignore());
         // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
         // nuget.org, the default source. Add your own nuget.config only if you use a private feed.
-        Write("README.md", RootReadme(options));
+        WriteIfAbsent("README.md", RootReadme(options));
 
         if (options.Json)
         {

@@ -498,6 +498,31 @@ public class ProjectScaffolderTests
         Assert.True(File.Exists(path), $"Expected file to exist: {path}");
     }
 
+    [Fact]
+    public void Force_PreservesUserEditedRootFiles_ButRegeneratesTheSolution()   // B9-scaffold / Part B
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+            string root = Path.Combine(temp, "ZavaSales");
+
+            // The user customizes root files.
+            File.WriteAllText(Path.Combine(root, "README.md"), "MY CUSTOM README");
+            File.WriteAllText(Path.Combine(root, ".gitignore"), "my-custom-ignore");
+            File.WriteAllText(Path.Combine(root, "Directory.Build.props"), "<Project><!-- mine --></Project>");
+
+            // Regenerate with --force.
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, force: true)));
+
+            // User-editable root files are preserved...
+            Assert.Equal("MY CUSTOM README", File.ReadAllText(Path.Combine(root, "README.md")));
+            Assert.Equal("my-custom-ignore", File.ReadAllText(Path.Combine(root, ".gitignore")));
+            Assert.Contains("mine", File.ReadAllText(Path.Combine(root, "Directory.Build.props")));
+            // ...while the managed solution file is (re)written.
+            Assert.Contains("Microsoft Visual Studio Solution File", File.ReadAllText(Path.Combine(root, "ZavaSales.sln")));
+        });
+    }
+
     private static void RunInTempDir(Action<string> action)
     {
         string temp = Path.Combine(Path.GetTempPath(), "vela-scaffold-" + Guid.NewGuid().ToString("N"));

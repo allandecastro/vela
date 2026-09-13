@@ -64,7 +64,13 @@ internal static class BarrelTs
                 continue;
             }
 
-            string module = "./" + file.FileName.Substring(0, file.FileName.Length - ".ts".Length);
+            // Build the ES module specifier: drop a trailing ".ts" (only if present) and use forward slashes so a
+            // FileName that carries OS path separators (e.g. "forms\account\main.form.ts" on Windows) still emits a
+            // valid import (B11).
+            string relative = file.FileName.EndsWith(".ts", StringComparison.Ordinal)
+                ? file.FileName.Substring(0, file.FileName.Length - ".ts".Length)
+                : file.FileName;
+            string module = "./" + relative.Replace('\\', '/');
             if (values.Count > 0)
             {
                 sb.Append($"export {{ {string.Join(", ", values)} }} from '{module}';\n");

@@ -6,6 +6,7 @@ using Xunit;
 namespace Vela.Cli.Tests;
 
 /// <summary>Covers the persisted user preferences (<c>~/.vela/config.json</c>) and the prompt-default plumbing.</summary>
+[Xunit.Collection("ConfigDir")]
 public class UserConfigTests
 {
     [Fact]
