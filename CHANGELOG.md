@@ -53,6 +53,33 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **Testing: `WinOpportunity` / `LoseOpportunity` resolve the primary entity to the opportunity.** The in-memory
   pipeline now derives the primary record from the request's `OpportunityClose.opportunityid` instead of picking the
   `opportunityclose` activity, so an entity-filtered step registered on these messages fires as expected.
+- **CLI: `vela new` / `init` can no longer scaffold outside the target directory.** A solution or web-resources
+  folder name is rejected unless it starts with an alphanumeric character (so it can never be `.`/`..`), and a
+  defense-in-depth check refuses to write when the resolved target is not under the output directory, so a
+  `--force` regeneration can never delete managed folders outside the tree.
+- **CLI: generated `On<Message>()` step extensions reference the real early-bound type.** `vela models --messages`
+  / `--custom-apis` now resolve each applicable entity's model type name from its Dataverse SchemaName instead of a
+  naive PascalCase of the logical name, so the extension compiles for custom entities with underscores
+  (e.g. `new_customentity` -> `new_CustomEntity`).
+- **CLI: generated request/response and step-extension code is collision- and keyword-safe.** Custom API parameter
+  and SDK message field names that are C# keywords or contain invalid characters are escaped/sanitized (with an
+  explicit `Parameters`/`Results` key so the runtime name is preserved); two Custom APIs whose names collide once
+  the publisher prefix is stripped get distinct, prefixed extension methods; and option-set choices with negative
+  values no longer emit invalid enum member identifiers.
+- **CLI: `--core-version` is validated** against a NuGet version pattern (blocks `.csproj` injection and typos that
+  silently fail `dotnet restore`).
+- **CLI: `plan`/`apply` converge in more cases.** A Custom API parameter declared with an equivalent type
+  (`System.Int64`/`long`, `System.Single`) is canonicalized to the stored form before diffing, so it no longer
+  reports a perpetual "changed"; a secure configuration that could not carry its plaintext secret (no stable step
+  key) now fails clearly instead of writing the redacted digest to Dataverse; and a duplicate Custom API / web
+  resource identity or duplicate local step key fails with a clear message instead of an opaque error or a silently
+  dropped step.
+- **CLI: argument parsing.** A boolean flag no longer swallows the positional package path
+  (`vela plan --strict foo.nupkg`), and the unknown-option check no longer lets a value option hide a following
+  known option. `vela add step` locates the `RegisterPluginSteps()` method by its declaration rather than the first
+  textual mention.
+
+## [0.8.0] - 2026-09-13
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.8.0`.
 

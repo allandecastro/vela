@@ -55,6 +55,15 @@ internal static class SdkMessageClassResolver
         "SendTemplate", "SendBulkMail", "SendFax",
         "ReassignObjectsOwner", "InitializeFrom",
         "AddProductToKit", "RemoveProductFromKit", "ConvertProductToKit", "ConvertKitToProduct",
+
+        // Additional well-known Microsoft.Crm.Sdk.Messages.*Request business messages (still non-exhaustive).
+        "Assign", "SetState", "Book", "Reschedule",
+        "PublishXml", "PublishAllXml", "PublishDuplicateRule",
+        "InstantiateTemplate", "BackgroundSendEmail", "DeliverImmediatePromoteEmail",
+        "CalculatePrice", "CalculateActualValueOpportunity", "GetTrackingToken", "RetrieveExchangeRate",
+        "AddPrivilegesRole", "RemovePrivilegeRole", "ReplacePrivilegesRole", "RetrieveRolePrivilegesRole",
+        "AddUserToRecordTeam", "RemoveUserFromRecordTeam",
+        "GrantAccessUsingConnectionRole", "ImportSolution", "ExportSolution", "AddSolutionComponent",
     };
 
     /// <summary>
