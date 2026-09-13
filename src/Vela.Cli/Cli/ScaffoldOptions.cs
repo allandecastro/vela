@@ -78,9 +78,21 @@ internal sealed record ScaffoldOptions(
     // surface generated code depends on - Vela.Messages.TypedRequest - landed in 0.8.0).
     public const string DefaultCoreVersion = "0.8.0";
 
+    // Windows reserved device names: unusable as a folder / file name on Windows even with a valid character set.
+    private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
+
     /// <summary>True when the value is a valid solution name (folder / .sln-file safe).</summary>
     public static bool IsValidSolutionName(string value) =>
-        !string.IsNullOrWhiteSpace(value) && SolutionNamePattern.IsMatch(value);
+        !string.IsNullOrWhiteSpace(value)
+        && SolutionNamePattern.IsMatch(value)
+        && !ReservedDeviceNames.Contains(value)
+        // A Windows device name followed by an extension is also reserved (e.g. CON.txt).
+        && !ReservedDeviceNames.Contains(value.Split('.')[0]);
 
     /// <summary>True when the value is a valid namespace / assembly-name prefix (dotted identifier).</summary>
     public static bool IsValidPrefix(string value) =>

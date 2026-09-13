@@ -78,6 +78,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   (`vela plan --strict foo.nupkg`), and the unknown-option check no longer lets a value option hide a following
   known option. `vela add step` locates the `RegisterPluginSteps()` method by its declaration rather than the first
   textual mention.
+- **CLI: `vela new` / `init` rejects Windows reserved solution names** (`CON`, `NUL`, `COM1`, ... and
+  `CON.txt`), which would otherwise scaffold an unusable folder on Windows.
+- **CLI: `vela models --entities` is case-insensitive.** Entity names are lower-cased to Dataverse's logical-name
+  form, so `--entities Account` resolves the same as `account`.
+- **CLI: `RetrieveAll` no longer mutates the caller's `QueryExpression`.** Its `PageInfo` is restored after paging,
+  so a query object reused after a read is unaffected.
 
 ## [0.8.0] - 2026-09-13
 
