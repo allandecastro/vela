@@ -479,6 +479,21 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Async_step_failure_is_recorded_not_surfaced_to_the_caller()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .Register<AsyncThrowOnCreate>();
+
+            // Real Dataverse runs async steps as decoupled system jobs; a failure never reaches the sync caller.
+            Guid id = pipeline.Service.Create(new FakeAccount { Name = "Zava" });
+
+            Assert.NotEqual(Guid.Empty, id);              // the create returned normally
+            Assert.Single(pipeline.GetAll("account"));    // the synchronous operation committed
+            Exception failure = Assert.Single(pipeline.AsyncStepFailures);
+            Assert.Contains("async boom", failure.Message); // the async failure is observable for assertions
+        }
+
+        [Fact]
         public void ExecuteTransaction_rolls_back_committed_children_when_a_later_child_throws()
         {
             PluginPipeline pipeline = PluginPipeline.Empty()

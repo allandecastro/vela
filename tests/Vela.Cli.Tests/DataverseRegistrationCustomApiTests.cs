@@ -226,7 +226,11 @@ public sealed class DataverseRegistrationCustomApiTests
     public void SyncRequestParameters_updates_existing_parameter_by_name()
     {
         var existingId = Guid.NewGuid();
-        var existing = new Entity("customapirequestparameter", existingId) { ["name"] = "Target" };
+        var existing = new Entity("customapirequestparameter", existingId)
+        {
+            ["name"] = "Target",
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.Integer), // matches desired: this test exercises the update path, not a type change
+        };
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
@@ -239,9 +243,31 @@ public sealed class DataverseRegistrationCustomApiTests
         Assert.Equal("customapirequestparameter", updated.LogicalName);
         Assert.Equal(existingId, updated.Id);
         Assert.True(updated.GetAttributeValue<bool>("isoptional"));
-        Assert.Equal(SdkConstants.CustomApiParameterType.Integer, updated.GetAttributeValue<OptionSetValue>("type").Value);
+        Assert.False(updated.Contains("type")); // type is immutable, so it is not written on update
         Assert.Equal("contact", updated.GetAttributeValue<string>("logicalentityname")); // written when set
         Assert.Empty(svc.Created);
+    }
+
+    [Fact]
+    public void SyncRequestParameters_throws_when_an_existing_parameter_type_changes()
+    {
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("customapirequestparameter", existingId)
+        {
+            ["name"] = "Amount",
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.Integer),
+        };
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
+        };
+        // Desired type differs (String vs Integer). A parameter's type is create-only, so this must fail fast
+        // rather than emit an update Dataverse ignores (which would never converge).
+        var param = new CustomApiParameterApplyDefinition("Amount", IsOptional: false, ParameterTypeName: "System.String", IsCollection: false, LogicalEntityName: null);
+
+        Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false));
+        Assert.Empty(svc.Updated); // nothing written when the type can't change
     }
 
     [Fact]
@@ -251,6 +277,7 @@ public sealed class DataverseRegistrationCustomApiTests
         var existing = new Entity("customapirequestparameter", existingId)
         {
             ["name"] = "Target",
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.String), // matches desired; only the binding changes
             ["logicalentityname"] = "account", // a stale entity binding on the live row
         };
         var svc = new TestSupport.FakeOrgService

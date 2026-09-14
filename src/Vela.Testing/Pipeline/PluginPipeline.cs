@@ -29,6 +29,7 @@ namespace Vela.Testing
         private readonly Dictionary<string, Type> _customApis = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
         private readonly InMemoryOrganizationService _store = new InMemoryOrganizationService();
         private readonly List<PipelineExecutionEntry> _log = new List<PipelineExecutionEntry>();
+        private readonly List<Exception> _asyncStepFailures = new List<Exception>();
         private readonly RecordingTracingService _trace = new RecordingTracingService();
         private readonly PipelineOrganizationService _service;
         private readonly Guid _correlationId = Guid.NewGuid();
@@ -326,6 +327,13 @@ namespace Vela.Testing
 
         /// <summary>Ordered log of every step that fired (for asserting what ran and in what order).</summary>
         public IReadOnlyList<PipelineExecutionEntry> ExecutionLog => _log;
+
+        /// <summary>
+        /// Exceptions thrown by asynchronous steps. Real Dataverse runs async steps as decoupled system jobs whose
+        /// failures never surface to the triggering caller, so the pipeline records them here instead of throwing
+        /// out of the originating operation. Assert on this to verify an async step failed.
+        /// </summary>
+        public IReadOnlyList<Exception> AsyncStepFailures => _asyncStepFailures;
 
         /// <summary>Captured traces aggregated across the whole cascade.</summary>
         public RecordingTracingService Trace => _trace;
@@ -964,10 +972,20 @@ namespace Vela.Testing
                     throw;
                 }
 
-                // Asynchronous steps run after the synchronous transaction "commits"; their failures do not roll back.
+                // Asynchronous steps run after the synchronous transaction "commits"; their failures do not roll
+                // back. Real Dataverse runs them as decoupled system jobs whose failures never surface to the
+                // triggering caller, so record any exception (assert via AsyncStepFailures) instead of throwing
+                // out of the originating operation.
                 foreach (Action pending in asyncQueue)
                 {
-                    pending();
+                    try
+                    {
+                        pending();
+                    }
+                    catch (Exception ex)
+                    {
+                        _asyncStepFailures.Add(ex);
+                    }
                 }
 
                 return result;

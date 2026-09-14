@@ -135,6 +135,30 @@ public class ModelsCommandTests
     }
 
     [Fact]
+    public void ResolveNamespace_DoesNotTreat_p_AsProjectAlias()
+    {
+        // -p is the --package short alias (as in plan/apply), not --project, so it must NOT drive namespace
+        // inference. A solution root that --project would resolve returns null when passed via -p.
+        string root = TempDir();
+        try
+        {
+            string plugins = System.IO.Path.Combine(root, "src", "Acme.Plugins");
+            System.IO.Directory.CreateDirectory(plugins);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(plugins, "Acme.Plugins.csproj"),
+                "<Project><PropertyGroup><RootNamespace>Acme.Plugins</RootNamespace></PropertyGroup></Project>");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(root, "Acme.sln"),
+                "Microsoft Visual Studio Solution File, Format Version 12.00\n" +
+                "Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Acme.Plugins\", \"src\\Acme.Plugins\\Acme.Plugins.csproj\", \"{11111111-1111-1111-1111-111111111111}\"\nEndProject\n");
+
+            Assert.Null(ModelsCommand.ResolveNamespace(new[] { "-p", root }));
+        }
+        finally
+        {
+            System.IO.Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ResolveNamespace_ReturnsNull_WhenNoProjectOrSolution()
     {
         string root = TempDir();
