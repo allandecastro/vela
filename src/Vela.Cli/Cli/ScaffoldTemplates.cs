@@ -1684,7 +1684,9 @@ namespace {{prefix}}.Plugins.Account.CustomApis
                 .AsAction()
                 .BoundTo<Account>()
                 .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync)
-                .Request(r => r.Add(x => x.AccountId))
+                .Request(r => r
+                    .Add(x => x.AccountId)
+                    .Add(x => x.AsOfDate, optional: true, "Date to value against; defaults to today."))
                 .Response(r => r.Add(x => x.EstimatedValue));
         }
 
@@ -1708,6 +1710,14 @@ namespace {{prefix}}.Plugins.Account.CustomApis
         public Guid AccountId
         {
             get => Get<Guid>();
+            set => Set(value);
+        }
+
+        // Optional request parameter (isoptional = true in Dataverse). Only request
+        // parameters can be optional; response properties are always present.
+        public DateTime AsOfDate
+        {
+            get => Get<DateTime>();
             set => Set(value);
         }
     }
