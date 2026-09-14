@@ -24,12 +24,18 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.4.0] - 2026-09-14 (Vela.Cli)
+
+CLI line (`Vela.Cli`), published as `cli-v0.4.0`.
+
+### Changed
+
+- **CLI: the `custom-api` scaffold demonstrates the optional request-parameter overload.** The generated
+  `AccountEstimateValue` template now shows the `.Request(..., optional: true)` overload and notes that
+  optionality applies to request parameters only (response properties are always present, matching Dataverse).
+
 ### Fixed
 
-- **Framework: plugin / Custom API introspection failures are reported as an Error.** A type that IS a plugin
-  or Custom API but throws while yielding its definition was demoted to a Warning and silently excluded from
-  the manifest, dropping it from the plan (and risking a delete of the live registration). Both discovery
-  paths now emit an Error-severity diagnostic.
 - **CLI: the plugin assembly is no longer re-uploaded when its content and version are unchanged.** Mirrors the
   plugin-package fix: an identical `content` + `version` update only bumped `modifiedon`. The
   "new type + same version" stale-assembly trap stays handled by `GuardAgainstStaleAssemblyVersion`.
@@ -37,6 +43,27 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `customapirequestparameter.isoptional` and emits a `[Required]` attribute on required request parameters, so
   rebuilding the manifest from a regenerated model keeps required parameters required instead of silently making
   every parameter optional. Response properties have no `isoptional` column and are never marked required.
+
+## [0.11.0] - 2026-09-14
+
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.11.0`.
+
+### Added
+
+- **Framework: early-bound `ctx.PreImage` / `ctx.PostImage` on the curated message contexts.** A pre/post image
+  is always a snapshot of the step's own table, so the typed contexts now expose it as the context's `TEntity`
+  with no type argument: `ctx.PostImage` on `ICreatePostContext<T>`, `ctx.PreImage` on `IUpdatePreContext<T>` /
+  `IDeletePreContext<T>` / `IDeletePostContext<T>`, and both on `IUpdatePostContext<T>`. Each reads the image
+  under the default alias and returns null when none is registered; `ctx.GetPreImage<T>("alias")` /
+  `ctx.GetPostImage<T>("alias")` remain for custom aliases. Exposed only where the message and stage actually
+  produce that image (no pre-image on Create, no post-image on Delete).
+
+### Fixed
+
+- **Framework: plugin / Custom API introspection failures are reported as an Error.** A type that IS a plugin
+  or Custom API but throws while yielding its definition was demoted to a Warning and silently excluded from
+  the manifest, dropping it from the plan (and risking a delete of the live registration). Both discovery
+  paths now emit an Error-severity diagnostic.
 
 ## [0.3.0] - 2026-09-13 (Vela.Cli)
 
@@ -51,13 +78,6 @@ CLI line (`Vela.Cli`), published as `cli-v0.3.0`.
   `NO_COLOR` / `VELA_NO_COLOR`, so piped, redirected, and CI output stays plain text.
 - **CLI: `--json` on `plan`/`apply`/`inspect`.** Forces JSON output even on a terminal (equivalent to piping
   or `--out <file>`).
-- **Framework: early-bound `ctx.PreImage` / `ctx.PostImage` on the curated message contexts.** A pre/post image
-  is always a snapshot of the step's own table, so the typed contexts now expose it as the context's `TEntity`
-  with no type argument: `ctx.PostImage` on `ICreatePostContext<T>`, `ctx.PreImage` on `IUpdatePreContext<T>` /
-  `IDeletePreContext<T>` / `IDeletePostContext<T>`, and both on `IUpdatePostContext<T>`. Each reads the image
-  under the default alias and returns null when none is registered; `ctx.GetPreImage<T>("alias")` /
-  `ctx.GetPostImage<T>("alias")` remain for custom aliases. Exposed only where the message and stage actually
-  produce that image (no pre-image on Create, no post-image on Delete).
 
 ### Changed
 
