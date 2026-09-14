@@ -213,9 +213,12 @@ internal static class SignCommand
                 return Fail("Failed to start 'dotnet nuget sign'.", ExitError, includeUsage: false);
             }
 
-            // Read both streams to completion before waiting, so the child can't block on a full output buffer.
-            string standardError = process.StandardError.ReadToEnd();
-            _ = process.StandardOutput.ReadToEnd();
+            // Drain both streams CONCURRENTLY so the child can't block writing to one pipe while we read the other
+            // to completion (reading stderr fully before touching stdout is the classic deadlock).
+            Task<string> errorTask = process.StandardError.ReadToEndAsync();
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+            string standardError = errorTask.GetAwaiter().GetResult();
+            _ = outputTask.GetAwaiter().GetResult();
             process.WaitForExit();
             if (process.ExitCode != 0)
             {

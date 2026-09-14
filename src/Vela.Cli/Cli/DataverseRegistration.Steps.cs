@@ -66,12 +66,12 @@ internal static partial class DataverseRegistration
         step.Id = existingId.Value;
         service.Update(step);
         stepId = existingId.Value;
-        LogOperation("step", "update", BuildStepName(definition));
+        LogOperation("step", "update", BuildStepName(definition), verbose: verbose);
     }
     else
     {
         stepId = service.Create(step);
-        LogOperation("step", "create", BuildStepName(definition));
+        LogOperation("step", "create", BuildStepName(definition), verbose: verbose);
     }
 
     // definition.SecureConfig is the redacted hash (Items never carry the plaintext); write the RAW value from the
