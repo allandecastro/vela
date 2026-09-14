@@ -26,5 +26,21 @@ namespace Vela.Tests
             Assert.Equal("Updated Name", merged.GetAttributeValue<string>("name"));
             Assert.Equal("123", merged.GetAttributeValue<string>("telephone1"));
         }
+
+        [Fact]
+        public void GetPreImageMerged_WithoutTarget_ReturnsIndependentCopy()
+        {
+            LocalPluginContext context = new PluginContextBuilder().Build();
+            Entity preImage = new Entity(TestAccount.EntityLogicalNameValue) { Id = Guid.NewGuid() };
+            preImage["name"] = "Original";
+            context.PluginExecutionContext.PreEntityImages["PreImage"] = preImage;
+
+            // No Target: the merged result is just the image, but it must be an independent copy, not the shared
+            // image reference, so mutating it cannot corrupt the context's PreEntityImages entry.
+            Entity merged = context.GetPreImageMerged();
+            merged["name"] = "Mutated";
+
+            Assert.Equal("Original", preImage.GetAttributeValue<string>("name"));
+        }
     }
 }

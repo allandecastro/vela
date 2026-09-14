@@ -33,11 +33,6 @@ with `ctx.Request.Target`; overriding `Execute(ILocalPluginContext ctx)` and usi
 supported as an untyped fallback.
 For a lightweight Custom API handler the signature is `void Handler(ILocalPluginContext)`.
 
-### I'm seeing unexpected legacy warnings - how do I clear them?
-
-Migrate to the direct patterns: `RegisterPluginSteps()` + `RegisterSteps().On...()` for plugins, and for
-Custom APIs override `RegisterCustomApi()` and call `RegisterCustomApi(...)`.
-
 ### Can `plan`/`apply` authenticate with a certificate or a managed-identity connection?
 
 No. Supported authentication is connection string, client secret (env var / stdin / arg), and interactive MSAL
@@ -46,10 +41,10 @@ identity is only relevant to `vela sign` for MI plugins. See [limitations](limit
 
 ### Does `apply` manage solutions, security roles, or environment variables?
 
-No. `plan`/`apply` manage plugin packages/assemblies, steps, step images, and Custom APIs. Solutions must
-already exist (`--solution` only adds components), and SDK message filters, step enabled/disabled state, step
-configuration, security roles / field security, web resources, and environment variables are not managed.
-Assemblies are upserted, never deleted. See [limitations](limitations.md).
+No. `plan`/`apply` manage plugin packages/assemblies, steps, step images, Custom APIs, and web resources
+(with `--webresources --solution`). Solutions must already exist (`--solution` only adds components), and SDK
+message filters, step enabled/disabled state, step configuration, security roles / field security, and
+environment variables are not managed. Assemblies are upserted, never deleted. See [limitations](limitations.md).
 
 ### Can I register a plugin from a bare `.dll`?
 

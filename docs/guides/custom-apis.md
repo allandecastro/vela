@@ -185,8 +185,6 @@ change that never takes effect (which would otherwise re-appear on every plan). 
 the Custom API (remove it from the package and `apply`, or delete it in Dataverse) and re-apply to recreate it
 with the new shape.
 
-Legacy names (`Register.Plugin`, `Register.CustomApi`, `ConfigureCustomApi`) are kept for backward compatibility, but new code should use the direct API (`RegisterSteps()` for plugins, `RegisterCustomApi(...)` for Custom APIs).
-
 ## See also
 
 - [Write a plugin](plugins.md) - steps, context helpers, and images.

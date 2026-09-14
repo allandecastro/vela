@@ -198,7 +198,11 @@ namespace Vela.Testing
                 List<string> order = new List<string>();
                 foreach (Entity row in rows)
                 {
-                    string key = string.Join("", query.Groups.Select(g => EntityValues.Normalize(EntityValues.GetValue(row, g.Attribute))?.ToString() ?? " "));
+                    // Delimit fields with a unit separator (never present in data) and qualify each with its
+                    // attribute name, so distinct tuples cannot collide: without a separator (city:"New",
+                    // region:"York") and (city:"NewYork",region:"") both keyed to "NewYork" and merged into one
+                    // group with wrong aggregate/count values.
+                    string key = string.Join("\u001f", query.Groups.Select(g => $"{g.Attribute}={EntityValues.Normalize(EntityValues.GetValue(row, g.Attribute))?.ToString() ?? " "}"));
                     if (!byKey.TryGetValue(key, out List<Entity>? bucket))
                     {
                         bucket = new List<Entity>();

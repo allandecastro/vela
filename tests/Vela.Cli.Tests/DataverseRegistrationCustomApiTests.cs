@@ -245,6 +245,30 @@ public sealed class DataverseRegistrationCustomApiTests
     }
 
     [Fact]
+    public void SyncRequestParameters_clears_logicalentityname_when_blank_on_update()
+    {
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("customapirequestparameter", existingId)
+        {
+            ["name"] = "Target",
+            ["logicalentityname"] = "account", // a stale entity binding on the live row
+        };
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
+        };
+        // Desired parameter has no entity binding: the stale value must be cleared, not left behind (which would
+        // make every subsequent plan/apply report the Custom API as "changed" forever).
+        var param = new CustomApiParameterApplyDefinition("Target", IsOptional: false, ParameterTypeName: "System.String", IsCollection: false, LogicalEntityName: null);
+
+        DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
+
+        Entity updated = Assert.Single(svc.Updated);
+        Assert.True(updated.Contains("logicalentityname"));                 // the attribute is written ...
+        Assert.Null(updated.GetAttributeValue<string>("logicalentityname")); // ... as null, to clear the stale value
+    }
+
+    [Fact]
     public void SyncRequestParameters_deletes_orphaned_parameter()
     {
         var orphanId = Guid.NewGuid();

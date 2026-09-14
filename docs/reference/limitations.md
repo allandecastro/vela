@@ -46,10 +46,11 @@ change.
 untouched.
 
 - **Managed:** plugin **packages**/assemblies (uploaded from the `.nupkg`), plugin **steps**, step
-  **images**, and **Custom APIs** with their request/response parameters.
+  **images**, **Custom APIs** with their request/response parameters, and **web resources** (with
+  `--webresources --solution`).
 - **Not managed:** solutions (must already exist - `--solution` only adds components to it), SDK message
   filters (read-only lookup), step **enabled/disabled** state, secured/unsecured step **configuration**,
-  security roles / field security, web resources, environment variables. Assemblies are upserted, never
+  security roles / field security, environment variables. Assemblies are upserted, never
   deleted.
 - **Deletion is scoped to the package.** `apply` removes steps/Custom APIs that exist in Dataverse but are
   absent from the local package's own types - it will not delete unrelated registrations.
@@ -79,8 +80,8 @@ untouched.
 - **No cross-operation transaction.** A partway failure leaves partial state; the resume report lists what
   completed. Upserts are idempotent - fix the cause and re-run. Interactive mode needs a real terminal (not
   CI/piped).
-- **`vela add`** generates one file per run (plugin/service/customapi/test/step); a plugin/service needs an
-  early-bound model type (`--entity`).
+- **`vela add`** generates one file per run (plugin/service/customapi/test/step/form-script/ribbon-script); a
+  plugin/service needs an early-bound model type (`--entity`).
 - **`vela models`** generates entity classes (typed properties, primary-id sync, XML doc, DataAnnotations,
   option-set enums local/global, multi-select as `IList<Enum>`, alternate-key reference factories) scoped by
   `--solution`/`--entities`, Custom API message classes via `--custom-apis`, and a dependency-light `Roles` class

@@ -78,7 +78,7 @@ internal static partial class DataverseRegistration
             try
             {
                 string stepKey = TryGetString(item.Definition, "stepKey") ?? item.Type;
-                LogOperation("step", "delete", stepKey);
+                LogOperation("step", "delete", stepKey, verbose: verbose);
                 DeleteStepByDefinition(service, item.Definition);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
@@ -94,7 +94,7 @@ internal static partial class DataverseRegistration
             try
             {
                 string uniqueName = TryGetString(item.Definition, "uniqueName") ?? item.Type;
-                LogOperation("custom-api", "delete", uniqueName);
+                LogOperation("custom-api", "delete", uniqueName, verbose: verbose);
                 DeleteCustomApi(service, item.Definition);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))

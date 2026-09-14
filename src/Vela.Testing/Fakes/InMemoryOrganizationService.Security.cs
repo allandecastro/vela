@@ -87,12 +87,28 @@ namespace Vela.Testing
             }
 
             List<string> hidden = entity.Attributes.Keys
-                .Where(column => _security.IsSecuredColumn(entity.LogicalName, column) && !_security.CanReadColumn(_currentUserId, entity.LogicalName, column))
+                .Where(column => IsSecuredAndUnreadable(entity, column))
                 .ToList();
             foreach (string column in hidden)
             {
                 entity.Attributes.Remove(column);
             }
+        }
+
+        // Evaluate field-level security against the column's real table/field. Aliased (link-entity) columns are
+        // keyed "alias.field" and typed as AliasedValue carrying the linked table/field, so testing the row's own
+        // logical name (as a plain column would) leaves a joined secured column unmasked.
+        private bool IsSecuredAndUnreadable(Entity entity, string column)
+        {
+            string table = entity.LogicalName;
+            string field = column;
+            if (entity[column] is AliasedValue aliased)
+            {
+                table = aliased.EntityLogicalName;
+                field = aliased.AttributeLogicalName;
+            }
+
+            return _security!.IsSecuredColumn(table, field) && !_security.CanReadColumn(_currentUserId, table, field);
         }
 
         // Field-level security: reject a RetrieveMultiple that aggregates or groups by a field-secured column the
