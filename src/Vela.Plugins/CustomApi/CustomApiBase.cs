@@ -21,8 +21,9 @@ namespace Vela.CustomApi
     /// <param name="maxDepth">Depth guard threshold.</param>
     public abstract class CustomApiBase(string unsecureConfig, string secureConfig, int maxDepth = 8) : PluginBase(unsecureConfig, secureConfig, maxDepth)
     {
-        private CustomApiDefinition? _customApiDefinition;
+        private volatile CustomApiDefinition? _customApiDefinition;
         private ICustomApiBuilder? _activeBuilder;
+        private readonly object _initLock = new object();
 
         /// <summary>
         /// Gets the step definition for this plugin (used for registration manifest generation).
@@ -37,7 +38,21 @@ namespace Vela.CustomApi
         /// </summary>
         public virtual CustomApiDefinition GetCustomApiDefinition()
         {
-            return _customApiDefinition ??= BuildDefinition();
+            CustomApiDefinition? snapshot = _customApiDefinition;
+            if (snapshot != null)
+            {
+                return snapshot;
+            }
+
+            // The Dataverse sandbox caches and concurrently reuses a single plugin instance, so the one-time
+            // build below — which mutates the shared _activeBuilder field — must be serialized. Otherwise two
+            // concurrent first executions race: one can null _activeBuilder while the other is still inside
+            // RegisterCustomApi(...), throwing spuriously or cross-wiring the two builders. This mirrors the
+            // _stepInitLock guard on EntityPluginBase.GetStepDefinitions().
+            lock (_initLock)
+            {
+                return _customApiDefinition ??= BuildDefinition();
+            }
         }
 
         /// <summary>

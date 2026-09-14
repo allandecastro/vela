@@ -73,6 +73,24 @@ public class ModelGeneratorTests
     }
 
     [Fact]
+    public void Multiline_descriptions_do_not_break_generated_doc_comments()
+    {
+        // Dataverse descriptions are routinely multi-line; a raw CR/LF inside a single-line /// <summary> leaves the
+        // continuation without a /// prefix and produces uncompilable generated code.
+        EntityMetadata entity = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .String("name", "Name", maxLength: 160).Display("Account Name").Describe("First line\r\nSecond line")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { entity }, new ModelGenOptions("Acme.Shared.Models.Generated"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.DoesNotContain("First line\r", code); // no raw CR/LF survives inside the doc comment
+        Assert.DoesNotContain("First line\n", code);
+        Assert.Contains("First line Second line", code); // collapsed to a single line
+    }
+
+    [Fact]
     public void PartyList_IsTyped_AsEntityCollection()
     {
         // ActivityParty columns (email From/To/Cc) are partylists -> EntityCollection at runtime.

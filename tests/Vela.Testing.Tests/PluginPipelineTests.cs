@@ -455,5 +455,47 @@ namespace Vela.Testing.Tests
                 .ToArray();
             Assert.Equal(new[] { "A-old->A-new", "B-old->B-new" }, transitions);
         }
+
+        [Fact]
+        public void ExecuteMultiple_runs_each_child_through_the_pipeline_so_plugins_fire()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .Register<CreateTaskOnAccountCreate>();
+
+            ExecuteMultipleRequest batch = new ExecuteMultipleRequest
+            {
+                Settings = new ExecuteMultipleSettings { ContinueOnError = false, ReturnResponses = true },
+                Requests = new OrganizationRequestCollection(),
+            };
+            batch.Requests.Add(new CreateRequest { Target = new FakeAccount { Name = "A" } });
+            batch.Requests.Add(new CreateRequest { Target = new FakeAccount { Name = "B" } });
+
+            ExecuteMultipleResponse response = (ExecuteMultipleResponse)pipeline.Service.Execute(batch);
+
+            Assert.False(response.IsFaulted);
+            Assert.Equal(2, pipeline.GetAll("account").Count());
+            // The account Create plugin fired for each child; via the old store-direct path it would be 0 tasks.
+            Assert.Equal(2, pipeline.GetAll("task").Count());
+        }
+
+        [Fact]
+        public void ExecuteTransaction_rolls_back_committed_children_when_a_later_child_throws()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .Register<ThrowOnPostCreate>();
+
+            ExecuteTransactionRequest batch = new ExecuteTransactionRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+            };
+            batch.Requests.Add(new CreateRequest { Target = new FakeTask { Subject = "committed first" } }); // no plugin, succeeds
+            batch.Requests.Add(new CreateRequest { Target = new FakeAccount { Name = "boom" } });            // ThrowOnPostCreate throws
+
+            Assert.ThrowsAny<Exception>(() => pipeline.Service.Execute(batch));
+
+            // The earlier successful child is rolled back with the whole batch.
+            Assert.Empty(pipeline.GetAll("task"));
+            Assert.Empty(pipeline.GetAll("account"));
+        }
     }
 }

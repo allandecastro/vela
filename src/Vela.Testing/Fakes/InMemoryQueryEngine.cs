@@ -79,7 +79,11 @@ namespace Vela.Testing
                 }
 
                 return true;
-            });
+            })
+            // Deep-copy each matched row so results are isolated from the store, exactly as ExecuteQueryExpression
+            // clones its base rows. Without this, mutating a returned mutable value (EntityReference/byte[]/nested
+            // Entity/collection) would corrupt the stored record and break read isolation.
+            .Select(EntityValues.Clone);
 
             List<OrderSpec> orders = query.Orders.Select(o => new OrderSpec { Key = o.AttributeName, Descending = o.OrderType == OrderType.Descending }).ToList();
             return BuildCollection(query.EntityName, matches, query.ColumnSet, orders, query.TopCount, distinct: false, query.PageInfo);
@@ -179,7 +183,9 @@ namespace Vela.Testing
         // Aggregates are computed over the rows the caller may read (security-trimmed), like the platform.
         public EntityCollection ExecuteAggregate(AggregateQuery query)
         {
-            List<Entity> rows = ReadableRows(query.EntityName).Where(entity => EvaluateFilter(entity, query.Criteria)).ToList();
+            // Deep-copy the rows so group-by and min/max values (exposed as AliasedValue) cannot alias the store
+            // and let a caller mutate a stored record through an aggregate result.
+            List<Entity> rows = ReadableRows(query.EntityName).Where(entity => EvaluateFilter(entity, query.Criteria)).Select(EntityValues.Clone).ToList();
 
             List<List<Entity>> groups = new List<List<Entity>>();
             if (query.Groups.Count == 0)
@@ -462,7 +468,9 @@ namespace Vela.Testing
             {
                 if (target.Contains(name))
                 {
-                    copy[$"{alias}.{name}"] = new AliasedValue(target.LogicalName, name, target[name]);
+                    // Deep-copy the linked value: target is a live store row, so aliasing its value here would
+                    // let a caller mutate the store through a joined column and break read isolation.
+                    copy[$"{alias}.{name}"] = new AliasedValue(target.LogicalName, name, EntityValues.CloneValue(target[name]));
                 }
             }
 
@@ -471,7 +479,7 @@ namespace Vela.Testing
             string keyColumn = $"{alias}.{link.LinkToAttributeName}";
             if (!copy.Contains(keyColumn))
             {
-                copy[keyColumn] = new AliasedValue(target.LogicalName, link.LinkToAttributeName, EntityValues.GetValue(target, link.LinkToAttributeName));
+                copy[keyColumn] = new AliasedValue(target.LogicalName, link.LinkToAttributeName, EntityValues.CloneValue(EntityValues.GetValue(target, link.LinkToAttributeName)));
             }
 
             return copy;

@@ -632,9 +632,88 @@ namespace Vela.Testing
                     ExecuteSetState(setState.EntityMoniker, setState.State, setState.Status, shared);
                     return new SetStateResponse();
 
+                case ExecuteMultipleRequest executeMultiple:
+                    return ExecuteMultipleThroughPipeline(executeMultiple);
+
+                case ExecuteTransactionRequest executeTransaction:
+                    return ExecuteTransactionThroughPipeline(executeTransaction);
+
                 default:
                     return ExecuteModelledMessage(request, shared);
             }
+        }
+
+        // ExecuteMultiple/ExecuteTransaction must run each child through the pipeline so registered steps fire,
+        // exactly as they would in production. Routing to _store.Execute (the default fall-through) would call the
+        // store's own child dispatch, which bypasses the pipeline entirely and gives tests false confidence that
+        // no plugin ran. Children go through ExecuteRequestCore (not ExecuteRequest) so they inherit the batch's
+        // active bypass instead of re-extracting their own.
+        private ExecuteMultipleResponse ExecuteMultipleThroughPipeline(ExecuteMultipleRequest request)
+        {
+            bool continueOnError = request.Settings?.ContinueOnError ?? false;
+            bool returnResponses = request.Settings?.ReturnResponses ?? false;
+            ExecuteMultipleResponseItemCollection items = new ExecuteMultipleResponseItemCollection();
+            bool faulted = false;
+
+            for (int i = 0; i < request.Requests.Count; i++)
+            {
+                try
+                {
+                    OrganizationResponse childResponse = ExecuteRequestCore(request.Requests[i]);
+                    if (returnResponses)
+                    {
+                        items.Add(new ExecuteMultipleResponseItem { RequestIndex = i, Response = childResponse });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    faulted = true;
+                    items.Add(new ExecuteMultipleResponseItem
+                    {
+                        RequestIndex = i,
+                        Fault = new OrganizationServiceFault { Message = ex.Message },
+                    });
+
+                    if (!continueOnError)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            ExecuteMultipleResponse response = new ExecuteMultipleResponse();
+            response.Results["IsFaulted"] = faulted;
+            response.Results["Responses"] = items;
+            return response;
+        }
+
+        // All-or-nothing: snapshot the store, run every child through the pipeline, and roll back the whole batch
+        // if any child throws. Mirrors the store's ExecuteTransaction but with plugin steps firing per child.
+        private ExecuteTransactionResponse ExecuteTransactionThroughPipeline(ExecuteTransactionRequest request)
+        {
+            Dictionary<string, Dictionary<Guid, Entity>> snapshot = _store.Snapshot();
+            OrganizationResponseCollection responses = new OrganizationResponseCollection();
+
+            try
+            {
+                foreach (OrganizationRequest child in request.Requests)
+                {
+                    OrganizationResponse childResponse = ExecuteRequestCore(child);
+                    if (request.ReturnResponses == true)
+                    {
+                        responses.Add(childResponse);
+                    }
+                }
+            }
+            catch
+            {
+                _store.RestoreTo(snapshot);
+                throw;
+            }
+
+            ExecuteTransactionResponse response = new ExecuteTransactionResponse();
+            response.Results["Responses"] = responses;
+            return response;
         }
 
         // A message with no dedicated data simulation but with registered steps (for example QualifyLead,

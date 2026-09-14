@@ -153,7 +153,11 @@ public static class RoleGenerator
         return candidate;
     }
 
-    private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"")
+        // Keep raw newlines out of the string literal (a raw CR/LF terminates it -> CS1010).
+        .Replace("\r", "\\r").Replace("\n", "\\n");
 
-    private static string XmlEscape(string value) => value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+    private static string XmlEscape(string value) => value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
+        // Collapse newlines: a raw CR/LF in a single-line /// <summary> breaks the generated doc comment.
+        .Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ");
 }

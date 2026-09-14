@@ -1247,7 +1247,9 @@ namespace Vela.Testing
             {
                 if (entity.Contains(column))
                 {
-                    projected[column] = entity[column];
+                    // Deep-copy each value: the AllColumns branch clones, and a projected read must be just as
+                    // isolated, so mutating a returned mutable value can't corrupt the stored record.
+                    projected[column] = EntityValues.CloneValue(entity[column]);
                 }
             }
 
