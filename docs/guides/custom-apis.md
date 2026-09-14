@@ -178,12 +178,13 @@ fixed by Dataverse when the Custom API is first created and cannot be changed af
 
 - function versus action (`AsFunction()` / `AsAction()`),
 - the binding type (`BoundTo<T>()` versus global),
-- the bound entity.
+- the bound entity,
+- a request parameter's or response property's **type** (the parameter's `Type` column is create-only).
 
 Dataverse silently ignores updates to these, so `apply` fails fast with a clear message rather than reporting a
 change that never takes effect (which would otherwise re-appear on every plan). To change one of them, delete
-the Custom API (remove it from the package and `apply`, or delete it in Dataverse) and re-apply to recreate it
-with the new shape.
+the Custom API or the affected parameter (remove it from the package and `apply`, or delete it in Dataverse)
+and re-apply to recreate it with the new shape.
 
 ## See also
 

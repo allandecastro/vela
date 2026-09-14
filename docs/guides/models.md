@@ -53,7 +53,7 @@ entity when it has one (compile-time entity applicability), async-only when the 
 API. A required request parameter (`isoptional = false` in Dataverse) is generated with a `[Required]` attribute so
 that rebuilding the manifest from the generated model preserves its optionality; response properties are always
 present, so they never carry it. See [Write a Custom API](custom-apis.md). To keep the Custom APIs you **authored in code** out of that all set (you already have those
-classes), pass your built plugin package with `--package <file.nupkg>` (repeatable) and/or `--packages-dir <folder>`
+classes), pass your built plugin package with `--package <file.nupkg>` (or `-p`, repeatable) and/or `--packages-dir <folder>`
 (plus `--package-assembly <name>` if the primary assembly needs disambiguating): their unique names are scanned
 from the package - the same offline scan `plan`/`apply` use - and removed, and a note reports how many were
 excluded. Excluding authored Custom APIs requires passing the package; without one, `--custom-apis` with no value
