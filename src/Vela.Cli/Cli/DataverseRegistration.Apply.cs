@@ -490,8 +490,12 @@ internal static partial class DataverseRegistration
         return;
     }
 
+    // Resolve the existing plugin-type ids once, not once per required type: the lookup issues a query pair per
+    // assembly, so calling it inside the Where predicate was O(requiredTypes x assemblies) round-trips.
+    Dictionary<string, Guid> existingTypeIds = GetPluginTypeIdByNameForAssemblies(
+        service, sourceAssemblyPayloads.Select(p => p.AssemblyName).ToArray());
     HashSet<string> missingPluginTypes = new HashSet<string>(
-        requiredPluginTypes.Where(x => !GetPluginTypeIdByNameForAssemblies(service, sourceAssemblyPayloads.Select(p => p.AssemblyName).ToArray()).ContainsKey(x)),
+        requiredPluginTypes.Where(x => !existingTypeIds.ContainsKey(x)),
         StringComparer.OrdinalIgnoreCase);
     if (missingPluginTypes.Count == 0)
     {

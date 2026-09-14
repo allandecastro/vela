@@ -188,6 +188,20 @@ internal static partial class DataverseRegistration
 
             if (existingByName.TryGetValue(parameter.Name, out Entity? existing))
             {
+                // A parameter's type is create-only: Dataverse silently ignores an update to it (the value simply
+                // stays), so applying a type change would report success but never converge - every later plan
+                // would show the same phantom change. Fail fast with guidance, like the parent Custom API
+                // immutables (EnsureCustomApiImmutablesUnchanged).
+                int existingType = existing.GetAttributeValue<OptionSetValue>("type")?.Value ?? -1;
+                if (existingType != typeCode)
+                {
+                    throw new InvalidOperationException(
+                        $"Custom API '{apiUniqueName}': parameter '{parameter.Name}' type ({existingType} -> {typeCode}) " +
+                        "cannot be changed on an existing parameter. A parameter's type is set at creation and Dataverse " +
+                        "ignores such updates, so applying would report success but never converge. Remove the parameter " +
+                        "(or the Custom API) and re-apply to recreate it with the new type.");
+                }
+
                 Entity update = new Entity(spec.EntityName)
                 {
                     Id = existing.Id
@@ -196,7 +210,7 @@ internal static partial class DataverseRegistration
                 {
                     update["isoptional"] = parameter.IsOptional;
                 }
-                update["type"] = new OptionSetValue(typeCode);
+                // type is immutable (guarded unchanged above), so it is not written on update.
                 // Always write logicalentityname (null clears it). Only setting it when non-empty left a stale
                 // value behind when a parameter's entity binding was removed, so the live read kept surfacing the
                 // old table and every subsequent plan/apply reported the Custom API as "changed" forever.

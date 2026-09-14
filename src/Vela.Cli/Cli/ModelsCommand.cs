@@ -26,10 +26,11 @@ internal static class ModelsCommand
     private static readonly HashSet<string> ValueOptions = new(CommandLineOptions.ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--solution", "--entities", "--custom-apis", "--messages", "--roles", "--solution-roles", "--out", "--lang",
-        "--namespace", "--project", "-p",
+        "--namespace", "--project",
         // Optional plugin package inputs (same shape as plan/apply): when provided, ALL-mode --custom-apis excludes
-        // the Custom APIs authored in these package(s) so the developer's own classes are not regenerated.
-        "--package", "--packages-dir", "--package-assembly",
+        // the Custom APIs authored in these package(s) so the developer's own classes are not regenerated. `-p` is
+        // the shared short alias for --package (as in plan/apply), NOT --project.
+        "--package", "-p", "--packages-dir", "--package-assembly",
     };
 
     private static readonly HashSet<string> FlagOptions = new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
@@ -671,6 +672,7 @@ internal static class ModelsCommand
     {
         exitCode = ExitSuccess;
         List<string> paths = ReadMultiOption(args, "--package");
+        paths.AddRange(ReadMultiOption(args, "-p")); // -p is the shared short alias for --package (as in plan/apply)
 
         string? packagesDir = TryReadOption(args, "--packages-dir");
         if (!string.IsNullOrWhiteSpace(packagesDir))
@@ -917,7 +919,7 @@ internal static class ModelsCommand
             return explicitNs;
         }
 
-        string? projectFile = ResolveProjectFile(TryReadOption(args, "--project") ?? TryReadOption(args, "-p"));
+        string? projectFile = ResolveProjectFile(TryReadOption(args, "--project"));
         if (projectFile == null)
         {
             return null;

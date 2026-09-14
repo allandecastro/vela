@@ -200,6 +200,19 @@ namespace Vela.Testing.Tests
             => throw new PluginBusinessException("rejected after write");
     }
 
+    // Asynchronous step that throws: its failure must be recorded, not surfaced to the triggering caller.
+    public sealed class AsyncThrowOnCreate : EntityPluginBase<FakeAccount>
+    {
+        public AsyncThrowOnCreate(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Asynchronous)
+                .FilteringAttributes(a => a.Name);
+
+        protected override void Execute(ILocalPluginContext ctx)
+            => throw new PluginBusinessException("async boom");
+    }
+
     // Asynchronous step: creates a note after the synchronous commit.
     public sealed class AsyncCreateNote : EntityPluginBase<FakeAccount>
     {
