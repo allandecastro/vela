@@ -48,25 +48,19 @@ namespace Vela.Context
     /// <summary>Pre-stage typed context for a custom message step with early-bound typed images.</summary>
     /// <typeparam name="TRequest">The request type over the live <c>InputParameters</c>.</typeparam>
     /// <typeparam name="TEntity">The early-bound entity type for the step's images.</typeparam>
-    public interface IMessagePreContext<out TRequest, TEntity> : IMessagePreContext<TRequest>
+    public interface IMessagePreContext<out TRequest, TEntity> : IMessagePreContext<TRequest>, IPreImageContext<TEntity>
         where TRequest : OrganizationRequest
         where TEntity : Entity
     {
-        /// <summary>The registered pre-image as the early-bound entity, or null when none is registered.</summary>
-        TEntity? PreImage { get; }
     }
 
     /// <summary>Post-stage typed context for a custom message step with early-bound typed images.</summary>
     /// <typeparam name="TRequest">The request type over the live <c>InputParameters</c>.</typeparam>
     /// <typeparam name="TEntity">The early-bound entity type for the step's images.</typeparam>
-    public interface IMessagePostContext<out TRequest, TEntity> : IMessagePostContext<TRequest>
+    public interface IMessagePostContext<out TRequest, TEntity> : IMessagePostContext<TRequest>, IPreImageContext<TEntity>, IPostImageContext<TEntity>
         where TRequest : OrganizationRequest
         where TEntity : Entity
     {
-        /// <summary>The registered pre-image as the early-bound entity, or null when none is registered.</summary>
-        TEntity? PreImage { get; }
-        /// <summary>The registered post-image as the early-bound entity, or null when none is registered.</summary>
-        TEntity? PostImage { get; }
     }
 
     /// <summary>Runtime pre-stage context for a custom message step with early-bound typed images.</summary>
