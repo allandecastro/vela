@@ -128,4 +128,18 @@ public sealed class CustomApiExecutionCoverageTests
 
         Assert.Equal("hi", context.PluginExecutionContext.OutputParameters["Message"]);
     }
+
+    [Fact]
+    public void GetCustomApiDefinition_is_thread_safe_and_returns_one_consistent_definition()
+    {
+        GreetLightApi api = new GreetLightApi();
+
+        CustomApiDefinition[] results = new CustomApiDefinition[32];
+        // The Dataverse sandbox reuses one plugin instance across concurrent first-executions. Without the init
+        // lock, racing builds null the shared _activeBuilder mid-build and throw or cross-wire the definition.
+        System.Threading.Tasks.Parallel.For(0, results.Length, i => results[i] = api.GetCustomApiDefinition());
+
+        Assert.All(results, d => Assert.Same(results[0], d)); // one shared, fully-built definition
+        Assert.Equal("vela_Greet", results[0].UniqueName);
+    }
 }

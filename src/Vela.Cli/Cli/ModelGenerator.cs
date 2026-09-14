@@ -597,5 +597,8 @@ public static class ModelGenerator
         label?.UserLocalizedLabel?.Label ?? label?.LocalizedLabels?.FirstOrDefault()?.Label;
 
     private static string XmlEscape(string value) =>
-        value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+        value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
+            // Collapse newlines: labels/descriptions are emitted into a single-line /// <summary> and a raw CR/LF
+            // would leave the continuation without a /// prefix, producing uncompilable generated code.
+            .Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ");
 }
