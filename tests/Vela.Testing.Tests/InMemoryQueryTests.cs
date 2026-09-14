@@ -298,6 +298,30 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void FetchXml_Aggregate_MultiColumnGroupBy_DoesNotCollideDistinctTuples()
+        {
+            // Two distinct (city, region) tuples that concatenate to the same string: ("New","York") and
+            // ("NewYork",""). Without a group-key separator they collapse into one group of 2.
+            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
+                new Entity("account") { Id = Guid.NewGuid(), ["address1_city"] = "New", ["address1_stateorprovince"] = "York" },
+                new Entity("account") { Id = Guid.NewGuid(), ["address1_city"] = "NewYork", ["address1_stateorprovince"] = "" });
+
+            string fetch = @"
+                <fetch aggregate='true'>
+                  <entity name='account'>
+                    <attribute name='address1_city' groupby='true' alias='city' />
+                    <attribute name='address1_stateorprovince' groupby='true' alias='region' />
+                    <attribute name='accountid' aggregate='count' alias='cnt' />
+                  </entity>
+                </fetch>";
+
+            var rows = crm.RetrieveMultiple(new FetchExpression(fetch)).Entities;
+
+            Assert.Equal(2, rows.Count); // two distinct groups, not one merged group
+            Assert.All(rows, r => Assert.Equal(1, (int)r.GetAttributeValue<AliasedValue>("cnt").Value));
+        }
+
+        [Fact]
         public void FetchXml_Aggregate_CountAvgMinMax_NoGrouping()
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
