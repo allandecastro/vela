@@ -33,6 +33,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **CLI: the plugin assembly is no longer re-uploaded when its content and version are unchanged.** Mirrors the
   plugin-package fix: an identical `content` + `version` update only bumped `modifiedon`. The
   "new type + same version" stale-assembly trap stays handled by `GuardAgainstStaleAssemblyVersion`.
+- **CLI: `vela models --custom-apis` preserves request-parameter optionality.** The generator now reads
+  `customapirequestparameter.isoptional` and emits a `[Required]` attribute on required request parameters, so
+  rebuilding the manifest from a regenerated model keeps required parameters required instead of silently making
+  every parameter optional. Response properties have no `isoptional` column and are never marked required.
 
 ## [0.3.0] - 2026-09-13 (Vela.Cli)
 
