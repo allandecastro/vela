@@ -21,7 +21,9 @@ public class CalculateAccountScore : CustomApiBase<ScoreRequest, ScoreResponse>
             .AsAction()
             .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync)
             .WorkflowSdkStep(true)
-            .Request(r => r.Add(x => x.AccountId))
+            .Request(r => r
+                .Add(x => x.AccountId)
+                .Add(x => x.AsOfDate, optional: true, "Date to score against; defaults to today."))
             .Response(r => r.Add(x => x.Score));
     }
 
@@ -40,6 +42,12 @@ public class ScoreRequest : TypedRequest
         get => Get<Guid>();
         set => Set(value);
     }
+
+    public DateTime AsOfDate
+    {
+        get => Get<DateTime>();
+        set => Set(value);
+    }
 }
 
 public class ScoreResponse : TypedResponse
@@ -55,6 +63,13 @@ public class ScoreResponse : TypedResponse
 `TypedRequest` / `TypedResponse` live in `Vela.Messages`. The `Get<T>()` / `Set(value)` helpers infer the
 parameter key from the property name, so a property is a plain one-liner - no `Parameters.Contains(...)`
 boilerplate. A read-only response property can drop the setter: `public int Score => Get<int>();`.
+
+**Optional request parameters.** Request parameters are required by default. Mark one optional with the
+`Add(x => x.AsOfDate, optional: true, "...")` overload (the third argument sets the parameter description). By
+default, when parameters are inferred from the model rather than declared explicitly, a property is treated as
+optional unless it carries `[Required]`. Optionality applies to **request parameters only**: response
+properties are always present in the response type, so they have no optional flag (this mirrors Dataverse,
+where `customapiresponseproperty` has no `isoptional`).
 
 `CustomApiBase<TRequest, TResponse>` constrains `TRequest : OrganizationRequest` and
 `TResponse : OrganizationResponse` (the same constraint on `Register.RegisterCustomApi<TRequest, TResponse>()`
