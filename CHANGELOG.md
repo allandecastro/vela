@@ -24,45 +24,18 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### CLI (`Vela.Cli`)
+## [0.12.0] - 2026-09-14 (Vela.Plugins + Vela.Testing)
 
-#### Changed
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.12.0`.
 
-- **BREAKING: `-p` now means `--package` in `vela models`** (consistent with `plan`/`apply`), not `--project`.
-  It was a silent cross-command footgun: `vela models --custom-apis -p pkg.nupkg` consumed the package path as
-  the project. Use the long form `--project` for the project/namespace-inference path.
-- **A Custom API parameter's `type` can no longer be changed on an existing parameter.** The Dataverse
-  `customapirequestparameter`/`customapiresponseproperty` `Type` column is create-only, so an update was
-  silently ignored and every subsequent `plan`/`apply` reported the same phantom change. `apply` now fails fast
-  with guidance to delete and recreate the parameter (mirroring the parent Custom API immutable guard).
-
-#### Fixed
-
-- **`vela models` generates compilable C# when a Dataverse label/description spans multiple lines.** A raw
-  newline inside a single-line `///` doc comment previously produced uncompilable output.
-- **Custom API request-parameter entity binding no longer sticks.** Removing a parameter's bound entity now
-  clears `logicalentityname` instead of leaving the stale value, which had caused a perpetual "changed" diff.
-- **Multi-target-framework plugin packages resolve the correct assembly.** `ExtractPackage` no longer flattens
-  every `lib/**/*.dll` by file name (colliding same-named assemblies across frameworks); it picks a single
-  framework, preferring .NET Framework (the sandbox target).
-- **`vela sign` cannot deadlock on large `dotnet nuget sign` output** (both output streams are now drained
-  concurrently).
-- **Non-verbose `apply` no longer prints step / Custom API create/update/delete lines** (the `verbose` flag is
-  now honored for them, matching package/assembly/web-resource logging).
-- **The Dataverse connection is disposed when it fails to become ready** (previously leaked).
-- **Fewer Dataverse round-trips when adding plugin types under an unchanged assembly** (the plugin-type lookup is
-  resolved once instead of once per required type).
-
-### Framework (`Vela.Plugins` + `Vela.Testing`)
-
-#### Changed
+### Changed
 
 - **`PluginPipeline` records asynchronous step failures on the new `AsyncStepFailures` collection instead of
   throwing them to the triggering caller**, matching Dataverse (async steps run as decoupled system jobs whose
   failures never reach the synchronous caller). Assert on `pipeline.AsyncStepFailures` to verify an async step
   threw.
 
-#### Fixed
+### Fixed
 
 - **`CustomApiBase` is thread-safe on first execution.** The Dataverse sandbox concurrently reuses a single
   plugin instance; building the Custom API definition is now serialized (mirroring `EntityPluginBase`), so
@@ -82,6 +55,37 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   mutating a returned value cannot corrupt a stored record.
 - **Test harness: multi-column group-by no longer merges distinct tuples** (the group key now uses a separator).
 - **Test harness: field-level security masks a secured column pulled through a link-entity alias.**
+
+## [0.5.0] - 2026-09-14 (Vela.Cli)
+
+CLI line (`Vela.Cli`), published as `cli-v0.5.0`.
+
+### Changed
+
+- **BREAKING: `-p` now means `--package` in `vela models`** (consistent with `plan`/`apply`), not `--project`.
+  It was a silent cross-command footgun: `vela models --custom-apis -p pkg.nupkg` consumed the package path as
+  the project. Use the long form `--project` for the project/namespace-inference path.
+- **BREAKING: a Custom API parameter's `type` can no longer be changed on an existing parameter.** The Dataverse
+  `customapirequestparameter`/`customapiresponseproperty` `Type` column is create-only, so an update was
+  silently ignored and every subsequent `plan`/`apply` reported the same phantom change. `apply` now fails fast
+  with guidance to delete and recreate the parameter (mirroring the parent Custom API immutable guard).
+
+### Fixed
+
+- **`vela models` generates compilable C# when a Dataverse label/description spans multiple lines.** A raw
+  newline inside a single-line `///` doc comment previously produced uncompilable output.
+- **Custom API request-parameter entity binding no longer sticks.** Removing a parameter's bound entity now
+  clears `logicalentityname` instead of leaving the stale value, which had caused a perpetual "changed" diff.
+- **Multi-target-framework plugin packages resolve the correct assembly.** `ExtractPackage` no longer flattens
+  every `lib/**/*.dll` by file name (colliding same-named assemblies across frameworks); it picks a single
+  framework, preferring .NET Framework (the sandbox target).
+- **`vela sign` cannot deadlock on large `dotnet nuget sign` output** (both output streams are now drained
+  concurrently).
+- **Non-verbose `apply` no longer prints step / Custom API create/update/delete lines** (the `verbose` flag is
+  now honored for them, matching package/assembly/web-resource logging).
+- **The Dataverse connection is disposed when it fails to become ready** (previously leaked).
+- **Fewer Dataverse round-trips when adding plugin types under an unchanged assembly** (the plugin-type lookup is
+  resolved once instead of once per required type).
 
 ## [0.4.0] - 2026-09-14 (Vela.Cli)
 
