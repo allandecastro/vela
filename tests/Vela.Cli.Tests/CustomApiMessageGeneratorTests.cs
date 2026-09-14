@@ -34,6 +34,41 @@ public class CustomApiMessageGeneratorTests
     }
 
     [Fact]
+    public void RequiredRequestParameter_EmitsRequiredAttribute()
+    {
+        CustomApiMessage message = new CustomApiMessage(
+            "zava_Score",
+            IsBoundToEntity: false,
+            RequestParameters: new[]
+            {
+                new CustomApiParameter("AccountId", 12),                       // Guid, required
+                new CustomApiParameter("AsOfDate", 1, IsOptional: true),       // DateTime, optional
+            },
+            ResponseProperties: new[] { new CustomApiParameter("Total", 2) });
+
+        string nl = Environment.NewLine;
+        string code = Generate(message);
+
+        // Required request parameter carries [Required] on the line directly above it; the optional one does not.
+        Assert.Contains($"[System.ComponentModel.DataAnnotations.Required]{nl}        public Guid AccountId", code);
+        Assert.DoesNotContain($"[System.ComponentModel.DataAnnotations.Required]{nl}        public DateTime AsOfDate", code);
+    }
+
+    [Fact]
+    public void ResponseProperty_NeverEmitsRequiredAttribute()
+    {
+        CustomApiMessage message = new CustomApiMessage(
+            "zava_Score",
+            IsBoundToEntity: false,
+            RequestParameters: Array.Empty<CustomApiParameter>(),
+            ResponseProperties: new[] { new CustomApiParameter("Total", 2) });
+
+        string code = Generate(message);
+
+        Assert.DoesNotContain("[System.ComponentModel.DataAnnotations.Required]", code);
+    }
+
+    [Fact]
     public void Unbound_HasNoTarget()
     {
         string code = Generate(new CustomApiMessage("zava_Ping", false, Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>()));

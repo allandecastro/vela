@@ -5,8 +5,13 @@ using System.Text;
 
 namespace Vela.Cli;
 
-/// <summary>A Custom API parameter/property: its name and Dataverse <c>customapifieldtype</c> value.</summary>
-public sealed record CustomApiParameter(string Name, int FieldType);
+/// <summary>
+/// A Custom API parameter/property: its name and Dataverse <c>customapifieldtype</c> value. <paramref name="IsOptional"/>
+/// only applies to request parameters (Dataverse <c>customapirequestparameter.isoptional</c>); response properties are
+/// always present, so it stays false for them. When true it suppresses the generated <c>[Required]</c> attribute so a
+/// round-trip (generate the model, rebuild the manifest, re-apply) preserves the parameter's optionality.
+/// </summary>
+public sealed record CustomApiParameter(string Name, int FieldType, bool IsOptional = false);
 
 /// <summary>
 /// A Custom API message to generate typed Request/Response classes for. <paramref name="AllowedStepType"/>,
@@ -243,6 +248,14 @@ public static class CustomApiMessageGenerator
         }
         else
         {
+            // A required request parameter (isoptional == false in Dataverse) is emitted with [Required] so that,
+            // when this generated model is used to rebuild the manifest, the reflection-based parameter reader marks
+            // it required again - without it, a regenerated model would silently make every parameter optional.
+            if (!parameter.IsOptional)
+            {
+                sb.AppendLine("        [System.ComponentModel.DataAnnotations.Required]");
+            }
+
             sb.AppendLine($"        public {type} {member}");
             sb.AppendLine("        {");
             sb.AppendLine($"            get => Get<{type}>({key});");

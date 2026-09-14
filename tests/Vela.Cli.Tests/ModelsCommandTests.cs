@@ -50,6 +50,47 @@ public class ModelsCommandTests
     }
 
     [Fact]
+    public void ReadCustomApiParameters_reads_isoptional_for_request_parameters()
+    {
+        Entity required = new Entity("customapirequestparameter", Guid.NewGuid());
+        required["name"] = "AccountId";
+        required["type"] = new OptionSetValue(12);
+        required["isoptional"] = false;
+        Entity optional = new Entity("customapirequestparameter", Guid.NewGuid());
+        optional["name"] = "AsOfDate";
+        optional["type"] = new OptionSetValue(1);
+        optional["isoptional"] = true;
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(required, optional),
+        };
+
+        var result = ModelsCommand.ReadCustomApiParameters(svc, "customapirequestparameter", Guid.NewGuid());
+
+        Assert.False(result.Single(p => p.Name == "AccountId").IsOptional);
+        Assert.True(result.Single(p => p.Name == "AsOfDate").IsOptional);
+        Assert.Contains("isoptional", Assert.Single(svc.Queries).ColumnSet.Columns);
+    }
+
+    [Fact]
+    public void ReadCustomApiParameters_never_requests_isoptional_for_response_properties()
+    {
+        Entity prop = new Entity("customapiresponseproperty", Guid.NewGuid());
+        prop["name"] = "Total";
+        prop["type"] = new OptionSetValue(2);
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(prop),
+        };
+
+        var result = ModelsCommand.ReadCustomApiParameters(svc, "customapiresponseproperty", Guid.NewGuid());
+
+        // Response properties have no isoptional column, so it is neither requested nor set.
+        Assert.False(Assert.Single(result).IsOptional);
+        Assert.DoesNotContain("isoptional", Assert.Single(svc.Queries).ColumnSet.Columns);
+    }
+
+    [Fact]
     public void Models_Help_Succeeds()
     {
         Assert.Equal(ExitSuccess, ModelsCommand.Run(["--help"]));

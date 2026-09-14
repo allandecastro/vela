@@ -797,12 +797,17 @@ internal static class ModelsCommand
         // ContactId"): the name is both the C# property identifier and the runtime Parameters/Results key.
         // The dotted uniquename would emit `public Guid zava_ContactValidate.ContactId` (parsed as an explicit
         // interface member, CS0538) and read the wrong Parameters key at runtime.
-        QueryExpression query = new QueryExpression(entity) { ColumnSet = new ColumnSet("name", "type") };
+        // isoptional exists on customapirequestparameter only; customapiresponseproperty has no such column
+        // (response properties are always present), so it is requested and read for request parameters alone.
+        bool isRequest = entity == "customapirequestparameter";
+        ColumnSet columns = isRequest ? new ColumnSet("name", "type", "isoptional") : new ColumnSet("name", "type");
+        QueryExpression query = new QueryExpression(entity) { ColumnSet = columns };
         query.Criteria.AddCondition("customapiid", ConditionOperator.Equal, customApiId);
         return service.RetrieveAll(query)
             .Select(e => new CustomApiParameter(
                 e.GetAttributeValue<string>("name") ?? string.Empty,
-                e.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10))
+                e.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10,
+                isRequest && (e.GetAttributeValue<bool?>("isoptional") ?? false)))
             .Where(p => !string.IsNullOrWhiteSpace(p.Name))
             .OrderBy(p => p.Name, StringComparer.Ordinal)
             .ToList();

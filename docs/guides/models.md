@@ -50,7 +50,9 @@ written into a `Messages/` subfolder of the output; with **no value**, `--custom
 in the environment. Each also gets a **registrability-gated `On<Message>()` step extension**: bound to the API's
 entity when it has one (compile-time entity applicability), async-only when the API's
 `allowedcustomprocessingsteptype` is AsyncOnly (only `.Async()` compiles), and omitted entirely for a None/private
-API. See [Write a Custom API](custom-apis.md). To keep the Custom APIs you **authored in code** out of that all set (you already have those
+API. A required request parameter (`isoptional = false` in Dataverse) is generated with a `[Required]` attribute so
+that rebuilding the manifest from the generated model preserves its optionality; response properties are always
+present, so they never carry it. See [Write a Custom API](custom-apis.md). To keep the Custom APIs you **authored in code** out of that all set (you already have those
 classes), pass your built plugin package with `--package <file.nupkg>` (repeatable) and/or `--packages-dir <folder>`
 (plus `--package-assembly <name>` if the primary assembly needs disambiguating): their unique names are scanned
 from the package - the same offline scan `plan`/`apply` use - and removed, and a note reports how many were
