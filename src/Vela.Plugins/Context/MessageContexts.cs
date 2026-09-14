@@ -12,16 +12,16 @@ namespace Vela.Context
 
     /// <summary>Pre-stage typed context for a Create step (<c>ctx.Request</c> only).</summary>
     public interface ICreatePreContext<TEntity> : IStepRequestContext<Vela.Messages.CreateRequest<TEntity>> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a Create step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface ICreatePostContext<TEntity> : IStepRequestContext<Vela.Messages.CreateRequest<TEntity>>, IStepResponseContext<CreateResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a Update step (<c>ctx.Request</c> only).</summary>
-    public interface IUpdatePreContext<TEntity> : IStepRequestContext<Vela.Messages.UpdateRequest<TEntity>> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a Update step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IUpdatePostContext<TEntity> : IStepRequestContext<Vela.Messages.UpdateRequest<TEntity>>, IStepResponseContext<UpdateResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a Delete step (<c>ctx.Request</c> only).</summary>
-    public interface IDeletePreContext<TEntity> : IStepRequestContext<DeleteRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a Delete step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IDeletePostContext<TEntity> : IStepRequestContext<DeleteRequest>, IStepResponseContext<DeleteResponse> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Create step (<c>ctx.Request</c> + <c>ctx.Response</c> + <c>ctx.PostImage</c>).</summary>
+    public interface ICreatePostContext<TEntity> : IStepRequestContext<Vela.Messages.CreateRequest<TEntity>>, IStepResponseContext<CreateResponse>, IPostImageContext<TEntity> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Update step (<c>ctx.Request</c> + <c>ctx.PreImage</c>).</summary>
+    public interface IUpdatePreContext<TEntity> : IStepRequestContext<Vela.Messages.UpdateRequest<TEntity>>, IPreImageContext<TEntity> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Update step (<c>ctx.Request</c> + <c>ctx.Response</c> + <c>ctx.PreImage</c> / <c>ctx.PostImage</c>).</summary>
+    public interface IUpdatePostContext<TEntity> : IStepRequestContext<Vela.Messages.UpdateRequest<TEntity>>, IStepResponseContext<UpdateResponse>, IPreImageContext<TEntity>, IPostImageContext<TEntity> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Delete step (<c>ctx.Request</c> + <c>ctx.PreImage</c>).</summary>
+    public interface IDeletePreContext<TEntity> : IStepRequestContext<DeleteRequest>, IPreImageContext<TEntity> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Delete step (<c>ctx.Request</c> + <c>ctx.Response</c> + <c>ctx.PreImage</c>).</summary>
+    public interface IDeletePostContext<TEntity> : IStepRequestContext<DeleteRequest>, IStepResponseContext<DeleteResponse>, IPreImageContext<TEntity> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a CreateMultiple step (<c>ctx.Request</c> only).</summary>
     public interface ICreateMultiplePreContext<TEntity> : IStepRequestContext<CreateMultipleRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a CreateMultiple step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
@@ -210,30 +210,42 @@ namespace Vela.Context
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public CreatePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity? PostImage => this.GetPostImage<TEntity>();
     }
     /// <summary>Runtime pre-stage context for Update.</summary>
     public sealed class UpdatePreContext<TEntity> : PreStepContext<Vela.Messages.UpdateRequest<TEntity>>, IUpdatePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public UpdatePreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity? PreImage => this.GetPreImage<TEntity>();
     }
     /// <summary>Runtime post-stage context for Update.</summary>
     public sealed class UpdatePostContext<TEntity> : PostStepContext<Vela.Messages.UpdateRequest<TEntity>, UpdateResponse>, IUpdatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public UpdatePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity? PreImage => this.GetPreImage<TEntity>();
+        /// <inheritdoc/>
+        public TEntity? PostImage => this.GetPostImage<TEntity>();
     }
     /// <summary>Runtime pre-stage context for Delete.</summary>
     public sealed class DeletePreContext<TEntity> : PreStepContext<DeleteRequest>, IDeletePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public DeletePreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity? PreImage => this.GetPreImage<TEntity>();
     }
     /// <summary>Runtime post-stage context for Delete.</summary>
     public sealed class DeletePostContext<TEntity> : PostStepContext<DeleteRequest, DeleteResponse>, IDeletePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public DeletePostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity? PreImage => this.GetPreImage<TEntity>();
     }
     /// <summary>Runtime pre-stage context for CreateMultiple.</summary>
     public sealed class CreateMultiplePreContext<TEntity> : PreStepContext<CreateMultipleRequest>, ICreateMultiplePreContext<TEntity> where TEntity : Entity

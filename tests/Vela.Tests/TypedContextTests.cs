@@ -145,5 +145,70 @@ namespace Vela.Tests
 
             Assert.Equal(2, ctx.Request.Targets.Entities.Count);
         }
+
+        [Fact]
+        public void CreatePostContext_ExposesTheTypedPostImage()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            inner.PluginExecutionContext.PostEntityImages["PostImage"] =
+                new TestAccount { Id = Guid.NewGuid(), Name = "Created" };
+
+            ICreatePostContext<TestAccount> ctx = new CreatePostContext<TestAccount>(inner);
+
+            // ctx.PostImage is the early-bound entity for the default alias - no type argument.
+            Assert.Equal("Created", ctx.PostImage!.Name);
+        }
+
+        [Fact]
+        public void UpdatePreContext_ExposesTheTypedPreImage()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            inner.PluginExecutionContext.PreEntityImages["PreImage"] =
+                new TestAccount { Id = Guid.NewGuid(), Name = "Before" };
+
+            IUpdatePreContext<TestAccount> ctx = new UpdatePreContext<TestAccount>(inner);
+
+            Assert.Equal("Before", ctx.PreImage!.Name);
+        }
+
+        [Fact]
+        public void UpdatePostContext_ExposesTheTypedPreImageAndPostImage()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            inner.PluginExecutionContext.PreEntityImages["PreImage"] =
+                new TestAccount { Id = Guid.NewGuid(), Name = "Before" };
+            inner.PluginExecutionContext.PostEntityImages["PostImage"] =
+                new TestAccount { Id = Guid.NewGuid(), Name = "After" };
+
+            IUpdatePostContext<TestAccount> ctx = new UpdatePostContext<TestAccount>(inner);
+
+            Assert.Equal("Before", ctx.PreImage!.Name);
+            Assert.Equal("After", ctx.PostImage!.Name);
+        }
+
+        [Fact]
+        public void DeleteContexts_ExposeTheTypedPreImage()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+            inner.PluginExecutionContext.PreEntityImages["PreImage"] =
+                new TestAccount { Id = Guid.NewGuid(), Name = "Doomed" };
+
+            IDeletePreContext<TestAccount> pre = new DeletePreContext<TestAccount>(inner);
+            IDeletePostContext<TestAccount> post = new DeletePostContext<TestAccount>(inner);
+
+            Assert.Equal("Doomed", pre.PreImage!.Name);
+            Assert.Equal("Doomed", post.PreImage!.Name);
+        }
+
+        [Fact]
+        public void TypedImage_IsNull_WhenNoImageRegistered()
+        {
+            LocalPluginContext inner = new PluginContextBuilder().Build();
+
+            IUpdatePostContext<TestAccount> ctx = new UpdatePostContext<TestAccount>(inner);
+
+            Assert.Null(ctx.PreImage);
+            Assert.Null(ctx.PostImage);
+        }
     }
 }

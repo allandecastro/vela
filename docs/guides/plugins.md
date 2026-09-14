@@ -79,15 +79,15 @@ public class AccountStepRouter : EntityPluginBase<Account>
     private void OnCreatePost(ICreatePostContext<Account> ctx)
     {
         var created = ctx.Request.Target;                       // typed Account, no cast, no type argument
-        var postImage = ctx.GetPostImage<Account>();
-        ctx.Trace($"Account created: {postImage.Name} / {postImage.EmailAddress1}");
+        var postImage = ctx.PostImage;                          // typed Account?, no type argument (null if unregistered)
+        ctx.Trace($"Account created: {postImage?.Name} / {postImage?.EmailAddress1}");
     }
 
     private void OnUpdatePost(IUpdatePostContext<Account> ctx)
     {
-        var preImage = ctx.GetPreImage<Account>();
-        var postImage = ctx.GetPostImage<Account>();
-        ctx.Trace($"Account updated: {preImage.Name} -> {postImage.Name}");
+        var preImage = ctx.PreImage;                            // typed Account? for the default alias
+        var postImage = ctx.PostImage;                          // for a custom alias, use ctx.GetPreImage<Account>("alias")
+        ctx.Trace($"Account updated: {preImage?.Name} -> {postImage?.Name}");
     }
 }
 ```
@@ -104,7 +104,8 @@ does not compile.
 **Do**
 - Use `RegisterPluginSteps()` + `RegisterSteps().On...()` for single-step and multi-step plugins.
 - Use `ctx.GetRequiredService<T>()` for dependency resolution in handlers.
-- Use typed helpers (`GetTarget<T>`, `GetPreImage<T>`, `GetPostImage<T>`) instead of raw dictionaries.
+- Read the primary record via `ctx.Request.Target` on the typed message contexts (already early-bound); `GetTarget<T>()` stays for the message-agnostic `OnMessage(...)` handlers where the request does not type the Target.
+- Read images with `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` instead of the raw `PreEntityImages` / `PostEntityImages` dictionaries.
 
 **Don't**
 - Start new plugin code on `RegisterPluginStep(IStepBuilder<TEntity>)` legacy shape.
