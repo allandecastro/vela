@@ -139,11 +139,17 @@ internal static partial class DataverseRegistration
 
         done++; // publish + resolve plugin types
 
+        // When applying into a solution, Custom API unique names must carry the publisher prefix. Resolve it once
+        // (only when there is a Custom API to write) so UpsertCustomApi can validate the prefix locally.
+        string? customApiSolutionPrefix = (addedApis.Count > 0 || changedApis.Count > 0) && !string.IsNullOrWhiteSpace(solutionUniqueName)
+            ? ResolveSolutionCustomizationPrefix(service, solutionUniqueName!)
+            : null;
+
         foreach (RegistrationItem item in addedApis)
         {
             try
             {
-                UpsertCustomApi(svc, pluginTypeIds, item.Definition, verbose);
+                UpsertCustomApi(svc, pluginTypeIds, item.Definition, verbose, customApiSolutionPrefix);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
             {
@@ -157,7 +163,7 @@ internal static partial class DataverseRegistration
         {
             try
             {
-                UpsertCustomApi(svc, pluginTypeIds, change.After, verbose);
+                UpsertCustomApi(svc, pluginTypeIds, change.After, verbose, customApiSolutionPrefix);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
             {
