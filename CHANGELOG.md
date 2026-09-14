@@ -47,6 +47,13 @@ CLI line (`Vela.Cli`), published as `cli-v0.3.0`.
   `NO_COLOR` / `VELA_NO_COLOR`, so piped, redirected, and CI output stays plain text.
 - **CLI: `--json` on `plan`/`apply`/`inspect`.** Forces JSON output even on a terminal (equivalent to piping
   or `--out <file>`).
+- **Framework: early-bound `ctx.PreImage` / `ctx.PostImage` on the curated message contexts.** A pre/post image
+  is always a snapshot of the step's own table, so the typed contexts now expose it as the context's `TEntity`
+  with no type argument: `ctx.PostImage` on `ICreatePostContext<T>`, `ctx.PreImage` on `IUpdatePreContext<T>` /
+  `IDeletePreContext<T>` / `IDeletePostContext<T>`, and both on `IUpdatePostContext<T>`. Each reads the image
+  under the default alias and returns null when none is registered; `ctx.GetPreImage<T>("alias")` /
+  `ctx.GetPostImage<T>("alias")` remain for custom aliases. Exposed only where the message and stage actually
+  produce that image (no pre-image on Create, no post-image on Delete).
 
 ### Changed
 
