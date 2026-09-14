@@ -128,6 +128,20 @@ public sealed class ManifestScannerTests
     }
 
     [Fact]
+    public void FrameworkManifestScanner_IntrospectionFailure_IsReportedAsError()
+    {
+        // A type that IS a Custom API but fails to build its definition is excluded from the manifest, which
+        // silently drops it from the plan (and could delete a live registration). It must be an Error, not a
+        // skippable Warning. The InvalidOutside* types register outside RegisterCustomApi() and throw on
+        // construction, so scanning this assembly produces exactly that failure.
+        FrameworkManifest manifest = FrameworkManifestScanner.Scan(typeof(ManifestScannerTests).Assembly);
+
+        Assert.Contains(manifest.Diagnostics, d =>
+            d.Severity == FrameworkManifestDiagnosticSeverity.Error &&
+            d.Message.Contains("discovery failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void CustomApiBase_RegisterCustomApiOutsideRegistration_Throws()
     {
         InvalidOutsideLightweightApi api = new InvalidOutsideLightweightApi(string.Empty, string.Empty);

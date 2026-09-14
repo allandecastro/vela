@@ -559,6 +559,17 @@ internal static partial class DataverseRegistration
         return;
     }
 
+    // Skip a pure no-op update: identical content AND version would only bump modifiedon (re-uploading the same
+    // version is also a no-op for type registration, since Dataverse caches assemblies by version). Any real
+    // change to either still updates. The "new type + same version" stale-assembly trap is handled separately by
+    // GuardAgainstStaleAssemblyVersion.
+    Entity current = service.Retrieve("pluginassembly", existing.Id, new ColumnSet("content", "version"));
+    if (string.Equals(current.GetAttributeValue<string>("content") ?? string.Empty, content, StringComparison.Ordinal) &&
+        string.Equals(current.GetAttributeValue<string>("version") ?? string.Empty, version, StringComparison.Ordinal))
+    {
+        return;
+    }
+
     Entity update = new Entity("pluginassembly")
     {
         Id = existing.Id

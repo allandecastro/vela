@@ -106,9 +106,12 @@ public static class FrameworkManifestScanner
         }
         catch (Exception ex)
         {
+            // A type that IS a plugin but fails to yield its step definition is excluded from the manifest,
+            // which silently drops the step from the plan (and could delete a live registration). Surface it as
+            // an Error, not a skippable Warning.
             diagnostics.Add(new FrameworkManifestDiagnostic
             {
-                Severity = FrameworkManifestDiagnosticSeverity.Warning,
+                Severity = FrameworkManifestDiagnosticSeverity.Error,
                 TypeName = type.FullName ?? type.Name,
                 Message = $"Plugin step discovery failed ({ex.GetType().Name}): {ex.Message}"
             });
@@ -136,9 +139,12 @@ public static class FrameworkManifestScanner
         }
         catch (Exception ex)
         {
+            // A type that IS a Custom API but fails to build its definition is excluded from the manifest,
+            // which silently drops the whole API from the plan (and could delete a live registration). Surface
+            // it as an Error, not a skippable Warning.
             diagnostics.Add(new FrameworkManifestDiagnostic
             {
-                Severity = FrameworkManifestDiagnosticSeverity.Warning,
+                Severity = FrameworkManifestDiagnosticSeverity.Error,
                 TypeName = type.FullName ?? type.Name,
                 Message = $"Custom API discovery failed ({ex.GetType().Name}): {ex.Message}"
             });

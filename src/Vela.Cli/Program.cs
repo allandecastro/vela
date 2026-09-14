@@ -302,25 +302,23 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
 
         // Confirmation gate: apply writes by default. In a terminal, show the plan and require a typed "yes".
         // In a non-interactive session (no stdin TTY) refuse unless --auto-approve/--yes was passed, so a
-        // script can never write unattended by accident.
-        if (!options.AutoApprove)
+        // script can never write unattended by accident. The decision is a pure, unit-tested helper; the prompt
+        // side effects live in the closure, which only runs in the interactive case.
+        switch (ApplyConfirmation.Decide(options.AutoApprove, Console.IsInputRedirected, () =>
         {
-            if (Console.IsInputRedirected)
-            {
-                return Fail(
-                    "Refusing to apply without confirmation in a non-interactive session. Re-run with --auto-approve (or --yes), or use 'vela plan' to preview.",
-                    ExitError, includeUsage: false);
-            }
-
             WritePlanSummary(preview with { Mode = "apply" }, Console.Error, ConsoleTheme.StderrColor);
             Console.Error.Write(
                 $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
-            string? answer = Console.ReadLine();
-            if (!string.Equals(answer?.Trim(), "yes", StringComparison.OrdinalIgnoreCase))
-            {
+            return Console.ReadLine();
+        }))
+        {
+            case ApplyDecision.RefuseNonInteractive:
+                return Fail(
+                    "Refusing to apply without confirmation in a non-interactive session. Re-run with --auto-approve (or --yes), or use 'vela plan' to preview.",
+                    ExitError, includeUsage: false);
+            case ApplyDecision.Cancel:
                 Console.Error.WriteLine("Apply cancelled.");
                 return ExitSuccess;
-            }
         }
 
         using ServiceClient client = CreateDataverseClient(options);
