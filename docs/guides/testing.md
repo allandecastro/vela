@@ -283,8 +283,10 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
 ```
 
 - Synchronous-plugin exceptions **roll the operation back** (snapshot/restore); **asynchronous** steps run
-  inline after the synchronous commit. Cascade depth is guarded (the plugin's own depth guard plus a pipeline
-  cap via `WithMaxDepth`).
+  inline after the synchronous commit. An asynchronous step's exception does **not** surface to the caller
+  (matching Dataverse, where async steps are decoupled system jobs) - it is recorded on
+  `pipeline.AsyncStepFailures` so you can still assert an async step failed. Cascade depth is guarded (the
+  plugin's own depth guard plus a pipeline cap via `WithMaxDepth`).
 - **Custom APIs** run through `Service.Execute(new OrganizationRequest("vela_MyApi"){ ["x"] = 1 })`.
 - **Bulk (`CreateMultiple`/`UpdateMultiple`)** fire steps the way Dataverse merges the two messages: a
   `CreateMultiple`/`UpdateMultiple` request runs your single `Create`/`Update` steps **once per row**, and a
