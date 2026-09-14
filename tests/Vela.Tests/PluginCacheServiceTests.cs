@@ -46,6 +46,21 @@ public sealed class PluginCacheServiceTests
     }
 
     [Fact]
+    public void GetOrCreate_CachesNull_WithoutThrowing()
+    {
+        PluginCacheService cache = new PluginCacheService();
+        int calls = 0;
+
+        // A factory may legitimately return null (a negative "not found" lookup cached for its TTL).
+        string? first = cache.GetOrCreate<string?>("account:missing", TimeSpan.FromMinutes(1), () => { calls++; return null; });
+        string? second = cache.GetOrCreate<string?>("account:missing", TimeSpan.FromMinutes(1), () => { calls++; return "rebuilt"; });
+
+        Assert.Null(first);
+        Assert.Null(second); // the cached null is returned, not re-evaluated and not thrown on
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
     public void Refresh_ReplacesExistingValue()
     {
         PluginCacheService cache = new PluginCacheService();

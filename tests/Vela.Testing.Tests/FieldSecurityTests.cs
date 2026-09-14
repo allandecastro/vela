@@ -206,5 +206,35 @@ namespace Vela.Testing.Tests
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.RetrieveMultiple(fetch));
         }
+
+        [Fact]
+        public void A_secured_column_pulled_through_a_link_alias_is_masked()
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Read)
+                        .Grant("contact", AccessLevel.Organization, Privilege.Read))
+                    .User(Alice, SalesBu, "reader")
+                    .SecureColumn("contact", "mobilephone")) // Alice has record read but no field permission on it
+                .Seed(
+                    new Entity("contact", contactId) { ["mobilephone"] = "555-0100", ["fullname"] = "Pat" },
+                    new Entity("account", accountId) { ["primarycontactid"] = new EntityReference("contact", contactId) });
+
+            QueryExpression query = new QueryExpression("account") { ColumnSet = new ColumnSet("primarycontactid") };
+            query.LinkEntities.Add(new LinkEntity("account", "contact", "primarycontactid", "contactid", JoinOperator.Inner)
+            {
+                EntityAlias = "c",
+                Columns = new ColumnSet("mobilephone", "fullname"),
+            });
+
+            Entity row = Assert.Single(svc.RetrieveMultiple(query).Entities);
+            Assert.False(row.Contains("c.mobilephone")); // secured column masked even when pulled through the join
+            Assert.Equal("Pat", ((AliasedValue)row["c.fullname"]).Value); // non-secured aliased column still present
+        }
     }
 }

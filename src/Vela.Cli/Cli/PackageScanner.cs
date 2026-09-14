@@ -222,11 +222,20 @@ internal static class PackageScanner
         ? (string.IsNullOrWhiteSpace(packageId) ? null : $"{packageId}.dll")
         : preferredAssemblyName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ? preferredAssemblyName : $"{preferredAssemblyName}.dll";
 
+    // A package may ship the same assembly for several target frameworks (lib/net462, lib/netstandard2.0, ...).
+    // Flattening every lib/**/*.dll by file name would collide them (last one wins, nondeterministic) and could
+    // load a non-net4x build that won't run in the Dataverse sandbox. Pick a single TFM folder (preferring .NET
+    // Framework) and extract only its assemblies.
+    List<ZipArchiveEntry> libDlls = archive.Entries
+        .Where(entry => entry.FullName.StartsWith("lib/", StringComparison.OrdinalIgnoreCase)
+            && entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    string? chosenTfm = ChooseTargetFramework(libDlls.Select(entry => TargetFrameworkOf(entry.FullName)));
+
     List<string> extractedDllPaths = [];
-    foreach (ZipArchiveEntry entry in archive.Entries)
+    foreach (ZipArchiveEntry entry in libDlls)
     {
-        if (!entry.FullName.StartsWith("lib/", StringComparison.OrdinalIgnoreCase) ||
-            !entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(TargetFrameworkOf(entry.FullName), chosenTfm, StringComparison.OrdinalIgnoreCase))
         {
             continue;
         }
@@ -262,6 +271,45 @@ internal static class PackageScanner
         .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
         .ToArray();
     return new ExtractedPackage(packagePath, tempRoot, primary, registrableAssemblyPaths);
+}
+
+    // "lib/net462/Foo.dll" -> "net462"; a flat "lib/Foo.dll" (no TFM folder) -> "".
+    internal static string TargetFrameworkOf(string entryFullName)
+{
+    string[] parts = entryFullName.Split('/');
+    return parts.Length >= 3 ? parts[1] : string.Empty;
+}
+
+    // Pick one target framework when a package ships several. The Dataverse sandbox runs .NET Framework, so
+    // prefer net4x, then netstandard, then a flat lib, and only then anything else; break ties by the higher
+    // version string (net472 over net462).
+    internal static string? ChooseTargetFramework(IEnumerable<string> targetFrameworks)
+{
+    List<string> distinct = targetFrameworks.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    if (distinct.Count <= 1)
+    {
+        return distinct.FirstOrDefault();
+    }
+
+    return distinct
+        .OrderByDescending(TargetFrameworkRank)
+        .ThenByDescending(tfm => tfm, StringComparer.OrdinalIgnoreCase)
+        .First();
+}
+
+    private static int TargetFrameworkRank(string tfm)
+{
+    if (tfm.StartsWith("net4", StringComparison.OrdinalIgnoreCase))
+    {
+        return 3;
+    }
+
+    if (tfm.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase))
+    {
+        return 2;
+    }
+
+    return string.IsNullOrEmpty(tfm) ? 1 : 0;
 }
 
     internal static bool IsLikelyDependencyAssembly(string fileName)

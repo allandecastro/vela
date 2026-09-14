@@ -94,7 +94,11 @@ internal static partial class DataverseRegistration
         }
 
         if (!client.IsReady)
-            throw new DataverseConnectionException($"Dataverse connection failed: {client.LastError}");
+        {
+            string lastError = client.LastError;
+            client.Dispose(); // release the connection the caller's using-block will never receive
+            throw new DataverseConnectionException($"Dataverse connection failed: {lastError}");
+        }
         return client;
     }
     return CreateDataverseClientFromConnectionString(options.ConnectionString!);
@@ -116,7 +120,9 @@ internal static partial class DataverseRegistration
 
     if (!client.IsReady)
     {
-        throw new DataverseConnectionException($"Dataverse connection failed: {client.LastError}");
+        string lastError = client.LastError;
+        client.Dispose(); // release the connection the caller's using-block will never receive
+        throw new DataverseConnectionException($"Dataverse connection failed: {lastError}");
     }
 
     return client;

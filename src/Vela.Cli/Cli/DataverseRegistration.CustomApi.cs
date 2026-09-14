@@ -51,12 +51,12 @@ internal static partial class DataverseRegistration
         api.Id = existingApiId.Value;
         service.Update(api);
         apiId = existingApiId.Value;
-        LogOperation("custom-api", "update", definition.UniqueName);
+        LogOperation("custom-api", "update", definition.UniqueName, verbose: verbose);
     }
     else
     {
         apiId = service.Create(api);
-        LogOperation("custom-api", "create", definition.UniqueName);
+        LogOperation("custom-api", "create", definition.UniqueName, verbose: verbose);
     }
 
     SyncCustomApiRequestParameters(service, apiId, definition.UniqueName, definition.InputParameters, verbose);
@@ -197,10 +197,10 @@ internal static partial class DataverseRegistration
                     update["isoptional"] = parameter.IsOptional;
                 }
                 update["type"] = new OptionSetValue(typeCode);
-                if (!string.IsNullOrWhiteSpace(parameter.LogicalEntityName))
-                {
-                    update["logicalentityname"] = parameter.LogicalEntityName;
-                }
+                // Always write logicalentityname (null clears it). Only setting it when non-empty left a stale
+                // value behind when a parameter's entity binding was removed, so the live read kept surfacing the
+                // old table and every subsequent plan/apply reported the Custom API as "changed" forever.
+                update["logicalentityname"] = string.IsNullOrWhiteSpace(parameter.LogicalEntityName) ? null : parameter.LogicalEntityName;
                 service.Update(update);
                 LogOperation(spec.LogTag, "update", parameter.Name, details, verbose, indent: true);
                 continue;

@@ -14,7 +14,9 @@ src/
   Vela.Cli/       # CLI (command `vela`) for manifests and Dataverse sync
   Vela.Testing/   # Test harness package
 tests/
-  Vela.Tests/     # Unit tests
+  Vela.Tests/          # Runtime/framework unit tests
+  Vela.Testing.Tests/  # In-memory harness/pipeline tests
+  Vela.Cli.Tests/      # CLI unit tests
 .github/workflows/ci.yml
 ```
 

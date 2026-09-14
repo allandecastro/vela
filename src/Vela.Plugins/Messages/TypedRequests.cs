@@ -19,7 +19,7 @@ namespace Vela.Messages
         /// <summary>Reads a typed value from <c>Parameters</c> (defaults when absent). Key defaults to the property name.</summary>
         /// <typeparam name="T">The parameter's CLR type.</typeparam>
         /// <param name="name">The parameter key; defaults to the calling property's name.</param>
-        protected T Get<T>([CallerMemberName] string name = "") => Parameters.Contains(name) ? (T)Parameters[name] : default!;
+        protected T Get<T>([CallerMemberName] string name = "") => Parameters.Contains(name) && Parameters[name] is T typed ? typed : default!;
 
         /// <summary>Writes a typed value into <c>Parameters</c>. Key defaults to the property name.</summary>
         /// <typeparam name="T">The parameter's CLR type.</typeparam>
@@ -38,7 +38,7 @@ namespace Vela.Messages
         /// <summary>Reads a typed value from <c>Results</c> (defaults when absent). Key defaults to the property name.</summary>
         /// <typeparam name="T">The result's CLR type.</typeparam>
         /// <param name="name">The result key; defaults to the calling property's name.</param>
-        protected T Get<T>([CallerMemberName] string name = "") => Results.Contains(name) ? (T)Results[name] : default!;
+        protected T Get<T>([CallerMemberName] string name = "") => Results.Contains(name) && Results[name] is T typed ? typed : default!;
 
         /// <summary>Writes a typed value into <c>Results</c>. Key defaults to the property name.</summary>
         /// <typeparam name="T">The result's CLR type.</typeparam>

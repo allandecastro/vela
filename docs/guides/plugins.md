@@ -108,7 +108,7 @@ does not compile.
 - Read images with `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` instead of the raw `PreEntityImages` / `PostEntityImages` dictionaries.
 
 **Don't**
-- Start new plugin code on `RegisterPluginStep(IStepBuilder<TEntity>)` legacy shape.
+- Start new plugin code on the older single-step `RegisterPluginStep<TEntity>()` shape; prefer overriding `RegisterPluginSteps()`.
 - Cast context to `LocalPluginContext` in handlers.
 - Mix multiple registration styles in the same plugin class.
 

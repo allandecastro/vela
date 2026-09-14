@@ -112,13 +112,22 @@ namespace Vela.Caching
 
         private static T Cast<T>(CacheEntry entry, string key)
         {
-            if (entry.Value is not T typedValue)
+            if (entry.Value is null)
             {
-                throw new InvalidOperationException(
-                    $"Cache key '{key}' contains '{entry.Value?.GetType().FullName ?? "null"}' but requested '{typeof(T).FullName}'.");
+                // A factory may legitimately cache a null (e.g. a negative "not found" lookup held for its TTL).
+                // Return it as-is for a reference/nullable T; only a value-type T over a stored null is a mismatch.
+                if (default(T) is null)
+                {
+                    return default!;
+                }
+            }
+            else if (entry.Value is T typedValue)
+            {
+                return typedValue;
             }
 
-            return typedValue;
+            throw new InvalidOperationException(
+                $"Cache key '{key}' contains '{entry.Value?.GetType().FullName ?? "null"}' but requested '{typeof(T).FullName}'.");
         }
 
         private static void EnsureKey(string key)

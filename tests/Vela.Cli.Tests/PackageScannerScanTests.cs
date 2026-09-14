@@ -80,6 +80,33 @@ public sealed class PackageScannerScanTests : IDisposable
     }
 
     [Fact]
+    public void ExtractPackage_picks_net_framework_when_multiple_target_frameworks_present()
+    {
+        // Same assembly shipped for two TFMs: only the net4x build should be extracted (the Dataverse sandbox
+        // runs .NET Framework), and it must not collide with the netstandard build.
+        string nupkg = BuildNupkg(
+            ("lib/netstandard2.0/Zava.Plugins.dll", Encoding.UTF8.GetBytes("netstandard-build")),
+            ("lib/net462/Zava.Plugins.dll", Encoding.UTF8.GetBytes("net462-build")));
+
+        var tempDirs = new List<string>();
+        ExtractedPackage result = PackageScanner.ExtractPackage(nupkg, "Zava.Plugins", tempDirs);
+        _tempPaths.AddRange(tempDirs);
+
+        Assert.Equal(new[] { "Zava.Plugins.dll" }, result.RegistrableAssemblyPaths.Select(Path.GetFileName)); // one, not two
+        Assert.Equal("net462-build", File.ReadAllText(result.PrimaryAssemblyPath)); // the net4x build, not netstandard
+    }
+
+    [Theory]
+    [InlineData(new[] { "net462" }, "net462")]
+    [InlineData(new[] { "netstandard2.0", "net462" }, "net462")]      // .NET Framework preferred over netstandard
+    [InlineData(new[] { "net462", "net472" }, "net472")]              // higher net4x version wins
+    [InlineData(new[] { "net8.0", "netstandard2.0" }, "netstandard2.0")] // netstandard over a non-loadable net8
+    public void ChooseTargetFramework_prefers_the_sandbox_compatible_framework(string[] tfms, string expected)
+    {
+        Assert.Equal(expected, PackageScanner.ChooseTargetFramework(tfms));
+    }
+
+    [Fact]
     public void ExtractPackage_uses_package_id_as_primary_when_no_preferred_name()
     {
         string nupkg = BuildNupkg(

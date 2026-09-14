@@ -197,7 +197,14 @@ public sealed class PluginContextExtensionsCoverageTests
         LocalPluginContext withImage = Ctx();
         Entity image = new Entity("account", Guid.NewGuid()) { ["name"] = "ImageOnly" };
         withImage.PluginExecutionContext.PreEntityImages["PreImage"] = image;
-        Assert.Same(image, withImage.GetPreImageMerged());
+
+        // With no target the merged result carries the image's values but must be an independent copy, so
+        // mutating it cannot corrupt the shared PreEntityImages entry.
+        Entity merged = withImage.GetPreImageMerged();
+        Assert.NotSame(image, merged);
+        Assert.Equal("ImageOnly", merged.GetAttributeValue<string>("name"));
+        merged["name"] = "Mutated";
+        Assert.Equal("ImageOnly", image.GetAttributeValue<string>("name"));
 
         Assert.Throws<InvalidPluginExecutionException>(() => Ctx().GetPreImageMerged());
     }

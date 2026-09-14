@@ -66,6 +66,18 @@ public sealed class ChangeComparerAndAttributeCoverageTests
     }
 
     [Fact]
+    public void Lookup_table_change_with_same_id_is_a_change()
+    {
+        Guid id = Guid.NewGuid();
+        // ownerid is polymorphic (systemuser vs team): the same id in a different table must count as a change,
+        // even though a lookup normalizes to its id alone.
+        RichEntity target = new RichEntity { Owner = new EntityReference("team", id) };
+        RichEntity pre = new RichEntity { Owner = new EntityReference("systemuser", id) };
+
+        Assert.True(Update(target, pre).HasChanged<RichEntity>(x => x.Owner));
+    }
+
+    [Fact]
     public void Equal_normalized_values_are_not_changes()
     {
         Guid owner = Guid.NewGuid();
