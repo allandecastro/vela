@@ -478,6 +478,26 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void UpsertPluginAssembly_skips_update_when_content_and_version_unchanged()
+    {
+        string dll = typeof(System.Xml.Linq.XDocument).Assembly.Location;
+        string content = Convert.ToBase64String(File.ReadAllBytes(dll));
+        string version = ExpectedVersion(dll);
+        var existingId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", existingId)),
+            OnRetrieve = (entity, id, _) => new Entity(entity, id) { ["content"] = content, ["version"] = version },
+        };
+
+        DataverseRegistration.UpsertPluginAssembly(svc, new AssemblyPayload("System.Private.Xml.Linq", dll));
+
+        // Identical content + version -> no Update (which would only bump modifiedon).
+        Assert.Empty(svc.Updated);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
     public void UpsertPluginAssembly_throws_when_assembly_file_missing()
     {
         var svc = new TestSupport.FakeOrgService();
