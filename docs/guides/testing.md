@@ -20,11 +20,12 @@ using Vela.Constants;
 using Vela.StepBuilder;
 using Vela.Testing;
 
-// Build + run in one chain; returns the plugin instance for assertions.
-AccountPostUpdate plugin = PluginContext.For<Account>()
+// Construct the plugin, run it, then assert on the instance.
+AccountPostUpdate plugin = new AccountPostUpdate(unsecure: "", secure: "");
+PluginContext.For<Account>()
     .WithTarget(new Account { Id = accountId, Name = "Zava" })
     .WithPreImage(new Account { Name = "Old name" })
-    .Execute<AccountPostUpdate>();
+    .Execute(plugin);
 
 // ...or build a LocalPluginContext for direct assertions (restate the trigger to override the default):
 LocalPluginContext ctx = PluginContext.For<Account>()
@@ -333,5 +334,3 @@ is modelled by `Update`-ing the lookup column. For anything else, inject your ow
 
 For the full picture across the whole framework (runtime, CLI and this test harness), see
 [Limitations](../reference/limitations.md).
-</content>
-</invoke>
