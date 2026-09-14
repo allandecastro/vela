@@ -24,6 +24,16 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed
+
+- **Framework: plugin / Custom API introspection failures are reported as an Error.** A type that IS a plugin
+  or Custom API but throws while yielding its definition was demoted to a Warning and silently excluded from
+  the manifest, dropping it from the plan (and risking a delete of the live registration). Both discovery
+  paths now emit an Error-severity diagnostic.
+- **CLI: the plugin assembly is no longer re-uploaded when its content and version are unchanged.** Mirrors the
+  plugin-package fix: an identical `content` + `version` update only bumped `modifiedon`. The
+  "new type + same version" stale-assembly trap stays handled by `GuardAgainstStaleAssemblyVersion`.
+
 ## [0.3.0] - 2026-09-13 (Vela.Cli)
 
 CLI line (`Vela.Cli`), published as `cli-v0.3.0`.
