@@ -15,6 +15,16 @@ namespace Vela.Context
     {
         public static bool AreEqual(object? actual, object? expected)
         {
+            // Two lookups are equal only when BOTH the target table and the id match: a polymorphic lookup
+            // (e.g. regardingobjectid) can reuse the same id across tables, and Normalize reduces a reference to
+            // its id alone, so without this HasChanged would miss a table change. A lookup is still comparable to
+            // a bare Guid by id (query filtering), so only tighten when both sides are references.
+            if (actual is EntityReference actualRef && expected is EntityReference expectedRef)
+            {
+                return actualRef.Id == expectedRef.Id
+                    && string.Equals(actualRef.LogicalName, expectedRef.LogicalName, StringComparison.OrdinalIgnoreCase);
+            }
+
             object? left = Normalize(actual);
             object? right = Normalize(expected);
             if (Equals(left, right))

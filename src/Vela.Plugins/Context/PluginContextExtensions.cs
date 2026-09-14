@@ -380,7 +380,9 @@ namespace Vela.Context
                     throw new InvalidPluginExecutionException("Neither image nor target is available for merge.");
                 }
 
-                return image;
+                // Clone, like the with-target branch: the merged result must be an independent copy so a caller
+                // mutating it cannot corrupt the shared PreEntityImages/PostEntityImages entry.
+                return CloneEntity(image);
             }
 
             Entity merged = image == null ? new Entity(target.LogicalName, target.Id) : CloneEntity(image);
@@ -411,7 +413,8 @@ namespace Vela.Context
                     throw new InvalidPluginExecutionException($"Neither image nor target is available for merge at index {targetIndex}.");
                 }
 
-                return image;
+                // Clone, like the with-target branch: the merged result must be independent of the shared image.
+                return CloneEntity(image);
             }
 
             Entity target = targets.Entities[targetIndex];
