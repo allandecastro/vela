@@ -482,6 +482,27 @@ internal static class AddCommand
                     }
                 }
 
+                // A valid C# identifier still may not be a real column on the early-bound model (e.g. a wrong-case
+                // 'name' instead of 'Name', which compiles against the base Entity but not the generated property).
+                // When the model is available, warn on names that do not match a generated property and suggest the
+                // correct casing, so the mistake surfaces here instead of as a later compile error.
+                if (TryReadModelPropertyNames(projectDir, entity!, out var modelProperties))
+                {
+                    foreach (string attribute in explicitAttributes)
+                    {
+                        if (modelProperties.Contains(attribute))
+                        {
+                            continue;
+                        }
+
+                        string? suggestion = modelProperties.FirstOrDefault(p => string.Equals(p, attribute, StringComparison.OrdinalIgnoreCase));
+                        string hint = suggestion is null
+                            ? $" It is not a property on the early-bound '{entity}' model; check the name or regenerate the model with 'vela models'."
+                            : $" Did you mean '{suggestion}'? Property names are case-sensitive.";
+                        Console.Error.WriteLine($"Warning: filtering attribute '{attribute}' may not compile.{hint}");
+                    }
+                }
+
                 attributes = explicitAttributes;
             }
             else if (TryPickDefaultFilteringAttribute(projectDir, entity!, out string picked))
@@ -571,7 +592,33 @@ internal static class AddCommand
             generateGlobal = string.IsNullOrWhiteSpace(entity);
         }
 
-        string uniqueName = $"{ApiPrefix(prefix)}_{name}";
+        // A Custom API's unique name must carry the publisher customization prefix of the solution it is deployed
+        // into (Dataverse rejects it otherwise, and `vela apply --solution` validates this). That publisher prefix
+        // is NOT the same thing as the .NET project prefix (`vela init --prefix`), and it is often unrelated to the
+        // environment name. Default to the project prefix for convenience, but let `--prefix` override it and warn
+        // when the default is used so a mismatch is caught before deploy rather than at apply time.
+        string? prefixOverride = TryReadOption(args, "--prefix");
+        string apiPrefix;
+        if (!string.IsNullOrWhiteSpace(prefixOverride))
+        {
+            string normalized = prefixOverride!.Trim().ToLowerInvariant();
+            if (!Regex.IsMatch(normalized, "^[a-z][a-z0-9]{1,7}$"))
+            {
+                return Fail($"Invalid --prefix '{prefixOverride}'. A Dataverse customization prefix is 2-8 characters, starts with a letter, and is alphanumeric (e.g. 'dv', 'acme').", ExitInvalidArguments, includeUsage: false);
+            }
+
+            apiPrefix = normalized;
+        }
+        else
+        {
+            apiPrefix = ApiPrefix(prefix);
+            if (!HasFlag(args, "--json"))
+            {
+                Console.Error.WriteLine($"Note: unique name uses the project prefix '{apiPrefix}_'. It must match your target solution's publisher prefix or 'vela apply --solution' will reject it. Override with --prefix <publisherprefix>.");
+            }
+        }
+
+        string uniqueName = $"{apiPrefix}_{name}";
 
         if (generateGlobal)
         {
@@ -675,6 +722,42 @@ internal static class AddCommand
     // Property + logical name preceding attribute on a generated early-bound model.
     private static readonly Regex LogicalNameAttr = new("\\[AttributeLogicalName\\(\"(?<logical>[^\"]+)\"\\)\\]", RegexOptions.Compiled);
     private static readonly Regex PropertyDecl = new("^\\s*public\\s+(?<type>[\\w\\.<>\\?\\[\\],\\s]+?)\\s+(?<name>\\w+)\\s*$", RegexOptions.Compiled);
+
+    // Reads the set of generated property names off the entity's early-bound model (each declared right after an
+    // [AttributeLogicalName("...")] attribute). Used to sanity-check explicit --filtering-attributes against the
+    // real columns. False when the model file cannot be located (then no validation is attempted).
+    private static bool TryReadModelPropertyNames(string projectDir, string entity, out HashSet<string> properties)
+    {
+        properties = new HashSet<string>(StringComparer.Ordinal);
+        if (!TryFindEntityModelFile(projectDir, entity, out string modelPath))
+        {
+            return false;
+        }
+
+        bool sawLogicalName = false;
+        foreach (string line in File.ReadLines(modelPath))
+        {
+            if (LogicalNameAttr.IsMatch(line))
+            {
+                sawLogicalName = true;
+                continue;
+            }
+
+            if (!sawLogicalName)
+            {
+                continue;
+            }
+
+            Match propertyMatch = PropertyDecl.Match(line);
+            if (propertyMatch.Success)
+            {
+                properties.Add(propertyMatch.Groups["name"].Value);
+                sawLogicalName = false;
+            }
+        }
+
+        return properties.Count > 0;
+    }
 
     // Auto-selects a default filtering attribute for a Create/Update step by reading the entity's generated
     // early-bound model. Prefers the conventional primary-name column ("name", else a string column whose logical
@@ -798,7 +881,7 @@ internal static class AddCommand
     // Options that consume the next token as their value; everything else may be a positional. Also the
     // value-option half of the unknown-option allowlist (union over all add kinds). Keep in sync with the kinds.
     internal static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
-        { "--entity", "-e", "--project", "-p", "--message", "--kind", "--handler", "--filtering-attributes", "--filter" };
+        { "--entity", "-e", "--project", "-p", "--message", "--kind", "--handler", "--filtering-attributes", "--filter", "--prefix" };
 
     // Boolean flags across all add kinds (customapi binding/operation, --force/--json, interactive, help).
     internal static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)

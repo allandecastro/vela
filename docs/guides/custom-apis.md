@@ -191,8 +191,31 @@ and re-apply to recreate it with the new shape.
 **Workflow-enabled Custom APIs** (`WorkflowSdkStepEnabled`) have extra rules that `apply` validates locally
 before writing: the Custom API must be an action (not a function), and its parameters cannot use the `Entity`,
 `EntityCollection`, or `StringArray` types. A violation fails with a clear message instead of an opaque platform
-error. When applying into a solution, a Custom API's unique name must also carry the solution publisher prefix
-(as web resources and plugin packages do); `apply --solution` checks this up front.
+error. When applying into a solution, a Custom API's unique name must also carry the solution
+[publisher prefix](#the-publisher-prefix) (as web resources and plugin packages do); `apply --solution` checks
+this up front.
+
+## The publisher prefix
+
+A Custom API's unique name (like `dv_AccountEstimateValue`) is `prefix` + `_` + `Name`. The `prefix` part is the
+**publisher customization prefix** of the Dataverse solution you deploy into, and it is worth understanding
+because it trips people up.
+
+- **What it is.** Every Dataverse solution belongs to a *publisher*, and every publisher has a short
+  customization prefix (2-8 characters, for example `dv` or `acme`). Dataverse prepends `prefix_` to the unique
+  name of anything you customize (tables, columns, Custom APIs, web resources) so that components from different
+  publishers never collide. A Custom API without the prefix is rejected.
+- **How Vela uses it.** `apply --solution <name>` reads the prefix from that solution's publisher and validates
+  it up front: the plugin package name, every Custom API unique name, and web-resource names must all carry it.
+  This is why `apply` fails fast with a clear message if a name does not start with the right prefix, instead of
+  surfacing an opaque platform error later.
+- **It is *not* the project prefix.** `vela init --prefix Zava` sets the **.NET project/namespace** prefix
+  (`Zava.Plugins`, `Zava.Shared`, ...). That is a code-organization choice and is unrelated to the Dataverse
+  publisher prefix. They are often different, and the *environment name* (for example `contoso-dev`) is unrelated
+  to both. `vela add customapi` defaults a Custom API's unique-name prefix to a lower-cased form of the project
+  prefix purely for convenience; if that does not match your target solution's publisher, pass
+  `--prefix <publisherprefix>` (for example `vela add customapi Recalculate --global --action --prefix dv`) so the
+  generated name is `dv_Recalculate`, or rename the unique name by hand.
 
 ## See also
 

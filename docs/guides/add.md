@@ -26,7 +26,10 @@ vela add --interactive
   type and the `<Table>/` folder. Required for a plugin and a service; omit on a Custom API to generate a global one.
 - **Custom API ergonomics:** `--function`/`--action` choose the operation type (default `Action`), and
   `--bound`/`--global` make the binding explicit instead of inferring it from `--entity` (`--bound` requires
-  `--entity`; `--global` is unbound).
+  `--entity`; `--global` is unbound). The generated unique name is `<prefix>_<Name>`; `<prefix>` defaults to a
+  lower-cased form of the project prefix, but that must match your target solution's **publisher prefix** or
+  `apply --solution` rejects it. Override it with `--prefix <publisherprefix>` (for example `--prefix dv` renders
+  `dv_<Name>`). See [the publisher prefix](custom-apis.md#the-publisher-prefix).
 - `--message <Message>` (plugin, default `Create`): the messages Vela models get a strongly-typed `On...()`
   call - the CRUD/bulk set (`Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`,
   `RetrieveMultiple`), relationships/sharing (`Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`,
@@ -45,7 +48,9 @@ vela add --interactive
   default column from the entity's generated early-bound model (its primary-name column) and marks it with an
   `auto-selected` comment so you can adjust it. The generated file always compiles and applies; if no column can
   be inferred (no generated model found), `add` fails with a clear message asking for `--filtering-attributes`
-  rather than emitting code that would not compile.
+  rather than emitting code that would not compile. Property names are **case-sensitive** (`Name`, not `name`):
+  when the model is available, `add` warns and suggests the correct casing if a value does not match a real
+  column, so a typo surfaces at generation time instead of as a later build error.
 - `vela add service` scaffolds a table-scoped `I<Name>` interface + sealed implementation (injecting
   `IOrganizationService`) under `<Table>/Services/`, and prints the `services.AddScoped<...>(...)` line to drop
   into your plugin's `ConfigureServices(...)`.

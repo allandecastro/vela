@@ -357,7 +357,7 @@ public sealed class DataverseRegistrationStepsTests
     }
 
     [Fact]
-    public void SyncStepImages_updates_existing_image_matched_by_alias_and_type()
+    public void SyncStepImages_replaces_a_changed_image_by_delete_then_recreate()
     {
         var stepId = Guid.NewGuid();
         var existingId = Guid.NewGuid();
@@ -365,6 +365,7 @@ public sealed class DataverseRegistrationStepsTests
         {
             ["entityalias"] = "PreImage",
             ["imagetype"] = new OptionSetValue(0),
+            ["attributes"] = "name,telephone1",
         };
         var svc = new TestSupport.FakeOrgService
         {
@@ -374,16 +375,20 @@ public sealed class DataverseRegistrationStepsTests
 
         DataverseRegistration.SyncStepImages(svc, stepId, "Update", pre, Array.Empty<ImageApplyDefinition>());
 
-        Entity updated = Assert.Single(svc.Updated);
-        Assert.Equal("sdkmessageprocessingstepimage", updated.LogicalName);
-        Assert.Equal(existingId, updated.Id);
-        Assert.Equal("name", updated.GetAttributeValue<string>("attributes"));
-        // Only the mutable `attributes` is written. Re-setting imagetype/messagepropertyname on an existing image
-        // makes the platform throw a NullReferenceException (0x80040216), so they must NOT be part of the update.
-        Assert.False(updated.Contains("imagetype"));
-        Assert.False(updated.Contains("messagepropertyname"));
-        Assert.Empty(svc.Created);
-        Assert.Empty(svc.Deleted);
+        // The platform's sdkmessageprocessingstepimage Update path throws a NullReferenceException
+        // (0x80040216) even for an attributes-only change, so a changed image is reconciled by
+        // delete + recreate rather than an in-place update.
+        Assert.Empty(svc.Updated);
+        (string Entity, Guid Id) deleted = Assert.Single(svc.Deleted);
+        Assert.Equal("sdkmessageprocessingstepimage", deleted.Entity);
+        Assert.Equal(existingId, deleted.Id);
+
+        Entity created = Assert.Single(svc.Created);
+        Assert.Equal("sdkmessageprocessingstepimage", created.LogicalName);
+        Assert.Equal("name", created.GetAttributeValue<string>("attributes"));
+        Assert.Equal("PreImage", created.GetAttributeValue<string>("entityalias"));
+        Assert.Equal(0, created.GetAttributeValue<OptionSetValue>("imagetype").Value);
+        Assert.Equal("Target", created.GetAttributeValue<string>("messagepropertyname"));
     }
 
     [Fact]

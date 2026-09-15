@@ -8,7 +8,7 @@ exit codes. For the full narrative, see [The vela CLI](../guides/cli-overview.md
 | Command | Purpose | Key options |
 | --- | --- | --- |
 | `vela init` (alias `new`) | Scaffold a build-ready solution | `--name`, `--prefix`, `--output`, `--no-tests`/`--no-console`/`--no-integrations`, `--managed-identity`, `--web-resources`, `--core-version`, `--force` |
-| `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; `--entity`, `--message`, `--filtering-attributes`, `--function`/`--action`, `--bound`/`--global`, `--project`, `--force` |
+| `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; `--entity`, `--message`, `--filtering-attributes`, `--function`/`--action`, `--bound`/`--global`, `--prefix` (customapi publisher prefix), `--project`, `--force` |
 | `vela models <scope>` | Generate early-bound / typed models | see [scopes](#models-scopes) + connection flags |
 | `vela plan` | Preview registrations (read-only) | package inputs + connection flags, `--strict`, `--verbose`, `--json`, `--out` |
 | `vela apply` | Apply registrations (writes) | same as `plan` + `--solution`, `--auto-approve` (alias `--yes`), `--webresources` |
