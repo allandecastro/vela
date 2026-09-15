@@ -36,6 +36,12 @@ namespace Vela.Testing
         private int _maxDepth = 16;
         private int _depth;
 
+        // The execution contexts currently on the (synchronous) call stack. The context of the plugin that is
+        // executing when a cascaded write re-enters the pipeline becomes the nested execution's ParentContext,
+        // mirroring how Dataverse exposes IPluginExecutionContext.ParentContext (and its SharedVariables) to a
+        // plugin fired by another plugin's write.
+        private readonly Stack<FakePluginExecutionContext> _contextStack = new Stack<FakePluginExecutionContext>();
+
         // Shared variables for the operation currently running. Seeded from the request 'tag' (or other
         // shared variables) at the top level, shared across every stage/plugin of the operation, and inherited
         // by cascaded (nested) writes — mirroring how Dataverse surfaces them (and ParentContext.SharedVariables).
@@ -585,7 +591,7 @@ namespace Vela.Testing
 
                     _log.Add(new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, request.RequestName, PluginStages.MainOperation, ExecutionMode.Synchronous, string.Empty, _depth));
                     IPlugin plugin = Instantiate(pluginType);
-                    plugin.Execute(BuildProvider(context));
+                    ExecuteWithContext(context, plugin);
 
                     OrganizationResponse response = new OrganizationResponse();
                     foreach (KeyValuePair<string, object> output in context.OutputParameters)
@@ -1145,7 +1151,7 @@ namespace Vela.Testing
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, message, stage, registration.Step.Mode, entityName, _depth));
             IPlugin plugin = registration.CreateInstance();
-            plugin.Execute(BuildProvider(context));
+            ExecuteWithContext(context, plugin);
         }
 
         private static EntityImageCollection BuildImageCollection(ImageDefinition[] definitions, Entity? state)
@@ -1214,7 +1220,31 @@ namespace Vela.Testing
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth));
             IPlugin plugin = registration.CreateInstance();
-            plugin.Execute(BuildProvider(context));
+            ExecuteWithContext(context, plugin);
+        }
+
+        // Finalizes a freshly built context and runs the plugin. Stamps the calling identity from the store's
+        // actor (so ctx.UserId/InitiatingUserId/BusinessUnitId/OrganizationId match WhoAmI and system-field
+        // stamping instead of being random), links the ParentContext for a cascaded (nested) execution, and keeps
+        // the context on the stack while the plugin runs so a write it triggers sees it as the parent.
+        private void ExecuteWithContext(FakePluginExecutionContext context, IPlugin plugin)
+        {
+            (Guid userId, Guid businessUnitId, Guid organizationId) = _store.CurrentActor();
+            context.UserId = userId;
+            context.InitiatingUserId = userId;
+            context.BusinessUnitId = businessUnitId;
+            context.OrganizationId = organizationId;
+            context.ParentContext = _contextStack.Count > 0 ? _contextStack.Peek() : null;
+
+            _contextStack.Push(context);
+            try
+            {
+                plugin.Execute(BuildProvider(context));
+            }
+            finally
+            {
+                _contextStack.Pop();
+            }
         }
 
         private IServiceProvider BuildProvider(FakePluginExecutionContext context)

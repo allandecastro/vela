@@ -1,4 +1,5 @@
 using System;
+using System.ServiceModel;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
@@ -26,7 +27,11 @@ namespace Vela.Testing.Tests
             Assert.Equal("Renamed", crm.Retrieve("account", id, new ColumnSet("name")).GetAttributeValue<string>("name"));
 
             crm.Delete("account", id);
-            Assert.Throws<InvalidOperationException>(() => crm.Retrieve("account", id, new ColumnSet(true)));
+            // A not-found retrieve surfaces the platform's ObjectDoesNotExist fault (as a real IOrganizationService
+            // does), not a bare InvalidOperationException, so plugins that catch the fault code behave the same here.
+            FaultException<OrganizationServiceFault> notFound = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => crm.Retrieve("account", id, new ColumnSet(true)));
+            Assert.Equal(-2147220969, notFound.Detail.ErrorCode);
         }
 
         [Fact]
@@ -847,7 +852,9 @@ namespace Vela.Testing.Tests
             request.Requests.Add(new CreateRequest { Target = new Entity("account") { ["name"] = "New" } });
             request.Requests.Add(new UpdateRequest { Target = new Entity("account", Guid.NewGuid()) { ["name"] = "missing" } });
 
-            Assert.Throws<InvalidOperationException>(() => crm.Execute(request));
+            // The missing-record update now faults with ObjectDoesNotExist (as on a real org); the whole transaction
+            // still rolls back.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => crm.Execute(request));
 
             // The "New" account created earlier in the batch was rolled back; only the seed remains.
             Assert.Single(crm.GetAll("account"));

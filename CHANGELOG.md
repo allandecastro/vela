@@ -24,6 +24,21 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Framework
+
+#### Fixed
+
+- **Test harness: a plugin sees the configured caller's identity, not a random value.** `ctx.UserId`,
+  `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` on the execution context now come from the store's
+  acting user (`WithCurrentUser` / `WithCurrentBusinessUnit` / `WithOrganizationId`), consistent with what
+  `WhoAmI` and `createdby`/`ownerid` stamping report, instead of ctor-default GUIDs.
+- **Test harness: `ParentContext` is populated on a cascaded execution.** A plugin fired by another plugin's write
+  now sees its caller's context as `IPluginExecutionContext.ParentContext` (with its `SharedVariables`), so
+  re-entrancy guards like `if (ctx.ParentContext?.MessageName == "Create")` behave as they do in Dataverse.
+- **Test harness: a not-found record raises the platform fault, not `InvalidOperationException`.** Retrieving or
+  updating a missing record now throws `FaultException<OrganizationServiceFault>` with the documented
+  `ObjectDoesNotExist` code (`-2147220969`), matching a real `IOrganizationService`, so a plugin that catches the
+  fault code behaves the same under the harness as in production.
 ### CLI
 
 #### Added
