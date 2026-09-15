@@ -510,6 +510,59 @@ public sealed class DataverseRegistrationStepsTests
         Assert.Contains("[vela:stepkey=dv-key]", step.GetAttributeValue<string>("description"));
     }
 
+    // H1: an entity-scoped step whose (entity, message) has no sdkmessagefilter must fail fast rather than
+    // silently register an unfiltered global step that fires for every entity.
+    [Fact]
+    public void UpsertStep_throws_when_entity_has_no_message_filter()
+    {
+        var pluginTypeId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", messageId)),
+                "sdkmessagefilter" => new EntityCollection(), // no filter for the entity → unresolvable
+                _ => new EntityCollection(),
+            },
+        };
+
+        JsonElement def = Json(new
+        {
+            pluginTypeName = Plugin,
+            message = "Update",
+            entityLogicalName = "acount", // typo'd / unsupported entity
+            stepKey = "dv-key",
+            stage = 40,
+            mode = 0,
+        });
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false));
+        Assert.Contains("acount", ex.Message);
+        Assert.Contains("no message filter", ex.Message);
+        Assert.DoesNotContain(svc.Created, e => e.LogicalName == "sdkmessageprocessingstep");
+    }
+
+    // M6: the plugin-type-scoped name lookup queries on both name AND eventhandler, so a same-named step of a
+    // different plugin type is never matched (and deleted) by mistake.
+    [Fact]
+    public void FindStepByName_scoped_filters_by_name_and_plugin_type()
+    {
+        var stepId = Guid.NewGuid();
+        var pluginTypeId = Guid.NewGuid();
+        QueryExpression? captured = null;
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => { captured = q; return TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", stepId)); },
+        };
+
+        Assert.Equal(stepId, DataverseRegistration.FindStepByName(svc, "My Step", pluginTypeId));
+        Assert.Equal("sdkmessageprocessingstep", captured!.EntityName);
+        Assert.Contains(captured.Criteria.Conditions, c => c.AttributeName == "name");
+        Assert.Contains(captured.Criteria.Conditions, c => c.AttributeName == "eventhandler");
+    }
+
     [Fact]
     public void UpsertStep_writes_the_raw_secure_config_from_the_side_channel_not_the_hash()
     {

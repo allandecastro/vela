@@ -406,41 +406,20 @@ internal static partial class DataverseRegistration
         bool isBound = bindingType != 0;
         bool workflowSdkStepEnabled = api.GetAttributeValue<bool?>("workflowsdkstepenabled") ?? false;
 
-        var inputParameters = requestParams.TryGetValue(api.Id, out var input)
-            ? input.OrderBy(x => x.Name, StringComparer.Ordinal).Select(x => new
-            {
-                name = x.Name,
-                isOptional = x.IsOptional,
-                parameterTypeName = x.ParameterTypeName,
-                isCollection = x.IsCollection,
-                logicalEntityName = x.LogicalEntityName
-            }).ToArray()
+        object[] inputParameters = requestParams.TryGetValue(api.Id, out var input)
+            ? input.OrderBy(x => x.Name, StringComparer.Ordinal)
+                .Select(x => CustomApiShape.InputParameter(x.Name, x.IsOptional, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName))
+                .ToArray()
             : [];
-        var outputParameters = responseParams.TryGetValue(api.Id, out var output)
-            ? output.OrderBy(x => x.Name, StringComparer.Ordinal).Select(x => new
-            {
-                name = x.Name,
-                parameterTypeName = x.ParameterTypeName,
-                isCollection = x.IsCollection,
-                logicalEntityName = x.LogicalEntityName
-            }).ToArray()
+        object[] outputParameters = responseParams.TryGetValue(api.Id, out var output)
+            ? output.OrderBy(x => x.Name, StringComparer.Ordinal)
+                .Select(x => CustomApiShape.OutputParameter(x.Name, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName))
+                .ToArray()
             : [];
 
-        var shape = new
-        {
-            pluginTypeName,
-            uniqueName,
-            isFunction,
-            isBound,
-            boundEntityLogicalName,
-            executePrivilegeName,
-            isPrivate,
-            allowedCustomProcessingStepType,
-            bindingType,
-            workflowSdkStepEnabled,
-            inputParameters,
-            outputParameters
-        };
+        object shape = CustomApiShape.Build(
+            pluginTypeName, uniqueName, isFunction, isBound, boundEntityLogicalName, executePrivilegeName,
+            isPrivate, allowedCustomProcessingStepType, bindingType, workflowSdkStepEnabled, inputParameters, outputParameters);
 
         items.Add(new RegistrationItem("custom-api", uniqueName, JsonSerializer.SerializeToElement(shape, jsonOptions)));
     }

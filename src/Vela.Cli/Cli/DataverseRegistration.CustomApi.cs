@@ -21,13 +21,16 @@ namespace Vela.Cli;
 /// <summary> Custom API upsert/delete, parameters, type mapping, and shared definition parsing. </summary>
 internal static partial class DataverseRegistration
 {
-    internal static void UpsertCustomApi(IOrganizationService service, Dictionary<string, Guid> pluginTypeIds, JsonElement definitionElement, bool verbose = true)
+    internal static void UpsertCustomApi(IOrganizationService service, Dictionary<string, Guid> pluginTypeIds, JsonElement definitionElement, bool verbose = true, string? solutionPrefix = null)
 {
     CustomApiApplyDefinition definition = ParseCustomApiDefinition(definitionElement);
     if (!pluginTypeIds.TryGetValue(definition.PluginTypeName, out Guid pluginTypeId))
     {
         throw new InvalidOperationException($"Plugin type not found in Dataverse: {definition.PluginTypeName}");
     }
+
+    ValidateWorkflowSdkStepConstraints(definition);
+    ValidateCustomApiUniqueNamePrefix(definition, solutionPrefix);
 
     Guid? existingApiId = FindCustomApiId(service, definition.UniqueName);
     Entity api = new Entity("customapi");
@@ -75,16 +78,19 @@ internal static partial class DataverseRegistration
     }
 }
 
-    // isFunction, bindingType and the bound entity are fixed when a Custom API is created; Dataverse silently
-    // ignores attempts to change them on Update (no error, the value simply stays). Left unguarded, `apply`
-    // would report a successful update that never takes effect, so every subsequent plan/apply would show the
-    // same phantom change forever (idempotence never converges). Fail fast with guidance instead.
+    // isFunction, bindingType, the bound entity, allowedCustomProcessingStepType and workflowSdkStepEnabled are
+    // fixed when a Custom API is created; Dataverse silently ignores attempts to change them on Update (no error,
+    // the value simply stays). Left unguarded, `apply` would report a successful update that never takes effect, so
+    // every subsequent plan/apply would show the same phantom change forever (idempotence never converges). Fail
+    // fast with guidance instead. (Per the Custom API tables docs, all five "cannot be changed after saved".)
     private static void EnsureCustomApiImmutablesUnchanged(IOrganizationService service, Guid existingApiId, CustomApiApplyDefinition definition)
     {
-        Entity existing = service.Retrieve("customapi", existingApiId, new ColumnSet("isfunction", "bindingtype", "boundentitylogicalname"));
+        Entity existing = service.Retrieve("customapi", existingApiId, new ColumnSet("isfunction", "bindingtype", "boundentitylogicalname", "allowedcustomprocessingsteptype", "workflowsdkstepenabled"));
         bool existingIsFunction = existing.GetAttributeValue<bool?>("isfunction") ?? false;
         int existingBindingType = existing.GetAttributeValue<OptionSetValue>("bindingtype")?.Value ?? 0;
         string existingBoundEntity = existing.GetAttributeValue<string>("boundentitylogicalname") ?? string.Empty;
+        int existingAllowedStepType = existing.GetAttributeValue<OptionSetValue>("allowedcustomprocessingsteptype")?.Value ?? 0;
+        bool existingWorkflowEnabled = existing.GetAttributeValue<bool?>("workflowsdkstepenabled") ?? false;
         string desiredBoundEntity = definition.BoundEntityLogicalName ?? string.Empty;
 
         List<string> changed = new();
@@ -100,6 +106,14 @@ internal static partial class DataverseRegistration
         {
             changed.Add($"boundEntity ('{existingBoundEntity}' -> '{desiredBoundEntity}')");
         }
+        if (existingAllowedStepType != definition.AllowedCustomProcessingStepType)
+        {
+            changed.Add($"allowedCustomProcessingStepType ({existingAllowedStepType} -> {definition.AllowedCustomProcessingStepType})");
+        }
+        if (existingWorkflowEnabled != definition.WorkflowSdkStepEnabled)
+        {
+            changed.Add($"workflowSdkStepEnabled ({existingWorkflowEnabled} -> {definition.WorkflowSdkStepEnabled})");
+        }
 
         if (changed.Count > 0)
         {
@@ -108,6 +122,63 @@ internal static partial class DataverseRegistration
                 "existing Custom API. These are set at creation and Dataverse ignores such updates, so applying " +
                 "would report success but never converge. Delete the Custom API and re-apply to recreate it with " +
                 "the new shape, or revert the change.");
+        }
+    }
+
+    // Dataverse requires a Custom API's unique name to carry the solution publisher's customization prefix (like
+    // web resources and plugin packages). When applying into a solution, validate it up front so a missing/wrong
+    // prefix fails with a clear message instead of an opaque platform error. (No solution given → nothing to check.)
+    private static void ValidateCustomApiUniqueNamePrefix(CustomApiApplyDefinition definition, string? solutionPrefix)
+    {
+        if (string.IsNullOrWhiteSpace(solutionPrefix))
+        {
+            return;
+        }
+
+        if (!definition.UniqueName.StartsWith(solutionPrefix + "_", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Custom API '{definition.UniqueName}' must start with the solution publisher prefix '{solutionPrefix}_'. " +
+                "Dataverse requires the customization prefix on a Custom API's unique name. Rename it to " +
+                $"'{solutionPrefix}_{definition.UniqueName}' (or match the solution's publisher prefix).");
+        }
+    }
+
+    // A workflow-enabled Custom API ("Enabled for Workflow") has documented constraints: it must be an action
+    // (IsFunction=false), and its parameters cannot use Entity, EntityCollection or StringArray types. Dataverse
+    // rejects a violation at apply with an opaque platform error, so validate locally with a clear message first.
+    private static void ValidateWorkflowSdkStepConstraints(CustomApiApplyDefinition definition)
+    {
+        if (!definition.WorkflowSdkStepEnabled)
+        {
+            return;
+        }
+
+        if (definition.IsFunction)
+        {
+            throw new InvalidOperationException(
+                $"Custom API '{definition.UniqueName}': WorkflowSdkStepEnabled requires an action, but IsFunction is true. " +
+                "A function cannot be enabled for workflow - make it an action or disable workflow support.");
+        }
+
+        int[] unsupported =
+        {
+            SdkConstants.CustomApiParameterType.Entity,
+            SdkConstants.CustomApiParameterType.EntityCollection,
+            SdkConstants.CustomApiParameterType.StringArray,
+        };
+
+        foreach (CustomApiParameterApplyDefinition parameter in definition.InputParameters.Concat(definition.OutputParameters))
+        {
+            int typeCode = ResolveCustomApiTypeCode(parameter.ParameterTypeName, parameter.IsCollection);
+            if (unsupported.Contains(typeCode))
+            {
+                throw new InvalidOperationException(
+                    $"Custom API '{definition.UniqueName}': parameter '{parameter.Name}' uses a type " +
+                    $"({parameter.ParameterTypeName}{(parameter.IsCollection ? "[]" : "")}) that is not allowed when WorkflowSdkStepEnabled is set. " +
+                    "Workflow-enabled Custom APIs cannot use Entity, EntityCollection or StringArray parameters. " +
+                    "Change the parameter type or disable workflow support.");
+            }
         }
     }
 

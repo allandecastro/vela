@@ -329,7 +329,10 @@ internal static class CommandLineOptions
 
         options = new SharedOptions(
             PackagePaths: resolvedPackages,
-            PackageAssembly: TryReadOption(args, "--package-assembly") ?? (interactive ? Prompt("Package assembly name (optional, example: Zava.Plugins.Package.dll):", allowEmpty: true) : null),
+            // Only prompt for the optional package assembly on a real terminal. Under redirected/piped stdin
+            // (CI, agents, tests) a blocking Console.ReadLine() on an open-but-empty pipe hangs plan/apply/inspect
+            // forever, so scripted usage skips the prompt and leaves this null (it is optional).
+            PackageAssembly: TryReadOption(args, "--package-assembly") ?? (interactive && !Console.IsInputRedirected ? Prompt("Package assembly name (optional, example: Zava.Plugins.Package.dll):", allowEmpty: true) : null),
             ConnectionString: connectionString,
             OAuthUrl: oauthUrl,
             OAuthToken: oauthToken,

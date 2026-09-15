@@ -164,6 +164,92 @@ public class DataverseRegistrationHelperTests
         Assert.Equal("ZAVA_MyPackage", DataverseRegistration.NormalizePackageNameWithPrefix("ZAVA_MyPackage", "zava"));
     }
 
+    // --- IsPackageSigned / ReadPackageBytesForImport (signed-package guard, E8) ----------------
+
+    [Fact]
+    public void IsPackageSigned_false_for_unsigned_package()
+    {
+        string path = WriteTempNupkg("MyPackage", signed: false);
+        try
+        {
+            Assert.False(DataverseRegistration.IsPackageSigned(path));
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void IsPackageSigned_true_when_signature_entry_present()
+    {
+        string path = WriteTempNupkg("MyPackage", signed: true);
+        try
+        {
+            Assert.True(DataverseRegistration.IsPackageSigned(path));
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ReadPackageBytesForImport_matching_name_returns_bytes_even_if_signed()
+    {
+        // No rename needed → the signed package is passed through untouched (signature stays valid).
+        string path = WriteTempNupkg("zava_MyPackage", signed: true);
+        var temps = new List<string>();
+        try
+        {
+            byte[] bytes = DataverseRegistration.ReadPackageBytesForImport(path, "zava_MyPackage", "zava_MyPackage", temps);
+            Assert.Equal(System.IO.File.ReadAllBytes(path), bytes);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ReadPackageBytesForImport_signed_package_needing_rename_throws_actionable_error()
+    {
+        // Applying with --solution would rename (add the publisher prefix) and repack, invalidating the signature.
+        string path = WriteTempNupkg("MyPackage", signed: true);
+        var temps = new List<string>();
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => DataverseRegistration.ReadPackageBytesForImport(path, "MyPackage", "zava_MyPackage", temps));
+            Assert.Contains("signed", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("zava_MyPackage", ex.Message);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    private static string WriteTempNupkg(string id, bool signed)
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"vela-test-{Guid.NewGuid():N}.nupkg");
+        using (var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using (var entry = new System.IO.StreamWriter(zip.CreateEntry($"{id}.nuspec").Open()))
+            {
+                entry.Write($"<?xml version=\"1.0\"?><package xmlns=\"http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd\"><metadata><id>{id}</id><version>1.0.0</version></metadata></package>");
+            }
+
+            if (signed)
+            {
+                using var sig = new System.IO.StreamWriter(zip.CreateEntry(".signature.p7s").Open());
+                sig.Write("dummy-signature");
+            }
+        }
+
+        return path;
+    }
+
     // --- ResolveCustomApiTypeCode --------------------------------------------------------------
 
     [Fact]
