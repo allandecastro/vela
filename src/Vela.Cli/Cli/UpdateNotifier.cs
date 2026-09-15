@@ -51,7 +51,7 @@ internal static class UpdateNotifier
     /// <summary>The upgrade notice text (kept pure for testing).</summary>
     internal static string FormatMessage(string currentVersion, string latestVersion) =>
         $"A newer version of {ToolInfo.ToolName} is available: {latestVersion} (you have {currentVersion}). " +
-        $"Update with: dotnet tool update -g Vela.Cli";
+        $"Update with: vela update (or: dotnet tool update -g Vela.Cli)";
 
     // Returns the latest known stable CLI version, using the cached value unless the throttle window has elapsed,
     // in which case nuget.org is queried once and the cache refreshed. Returns null when nothing is known.

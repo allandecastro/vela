@@ -35,47 +35,108 @@ vela models --roles "Salesperson,Sales Manager" --namespace Zava.Shared.Models.G
 vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models.Generated --out src/Zava.Shared/Models/Generated
 ```
 
-Generated classes are `partial` (extend them in a sibling file), keep the primary id synced with `Entity.Id`,
-carry XML doc (display name / description / constraints / lookup targets), DataAnnotations
-(`[StringLength]`/`[Range]`, omit with `--no-annotations`) and two self-contained facet attributes that no
-standard annotation can express - `[RequiredLevel(...)]` (the full four-value Dataverse required level, not a
-lossy boolean) and `[LookupTargets(...)]` (a lookup / Customer / polymorphic column's target tables). The test
-harness's `FakeEntityMetadata.From<T>()` recovers all of these by reflection, so a derived fake metadata carries
-required level and lookup targets with no hand-written overrides. `vela models` turns choices into enums (local choices nested in
-the table, global option sets as shared enums; multi-select choices become an `IList<Enum>`), types **File**
-columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail), and exposes alternate keys as typed factories
-(`Account.ByAccountNumberKey("A-001")` returns a key-based `EntityReference`). `--custom-apis` instead generates typed
-`OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`),
-written into a `Messages/` subfolder of the output; with **no value**, `--custom-apis` generates every Custom API
-in the environment (including the platform's own, which can be hundreds of files) - `models` prints a warning
-pointing you at a targeted list or a package (below) to narrow it. Each also gets a **registrability-gated `On<Message>()` step extension**: bound to the API's
-entity when it has one (compile-time entity applicability), async-only when the API's
-`allowedcustomprocessingsteptype` is AsyncOnly (only `.Async()` compiles), and omitted entirely for a None/private
-API. A required request parameter (`isoptional = false` in Dataverse) is generated with a `[Required]` attribute so
-that rebuilding the manifest from the generated model preserves its optionality; response properties are always
-present, so they never carry it. See [Write a Custom API](custom-apis.md). To keep the Custom APIs you **authored in code** out of that all set (you already have those
-classes), pass your built plugin package with `--package <file.nupkg>` (or `-p`, repeatable) and/or `--packages-dir <folder>`
-(plus `--package-assembly <name>` if the primary assembly needs disambiguating): their unique names are scanned
-from the package - the same offline scan `plan`/`apply` use - and removed, and a note reports how many were
-excluded. Excluding authored Custom APIs requires passing the package; without one, `--custom-apis` with no value
-generates every Custom API present. A targeted `--custom-apis a,b,c` is never filtered - the named ones are always
-generated. `--messages a,b,c` does the same for any SDK message
-(`sdkmessage`), also into `Messages/`; `--messages` with **no value** generates every registerable message in the
-environment (Microsoft's "available events": non-private messages with a visible, custom-step-allowed
-`sdkmessagefilter`), skipping messages backed by a Custom API (owned by `--custom-apis`) and messages that
-already ship an SDK request class - both the core `Microsoft.Xrm.Sdk.Messages.*` types (e.g. `CreateRequest`) and
-the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (e.g. `QualifyLeadRequest`), the latter matched against a
-curated, non-exhaustive supplement (an unlisted one generates a harmless duplicate). Alongside each
-`XxxRequest`/`XxxResponse`, `--messages` also emits an entity-constrained `On<Message>()` step extension per
-applicable entity (read from the message's `sdkmessagefilter` `primaryobjecttypecode`), constrained to
-`IStepBuilder<TEntity>` and delegating to `On<XxxRequest>()`. This gives **compile-time entity applicability**:
-`steps.OnQualifyLead()` only compiles inside an `EntityPluginBase<Lead>`, exactly like the curated `On<Message>()`
-methods. A global message (`primaryobjecttypecode` `none`) or one applying to more than eight entities emits a
-single generic `On<Message><TEntity>()` instead. The generated requests also pair with the permissive
-`OnMessage(...).Handler<TRequest>()` typed handler and with `On<TRequest>()` directly. The early-bound entity
-types are assumed to be generated into the same namespace (`vela models --tables`).
-Connection flags are the same as `plan`/`apply`
-(`--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or `--interactive`).
+## What the generated table classes contain
+
+`--solution` / `--entities` generate `partial` entity classes (extend them in a sibling file) with:
+
+- **Primary id kept in sync** with `Entity.Id`.
+- **XML doc** on each property (display name, description, constraints, lookup targets).
+- **DataAnnotations** (`[StringLength]` / `[Range]`); omit with `--no-annotations`.
+- **Two facet attributes** no standard annotation can express: `[RequiredLevel(...)]` (the full four-value
+  Dataverse required level, not a lossy boolean) and `[LookupTargets(...)]` (a lookup / Customer / polymorphic
+  column's target tables).
+- **Choices as enums** (local choices nested in the table, global option sets as shared enums; multi-select
+  choices become an `IList<Enum>`).
+- **File** columns typed as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail).
+- **Alternate keys as typed factories**: `Account.ByAccountNumberKey("A-001")` returns a key-based
+  `EntityReference`.
+
+The test harness's `FakeEntityMetadata.From<T>()` recovers all of this by reflection, so a derived fake metadata
+carries required level and lookup targets with no hand-written overrides.
+
+## Custom API message classes (`--custom-apis`)
+
+`--custom-apis` generates typed `OrganizationRequest`/`OrganizationResponse` classes into a `Messages/` subfolder:
+
+```csharp
+var response = service.Execute(new zava_RecalculateRequest { AccountId = id })
+    .ToResponse<zava_RecalculateResponse>();
+```
+
+Each also gets a **registrability-gated `On<Message>()` step extension**: bound to the API's entity when it has
+one (compile-time entity applicability), async-only when the API's `allowedcustomprocessingsteptype` is AsyncOnly
+(only `.Async()` compiles), and omitted for a None/private API. A required request parameter (`isoptional = false`)
+carries a `[Required]` attribute so rebuilding the manifest preserves its optionality; response properties are
+always present. See [Write a Custom API](custom-apis.md).
+
+**Scoping.** With **no value**, `--custom-apis` generates *every* Custom API in the environment (the platform's own
+included, often hundreds of files) and prints a warning. Narrow it with a targeted list (`--custom-apis a,b,c`,
+never filtered) or exclude the ones you authored in code by passing your built package (`--package <file.nupkg>` /
+`-p`, repeatable; `--packages-dir <folder>`; `--package-assembly <name>` to disambiguate): their unique names are
+scanned from the package (the same offline scan `plan`/`apply` use) and removed, with a note of how many were
+excluded.
+
+## SDK message classes (`--messages`)
+
+`--messages a,b,c` generates typed `Request`/`Response` classes for any SDK message (`sdkmessage`), into
+`Messages/`. With **no value** it generates every *registerable* message (Microsoft's "available events":
+non-private messages with a visible, custom-step-allowed `sdkmessagefilter`), skipping messages backed by a
+Custom API and messages that already ship an SDK request class - the core `Microsoft.Xrm.Sdk.Messages.*` types
+and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (matched against a curated, non-exhaustive supplement;
+an unlisted one just makes a harmless duplicate).
+
+Alongside each `XxxRequest`/`XxxResponse`, `--messages` emits an **entity-constrained `On<Message>()` step
+extension** per applicable entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), giving
+**compile-time entity applicability**: a generated `OnMyMessage()` only compiles inside the `EntityPluginBase<T>`
+for the table its `sdkmessagefilter` targets, exactly like the curated `On<Message>()` methods (below). A global
+message (`primaryobjecttypecode` `none`) or one applying to more than eight entities emits a single generic
+`On<Message><TEntity>()` instead. The requests also pair with the permissive `OnMessage(...).Handler<TRequest>()`
+and with `On<TRequest>()` directly.
+
+### Using a standard message (`QualifyLead`)
+
+Many standard Sales/business messages are **curated by Vela out of the box**, so their typed step method and
+context already exist with **no `vela models` run needed**. `QualifyLead` is one: register a step on it directly,
+and the handler receives the typed `QualifyLeadRequest`/`QualifyLeadResponse`.
+
+```csharp
+public sealed class RouteQualifiedLead : EntityPluginBase<Lead>
+{
+    protected override void RegisterPluginSteps() =>
+        RegisterSteps().OnQualifyLead().PostOperation().Sync().Handler(OnQualified);
+
+    private void OnQualified(IQualifyLeadPostContext<Lead> ctx)
+    {
+        QualifyLeadRequest request = ctx.Request;                       // strongly typed
+        QualifyLeadResponse response = ctx.Response;                    // the created records
+        foreach (EntityReference created in response.CreatedEntities)   // account / contact / opportunity
+        {
+            // e.g. stamp or route each record the qualification created
+        }
+    }
+}
+```
+
+You can also call the message from your own code with the SDK request:
+
+```csharp
+var response = (QualifyLeadResponse)service.Execute(new QualifyLeadRequest
+{
+    LeadId = new EntityReference(Lead.EntityLogicalNameValue, leadId),
+    CreateAccount = true,
+    Status = new OptionSetValue(3), // Qualified
+});
+```
+
+Use `--messages` only for a message Vela does **not** curate: it generates the same typed `Request`/`Response`
+and the entity-constrained `On<Message>()` extension for it. (The full curated list is in
+[Write a plugin](plugins.md).)
+
+## Connection flags
+
+Same as `plan`/`apply`: `--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or
+`--interactive`. Early-bound entity types are assumed to be generated into the same namespace
+(`vela models --tables`).
 
 ## TypeScript form models (`--forms`)
 
