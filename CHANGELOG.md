@@ -24,9 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Framework
+## [0.13.0] - 2026-09-15 (Vela.Plugins + Vela.Testing)
 
-#### Fixed
+Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.13.0`.
+
+### Fixed
 
 - **Test harness: a plugin sees the configured caller's identity, not a random value.** `ctx.UserId`,
   `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` on the execution context now come from the store's
@@ -40,9 +42,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ObjectDoesNotExist` code (`-2147220969`), matching a real `IOrganizationService`, so a plugin that catches the
   fault code behaves the same under the harness as in production.
 
-### CLI
+## [0.6.0] - 2026-09-15 (Vela.Cli)
 
-#### Added
+CLI line (`Vela.Cli`), published as `cli-v0.6.0`.
+
+### Added
 
 - **`vela add plugin` accepts `--filtering-attributes <Col1,Col2>`** to set the filtering attribute(s) for a
   `Create`/`Update` (or `CreateMultiple`/`UpdateMultiple`) step. When omitted, the column is auto-detected from
@@ -54,7 +58,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   warning pointing at `--custom-apis <a,b,c>` to target specific ones or `--package`/`--packages-dir` to exclude
   the ones you authored in code.
 
-#### Changed
+### Changed
 
 - **`vela add plugin` no longer emits the non-compiling `REPLACE_WITH_A_FILTERING_ATTRIBUTE` placeholder.** See
   the `--filtering-attributes` behavior above.
@@ -68,7 +72,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `--messages`, `--roles`, `--solution-roles` and `--lang` (previously only `--solution`/`--entities`/`--forms`/
   `--tables` were shown, though the others already worked and are detailed under `vela models --help`).
 
-#### Fixed
+### Fixed
 
 - **`plan`/`apply`/`inspect` no longer hang under `--interactive` when stdin is redirected** (CI, agents,
   piped input). The optional "package assembly name" prompt now only appears on a real terminal, so a scripted
