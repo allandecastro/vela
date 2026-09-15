@@ -20,6 +20,10 @@ public sealed record CustomApiParameter(string Name, int FieldType, bool IsOptio
 /// <c>.context/phase3c-customapi-registrability.md</c>). They default to a permissive, global shape so callers
 /// that do not care keep working.
 /// </summary>
+/// <param name="UniqueName">The Custom API unique name (its message name).</param>
+/// <param name="IsBoundToEntity">Whether the Custom API is bound to an entity (vs a global/unbound API).</param>
+/// <param name="RequestParameters">The input (request) parameters.</param>
+/// <param name="ResponseProperties">The output (response) properties.</param>
 /// <param name="AllowedStepType">Dataverse <c>allowedcustomprocessingsteptype</c>: 0 None, 1 AsyncOnly, 2 SyncAndAsync.</param>
 /// <param name="IsPrivate">Dataverse <c>isprivate</c>: a private Custom API is not meant to be extended by steps.</param>
 /// <param name="BoundEntityLogicalName">Dataverse <c>boundentitylogicalname</c> (null/empty for a global API); when
@@ -42,6 +46,8 @@ public sealed record CustomApiMessage(
 /// </summary>
 public static class CustomApiMessageGenerator
 {
+    /// <param name="messages">The Custom API messages to generate typed request/response classes for.</param>
+    /// <param name="ns">The target namespace for the generated files.</param>
     /// <param name="entityTypeNames">Optional map from an entity logical name to its early-bound C# type name (its
     /// SchemaName). Used so a bound Custom API's <c>On&lt;Message&gt;()</c> extension references the exact generated
     /// type; falls back to PascalCase when null or missing.</param>

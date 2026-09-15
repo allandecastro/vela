@@ -31,6 +31,8 @@ public sealed record SdkMessage(
 /// </summary>
 public static class SdkMessageGenerator
 {
+    /// <param name="messages">The SDK messages to generate typed request/response classes for.</param>
+    /// <param name="ns">The target namespace for the generated files.</param>
     /// <param name="entityTypeNames">Optional map from an entity logical name to its early-bound C# type name
     /// (its SchemaName, as the model generator emits it). Used so the entity-constrained <c>On&lt;Message&gt;()</c>
     /// extension references the exact generated type (e.g. <c>new_CustomEntity</c>), not a naive PascalCase of the

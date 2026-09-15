@@ -24,6 +24,24 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### CLI
+
+#### Changed
+
+- **`vela models` generates the roles it can resolve instead of aborting on the first missing one.** A typo'd or
+  absent `--roles` name is now warned about and skipped; the run still generates the roles that resolved, and only
+  fails when none of the requested roles exist.
+- **`vela --help` documents every `vela models` scope.** The top-level help now lists `--custom-apis`,
+  `--messages`, `--roles`, `--solution-roles` and `--lang` (previously only `--solution`/`--entities`/`--forms`/
+  `--tables` were shown, though the others already worked and are detailed under `vela models --help`).
+
+#### Added
+
+- **`vela models --custom-apis` with no value warns before generating every Custom API.** Bare `--custom-apis`
+  emits all Custom APIs in the environment (system ones included — often hundreds of files); it now prints a
+  warning pointing at `--custom-apis <a,b,c>` to target specific ones or `--package`/`--packages-dir` to exclude
+  the ones you authored in code.
+
 ## [0.12.0] - 2026-09-14 (Vela.Plugins + Vela.Testing)
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.12.0`.
