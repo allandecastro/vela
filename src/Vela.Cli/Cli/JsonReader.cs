@@ -117,11 +117,12 @@ internal static class JsonReader
                 bool isCollection = TryGetBool(value, "isCollection");
                 string? logicalEntityName = TryGetString(value, "logicalEntityName");
                 (parameterTypeName, isCollection) = CanonicalizeCustomApiType(parameterTypeName, isCollection, logicalEntityName);
-                return new { name, isOptional, parameterTypeName, isCollection, logicalEntityName };
+                return (name, isOptional, parameterTypeName, isCollection, logicalEntityName);
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.name))
             .OrderBy(x => x.name, StringComparer.Ordinal)
-            .ToArray<object>();
+            .Select(x => CustomApiShape.InputParameter(x.name, x.isOptional, x.parameterTypeName, x.isCollection, x.logicalEntityName))
+            .ToArray();
     }
 
     public static object[] TryGetCustomApiOutputShapes(JsonElement element, string propertyName)
@@ -139,11 +140,12 @@ internal static class JsonReader
                 bool isCollection = TryGetBool(value, "isCollection");
                 string? logicalEntityName = TryGetString(value, "logicalEntityName");
                 (parameterTypeName, isCollection) = CanonicalizeCustomApiType(parameterTypeName, isCollection, logicalEntityName);
-                return new { name, parameterTypeName, isCollection, logicalEntityName };
+                return (name, parameterTypeName, isCollection, logicalEntityName);
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.name))
             .OrderBy(x => x.name, StringComparer.Ordinal)
-            .ToArray<object>();
+            .Select(x => CustomApiShape.OutputParameter(x.name, x.parameterTypeName, x.isCollection, x.logicalEntityName))
+            .ToArray();
     }
 
     // A4: canonicalize a Custom API parameter type name to the same code->name form the live read produces (e.g.
