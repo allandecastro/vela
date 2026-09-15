@@ -24,6 +24,32 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### CLI
+
+#### Added
+
+- **`vela add plugin` accepts `--filtering-attributes <Col1,Col2>`** to set the filtering attribute(s) for a
+  `Create`/`Update` (or `CreateMultiple`/`UpdateMultiple`) step. When omitted, the column is auto-detected from
+  the entity's generated early-bound model (the conventional primary-name column). The generated file always
+  compiles and applies; when nothing can be inferred, `add` fails with a clear message instead of emitting a
+  non-compiling placeholder.
+
+#### Changed
+
+- **`vela add plugin` no longer emits the non-compiling `REPLACE_WITH_A_FILTERING_ATTRIBUTE` placeholder.** See
+  the `--filtering-attributes` behavior above.
+
+#### Fixed
+
+- **`plan`/`apply`/`inspect` no longer hang under `--interactive` when stdin is redirected** (CI, agents,
+  piped input). The optional "package assembly name" prompt now only appears on a real terminal, so a scripted
+  run with all inputs supplied no longer blocks on `Console.ReadLine()`.
+- **`apply --solution` fails fast with an actionable message when given a NuGet-signed plugin package.** Adding
+  the solution publisher prefix rewrites (repacks) the package, which invalidates the signature and was rejected
+  by Dataverse with the cryptic `0x80040265` "signature does not cover the package content". `apply` now detects
+  the signature up front and explains how to proceed (build/sign the package already named with the prefix, or
+  apply without `--solution`).
+
 ## [0.12.0] - 2026-09-14 (Vela.Plugins + Vela.Testing)
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.12.0`.
