@@ -22,6 +22,15 @@ public class UpdateNotifierTests
         string msg = UpdateNotifier.FormatMessage("0.1.26", "0.1.27");
         Assert.Contains("0.1.27", msg);
         Assert.Contains("0.1.26", msg);
+        Assert.Contains("vela update", msg);
         Assert.Contains("dotnet tool update -g Vela.Cli", msg);
+    }
+
+    [Fact]
+    public void UpdateCommand_BuildDotnetArgs_targets_the_global_tool()
+    {
+        Assert.Equal(["tool", "update", "--global", "Vela.Cli"], UpdateCommand.BuildDotnetArgs(null));
+        Assert.Equal(["tool", "update", "--global", "Vela.Cli"], UpdateCommand.BuildDotnetArgs("  "));
+        Assert.Equal(["tool", "update", "--global", "Vela.Cli", "--version", "0.6.1"], UpdateCommand.BuildDotnetArgs("0.6.1"));
     }
 }

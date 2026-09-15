@@ -226,6 +226,7 @@ internal static class OutputWriter
         WriteCommand(console, "sign", "Sign a plugin package.");
         Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
         WriteCommand(console, "logout", "Clear the cached interactive-login token and remembered Dataverse URL.");
+        WriteCommand(console, "update", "Update the vela global tool to the latest version (or --version <x.y.z>).");
         WriteCommand(console, "menu", "Launch the interactive menu (default with no args).");
         WriteCommand(console, "version", "Print the tool version.");
         console.WriteLine();

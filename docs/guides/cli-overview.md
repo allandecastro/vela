@@ -19,8 +19,14 @@ Core commands:
 | `vela inspect` | Report local package registrations alongside live Dataverse state, with diagnostics (read-only). |
 | `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
 | `vela logout` | Clear the cached interactive token and remembered Dataverse URL. |
+| `vela update` | Update the vela global tool to the latest published version (or `--version <x.y.z>`). |
 | `vela menu` (or bare `vela`) | Launch the interactive menu that guides you through the commands above. |
 | `vela version` | Print the tool version. |
+
+> [!NOTE]
+> **`vela update`** runs `dotnet tool update --global Vela.Cli` for you. On **Windows** the running executable is
+> locked, so it cannot replace itself while `vela` is running - the command detects this and asks you to run
+> `dotnet tool update -g Vela.Cli` from a fresh shell. On macOS/Linux it updates in place.
 
 ### Exit codes
 

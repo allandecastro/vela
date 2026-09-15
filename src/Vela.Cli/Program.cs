@@ -75,6 +75,7 @@ int exitCode = command switch
     "models" => ModelsCommand.Run(commandArgs),
     "sign" => SignCommand.Run(commandArgs),
     "logout" => LogoutCommand.Run(commandArgs),
+    "update" => UpdateCommand.Run(commandArgs),
     _ => Fail($"Unknown command '{effectiveArgs[0]}'.", ExitInvalidArguments)
 };
 

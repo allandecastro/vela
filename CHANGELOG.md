@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### CLI
+
+#### Added
+
+- **`vela update` updates the global tool** by running `dotnet tool update --global Vela.Cli` (pin a version with
+  `--version <x.y.z>`). On Windows, where the running executable is locked and cannot replace itself, it explains
+  how to run the update from a fresh shell. The "newer version available" notice now also points at `vela update`.
+
 ## [0.13.0] - 2026-09-15 (Vela.Plugins + Vela.Testing)
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.13.0`.

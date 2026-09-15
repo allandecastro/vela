@@ -15,6 +15,7 @@ exit codes. For the full narrative, see [The vela CLI](../guides/cli-overview.md
 | `vela inspect` | Compare local packages with the live environment | package inputs + connection flags |
 | `vela sign` | Sign a plugin package | `--package`, `--fingerprint` \| (`--pfx`/`--pfx-base64` + `--pfx-password`/`--pfx-credential`), `--timestamp` |
 | `vela logout` | Clear the cached interactive token and remembered URL | |
+| `vela update` | Update the global tool (`dotnet tool update --global Vela.Cli`) | `--version <x.y.z>` (Windows: run from a fresh shell, the running exe is locked) |
 | `vela menu` (or bare `vela`) | Interactive menu | |
 | `vela version` | Print the tool version | |
 
