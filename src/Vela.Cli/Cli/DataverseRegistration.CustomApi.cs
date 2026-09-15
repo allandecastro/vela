@@ -276,78 +276,75 @@ internal static partial class DataverseRegistration
     }
 }
 
+    // Exact simple-type-name → Custom API scalar type code. Replaces an order-dependent string.Contains ladder
+    // where, for example, "Int" matched ANY type name containing "int" (and "Entity" had to be tested after
+    // "EntityReference"/"EntityCollection" to avoid a wrong early match). Keyed on the simple (last-segment) name
+    // so both the SDK full names the reverse resolver emits ("System.Int32") and short names callers may pass
+    // ("Picklist") resolve. Symmetric with ResolveCustomApiTypeName.
+    // Keys are simple type names, and cover the three spellings a caller may supply: the SDK type name the reverse
+    // resolver emits ("Int32"/"Double"/"OptionSetValue"), the Custom API type label ("Integer"/"Float"/"Picklist"),
+    // and the C# alias ("int"/"long"/"double"). All exact — no substring matching, so an unrelated name that merely
+    // contains "int" no longer resolves to Integer.
+    private static readonly Dictionary<string, int> CustomApiScalarTypeCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Boolean"] = SdkConstants.CustomApiParameterType.Boolean,
+        ["bool"] = SdkConstants.CustomApiParameterType.Boolean,
+        ["DateTime"] = SdkConstants.CustomApiParameterType.DateTime,
+        ["Decimal"] = SdkConstants.CustomApiParameterType.Decimal,
+        ["decimal"] = SdkConstants.CustomApiParameterType.Decimal,
+        ["Entity"] = SdkConstants.CustomApiParameterType.Entity,
+        ["EntityCollection"] = SdkConstants.CustomApiParameterType.EntityCollection,
+        ["EntityReference"] = SdkConstants.CustomApiParameterType.EntityReference,
+        ["Float"] = SdkConstants.CustomApiParameterType.Float,
+        ["Double"] = SdkConstants.CustomApiParameterType.Float,
+        ["Single"] = SdkConstants.CustomApiParameterType.Float,
+        ["double"] = SdkConstants.CustomApiParameterType.Float,
+        ["float"] = SdkConstants.CustomApiParameterType.Float,
+        ["Integer"] = SdkConstants.CustomApiParameterType.Integer,
+        ["Int16"] = SdkConstants.CustomApiParameterType.Integer,
+        ["Int32"] = SdkConstants.CustomApiParameterType.Integer,
+        ["Int64"] = SdkConstants.CustomApiParameterType.Integer,
+        ["int"] = SdkConstants.CustomApiParameterType.Integer,
+        ["long"] = SdkConstants.CustomApiParameterType.Integer,
+        ["short"] = SdkConstants.CustomApiParameterType.Integer,
+        ["Money"] = SdkConstants.CustomApiParameterType.Money,
+        ["OptionSetValue"] = SdkConstants.CustomApiParameterType.Picklist,
+        ["Picklist"] = SdkConstants.CustomApiParameterType.Picklist,
+        ["Guid"] = SdkConstants.CustomApiParameterType.Guid,
+        ["guid"] = SdkConstants.CustomApiParameterType.Guid,
+        ["String"] = SdkConstants.CustomApiParameterType.String,
+        ["string"] = SdkConstants.CustomApiParameterType.String,
+    };
+
     internal static int ResolveCustomApiTypeCode(string? parameterTypeName, bool isCollection)
 {
-    string normalized = (parameterTypeName ?? "System.String").Trim();
+    string simple = SimpleTypeName((parameterTypeName ?? "System.String").Trim());
+
+    // Only String and Entity element types have a Custom API collection code (StringArray / EntityCollection);
+    // any other element type has no collection representation, so it falls through to its scalar code (unchanged).
     if (isCollection)
     {
-        if (normalized.Contains("String", StringComparison.OrdinalIgnoreCase))
+        if (simple.IndexOf("String", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             return SdkConstants.CustomApiParameterType.StringArray;
         }
 
-        if (normalized.Contains("Entity", StringComparison.OrdinalIgnoreCase))
+        if (simple.IndexOf("Entity", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             return SdkConstants.CustomApiParameterType.EntityCollection;
         }
     }
 
-    if (normalized.Contains("Boolean", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.Boolean;
-    }
+    return CustomApiScalarTypeCodes.TryGetValue(simple, out int code)
+        ? code
+        : SdkConstants.CustomApiParameterType.String;
+}
 
-    if (normalized.Contains("DateTime", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.DateTime;
-    }
-
-    if (normalized.Contains("Decimal", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.Decimal;
-    }
-
-    if (normalized.Contains("EntityReference", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.EntityReference;
-    }
-
-    if (normalized.Contains("EntityCollection", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.EntityCollection;
-    }
-
-    if (normalized.Contains("Entity", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.Entity;
-    }
-
-    if (normalized.Contains("Double", StringComparison.OrdinalIgnoreCase) || normalized.Contains("Single", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.Float;
-    }
-
-    if (normalized.Contains("Int", StringComparison.OrdinalIgnoreCase) || normalized.Contains("Long", StringComparison.OrdinalIgnoreCase) || normalized.Contains("Short", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.Integer;
-    }
-
-    if (normalized.Contains("Money", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.Money;
-    }
-
-    if (normalized.Contains("OptionSet", StringComparison.OrdinalIgnoreCase) || normalized.Contains("Picklist", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.Picklist;
-    }
-
-    if (normalized.Contains("Guid", StringComparison.OrdinalIgnoreCase))
-    {
-        return SdkConstants.CustomApiParameterType.Guid;
-    }
-
-    return SdkConstants.CustomApiParameterType.String;
+    // The simple (last dotted segment) of a type name; e.g. "System.Int32" -> "Int32", "Picklist" -> "Picklist".
+    private static string SimpleTypeName(string typeName)
+{
+    int lastDot = typeName.LastIndexOf('.');
+    return lastDot >= 0 && lastDot < typeName.Length - 1 ? typeName.Substring(lastDot + 1) : typeName;
 }
 
     internal static (string typeName, bool isCollection) ResolveCustomApiTypeName(int typeCode, string? logicalEntityName)

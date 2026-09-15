@@ -24,6 +24,16 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### CLI
+
+#### Fixed
+
+- **Custom API parameter type resolution no longer over-matches on substrings.** The CLR-type → Custom API type
+  mapping was an order-dependent `string.Contains` ladder in which any type name containing `"int"` resolved to
+  `Integer` (and `Entity` had to be tested after `EntityReference`/`EntityCollection`). It is now an exact
+  simple-name table covering the SDK type names, the Custom API type labels and the C# aliases, so an unrelated
+  type resolves correctly (or falls back to `String`) instead of being misclassified.
+
 ## [0.12.0] - 2026-09-14 (Vela.Plugins + Vela.Testing)
 
 Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.12.0`.
