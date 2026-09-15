@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Vela.Cli;
 using Xunit;
 using static Vela.Cli.CliExitCodes;
@@ -306,5 +307,49 @@ public class CommandLineOptionsTests
         Assert.Contains("ClientId=client", cs);
         Assert.Contains("ClientSecret=secret", cs);
         Assert.Contains("RequireNewInstance=true", cs);
+    }
+}
+
+/// <summary>
+/// E1 regression: <c>--interactive</c> must not fire a blocking "Package assembly name" prompt under redirected
+/// stdin (CI/agents/tests), which hung plan/apply/inspect on an open-but-empty pipe. Uses the serial
+/// console-redirect collection because it swaps the process-global <see cref="Console.In"/>/<see cref="Console.Out"/>.
+/// </summary>
+[Collection("ConsoleRedirect")]
+public class CommandLineOptionsInteractivePromptTests
+{
+    [Fact]
+    public void TryParseSharedOptions_interactive_does_not_prompt_for_package_assembly_under_redirected_stdin()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"vela-e1-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, "Sample.Plugins.1.0.0.nupkg"), [0x50, 0x4b]);
+
+        TextReader originalIn = Console.In;
+        TextWriter originalOut = Console.Out;
+        var captured = new StringWriter();
+        try
+        {
+            Console.SetIn(new StringReader(string.Empty));
+            Console.SetOut(captured);
+
+            string[] args =
+            [
+                "--packages-dir", dir, "--interactive",
+                "--connection-string", "AuthType=ClientSecret;Url=https://x.crm.dynamics.com;TenantId=t;ClientId=c;ClientSecret=s"
+            ];
+            bool ok = CommandLineOptions.TryParseSharedOptions(args, out SharedOptions options, out int exit);
+
+            Assert.True(ok);
+            Assert.Equal(ExitSuccess, exit);
+            Assert.Null(options.PackageAssembly);
+            Assert.DoesNotContain("Package assembly name", captured.ToString());
+        }
+        finally
+        {
+            Console.SetIn(originalIn);
+            Console.SetOut(originalOut);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 }

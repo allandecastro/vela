@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.ServiceModel;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -435,11 +436,25 @@ namespace Vela.Testing
             return stored.Id;
         }
 
+        // 0x80040217 ObjectDoesNotExist — the platform's fault code for a record that does not exist. Real plugins
+        // (and Vela's own RetryPolicy) branch on this exact ErrorCode, and the harness's security layer already
+        // surfaces a FaultException for privilege denials, so a not-found must be a FaultException too (not a bare
+        // InvalidOperationException) for the double to stay substitutable with a real IOrganizationService.
+        private const int ObjectDoesNotExist = unchecked((int)0x80040217);
+
+        private static FaultException<OrganizationServiceFault> RecordDoesNotExist(string entityName, Guid id)
+        {
+            string message = $"{entityName} With Id = {id:D} Does Not Exist";
+            return new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { ErrorCode = ObjectDoesNotExist, Message = message },
+                new FaultReason(message));
+        }
+
         public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
         {
             if (!Table(entityName).TryGetValue(id, out Entity? stored))
             {
-                throw new InvalidOperationException($"{entityName} with id {id} does not exist in the in-memory store.");
+                throw RecordDoesNotExist(entityName, id);
             }
 
             if (!SecurityInfraTables.Contains(entityName))
@@ -467,7 +482,7 @@ namespace Vela.Testing
             EnsureWritable(entity.LogicalName);
             if (!Table(entity.LogicalName).TryGetValue(entity.Id, out Entity? stored))
             {
-                throw new InvalidOperationException($"{entity.LogicalName} with id {entity.Id} does not exist in the in-memory store.");
+                throw RecordDoesNotExist(entity.LogicalName, entity.Id);
             }
 
             bool changesOwner = entity.Contains(SystemFieldApplier.OwnerId);

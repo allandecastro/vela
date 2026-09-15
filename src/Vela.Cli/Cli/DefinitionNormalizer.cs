@@ -191,24 +191,12 @@ internal static class DefinitionNormalizer
         int allowedCustomProcessingStepType = TryGetInt(raw, "allowedCustomProcessingStepType");
         int bindingType = TryGetInt(raw, "bindingType", defaultValue: isBound ? 1 : 0);
         bool workflowSdkStepEnabled = TryGetBool(raw, "workflowSdkStepEnabled");
-        var inputParameters = TryGetCustomApiInputShapes(raw, "inputParameters");
-        var outputParameters = TryGetCustomApiOutputShapes(raw, "outputParameters");
+        object[] inputParameters = TryGetCustomApiInputShapes(raw, "inputParameters");
+        object[] outputParameters = TryGetCustomApiOutputShapes(raw, "outputParameters");
 
-        var normalized = new
-        {
-            pluginTypeName,
-            uniqueName,
-            isFunction,
-            isBound,
-            boundEntityLogicalName,
-            executePrivilegeName,
-            isPrivate,
-            allowedCustomProcessingStepType,
-            bindingType,
-            workflowSdkStepEnabled,
-            inputParameters,
-            outputParameters
-        };
+        object normalized = CustomApiShape.Build(
+            pluginTypeName, uniqueName, isFunction, isBound, boundEntityLogicalName, executePrivilegeName,
+            isPrivate, allowedCustomProcessingStepType, bindingType, workflowSdkStepEnabled, inputParameters, outputParameters);
 
         return JsonSerializer.SerializeToElement(normalized, jsonOptions);
     }
