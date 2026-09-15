@@ -43,24 +43,39 @@ value object, the **`StepDefinition`**:
 - **Runtime execution** - *what* happens when it fires. The sandbox instantiates your class and calls it; the
   base routes the call to the right typed handler.
 
-```text
-                         ┌─────────────────────── build / design time ───────────────────────┐
-RegisterPluginSteps()  →  RegisterSteps().OnUpdate().PostOperation().Mode(..).Filtering(..).Handler(OnX)
-        │                        (type-state fluent builder: message → stage → mode → filtering → images)
-        ▼
-   StepBuilder<TEntity>  ──Build()──►  StepDefinition   ──►  vela plan / apply  ──►  Dataverse sdkmessageprocessingstep
-        │                              (registration metadata: message, stage, mode, filtering, images, keys, config)
-        │
-        └────────────────────────────── runtime ──────────────────────────────┐
-                                                                               ▼
-Dataverse pipeline  →  IPlugin.Execute(IServiceProvider)  →  PluginBase  →  ILocalPluginContext
-                                                                 │   (depth guard, service container, wrapped
-                                                                 │    tracing services, execution snapshots)
-                                                                 ▼
-                                        EntityPluginBase.ExecuteDataversePlugin(ctx)
-                                                                 │  match the pipeline execution to one StepDefinition
-                                                                 ▼
-                        BuildTypedContext(message, stage, ctx)  →  I<Message>Context<TEntity>  →  .Handler(OnX) method
+`StepDefinition` is the pivot: you build it once from the fluent chain, and it is used two independent ways -
+deployed into Dataverse, and matched at runtime to route the call to your handler.
+
+```mermaid
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 6, "bottom": 18}, "nodeSpacing": 45, "rankSpacing": 50, "padding": 12}}}%%
+flowchart TB
+    A["RegisterPluginSteps()"]
+    B["type-state fluent builder<br/>OnUpdate().PostOperation().Mode(..).Filtering(..).Handler(OnX)<br/><i>message → stage → mode → filtering → images</i>"]
+    C["StepBuilder&lt;TEntity&gt;"]
+    SD[["StepDefinition<br/><i>message, stage, mode, filtering, images, keys, config</i>"]]
+    A --> B --> C
+    C -->|Build| SD
+
+    subgraph deploy ["Design-time: deploy the registration"]
+        direction TB
+        E["vela plan / apply"]
+        F[("Dataverse<br/>sdkmessageprocessingstep")]
+        E --> F
+    end
+
+    subgraph runtime ["Runtime: route the execution"]
+        direction TB
+        G["Dataverse pipeline fires the step"]
+        I["PluginBase → ILocalPluginContext<br/><i>depth guard, DI container, tracing, snapshots</i>"]
+        K["EntityPluginBase.ExecuteDataversePlugin(ctx)"]
+        L["BuildTypedContext(message, stage, ctx)"]
+        N["I&lt;Message&gt;Context&lt;TEntity&gt; → .Handler(OnX)"]
+        G --> I --> K --> L --> N
+    end
+
+    SD -->|diffed & applied| E
+    SD -. "matched at runtime" .-> K
+    F -. "the deployed step fires" .-> G
 ```
 
 ### The layers, bottom to top
