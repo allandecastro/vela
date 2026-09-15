@@ -1267,6 +1267,17 @@ $$"""
   <ItemGroup>
     <ProjectReference Include="..\{{sharedProjectName}}\{{sharedProjectName}}.csproj" />
   </ItemGroup>
+
+  <!-- The package version is pinned to 1.0.0 (so `vela plan/apply` can reference a stable artifacts path) while
+       the assembly version auto-increments (1.0.*). Because the .nupkg filename never changes, Pack's incremental
+       check can keep a STALE package after a code-only change and deploy an old assembly. Delete the package
+       before each build so GeneratePackageOnBuild always repacks it from the freshly built assembly. -->
+  <Target Name="RefreshPluginPackage" BeforeTargets="Build">
+    <PropertyGroup>
+      <_PluginPackagePath>$([MSBuild]::EnsureTrailingSlash('$(PackageOutputPath)'))$(PackageId).$(Version).nupkg</_PluginPackagePath>
+    </PropertyGroup>
+    <Delete Files="$(_PluginPackagePath)" Condition="Exists('$(_PluginPackagePath)')" />
+  </Target>
 {{signingTarget}}
 </Project>
 """;

@@ -24,6 +24,35 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.7.0] - 2026-09-16 (Vela.Cli)
+
+CLI line (`Vela.Cli`), published as `cli-v0.7.0`.
+
+### Added
+
+- **`vela add customapi --prefix <publisherprefix>`** overrides the Custom API unique-name prefix. It defaults to
+  the project prefix, but that must match the target solution's Dataverse *publisher* prefix (unrelated to the
+  `.NET` project prefix or the environment name); when the default is used, `add` now prints a note so a mismatch
+  is caught before `apply --solution` rejects it.
+
+### Changed
+
+- **`vela add plugin --filtering-attributes` now validates against the early-bound model.** Names are
+  case-sensitive property names (`Name`, not `name`); when the model is available, a value that does not match a
+  real property is flagged with a warning and a suggestion, so the mistake surfaces at generation time instead of
+  as a later compile error.
+
+### Fixed
+
+- **Updating a plugin step's image no longer fails.** Changing the columns of an existing pre/post image made
+  `apply` throw a platform `NullReferenceException` (0x80040216) from the Dataverse image-update path (even for an
+  attributes-only change, which the previous in-place update did not avoid). A changed image is now reconciled by
+  delete + recreate, which the platform accepts.
+- **Scaffolded plugin projects no longer package a stale assembly.** The plugin package version is pinned to
+  `1.0.0` while the assembly auto-increments, so `GeneratePackageOnBuild`'s incremental check could keep an old
+  `.nupkg` after a code-only change and deploy a stale assembly (`vela plan` would silently miss new types). The
+  generated project now deletes the package before each build so it is always repacked from the fresh assembly.
+
 ## [0.6.1] - 2026-09-15 (Vela.Cli)
 
 CLI line (`Vela.Cli`), published as `cli-v0.6.1`.

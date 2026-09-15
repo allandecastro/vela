@@ -408,11 +408,8 @@ internal static partial class DataverseRegistration
 
         if (existingByKey.TryGetValue(key, out Entity? existing))
         {
-            // The match key is (alias, imagetype), so those already agree, and messagepropertyname is derived from
-            // the (unchanged) message + imagetype. Only `attributes` can differ, so update just that. Crucially, do
-            // NOT re-set imagetype/messagepropertyname on an existing image: the platform throws a
-            // NullReferenceException (0x80040216) on such an image update, which broke every step update that had an
-            // image. Skip the update entirely when nothing changed.
+            // The match key is (alias, imagetype), so those already agree; only `attributes` can differ.
+            // Skip entirely when nothing changed.
             string existingAttributes = string.Join(",", (existing.GetAttributeValue<string>("attributes") ?? string.Empty)
                 .Split(',')
                 .Select(x => x.Trim())
@@ -423,10 +420,11 @@ internal static partial class DataverseRegistration
                 continue;
             }
 
-            Entity update = new Entity("sdkmessageprocessingstepimage") { Id = existing.Id };
-            update["attributes"] = attributesCsv;
-            service.Update(update);
-            continue;
+            // The platform's sdkmessageprocessingstepimage Update path throws a NullReferenceException
+            // (0x80040216) even for an attributes-only change (it dereferences fields the update payload does
+            // not carry), so we cannot Update the image in place. Delete the stale image and recreate it from
+            // scratch (the create path below is the same one that produced it initially, and is reliable).
+            service.Delete("sdkmessageprocessingstepimage", existing.Id);
         }
 
         Entity create = new Entity("sdkmessageprocessingstepimage");

@@ -165,6 +165,35 @@ public class AddCommandTests
         }
     }
 
+    // A Custom API's unique name must carry the target solution's publisher prefix, which is not the .NET
+    // project prefix. --prefix overrides the default so the generated unique name matches the publisher.
+    [Fact]
+    public void Add_CustomApi_PrefixOverride_UsesPublisherPrefixInUniqueName()
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["customapi", "RecalculateTotals", "--prefix", "dv", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "RecalculateTotals.cs"));
+            Assert.Contains("RegisterCustomApi(\"dv_RecalculateTotals\", nameof(Handle))", content);
+            Assert.DoesNotContain("acme_RecalculateTotals", content);
+        });
+    }
+
+    [Theory]
+    [InlineData("1bad")]       // starts with a digit
+    [InlineData("x")]          // too short (min 2)
+    [InlineData("toolongpx")]  // 9 chars (max 8)
+    [InlineData("has_us")]     // not alphanumeric
+    public void Add_CustomApi_InvalidPrefix_Fails(string prefix)
+    {
+        RunInProject("Acme.Plugins", (project, _) =>
+        {
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["customapi", "Foo", "--prefix", prefix, "--project", project]));
+        });
+    }
+
     // SetState/SetStateDynamicEntity are deprecated by the platform (use an Update of statecode/statuscode),
     // so the builder no longer exposes a typed On...() method for them. `vela add` treats them as any other
     // custom message and renders the permissive OnMessage("...") escape hatch.
