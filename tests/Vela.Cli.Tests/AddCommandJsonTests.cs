@@ -20,7 +20,7 @@ public sealed class AddCommandJsonTests
         RunInProject("Acme.Plugins", (project, dir) =>
         {
             string output = CaptureOut(() =>
-                Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountValidator", "--entity", "Account", "--project", project, "--json"])));
+                Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountValidator", "--entity", "Account", "--filtering-attributes", "Name", "--project", project, "--json"])));
 
             using JsonDocument doc = JsonDocument.Parse(output);
             Assert.Contains("plugin AccountValidator", doc.RootElement.GetProperty("description").GetString());

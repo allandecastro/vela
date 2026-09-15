@@ -37,7 +37,7 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["plugin", "AccountValidatorPlugin", "--entity", "Account", "--message", "Update", "--project", project]);
+            int exit = AddCommand.Run(["plugin", "AccountValidatorPlugin", "--entity", "Account", "--message", "Update", "--filtering-attributes", "Name", "--project", project]);
             Assert.Equal(ExitSuccess, exit);
 
             string file = Path.Combine(dir, "Account", "Plugins", "AccountValidatorPlugin.cs");
@@ -60,7 +60,7 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--project", project, "--force"]);
+            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--filtering-attributes", "Name", "--project", project, "--force"]);
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
@@ -91,13 +91,78 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["plugin", "AccountBulk", "--entity", "Account", "--message", message, "--project", project, "--force"]);
+            int exit = AddCommand.Run(["plugin", "AccountBulk", "--entity", "Account", "--message", message, "--filtering-attributes", "Name", "--project", project, "--force"]);
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountBulk.cs"));
             Assert.Contains(expectedCall, content);
             Assert.Contains(".FilteringAttributes(", content);
         });
+    }
+
+    // E2: --filtering-attributes renders one lambda per column, in order.
+    [Fact]
+    public void Add_Plugin_Update_ExplicitFilteringAttributes_RendersLambdas()
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountFiltered", "--entity", "Account", "--message", "Update", "--filtering-attributes", "Name,Telephone1", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountFiltered.cs"));
+            Assert.Contains(".FilteringAttributes(e => e.Name, e => e.Telephone1)", content);
+        });
+    }
+
+    // E2: a filtering-required message with no explicit attributes and no discoverable model fails with a clear
+    // error instead of emitting a non-compiling placeholder.
+    [Fact]
+    public void Add_Plugin_Update_NoFilteringAndNoModel_FailsClearly()
+    {
+        RunInProject("Acme.Plugins", (project, _) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountNoFilter", "--entity", "Account", "--message", "Update", "--project", project]);
+            Assert.Equal(ExitInvalidArguments, exit);
+        });
+    }
+
+    // E2 (Option B): with no explicit attributes, the filtering column is auto-detected from the entity's
+    // generated early-bound model (the conventional primary-name column) so the file compiles and applies.
+    [Fact]
+    public void Add_Plugin_Update_AutoDetectsFilteringAttributeFromModel()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "vela-add-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "Demo.sln"), string.Empty);
+            string pluginsDir = Path.Combine(root, "src", "Acme.Plugins");
+            Directory.CreateDirectory(pluginsDir);
+            string project = Path.Combine(pluginsDir, "Acme.Plugins.csproj");
+            File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><RootNamespace>Acme.Plugins</RootNamespace></PropertyGroup></Project>");
+
+            string modelsDir = Path.Combine(root, "src", "Acme.Shared", "Models", "Generated");
+            Directory.CreateDirectory(modelsDir);
+            File.WriteAllText(Path.Combine(modelsDir, "Account.cs"),
+                "public sealed class Account : Entity\n{\n    [AttributeLogicalName(\"accountnumber\")]\n    public string? AccountNumber\n    {\n        get; set;\n    }\n\n    [AttributeLogicalName(\"name\")]\n    public string? Name\n    {\n        get; set;\n    }\n}\n");
+
+            int exit = AddCommand.Run(["plugin", "AccountAuto", "--entity", "Account", "--message", "Update", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(pluginsDir, "Account", "Plugins", "AccountAuto.cs"));
+            Assert.Contains(".FilteringAttributes(e => e.Name)", content);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // Best-effort cleanup.
+            }
+        }
     }
 
     // SetState/SetStateDynamicEntity are deprecated by the platform (use an Update of statecode/statuscode),
@@ -355,9 +420,9 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "DupPlugin", "--entity", "Account", "--project", project]));
-            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["plugin", "DupPlugin", "--entity", "Account", "--project", project]));
-            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "DupPlugin", "--entity", "Account", "--project", project, "--force"]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "DupPlugin", "--entity", "Account", "--filtering-attributes", "Name", "--project", project]));
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["plugin", "DupPlugin", "--entity", "Account", "--filtering-attributes", "Name", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "DupPlugin", "--entity", "Account", "--filtering-attributes", "Name", "--project", project, "--force"]));
         });
     }
 

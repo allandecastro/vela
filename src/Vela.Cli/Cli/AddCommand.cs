@@ -457,22 +457,47 @@ internal static class AddCommand
         string message = known ?? rawMessage;
         string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
 
-        // Create/Update steps require at least one filtering attribute, and the builder's first argument is
-        // mandatory at compile time. The generator can't know which columns the caller actually generated onto
-        // the model (only Id, from the Entity base class, is guaranteed) and no real attribute is safe to
-        // assume, so it emits a placeholder property that does NOT exist. The project fails to build at this
-        // exact line (CS1061 "does not contain a definition for 'REPLACE_WITH_A_FILTERING_ATTRIBUTE'"), forcing
-        // the caller to pick a real filtering attribute before the step can be scanned or applied. This is
-        // deliberately better than a name that compiles: e.Id built fine but was then rejected at apply with the
-        // cryptic "Attribute (Id=id) does not exist", and a real column like e.OwnerId only compiles if that
-        // column was generated onto the model.
+        // Create/Update (and their bulk variants) require at least one filtering attribute, and the builder's
+        // first argument is mandatory at compile time. Prefer an explicit --filtering-attributes; otherwise
+        // auto-detect a sensible default column from the entity's generated early-bound model so the emitted file
+        // both compiles AND applies. Fall back to a clear error rather than ever emitting non-compiling code.
         bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
             || string.Equals(message, "Update", StringComparison.Ordinal)
             || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
             || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
-        string filteringCall = needsFiltering
-            ? "\n                .FilteringAttributes(e => e.REPLACE_WITH_A_FILTERING_ATTRIBUTE /* TODO: pick the attribute(s) that should trigger this step, e.g. e => e.Name */)"
-            : string.Empty;
+
+        string filteringCall = string.Empty;
+        if (needsFiltering)
+        {
+            string[] explicitAttributes = SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter"));
+            bool autoSelected = false;
+            string[] attributes;
+            if (explicitAttributes.Length > 0)
+            {
+                foreach (string attribute in explicitAttributes)
+                {
+                    if (!IdentifierPattern.IsMatch(attribute))
+                    {
+                        return Fail($"Invalid --filtering-attributes value '{attribute}'. Use the early-bound property name(s), e.g. --filtering-attributes Name.", ExitInvalidArguments, includeUsage: false);
+                    }
+                }
+
+                attributes = explicitAttributes;
+            }
+            else if (TryPickDefaultFilteringAttribute(projectDir, entity!, out string picked))
+            {
+                attributes = [picked];
+                autoSelected = true;
+            }
+            else
+            {
+                return Fail($"'{message}' steps require at least one filtering attribute and none could be inferred for '{entity}'. Pass --filtering-attributes <PropertyName[,PropertyName...]> (the early-bound column(s) whose change should trigger the step, e.g. --filtering-attributes Name).", ExitInvalidArguments, includeUsage: false);
+            }
+
+            string lambdas = string.Join(", ", attributes.Select(a => $"e => e.{a}"));
+            string note = autoSelected ? " /* auto-selected; change to the column(s) that should trigger this step */" : string.Empty;
+            filteringCall = $"\n                .FilteringAttributes({lambdas}){note}";
+        }
 
         string ns = $"{rootNamespace}.{entity}.Plugins";
         string relativePath = Path.Combine(entity!, "Plugins", $"{name}.cs");
@@ -641,10 +666,139 @@ internal static class AddCommand
     private static bool IsHelp(string arg) =>
         arg is "--help" or "-h" or "-?" or "/?" or "help";
 
+    // Splits a comma-separated option value into trimmed, non-empty tokens.
+    private static string[] SplitList(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    // Property + logical name preceding attribute on a generated early-bound model.
+    private static readonly Regex LogicalNameAttr = new("\\[AttributeLogicalName\\(\"(?<logical>[^\"]+)\"\\)\\]", RegexOptions.Compiled);
+    private static readonly Regex PropertyDecl = new("^\\s*public\\s+(?<type>[\\w\\.<>\\?\\[\\],\\s]+?)\\s+(?<name>\\w+)\\s*$", RegexOptions.Compiled);
+
+    // Auto-selects a default filtering attribute for a Create/Update step by reading the entity's generated
+    // early-bound model. Prefers the conventional primary-name column ("name", else a string column whose logical
+    // name ends with "name"), else the first non-Id string column, else the first non-Id column. Returns the C#
+    // property name (what the FilteringAttributes lambda references). False when no model / no candidate is found.
+    private static bool TryPickDefaultFilteringAttribute(string projectDir, string entity, out string property)
+    {
+        property = string.Empty;
+        if (!TryFindEntityModelFile(projectDir, entity, out string modelPath))
+        {
+            return false;
+        }
+
+        var candidates = new List<(string Property, string Logical, bool IsString)>();
+        string? pendingLogical = null;
+        foreach (string line in File.ReadLines(modelPath))
+        {
+            Match logicalMatch = LogicalNameAttr.Match(line);
+            if (logicalMatch.Success)
+            {
+                pendingLogical = logicalMatch.Groups["logical"].Value;
+                continue;
+            }
+
+            if (pendingLogical == null)
+            {
+                continue;
+            }
+
+            Match propertyMatch = PropertyDecl.Match(line);
+            if (propertyMatch.Success)
+            {
+                string prop = propertyMatch.Groups["name"].Value;
+                string type = propertyMatch.Groups["type"].Value;
+                if (!string.Equals(prop, "Id", StringComparison.Ordinal))
+                {
+                    candidates.Add((prop, pendingLogical.ToLowerInvariant(), type.Contains("string", StringComparison.OrdinalIgnoreCase)));
+                }
+
+                pendingLogical = null;
+            }
+        }
+
+        var chosen = candidates.FirstOrDefault(c => c.Logical == "name");
+        if (string.IsNullOrEmpty(chosen.Property))
+        {
+            chosen = candidates.FirstOrDefault(c => c.IsString && c.Logical.EndsWith("name", StringComparison.Ordinal));
+        }
+
+        if (string.IsNullOrEmpty(chosen.Property))
+        {
+            chosen = candidates.FirstOrDefault(c => c.IsString);
+        }
+
+        if (string.IsNullOrEmpty(chosen.Property))
+        {
+            chosen = candidates.FirstOrDefault();
+        }
+
+        if (string.IsNullOrEmpty(chosen.Property))
+        {
+            return false;
+        }
+
+        property = chosen.Property;
+        return true;
+    }
+
+    // Locates the generated early-bound model file for an entity: walks up from the target project to the solution
+    // root (a directory holding a .sln, else the highest reached), then finds a "{entity}.cs" that declares
+    // "class {entity} : Entity", skipping build output. False when not found.
+    private static bool TryFindEntityModelFile(string projectDir, string entity, out string path)
+    {
+        path = string.Empty;
+
+        // Bound the search to the solution root (a directory holding a .sln) so auto-detection can reach a sibling
+        // models project. If no .sln is found within a few levels, fall back to the project directory itself rather
+        // than climbing toward the filesystem root and scanning an enormous tree.
+        string root = projectDir;
+        string? dir = projectDir;
+        for (int i = 0; i < 6 && dir != null; i++)
+        {
+            if (Directory.EnumerateFiles(dir, "*.sln", SearchOption.TopDirectoryOnly).Any())
+            {
+                root = dir;
+                break;
+            }
+
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        var classDecl = new Regex($"class\\s+{Regex.Escape(entity)}\\s*:\\s*Entity", RegexOptions.Compiled);
+        foreach (string file in Directory.EnumerateFiles(root, entity + ".cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string text;
+            try
+            {
+                text = File.ReadAllText(file);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (classDecl.IsMatch(text))
+            {
+                path = file;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // Options that consume the next token as their value; everything else may be a positional. Also the
     // value-option half of the unknown-option allowlist (union over all add kinds). Keep in sync with the kinds.
     internal static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
-        { "--entity", "-e", "--project", "-p", "--message", "--kind", "--handler" };
+        { "--entity", "-e", "--project", "-p", "--message", "--kind", "--handler", "--filtering-attributes", "--filter" };
 
     // Boolean flags across all add kinds (customapi binding/operation, --force/--json, interactive, help).
     internal static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
@@ -676,7 +830,7 @@ internal static class AddCommand
     private static void PrintAddUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  vela add plugin <Name> --entity <ModelType> [--message <Message>] [--project <csproj>] [--force]");
+        Console.WriteLine("  vela add plugin <Name> --entity <ModelType> [--message <Message>] [--filtering-attributes <Col1,Col2>] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add service <Name> --entity <ModelType> [--project <csproj>] [--force]");
         Console.WriteLine("  vela add customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--project <csproj>] [--force]");
