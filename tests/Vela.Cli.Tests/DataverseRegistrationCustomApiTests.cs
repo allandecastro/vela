@@ -43,7 +43,9 @@ public sealed class DataverseRegistrationCustomApiTests
         {
             pluginTypeName = Plugin,
             uniqueName = "zava_DoThing",
-            isFunction = true,
+            // A workflow-enabled Custom API must be an action (IsFunction=false); the two are mutually exclusive
+            // and now validated, so this fixture uses that valid combination while still exercising every column.
+            isFunction = false,
             isBound = true,
             boundEntityLogicalName = "account",
             executePrivilegeName = "prvDoThing",
@@ -61,7 +63,7 @@ public sealed class DataverseRegistrationCustomApiTests
         Assert.Equal("zava_DoThing", api.GetAttributeValue<string>("name"));
         Assert.Equal("zava_DoThing", api.GetAttributeValue<string>("displayname"));
         Assert.Equal("zava_DoThing", api.GetAttributeValue<string>("description"));
-        Assert.True(api.GetAttributeValue<bool>("isfunction"));
+        Assert.False(api.GetAttributeValue<bool>("isfunction"));
         Assert.Equal("account", api.GetAttributeValue<string>("boundentitylogicalname"));
         Assert.Equal("prvDoThing", api.GetAttributeValue<string>("executeprivilegename"));
         Assert.True(api.GetAttributeValue<bool>("isprivate"));
@@ -141,6 +143,86 @@ public sealed class DataverseRegistrationCustomApiTests
         Assert.Contains((string)expectedInMessage[0], ex.Message);
         Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
+    }
+
+    [Fact]
+    public void UpsertCustomApi_throws_when_allowedCustomProcessingStepType_changes()
+    {
+        var existingId = Guid.NewGuid();
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService(new Entity("customapi", existingId));
+        svc.OnRetrieve = (_, _, _) => new Entity("customapi", existingId) { ["allowedcustomprocessingsteptype"] = new OptionSetValue(1) };
+        JsonElement def = Json(new { pluginTypeName = Plugin, uniqueName = "zava_DoThing", allowedCustomProcessingStepType = 0 });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
+        Assert.Contains("allowedCustomProcessingStepType", ex.Message);
+        Assert.Contains("cannot be changed", ex.Message);
+        Assert.Empty(svc.Updated);
+    }
+
+    [Fact]
+    public void UpsertCustomApi_throws_when_workflowSdkStepEnabled_changes()
+    {
+        var existingId = Guid.NewGuid();
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService(new Entity("customapi", existingId));
+        svc.OnRetrieve = (_, _, _) => new Entity("customapi", existingId) { ["workflowsdkstepenabled"] = true };
+        JsonElement def = Json(new { pluginTypeName = Plugin, uniqueName = "zava_DoThing", workflowSdkStepEnabled = false });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
+        Assert.Contains("workflowSdkStepEnabled", ex.Message);
+        Assert.Contains("cannot be changed", ex.Message);
+        Assert.Empty(svc.Updated);
+    }
+
+    [Fact]
+    public void UpsertCustomApi_throws_when_workflow_enabled_on_a_function()
+    {
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService();
+        JsonElement def = Json(new { pluginTypeName = Plugin, uniqueName = "zava_DoThing", isFunction = true, workflowSdkStepEnabled = true });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
+        Assert.Contains("WorkflowSdkStepEnabled requires an action", ex.Message);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
+    public void UpsertCustomApi_throws_when_workflow_enabled_with_entity_parameter()
+    {
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService();
+        JsonElement def = Json(new
+        {
+            pluginTypeName = Plugin,
+            uniqueName = "zava_DoThing",
+            isFunction = false,
+            workflowSdkStepEnabled = true,
+            inputParameters = new[] { new { name = "Record", parameterTypeName = "Microsoft.Xrm.Sdk.Entity", isCollection = false } },
+        });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
+        Assert.Contains("not allowed when WorkflowSdkStepEnabled", ex.Message);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
+    public void UpsertCustomApi_throws_when_uniquename_missing_solution_prefix()
+    {
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService();
+        JsonElement def = Json(new { pluginTypeName = Plugin, uniqueName = "DoThing" });
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false, solutionPrefix: "zava"));
+        Assert.Contains("must start with the solution publisher prefix", ex.Message);
+        Assert.Contains("zava_", ex.Message);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
+    public void UpsertCustomApi_accepts_uniquename_with_solution_prefix()
+    {
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService();
+        JsonElement def = Json(new { pluginTypeName = Plugin, uniqueName = "zava_DoThing" });
+
+        DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false, solutionPrefix: "zava");
+        Assert.Single(svc.Created);
     }
 
     [Fact]

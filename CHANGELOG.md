@@ -24,10 +24,43 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Framework
+
+#### Fixed
+
+- **Test harness: a plugin sees the configured caller's identity, not a random value.** `ctx.UserId`,
+  `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` on the execution context now come from the store's
+  acting user (`WithCurrentUser` / `WithCurrentBusinessUnit` / `WithOrganizationId`), consistent with what
+  `WhoAmI` and `createdby`/`ownerid` stamping report, instead of ctor-default GUIDs.
+- **Test harness: `ParentContext` is populated on a cascaded execution.** A plugin fired by another plugin's write
+  now sees its caller's context as `IPluginExecutionContext.ParentContext` (with its `SharedVariables`), so
+  re-entrancy guards like `if (ctx.ParentContext?.MessageName == "Create")` behave as they do in Dataverse.
+- **Test harness: a not-found record raises the platform fault, not `InvalidOperationException`.** Retrieving or
+  updating a missing record now throws `FaultException<OrganizationServiceFault>` with the documented
+  `ObjectDoesNotExist` code (`-2147220969`), matching a real `IOrganizationService`, so a plugin that catches the
+  fault code behaves the same under the harness as in production.
+
 ### CLI
+
+#### Added
+
+- **`vela add plugin` accepts `--filtering-attributes <Col1,Col2>`** to set the filtering attribute(s) for a
+  `Create`/`Update` (or `CreateMultiple`/`UpdateMultiple`) step. When omitted, the column is auto-detected from
+  the entity's generated early-bound model (the conventional primary-name column). The generated file always
+  compiles and applies; when nothing can be inferred, `add` fails with a clear message instead of emitting a
+  non-compiling placeholder.
+- **`vela models --custom-apis` with no value warns before generating every Custom API.** Bare `--custom-apis`
+  emits all Custom APIs in the environment (system ones included, often hundreds of files); it now prints a
+  warning pointing at `--custom-apis <a,b,c>` to target specific ones or `--package`/`--packages-dir` to exclude
+  the ones you authored in code.
 
 #### Changed
 
+- **`vela add plugin` no longer emits the non-compiling `REPLACE_WITH_A_FILTERING_ATTRIBUTE` placeholder.** See
+  the `--filtering-attributes` behavior above.
+- **The Custom API plan/apply diff shape is built from a single source of truth** (`CustomApiShape`), shared by the
+  live read, the local normalizer and the parameter reader, so the shape can no longer drift between the read and
+  normalize sides (the divergence class that produces a permanent non-converging "changed").
 - **`vela models` generates the roles it can resolve instead of aborting on the first missing one.** A typo'd or
   absent `--roles` name is now warned about and skipped; the run still generates the roles that resolved, and only
   fails when none of the requested roles exist.
@@ -35,12 +68,37 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `--messages`, `--roles`, `--solution-roles` and `--lang` (previously only `--solution`/`--entities`/`--forms`/
   `--tables` were shown, though the others already worked and are detailed under `vela models --help`).
 
-#### Added
+#### Fixed
 
-- **`vela models --custom-apis` with no value warns before generating every Custom API.** Bare `--custom-apis`
-  emits all Custom APIs in the environment (system ones included — often hundreds of files); it now prints a
-  warning pointing at `--custom-apis <a,b,c>` to target specific ones or `--package`/`--packages-dir` to exclude
-  the ones you authored in code.
+- **`plan`/`apply`/`inspect` no longer hang under `--interactive` when stdin is redirected** (CI, agents,
+  piped input). The optional "package assembly name" prompt now only appears on a real terminal, so a scripted
+  run with all inputs supplied no longer blocks on `Console.ReadLine()`.
+- **`apply --solution` fails fast with an actionable message when given a NuGet-signed plugin package.** Adding
+  the solution publisher prefix rewrites (repacks) the package, which invalidates the signature and was rejected
+  by Dataverse with the cryptic `0x80040265` "signature does not cover the package content". `apply` now detects
+  the signature up front and explains how to proceed (build/sign the package already named with the prefix, or
+  apply without `--solution`).
+- **`apply` fails fast instead of silently registering an unfiltered (global) step.** When a step names an entity
+  whose `(entity, message)` has no `sdkmessagefilter` (a typo'd or unsupported entity), Vela previously omitted the
+  filter and registered a step that fired for **every** entity supporting the message. It now throws a clear error.
+- **Custom API deletion is scoped to its plugin type.** Deleting a step during `apply` matched by display name
+  alone, which is not unique across plugin types/assemblies and could delete an unrelated step; the lookup is now
+  scoped to the resolved plugin type (with an unscoped name match kept only as a last resort when the plugin type
+  no longer resolves).
+- **`apply` guards the two remaining immutable Custom API fields.** `allowedCustomProcessingStepType` and
+  `workflowSdkStepEnabled` join `isFunction`/`bindingType`/`boundEntity` in the "cannot be changed after saved"
+  check, so changing them no longer reports a successful update that never converges (a permanent phantom diff).
+- **`apply` validates `WorkflowSdkStepEnabled` constraints locally.** A workflow-enabled Custom API must be an
+  action (not a function) and cannot use Entity/EntityCollection/StringArray parameters; violations now fail with a
+  clear message instead of an opaque platform error at apply.
+- **`apply --solution` validates the Custom API unique-name publisher prefix** (as it already does for web
+  resources and plugin packages), so a unique name missing the prefix fails with guidance rather than a cryptic
+  Dataverse error.
+- **Custom API parameter type resolution no longer over-matches on substrings.** The CLR-type to Custom API type
+  mapping was an order-dependent `string.Contains` ladder in which any type name containing `"int"` resolved to
+  `Integer` (and `Entity` had to be tested after `EntityReference`/`EntityCollection`). It is now an exact
+  simple-name table covering the SDK type names, the Custom API type labels and the C# aliases, so an unrelated
+  type resolves correctly (or falls back to `String`) instead of being misclassified.
 
 ## [0.12.0] - 2026-09-14 (Vela.Plugins + Vela.Testing)
 

@@ -139,11 +139,17 @@ internal static partial class DataverseRegistration
 
         done++; // publish + resolve plugin types
 
+        // When applying into a solution, Custom API unique names must carry the publisher prefix. Resolve it once
+        // (only when there is a Custom API to write) so UpsertCustomApi can validate the prefix locally.
+        string? customApiSolutionPrefix = (addedApis.Count > 0 || changedApis.Count > 0) && !string.IsNullOrWhiteSpace(solutionUniqueName)
+            ? ResolveSolutionCustomizationPrefix(service, solutionUniqueName!)
+            : null;
+
         foreach (RegistrationItem item in addedApis)
         {
             try
             {
-                UpsertCustomApi(svc, pluginTypeIds, item.Definition, verbose);
+                UpsertCustomApi(svc, pluginTypeIds, item.Definition, verbose, customApiSolutionPrefix);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
             {
@@ -157,7 +163,7 @@ internal static partial class DataverseRegistration
         {
             try
             {
-                UpsertCustomApi(svc, pluginTypeIds, change.After, verbose);
+                UpsertCustomApi(svc, pluginTypeIds, change.After, verbose, customApiSolutionPrefix);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
             {
@@ -403,6 +409,20 @@ internal static partial class DataverseRegistration
         return File.ReadAllBytes(packagePath);
     }
 
+    // Applying with --solution injects the publisher prefix by rewriting the package id in the .nuspec and
+    // repacking. That repack changes the archive content, which invalidates any NuGet author signature: Dataverse
+    // then rejects the upload with 0x80040265 "the package is signed but its signature does not cover the package
+    // content". Detect a signed package up front and fail with an actionable message instead of a cryptic
+    // platform error. (The package must be named with the prefix BEFORE signing, or applied without --solution.)
+    if (IsPackageSigned(packagePath))
+    {
+        throw new InvalidOperationException(
+            $"Plugin package '{originalPackageName}' is signed, but applying it with a solution requires renaming it " +
+            $"to '{desiredPackageName}' (to add the publisher prefix), which would invalidate the signature and be " +
+            "rejected by Dataverse (0x80040265). Build/sign the package already named with the solution publisher " +
+            $"prefix ('{desiredPackageName}'), or apply without --solution.");
+    }
+
     string tempRoot = Path.Combine(Path.GetTempPath(), "vela-tools", Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(tempRoot);
     tempDirectories.Add(tempRoot);
@@ -443,6 +463,14 @@ internal static partial class DataverseRegistration
     string transformedPackagePath = Path.Combine(outputDirectory, $"{desiredPackageName}.nupkg");
     ZipFile.CreateFromDirectory(tempRoot, transformedPackagePath);
     return File.ReadAllBytes(transformedPackagePath);
+}
+
+    // A NuGet-signed package carries a top-level '.signature.p7s' entry (the PKCS#7 signature). Its presence means
+    // any modification to the archive (e.g. the prefix-rename repack) invalidates the signature.
+    internal static bool IsPackageSigned(string packagePath)
+{
+    using ZipArchive archive = ZipFile.OpenRead(packagePath);
+    return archive.GetEntry(".signature.p7s") != null;
 }
 
     internal static Entity? GetPluginPackage(IOrganizationService service, string packageName)

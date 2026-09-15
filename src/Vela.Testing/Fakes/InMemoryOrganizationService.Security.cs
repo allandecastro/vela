@@ -78,6 +78,18 @@ namespace Vela.Testing
             return new SystemActor(_currentUserId, businessUnit, _currentOrganizationId);
         }
 
+        /// <summary>
+        /// The acting identity (user, its business unit, and organization) the pipeline stamps onto a plugin
+        /// execution context. Kept consistent with what <c>WhoAmI</c> reports and how <c>createdby</c>/<c>ownerid</c>
+        /// are stamped, so a plugin reading <c>ctx.UserId</c>/<c>InitiatingUserId</c>/<c>BusinessUnitId</c>/
+        /// <c>OrganizationId</c> sees the configured caller (<see cref="WithCurrentUser"/>), not a random value.
+        /// </summary>
+        public (Guid UserId, Guid BusinessUnitId, Guid OrganizationId) CurrentActor()
+        {
+            SystemActor actor = Actor();
+            return (actor.UserId, actor.BusinessUnitId, actor.OrganizationId);
+        }
+
         // Field-level security: drop field-secured columns the current user may not read from a returned record.
         private void MaskSecuredColumns(Entity entity)
         {

@@ -164,6 +164,92 @@ public class DataverseRegistrationHelperTests
         Assert.Equal("ZAVA_MyPackage", DataverseRegistration.NormalizePackageNameWithPrefix("ZAVA_MyPackage", "zava"));
     }
 
+    // --- IsPackageSigned / ReadPackageBytesForImport (signed-package guard, E8) ----------------
+
+    [Fact]
+    public void IsPackageSigned_false_for_unsigned_package()
+    {
+        string path = WriteTempNupkg("MyPackage", signed: false);
+        try
+        {
+            Assert.False(DataverseRegistration.IsPackageSigned(path));
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void IsPackageSigned_true_when_signature_entry_present()
+    {
+        string path = WriteTempNupkg("MyPackage", signed: true);
+        try
+        {
+            Assert.True(DataverseRegistration.IsPackageSigned(path));
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ReadPackageBytesForImport_matching_name_returns_bytes_even_if_signed()
+    {
+        // No rename needed → the signed package is passed through untouched (signature stays valid).
+        string path = WriteTempNupkg("zava_MyPackage", signed: true);
+        var temps = new List<string>();
+        try
+        {
+            byte[] bytes = DataverseRegistration.ReadPackageBytesForImport(path, "zava_MyPackage", "zava_MyPackage", temps);
+            Assert.Equal(System.IO.File.ReadAllBytes(path), bytes);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ReadPackageBytesForImport_signed_package_needing_rename_throws_actionable_error()
+    {
+        // Applying with --solution would rename (add the publisher prefix) and repack, invalidating the signature.
+        string path = WriteTempNupkg("MyPackage", signed: true);
+        var temps = new List<string>();
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => DataverseRegistration.ReadPackageBytesForImport(path, "MyPackage", "zava_MyPackage", temps));
+            Assert.Contains("signed", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("zava_MyPackage", ex.Message);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    private static string WriteTempNupkg(string id, bool signed)
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"vela-test-{Guid.NewGuid():N}.nupkg");
+        using (var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using (var entry = new System.IO.StreamWriter(zip.CreateEntry($"{id}.nuspec").Open()))
+            {
+                entry.Write($"<?xml version=\"1.0\"?><package xmlns=\"http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd\"><metadata><id>{id}</id><version>1.0.0</version></metadata></package>");
+            }
+
+            if (signed)
+            {
+                using var sig = new System.IO.StreamWriter(zip.CreateEntry(".signature.p7s").Open());
+                sig.Write("dummy-signature");
+            }
+        }
+
+        return path;
+    }
+
     // --- ResolveCustomApiTypeCode --------------------------------------------------------------
 
     [Fact]
@@ -240,6 +326,25 @@ public class DataverseRegistrationHelperTests
             (string typeName, bool isCollection) = DataverseRegistration.ResolveCustomApiTypeName(code, null);
             Assert.Equal(code, DataverseRegistration.ResolveCustomApiTypeCode(typeName, isCollection));
         }
+    }
+
+    // M1: the old string.Contains ladder mapped ANY type name containing "int" to Integer (and relied on branch
+    // order for Entity vs EntityReference). The exact simple-name table no longer over-matches.
+    [Theory]
+    [InlineData("MyCompany.PrintJob")]   // contains "int" but is not an integer type
+    [InlineData("System.Uri")]            // unknown scalar
+    public void ResolveCustomApiTypeCode_unknown_type_defaults_to_string_not_integer(string typeName)
+    {
+        Assert.Equal(SdkConstants.CustomApiParameterType.String, DataverseRegistration.ResolveCustomApiTypeCode(typeName, isCollection: false));
+    }
+
+    [Fact]
+    public void ResolveCustomApiTypeCode_matches_by_exact_simple_name_not_substring()
+    {
+        // EntityReference resolves to its own code (5), not Entity (3) — no branch-order dependency.
+        Assert.Equal(SdkConstants.CustomApiParameterType.EntityReference, DataverseRegistration.ResolveCustomApiTypeCode("Microsoft.Xrm.Sdk.EntityReference", isCollection: false));
+        // A short name (no namespace) still resolves.
+        Assert.Equal(SdkConstants.CustomApiParameterType.Picklist, DataverseRegistration.ResolveCustomApiTypeCode("Picklist", isCollection: false));
     }
 
     // --- GetRequiredPluginTypeNames / AddRequiredPluginTypeName --------------------------------
