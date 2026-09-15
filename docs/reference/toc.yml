@@ -1,3 +1,5 @@
+- name: CLI cheat sheet
+  href: cli-cheatsheet.md
 - name: Limitations
   href: limitations.md
 - name: FAQ

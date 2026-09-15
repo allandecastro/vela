@@ -255,6 +255,7 @@ main.container-xxl > .content:only-child > article > h2 {
 [data-bs-theme='dark'] .dark-only { display: inline; }
 .vela-hero-tagline { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.45rem; color: var(--vela-ink); }
 .vela-hero-sub { max-width: 40rem; margin: 0 auto 1.5rem; color: var(--vela-muted); text-align: center; }
+.vela-hero-for { text-align: center; color: var(--vela-muted); font-size: 0.95rem; margin: -0.5rem 0 0.5rem; }
 .vela-hero-actions { margin: 0; text-align: center; }
 .vela-btn, .vela-btn-ghost {
   display: inline-block; padding: 0.55rem 1.15rem; border-radius: 8px; font-weight: 600;

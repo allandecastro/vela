@@ -32,3 +32,10 @@ for the layout and the [guides](../guides/index.md) to write and test your own c
 > (a `pac plugin init` project) references your domain/model projects, which in turn use the framework
 > abstractions through the NuGet dependency.
 
+## Next steps
+
+- **[What `vela init` scaffolds](initialize-a-solution.md)** - the projects you just generated and where to edit.
+- **Author** - [write a plugin](../guides/plugins.md) or a [Custom API](../guides/custom-apis.md).
+- **Test** - [run it against an in-memory Dataverse](../guides/testing.md), no connection.
+- **Deploy** - [plan then apply](../guides/plan-apply.md) into your environment.
+
