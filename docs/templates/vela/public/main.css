@@ -265,3 +265,78 @@ main.container-xxl > .content:only-child > article > h2 {
 .vela-btn:hover { filter: brightness(1.06); }
 .vela-btn-ghost { border: 1px solid var(--bs-border-color); color: var(--vela-ink) !important; }
 .vela-btn-ghost:hover { border-color: var(--vela-accent); }
+
+/* --- Mermaid diagrams: Vela-branded, follows light/dark via the --vela-* variables --- */
+.mermaid { text-align: center; margin: 1.75rem 0; line-height: normal; }
+.mermaid svg { max-width: 100%; height: auto; }
+
+/* Nodes: soft blue fill, accent border, ink label in Inter. */
+.mermaid .node rect,
+.mermaid .node polygon,
+.mermaid .node circle,
+.mermaid .node path,
+.mermaid .node .basic {
+  fill: var(--vela-accent-soft) !important;
+  stroke: var(--vela-accent) !important;
+  stroke-width: 1.25px !important;
+  rx: 8px; ry: 8px;
+}
+
+/* Database (cylinder) shape - the Dataverse store node. */
+.mermaid .node .label-container { fill: var(--vela-accent-soft) !important; stroke: var(--vela-accent) !important; }
+
+/* Subgraph clusters: quiet card, hairline border, muted title. */
+.mermaid .cluster rect {
+  fill: transparent !important;
+  stroke: var(--vela-line) !important;
+  stroke-width: 1px !important;
+  rx: 12px; ry: 12px;
+}
+.mermaid .cluster-label,
+.mermaid .cluster-label p,
+.mermaid .cluster-label span,
+.mermaid .cluster text {
+  fill: var(--vela-muted) !important;
+  color: var(--vela-muted) !important;
+  font-weight: 600 !important;
+}
+
+/* Node label text (HTML foreignObject and plain SVG text). */
+.mermaid .nodeLabel,
+.mermaid .nodeLabel p,
+.mermaid .label,
+.mermaid .node text,
+.mermaid span.nodeLabel {
+  fill: var(--vela-ink) !important;
+  color: var(--vela-ink) !important;
+  font-family: var(--bs-body-font-family) !important;
+  font-size: 0.82rem !important;
+}
+.mermaid .nodeLabel i, .mermaid .nodeLabel em { color: var(--vela-muted) !important; font-style: italic; }
+
+/* Edges + arrowheads: understated slate. */
+.mermaid .edgePath .path,
+.mermaid .flowchart-link,
+.mermaid path.path {
+  stroke: var(--vela-muted) !important;
+  stroke-width: 1.3px !important;
+}
+.mermaid marker path,
+.mermaid .arrowheadPath,
+.mermaid #arrowhead path,
+.mermaid defs marker path { fill: var(--vela-muted) !important; stroke: var(--vela-muted) !important; }
+
+/* Edge labels (Build, match one StepDefinition, ...): match the page background so lines don't cut through. */
+.mermaid .edgeLabel,
+.mermaid .edgeLabel rect,
+.mermaid .edgeLabel foreignObject > div {
+  background: var(--bs-body-bg) !important;
+  fill: var(--bs-body-bg) !important;
+}
+.mermaid .edgeLabel .label,
+.mermaid .edgeLabel span,
+.mermaid .edgeLabel p {
+  color: var(--vela-muted) !important;
+  fill: var(--vela-muted) !important;
+  font-size: 0.76rem !important;
+}

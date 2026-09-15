@@ -43,36 +43,39 @@ value object, the **`StepDefinition`**:
 - **Runtime execution** - *what* happens when it fires. The sandbox instantiates your class and calls it; the
   base routes the call to the right typed handler.
 
+`StepDefinition` is the pivot: you build it once from the fluent chain, and it is used two independent ways -
+deployed into Dataverse, and matched at runtime to route the call to your handler.
+
 ```mermaid
-flowchart TD
-    subgraph build ["Build / design time (when the plugin fires)"]
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 6, "bottom": 18}, "nodeSpacing": 45, "rankSpacing": 50, "padding": 12}}}%%
+flowchart TB
+    A["RegisterPluginSteps()"]
+    B["type-state fluent builder<br/>OnUpdate().PostOperation().Mode(..).Filtering(..).Handler(OnX)<br/><i>message → stage → mode → filtering → images</i>"]
+    C["StepBuilder&lt;TEntity&gt;"]
+    SD[["StepDefinition<br/><i>message, stage, mode, filtering, images, keys, config</i>"]]
+    A --> B --> C
+    C -->|Build| SD
+
+    subgraph deploy ["Design-time: deploy the registration"]
         direction TB
-        A["RegisterPluginSteps()"]
-        B["RegisterSteps().OnUpdate().PostOperation()<br/>.Mode(..).Filtering(..).Handler(OnX)<br/><i>type-state fluent builder:<br/>message → stage → mode → filtering → images</i>"]
-        C["StepBuilder&lt;TEntity&gt;"]
-        D["StepDefinition<br/><i>message, stage, mode, filtering, images, keys, config</i>"]
         E["vela plan / apply"]
         F[("Dataverse<br/>sdkmessageprocessingstep")]
-        A --> B --> C
-        C -->|Build| D --> E --> F
+        E --> F
     end
 
-    subgraph run ["Runtime (what happens when it fires)"]
+    subgraph runtime ["Runtime: route the execution"]
         direction TB
-        G["Dataverse pipeline"]
-        H["IPlugin.Execute(IServiceProvider)"]
-        I["PluginBase<br/><i>depth guard, per-execution DI container,<br/>wrapped tracing services, execution snapshots</i>"]
-        J["ILocalPluginContext"]
+        G["Dataverse pipeline fires the step"]
+        I["PluginBase → ILocalPluginContext<br/><i>depth guard, DI container, tracing, snapshots</i>"]
         K["EntityPluginBase.ExecuteDataversePlugin(ctx)"]
         L["BuildTypedContext(message, stage, ctx)"]
-        M["I&lt;Message&gt;Context&lt;TEntity&gt;"]
-        N[".Handler(OnX) method"]
-        G --> H --> I --> J --> K
-        K -->|match one StepDefinition| L --> M --> N
+        N["I&lt;Message&gt;Context&lt;TEntity&gt; → .Handler(OnX)"]
+        G --> I --> K --> L --> N
     end
 
-    F -. "the sandbox fires the registered step" .-> G
-    D -. "the runtime matches this definition" .-> K
+    SD -->|diffed & applied| E
+    SD -. "matched at runtime" .-> K
+    F -. "the deployed step fires" .-> G
 ```
 
 ### The layers, bottom to top
