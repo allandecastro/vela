@@ -21,17 +21,6 @@ public sealed record GeneratedModel(string FileName, string Code);
 /// </summary>
 public static class ModelGenerator
 {
-    private static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
-    {
-        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const",
-        "continue", "decimal", "default", "delegate", "do", "double", "else", "enum", "event", "explicit", "extern",
-        "false", "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit", "in", "int", "interface",
-        "internal", "is", "lock", "long", "namespace", "new", "null", "object", "operator", "out", "override",
-        "params", "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
-        "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true", "try", "typeof",
-        "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while",
-    };
-
     public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<EntityMetadata> entities, ModelGenOptions options)
     {
         if (entities == null)
@@ -237,7 +226,7 @@ public static class ModelGenerator
 
         foreach (EntityKeyMetadata key in keys)
         {
-            string method = UniqueName("By" + Escape(key.SchemaName ?? Pascalize(key.LogicalName ?? "Key")), usedNames);
+            string method = UniqueName("By" + CSharpIdentifier.EscapeKeyword(key.SchemaName ?? Pascalize(key.LogicalName ?? "Key")), usedNames);
             string attributes = string.Join(", ", key.KeyAttributes.Select(a => $"\"{a}\""));
 
             sb.AppendLine();
@@ -280,7 +269,7 @@ public static class ModelGenerator
     {
         if (optionSet.IsGlobal == true)
         {
-            string globalName = Escape(Pascalize(optionSet.Name ?? propertyName.TrimStart('@')));
+            string globalName = CSharpIdentifier.EscapeKeyword(Pascalize(optionSet.Name ?? propertyName.TrimStart('@')));
             if (!globals.ContainsKey(globalName))
             {
                 globals[globalName] = optionSet;
@@ -330,7 +319,7 @@ public static class ModelGenerator
             filtered = "_" + (filtered.Length == 0 ? CSharpIdentifier.NumericToken(value) : filtered);
         }
 
-        string name = Keywords.Contains(filtered) ? "@" + filtered : filtered;
+        string name = CSharpIdentifier.EscapeKeyword(filtered);
         string candidate = name;
         int suffix = value;
         while (!used.Add(candidate))
@@ -562,10 +551,10 @@ public static class ModelGenerator
     }
 
     private static string ClassName(EntityMetadata entity) =>
-        Escape(entity.SchemaName ?? Pascalize(entity.LogicalName));
+        CSharpIdentifier.EscapeKeyword(entity.SchemaName ?? Pascalize(entity.LogicalName));
 
     private static string PropertyName(AttributeMetadata attribute) =>
-        Escape(attribute.SchemaName ?? Pascalize(attribute.LogicalName));
+        CSharpIdentifier.EscapeKeyword(attribute.SchemaName ?? Pascalize(attribute.LogicalName));
 
     private static string UniqueName(string name, HashSet<string> used)
     {
@@ -578,9 +567,6 @@ public static class ModelGenerator
 
         return candidate;
     }
-
-    private static string Escape(string identifier) =>
-        Keywords.Contains(identifier) ? "@" + identifier : identifier;
 
     private static string Pascalize(string logicalName)
     {
