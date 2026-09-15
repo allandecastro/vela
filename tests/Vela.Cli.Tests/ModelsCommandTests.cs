@@ -24,6 +24,29 @@ public class ModelsCommandTests
     }
 
     [Fact]
+    public void ReadRootRole_returns_null_for_a_missing_role_instead_of_throwing()
+    {
+        // E5: a missing role must not abort the whole run — ReadRootRole returns null so the caller can skip it,
+        // warn, and still generate the roles that resolved.
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
+        Assert.Null(ModelsCommand.ReadRootRole(svc, "Nonexistent Role"));
+    }
+
+    [Fact]
+    public void ReadRootRole_returns_the_root_role_when_found()
+    {
+        var id = Guid.NewGuid();
+        Entity role = new Entity("role", id);
+        role["name"] = "Salesperson";
+        role["parentrootroleid"] = new EntityReference("role", id); // its own root
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(role) };
+
+        Entity? found = ModelsCommand.ReadRootRole(svc, "Salesperson");
+        Assert.NotNull(found);
+        Assert.Equal(id, found!.Id);
+    }
+
+    [Fact]
     public void ReadCustomApiParameters_uses_the_name_not_the_dotted_uniquename()
     {
         // Dataverse stores a Custom API parameter's `name` unqualified ("ContactId") and its `uniquename`

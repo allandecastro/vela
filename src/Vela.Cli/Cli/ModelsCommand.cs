@@ -116,6 +116,15 @@ internal static class ModelsCommand
             return Fail("--solution-roles requires --solution <uniquename>.", ExitInvalidArguments, includeUsage: false);
         }
 
+        // Bare `--custom-apis` generates EVERY Custom API in the environment, which includes the platform's own
+        // (hundreds of files). That surprises callers who expected only their own, so warn up front and point at
+        // the ways to narrow it. (`--package`/`--packages-dir` already excludes the Custom APIs authored in code.)
+        bool excludesAuthored = HasFlag(args, "--package") || HasFlag(args, "--packages-dir");
+        if (allCustomApis && !excludesAuthored)
+        {
+            Console.Error.WriteLine("Warning: --custom-apis with no value generates every Custom API in the environment, including system ones (this can be hundreds of files). Pass --custom-apis <a,b,c> to target specific ones, or --package/--packages-dir to exclude the Custom APIs you authored in code.");
+        }
+
         string outDir = Path.GetFullPath(TryReadOption(args, "--out") ?? ".");
         bool overwrite = HasFlag(args, "--overwrite");
         bool interactive = HasFlag(args, "--interactive") || HasFlag(args, "-i");
@@ -821,10 +830,25 @@ internal static class ModelsCommand
         // role listed both ways is generated once.
         Dictionary<Guid, string> roots = new Dictionary<Guid, string>();
 
+        List<string> missing = new List<string>();
         foreach (string name in roleNames)
         {
-            Entity root = ReadRootRole(service, name);
+            Entity? root = ReadRootRole(service, name);
+            if (root == null)
+            {
+                missing.Add(name);
+                continue;
+            }
+
             roots[root.Id] = root.GetAttributeValue<string>("name") ?? name;
+        }
+
+        // Generate whatever resolved rather than aborting the whole run on the first missing role; a typo in one
+        // name should not throw away the others. Only a completely empty result (no explicit role resolved and no
+        // solution roles) is an error.
+        if (missing.Count > 0)
+        {
+            Console.Error.WriteLine($"Warning: security role(s) not found and skipped: {string.Join(", ", missing)}.");
         }
 
         if (!string.IsNullOrWhiteSpace(solution))
@@ -833,6 +857,12 @@ internal static class ModelsCommand
             {
                 roots[role.Id] = role.GetAttributeValue<string>("name") ?? role.Id.ToString();
             }
+        }
+
+        if (roots.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"None of the requested security role(s) were found in the connected environment: {string.Join(", ", roleNames)}.");
         }
 
         IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> privileges = BuildPrivilegeMap(service);
@@ -867,15 +897,16 @@ internal static class ModelsCommand
 
     // The root (template) role for a name. Roles are duplicated per business unit; the root is the one whose
     // parentrootroleid points at itself, and its id is the stable id plugin logic uses.
-    private static Entity ReadRootRole(IOrganizationService service, string name)
+    internal static Entity? ReadRootRole(IOrganizationService service, string name)
     {
         QueryExpression query = new QueryExpression("role") { ColumnSet = new ColumnSet("roleid", "name", "parentrootroleid") };
         query.Criteria.AddCondition("name", ConditionOperator.Equal, name);
         List<Entity> matches = service.RetrieveAll(query).ToList();
 
+        // Null (not found) instead of throwing: the caller collects and reports the missing names but still
+        // generates the roles that did resolve.
         return matches.FirstOrDefault(r => r.GetAttributeValue<EntityReference>("parentrootroleid")?.Id == r.Id)
-            ?? matches.FirstOrDefault()
-            ?? throw new InvalidOperationException($"Security role '{name}' was not found in the connected environment.");
+            ?? matches.FirstOrDefault();
     }
 
     private static IEnumerable<(Guid PrivilegeId, int DepthMask)> ReadRolePrivileges(IOrganizationService service, Guid roleId)

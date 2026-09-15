@@ -219,8 +219,10 @@ internal static class OutputWriter
         Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--web-resources (preview) [--web-resources-namespace <name>] [--web-resources-folder <dir>]] [--json] [--force] [--interactive]");
         WriteCommand(console, "add", "Add a plugin, service, Custom API, test, or step to a project.");
         Console.WriteLine("      (plugin|service|customapi|test|step) <Name> [...]   run 'vela add --help' for the full options");
-        WriteCommand(console, "models", "Generate early-bound model classes.");
-        Console.WriteLine("      (--solution <uniquename> | --entities <a,b,c>) [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--forms and/or --tables (preview, TypeScript)] [connection options]");
+        WriteCommand(console, "models", "Generate early-bound model classes (C#) or TypeScript (preview).");
+        Console.WriteLine("      scope: --solution <uniquename> | --entities <a,b,c> | --custom-apis [<a,b,c>] | --messages [<a,b,c>] | --roles <a,b,c> | --solution-roles (combinable)");
+        Console.WriteLine("      [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--lang csharp|ts] [--forms and/or --tables (preview, TypeScript)] [connection options]");
+        Console.WriteLine("      run 'vela models --help' for the full scope/option reference");
         WriteCommand(console, "sign", "Sign a plugin package.");
         Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
         WriteCommand(console, "logout", "Clear the cached interactive-login token and remembered Dataverse URL.");

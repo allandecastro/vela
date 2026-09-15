@@ -27,6 +27,7 @@ namespace Vela.Cli;
 /// <param name="IncludeWebResources">When true, scaffold the opt-in <c>{prefix}.WebResources</c> TypeScript project.</param>
 /// <param name="WebResourceNamespace">The dotted JS global name (esbuild <c>globalName</c>) the bundle exposes; the consumer's publisher prefix, never "Vela".</param>
 /// <param name="WebResourcesFolder">The build output folder (tsup <c>outDir</c>) and default <c>vela apply --webresources</c> target.</param>
+/// <param name="Json">Whether to emit machine-readable JSON output instead of the human-readable summary.</param>
 internal sealed record ScaffoldOptions(
     string SolutionName,
     string Prefix,

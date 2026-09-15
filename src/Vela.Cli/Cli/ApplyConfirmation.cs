@@ -17,7 +17,7 @@ internal enum ApplyDecision
 
 /// <summary>
 /// Pure decision for the <c>apply</c> confirmation gate, extracted from the command flow so it can be unit
-/// tested without a live connection. <paramref name="readConfirmation"/> is only invoked in the interactive
+/// tested without a live connection. The <c>readConfirmation</c> callback is only invoked in the interactive
 /// case (not auto-approved, stdin is a TTY); it performs the prompt and returns the typed answer.
 /// </summary>
 internal static class ApplyConfirmation

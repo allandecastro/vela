@@ -39,6 +39,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   updating a missing record now throws `FaultException<OrganizationServiceFault>` with the documented
   `ObjectDoesNotExist` code (`-2147220969`), matching a real `IOrganizationService`, so a plugin that catches the
   fault code behaves the same under the harness as in production.
+
 ### CLI
 
 #### Added
@@ -48,6 +49,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   the entity's generated early-bound model (the conventional primary-name column). The generated file always
   compiles and applies; when nothing can be inferred, `add` fails with a clear message instead of emitting a
   non-compiling placeholder.
+- **`vela models --custom-apis` with no value warns before generating every Custom API.** Bare `--custom-apis`
+  emits all Custom APIs in the environment (system ones included, often hundreds of files); it now prints a
+  warning pointing at `--custom-apis <a,b,c>` to target specific ones or `--package`/`--packages-dir` to exclude
+  the ones you authored in code.
 
 #### Changed
 
@@ -56,6 +61,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **The Custom API plan/apply diff shape is built from a single source of truth** (`CustomApiShape`), shared by the
   live read, the local normalizer and the parameter reader, so the shape can no longer drift between the read and
   normalize sides (the divergence class that produces a permanent non-converging "changed").
+- **`vela models` generates the roles it can resolve instead of aborting on the first missing one.** A typo'd or
+  absent `--roles` name is now warned about and skipped; the run still generates the roles that resolved, and only
+  fails when none of the requested roles exist.
+- **`vela --help` documents every `vela models` scope.** The top-level help now lists `--custom-apis`,
+  `--messages`, `--roles`, `--solution-roles` and `--lang` (previously only `--solution`/`--entities`/`--forms`/
+  `--tables` were shown, though the others already worked and are detailed under `vela models --help`).
 
 #### Fixed
 
@@ -83,7 +94,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`apply --solution` validates the Custom API unique-name publisher prefix** (as it already does for web
   resources and plugin packages), so a unique name missing the prefix fails with guidance rather than a cryptic
   Dataverse error.
-- **Custom API parameter type resolution no longer over-matches on substrings.** The CLR-type → Custom API type
+- **Custom API parameter type resolution no longer over-matches on substrings.** The CLR-type to Custom API type
   mapping was an order-dependent `string.Contains` ladder in which any type name containing `"int"` resolved to
   `Integer` (and `Entity` had to be tested after `EntityReference`/`EntityCollection`). It is now an exact
   simple-name table covering the SDK type names, the Custom API type labels and the C# aliases, so an unrelated
