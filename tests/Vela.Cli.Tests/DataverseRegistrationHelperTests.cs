@@ -328,6 +328,25 @@ public class DataverseRegistrationHelperTests
         }
     }
 
+    // M1: the old string.Contains ladder mapped ANY type name containing "int" to Integer (and relied on branch
+    // order for Entity vs EntityReference). The exact simple-name table no longer over-matches.
+    [Theory]
+    [InlineData("MyCompany.PrintJob")]   // contains "int" but is not an integer type
+    [InlineData("System.Uri")]            // unknown scalar
+    public void ResolveCustomApiTypeCode_unknown_type_defaults_to_string_not_integer(string typeName)
+    {
+        Assert.Equal(SdkConstants.CustomApiParameterType.String, DataverseRegistration.ResolveCustomApiTypeCode(typeName, isCollection: false));
+    }
+
+    [Fact]
+    public void ResolveCustomApiTypeCode_matches_by_exact_simple_name_not_substring()
+    {
+        // EntityReference resolves to its own code (5), not Entity (3) — no branch-order dependency.
+        Assert.Equal(SdkConstants.CustomApiParameterType.EntityReference, DataverseRegistration.ResolveCustomApiTypeCode("Microsoft.Xrm.Sdk.EntityReference", isCollection: false));
+        // A short name (no namespace) still resolves.
+        Assert.Equal(SdkConstants.CustomApiParameterType.Picklist, DataverseRegistration.ResolveCustomApiTypeCode("Picklist", isCollection: false));
+    }
+
     // --- GetRequiredPluginTypeNames / AddRequiredPluginTypeName --------------------------------
 
     [Fact]

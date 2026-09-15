@@ -83,6 +83,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`apply --solution` validates the Custom API unique-name publisher prefix** (as it already does for web
   resources and plugin packages), so a unique name missing the prefix fails with guidance rather than a cryptic
   Dataverse error.
+- **Custom API parameter type resolution no longer over-matches on substrings.** The CLR-type → Custom API type
+  mapping was an order-dependent `string.Contains` ladder in which any type name containing `"int"` resolved to
+  `Integer` (and `Entity` had to be tested after `EntityReference`/`EntityCollection`). It is now an exact
+  simple-name table covering the SDK type names, the Custom API type labels and the C# aliases, so an unrelated
+  type resolves correctly (or falls back to `String`) instead of being misclassified.
 
 ## [0.12.0] - 2026-09-14 (Vela.Plugins + Vela.Testing)
 
