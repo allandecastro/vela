@@ -63,6 +63,13 @@ var manifest = FrameworkManifestScanner.Scan(
     new FrameworkManifestScanOptions { Strict = true });
 ```
 
+## Labelling the environment
+
+`plan`, `apply` and `inspect` accept an optional `--environment <label>` that names the target in the summary and
+JSON output (the heading reads, for example, `plan production`). It is a display label only, useful when a
+pipeline runs the same command against several environments; when omitted, the output falls back to the
+connection `--url`. (`--solution-unique-name` is also accepted as an alias of `--solution`.)
+
 ## Output: terminal vs piped
 
 `plan`, `apply`, and `inspect` print a colorized, human-readable summary when stdout is a terminal, and JSON

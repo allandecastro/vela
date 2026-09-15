@@ -20,6 +20,7 @@ Task-focused guides for building, testing and shipping Dataverse plugins and Cus
   <a class="vela-card" href="plan-apply.md"><span class="t">Plan & Apply</span><span class="d">Preview then apply registrations against a live environment.</span></a>
   <a class="vela-card" href="models.md"><span class="t">Early-bound models</span><span class="d">Generate early-bound classes with vela models.</span></a>
   <a class="vela-card" href="signing.md"><span class="t">Signing</span><span class="d">Sign a plugin package for managed-identity plugins.</span></a>
+  <a class="vela-card" href="client-side.md"><span class="t">Client-side (preview)</span><span class="d">TypeScript form/ribbon scripts and web resources for vela-client.</span></a>
   <a class="vela-card" href="end-to-end.md"><span class="t">End-to-end example</span><span class="d">A full walkthrough from code to a running step.</span></a>
   <a class="vela-card" href="cookbook.md"><span class="t">Cookbook</span><span class="d">Common recipes at a glance.</span></a>
   <a class="vela-card" href="troubleshooting.md"><span class="t">Troubleshooting</span><span class="d">Fixes for the most common issues.</span></a>

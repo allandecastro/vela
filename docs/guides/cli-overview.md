@@ -19,6 +19,20 @@ Core commands:
 | `vela inspect` | Report local package registrations alongside live Dataverse state, with diagnostics (read-only). |
 | `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
 | `vela logout` | Clear the cached interactive token and remembered Dataverse URL. |
+| `vela menu` (or bare `vela`) | Launch the interactive menu that guides you through the commands above. |
+| `vela version` | Print the tool version. |
+
+### Exit codes
+
+Every command returns a stable exit code, so scripts and coding agents can branch on the outcome:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `2` | Invalid arguments (unknown option, missing/insufficient scope). |
+| `3` | A required file was not found (for example a package path). |
+| `4` | Parse/read or other error (a malformed package, definition or response, or an unexpected failure). |
+| `6` | Dataverse connection failure (auth or endpoint). |
 
 > [!NOTE]
 > **Client-side (preview / work in progress).** For the **vela-client** (separate) runtime,

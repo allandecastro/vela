@@ -21,3 +21,13 @@ MSBuild target runs after `Pack`, **inert until a certificate source is configur
 MSBuild properties, e.g. `dotnet build src/Zava.Integrations -c Release
 -p:PluginSigningFingerprint=<sha256>` (or `-p:PluginSigningCertificate=path.pfx -p:PluginSigningCredential=<cred>`).
 The generated solution's README documents the full property set.
+
+## Signed packages and `apply --solution`
+
+`apply --solution <name>` adds the solution's publisher prefix to the plugin package name, which it does by
+rewriting the `.nupkg`. That rewrite changes the archive, so it would invalidate a signature already applied by
+`vela sign` (Dataverse rejects the import with `0x80040265`, "the package is signed but its signature does not
+cover the package content"). `apply` detects a signed package up front and fails with a clear message rather
+than uploading one Dataverse will reject. To deploy a signed package into a solution, build and sign it with the
+prefixed name already in place (so no rename is needed), or apply it without `--solution`. See
+[plan → apply](plan-apply.md).

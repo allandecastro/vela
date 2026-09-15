@@ -42,10 +42,10 @@ vela add --interactive
   messages require at least one filtering attribute. Pass `--filtering-attributes <Col1,Col2>` with the
   early-bound property name(s) that should trigger the step (for example `--filtering-attributes Name,Telephone1`
   renders `FilteringAttributes(e => e.Name, e => e.Telephone1)`). If you omit it, `add` auto-selects a sensible
-  default column from the entity's generated early-bound model (the conventional primary-name column) and marks
-  it with an `auto-selected` comment so you can adjust it. The generated file always compiles and applies; if no
-  column can be inferred (no generated model found), `add` fails with a clear message asking for
-  `--filtering-attributes` instead of emitting code that would not compile.
+  default column from the entity's generated early-bound model (its primary-name column) and marks it with an
+  `auto-selected` comment so you can adjust it. The generated file always compiles and applies; if no column can
+  be inferred (no generated model found), `add` fails with a clear message asking for `--filtering-attributes`
+  rather than emitting code that would not compile.
 - `vela add service` scaffolds a table-scoped `I<Name>` interface + sealed implementation (injecting
   `IOrganizationService`) under `<Table>/Services/`, and prints the `services.AddScoped<...>(...)` line to drop
   into your plugin's `ConfigureServices(...)`.
