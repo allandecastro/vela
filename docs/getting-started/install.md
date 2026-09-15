@@ -23,3 +23,8 @@ vela version
 
 For the command reference and secret handling, see [The vela CLI](../guides/cli-overview.md).
 
+## Next steps
+
+- **[Quickstart](quickstart.md)** - from an empty folder to registered, running steps in five commands.
+- **[The vela CLI](../guides/cli-overview.md)** - commands, exit codes and the [CLI cheat sheet](../reference/cli-cheatsheet.md).
+

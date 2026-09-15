@@ -15,15 +15,49 @@ _disableBreadcrumb: true
   </p>
 </div>
 
+<p class="vela-hero-for">For Dataverse and Dynamics 365 developers who write plugins and Custom APIs in C#.</p>
+
+## See it
+
+Write a step-registered plugin with a strongly-typed handler, then preview and apply it with the CLI:
+
+```csharp
+public sealed class AccountValidator : EntityPluginBase<Account>
+{
+    protected override void RegisterPluginSteps() =>
+        RegisterSteps().OnUpdate().PreOperation().Sync()
+            .FilteringAttributes(a => a.Name)
+            .Handler(OnUpdating);
+
+    private void OnUpdating(IUpdatePreContext<Account> ctx)
+    {
+        if (string.IsNullOrWhiteSpace(ctx.Request.Target.Name))
+            throw new InvalidPluginExecutionException("Account name is required.");
+    }
+}
+```
+
+```powershell
+vela plan  --packages-dir ./artifacts --interactive   # preview the registration (read-only)
+vela apply --packages-dir ./artifacts --interactive   # upsert it into your environment
+```
+
+Test it with no connection, no mocking library:
+
+```csharp
+var ctx = PluginContext.For<Account>().WithTarget(new Account { Name = "" });
+Assert.Throws<InvalidPluginExecutionException>(() => new AccountValidator().Execute(ctx.Build()));
+```
+
 ## Why Vela
 
 <div class="vela-cards">
-  <a class="vela-card" href="guides/plugins.md"><span class="t">Fluent base types</span><span class="d">Declarative step registration and strongly-typed handlers for plugins and Custom APIs.</span></a>
-  <a class="vela-card" href="guides/plugins.md"><span class="t">Typed context helpers</span><span class="d">Strongly-typed target and images, framework tracing, lightweight DI, and a TTL cache.</span></a>
-  <a class="vela-card" href="guides/plan-apply.md"><span class="t">Preview-first CLI</span><span class="d">plan then apply of registrations, plus scaffolding, early-bound generation and signing.</span></a>
-  <a class="vela-card" href="guides/plan-apply.md"><span class="t">Idempotent apply</span><span class="d">Safe upsert and delete of steps, Custom APIs and images against a live environment.</span></a>
+  <a class="vela-card" href="guides/plugins.md"><span class="t">Fluent plugins</span><span class="d">Declarative step registration and strongly-typed handlers, with typed target, images, tracing and a TTL cache.</span></a>
+  <a class="vela-card" href="guides/custom-apis.md"><span class="t">Custom APIs</span><span class="d">Declarative Custom API definitions and typed request/response parameters.</span></a>
+  <a class="vela-card" href="guides/plan-apply.md"><span class="t">Preview-first CLI</span><span class="d">Idempotent plan then apply of steps, Custom APIs and images against a live environment.</span></a>
   <a class="vela-card" href="guides/testing.md"><span class="t">No-connection testing</span><span class="d">Run plugins against an in-memory Dataverse - no live connection, no mocking library.</span></a>
-  <a class="vela-card" href="guides/security-model.md"><span class="t">Opt-in security model</span><span class="d">Roles, privileges, business units, teams, sharing and relationship cascades when you need them.</span></a>
+  <a class="vela-card" href="guides/models.md"><span class="t">Early-bound & typed models</span><span class="d">Generate C# entity classes and typed message classes from your environment.</span></a>
+  <a class="vela-card" href="guides/security-model.md"><span class="t">Opt-in security model</span><span class="d">Roles, privileges, business units, teams, sharing and cascades when a test needs them.</span></a>
 </div>
 
 ## Start here
