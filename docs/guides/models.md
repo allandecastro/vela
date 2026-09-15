@@ -47,7 +47,8 @@ columns as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbna
 (`Account.ByAccountNumberKey("A-001")` returns a key-based `EntityReference`). `--custom-apis` instead generates typed
 `OrganizationRequest`/`OrganizationResponse` message classes (call with `service.Execute(new zava_RecalculateRequest { … })`),
 written into a `Messages/` subfolder of the output; with **no value**, `--custom-apis` generates every Custom API
-in the environment. Each also gets a **registrability-gated `On<Message>()` step extension**: bound to the API's
+in the environment (including the platform's own, which can be hundreds of files) - `models` prints a warning
+pointing you at a targeted list or a package (below) to narrow it. Each also gets a **registrability-gated `On<Message>()` step extension**: bound to the API's
 entity when it has one (compile-time entity applicability), async-only when the API's
 `allowedcustomprocessingsteptype` is AsyncOnly (only `.Async()` compiles), and omitted entirely for a None/private
 API. A required request parameter (`isoptional = false` in Dataverse) is generated with a `[Required]` attribute so
@@ -188,7 +189,9 @@ vela models --forms --tables --entities account,contact --out src/generated --ov
 `--roles "Salesperson,Sales Manager"` (explicit names) or `--solution-roles` (every role in a `--solution`)
 generates a `Roles` class into the **shared models project**, alongside the table models. Each role becomes
 three members, keyed off its **root** role id (the stable id, identical across business units) and its real
-privileges read from the environment:
+privileges read from the environment. A `--roles` name that is not found in the environment is warned about and
+skipped, and the roles that did resolve are still generated; the command only fails when none of the requested
+roles exist.
 
 ```csharp
 public static class Roles

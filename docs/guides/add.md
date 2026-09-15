@@ -38,12 +38,14 @@ vela add --interactive
   and `Assign` messages have no typed method (update `statecode`/`statuscode` or `ownerid` with `Update`
   instead), so they too render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
   current directory), `--force` (overwrite an existing file).
-- **Filtering attributes on a `Create`/`Update` plugin:** these messages require at least one filtering
-  attribute, and the generator cannot know your model's columns, so the step is scaffolded with a
-  `FilteringAttributes(e => e.REPLACE_WITH_A_FILTERING_ATTRIBUTE)` placeholder that does not compile. Replace it
-  with the real attribute(s) that should trigger the step (for example `e => e.Name`) before building. This is
-  deliberate: it fails at that line with a clear compiler error instead of registering a step that Dataverse
-  would later reject at apply.
+- **Filtering attributes on a `Create`/`Update` plugin** (also `CreateMultiple`/`UpdateMultiple`): these
+  messages require at least one filtering attribute. Pass `--filtering-attributes <Col1,Col2>` with the
+  early-bound property name(s) that should trigger the step (for example `--filtering-attributes Name,Telephone1`
+  renders `FilteringAttributes(e => e.Name, e => e.Telephone1)`). If you omit it, `add` auto-selects a sensible
+  default column from the entity's generated early-bound model (its primary-name column) and marks it with an
+  `auto-selected` comment so you can adjust it. The generated file always compiles and applies; if no column can
+  be inferred (no generated model found), `add` fails with a clear message asking for `--filtering-attributes`
+  rather than emitting code that would not compile.
 - `vela add service` scaffolds a table-scoped `I<Name>` interface + sealed implementation (injecting
   `IOrganizationService`) under `<Table>/Services/`, and prints the `services.AddScoped<...>(...)` line to drop
   into your plugin's `ConfigureServices(...)`.

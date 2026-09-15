@@ -58,6 +58,26 @@ messages, `Assign`/`Associate`/`Disassociate`, metadata reads, and `ExecuteMulti
 For any other message, inject your own `IOrganizationService` via `WithOrganizationService(...)`.
 See [testing](../guides/testing.md).
 
+### Can I run `plan`/`apply`/`inspect` in CI or from a coding agent without them hanging?
+
+Yes. They never block on a prompt under redirected or piped stdin: the optional "package assembly name" prompt
+and the interactive OAuth prompts only appear on a real terminal. Supply your inputs on the command line (and
+`--auto-approve` for `apply`) and the command runs to completion or fails with a clear message.
+See [plan → apply](../guides/plan-apply.md).
+
+### `apply` rejected my signed plugin package - why?
+
+Applying with `--solution` adds the solution publisher prefix to the package name, which rewrites the `.nupkg`
+and would invalidate a signature already applied by `vela sign` (Dataverse returns `0x80040265`). Build and sign
+the package with the prefixed name already in place, or apply it without `--solution`.
+See [signing](../guides/signing.md).
+
+### Why did `apply` reject my workflow-enabled Custom API?
+
+A Custom API with `WorkflowSdkStepEnabled` set must be an action (not a function) and cannot use
+`Entity`/`EntityCollection`/`StringArray` parameters. `apply` validates this locally and fails with a clear
+message instead of an opaque platform error. See [Write a Custom API](../guides/custom-apis.md).
+
 ### Is the harness security model on by default?
 
 No - it is opt-in and off by default. With no `WithSecurity(...)` call the in-memory service grants full

@@ -287,6 +287,16 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   (matching Dataverse, where async steps are decoupled system jobs) - it is recorded on
   `pipeline.AsyncStepFailures` so you can still assert an async step failed. Cascade depth is guarded (the
   plugin's own depth guard plus a pipeline cap via `WithMaxDepth`).
+- **Execution-context identity.** The plugin's `ctx` reports the configured caller: `UserId`,
+  `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` come from `WithCurrentUser(...)` /
+  `WithCurrentBusinessUnit(...)` / `WithOrganizationId(...)`, consistent with what `WhoAmI` and the
+  `createdby`/`ownerid` stamping report (not random values).
+- **`ParentContext` on a cascade.** A plugin fired by another plugin's write sees its caller's context as
+  `ctx.ParentContext` (with its shared variables), so a re-entrancy guard like
+  `if (ctx.ParentContext?.MessageName == "Create") return;` behaves as it does in Dataverse.
+- **Not-found faults.** Retrieving or updating a record that does not exist throws
+  `FaultException<OrganizationServiceFault>` with the platform `ObjectDoesNotExist` code (`-2147220969`), like a
+  real `IOrganizationService`, so a plugin that catches that fault code is exercised faithfully.
 - **Custom APIs** run through `Service.Execute(new OrganizationRequest("vela_MyApi"){ ["x"] = 1 })`.
 - **Bulk (`CreateMultiple`/`UpdateMultiple`)** fire steps the way Dataverse merges the two messages: a
   `CreateMultiple`/`UpdateMultiple` request runs your single `Create`/`Update` steps **once per row**, and a
@@ -333,6 +343,14 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
 Query hints, NoLock, `FilterHint=union`, faithful paging cookies. `Associate`/`Disassociate` persist intersect
 rows once the relationship is declared (`WithManyToMany(...)` or registered metadata), but a 1:N relationship
 is modelled by `Update`-ing the lookup column. For anything else, inject your own `IOrganizationService`.
+
+The harness does **not** simulate the server-side **data effect** of non-CRUD "modelled" messages
+(`QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident`, and the like): it fires the steps registered on
+those messages so you can test your own logic, but the record changes the platform would make are not produced.
+Only `PrincipalPrivilegeDenied` (security) and `ObjectDoesNotExist` (not-found) faults carry a real Dataverse
+`ErrorCode`; other faults (for example an `ExecuteMultiple`/`ExecuteTransaction` child failure) surface an
+`OrganizationServiceFault` with no `ErrorCode`. There is no formula/rollup/calculated-column, business-rule, or
+duplicate-detection simulation.
 
 For the full picture across the whole framework (runtime, CLI and this test harness), see
 [Limitations](../reference/limitations.md).

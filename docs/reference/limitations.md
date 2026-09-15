@@ -58,9 +58,18 @@ untouched.
   float, integer, guid, string, `Entity`, `EntityReference`, `EntityCollection`, `Money`, `OptionSetValue`,
   string array). Multi-select option sets and nested/complex types are not supported (unknown types fall back
   to `String`).
-- **Some Custom API fields are create-only.** `IsFunction`, the binding type, and the bound entity are fixed
-  when the Custom API is created; Dataverse ignores updates to them. `apply` detects such a change and fails
-  fast (delete and recreate the Custom API to change one) rather than reporting an update that never lands.
+- **Some Custom API fields are create-only.** `IsFunction`, the binding type, the bound entity, the allowed
+  custom-processing-step type, and `WorkflowSdkStepEnabled` are fixed when the Custom API is created; Dataverse
+  ignores updates to them. `apply` detects such a change and fails fast (delete and recreate the Custom API to
+  change one) rather than reporting an update that never lands.
+- **Workflow-enabled Custom APIs are validated locally.** When `WorkflowSdkStepEnabled` is set, the Custom API
+  must be an action (not a function) and cannot use `Entity`/`EntityCollection`/`StringArray` parameters; `apply`
+  fails with a clear message instead of an opaque platform error. Under `--solution`, a Custom API's unique name
+  must carry the solution publisher prefix (as web resources and plugin packages do) - `apply` checks this too.
+  (Step and Custom API unique-name prefix enforcement applies only under `--solution`.)
+- **An entity-scoped step must resolve a message filter.** If a step names an entity that has no
+  `sdkmessagefilter` for its message (a typo'd or unsupported entity), `apply` fails rather than registering an
+  unfiltered step that would fire for every entity.
 - **Stage normalization:** async steps are forced to `PostOperation`; non-standard stage values default to
   `MainOperation`.
 - **Packaging:** a plugin-package `.nupkg` (built via `Microsoft.PowerApps.MSBuild.Plugin`) is required - a
@@ -78,14 +87,18 @@ untouched.
   the terminal summary, the JSON, and any `--out` plan file - changes are still detected, but the value never
   appears. Unsecure config is shown verbatim (non-sensitive by design).
 - **No cross-operation transaction.** A partway failure leaves partial state; the resume report lists what
-  completed. Upserts are idempotent - fix the cause and re-run. Interactive mode needs a real terminal (not
-  CI/piped).
+  completed. Upserts are idempotent - fix the cause and re-run. `plan`/`apply`/`inspect` never block on a prompt
+  under redirected/piped stdin (safe for CI and agents); the optional package-assembly prompt and interactive
+  OAuth prompts are terminal-only, and `apply` still refuses to write without `--auto-approve` when there is no
+  stdin TTY.
 - **`vela add`** generates one file per run (plugin/service/customapi/test/step/form-script/ribbon-script); a
   plugin/service needs an early-bound model type (`--entity`).
 - **`vela models`** generates entity classes (typed properties, primary-id sync, XML doc, DataAnnotations,
   option-set enums local/global, multi-select as `IList<Enum>`, alternate-key reference factories) scoped by
   `--solution`/`--entities`, Custom API message classes via `--custom-apis`, and a dependency-light `Roles` class
-  (real role privileges + root role id, in the shared models project) via `--roles`/`--solution-roles`. **Out of scope:** relationship
+  (real role privileges + root role id, in the shared models project) via `--roles`/`--solution-roles` (a
+  `--roles` name not found in the environment is warned about and skipped; the run only fails when none resolve).
+  **Out of scope:** relationship
   navigation properties + `OrganizationServiceContext`/LINQ (lazy loading/change-tracking don't fit the plugin
   sandbox - use `Query.For<T>()`), localized multi-language labels, and custom class/property casing - use
   `pac modelbuilder` if you need those. Role generation covers **table** privileges only - non-entity /
@@ -103,6 +116,16 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   `CreateMultiple`/`UpdateMultiple`, `Assign`/`Associate`/`Disassociate`, the metadata reads
   (`RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute`), and `ExecuteMultiple`/`ExecuteTransaction`
   (the latter rolls the whole batch back on failure). For any other message, inject your own service.
+- **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on
+  `QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident` and the like fires so you can test your own
+  logic, but the record changes the platform would make are not simulated.
+- **Execution-context identity is the configured caller.** `ctx.UserId`/`InitiatingUserId`/`BusinessUnitId`/
+  `OrganizationId` come from `WithCurrentUser`/`WithCurrentBusinessUnit`/`WithOrganizationId`, and a cascaded
+  plugin sees its caller's context as `ctx.ParentContext`.
+- **Fault codes are partial.** A not-found `Retrieve`/`Update` throws `FaultException<OrganizationServiceFault>`
+  with `ObjectDoesNotExist` (`-2147220969`), and a privilege denial carries `PrincipalPrivilegeDenied`; other
+  faults (for example an `ExecuteMultiple` child failure) surface an `OrganizationServiceFault` with no
+  `ErrorCode`. No formula/rollup/calculated columns, business rules, or duplicate-detection.
 - **N:N `Associate`/`Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or via a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise); then Associate/
   Disassociate persist the intersect rows and `RetrieveMultiple` joins through them. `Associate` is idempotent
