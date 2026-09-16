@@ -24,6 +24,15 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### CLI
+
+#### Changed
+
+- **Scaffolded solutions reference `Vela.Messages`** (the new multi-targeted base-types package) from the Shared
+  project, and the default core version is `0.14.0`. Generated Custom API request/response contracts now compile in
+  Shared and can be called from anywhere (plugins on net462, the ConsoleApp / integrations on net10.0). Closes the
+  gap where `vela models --custom-apis` output landed in the SDK-only Shared project and would not build.
+
 ## [0.14.0] - 2026-09-16 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.14.0` (all three packages ship at this version).
