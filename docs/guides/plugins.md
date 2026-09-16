@@ -133,6 +133,12 @@ The fluent builder enforces a specific order:
 
 Short aliases are available when you prefer action-style naming: `AddPreImage(...)`, `AddPostImage(...)`.
 
+> [!NOTE]
+> Column selectors (`FilteringAttributes`, image `Attributes(...)`, and the typed query/change helpers) accept an
+> early-bound column, e.g. `a => a.Name`. A bundled analyzer (`VELA001`, shipped in `Vela.Plugins`) flags, in the
+> editor and at build, a selector that targets a member of the base `Entity` type (such as `a => a.LogicalName` or
+> `a => a.Id`) rather than a real column - no reference or configuration needed.
+
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:
 
