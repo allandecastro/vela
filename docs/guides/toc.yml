@@ -8,6 +8,8 @@
   href: plugins.md
 - name: Typed queries
   href: queries.md
+- name: Escape hatches (drop to the SDK)
+  href: escape-hatches.md
 - name: Write a Custom API
   href: custom-apis.md
 - name: Dependency injection
