@@ -175,8 +175,10 @@ The modelled messages with a typed context are:
 - **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`,
   `AddMemberList`, `RemoveMemberList`.
 - **Case / contract:** `CloseIncident`, `CancelContract`, `CloneContract`.
-- **System:** `WhoAmI` (a global message with no primary entity; `ctx.Response` carries the user/business-unit/
-  organization ids).
+
+Global, entity-less messages (for example `WhoAmI`) are not in this list: they cannot be registered as an
+entity-bound plugin step, so there is no `On...()` for them. You can still call them from a handler
+(`service.Execute(new WhoAmIRequest())`) and generate a typed request with `vela models --messages`.
 
 A step registered through `OnMessage("...")` (any other message) can bind its handler three ways:
 

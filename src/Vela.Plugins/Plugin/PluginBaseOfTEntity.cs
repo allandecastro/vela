@@ -308,7 +308,6 @@ namespace Vela.Plugin
                 PluginMessages.CloneContract => post ? (object)new CloneContractPostContext<TEntity>(ctx) : new CloneContractPreContext<TEntity>(ctx),
                 PluginMessages.RetrievePrincipalAccess => post ? (object)new RetrievePrincipalAccessPostContext<TEntity>(ctx) : new RetrievePrincipalAccessPreContext<TEntity>(ctx),
                 PluginMessages.RetrieveSharedPrincipalsAndAccess => post ? (object)new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(ctx) : new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(ctx),
-                PluginMessages.WhoAmI => post ? (object)new WhoAmIPostContext<TEntity>(ctx) : new WhoAmIPreContext<TEntity>(ctx),
                 PluginMessages.WinQuote => post ? (object)new WinQuotePostContext<TEntity>(ctx) : new WinQuotePreContext<TEntity>(ctx),
                 PluginMessages.ReviseQuote => post ? (object)new ReviseQuotePostContext<TEntity>(ctx) : new ReviseQuotePreContext<TEntity>(ctx),
                 PluginMessages.FulfillSalesOrder => post ? (object)new FulfillSalesOrderPostContext<TEntity>(ctx) : new FulfillSalesOrderPreContext<TEntity>(ctx),

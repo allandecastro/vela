@@ -68,7 +68,6 @@ namespace Vela.Tests
                 RegisterSteps().OnCloneContract().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnRetrievePrincipalAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnWhoAmI().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnWinQuote().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnReviseQuote().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
                 RegisterSteps().OnFulfillSalesOrder().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
@@ -123,7 +122,6 @@ namespace Vela.Tests
         [InlineData(PluginMessages.CloneContract)]
         [InlineData(PluginMessages.RetrievePrincipalAccess)]
         [InlineData(PluginMessages.RetrieveSharedPrincipalsAndAccess)]
-        [InlineData(PluginMessages.WhoAmI)]
         [InlineData(PluginMessages.WinQuote)]
         [InlineData(PluginMessages.ReviseQuote)]
         [InlineData(PluginMessages.FulfillSalesOrder)]

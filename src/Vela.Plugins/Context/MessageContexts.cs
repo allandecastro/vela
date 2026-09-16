@@ -170,10 +170,6 @@ namespace Vela.Context
     public interface IRetrieveSharedPrincipalsAndAccessPreContext<TEntity> : IStepRequestContext<RetrieveSharedPrincipalsAndAccessRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a RetrieveSharedPrincipalsAndAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
     public interface IRetrieveSharedPrincipalsAndAccessPostContext<TEntity> : IStepRequestContext<RetrieveSharedPrincipalsAndAccessRequest>, IStepResponseContext<RetrieveSharedPrincipalsAndAccessResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a WhoAmI step (<c>ctx.Request</c> only).</summary>
-    public interface IWhoAmIPreContext<TEntity> : IStepRequestContext<WhoAmIRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a WhoAmI step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IWhoAmIPostContext<TEntity> : IStepRequestContext<WhoAmIRequest>, IStepResponseContext<WhoAmIResponse> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a WinQuote step (<c>ctx.Request</c> only).</summary>
     public interface IWinQuotePreContext<TEntity> : IStepRequestContext<WinQuoteRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a WinQuote step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
@@ -690,18 +686,6 @@ namespace Vela.Context
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public RetrieveSharedPrincipalsAndAccessPostContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime pre-stage context for WhoAmI.</summary>
-    public sealed class WhoAmIPreContext<TEntity> : PreStepContext<WhoAmIRequest>, IWhoAmIPreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public WhoAmIPreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for WhoAmI.</summary>
-    public sealed class WhoAmIPostContext<TEntity> : PostStepContext<WhoAmIRequest, WhoAmIResponse>, IWhoAmIPostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public WhoAmIPostContext(ILocalPluginContext inner) : base(inner) { }
     }
     /// <summary>Runtime pre-stage context for WinQuote.</summary>
     public sealed class WinQuotePreContext<TEntity> : PreStepContext<WinQuoteRequest>, IWinQuotePreContext<TEntity> where TEntity : Entity

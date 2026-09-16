@@ -29,6 +29,10 @@ namespace Vela.Tests
             PluginMessages.Assign,
             PluginMessages.SetState,
             PluginMessages.SetStateDynamicEntity,
+            // WhoAmI is a global (entity-less) message: it cannot be registered as an entity-bound plugin step, so
+            // it is not modelled with a typed On.../context. It stays a constant (reachable via OnMessage / used by
+            // `vela models --messages` to generate the SDK request), just not a step.
+            PluginMessages.WhoAmI,
         };
 
         private static readonly Assembly PluginsAssembly = typeof(PluginMessages).Assembly;

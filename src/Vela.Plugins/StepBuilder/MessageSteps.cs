@@ -1113,33 +1113,6 @@ public interface IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> where TEnt
     IModeSelector<IRetrieveSharedPrincipalsAndAccessPostStep<TEntity>> PostOperation();
 }
 
-/// <summary>WhoAmI step (pre-stage).</summary>
-public interface IWhoAmIPreStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
-{
-    /// <summary>Bind a typed handler, e.g. <c>.Handler(OnWhoAmI)</c>.</summary>
-    /// <param name="handler">Instance method with signature <c>(IWhoAmIPreContext&lt;TEntity&gt;)</c>.</param>
-    INoImageStep<TEntity> Handler(Action<IWhoAmIPreContext<TEntity>> handler);
-}
-
-/// <summary>WhoAmI step (post-stage).</summary>
-public interface IWhoAmIPostStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
-{
-    /// <summary>Bind a typed handler, e.g. <c>.Handler(OnWhoAmI)</c>.</summary>
-    /// <param name="handler">Instance method with signature <c>(IWhoAmIPostContext&lt;TEntity&gt;)</c>.</param>
-    INoImageStep<TEntity> Handler(Action<IWhoAmIPostContext<TEntity>> handler);
-}
-
-/// <summary>Stage selection for WhoAmI.</summary>
-public interface IWhoAmIStepStage<TEntity> where TEntity : Entity
-{
-    /// <summary>PreValidation.</summary>
-    IModeSelector<IWhoAmIPreStep<TEntity>> PreValidation();
-    /// <summary>PreOperation.</summary>
-    IModeSelector<IWhoAmIPreStep<TEntity>> PreOperation();
-    /// <summary>PostOperation.</summary>
-    IModeSelector<IWhoAmIPostStep<TEntity>> PostOperation();
-}
-
 /// <summary>WinQuote step (pre-stage).</summary>
 public interface IWinQuotePreStep<TEntity> : INoImageStep<TEntity> where TEntity : Entity
 {

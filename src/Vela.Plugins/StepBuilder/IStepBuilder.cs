@@ -109,8 +109,6 @@ public interface IStepBuilder<TEntity> where TEntity : Entity
     IRetrievePrincipalAccessStepStage<TEntity> OnRetrievePrincipalAccess();
     /// <summary>Begin a RetrieveSharedPrincipalsAndAccess step.</summary>
     IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> OnRetrieveSharedPrincipalsAndAccess();
-    /// <summary>Begin a WhoAmI step.</summary>
-    IWhoAmIStepStage<TEntity> OnWhoAmI();
     /// <summary>Begin a WinQuote step.</summary>
     IWinQuoteStepStage<TEntity> OnWinQuote();
     /// <summary>Begin a ReviseQuote step.</summary>
