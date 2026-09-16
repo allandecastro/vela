@@ -26,6 +26,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Framework
 
+#### Added
+
+- **Column-selector analyzer (`VELA001`), shipped in the `Vela.Plugins` package.** A Roslyn analyzer that reports
+  an error when a Vela column selector (`Expression<Func<TEntity, object>>`, used by `FilteringAttributes`, pre/post
+  image `Attributes(...)`, typed queries and the change/attribute helpers) targets a member declared on
+  `Microsoft.Xrm.Sdk.Entity` (for example `LogicalName`, `Id`, `RelatedEntities`) rather than a generated column
+  property. It surfaces in the editor and fails the build. It is automatic (no reference or configuration needed)
+  and does not touch plain LINQ `Func<...>` lambdas.
+
 #### Removed
 
 - **BREAKING: `OnWhoAmI()` is gone.** `WhoAmI` is a global, entity-less message: it cannot be registered as an
