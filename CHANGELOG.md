@@ -24,9 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### CLI
+## [0.8.0] - 2026-09-16 (Vela.Cli)
 
-#### Changed
+CLI line (`Vela.Cli`), published as `cli-v0.8.0`.
+
+### Changed
 
 - **Scaffolded solutions reference `Vela.Messages`** (the new multi-targeted base-types package) from the Shared
   project, and the default core version is `0.14.0`. Generated Custom API request/response contracts now compile in
