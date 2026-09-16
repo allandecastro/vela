@@ -24,6 +24,16 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Framework
+
+#### Removed
+
+- **BREAKING: `OnWhoAmI()` is gone.** `WhoAmI` is a global, entity-less message: it cannot be registered as an
+  entity-bound plugin step (the platform rejects the entity-filtered step), so the typed `OnWhoAmI()` builder
+  method and its context are removed to stop offering a registration that can never work. `WhoAmI` stays a message
+  constant, remains callable from a handler (`service.Execute(new WhoAmIRequest())`), and can still be generated as
+  a typed request with `vela models --messages`.
+
 ### CLI
 
 #### Fixed

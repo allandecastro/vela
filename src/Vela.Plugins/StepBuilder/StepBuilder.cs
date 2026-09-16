@@ -145,9 +145,6 @@ public sealed class StepBuilder<TEntity> :
     IRetrieveSharedPrincipalsAndAccessStepStage<TEntity>,
     IModeSelector<IRetrieveSharedPrincipalsAndAccessPreStep<TEntity>>, IRetrieveSharedPrincipalsAndAccessPreStep<TEntity>,
     IModeSelector<IRetrieveSharedPrincipalsAndAccessPostStep<TEntity>>, IRetrieveSharedPrincipalsAndAccessPostStep<TEntity>,
-    IWhoAmIStepStage<TEntity>,
-    IModeSelector<IWhoAmIPreStep<TEntity>>, IWhoAmIPreStep<TEntity>,
-    IModeSelector<IWhoAmIPostStep<TEntity>>, IWhoAmIPostStep<TEntity>,
     IWinQuoteStepStage<TEntity>,
     IModeSelector<IWinQuotePreStep<TEntity>>, IWinQuotePreStep<TEntity>,
     IModeSelector<IWinQuotePostStep<TEntity>>, IWinQuotePostStep<TEntity>,
@@ -240,7 +237,6 @@ public sealed class StepBuilder<TEntity> :
     public ICloneContractStepStage<TEntity> OnCloneContract() { _definition.Message = PluginMessages.CloneContract; return this; }
     public IRetrievePrincipalAccessStepStage<TEntity> OnRetrievePrincipalAccess() { _definition.Message = PluginMessages.RetrievePrincipalAccess; return this; }
     public IRetrieveSharedPrincipalsAndAccessStepStage<TEntity> OnRetrieveSharedPrincipalsAndAccess() { _definition.Message = PluginMessages.RetrieveSharedPrincipalsAndAccess; return this; }
-    public IWhoAmIStepStage<TEntity> OnWhoAmI() { _definition.Message = PluginMessages.WhoAmI; return this; }
     public IWinQuoteStepStage<TEntity> OnWinQuote() { _definition.Message = PluginMessages.WinQuote; return this; }
     public IReviseQuoteStepStage<TEntity> OnReviseQuote() { _definition.Message = PluginMessages.ReviseQuote; return this; }
     public IFulfillSalesOrderStepStage<TEntity> OnFulfillSalesOrder() { _definition.Message = PluginMessages.FulfillSalesOrder; return this; }
@@ -599,13 +595,6 @@ public sealed class StepBuilder<TEntity> :
     INoImageStep<TEntity> IRetrieveSharedPrincipalsAndAccessPreStep<TEntity>.Handler(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler) { SetHandler(handler); return this; }
     IRetrieveSharedPrincipalsAndAccessPostStep<TEntity> IModeSelector<IRetrieveSharedPrincipalsAndAccessPostStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
     INoImageStep<TEntity> IRetrieveSharedPrincipalsAndAccessPostStep<TEntity>.Handler(Action<IRetrieveSharedPrincipalsAndAccessPostContext<TEntity>> handler) { SetHandler(handler); return this; }
-    IModeSelector<IWhoAmIPreStep<TEntity>> IWhoAmIStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-    IModeSelector<IWhoAmIPreStep<TEntity>> IWhoAmIStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-    IModeSelector<IWhoAmIPostStep<TEntity>> IWhoAmIStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-    IWhoAmIPreStep<TEntity> IModeSelector<IWhoAmIPreStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
-    INoImageStep<TEntity> IWhoAmIPreStep<TEntity>.Handler(Action<IWhoAmIPreContext<TEntity>> handler) { SetHandler(handler); return this; }
-    IWhoAmIPostStep<TEntity> IModeSelector<IWhoAmIPostStep<TEntity>>.Mode(ExecutionMode mode) { _definition.Mode = mode; return this; }
-    INoImageStep<TEntity> IWhoAmIPostStep<TEntity>.Handler(Action<IWhoAmIPostContext<TEntity>> handler) { SetHandler(handler); return this; }
     IModeSelector<IWinQuotePreStep<TEntity>> IWinQuoteStepStage<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
     IModeSelector<IWinQuotePreStep<TEntity>> IWinQuoteStepStage<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
     IModeSelector<IWinQuotePostStep<TEntity>> IWinQuoteStepStage<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
