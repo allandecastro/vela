@@ -996,6 +996,13 @@ $$"""
     <PackageReference Include="System.Security.Cryptography.Xml" Version="{{CryptographyXmlVersion}}" />
   </ItemGroup>
 
+  <!-- Vela.Messages holds the SDK-only TypedRequest/TypedResponse base types and multi-targets net462;net10.0, so
+       generated Custom API request/response contracts compile here and can be called from anywhere (plugins on
+       net462, the ConsoleApp / integrations on net10.0). -->
+  <ItemGroup>
+    <PackageReference Include="Vela.Messages" Version="{{options.CoreVersion}}" />
+  </ItemGroup>
+
 </Project>
 """;
 
