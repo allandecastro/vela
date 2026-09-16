@@ -24,9 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Framework
+## [0.14.0] - 2026-09-16 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
-#### Added
+Framework line, published as `framework-v0.14.0` (all three packages ship at this version).
+
+### Added
 
 - **New `Vela.Messages` package** (multi-targets `net462;net10.0`). It holds the SDK-only request/response base
   types (`TypedRequest` / `TypedResponse`) plus the generic `CreateRequest<T>` / `UpdateRequest<T>` /
@@ -35,7 +37,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `net10.0` Console app or integration, not only inside a `net462` plugin. `Vela.Plugins` takes a dependency on it,
   so plugin projects get it transitively.
 
-#### Changed
+### Changed
 
 - **The `Vela.Messages` base types moved from `Vela.Plugins` into the new `Vela.Messages` package.** They keep the
   same `Vela.Messages` namespace, so source is unchanged (`using Vela.Messages;` still works), and `Vela.Plugins`
