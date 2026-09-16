@@ -51,13 +51,15 @@ jobs:
       - name: Test
         run: dotnet test Vela.sln -c Release --no-build
 
-      - name: Pack framework (Vela.Plugins + Vela.Testing)
-        # Both at the same version: Vela.Testing reuses Vela.Plugins internals (InternalsVisibleTo +
-        # the shared AttributeValueComparer), so they must ship locked together. Packing them in one
-        # invocation emits Testing's dependency on Vela.Plugins at this exact version.
+      - name: Pack framework (Vela.Messages + Vela.Plugins + Vela.Testing)
+        # All at the same version and shipped locked together: Vela.Plugins references Vela.Messages and
+        # Vela.Testing reuses Vela.Plugins internals (InternalsVisibleTo + the shared AttributeValueComparer).
+        # Packing at this exact version emits Vela.Plugins' dependency on Vela.Messages and Vela.Testing's
+        # dependency on Vela.Plugins at the same version.
         if: env.LINE == 'framework'
         shell: pwsh
         run: |
+          dotnet pack .\src\Vela.Messages\Vela.Messages.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
           dotnet pack .\src\Vela.Plugins\Vela.Plugins.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
           dotnet pack .\src\Vela.Testing\Vela.Testing.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
 
