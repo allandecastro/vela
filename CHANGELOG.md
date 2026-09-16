@@ -24,6 +24,18 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### CLI
+
+#### Fixed
+
+- **`vela models --custom-apis` (all, no names) no longer times out on large environments.** It read every Custom
+  API with one query plus two per API (an N+1), which could exceed the service timeout. It now reads all Custom
+  APIs, their request parameters and their response properties in three paged queries and joins them in memory.
+- **`vela models` writes C# models into the project's `Models/Generated` folder.** Run from a project with no
+  `--out`, it wrote the files to the project root even though the inferred namespace is
+  `<Prefix>.Shared.Models.Generated`; the files now land where the namespace says. An explicit `--out` or
+  `--namespace` is respected.
+
 ## [0.8.0] - 2026-09-16 (Vela.Cli)
 
 CLI line (`Vela.Cli`), published as `cli-v0.8.0`.

@@ -178,6 +178,10 @@ internal static class ModelsCommand
             return Fail("Could not infer a namespace. Pass --namespace <ns> (or run inside a project so it can be derived).", ExitInvalidArguments, includeUsage: false);
         }
 
+        // With no explicit --out, write into the inferred project's Models/Generated folder so the files land where
+        // the namespace (<Prefix>.Shared.Models.Generated) says, instead of the project root.
+        outDir = ResolveCSharpOutputDir(args, outDir);
+
         bool dataAnnotations = !HasFlag(args, "--no-annotations");
 
         // Optional plugin package inputs (offline scan): when provided, collect the unique names of the Custom APIs
@@ -271,12 +275,18 @@ internal static class ModelsCommand
 
             if (customApis.Length > 0 || allCustomApis)
             {
-                IEnumerable<string> customApiNames;
+                CustomApiMessage[] customApiMessages;
                 if (allCustomApis)
                 {
-                    // Bare --custom-apis = every Custom API in the environment, minus any the developer authored in
-                    // the provided package(s) (they already have those classes). No package = nothing excluded.
-                    customApiNames = ExcludeAuthoredCustomApis(ListAllCustomApiNames(service), authoredCustomApis, out int excludedCount);
+                    // Bare --custom-apis = every Custom API in the environment. Read them all in a few paged queries
+                    // (one per table) and join in memory, instead of one-plus-two round-trips per API, which times
+                    // out on large environments (#211). Then drop any the developer authored in the provided
+                    // package(s) (they already have those classes). No package = nothing excluded.
+                    IReadOnlyList<CustomApiMessage> all = ReadAllCustomApis(service);
+                    ISet<string> kept = new HashSet<string>(
+                        ExcludeAuthoredCustomApis(all.Select(m => m.UniqueName), authoredCustomApis, out int excludedCount),
+                        StringComparer.OrdinalIgnoreCase);
+                    customApiMessages = all.Where(m => kept.Contains(m.UniqueName)).ToArray();
                     if (excludedCount > 0)
                     {
                         Console.Error.WriteLine($"Excluding {excludedCount} Custom API(s) authored in the provided package(s).");
@@ -285,10 +295,9 @@ internal static class ModelsCommand
                 else
                 {
                     // Targeted list: the user asked for these by name, so generate exactly them — never filtered.
-                    customApiNames = customApis;
+                    customApiMessages = customApis.Select(name => ReadCustomApi(service, name)).ToArray();
                 }
 
-                CustomApiMessage[] customApiMessages = customApiNames.Select(name => ReadCustomApi(service, name)).ToArray();
                 models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!, EntityTypeNames()));
             }
 
@@ -660,20 +669,6 @@ internal static class ModelsCommand
         return map;
     }
 
-    // Every Custom API in the environment, by unique name. Used by bare `--custom-apis` (all mode). To keep the
-    // developer's own authored Custom APIs out of ALL mode, pass `--package`/`--packages-dir`: their unique names are
-    // then collected (via PackageScanner, like `plan`/`apply`) and removed by ExcludeAuthoredCustomApis at the call site.
-    private static IReadOnlyList<string> ListAllCustomApiNames(IOrganizationService service)
-    {
-        QueryExpression query = new QueryExpression("customapi") { ColumnSet = new ColumnSet("uniquename") };
-        return service.RetrieveAll(query)
-            .Select(e => e.GetAttributeValue<string>("uniquename"))
-            .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToList();
-    }
-
     // Resolves the optional plugin package inputs (--package, repeatable; --packages-dir, a folder of .nupkg) to full
     // paths, mirroring how plan/apply parse them. Returns true with a (possibly empty) list; false plus an exit code
     // on a bad path. No package option given = an empty list, and Custom API ALL mode stays unfiltered.
@@ -774,6 +769,85 @@ internal static class ModelsCommand
                 Console.Error.WriteLine($"Warning: failed to delete temp directory '{directory}': {ex.Message}");
             }
         }
+    }
+
+    // Reads every Custom API (with its request parameters and response properties) in a fixed number of paged
+    // queries - one for `customapi`, one for `customapirequestparameter`, one for `customapiresponseproperty` -
+    // joined in memory by customapiid. Replaces the one-plus-two round-trips per API that the ALL-mode loop used to
+    // do (which times out on large environments, #211).
+    internal static IReadOnlyList<CustomApiMessage> ReadAllCustomApis(IOrganizationService service)
+    {
+        Dictionary<Guid, List<CustomApiParameter>> requestParameters = GroupCustomApiParameters(service, "customapirequestparameter", isRequest: true);
+        Dictionary<Guid, List<CustomApiParameter>> responseProperties = GroupCustomApiParameters(service, "customapiresponseproperty", isRequest: false);
+
+        QueryExpression query = new QueryExpression("customapi")
+        {
+            ColumnSet = new ColumnSet("customapiid", "uniquename", "bindingtype", "boundentitylogicalname", "allowedcustomprocessingsteptype", "isprivate"),
+        };
+
+        List<CustomApiMessage> result = new List<CustomApiMessage>();
+        foreach (Entity api in service.RetrieveAll(query))
+        {
+            string? uniqueName = api.GetAttributeValue<string>("uniquename");
+            if (string.IsNullOrWhiteSpace(uniqueName))
+            {
+                continue;
+            }
+
+            int bindingType = api.GetAttributeValue<OptionSetValue>("bindingtype")?.Value ?? 0;
+            string? boundEntity = api.GetAttributeValue<string>("boundentitylogicalname");
+            result.Add(new CustomApiMessage(
+                uniqueName!,
+                IsBoundToEntity: bindingType == 1,
+                requestParameters.TryGetValue(api.Id, out List<CustomApiParameter>? rp) ? rp : new List<CustomApiParameter>(),
+                responseProperties.TryGetValue(api.Id, out List<CustomApiParameter>? sp) ? sp : new List<CustomApiParameter>(),
+                AllowedStepType: api.GetAttributeValue<OptionSetValue>("allowedcustomprocessingsteptype")?.Value ?? 2,
+                IsPrivate: api.GetAttributeValue<bool>("isprivate"),
+                BoundEntityLogicalName: string.IsNullOrWhiteSpace(boundEntity) ? null : boundEntity));
+        }
+
+        return result.OrderBy(m => m.UniqueName, StringComparer.Ordinal).ToList();
+    }
+
+    // Reads all rows of a Custom API parameter table in one paged query and groups them by their parent Custom API.
+    // Mirrors the per-API reader's column/shape choices (see ReadCustomApiParameters), including the by-name order.
+    private static Dictionary<Guid, List<CustomApiParameter>> GroupCustomApiParameters(IOrganizationService service, string entity, bool isRequest)
+    {
+        ColumnSet columns = isRequest
+            ? new ColumnSet("name", "type", "isoptional", "customapiid")
+            : new ColumnSet("name", "type", "customapiid");
+        QueryExpression query = new QueryExpression(entity) { ColumnSet = columns };
+
+        Dictionary<Guid, List<CustomApiParameter>> byApi = new Dictionary<Guid, List<CustomApiParameter>>();
+        foreach (Entity e in service.RetrieveAll(query))
+        {
+            Guid apiId = e.GetAttributeValue<EntityReference>("customapiid")?.Id ?? Guid.Empty;
+            string name = e.GetAttributeValue<string>("name") ?? string.Empty;
+            if (apiId == Guid.Empty || string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            CustomApiParameter parameter = new CustomApiParameter(
+                name,
+                e.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10,
+                isRequest && (e.GetAttributeValue<bool?>("isoptional") ?? false));
+
+            if (!byApi.TryGetValue(apiId, out List<CustomApiParameter>? list))
+            {
+                list = new List<CustomApiParameter>();
+                byApi[apiId] = list;
+            }
+
+            list.Add(parameter);
+        }
+
+        foreach (List<CustomApiParameter> list in byApi.Values)
+        {
+            list.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
+        }
+
+        return byApi;
     }
 
     private static CustomApiMessage ReadCustomApi(IOrganizationService service, string uniqueName)
@@ -940,6 +1014,23 @@ internal static class ModelsCommand
         }
 
         return map;
+    }
+
+    // Default output directory for C# models: an explicit --out wins; otherwise, when the namespace is inferred from
+    // a project (no --namespace) and a project is found, write into that project's Models/Generated folder so the
+    // files land where the inferred namespace says. Falls back to the caller's default (the current directory).
+    internal static string ResolveCSharpOutputDir(string[] args, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(TryReadOption(args, "--out"))
+            || !string.IsNullOrWhiteSpace(TryReadOption(args, "--namespace")))
+        {
+            return fallback;
+        }
+
+        string? project = ResolveProjectFile(TryReadOption(args, "--project"));
+        return project != null
+            ? Path.Combine(Path.GetDirectoryName(project)!, "Models", "Generated")
+            : fallback;
     }
 
     internal static string? ResolveNamespace(string[] args)
