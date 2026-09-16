@@ -31,6 +31,18 @@ public sealed class ModelsLangOptionalTests
         return captured.ToString();
     }
 
+    // Regression: --solution-roles used to be mis-registered as a value option (in ValueOptions but read via
+    // HasFlag and not in OptionalValueOptions), so it errored "requires a value" in every form. It is a flag
+    // combined with --solution, so alone it must reach the "requires --solution" gate, not the tokenizer.
+    [Fact]
+    public void SolutionRoles_is_a_flag_not_a_value_option()
+    {
+        string err = RunCapturingStderr(["--solution-roles"], out int exit);
+        Assert.Equal(ExitInvalidArguments, exit);
+        Assert.Contains("requires --solution", err);
+        Assert.DoesNotContain("requires a value", err);
+    }
+
     [Theory]
     [InlineData("--forms")]
     [InlineData("--tables")]

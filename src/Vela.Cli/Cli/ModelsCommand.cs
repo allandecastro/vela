@@ -25,7 +25,7 @@ internal static class ModelsCommand
     // Dataverse via TryResolveConnection). Value options consume the next token; flags stand alone.
     private static readonly HashSet<string> ValueOptions = new(CommandLineOptions.ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
     {
-        "--solution", "--entities", "--custom-apis", "--messages", "--roles", "--solution-roles", "--out", "--lang",
+        "--solution", "--entities", "--custom-apis", "--messages", "--roles", "--out", "--lang",
         "--namespace", "--project",
         // Optional plugin package inputs (same shape as plan/apply): when provided, ALL-mode --custom-apis excludes
         // the Custom APIs authored in these package(s) so the developer's own classes are not regenerated. `-p` is
@@ -35,7 +35,7 @@ internal static class ModelsCommand
 
     private static readonly HashSet<string> FlagOptions = new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
     {
-        "--forms", "--tables", "--no-annotations", "--overwrite", "--verbose", "-v", "--json",
+        "--solution-roles", "--forms", "--tables", "--no-annotations", "--overwrite", "--verbose", "-v", "--json",
         "--interactive", "-i", "--help", "-h",
     };
 

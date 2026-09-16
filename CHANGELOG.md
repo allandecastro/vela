@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### CLI
+
+#### Fixed
+
+- **`vela models --solution-roles` now works.** It was mis-registered as a value-taking option, so it errored in
+  every form (`--solution-roles` alone reported "requires a value", and with a value reported "requires
+  --solution"). It is a boolean flag combined with `--solution <uniquename>`.
+
 ## [0.7.0] - 2026-09-16 (Vela.Cli)
 
 CLI line (`Vela.Cli`), published as `cli-v0.7.0`.
