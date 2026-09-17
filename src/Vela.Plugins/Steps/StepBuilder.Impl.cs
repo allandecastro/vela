@@ -332,7 +332,14 @@ namespace Vela.StepBuilder
         ISyncMode<IMergePreOperationConfig<TEntity>>,
         IMergePreOperationConfig<TEntity>,
         ISyncAsyncMode<IMergePostOperationConfig<TEntity>>,
-        IMergePostOperationConfig<TEntity>
+        IMergePostOperationConfig<TEntity>,
+        IPermissiveStages<TEntity>,
+        ISyncMode<IPermissivePreValidationConfig<TEntity>>,
+        IPermissivePreValidationConfig<TEntity>,
+        ISyncMode<IPermissivePreOperationConfig<TEntity>>,
+        IPermissivePreOperationConfig<TEntity>,
+        ISyncAsyncMode<IPermissivePostOperationConfig<TEntity>>,
+        IPermissivePostOperationConfig<TEntity>
         where TEntity : Entity
     {
         private StepBuilder<TEntity> SetFilteringParams(Expression<Func<TEntity, object?>>[] attributes)
@@ -390,6 +397,71 @@ namespace Vela.StepBuilder
         IGetInvoiceProductsFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGetInvoiceProductsFromOpportunity() { _definition.Message = PluginMessages.GetInvoiceProductsFromOpportunity; return this; }
         IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() { _definition.Message = PluginMessages.ModifyAccess; return this; }
         IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() { _definition.Message = PluginMessages.Merge; return this; }
+        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) { if (string.IsNullOrWhiteSpace(messageName)) throw new ArgumentNullException(nameof(messageName)); _definition.Message = messageName; return this; }
+        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { _definition.Message = ExpressionHelper.GetMessageName<TMessage>(); return this; }
+        ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { _definition.Message = ExpressionHelper.GetMessageName<TRequest>(); return new TypedStepAdapter<TEntity, TRequest>(this); }
+        IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { _definition.Message = ExpressionHelper.GetMessageName<TRequest>(); return new TypedStepAdapter<TEntity, TRequest>(this); }
+
+        ISyncMode<IPermissivePreValidationConfig<TEntity>> IPermissiveStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IPermissivePreOperationConfig<TEntity>> IPermissiveStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IPermissivePostOperationConfig<TEntity>> IPermissiveStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+
+        IPermissivePreValidationConfig<TEntity> ISyncMode<IPermissivePreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IPermissivePreOperationConfig<TEntity> ISyncMode<IPermissivePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IPermissivePostOperationConfig<TEntity> ISyncAsyncMode<IPermissivePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IPermissivePostOperationConfig<TEntity> ISyncAsyncMode<IPermissivePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IPermissivePreValidationConfig<TEntity>.Handle(Action<ILocalPluginContext> handler) { SetHandler(handler); }
+        void IPermissivePreValidationConfig<TEntity>.Handle<TRequest>(Action<IMessagePreContext<TRequest>> handler) { SetHandler(handler); }
+        void IPermissivePreValidationConfig<TEntity>.Handle<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) { SetHandler(handler); }
+
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IPermissivePreOperationConfig<TEntity>.Handle(Action<ILocalPluginContext> handler) { SetHandler(handler); }
+        void IPermissivePreOperationConfig<TEntity>.Handle<TRequest>(Action<IMessagePreContext<TRequest>> handler) { SetHandler(handler); }
+        void IPermissivePreOperationConfig<TEntity>.Handle<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) { SetHandler(handler); }
+
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IPermissivePostOperationConfig<TEntity>.Handle(Action<ILocalPluginContext> handler) { SetHandler(handler); }
+        void IPermissivePostOperationConfig<TEntity>.Handle<TRequest>(Action<IMessagePostContext<TRequest>> handler) { SetHandler(handler); }
+        void IPermissivePostOperationConfig<TEntity>.Handle<TRequest>(Action<IMessagePostContext<TRequest, TEntity>> handler) { SetHandler(handler); }
+
+        internal void AddImageInternal(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes) => AddImageNow(alias, isPre, attributes);
+        internal void SetExecutionOrderInternal(int order) => SetExecutionOrder(order);
+        internal void SetStepKeyInternal(string key) => SetKey(key);
+        internal void SetDescriptionInternal(string description) => SetDescription(description);
+        internal void SetImpersonationInternal(ImpersonationSource source) => SetImpersonation(source);
+        internal void SetSupportedDeploymentInternal(SupportedDeployment deployment) => SetSupportedDeployment(deployment);
+        internal void SetUnsecureConfigInternal(string configuration) => SetUnsecureConfig(configuration);
+        internal void SetSecureConfigInternal(string configuration) => SetSecureConfig(configuration);
+        internal void SetDisabledInternal() => SetDisabled();
 
         ISyncMode<ICreatePreValidationConfig<TEntity>> ICreateStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<ICreatePreOperationConfig<TEntity>> ICreateStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
@@ -716,357 +788,1323 @@ namespace Vela.StepBuilder
         IMergePostOperationConfig<TEntity> ISyncAsyncMode<IMergePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
 
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePreValidationConfig<TEntity>.Handle(Action<ICreatePreContext<TEntity>> handler) { SetHandler(handler); }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePreOperationConfig<TEntity>.Handle(Action<ICreatePreContext<TEntity>> handler) { SetHandler(handler); }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePostOperationConfig<TEntity>.Handle(Action<ICreatePostContext<TEntity>> handler) { SetHandler(handler); }
 
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePreValidationConfig<TEntity>.Handle(Action<IUpdatePreContext<TEntity>> handler) { SetHandler(handler); }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePreOperationConfig<TEntity>.Handle(Action<IUpdatePreContext<TEntity>> handler) { SetHandler(handler); }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePostOperationConfig<TEntity>.Handle(Action<IUpdatePostContext<TEntity>> handler) { SetHandler(handler); }
 
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePreValidationConfig<TEntity>.Handle(Action<ICreateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePreOperationConfig<TEntity>.Handle(Action<ICreateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePostOperationConfig<TEntity>.Handle(Action<ICreateMultiplePostContext<TEntity>> handler) { SetHandler(handler); }
 
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdateMultiplePreValidationConfig<TEntity>.Handle(Action<IUpdateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdateMultiplePreOperationConfig<TEntity>.Handle(Action<IUpdateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
-        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdateMultiplePostOperationConfig<TEntity>.Handle(Action<IUpdateMultiplePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePreValidationConfig<TEntity>.Handle(Action<IDeletePreContext<TEntity>> handler) { SetHandler(handler); }
-        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePreOperationConfig<TEntity>.Handle(Action<IDeletePreContext<TEntity>> handler) { SetHandler(handler); }
-        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePostOperationConfig<TEntity>.Handle(Action<IDeletePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePreValidationConfig<TEntity>.Handle(Action<IRetrievePreContext<TEntity>> handler) { SetHandler(handler); }
-        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePreOperationConfig<TEntity>.Handle(Action<IRetrievePreContext<TEntity>> handler) { SetHandler(handler); }
-        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePostOperationConfig<TEntity>.Handle(Action<IRetrievePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveMultiplePreValidationConfig<TEntity>.Handle(Action<IRetrieveMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
-        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveMultiplePreOperationConfig<TEntity>.Handle(Action<IRetrieveMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
-        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveMultiplePostOperationConfig<TEntity>.Handle(Action<IRetrieveMultiplePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAssociatePreValidationConfig<TEntity>.Handle(Action<IAssociatePreContext<TEntity>> handler) { SetHandler(handler); }
-        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAssociatePreOperationConfig<TEntity>.Handle(Action<IAssociatePreContext<TEntity>> handler) { SetHandler(handler); }
-        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAssociatePostOperationConfig<TEntity>.Handle(Action<IAssociatePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDisassociatePreValidationConfig<TEntity>.Handle(Action<IDisassociatePreContext<TEntity>> handler) { SetHandler(handler); }
-        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDisassociatePreOperationConfig<TEntity>.Handle(Action<IDisassociatePreContext<TEntity>> handler) { SetHandler(handler); }
-        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDisassociatePostOperationConfig<TEntity>.Handle(Action<IDisassociatePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGrantAccessPreValidationConfig<TEntity>.Handle(Action<IGrantAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGrantAccessPreOperationConfig<TEntity>.Handle(Action<IGrantAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGrantAccessPostOperationConfig<TEntity>.Handle(Action<IGrantAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRevokeAccessPreValidationConfig<TEntity>.Handle(Action<IRevokeAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRevokeAccessPreOperationConfig<TEntity>.Handle(Action<IRevokeAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRevokeAccessPostOperationConfig<TEntity>.Handle(Action<IRevokeAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IQualifyLeadPreValidationConfig<TEntity>.Handle(Action<IQualifyLeadPreContext<TEntity>> handler) { SetHandler(handler); }
-        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IQualifyLeadPreOperationConfig<TEntity>.Handle(Action<IQualifyLeadPreContext<TEntity>> handler) { SetHandler(handler); }
-        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IQualifyLeadPostOperationConfig<TEntity>.Handle(Action<IQualifyLeadPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinOpportunityPreValidationConfig<TEntity>.Handle(Action<IWinOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinOpportunityPreOperationConfig<TEntity>.Handle(Action<IWinOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinOpportunityPostOperationConfig<TEntity>.Handle(Action<IWinOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ILoseOpportunityPreValidationConfig<TEntity>.Handle(Action<ILoseOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ILoseOpportunityPreOperationConfig<TEntity>.Handle(Action<ILoseOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ILoseOpportunityPostOperationConfig<TEntity>.Handle(Action<ILoseOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.Handle(Action<IConvertSalesOrderToInvoicePreContext<TEntity>> handler) { SetHandler(handler); }
-        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.Handle(Action<IConvertSalesOrderToInvoicePreContext<TEntity>> handler) { SetHandler(handler); }
-        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.Handle(Action<IConvertSalesOrderToInvoicePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGenerateQuoteFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGenerateQuoteFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateQuoteFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddToQueuePreValidationConfig<TEntity>.Handle(Action<IAddToQueuePreContext<TEntity>> handler) { SetHandler(handler); }
-        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddToQueuePreOperationConfig<TEntity>.Handle(Action<IAddToQueuePreContext<TEntity>> handler) { SetHandler(handler); }
-        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddToQueuePostOperationConfig<TEntity>.Handle(Action<IAddToQueuePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveFromQueuePreValidationConfig<TEntity>.Handle(Action<IRemoveFromQueuePreContext<TEntity>> handler) { SetHandler(handler); }
-        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveFromQueuePreOperationConfig<TEntity>.Handle(Action<IRemoveFromQueuePreContext<TEntity>> handler) { SetHandler(handler); }
-        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveFromQueuePostOperationConfig<TEntity>.Handle(Action<IRemoveFromQueuePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPickFromQueuePreValidationConfig<TEntity>.Handle(Action<IPickFromQueuePreContext<TEntity>> handler) { SetHandler(handler); }
-        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPickFromQueuePreOperationConfig<TEntity>.Handle(Action<IPickFromQueuePreContext<TEntity>> handler) { SetHandler(handler); }
-        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPickFromQueuePostOperationConfig<TEntity>.Handle(Action<IPickFromQueuePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRouteToPreValidationConfig<TEntity>.Handle(Action<IRouteToPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRouteToPreOperationConfig<TEntity>.Handle(Action<IRouteToPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRouteToPostOperationConfig<TEntity>.Handle(Action<IRouteToPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReleaseToQueuePreValidationConfig<TEntity>.Handle(Action<IReleaseToQueuePreContext<TEntity>> handler) { SetHandler(handler); }
-        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReleaseToQueuePreOperationConfig<TEntity>.Handle(Action<IReleaseToQueuePreContext<TEntity>> handler) { SetHandler(handler); }
-        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReleaseToQueuePostOperationConfig<TEntity>.Handle(Action<IReleaseToQueuePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailPreValidationConfig<TEntity>.Handle(Action<ISendEmailPreContext<TEntity>> handler) { SetHandler(handler); }
-        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailPreOperationConfig<TEntity>.Handle(Action<ISendEmailPreContext<TEntity>> handler) { SetHandler(handler); }
-        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailPostOperationConfig<TEntity>.Handle(Action<ISendEmailPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailFromTemplatePreValidationConfig<TEntity>.Handle(Action<ISendEmailFromTemplatePreContext<TEntity>> handler) { SetHandler(handler); }
-        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailFromTemplatePreOperationConfig<TEntity>.Handle(Action<ISendEmailFromTemplatePreContext<TEntity>> handler) { SetHandler(handler); }
-        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailFromTemplatePostOperationConfig<TEntity>.Handle(Action<ISendEmailFromTemplatePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverIncomingEmailPreValidationConfig<TEntity>.Handle(Action<IDeliverIncomingEmailPreContext<TEntity>> handler) { SetHandler(handler); }
-        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverIncomingEmailPreOperationConfig<TEntity>.Handle(Action<IDeliverIncomingEmailPreContext<TEntity>> handler) { SetHandler(handler); }
-        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverIncomingEmailPostOperationConfig<TEntity>.Handle(Action<IDeliverIncomingEmailPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverPromoteEmailPreValidationConfig<TEntity>.Handle(Action<IDeliverPromoteEmailPreContext<TEntity>> handler) { SetHandler(handler); }
-        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverPromoteEmailPreOperationConfig<TEntity>.Handle(Action<IDeliverPromoteEmailPreContext<TEntity>> handler) { SetHandler(handler); }
-        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverPromoteEmailPostOperationConfig<TEntity>.Handle(Action<IDeliverPromoteEmailPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMembersTeamPreValidationConfig<TEntity>.Handle(Action<IAddMembersTeamPreContext<TEntity>> handler) { SetHandler(handler); }
-        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMembersTeamPreOperationConfig<TEntity>.Handle(Action<IAddMembersTeamPreContext<TEntity>> handler) { SetHandler(handler); }
-        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMembersTeamPostOperationConfig<TEntity>.Handle(Action<IAddMembersTeamPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMembersTeamPreValidationConfig<TEntity>.Handle(Action<IRemoveMembersTeamPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMembersTeamPreOperationConfig<TEntity>.Handle(Action<IRemoveMembersTeamPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMembersTeamPostOperationConfig<TEntity>.Handle(Action<IRemoveMembersTeamPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddListMembersListPreValidationConfig<TEntity>.Handle(Action<IAddListMembersListPreContext<TEntity>> handler) { SetHandler(handler); }
-        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddListMembersListPreOperationConfig<TEntity>.Handle(Action<IAddListMembersListPreContext<TEntity>> handler) { SetHandler(handler); }
-        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddListMembersListPostOperationConfig<TEntity>.Handle(Action<IAddListMembersListPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMemberListPreValidationConfig<TEntity>.Handle(Action<IAddMemberListPreContext<TEntity>> handler) { SetHandler(handler); }
-        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMemberListPreOperationConfig<TEntity>.Handle(Action<IAddMemberListPreContext<TEntity>> handler) { SetHandler(handler); }
-        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMemberListPostOperationConfig<TEntity>.Handle(Action<IAddMemberListPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMemberListPreValidationConfig<TEntity>.Handle(Action<IRemoveMemberListPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMemberListPreOperationConfig<TEntity>.Handle(Action<IRemoveMemberListPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMemberListPostOperationConfig<TEntity>.Handle(Action<IRemoveMemberListPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloseIncidentPreValidationConfig<TEntity>.Handle(Action<ICloseIncidentPreContext<TEntity>> handler) { SetHandler(handler); }
-        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloseIncidentPreOperationConfig<TEntity>.Handle(Action<ICloseIncidentPreContext<TEntity>> handler) { SetHandler(handler); }
-        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloseIncidentPostOperationConfig<TEntity>.Handle(Action<ICloseIncidentPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICancelContractPreValidationConfig<TEntity>.Handle(Action<ICancelContractPreContext<TEntity>> handler) { SetHandler(handler); }
-        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICancelContractPreOperationConfig<TEntity>.Handle(Action<ICancelContractPreContext<TEntity>> handler) { SetHandler(handler); }
-        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICancelContractPostOperationConfig<TEntity>.Handle(Action<ICancelContractPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloneContractPreValidationConfig<TEntity>.Handle(Action<ICloneContractPreContext<TEntity>> handler) { SetHandler(handler); }
-        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloneContractPreOperationConfig<TEntity>.Handle(Action<ICloneContractPreContext<TEntity>> handler) { SetHandler(handler); }
-        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloneContractPostOperationConfig<TEntity>.Handle(Action<ICloneContractPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePrincipalAccessPreValidationConfig<TEntity>.Handle(Action<IRetrievePrincipalAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePrincipalAccessPreOperationConfig<TEntity>.Handle(Action<IRetrievePrincipalAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePrincipalAccessPostOperationConfig<TEntity>.Handle(Action<IRetrievePrincipalAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.Handle(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.Handle(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.Handle(Action<IRetrieveSharedPrincipalsAndAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinQuotePreValidationConfig<TEntity>.Handle(Action<IWinQuotePreContext<TEntity>> handler) { SetHandler(handler); }
-        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinQuotePreOperationConfig<TEntity>.Handle(Action<IWinQuotePreContext<TEntity>> handler) { SetHandler(handler); }
-        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinQuotePostOperationConfig<TEntity>.Handle(Action<IWinQuotePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReviseQuotePreValidationConfig<TEntity>.Handle(Action<IReviseQuotePreContext<TEntity>> handler) { SetHandler(handler); }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReviseQuotePreOperationConfig<TEntity>.Handle(Action<IReviseQuotePreContext<TEntity>> handler) { SetHandler(handler); }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReviseQuotePostOperationConfig<TEntity>.Handle(Action<IReviseQuotePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IFulfillSalesOrderPreValidationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IFulfillSalesOrderPreOperationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IFulfillSalesOrderPostOperationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IModifyAccessPreValidationConfig<TEntity>.Handle(Action<IModifyAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IModifyAccessPreOperationConfig<TEntity>.Handle(Action<IModifyAccessPreContext<TEntity>> handler) { SetHandler(handler); }
-        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IModifyAccessPostOperationConfig<TEntity>.Handle(Action<IModifyAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePreValidationConfig<TEntity>.Handle(Action<IMergePreContext<TEntity>> handler) { SetHandler(handler); }
-        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePreOperationConfig<TEntity>.Handle(Action<IMergePreContext<TEntity>> handler) { SetHandler(handler); }
-        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithDescription(string description) { _definition.Description = description; return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePostOperationConfig<TEntity>.Handle(Action<IMergePostContext<TEntity>> handler) { SetHandler(handler); }
 
     }
@@ -1122,5 +2160,9 @@ namespace Vela.Plugin
         IGetInvoiceProductsFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGetInvoiceProductsFromOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnGetInvoiceProductsFromOpportunity();
         IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() => ((IStepTrigger<TEntity>)BeginStep()).OnModifyAccess();
         IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() => ((IStepTrigger<TEntity>)BeginStep()).OnMerge();
+        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) => ((IStepTrigger<TEntity>)BeginStep()).OnMessage(messageName);
+        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() => ((IStepTrigger<TEntity>)BeginStep()).OnMessage<TMessage>();
+        ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() => ((IStepTrigger<TEntity>)BeginStep()).On<TRequest>();
+        IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() => ((IStepTrigger<TEntity>)BeginStep()).OnAsyncOnly<TRequest>();
     }
 }

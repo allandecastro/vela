@@ -2,7 +2,9 @@
 using System;
 using System.ComponentModel;
 using System.Linq.Expressions;
+using Vela.Constants;
 using Vela.Context;
+using Vela.StepBuilder; // ImpersonationSource / SupportedDeployment / ExecutionMode enums (relocated at old-builder removal)
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.Steps
@@ -23,12 +25,21 @@ namespace Vela.Steps
     public interface ISyncMode<out TConfig> : IFluentStep { TConfig Sync(); }
     /// <summary>Sync or async mode choice (post-operation only).</summary>
     public interface ISyncAsyncMode<out TConfig> : IFluentStep { TConfig Sync(); TConfig Async(); }
+    /// <summary>Async-only mode choice (a Custom API whose allowedcustomprocessingsteptype is AsyncOnly).</summary>
+    public interface IAsyncMode<out TConfig> : IFluentStep { TConfig Async(); }
 
     /// <summary>Config for a Create step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface ICreatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICreatePreValidationConfig<TEntity> WithFiltering(params Expression<Func<TEntity, object?>>[] attributes);
         ICreatePreValidationConfig<TEntity> WithDescription(string description);
+        ICreatePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ICreatePreValidationConfig<TEntity> WithStepKey(string key);
+        ICreatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICreatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICreatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICreatePreContext<TEntity>> handler);
     }
 
@@ -37,6 +48,13 @@ namespace Vela.Steps
     {
         ICreatePreOperationConfig<TEntity> WithFiltering(params Expression<Func<TEntity, object?>>[] attributes);
         ICreatePreOperationConfig<TEntity> WithDescription(string description);
+        ICreatePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICreatePreOperationConfig<TEntity> WithStepKey(string key);
+        ICreatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICreatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICreatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreatePreContext<TEntity>> handler);
     }
 
@@ -47,6 +65,13 @@ namespace Vela.Steps
         ICreatePostOperationConfig<TEntity> WithDescription(string description);
         ICreatePostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
         ICreatePostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        ICreatePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICreatePostOperationConfig<TEntity> WithStepKey(string key);
+        ICreatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICreatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICreatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreatePostContext<TEntity>> handler);
     }
 
@@ -55,6 +80,13 @@ namespace Vela.Steps
     {
         IUpdatePreValidationConfig<TEntity> WithFiltering(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdatePreValidationConfig<TEntity> WithDescription(string description);
+        IUpdatePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IUpdatePreValidationConfig<TEntity> WithStepKey(string key);
+        IUpdatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUpdatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUpdatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePreContext<TEntity>> handler);
     }
 
@@ -65,6 +97,13 @@ namespace Vela.Steps
         IUpdatePreOperationConfig<TEntity> WithDescription(string description);
         IUpdatePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdatePreOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdatePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IUpdatePreOperationConfig<TEntity> WithStepKey(string key);
+        IUpdatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUpdatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUpdatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePreContext<TEntity>> handler);
     }
 
@@ -77,6 +116,13 @@ namespace Vela.Steps
         IUpdatePostOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IUpdatePostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdatePostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdatePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IUpdatePostOperationConfig<TEntity> WithStepKey(string key);
+        IUpdatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUpdatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUpdatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePostContext<TEntity>> handler);
     }
 
@@ -85,6 +131,13 @@ namespace Vela.Steps
     {
         ICreateMultiplePreValidationConfig<TEntity> WithFiltering(params Expression<Func<TEntity, object?>>[] attributes);
         ICreateMultiplePreValidationConfig<TEntity> WithDescription(string description);
+        ICreateMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ICreateMultiplePreValidationConfig<TEntity> WithStepKey(string key);
+        ICreateMultiplePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreateMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICreateMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICreateMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreateMultiplePreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICreateMultiplePreContext<TEntity>> handler);
     }
 
@@ -93,6 +146,13 @@ namespace Vela.Steps
     {
         ICreateMultiplePreOperationConfig<TEntity> WithFiltering(params Expression<Func<TEntity, object?>>[] attributes);
         ICreateMultiplePreOperationConfig<TEntity> WithDescription(string description);
+        ICreateMultiplePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICreateMultiplePreOperationConfig<TEntity> WithStepKey(string key);
+        ICreateMultiplePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreateMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICreateMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICreateMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreateMultiplePreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreateMultiplePreContext<TEntity>> handler);
     }
 
@@ -103,6 +163,13 @@ namespace Vela.Steps
         ICreateMultiplePostOperationConfig<TEntity> WithDescription(string description);
         ICreateMultiplePostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
         ICreateMultiplePostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        ICreateMultiplePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICreateMultiplePostOperationConfig<TEntity> WithStepKey(string key);
+        ICreateMultiplePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreateMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICreateMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICreateMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreateMultiplePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreateMultiplePostContext<TEntity>> handler);
     }
 
@@ -111,6 +178,13 @@ namespace Vela.Steps
     {
         IUpdateMultiplePreValidationConfig<TEntity> WithFiltering(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdateMultiplePreValidationConfig<TEntity> WithDescription(string description);
+        IUpdateMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IUpdateMultiplePreValidationConfig<TEntity> WithStepKey(string key);
+        IUpdateMultiplePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdateMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUpdateMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUpdateMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdateMultiplePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IUpdateMultiplePreContext<TEntity>> handler);
     }
 
@@ -121,6 +195,13 @@ namespace Vela.Steps
         IUpdateMultiplePreOperationConfig<TEntity> WithDescription(string description);
         IUpdateMultiplePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdateMultiplePreOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdateMultiplePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IUpdateMultiplePreOperationConfig<TEntity> WithStepKey(string key);
+        IUpdateMultiplePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdateMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUpdateMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUpdateMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdateMultiplePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdateMultiplePreContext<TEntity>> handler);
     }
 
@@ -133,6 +214,13 @@ namespace Vela.Steps
         IUpdateMultiplePostOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IUpdateMultiplePostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdateMultiplePostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdateMultiplePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IUpdateMultiplePostOperationConfig<TEntity> WithStepKey(string key);
+        IUpdateMultiplePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdateMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUpdateMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUpdateMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdateMultiplePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdateMultiplePostContext<TEntity>> handler);
     }
 
@@ -140,6 +228,13 @@ namespace Vela.Steps
     public interface IDeletePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDeletePreValidationConfig<TEntity> WithDescription(string description);
+        IDeletePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IDeletePreValidationConfig<TEntity> WithStepKey(string key);
+        IDeletePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeletePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeletePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeletePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeletePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePreContext<TEntity>> handler);
     }
 
@@ -149,6 +244,13 @@ namespace Vela.Steps
         IDeletePreOperationConfig<TEntity> WithDescription(string description);
         IDeletePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
         IDeletePreOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IDeletePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IDeletePreOperationConfig<TEntity> WithStepKey(string key);
+        IDeletePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeletePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeletePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeletePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeletePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePreContext<TEntity>> handler);
     }
 
@@ -158,6 +260,13 @@ namespace Vela.Steps
         IDeletePostOperationConfig<TEntity> WithDescription(string description);
         IDeletePostOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
         IDeletePostOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IDeletePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IDeletePostOperationConfig<TEntity> WithStepKey(string key);
+        IDeletePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeletePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeletePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeletePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeletePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePostContext<TEntity>> handler);
     }
 
@@ -165,6 +274,13 @@ namespace Vela.Steps
     public interface IRetrievePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrievePreValidationConfig<TEntity> WithDescription(string description);
+        IRetrievePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrievePreValidationConfig<TEntity> WithStepKey(string key);
+        IRetrievePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrievePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrievePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePreContext<TEntity>> handler);
     }
 
@@ -172,6 +288,13 @@ namespace Vela.Steps
     public interface IRetrievePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrievePreOperationConfig<TEntity> WithDescription(string description);
+        IRetrievePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrievePreOperationConfig<TEntity> WithStepKey(string key);
+        IRetrievePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrievePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrievePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePreContext<TEntity>> handler);
     }
 
@@ -179,6 +302,13 @@ namespace Vela.Steps
     public interface IRetrievePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrievePostOperationConfig<TEntity> WithDescription(string description);
+        IRetrievePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrievePostOperationConfig<TEntity> WithStepKey(string key);
+        IRetrievePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrievePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrievePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePostContext<TEntity>> handler);
     }
 
@@ -186,6 +316,13 @@ namespace Vela.Steps
     public interface IRetrieveMultiplePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrieveMultiplePreValidationConfig<TEntity> WithDescription(string description);
+        IRetrieveMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrieveMultiplePreValidationConfig<TEntity> WithStepKey(string key);
+        IRetrieveMultiplePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrieveMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrieveMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveMultiplePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveMultiplePreContext<TEntity>> handler);
     }
 
@@ -193,6 +330,13 @@ namespace Vela.Steps
     public interface IRetrieveMultiplePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrieveMultiplePreOperationConfig<TEntity> WithDescription(string description);
+        IRetrieveMultiplePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrieveMultiplePreOperationConfig<TEntity> WithStepKey(string key);
+        IRetrieveMultiplePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrieveMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrieveMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveMultiplePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveMultiplePreContext<TEntity>> handler);
     }
 
@@ -200,6 +344,13 @@ namespace Vela.Steps
     public interface IRetrieveMultiplePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrieveMultiplePostOperationConfig<TEntity> WithDescription(string description);
+        IRetrieveMultiplePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrieveMultiplePostOperationConfig<TEntity> WithStepKey(string key);
+        IRetrieveMultiplePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrieveMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrieveMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveMultiplePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveMultiplePostContext<TEntity>> handler);
     }
 
@@ -207,6 +358,13 @@ namespace Vela.Steps
     public interface IAssociatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAssociatePreValidationConfig<TEntity> WithDescription(string description);
+        IAssociatePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IAssociatePreValidationConfig<TEntity> WithStepKey(string key);
+        IAssociatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssociatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAssociatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAssociatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssociatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAssociatePreContext<TEntity>> handler);
     }
 
@@ -214,6 +372,13 @@ namespace Vela.Steps
     public interface IAssociatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAssociatePreOperationConfig<TEntity> WithDescription(string description);
+        IAssociatePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAssociatePreOperationConfig<TEntity> WithStepKey(string key);
+        IAssociatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssociatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAssociatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAssociatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssociatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAssociatePreContext<TEntity>> handler);
     }
 
@@ -221,6 +386,13 @@ namespace Vela.Steps
     public interface IAssociatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAssociatePostOperationConfig<TEntity> WithDescription(string description);
+        IAssociatePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAssociatePostOperationConfig<TEntity> WithStepKey(string key);
+        IAssociatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssociatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAssociatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAssociatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssociatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAssociatePostContext<TEntity>> handler);
     }
 
@@ -228,6 +400,13 @@ namespace Vela.Steps
     public interface IDisassociatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDisassociatePreValidationConfig<TEntity> WithDescription(string description);
+        IDisassociatePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IDisassociatePreValidationConfig<TEntity> WithStepKey(string key);
+        IDisassociatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDisassociatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDisassociatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDisassociatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IDisassociatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDisassociatePreContext<TEntity>> handler);
     }
 
@@ -235,6 +414,13 @@ namespace Vela.Steps
     public interface IDisassociatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDisassociatePreOperationConfig<TEntity> WithDescription(string description);
+        IDisassociatePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IDisassociatePreOperationConfig<TEntity> WithStepKey(string key);
+        IDisassociatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDisassociatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDisassociatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDisassociatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDisassociatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDisassociatePreContext<TEntity>> handler);
     }
 
@@ -242,6 +428,13 @@ namespace Vela.Steps
     public interface IDisassociatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDisassociatePostOperationConfig<TEntity> WithDescription(string description);
+        IDisassociatePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IDisassociatePostOperationConfig<TEntity> WithStepKey(string key);
+        IDisassociatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDisassociatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDisassociatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDisassociatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDisassociatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDisassociatePostContext<TEntity>> handler);
     }
 
@@ -249,6 +442,13 @@ namespace Vela.Steps
     public interface IGrantAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGrantAccessPreValidationConfig<TEntity> WithDescription(string description);
+        IGrantAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IGrantAccessPreValidationConfig<TEntity> WithStepKey(string key);
+        IGrantAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGrantAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGrantAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGrantAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGrantAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGrantAccessPreContext<TEntity>> handler);
     }
 
@@ -256,6 +456,13 @@ namespace Vela.Steps
     public interface IGrantAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGrantAccessPreOperationConfig<TEntity> WithDescription(string description);
+        IGrantAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGrantAccessPreOperationConfig<TEntity> WithStepKey(string key);
+        IGrantAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGrantAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGrantAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGrantAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGrantAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGrantAccessPreContext<TEntity>> handler);
     }
 
@@ -263,6 +470,13 @@ namespace Vela.Steps
     public interface IGrantAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGrantAccessPostOperationConfig<TEntity> WithDescription(string description);
+        IGrantAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGrantAccessPostOperationConfig<TEntity> WithStepKey(string key);
+        IGrantAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGrantAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGrantAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGrantAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGrantAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGrantAccessPostContext<TEntity>> handler);
     }
 
@@ -270,6 +484,13 @@ namespace Vela.Steps
     public interface IRevokeAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRevokeAccessPreValidationConfig<TEntity> WithDescription(string description);
+        IRevokeAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRevokeAccessPreValidationConfig<TEntity> WithStepKey(string key);
+        IRevokeAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRevokeAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRevokeAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRevokeAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRevokeAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRevokeAccessPreContext<TEntity>> handler);
     }
 
@@ -277,6 +498,13 @@ namespace Vela.Steps
     public interface IRevokeAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRevokeAccessPreOperationConfig<TEntity> WithDescription(string description);
+        IRevokeAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRevokeAccessPreOperationConfig<TEntity> WithStepKey(string key);
+        IRevokeAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRevokeAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRevokeAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRevokeAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRevokeAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRevokeAccessPreContext<TEntity>> handler);
     }
 
@@ -284,6 +512,13 @@ namespace Vela.Steps
     public interface IRevokeAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRevokeAccessPostOperationConfig<TEntity> WithDescription(string description);
+        IRevokeAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRevokeAccessPostOperationConfig<TEntity> WithStepKey(string key);
+        IRevokeAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRevokeAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRevokeAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRevokeAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRevokeAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRevokeAccessPostContext<TEntity>> handler);
     }
 
@@ -291,6 +526,13 @@ namespace Vela.Steps
     public interface IQualifyLeadPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IQualifyLeadPreValidationConfig<TEntity> WithDescription(string description);
+        IQualifyLeadPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IQualifyLeadPreValidationConfig<TEntity> WithStepKey(string key);
+        IQualifyLeadPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IQualifyLeadPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IQualifyLeadPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IQualifyLeadPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IQualifyLeadPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IQualifyLeadPreContext<TEntity>> handler);
     }
 
@@ -298,6 +540,13 @@ namespace Vela.Steps
     public interface IQualifyLeadPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IQualifyLeadPreOperationConfig<TEntity> WithDescription(string description);
+        IQualifyLeadPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IQualifyLeadPreOperationConfig<TEntity> WithStepKey(string key);
+        IQualifyLeadPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IQualifyLeadPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IQualifyLeadPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IQualifyLeadPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IQualifyLeadPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IQualifyLeadPreContext<TEntity>> handler);
     }
 
@@ -305,6 +554,13 @@ namespace Vela.Steps
     public interface IQualifyLeadPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IQualifyLeadPostOperationConfig<TEntity> WithDescription(string description);
+        IQualifyLeadPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IQualifyLeadPostOperationConfig<TEntity> WithStepKey(string key);
+        IQualifyLeadPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IQualifyLeadPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IQualifyLeadPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IQualifyLeadPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IQualifyLeadPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IQualifyLeadPostContext<TEntity>> handler);
     }
 
@@ -312,6 +568,13 @@ namespace Vela.Steps
     public interface IWinOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IWinOpportunityPreValidationConfig<TEntity> WithDescription(string description);
+        IWinOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IWinOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
+        IWinOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IWinOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IWinOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IWinOpportunityPreContext<TEntity>> handler);
     }
 
@@ -319,6 +582,13 @@ namespace Vela.Steps
     public interface IWinOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IWinOpportunityPreOperationConfig<TEntity> WithDescription(string description);
+        IWinOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IWinOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
+        IWinOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IWinOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IWinOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IWinOpportunityPreContext<TEntity>> handler);
     }
 
@@ -326,6 +596,13 @@ namespace Vela.Steps
     public interface IWinOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IWinOpportunityPostOperationConfig<TEntity> WithDescription(string description);
+        IWinOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IWinOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
+        IWinOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IWinOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IWinOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IWinOpportunityPostContext<TEntity>> handler);
     }
 
@@ -333,6 +610,13 @@ namespace Vela.Steps
     public interface ILoseOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ILoseOpportunityPreValidationConfig<TEntity> WithDescription(string description);
+        ILoseOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ILoseOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
+        ILoseOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ILoseOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILoseOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILoseOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ILoseOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ILoseOpportunityPreContext<TEntity>> handler);
     }
 
@@ -340,6 +624,13 @@ namespace Vela.Steps
     public interface ILoseOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ILoseOpportunityPreOperationConfig<TEntity> WithDescription(string description);
+        ILoseOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ILoseOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
+        ILoseOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ILoseOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILoseOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILoseOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ILoseOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ILoseOpportunityPreContext<TEntity>> handler);
     }
 
@@ -347,6 +638,13 @@ namespace Vela.Steps
     public interface ILoseOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ILoseOpportunityPostOperationConfig<TEntity> WithDescription(string description);
+        ILoseOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ILoseOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
+        ILoseOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ILoseOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILoseOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILoseOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ILoseOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ILoseOpportunityPostContext<TEntity>> handler);
     }
 
@@ -354,6 +652,13 @@ namespace Vela.Steps
     public interface IConvertQuoteToSalesOrderPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithDescription(string description);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithStepKey(string key);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler);
     }
 
@@ -361,6 +666,13 @@ namespace Vela.Steps
     public interface IConvertQuoteToSalesOrderPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithDescription(string description);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithStepKey(string key);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler);
     }
 
@@ -368,6 +680,13 @@ namespace Vela.Steps
     public interface IConvertQuoteToSalesOrderPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithDescription(string description);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithStepKey(string key);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IConvertQuoteToSalesOrderPostContext<TEntity>> handler);
     }
 
@@ -375,6 +694,13 @@ namespace Vela.Steps
     public interface IConvertSalesOrderToInvoicePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithDescription(string description);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithStepKey(string key);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IConvertSalesOrderToInvoicePreContext<TEntity>> handler);
     }
 
@@ -382,6 +708,13 @@ namespace Vela.Steps
     public interface IConvertSalesOrderToInvoicePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithDescription(string description);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithStepKey(string key);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IConvertSalesOrderToInvoicePreContext<TEntity>> handler);
     }
 
@@ -389,6 +722,13 @@ namespace Vela.Steps
     public interface IConvertSalesOrderToInvoicePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithDescription(string description);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithStepKey(string key);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IConvertSalesOrderToInvoicePostContext<TEntity>> handler);
     }
 
@@ -396,6 +736,13 @@ namespace Vela.Steps
     public interface IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateQuoteFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -403,6 +750,13 @@ namespace Vela.Steps
     public interface IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateQuoteFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -410,6 +764,13 @@ namespace Vela.Steps
     public interface IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateQuoteFromOpportunityPostContext<TEntity>> handler);
     }
 
@@ -417,6 +778,13 @@ namespace Vela.Steps
     public interface IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -424,6 +792,13 @@ namespace Vela.Steps
     public interface IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -431,6 +806,13 @@ namespace Vela.Steps
     public interface IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateSalesOrderFromOpportunityPostContext<TEntity>> handler);
     }
 
@@ -438,6 +820,13 @@ namespace Vela.Steps
     public interface IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -445,6 +834,13 @@ namespace Vela.Steps
     public interface IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -452,6 +848,13 @@ namespace Vela.Steps
     public interface IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateInvoiceFromOpportunityPostContext<TEntity>> handler);
     }
 
@@ -459,6 +862,13 @@ namespace Vela.Steps
     public interface IAddToQueuePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddToQueuePreValidationConfig<TEntity> WithDescription(string description);
+        IAddToQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IAddToQueuePreValidationConfig<TEntity> WithStepKey(string key);
+        IAddToQueuePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddToQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddToQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddToQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddToQueuePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAddToQueuePreContext<TEntity>> handler);
     }
 
@@ -466,6 +876,13 @@ namespace Vela.Steps
     public interface IAddToQueuePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddToQueuePreOperationConfig<TEntity> WithDescription(string description);
+        IAddToQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddToQueuePreOperationConfig<TEntity> WithStepKey(string key);
+        IAddToQueuePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddToQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddToQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddToQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddToQueuePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddToQueuePreContext<TEntity>> handler);
     }
 
@@ -473,6 +890,13 @@ namespace Vela.Steps
     public interface IAddToQueuePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddToQueuePostOperationConfig<TEntity> WithDescription(string description);
+        IAddToQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddToQueuePostOperationConfig<TEntity> WithStepKey(string key);
+        IAddToQueuePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddToQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddToQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddToQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddToQueuePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddToQueuePostContext<TEntity>> handler);
     }
 
@@ -480,6 +904,13 @@ namespace Vela.Steps
     public interface IRemoveFromQueuePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveFromQueuePreValidationConfig<TEntity> WithDescription(string description);
+        IRemoveFromQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveFromQueuePreValidationConfig<TEntity> WithStepKey(string key);
+        IRemoveFromQueuePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveFromQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveFromQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveFromQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveFromQueuePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveFromQueuePreContext<TEntity>> handler);
     }
 
@@ -487,6 +918,13 @@ namespace Vela.Steps
     public interface IRemoveFromQueuePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveFromQueuePreOperationConfig<TEntity> WithDescription(string description);
+        IRemoveFromQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveFromQueuePreOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveFromQueuePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveFromQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveFromQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveFromQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveFromQueuePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveFromQueuePreContext<TEntity>> handler);
     }
 
@@ -494,6 +932,13 @@ namespace Vela.Steps
     public interface IRemoveFromQueuePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveFromQueuePostOperationConfig<TEntity> WithDescription(string description);
+        IRemoveFromQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveFromQueuePostOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveFromQueuePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveFromQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveFromQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveFromQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveFromQueuePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveFromQueuePostContext<TEntity>> handler);
     }
 
@@ -501,6 +946,13 @@ namespace Vela.Steps
     public interface IPickFromQueuePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IPickFromQueuePreValidationConfig<TEntity> WithDescription(string description);
+        IPickFromQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IPickFromQueuePreValidationConfig<TEntity> WithStepKey(string key);
+        IPickFromQueuePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPickFromQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IPickFromQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IPickFromQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IPickFromQueuePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IPickFromQueuePreContext<TEntity>> handler);
     }
 
@@ -508,6 +960,13 @@ namespace Vela.Steps
     public interface IPickFromQueuePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IPickFromQueuePreOperationConfig<TEntity> WithDescription(string description);
+        IPickFromQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IPickFromQueuePreOperationConfig<TEntity> WithStepKey(string key);
+        IPickFromQueuePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPickFromQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IPickFromQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IPickFromQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IPickFromQueuePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IPickFromQueuePreContext<TEntity>> handler);
     }
 
@@ -515,6 +974,13 @@ namespace Vela.Steps
     public interface IPickFromQueuePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IPickFromQueuePostOperationConfig<TEntity> WithDescription(string description);
+        IPickFromQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IPickFromQueuePostOperationConfig<TEntity> WithStepKey(string key);
+        IPickFromQueuePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPickFromQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IPickFromQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IPickFromQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IPickFromQueuePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IPickFromQueuePostContext<TEntity>> handler);
     }
 
@@ -522,6 +988,13 @@ namespace Vela.Steps
     public interface IRouteToPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRouteToPreValidationConfig<TEntity> WithDescription(string description);
+        IRouteToPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRouteToPreValidationConfig<TEntity> WithStepKey(string key);
+        IRouteToPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRouteToPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRouteToPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRouteToPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRouteToPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRouteToPreContext<TEntity>> handler);
     }
 
@@ -529,6 +1002,13 @@ namespace Vela.Steps
     public interface IRouteToPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRouteToPreOperationConfig<TEntity> WithDescription(string description);
+        IRouteToPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRouteToPreOperationConfig<TEntity> WithStepKey(string key);
+        IRouteToPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRouteToPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRouteToPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRouteToPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRouteToPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRouteToPreContext<TEntity>> handler);
     }
 
@@ -536,6 +1016,13 @@ namespace Vela.Steps
     public interface IRouteToPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRouteToPostOperationConfig<TEntity> WithDescription(string description);
+        IRouteToPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRouteToPostOperationConfig<TEntity> WithStepKey(string key);
+        IRouteToPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRouteToPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRouteToPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRouteToPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRouteToPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRouteToPostContext<TEntity>> handler);
     }
 
@@ -543,6 +1030,13 @@ namespace Vela.Steps
     public interface IReleaseToQueuePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IReleaseToQueuePreValidationConfig<TEntity> WithDescription(string description);
+        IReleaseToQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IReleaseToQueuePreValidationConfig<TEntity> WithStepKey(string key);
+        IReleaseToQueuePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReleaseToQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReleaseToQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReleaseToQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IReleaseToQueuePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IReleaseToQueuePreContext<TEntity>> handler);
     }
 
@@ -550,6 +1044,13 @@ namespace Vela.Steps
     public interface IReleaseToQueuePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IReleaseToQueuePreOperationConfig<TEntity> WithDescription(string description);
+        IReleaseToQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IReleaseToQueuePreOperationConfig<TEntity> WithStepKey(string key);
+        IReleaseToQueuePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReleaseToQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReleaseToQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReleaseToQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IReleaseToQueuePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IReleaseToQueuePreContext<TEntity>> handler);
     }
 
@@ -557,6 +1058,13 @@ namespace Vela.Steps
     public interface IReleaseToQueuePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IReleaseToQueuePostOperationConfig<TEntity> WithDescription(string description);
+        IReleaseToQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IReleaseToQueuePostOperationConfig<TEntity> WithStepKey(string key);
+        IReleaseToQueuePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReleaseToQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReleaseToQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReleaseToQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IReleaseToQueuePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IReleaseToQueuePostContext<TEntity>> handler);
     }
 
@@ -564,6 +1072,13 @@ namespace Vela.Steps
     public interface ISendEmailPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ISendEmailPreValidationConfig<TEntity> WithDescription(string description);
+        ISendEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ISendEmailPreValidationConfig<TEntity> WithStepKey(string key);
+        ISendEmailPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailPreContext<TEntity>> handler);
     }
 
@@ -571,6 +1086,13 @@ namespace Vela.Steps
     public interface ISendEmailPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ISendEmailPreOperationConfig<TEntity> WithDescription(string description);
+        ISendEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ISendEmailPreOperationConfig<TEntity> WithStepKey(string key);
+        ISendEmailPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailPreContext<TEntity>> handler);
     }
 
@@ -578,6 +1100,13 @@ namespace Vela.Steps
     public interface ISendEmailPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ISendEmailPostOperationConfig<TEntity> WithDescription(string description);
+        ISendEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ISendEmailPostOperationConfig<TEntity> WithStepKey(string key);
+        ISendEmailPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailPostContext<TEntity>> handler);
     }
 
@@ -585,6 +1114,13 @@ namespace Vela.Steps
     public interface ISendEmailFromTemplatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithDescription(string description);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> WithStepKey(string key);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailFromTemplatePreContext<TEntity>> handler);
     }
 
@@ -592,6 +1128,13 @@ namespace Vela.Steps
     public interface ISendEmailFromTemplatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithDescription(string description);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> WithStepKey(string key);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailFromTemplatePreContext<TEntity>> handler);
     }
 
@@ -599,6 +1142,13 @@ namespace Vela.Steps
     public interface ISendEmailFromTemplatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithDescription(string description);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> WithStepKey(string key);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailFromTemplatePostContext<TEntity>> handler);
     }
 
@@ -606,6 +1156,13 @@ namespace Vela.Steps
     public interface IDeliverIncomingEmailPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithDescription(string description);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> WithStepKey(string key);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverIncomingEmailPreContext<TEntity>> handler);
     }
 
@@ -613,6 +1170,13 @@ namespace Vela.Steps
     public interface IDeliverIncomingEmailPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithDescription(string description);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> WithStepKey(string key);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverIncomingEmailPreContext<TEntity>> handler);
     }
 
@@ -620,6 +1184,13 @@ namespace Vela.Steps
     public interface IDeliverIncomingEmailPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithDescription(string description);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> WithStepKey(string key);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverIncomingEmailPostContext<TEntity>> handler);
     }
 
@@ -627,6 +1198,13 @@ namespace Vela.Steps
     public interface IDeliverPromoteEmailPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithDescription(string description);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> WithStepKey(string key);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverPromoteEmailPreContext<TEntity>> handler);
     }
 
@@ -634,6 +1212,13 @@ namespace Vela.Steps
     public interface IDeliverPromoteEmailPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithDescription(string description);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> WithStepKey(string key);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverPromoteEmailPreContext<TEntity>> handler);
     }
 
@@ -641,6 +1226,13 @@ namespace Vela.Steps
     public interface IDeliverPromoteEmailPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithDescription(string description);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> WithStepKey(string key);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverPromoteEmailPostContext<TEntity>> handler);
     }
 
@@ -648,6 +1240,13 @@ namespace Vela.Steps
     public interface IAddMembersTeamPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddMembersTeamPreValidationConfig<TEntity> WithDescription(string description);
+        IAddMembersTeamPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IAddMembersTeamPreValidationConfig<TEntity> WithStepKey(string key);
+        IAddMembersTeamPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMembersTeamPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddMembersTeamPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddMembersTeamPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMembersTeamPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAddMembersTeamPreContext<TEntity>> handler);
     }
 
@@ -655,6 +1254,13 @@ namespace Vela.Steps
     public interface IAddMembersTeamPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddMembersTeamPreOperationConfig<TEntity> WithDescription(string description);
+        IAddMembersTeamPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddMembersTeamPreOperationConfig<TEntity> WithStepKey(string key);
+        IAddMembersTeamPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMembersTeamPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddMembersTeamPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddMembersTeamPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMembersTeamPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddMembersTeamPreContext<TEntity>> handler);
     }
 
@@ -662,6 +1268,13 @@ namespace Vela.Steps
     public interface IAddMembersTeamPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddMembersTeamPostOperationConfig<TEntity> WithDescription(string description);
+        IAddMembersTeamPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddMembersTeamPostOperationConfig<TEntity> WithStepKey(string key);
+        IAddMembersTeamPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMembersTeamPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddMembersTeamPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddMembersTeamPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMembersTeamPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddMembersTeamPostContext<TEntity>> handler);
     }
 
@@ -669,6 +1282,13 @@ namespace Vela.Steps
     public interface IRemoveMembersTeamPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveMembersTeamPreValidationConfig<TEntity> WithDescription(string description);
+        IRemoveMembersTeamPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveMembersTeamPreValidationConfig<TEntity> WithStepKey(string key);
+        IRemoveMembersTeamPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMembersTeamPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveMembersTeamPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveMembersTeamPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMembersTeamPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMembersTeamPreContext<TEntity>> handler);
     }
 
@@ -676,6 +1296,13 @@ namespace Vela.Steps
     public interface IRemoveMembersTeamPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveMembersTeamPreOperationConfig<TEntity> WithDescription(string description);
+        IRemoveMembersTeamPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveMembersTeamPreOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveMembersTeamPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMembersTeamPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveMembersTeamPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveMembersTeamPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMembersTeamPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMembersTeamPreContext<TEntity>> handler);
     }
 
@@ -683,6 +1310,13 @@ namespace Vela.Steps
     public interface IRemoveMembersTeamPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveMembersTeamPostOperationConfig<TEntity> WithDescription(string description);
+        IRemoveMembersTeamPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveMembersTeamPostOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveMembersTeamPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMembersTeamPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveMembersTeamPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveMembersTeamPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMembersTeamPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMembersTeamPostContext<TEntity>> handler);
     }
 
@@ -690,6 +1324,13 @@ namespace Vela.Steps
     public interface IAddListMembersListPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddListMembersListPreValidationConfig<TEntity> WithDescription(string description);
+        IAddListMembersListPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IAddListMembersListPreValidationConfig<TEntity> WithStepKey(string key);
+        IAddListMembersListPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddListMembersListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddListMembersListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddListMembersListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddListMembersListPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAddListMembersListPreContext<TEntity>> handler);
     }
 
@@ -697,6 +1338,13 @@ namespace Vela.Steps
     public interface IAddListMembersListPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddListMembersListPreOperationConfig<TEntity> WithDescription(string description);
+        IAddListMembersListPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddListMembersListPreOperationConfig<TEntity> WithStepKey(string key);
+        IAddListMembersListPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddListMembersListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddListMembersListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddListMembersListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddListMembersListPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddListMembersListPreContext<TEntity>> handler);
     }
 
@@ -704,6 +1352,13 @@ namespace Vela.Steps
     public interface IAddListMembersListPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddListMembersListPostOperationConfig<TEntity> WithDescription(string description);
+        IAddListMembersListPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddListMembersListPostOperationConfig<TEntity> WithStepKey(string key);
+        IAddListMembersListPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddListMembersListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddListMembersListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddListMembersListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddListMembersListPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddListMembersListPostContext<TEntity>> handler);
     }
 
@@ -711,6 +1366,13 @@ namespace Vela.Steps
     public interface IAddMemberListPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddMemberListPreValidationConfig<TEntity> WithDescription(string description);
+        IAddMemberListPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IAddMemberListPreValidationConfig<TEntity> WithStepKey(string key);
+        IAddMemberListPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMemberListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddMemberListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddMemberListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMemberListPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAddMemberListPreContext<TEntity>> handler);
     }
 
@@ -718,6 +1380,13 @@ namespace Vela.Steps
     public interface IAddMemberListPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddMemberListPreOperationConfig<TEntity> WithDescription(string description);
+        IAddMemberListPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddMemberListPreOperationConfig<TEntity> WithStepKey(string key);
+        IAddMemberListPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMemberListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddMemberListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddMemberListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMemberListPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddMemberListPreContext<TEntity>> handler);
     }
 
@@ -725,6 +1394,13 @@ namespace Vela.Steps
     public interface IAddMemberListPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IAddMemberListPostOperationConfig<TEntity> WithDescription(string description);
+        IAddMemberListPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddMemberListPostOperationConfig<TEntity> WithStepKey(string key);
+        IAddMemberListPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMemberListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddMemberListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddMemberListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMemberListPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddMemberListPostContext<TEntity>> handler);
     }
 
@@ -732,6 +1408,13 @@ namespace Vela.Steps
     public interface IRemoveMemberListPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveMemberListPreValidationConfig<TEntity> WithDescription(string description);
+        IRemoveMemberListPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveMemberListPreValidationConfig<TEntity> WithStepKey(string key);
+        IRemoveMemberListPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMemberListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveMemberListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveMemberListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMemberListPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMemberListPreContext<TEntity>> handler);
     }
 
@@ -739,6 +1422,13 @@ namespace Vela.Steps
     public interface IRemoveMemberListPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveMemberListPreOperationConfig<TEntity> WithDescription(string description);
+        IRemoveMemberListPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveMemberListPreOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveMemberListPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMemberListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveMemberListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveMemberListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMemberListPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMemberListPreContext<TEntity>> handler);
     }
 
@@ -746,6 +1436,13 @@ namespace Vela.Steps
     public interface IRemoveMemberListPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRemoveMemberListPostOperationConfig<TEntity> WithDescription(string description);
+        IRemoveMemberListPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveMemberListPostOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveMemberListPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMemberListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveMemberListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveMemberListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMemberListPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMemberListPostContext<TEntity>> handler);
     }
 
@@ -753,6 +1450,13 @@ namespace Vela.Steps
     public interface ICloseIncidentPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICloseIncidentPreValidationConfig<TEntity> WithDescription(string description);
+        ICloseIncidentPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ICloseIncidentPreValidationConfig<TEntity> WithStepKey(string key);
+        ICloseIncidentPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloseIncidentPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICloseIncidentPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICloseIncidentPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloseIncidentPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICloseIncidentPreContext<TEntity>> handler);
     }
 
@@ -760,6 +1464,13 @@ namespace Vela.Steps
     public interface ICloseIncidentPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICloseIncidentPreOperationConfig<TEntity> WithDescription(string description);
+        ICloseIncidentPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICloseIncidentPreOperationConfig<TEntity> WithStepKey(string key);
+        ICloseIncidentPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloseIncidentPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICloseIncidentPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICloseIncidentPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloseIncidentPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICloseIncidentPreContext<TEntity>> handler);
     }
 
@@ -767,6 +1478,13 @@ namespace Vela.Steps
     public interface ICloseIncidentPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICloseIncidentPostOperationConfig<TEntity> WithDescription(string description);
+        ICloseIncidentPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICloseIncidentPostOperationConfig<TEntity> WithStepKey(string key);
+        ICloseIncidentPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloseIncidentPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICloseIncidentPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICloseIncidentPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloseIncidentPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICloseIncidentPostContext<TEntity>> handler);
     }
 
@@ -774,6 +1492,13 @@ namespace Vela.Steps
     public interface ICancelContractPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICancelContractPreValidationConfig<TEntity> WithDescription(string description);
+        ICancelContractPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ICancelContractPreValidationConfig<TEntity> WithStepKey(string key);
+        ICancelContractPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICancelContractPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICancelContractPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICancelContractPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICancelContractPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICancelContractPreContext<TEntity>> handler);
     }
 
@@ -781,6 +1506,13 @@ namespace Vela.Steps
     public interface ICancelContractPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICancelContractPreOperationConfig<TEntity> WithDescription(string description);
+        ICancelContractPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICancelContractPreOperationConfig<TEntity> WithStepKey(string key);
+        ICancelContractPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICancelContractPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICancelContractPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICancelContractPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICancelContractPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICancelContractPreContext<TEntity>> handler);
     }
 
@@ -788,6 +1520,13 @@ namespace Vela.Steps
     public interface ICancelContractPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICancelContractPostOperationConfig<TEntity> WithDescription(string description);
+        ICancelContractPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICancelContractPostOperationConfig<TEntity> WithStepKey(string key);
+        ICancelContractPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICancelContractPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICancelContractPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICancelContractPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICancelContractPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICancelContractPostContext<TEntity>> handler);
     }
 
@@ -795,6 +1534,13 @@ namespace Vela.Steps
     public interface ICloneContractPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICloneContractPreValidationConfig<TEntity> WithDescription(string description);
+        ICloneContractPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ICloneContractPreValidationConfig<TEntity> WithStepKey(string key);
+        ICloneContractPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloneContractPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICloneContractPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICloneContractPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloneContractPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICloneContractPreContext<TEntity>> handler);
     }
 
@@ -802,6 +1548,13 @@ namespace Vela.Steps
     public interface ICloneContractPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICloneContractPreOperationConfig<TEntity> WithDescription(string description);
+        ICloneContractPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICloneContractPreOperationConfig<TEntity> WithStepKey(string key);
+        ICloneContractPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloneContractPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICloneContractPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICloneContractPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloneContractPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICloneContractPreContext<TEntity>> handler);
     }
 
@@ -809,6 +1562,13 @@ namespace Vela.Steps
     public interface ICloneContractPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         ICloneContractPostOperationConfig<TEntity> WithDescription(string description);
+        ICloneContractPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ICloneContractPostOperationConfig<TEntity> WithStepKey(string key);
+        ICloneContractPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloneContractPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ICloneContractPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ICloneContractPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloneContractPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICloneContractPostContext<TEntity>> handler);
     }
 
@@ -816,6 +1576,13 @@ namespace Vela.Steps
     public interface IRetrievePrincipalAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithDescription(string description);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithStepKey(string key);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePrincipalAccessPreContext<TEntity>> handler);
     }
 
@@ -823,6 +1590,13 @@ namespace Vela.Steps
     public interface IRetrievePrincipalAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithDescription(string description);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithStepKey(string key);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePrincipalAccessPreContext<TEntity>> handler);
     }
 
@@ -830,6 +1604,13 @@ namespace Vela.Steps
     public interface IRetrievePrincipalAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithDescription(string description);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithStepKey(string key);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePrincipalAccessPostContext<TEntity>> handler);
     }
 
@@ -837,6 +1618,13 @@ namespace Vela.Steps
     public interface IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithDescription(string description);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithStepKey(string key);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler);
     }
 
@@ -844,6 +1632,13 @@ namespace Vela.Steps
     public interface IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithDescription(string description);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithStepKey(string key);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler);
     }
 
@@ -851,6 +1646,13 @@ namespace Vela.Steps
     public interface IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithDescription(string description);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithStepKey(string key);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveSharedPrincipalsAndAccessPostContext<TEntity>> handler);
     }
 
@@ -858,6 +1660,13 @@ namespace Vela.Steps
     public interface IWinQuotePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IWinQuotePreValidationConfig<TEntity> WithDescription(string description);
+        IWinQuotePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IWinQuotePreValidationConfig<TEntity> WithStepKey(string key);
+        IWinQuotePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinQuotePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IWinQuotePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IWinQuotePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinQuotePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IWinQuotePreContext<TEntity>> handler);
     }
 
@@ -865,6 +1674,13 @@ namespace Vela.Steps
     public interface IWinQuotePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IWinQuotePreOperationConfig<TEntity> WithDescription(string description);
+        IWinQuotePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IWinQuotePreOperationConfig<TEntity> WithStepKey(string key);
+        IWinQuotePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinQuotePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IWinQuotePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IWinQuotePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinQuotePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IWinQuotePreContext<TEntity>> handler);
     }
 
@@ -872,6 +1688,13 @@ namespace Vela.Steps
     public interface IWinQuotePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IWinQuotePostOperationConfig<TEntity> WithDescription(string description);
+        IWinQuotePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IWinQuotePostOperationConfig<TEntity> WithStepKey(string key);
+        IWinQuotePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinQuotePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IWinQuotePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IWinQuotePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinQuotePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IWinQuotePostContext<TEntity>> handler);
     }
 
@@ -879,6 +1702,13 @@ namespace Vela.Steps
     public interface IReviseQuotePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IReviseQuotePreValidationConfig<TEntity> WithDescription(string description);
+        IReviseQuotePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IReviseQuotePreValidationConfig<TEntity> WithStepKey(string key);
+        IReviseQuotePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReviseQuotePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReviseQuotePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReviseQuotePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IReviseQuotePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IReviseQuotePreContext<TEntity>> handler);
     }
 
@@ -886,6 +1716,13 @@ namespace Vela.Steps
     public interface IReviseQuotePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IReviseQuotePreOperationConfig<TEntity> WithDescription(string description);
+        IReviseQuotePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IReviseQuotePreOperationConfig<TEntity> WithStepKey(string key);
+        IReviseQuotePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReviseQuotePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReviseQuotePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReviseQuotePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IReviseQuotePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IReviseQuotePreContext<TEntity>> handler);
     }
 
@@ -893,6 +1730,13 @@ namespace Vela.Steps
     public interface IReviseQuotePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IReviseQuotePostOperationConfig<TEntity> WithDescription(string description);
+        IReviseQuotePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IReviseQuotePostOperationConfig<TEntity> WithStepKey(string key);
+        IReviseQuotePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReviseQuotePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReviseQuotePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReviseQuotePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IReviseQuotePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IReviseQuotePostContext<TEntity>> handler);
     }
 
@@ -900,6 +1744,13 @@ namespace Vela.Steps
     public interface IFulfillSalesOrderPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IFulfillSalesOrderPreValidationConfig<TEntity> WithDescription(string description);
+        IFulfillSalesOrderPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IFulfillSalesOrderPreValidationConfig<TEntity> WithStepKey(string key);
+        IFulfillSalesOrderPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IFulfillSalesOrderPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IFulfillSalesOrderPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IFulfillSalesOrderPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IFulfillSalesOrderPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler);
     }
 
@@ -907,6 +1758,13 @@ namespace Vela.Steps
     public interface IFulfillSalesOrderPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IFulfillSalesOrderPreOperationConfig<TEntity> WithDescription(string description);
+        IFulfillSalesOrderPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IFulfillSalesOrderPreOperationConfig<TEntity> WithStepKey(string key);
+        IFulfillSalesOrderPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IFulfillSalesOrderPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IFulfillSalesOrderPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IFulfillSalesOrderPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IFulfillSalesOrderPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler);
     }
 
@@ -914,6 +1772,13 @@ namespace Vela.Steps
     public interface IFulfillSalesOrderPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IFulfillSalesOrderPostOperationConfig<TEntity> WithDescription(string description);
+        IFulfillSalesOrderPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IFulfillSalesOrderPostOperationConfig<TEntity> WithStepKey(string key);
+        IFulfillSalesOrderPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IFulfillSalesOrderPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IFulfillSalesOrderPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IFulfillSalesOrderPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IFulfillSalesOrderPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IFulfillSalesOrderPostContext<TEntity>> handler);
     }
 
@@ -921,6 +1786,13 @@ namespace Vela.Steps
     public interface IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -928,6 +1800,13 @@ namespace Vela.Steps
     public interface IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -935,6 +1814,13 @@ namespace Vela.Steps
     public interface IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetQuoteProductsFromOpportunityPostContext<TEntity>> handler);
     }
 
@@ -942,6 +1828,13 @@ namespace Vela.Steps
     public interface IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -949,6 +1842,13 @@ namespace Vela.Steps
     public interface IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -956,6 +1856,13 @@ namespace Vela.Steps
     public interface IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetSalesOrderProductsFromOpportunityPostContext<TEntity>> handler);
     }
 
@@ -963,6 +1870,13 @@ namespace Vela.Steps
     public interface IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -970,6 +1884,13 @@ namespace Vela.Steps
     public interface IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler);
     }
 
@@ -977,6 +1898,13 @@ namespace Vela.Steps
     public interface IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetInvoiceProductsFromOpportunityPostContext<TEntity>> handler);
     }
 
@@ -984,6 +1912,13 @@ namespace Vela.Steps
     public interface IModifyAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IModifyAccessPreValidationConfig<TEntity> WithDescription(string description);
+        IModifyAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IModifyAccessPreValidationConfig<TEntity> WithStepKey(string key);
+        IModifyAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IModifyAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IModifyAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IModifyAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IModifyAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IModifyAccessPreContext<TEntity>> handler);
     }
 
@@ -991,6 +1926,13 @@ namespace Vela.Steps
     public interface IModifyAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IModifyAccessPreOperationConfig<TEntity> WithDescription(string description);
+        IModifyAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IModifyAccessPreOperationConfig<TEntity> WithStepKey(string key);
+        IModifyAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IModifyAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IModifyAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IModifyAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IModifyAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IModifyAccessPreContext<TEntity>> handler);
     }
 
@@ -998,6 +1940,13 @@ namespace Vela.Steps
     public interface IModifyAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IModifyAccessPostOperationConfig<TEntity> WithDescription(string description);
+        IModifyAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IModifyAccessPostOperationConfig<TEntity> WithStepKey(string key);
+        IModifyAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IModifyAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IModifyAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IModifyAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IModifyAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IModifyAccessPostContext<TEntity>> handler);
     }
 
@@ -1005,6 +1954,13 @@ namespace Vela.Steps
     public interface IMergePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IMergePreValidationConfig<TEntity> WithDescription(string description);
+        IMergePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IMergePreValidationConfig<TEntity> WithStepKey(string key);
+        IMergePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IMergePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IMergePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IMergePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IMergePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IMergePreContext<TEntity>> handler);
     }
 
@@ -1012,6 +1968,13 @@ namespace Vela.Steps
     public interface IMergePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IMergePreOperationConfig<TEntity> WithDescription(string description);
+        IMergePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IMergePreOperationConfig<TEntity> WithStepKey(string key);
+        IMergePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IMergePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IMergePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IMergePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IMergePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IMergePreContext<TEntity>> handler);
     }
 
@@ -1019,6 +1982,13 @@ namespace Vela.Steps
     public interface IMergePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
         IMergePostOperationConfig<TEntity> WithDescription(string description);
+        IMergePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IMergePostOperationConfig<TEntity> WithStepKey(string key);
+        IMergePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IMergePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IMergePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IMergePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IMergePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IMergePostContext<TEntity>> handler);
     }
 
@@ -1390,6 +2360,133 @@ namespace Vela.Steps
         ISyncAsyncMode<IMergePostOperationConfig<TEntity>> PostOperation();
     }
 
+    /// <summary>Stage choice for OnMessage(...): a custom / non-modelled message. Universal image rules only.</summary>
+    public interface IPermissiveStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IPermissivePreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IPermissivePreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IPermissivePostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Config for an OnMessage(...) step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IPermissivePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    {
+        IPermissivePreValidationConfig<TEntity> WithDescription(string description);
+        IPermissivePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IPermissivePreValidationConfig<TEntity> WithStepKey(string key);
+        IPermissivePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPermissivePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IPermissivePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IPermissivePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IPermissivePreValidationConfig<TEntity> Disabled();
+        void Handle(Action<ILocalPluginContext> handler);
+        void Handle<TRequest>(Action<IMessagePreContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
+        void Handle<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) where TRequest : OrganizationRequest, new();
+    }
+
+    /// <summary>Config for an OnMessage(...) step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IPermissivePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    {
+        IPermissivePreOperationConfig<TEntity> WithDescription(string description);
+        IPermissivePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IPermissivePreOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IPermissivePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IPermissivePreOperationConfig<TEntity> WithStepKey(string key);
+        IPermissivePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPermissivePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IPermissivePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IPermissivePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IPermissivePreOperationConfig<TEntity> Disabled();
+        void Handle(Action<ILocalPluginContext> handler);
+        void Handle<TRequest>(Action<IMessagePreContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
+        void Handle<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) where TRequest : OrganizationRequest, new();
+    }
+
+    /// <summary>Config for an OnMessage(...) step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IPermissivePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    {
+        IPermissivePostOperationConfig<TEntity> WithDescription(string description);
+        IPermissivePostOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IPermissivePostOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IPermissivePostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IPermissivePostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IPermissivePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IPermissivePostOperationConfig<TEntity> WithStepKey(string key);
+        IPermissivePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPermissivePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IPermissivePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IPermissivePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IPermissivePostOperationConfig<TEntity> Disabled();
+        void Handle(Action<ILocalPluginContext> handler);
+        void Handle<TRequest>(Action<IMessagePostContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
+        void Handle<TRequest>(Action<IMessagePostContext<TRequest, TEntity>> handler) where TRequest : OrganizationRequest, new();
+    }
+
+    /// <summary>Stage choice for On&lt;TRequest&gt;(): the handler is pre-typed to TRequest.</summary>
+    public interface ITypedStages<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
+    {
+        ISyncMode<ITypedPreValidationConfig<TEntity, TRequest>> PreValidation();
+        ISyncMode<ITypedPreOperationConfig<TEntity, TRequest>> PreOperation();
+        ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>> PostOperation();
+    }
+
+    /// <summary>Async-only stage choice for a Custom API (AsyncOnly). Reached via the generated On&lt;Message&gt;() extension, not by hand.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public interface IAsyncOnlyTypedStages<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
+    {
+        IAsyncMode<ITypedPreValidationConfig<TEntity, TRequest>> PreValidation();
+        IAsyncMode<ITypedPreOperationConfig<TEntity, TRequest>> PreOperation();
+        IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>> PostOperation();
+    }
+
+    /// <summary>Config for an On&lt;TRequest&gt;() step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ITypedPreValidationConfig<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
+    {
+        ITypedPreValidationConfig<TEntity, TRequest> WithDescription(string description);
+        ITypedPreValidationConfig<TEntity, TRequest> WithExecutionOrder(int order);
+        ITypedPreValidationConfig<TEntity, TRequest> WithStepKey(string key);
+        ITypedPreValidationConfig<TEntity, TRequest> WithImpersonation(ImpersonationSource source);
+        ITypedPreValidationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
+        ITypedPreValidationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
+        ITypedPreValidationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
+        ITypedPreValidationConfig<TEntity, TRequest> Disabled();
+        void Handle(Action<IMessagePreContext<TRequest>> handler);
+    }
+
+    /// <summary>Config for an On&lt;TRequest&gt;() step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ITypedPreOperationConfig<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
+    {
+        ITypedPreOperationConfig<TEntity, TRequest> WithDescription(string description);
+        ITypedPreOperationConfig<TEntity, TRequest> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        ITypedPreOperationConfig<TEntity, TRequest> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        ITypedPreOperationConfig<TEntity, TRequest> WithExecutionOrder(int order);
+        ITypedPreOperationConfig<TEntity, TRequest> WithStepKey(string key);
+        ITypedPreOperationConfig<TEntity, TRequest> WithImpersonation(ImpersonationSource source);
+        ITypedPreOperationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
+        ITypedPreOperationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
+        ITypedPreOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
+        ITypedPreOperationConfig<TEntity, TRequest> Disabled();
+        void Handle(Action<IMessagePreContext<TRequest>> handler);
+    }
+
+    /// <summary>Config for an On&lt;TRequest&gt;() step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ITypedPostOperationConfig<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
+    {
+        ITypedPostOperationConfig<TEntity, TRequest> WithDescription(string description);
+        ITypedPostOperationConfig<TEntity, TRequest> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        ITypedPostOperationConfig<TEntity, TRequest> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        ITypedPostOperationConfig<TEntity, TRequest> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
+        ITypedPostOperationConfig<TEntity, TRequest> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        ITypedPostOperationConfig<TEntity, TRequest> WithExecutionOrder(int order);
+        ITypedPostOperationConfig<TEntity, TRequest> WithStepKey(string key);
+        ITypedPostOperationConfig<TEntity, TRequest> WithImpersonation(ImpersonationSource source);
+        ITypedPostOperationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
+        ITypedPostOperationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
+        ITypedPostOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
+        ITypedPostOperationConfig<TEntity, TRequest> Disabled();
+        void Handle(Action<IMessagePostContext<TRequest>> handler);
+    }
+
     /// <summary>Entry point returned by RegisterStep(): pick the message the step reacts to.</summary>
     public interface IStepTrigger<TEntity> : IFluentStep where TEntity : Entity
     {
@@ -1439,5 +2536,14 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityStages<TEntity> OnGetInvoiceProductsFromOpportunity();
         IModifyAccessStages<TEntity> OnModifyAccess();
         IMergeStages<TEntity> OnMerge();
+        /// <summary>Trigger on a custom / non-modelled message stated by name. Image validity is enforced at runtime.</summary>
+        IPermissiveStages<TEntity> OnMessage(string messageName);
+        /// <summary>Trigger on a custom / non-modelled message stated by marker type.</summary>
+        IPermissiveStages<TEntity> OnMessage<TMessage>() where TMessage : class;
+        /// <summary>Trigger on the message named by TRequest (its RequestName); the handler is pre-typed to TRequest.</summary>
+        ITypedStages<TEntity, TRequest> On<TRequest>() where TRequest : OrganizationRequest, new();
+        /// <summary>Async-only typed trigger for a Custom API (AsyncOnly). Reached via the generated On&lt;Message&gt;() extension, not by hand.</summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        IAsyncOnlyTypedStages<TEntity, TRequest> OnAsyncOnly<TRequest>() where TRequest : OrganizationRequest, new();
     }
 }
