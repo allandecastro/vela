@@ -147,7 +147,7 @@ public static class SdkMessageGenerator
 
         if (generic)
         {
-            // All-entity or large fan-out: a single generic extension over IStepBuilder<TEntity> instead of one
+            // All-entity or large fan-out: a single generic extension over Vela.Steps.IStepTrigger<TEntity> instead of one
             // overload per entity (avoids referencing many early-bound types).
             sb.AppendLine($"        public static Vela.Steps.ITypedStages<TEntity, {request}> On{message.Name}<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<{request}>();");
         }

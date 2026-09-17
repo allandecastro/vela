@@ -127,16 +127,7 @@ namespace Vela.Plugin
         }
 
         /// <summary>
-        /// Fluent step registration entry point for <see cref="RegisterPluginSteps"/>.
-        /// </summary>
-        protected IStepBuilder<TEntity> RegisterSteps()
-        {
-            return _steps ?? throw new InvalidOperationException(
-                $"Plugin '{GetType().FullName}' can only call RegisterSteps() inside RegisterPluginSteps().");
-        }
-
-        /// <summary>
-        /// Registers one step with the redesigned fluent builder:
+        /// Registers one step with the fluent builder:
         /// <c>RegisterStep().On&lt;Message&gt;().&lt;Stage&gt;().&lt;Mode&gt;().With...().Handle(handler)</c>.
         /// Call once per step inside <see cref="RegisterPluginSteps"/>.
         /// </summary>
