@@ -4,7 +4,7 @@ using Microsoft.Xrm.Sdk;
 
 namespace Vela.Plugin
 {
-    internal sealed class PluginStepsRegistrar<TEntity>(Action<StepBuilder<TEntity>> registerStep) : IStepBuilder<TEntity>
+    internal sealed partial class PluginStepsRegistrar<TEntity>(Action<StepBuilder<TEntity>> registerStep) : IStepBuilder<TEntity>
         where TEntity : Entity
     {
         private readonly Action<StepBuilder<TEntity>> _registerStep = registerStep ?? throw new ArgumentNullException(nameof(registerStep));

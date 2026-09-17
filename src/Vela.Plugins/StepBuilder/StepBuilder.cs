@@ -16,7 +16,7 @@ namespace Vela.StepBuilder;
 /// interface implementations returning <c>this</c>, so a single mutable builder walks the type-state.
 /// </summary>
 /// <typeparam name="TEntity">The entity type for this step.</typeparam>
-public sealed class StepBuilder<TEntity> :
+public sealed partial class StepBuilder<TEntity> :
     IStepBuilder<TEntity>,
     IPermissiveStepStage<TEntity>,
     IModeSelector<IPermissiveNoImageStep<TEntity>>, IPermissiveNoImageStep<TEntity>,
