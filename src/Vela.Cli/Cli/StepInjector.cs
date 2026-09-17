@@ -4,11 +4,11 @@ using System.Text.RegularExpressions;
 namespace Vela.Cli;
 
 /// <summary>
-/// Injects an extra plugin step — a <c>RegisterSteps()…</c> registration plus a matching handler method —
+/// Injects an extra plugin step — a <c>RegisterStep()…</c> registration plus a matching handler method —
 /// into an existing handler-based (multi-step) plugin source file. The edit is text-based but
 /// brace/string/comment-aware, and it refuses to touch a file it cannot parse cleanly so it never corrupts
-/// source. Single-step plugins (those using the <c>Execute(...)</c> override) are rejected: converting them
-/// to multi-step is left to the author.
+/// source. Plugins whose steps do not bind a handler are rejected: converting them to handler-based is left
+/// to the author.
 /// </summary>
 internal static class StepInjector
 {
@@ -42,9 +42,9 @@ internal static class StepInjector
         }
 
         string body = source.Substring(openBrace, closeBrace - openBrace + 1);
-        if (!body.Contains(".Handler("))
+        if (!body.Contains(".Handle("))
         {
-            error = "Target plugin is single-step (it uses the Execute(...) override). Convert its existing step to .Handler(...) first; 'vela add step' adds to handler-based multi-step plugins.";
+            error = "Target plugin has no handler-bound step yet. Add a step that ends with .Handle(...) first; 'vela add step' adds to handler-based multi-step plugins.";
             return false;
         }
 
@@ -68,18 +68,23 @@ internal static class StepInjector
             || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
             || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
         string filtering = needsFiltering
-            ? "                .FilteringAttributes(e => e.Id /* TODO: choose the attributes that should trigger this step */)\n"
+            ? "                .WithFiltering(e => e.Id /* TODO: choose the attributes that should trigger this step */)\n"
             : string.Empty;
 
         string registration =
-            $"\n\n            RegisterSteps().{registrationCall}\n" +
+            $"\n\n            RegisterStep().{registrationCall}\n" +
             "                .PostOperation()\n" +
             "                .Sync()\n" +
             filtering +
-            $"                .Handler({handlerName});";
+            $"                .Handle({handlerName});";
+
+        // A modelled message binds the strongly-typed post-stage context; a custom OnMessage step is untyped.
+        string handlerContextType = registrationCall.StartsWith("OnMessage(", StringComparison.Ordinal)
+            ? "ILocalPluginContext"
+            : $"I{message}PostContext<{entityType}>";
 
         string handler =
-            $"\n\n        private void {handlerName}(ILocalPluginContext ctx)\n" +
+            $"\n\n        private void {handlerName}({handlerContextType} ctx)\n" +
             "        {\n" +
             $"            // TODO: implement the {message} step. Access the typed message via ctx (for example ctx.GetTarget<{entityType}>()).\n" +
             "        }";

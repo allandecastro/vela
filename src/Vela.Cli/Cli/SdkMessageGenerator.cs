@@ -119,8 +119,8 @@ public static class SdkMessageGenerator
     /// <summary>
     /// Appends the Phase 3b entity-constrained step extension(s) for the message (see
     /// <c>.context/phase3b-compile-time-design.md</c>). Because <c>On{Name}()</c> extends
-    /// <c>IStepBuilder&lt;TEntity&gt;</c> for a concrete entity, it is only in scope on a plugin for that entity,
-    /// giving compile-time entity-applicability; it delegates to the existing permissive <c>On&lt;{Name}Request&gt;()</c>.
+    /// <c>Vela.Steps.IStepTrigger&lt;TEntity&gt;</c> for a concrete entity, it is only in scope on a plugin for that
+    /// entity, giving compile-time entity-applicability; it delegates to the typed <c>On&lt;{Name}Request&gt;()</c>.
     /// The early-bound entity types are referenced by PascalCase of their logical name and are ASSUMED to be
     /// generated into this same target namespace (the models namespace <c>ns</c>).
     /// </summary>
@@ -149,7 +149,7 @@ public static class SdkMessageGenerator
         {
             // All-entity or large fan-out: a single generic extension over IStepBuilder<TEntity> instead of one
             // overload per entity (avoids referencing many early-bound types).
-            sb.AppendLine($"        public static Vela.StepBuilder.ITypedMessageStepStage<TEntity, {request}> On{message.Name}<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<{request}>();");
+            sb.AppendLine($"        public static Vela.Steps.ITypedStages<TEntity, {request}> On{message.Name}<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<{request}>();");
         }
         else
         {
@@ -163,7 +163,7 @@ public static class SdkMessageGenerator
 
                 first = false;
                 string pascal = EntityTypeName(entity, entityTypeNames);
-                sb.AppendLine($"        public static Vela.StepBuilder.ITypedMessageStepStage<{pascal}, {request}> On{message.Name}(this Vela.StepBuilder.IStepBuilder<{pascal}> builder) => builder.On<{request}>();");
+                sb.AppendLine($"        public static Vela.Steps.ITypedStages<{pascal}, {request}> On{message.Name}(this Vela.Steps.IStepTrigger<{pascal}> builder) => builder.On<{request}>();");
             }
         }
 

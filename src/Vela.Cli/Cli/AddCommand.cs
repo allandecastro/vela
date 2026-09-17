@@ -517,12 +517,17 @@ internal static class AddCommand
 
             string lambdas = string.Join(", ", attributes.Select(a => $"e => e.{a}"));
             string note = autoSelected ? " /* auto-selected; change to the column(s) that should trigger this step */" : string.Empty;
-            filteringCall = $"\n                .FilteringAttributes({lambdas}){note}";
+            filteringCall = $"\n                .WithFiltering({lambdas}){note}";
         }
+
+        // The redesigned builder ends the chain with .Handle(...), bound to a named instance handler. A modelled
+        // message gets the strongly-typed post-stage context (I{Message}PostContext<TEntity>); a custom OnMessage
+        // step has no typed context, so its handler takes the plain ILocalPluginContext.
+        string handlerContextType = known is null ? "ILocalPluginContext" : $"I{message}PostContext<{entity}>";
 
         string ns = $"{rootNamespace}.{entity}.Plugins";
         string relativePath = Path.Combine(entity!, "Plugins", $"{name}.cs");
-        string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, filteringCall);
+        string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, filteringCall, handlerContextType);
         return WriteFile(projectDir, relativePath, content, force, $"plugin {name} ({message} {entity})", HasFlag(args, "--json"));
     }
 
