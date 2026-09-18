@@ -26,6 +26,36 @@ public sealed partial class StepBuilder<TEntity>
     private readonly List<ImageDefinition> _postImages = new();
     private ImageDefinition? _currentImage;
     private bool _isPreImage;
+    private SetOnceModifier _setOnce;
+
+    // The single-value modifiers on the fluent chain: each is a "last wins" overwrite if called twice, which
+    // silently drops the earlier value. They may be set at most once per step; a second call throws (and the
+    // VELA003 analyzer flags it in the editor / at build). FilterOn is included because a second FilterOn(...)
+    // replaces the earlier attributes rather than adding to them.
+    [Flags]
+    private enum SetOnceModifier
+    {
+        None = 0,
+        Filtering = 1,
+        ExecutionOrder = 2,
+        Description = 4,
+        StepKey = 8,
+        Impersonation = 16,
+        SupportedDeployment = 32,
+        UnsecureConfig = 64,
+        SecureConfig = 128,
+    }
+
+    private void MarkSetOnce(SetOnceModifier modifier, string method)
+    {
+        if ((_setOnce & modifier) != 0)
+        {
+            throw new InvalidOperationException(
+                $"{method}(...) is already set on this step; call it at most once.");
+        }
+
+        _setOnce |= modifier;
+    }
 
     /// <summary>
     /// Creates a new step builder for the specified entity type.
@@ -100,6 +130,8 @@ public sealed partial class StepBuilder<TEntity>
             throw new ArgumentNullException(nameof(attribute));
         }
 
+        MarkSetOnce(SetOnceModifier.Filtering, "FilterOn");
+
         List<Expression<Func<TEntity, object?>>> all = new() { attribute };
         if (additionalAttributes != null)
         {
@@ -116,6 +148,7 @@ public sealed partial class StepBuilder<TEntity>
             throw new ArgumentNullException(nameof(stepKey));
         }
 
+        MarkSetOnce(SetOnceModifier.StepKey, "WithStepKey");
         _definition.StepKey = stepKey.Trim();
     }
 
@@ -153,13 +186,44 @@ public sealed partial class StepBuilder<TEntity>
 
     // Setting mutations centralised so the interface implementations stay in lockstep (each explicit
     // implementation is just `Set...(value); return this;`).
-    private void SetExecutionOrder(int order) => _definition.ExecutionOrder = order;
-    private void SetDescription(string description) => _definition.Description = description ?? string.Empty;
-    private void SetImpersonation(ImpersonationSource source) => _definition.ImpersonationSource = source;
-    private void SetSupportedDeployment(SupportedDeployment deployment) => _definition.SupportedDeployment = deployment;
+    private void SetExecutionOrder(int order)
+    {
+        MarkSetOnce(SetOnceModifier.ExecutionOrder, "WithExecutionOrder");
+        _definition.ExecutionOrder = order;
+    }
+
+    private void SetDescription(string description)
+    {
+        MarkSetOnce(SetOnceModifier.Description, "WithDescription");
+        _definition.Description = description ?? string.Empty;
+    }
+
+    private void SetImpersonation(ImpersonationSource source)
+    {
+        MarkSetOnce(SetOnceModifier.Impersonation, "WithImpersonation");
+        _definition.ImpersonationSource = source;
+    }
+
+    private void SetSupportedDeployment(SupportedDeployment deployment)
+    {
+        MarkSetOnce(SetOnceModifier.SupportedDeployment, "WithSupportedDeployment");
+        _definition.SupportedDeployment = deployment;
+    }
+
+    // Disabled() is a flag toggle: calling it twice is a harmless no-op, so it is intentionally not set-once.
     private void SetDisabled() => _definition.Enabled = false;
-    private void SetUnsecureConfig(string configuration) => _definition.UnsecureConfig = configuration ?? string.Empty;
-    private void SetSecureConfig(string configuration) => _definition.SecureConfig = configuration ?? string.Empty;
+
+    private void SetUnsecureConfig(string configuration)
+    {
+        MarkSetOnce(SetOnceModifier.UnsecureConfig, "WithUnsecureConfig");
+        _definition.UnsecureConfig = configuration ?? string.Empty;
+    }
+
+    private void SetSecureConfig(string configuration)
+    {
+        MarkSetOnce(SetOnceModifier.SecureConfig, "WithSecureConfig");
+        _definition.SecureConfig = configuration ?? string.Empty;
+    }
 
     private void StartImage(string alias, bool isPre)
     {

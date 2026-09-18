@@ -7,3 +7,4 @@ Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 VELA001 | Vela.Usage | Error | ColumnSelectorAnalyzer
 VELA002 | Vela.Usage | Error | StepCompletionAnalyzer
+VELA003 | Vela.Usage | Error | DuplicateModifierAnalyzer
