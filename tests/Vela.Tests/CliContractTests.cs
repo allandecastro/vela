@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using Vela.Constants;
+using Vela.Context;
 using Vela.CustomApi;
 using Vela.Plugin;
 using Vela.StepBuilder;
@@ -30,8 +31,11 @@ namespace Vela.Tests
                 RegisterStep().OnUpdate()
                     .PostOperation()
                     .Sync()
-                    .WithFiltering(a => a.Name);
+                    .WithFiltering(a => a.Name)
+                    .Handle(OnUpdate);
             }
+
+            private void OnUpdate(IUpdatePostContext<TestAccount> ctx) { }
         }
 
         private sealed class ContractSampleApi : CustomApiBase

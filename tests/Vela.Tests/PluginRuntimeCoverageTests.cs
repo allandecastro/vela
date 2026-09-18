@@ -27,9 +27,10 @@ public sealed class PluginRuntimeCoverageTests
     {
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name);
+                .WithFiltering(a => a.Name)
+                .Handle(OnUpdate);
 
-        protected override void Execute(ILocalPluginContext ctx) { }
+        private void OnUpdate(IUpdatePostContext<TestAccount> ctx) { }
     }
 
     private sealed class NotAPlugin

@@ -182,10 +182,11 @@ public sealed class ManifestScannerTests
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name);
+                .WithFiltering(a => a.Name)
+                .Handle(OnUpdate);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdate(IUpdatePostContext<TestAccount> ctx)
         {
         }
     }
@@ -341,10 +342,6 @@ public sealed class ManifestScannerTests
         protected override void RegisterPluginSteps()
         {
             throw new InvalidOperationException("Intentional test failure.");
-        }
-
-        protected override void Execute(ILocalPluginContext ctx)
-        {
         }
     }
 }

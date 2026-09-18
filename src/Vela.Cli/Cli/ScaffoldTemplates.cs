@@ -771,7 +771,7 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
 ### Resolving and using a service
 
 ```csharp
-protected override void Execute(ILocalPluginContext ctx)
+private void OnAccountCreated(ICreatePostContext<Account> ctx)
 {
     Account target = ctx.GetTarget<Account>();
     IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();

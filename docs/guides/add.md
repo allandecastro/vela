@@ -61,8 +61,8 @@ vela add --interactive
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
   method, e.g. `OnUpdate()`, or `OnMessage("...")` for an unmodelled message, not the generic `On<TRequest>()`
   overload) and a matching handler method
-  (`--message`, optional `--handler <Method>`). It refuses single-step plugins (those using the `Execute(...)`
-  override) and any file it can't parse cleanly, so it never corrupts source.
+  (`--message`, optional `--handler <Method>`). It refuses a plugin that has no handler-bound step yet (add a
+  step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source.
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +
   a co-located `main.test.ts`) in the [web-resources project](client-side.md) and registers its entry in
   `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it

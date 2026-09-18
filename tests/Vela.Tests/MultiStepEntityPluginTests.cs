@@ -31,7 +31,7 @@ public sealed class MultiStepEntityPluginTests
     }
 
     [Fact]
-    public void EntityPluginBase_UsesExecuteForSingleStep()
+    public void EntityPluginBase_DispatchesToHandler_ForSingleStep()
     {
         SingleStepPlugin plugin = new SingleStepPlugin();
         IServiceProvider provider = PluginContext.For<TestAccount>()
@@ -65,9 +65,9 @@ public sealed class MultiStepEntityPluginTests
     }
 
     [Fact]
-    public void EntityPluginBase_RunsSingleStep_WhenMessageHasNoTarget()
+    public void EntityPluginBase_DispatchesHandler_WhenMessageHasNoTarget()
     {
-        // RetrieveMultiple carries no primary-entity Target; the single-step Execute(ctx) still runs.
+        // RetrieveMultiple carries no primary-entity Target; the step's handler still runs.
         TargetProbePlugin plugin = new TargetProbePlugin();
         IServiceProvider provider = PluginContext.For<TestAccount>()
             .OnMessage(PluginMessages.RetrieveMultiple)
@@ -92,7 +92,7 @@ public sealed class MultiStepEntityPluginTests
             .BuildServiceProvider();
 
         InvalidPluginExecutionException exception = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
-        Assert.Contains("missing Handler", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no handler", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -151,10 +151,11 @@ public sealed class MultiStepEntityPluginTests
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name);
+                .WithFiltering(a => a.Name)
+                .Handle(OnUpdate);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdate(IUpdatePostContext<TestAccount> ctx)
         {
             Executed = true;
         }
@@ -174,10 +175,11 @@ public sealed class MultiStepEntityPluginTests
         {
             RegisterStep().OnDelete()
                 .PostOperation()
-                .Sync();
+                .Sync()
+                .Handle(OnDelete);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnDelete(IDeletePostContext<TestAccount> ctx)
         {
             Executed = true;
             CapturedId = ctx.GetTargetRef().Id;
@@ -196,10 +198,11 @@ public sealed class MultiStepEntityPluginTests
         {
             RegisterStep().OnRetrieveMultiple()
                 .PostOperation()
-                .Sync();
+                .Sync()
+                .Handle(OnRetrieveMultiple);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnRetrieveMultiple(IRetrieveMultiplePostContext<TestAccount> ctx)
         {
             Executed = true;
         }
@@ -237,10 +240,6 @@ public sealed class MultiStepEntityPluginTests
         }
 
         protected override void RegisterPluginSteps()
-        {
-        }
-
-        protected override void Execute(ILocalPluginContext ctx)
         {
         }
     }
