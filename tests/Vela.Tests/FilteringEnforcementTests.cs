@@ -1,6 +1,5 @@
 using System;
 using Vela.Constants;
-using Vela.StepBuilder;
 using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Xunit;

@@ -1,4 +1,4 @@
-namespace Vela.StepBuilder;
+namespace Vela.Steps;
 
 /// <summary>
 /// Specifies which user context the plugin impersonates.

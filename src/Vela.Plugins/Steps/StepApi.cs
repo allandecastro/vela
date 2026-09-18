@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.Linq.Expressions;
 using Vela.Constants;
 using Vela.Context;
-using Vela.StepBuilder; // ImpersonationSource / SupportedDeployment / ExecutionMode enums (relocated at old-builder removal)
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.Steps

@@ -8,7 +8,7 @@ using Vela.Constants;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
 
-namespace Vela.StepBuilder;
+namespace Vela.Steps;
 
 /// <summary>
 /// Mutable step registration state plus the private mutation helpers behind the fluent builder. The fluent

@@ -6,7 +6,7 @@ Create a class inheriting `EntityPluginBase<TEntity>` and declare steps in `Regi
 using Vela.Context;
 using Vela.Constants;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Zava.Shared.Models.Generated;
 
 namespace Zava.Plugins.Account

@@ -226,9 +226,9 @@ internal static class TypedQueryNames
     }
 
     public static string GetEntityLogicalName<TEntity>() where TEntity : Entity
-        => Vela.StepBuilder.ExpressionHelper.GetEntityLogicalName<TEntity>();
+        => Vela.Steps.ExpressionHelper.GetEntityLogicalName<TEntity>();
 
     public static string GetAttributeLogicalName<TEntity>(Expression<Func<TEntity, object?>> expression)
         where TEntity : Entity
-        => Vela.StepBuilder.ExpressionHelper.GetAttributeLogicalName(expression);
+        => Vela.Steps.ExpressionHelper.GetAttributeLogicalName(expression);
 }

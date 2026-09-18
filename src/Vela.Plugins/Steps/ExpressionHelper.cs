@@ -6,7 +6,7 @@ using Vela.Constants;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
 
-namespace Vela.StepBuilder;
+namespace Vela.Steps;
 
 /// <summary>
 /// Helper for extracting attribute names from lambda expressions.

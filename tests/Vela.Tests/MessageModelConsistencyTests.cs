@@ -7,7 +7,7 @@ using Moq;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Xunit;
 
 namespace Vela.Tests

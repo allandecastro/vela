@@ -17,7 +17,7 @@ own registration, so you don't restate it.
 
 ```csharp
 using Vela.Constants;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 
 // Construct the plugin, run it, then assert on the instance.

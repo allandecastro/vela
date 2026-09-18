@@ -7,7 +7,7 @@ using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Constants;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Context;
 using Xunit;
 

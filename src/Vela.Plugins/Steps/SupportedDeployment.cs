@@ -1,4 +1,4 @@
-namespace Vela.StepBuilder;
+namespace Vela.Steps;
 
 /// <summary>
 /// Specifies the deployment types where the plugin can execute.

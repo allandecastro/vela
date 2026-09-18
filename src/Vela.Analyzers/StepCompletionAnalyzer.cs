@@ -40,6 +40,11 @@ namespace Vela.Analyzers
                     return;
                 }
 
+                // Deliberately only ExpressionStatement (a discarded `RegisterStep()....;` statement, the common
+                // mistake). We intentionally do NOT flag a chain captured in a local (`var c = RegisterStep()...;`)
+                // or a field/return: a user may legitimately split the chain and complete it later
+                // (`c.FilterOn(...).Handle(...)`). Because this rule is an error, flagging those would fail the
+                // build on valid code (a false positive), which is worse than missing the rare split-and-drop case.
                 start.RegisterSyntaxNodeAction(nodeContext => AnalyzeStatement(nodeContext, fluent), SyntaxKind.ExpressionStatement);
             });
         }

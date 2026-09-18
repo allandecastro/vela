@@ -1,4 +1,4 @@
-namespace Vela.StepBuilder;
+namespace Vela.Steps;
 
 /// <summary>
 /// Specifies whether the plugin executes synchronously or asynchronously.

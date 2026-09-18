@@ -2,7 +2,6 @@ using System;
 using Microsoft.Xrm.Sdk;
 using Vela.Constants;
 using Vela.Context;
-using Vela.StepBuilder;
 using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Xunit;

@@ -1340,7 +1340,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Context;
     using Vela.Plugin;
     using Vela.Querying;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
     using {{prefix}}.Shared.Models.Generated;
@@ -1396,7 +1396,7 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
 {
     using System;
     using Vela.Constants;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Vela.Testing;
     using Microsoft.Xrm.Sdk;
     using Xunit;
@@ -1442,7 +1442,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Account.Services;
     using {{prefix}}.Shared.Models.Generated;
@@ -1495,7 +1495,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
@@ -1614,7 +1614,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Contact.Services;
     using {{prefix}}.Shared.Models.Generated;
@@ -2035,7 +2035,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
 {
     using System;
     using Vela.Constants;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Contact.Plugins;
@@ -2424,7 +2424,7 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
     using {{prefix}}.Shared.Services;
 
@@ -2467,7 +2467,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>

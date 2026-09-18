@@ -20,7 +20,7 @@ dotnet tool install --global Vela.Cli
 ```csharp
 using Vela.Context;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 
 public class AccountPostUpdate : EntityPluginBase<Account>
 {

@@ -6,7 +6,7 @@ using Vela.Context;
 using Vela.Steps;
 using Microsoft.Xrm.Sdk;
 
-namespace Vela.StepBuilder
+namespace Vela.Steps
 {
     public sealed partial class StepBuilder<TEntity> :
         IStepTrigger<TEntity>,

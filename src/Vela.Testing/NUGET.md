@@ -17,7 +17,7 @@ dotnet add package Vela.Testing
 
 ```csharp
 using Vela.Constants;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 using Xunit;
 

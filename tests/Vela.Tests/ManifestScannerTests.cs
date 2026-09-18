@@ -7,7 +7,6 @@ using Vela.Constants;
 using Vela.CustomApi;
 using Vela.Manifest;
 using Vela.Plugin;
-using Vela.StepBuilder;
 using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Microsoft.Xrm.Sdk;
