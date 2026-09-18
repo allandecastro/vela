@@ -24,9 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Framework
+## [0.15.0] - 2026-09-18 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
-#### Added
+Framework line, published as `framework-v0.15.0` (all three packages ship at this version).
+
+### Added
 
 - **Redesigned plugin step builder: `RegisterStep()`.** A guided, type-safe fluent chain -
   `RegisterStep().On<Message>().<Stage>().<Sync()|Async()>().FilterOn(...).With*(...).Handle(handler)` - replaces
@@ -46,7 +48,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   property. It surfaces in the editor and fails the build. It is automatic (no reference or configuration needed)
   and does not touch plain LINQ `Func<...>` lambdas.
 
-#### Changed
+### Changed
 
 - **BREAKING: filtering attributes are declared with `FilterOn(...)` (was `FilteringAttributes(...)`).** It is
   named `FilterOn`, not a `With*` modifier, because it is quasi-mandatory on Create / Update / CreateMultiple /
@@ -58,7 +60,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ExecutionMode`, `ImpersonationSource`, `SupportedDeployment` (and the builder surface) now live in
   `Vela.Steps` instead of `Vela.StepBuilder`. Change `using Vela.StepBuilder;` to `using Vela.Steps;`.
 
-#### Removed
+### Removed
 
 - **BREAKING: the legacy `RegisterSteps()` builder is removed.** Use
   `RegisterStep().On<Message>()...Handle(...)`. The old fluent surface (`IStepBuilder<TEntity>`, the per-message
@@ -74,9 +76,19 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   constant, remains callable from a handler (`service.Execute(new WhoAmIRequest())`), and can still be generated as
   a typed request with `vela models --messages`.
 
-### CLI
+## [0.9.0] - 2026-09-18 (Vela.Cli)
 
-#### Fixed
+CLI line (`Vela.Cli`), published as `cli-v0.9.0`.
+
+### Changed
+
+- **`vela init` / `vela add plugin` / `vela add step` and the generated `On<Message>()` step extensions emit the
+  redesigned `RegisterStep()` builder.** Scaffolded plugins, the single-file `add plugin` / `add step` output and
+  the `vela models` step extensions now use `RegisterStep().On<Message>()...FilterOn(...).Handle(...)` (was
+  `RegisterSteps()...FilteringAttributes(...)`), bind a typed handler with `.Handle(...)`, and reference the
+  `Vela.Steps` namespace. The default scaffold framework version is now `0.15.0`.
+
+### Fixed
 
 - **`vela models --custom-apis` (all, no names) no longer times out on large environments.** It read every Custom
   API with one query plus two per API (an N+1), which could exceed the service timeout. It now reads all Custom
