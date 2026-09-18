@@ -131,6 +131,10 @@ The message -> stage -> mode order is enforced by the type-state; steps 4-6 (`Fi
 `Disabled()` modifiers) return the same builder, so they can appear in any order between the mode and the
 terminal `Handle(...)`.
 
+Each single-value modifier (`FilterOn` and every `With...` setter) may be set **at most once** per step. A
+second call would silently overwrite the first, so it is rejected: analyzer `VELA003` flags it in the editor and
+at build, and the builder also throws at registration. (`Disabled()` is exempt: it is an idempotent flag toggle.)
+
 > [!NOTE]
 > Column selectors (`FilterOn`, the image selectors in `WithPreImage(...)` / `WithPostImage(...)`, and the typed query/change helpers) accept an
 > early-bound column, e.g. `a => a.Name`. A bundled analyzer (`VELA001`, shipped in `Vela.Plugins`) flags, in the
@@ -324,6 +328,34 @@ The rules the chain encodes:
 - `ctx.AcquireManagedIdentityToken(scopes)` - Acquire token via `IManagedIdentityService` when available
 - `ctx.TraceMethod("details")` - Trace caller method name with correlation/stage/depth
 - `ctx.TraceExecutionSnapshot("phase")` - Trace a structured context snapshot, including full Target/Image/Input/Output attribute values with PascalCase sections
+
+### Reacting only to real changes: HasChanged
+
+`FilterOn(...)` decides *when* the step fires (the attribute is present in the `Target`), but a caller can send
+an attribute already set to its current value. To run logic only when a value **actually differs** from its
+committed state, guard with `HasChanged`, which compares the `Target` against a registered **pre-image**:
+
+```csharp
+RegisterStep().OnUpdate().PostOperation().Sync()
+    .FilterOn(a => a.CreditLimit)
+    .WithPreImage(a => a.CreditLimit)   // required: HasChanged compares the Target against this
+    .Handle(ctx =>
+    {
+        if (ctx.HasChanged<Account>(a => a.CreditLimit))
+        {
+            // only runs when CreditLimit really changed, not merely re-sent
+        }
+    });
+```
+
+- It always compares **`Target` vs the pre-image** (the old value). It needs an entity `Target` (Create/Update;
+  Delete/Assign/SetState carry an `EntityReference` and throw) **and** a pre-image holding the attribute, or it
+  throws. An attribute absent from the `Target` counts as unchanged.
+- It works in **PreOperation and PostOperation** alike, as long as a pre-image is registered. Comparing against a
+  **post-image** is not a thing: the post-image already holds the new value, so `Target` vs post-image would
+  report "no change" for the very attributes that changed.
+- `HasAnyChanged(a => a.A, a => a.B)` is the any-of form. You don't need `HasChanged` at all when reacting to the
+  `Target` presence is enough, and it is unavailable on Create (there is no prior state to diff against).
 
 Managed identity example:
 
