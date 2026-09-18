@@ -31,7 +31,7 @@ namespace Vela.Steps
     /// <summary>Config for a Create step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface ICreatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        ICreatePreValidationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        ICreatePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreatePreValidationConfig<TEntity> WithDescription(string description);
         ICreatePreValidationConfig<TEntity> WithExecutionOrder(int order);
         ICreatePreValidationConfig<TEntity> WithStepKey(string key);
@@ -46,7 +46,7 @@ namespace Vela.Steps
     /// <summary>Config for a Create step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface ICreatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        ICreatePreOperationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        ICreatePreOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreatePreOperationConfig<TEntity> WithDescription(string description);
         ICreatePreOperationConfig<TEntity> WithExecutionOrder(int order);
         ICreatePreOperationConfig<TEntity> WithStepKey(string key);
@@ -61,7 +61,7 @@ namespace Vela.Steps
     /// <summary>Config for a Create step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface ICreatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        ICreatePostOperationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        ICreatePostOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreatePostOperationConfig<TEntity> WithDescription(string description);
         ICreatePostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
         ICreatePostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
@@ -78,7 +78,7 @@ namespace Vela.Steps
     /// <summary>Config for a Update step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IUpdatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        IUpdatePreValidationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdatePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdatePreValidationConfig<TEntity> WithDescription(string description);
         IUpdatePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IUpdatePreValidationConfig<TEntity> WithStepKey(string key);
@@ -93,7 +93,7 @@ namespace Vela.Steps
     /// <summary>Config for a Update step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IUpdatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        IUpdatePreOperationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdatePreOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdatePreOperationConfig<TEntity> WithDescription(string description);
         IUpdatePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdatePreOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
@@ -110,7 +110,7 @@ namespace Vela.Steps
     /// <summary>Config for a Update step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IUpdatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        IUpdatePostOperationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdatePostOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdatePostOperationConfig<TEntity> WithDescription(string description);
         IUpdatePostOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdatePostOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
@@ -129,7 +129,7 @@ namespace Vela.Steps
     /// <summary>Config for a CreateMultiple step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface ICreateMultiplePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        ICreateMultiplePreValidationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        ICreateMultiplePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreateMultiplePreValidationConfig<TEntity> WithDescription(string description);
         ICreateMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
         ICreateMultiplePreValidationConfig<TEntity> WithStepKey(string key);
@@ -144,7 +144,7 @@ namespace Vela.Steps
     /// <summary>Config for a CreateMultiple step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface ICreateMultiplePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        ICreateMultiplePreOperationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        ICreateMultiplePreOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreateMultiplePreOperationConfig<TEntity> WithDescription(string description);
         ICreateMultiplePreOperationConfig<TEntity> WithExecutionOrder(int order);
         ICreateMultiplePreOperationConfig<TEntity> WithStepKey(string key);
@@ -159,7 +159,7 @@ namespace Vela.Steps
     /// <summary>Config for a CreateMultiple step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface ICreateMultiplePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        ICreateMultiplePostOperationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        ICreateMultiplePostOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreateMultiplePostOperationConfig<TEntity> WithDescription(string description);
         ICreateMultiplePostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
         ICreateMultiplePostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
@@ -176,7 +176,7 @@ namespace Vela.Steps
     /// <summary>Config for a UpdateMultiple step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IUpdateMultiplePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        IUpdateMultiplePreValidationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdateMultiplePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdateMultiplePreValidationConfig<TEntity> WithDescription(string description);
         IUpdateMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IUpdateMultiplePreValidationConfig<TEntity> WithStepKey(string key);
@@ -191,7 +191,7 @@ namespace Vela.Steps
     /// <summary>Config for a UpdateMultiple step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IUpdateMultiplePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        IUpdateMultiplePreOperationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdateMultiplePreOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdateMultiplePreOperationConfig<TEntity> WithDescription(string description);
         IUpdateMultiplePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdateMultiplePreOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
@@ -208,7 +208,7 @@ namespace Vela.Steps
     /// <summary>Config for a UpdateMultiple step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IUpdateMultiplePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
-        IUpdateMultiplePostOperationConfig<TEntity> FilterOn(params Expression<Func<TEntity, object?>>[] attributes);
+        IUpdateMultiplePostOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdateMultiplePostOperationConfig<TEntity> WithDescription(string description);
         IUpdateMultiplePostOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
         IUpdateMultiplePostOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
@@ -2431,11 +2431,10 @@ namespace Vela.Steps
     }
 
     /// <summary>Async-only stage choice for a Custom API (AsyncOnly). Reached via the generated On&lt;Message&gt;() extension, not by hand.</summary>
+    /// <remarks>Only PostOperation is offered: an asynchronous step is PostOperation-only in Dataverse, so a pre-stage async step would be rejected at deploy time.</remarks>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public interface IAsyncOnlyTypedStages<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
     {
-        IAsyncMode<ITypedPreValidationConfig<TEntity, TRequest>> PreValidation();
-        IAsyncMode<ITypedPreOperationConfig<TEntity, TRequest>> PreOperation();
         IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>> PostOperation();
     }
 

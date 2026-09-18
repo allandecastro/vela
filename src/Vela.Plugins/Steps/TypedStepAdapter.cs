@@ -23,8 +23,6 @@ namespace Vela.Steps
         ISyncMode<ITypedPreValidationConfig<TEntity, TRequest>>,
         ISyncMode<ITypedPreOperationConfig<TEntity, TRequest>>,
         ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>,
-        IAsyncMode<ITypedPreValidationConfig<TEntity, TRequest>>,
-        IAsyncMode<ITypedPreOperationConfig<TEntity, TRequest>>,
         IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>,
         ITypedPreValidationConfig<TEntity, TRequest>,
         ITypedPreOperationConfig<TEntity, TRequest>,
@@ -41,8 +39,6 @@ namespace Vela.Steps
         ISyncMode<ITypedPreOperationConfig<TEntity, TRequest>> ITypedStages<TEntity, TRequest>.PreOperation() { _b.SetStageInternal(PluginStages.PreOperation); return this; }
         ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>> ITypedStages<TEntity, TRequest>.PostOperation() { _b.SetStageInternal(PluginStages.PostOperation); return this; }
 
-        IAsyncMode<ITypedPreValidationConfig<TEntity, TRequest>> IAsyncOnlyTypedStages<TEntity, TRequest>.PreValidation() { _b.SetStageInternal(PluginStages.PreValidation); return this; }
-        IAsyncMode<ITypedPreOperationConfig<TEntity, TRequest>> IAsyncOnlyTypedStages<TEntity, TRequest>.PreOperation() { _b.SetStageInternal(PluginStages.PreOperation); return this; }
         IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>> IAsyncOnlyTypedStages<TEntity, TRequest>.PostOperation() { _b.SetStageInternal(PluginStages.PostOperation); return this; }
 
         // ---- Modes ----
@@ -50,8 +46,6 @@ namespace Vela.Steps
         ITypedPreOperationConfig<TEntity, TRequest> ISyncMode<ITypedPreOperationConfig<TEntity, TRequest>>.Sync() { _b.SetModeInternal(ExecutionMode.Synchronous); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Sync() { _b.SetModeInternal(ExecutionMode.Synchronous); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Async() { _b.SetModeInternal(ExecutionMode.Asynchronous); return this; }
-        ITypedPreValidationConfig<TEntity, TRequest> IAsyncMode<ITypedPreValidationConfig<TEntity, TRequest>>.Async() { _b.SetModeInternal(ExecutionMode.Asynchronous); return this; }
-        ITypedPreOperationConfig<TEntity, TRequest> IAsyncMode<ITypedPreOperationConfig<TEntity, TRequest>>.Async() { _b.SetModeInternal(ExecutionMode.Asynchronous); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Async() { _b.SetModeInternal(ExecutionMode.Asynchronous); return this; }
 
         // ---- PreValidation config (no images) ----

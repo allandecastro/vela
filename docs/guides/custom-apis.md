@@ -147,9 +147,10 @@ public sealed class AfterEstimate : EntityPluginBase<Account>   // API bound to 
 - **Entity applicability.** A bound (or collection-bound) API constrains the extension to `IStepTrigger<TEntity>`
   for its entity, so `OnAccountEstimateValue()` only compiles inside an `EntityPluginBase<Account>`; on any other
   entity it does not exist (a compile error). A global API emits a generic `On<Message><TEntity>()` instead.
-- **Allowed step type.** An **AsyncOnly** API returns an async-only stage that exposes only `.Async()`, so a
-  synchronous registration does not compile. A **None** or **private** API emits no extension at all (only a
-  comment), so there is no blessed way to register a step on it.
+- **Allowed step type.** An **AsyncOnly** API returns an async-only stage that offers only `PostOperation()` and
+  only `.Async()` (an asynchronous step is PostOperation-only in Dataverse), so a synchronous or pre-stage
+  registration does not compile. A **None** or **private** API emits no extension at all (only a comment), so
+  there is no blessed way to register a step on it.
 - **Escape hatch.** The generic `On<zava_AccountEstimateValueRequest>()` entry stays available for explicit,
   unchecked use (it always allows `.Sync()`); for a compile-time-safe manual async-only registration use
   `OnAsyncOnly<zava_AccountEstimateValueRequest>()`, which returns the same async-only stage as the generated
