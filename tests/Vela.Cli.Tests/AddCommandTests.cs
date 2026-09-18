@@ -47,15 +47,15 @@ public class AddCommandTests
             Assert.Contains("namespace Acme.Plugins.Account.Plugins", content);
             Assert.Contains("using Acme.Shared.Models.Generated;", content);
             Assert.Contains("public sealed class AccountValidatorPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)", content);
-            Assert.Contains("RegisterSteps().OnUpdate()", content);
+            Assert.Contains("RegisterStep().OnUpdate()", content);
         });
     }
 
     [Theory]
-    [InlineData("Associate", "RegisterSteps().OnAssociate()")]
-    [InlineData("retrievemultiple", "RegisterSteps().OnRetrieveMultiple()")]
-    [InlineData("CreateMultiple", "RegisterSteps().OnCreateMultiple()")]
-    [InlineData("UpdateMultiple", "RegisterSteps().OnUpdateMultiple()")]
+    [InlineData("Associate", "RegisterStep().OnAssociate()")]
+    [InlineData("retrievemultiple", "RegisterStep().OnRetrieveMultiple()")]
+    [InlineData("CreateMultiple", "RegisterStep().OnCreateMultiple()")]
+    [InlineData("UpdateMultiple", "RegisterStep().OnUpdateMultiple()")]
     public void Add_Plugin_KnownMessage_RendersTypedCall(string message, string expectedCall)
     {
         RunInProject("Acme.Plugins", (project, dir) =>
@@ -77,7 +77,7 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountCustom.cs"));
-            Assert.Contains("RegisterSteps().OnMessage(\"acme_DoThing\")", content);
+            Assert.Contains("RegisterStep().OnMessage(\"acme_DoThing\")", content);
         });
     }
 
@@ -85,8 +85,8 @@ public class AddCommandTests
     // which require a filtering attribute at compile time - so the generator must also emit the filtering call,
     // otherwise the scaffolded plugin would not compile.
     [Theory]
-    [InlineData("CreateMultiple", "RegisterSteps().OnCreateMultiple()")]
-    [InlineData("UpdateMultiple", "RegisterSteps().OnUpdateMultiple()")]
+    [InlineData("CreateMultiple", "RegisterStep().OnCreateMultiple()")]
+    [InlineData("UpdateMultiple", "RegisterStep().OnUpdateMultiple()")]
     public void Add_Plugin_BulkMessage_RendersTypedCallWithFiltering(string message, string expectedCall)
     {
         RunInProject("Acme.Plugins", (project, dir) =>
@@ -96,7 +96,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountBulk.cs"));
             Assert.Contains(expectedCall, content);
-            Assert.Contains(".FilteringAttributes(", content);
+            Assert.Contains(".WithFiltering(", content);
         });
     }
 
@@ -110,7 +110,7 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountFiltered.cs"));
-            Assert.Contains(".FilteringAttributes(e => e.Name, e => e.Telephone1)", content);
+            Assert.Contains(".WithFiltering(e => e.Name, e => e.Telephone1)", content);
         });
     }
 
@@ -150,7 +150,7 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(pluginsDir, "Account", "Plugins", "AccountAuto.cs"));
-            Assert.Contains(".FilteringAttributes(e => e.Name)", content);
+            Assert.Contains(".WithFiltering(e => e.Name)", content);
         }
         finally
         {
@@ -208,7 +208,7 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
-            Assert.Contains($"RegisterSteps().OnMessage(\"{message}\")", content);
+            Assert.Contains($"RegisterStep().OnMessage(\"{message}\")", content);
         });
     }
 
@@ -228,7 +228,7 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
-            Assert.Contains($"RegisterSteps().On{message}()", content);
+            Assert.Contains($"RegisterStep().On{message}()", content);
             Assert.DoesNotContain("OnMessage(", content);
         });
     }
@@ -480,11 +480,11 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(pluginPath);
-            Assert.Contains("RegisterSteps().OnUpdate()", content);
-            Assert.Contains(".Handler(HandleUpdate);", content);
-            Assert.Contains("private void HandleUpdate(ILocalPluginContext ctx)", content);
+            Assert.Contains("RegisterStep().OnUpdate()", content);
+            Assert.Contains(".Handle(HandleUpdate);", content);
+            Assert.Contains("private void HandleUpdate(IUpdatePostContext<Account> ctx)", content);
             // The original step is preserved.
-            Assert.Contains(".Handler(HandleCreate);", content);
+            Assert.Contains(".Handle(HandleCreate);", content);
         });
     }
 
@@ -513,10 +513,10 @@ namespace Acme.Plugins.Account.Plugins
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .Handler(HandleCreate);
+                .Sync()
+                .Handle(HandleCreate);
         }
 
         private void HandleCreate(ILocalPluginContext ctx)

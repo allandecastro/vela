@@ -26,8 +26,8 @@ public sealed class PluginRuntimeCoverageTests
     private sealed class SampleStepPlugin(string unsecure, string secure) : EntityPluginBase<TestAccount>(unsecure, secure)
     {
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.Name);
 
         protected override void Execute(ILocalPluginContext ctx) { }
     }

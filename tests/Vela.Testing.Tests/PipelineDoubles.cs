@@ -29,10 +29,11 @@ namespace Vela.Testing.Tests
         public CreateTaskOnAccountCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnCreate().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .Handle(OnAccountCreated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnAccountCreated(ICreatePostContext<FakeAccount> ctx)
         {
             FakeAccount target = ctx.GetTarget<FakeAccount>();
             ctx.SystemService.Create(new FakeTask { Subject = $"Task for {target.Name}" });
@@ -47,7 +48,7 @@ namespace Vela.Testing.Tests
         public StampResponseIdOnCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreated);
+            => RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnCreated);
 
         private void OnCreated(ICreatePostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new Entity("task")
@@ -63,10 +64,11 @@ namespace Vela.Testing.Tests
         public CreateNoteOnTaskCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Subject);
+            => RegisterStep().OnCreate().PostOperation().Sync()
+                .WithFiltering(a => a.Subject)
+                .Handle(OnTaskCreated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnTaskCreated(ICreatePostContext<FakeTask> ctx)
             => ctx.SystemService.Create(new Entity("annotation") { ["subject"] = "auto-note" });
     }
 
@@ -77,9 +79,10 @@ namespace Vela.Testing.Tests
         public OnTaskDelete(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous);
+            => RegisterStep().OnDelete().PostOperation().Sync()
+                .Handle(OnDeleted);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnDeleted(IDeletePostContext<FakeTask> ctx)
         {
         }
     }
@@ -90,10 +93,11 @@ namespace Vela.Testing.Tests
         public OnNameChange(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .Handle(OnUpdated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
         {
             // Firing is observable via the pipeline ExecutionLog; no side effect needed.
         }
@@ -107,11 +111,12 @@ namespace Vela.Testing.Tests
         public KeyedNameChange(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Key(StepKey);
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .WithStepKey(StepKey)
+                .Handle(OnUpdated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
         {
             // Firing is observable via the pipeline ExecutionLog.
         }
@@ -124,10 +129,11 @@ namespace Vela.Testing.Tests
         public RecordUpdatePasses(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name, a => a.OwnerId);
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.Name, a => a.OwnerId)
+                .Handle(OnUpdated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdated(IUpdatePostContext<FakeOwnable> ctx)
         {
             FakeOwnable target = ctx.GetTarget<FakeOwnable>();
             ctx.SystemService.Create(new FakeTask { Subject = target.Contains("ownerid") ? "pass:owner" : "pass:standard" });
@@ -140,10 +146,11 @@ namespace Vela.Testing.Tests
         public OnStateChange(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.StateCode);
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.StateCode)
+                .Handle(OnUpdated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdated(IUpdatePostContext<FakeOwnable> ctx)
         {
             // Firing is observable via the pipeline ExecutionLog.
         }
@@ -155,12 +162,13 @@ namespace Vela.Testing.Tests
         public CaptureImages(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .PreImage().Attributes(a => a.Name)
-                .PostImage().Attributes(a => a.Name);
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .WithPreImage(a => a.Name)
+                .WithPostImage(a => a.Name)
+                .Handle(OnUpdated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
         {
             Entity pre = ctx.PluginExecutionContext.PreEntityImages[PluginImageAliases.PreImage];
             Entity post = ctx.PluginExecutionContext.PostEntityImages[PluginImageAliases.PostImage];
@@ -177,10 +185,11 @@ namespace Vela.Testing.Tests
         public RecurseOnUpdate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .Handle(OnUpdated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
         {
             FakeAccount target = ctx.GetTarget<FakeAccount>();
             ctx.SystemService.Update(new FakeAccount { Id = target.Id, Name = "again" });
@@ -193,10 +202,11 @@ namespace Vela.Testing.Tests
         public ThrowOnPostCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnCreate().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .Handle(OnCreated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnCreated(ICreatePostContext<FakeAccount> ctx)
             => throw new PluginBusinessException("rejected after write");
     }
 
@@ -206,10 +216,11 @@ namespace Vela.Testing.Tests
         public AsyncThrowOnCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Asynchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnCreate().PostOperation().Async()
+                .WithFiltering(a => a.Name)
+                .Handle(OnCreated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnCreated(ICreatePostContext<FakeAccount> ctx)
             => throw new PluginBusinessException("async boom");
     }
 
@@ -219,10 +230,11 @@ namespace Vela.Testing.Tests
         public AsyncCreateNote(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Asynchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnCreate().PostOperation().Async()
+                .WithFiltering(a => a.Name)
+                .Handle(OnCreated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnCreated(ICreatePostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new Entity("annotation") { ["subject"] = "async-note" });
     }
 
@@ -232,10 +244,11 @@ namespace Vela.Testing.Tests
         public AutoDiscoveredPlugin(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Id);
+            => RegisterStep().OnCreate().PostOperation().Sync()
+                .WithFiltering(a => a.Id)
+                .Handle(OnCreated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnCreated(ICreatePostContext<FakeAuto> ctx)
         {
             // Firing is observable via the pipeline ExecutionLog.
         }
@@ -248,10 +261,11 @@ namespace Vela.Testing.Tests
         public OnAccountCreateMultiple(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnCreateMultiple().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnCreateMultiple().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .Handle(OnCreatedMultiple);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnCreatedMultiple(ICreateMultiplePostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new FakeTask { Subject = $"bulk:{ctx.BulkTargets?.Entities.Count ?? 0}" });
     }
 
@@ -261,12 +275,13 @@ namespace Vela.Testing.Tests
         public CaptureBulkImages(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdateMultiple().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .PreImage().Attributes(a => a.Name)
-                .PostImage().Attributes(a => a.Name);
+            => RegisterStep().OnUpdateMultiple().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .WithPreImage(a => a.Name)
+                .WithPostImage(a => a.Name)
+                .Handle(OnUpdatedMultiple);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdatedMultiple(IUpdateMultiplePostContext<FakeAccount> ctx)
         {
             EntityCollection targets = ctx.BulkTargets!;
             for (int i = 0; i < targets.Entities.Count; i++)
@@ -287,9 +302,10 @@ namespace Vela.Testing.Tests
         public OnAccountAssociate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnAssociate().PostOperation().Mode(ExecutionMode.Synchronous);
+            => RegisterStep().OnAssociate().PostOperation().Sync()
+                .Handle(OnAssociated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnAssociated(IAssociatePostContext<FakeAccount> ctx)
         {
             // Firing (and the EntityReference target / extra inputs it carries) is observable via ExecutionLog.
         }
@@ -301,9 +317,10 @@ namespace Vela.Testing.Tests
         public OnAccountDisassociateAsync(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnDisassociate().PostOperation().Mode(ExecutionMode.Asynchronous);
+            => RegisterStep().OnDisassociate().PostOperation().Async()
+                .Handle(OnDisassociated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnDisassociated(IDisassociatePostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new Entity("annotation") { ["subject"] = "disassociated" });
     }
 
@@ -313,11 +330,12 @@ namespace Vela.Testing.Tests
         public CaptureFullPreImage(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .PreImage(); // no Attributes(...) -> the projected image keeps all columns
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.Name)
+                .WithPreImage() // no attributes -> the projected image keeps all columns
+                .Handle(OnUpdated);
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
         {
             Entity pre = ctx.PluginExecutionContext.PreEntityImages[PluginImageAliases.PreImage];
             ctx.SystemService.Create(new FakeTask { Subject = pre.GetAttributeValue<string>("name") ?? "?" });
@@ -331,7 +349,7 @@ namespace Vela.Testing.Tests
         public OnAccountEmailSent(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnSendEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnSent);
+            => RegisterStep().OnSendEmail().PostOperation().Sync().Handle(OnSent);
 
         private void OnSent(ISendEmailPostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"sent:{ctx.Request.EmailId}" });
@@ -343,7 +361,7 @@ namespace Vela.Testing.Tests
         public OnAccountAddedToQueue(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnAddToQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnQueued);
+            => RegisterStep().OnAddToQueue().PostOperation().Sync().Handle(OnQueued);
 
         private void OnQueued(IAddToQueuePostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"queue:{ctx.Request.Target.Id}:{ctx.Request.DestinationQueueId}" });

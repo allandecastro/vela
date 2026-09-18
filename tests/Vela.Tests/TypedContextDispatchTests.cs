@@ -27,53 +27,53 @@ namespace Vela.Tests
 
             protected override void RegisterPluginSteps()
             {
-                RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnAny);
-                RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnAny);
-                RegisterSteps().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnCreateMultiple().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnAny);
-                RegisterSteps().OnUpdateMultiple().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(OnAny);
-                RegisterSteps().OnRetrieve().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnRetrieveMultiple().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnAssociate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnDisassociate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnMerge().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnGrantAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnModifyAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnRevokeAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnMessage(CustomMessage).PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnQualifyLead().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnWinOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnLoseOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnConvertQuoteToSalesOrder().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnConvertSalesOrderToInvoice().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnGenerateQuoteFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnGenerateSalesOrderFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnGenerateInvoiceFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnAddToQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnRemoveFromQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnPickFromQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnRouteTo().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnReleaseToQueue().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnSendEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnSendEmailFromTemplate().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnDeliverIncomingEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnDeliverPromoteEmail().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnAddMembersTeam().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnRemoveMembersTeam().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnAddListMembersList().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnAddMemberList().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnRemoveMemberList().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnCloseIncident().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnCancelContract().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnCloneContract().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnRetrievePrincipalAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnWinQuote().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnReviseQuote().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnFulfillSalesOrder().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnGetQuoteProductsFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnGetSalesOrderProductsFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
-                RegisterSteps().OnGetInvoiceProductsFromOpportunity().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnAny);
+                RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnAny);
+                RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnAny);
+                RegisterStep().OnDelete().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnCreateMultiple().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnAny);
+                RegisterStep().OnUpdateMultiple().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnAny);
+                RegisterStep().OnRetrieve().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRetrieveMultiple().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnAssociate().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnDisassociate().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnMerge().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnGrantAccess().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnModifyAccess().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRevokeAccess().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnWinOpportunity().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnLoseOpportunity().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnConvertQuoteToSalesOrder().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnConvertSalesOrderToInvoice().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnGenerateQuoteFromOpportunity().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnGenerateSalesOrderFromOpportunity().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnGenerateInvoiceFromOpportunity().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnAddToQueue().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRemoveFromQueue().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnPickFromQueue().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRouteTo().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnReleaseToQueue().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnSendEmail().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnSendEmailFromTemplate().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnDeliverIncomingEmail().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnDeliverPromoteEmail().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnAddMembersTeam().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRemoveMembersTeam().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnAddListMembersList().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnAddMemberList().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRemoveMemberList().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnCloseIncident().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnCancelContract().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnCloneContract().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRetrievePrincipalAccess().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnWinQuote().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnReviseQuote().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnFulfillSalesOrder().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnGetQuoteProductsFromOpportunity().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnGetSalesOrderProductsFromOpportunity().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnGetInvoiceProductsFromOpportunity().PostOperation().Sync().Handle(OnAny);
             }
 
             // Bound to every step: contravariantly assignable to each Action<I{Msg}Context<TestAccount>> and to
@@ -155,7 +155,7 @@ namespace Vela.Tests
 
             protected override void RegisterPluginSteps()
             {
-                RegisterSteps().On<MergeRequest>().PreOperation().Mode(ExecutionMode.Synchronous).Handler(OnMerge);
+                RegisterStep().On<MergeRequest>().PreOperation().Sync().Handle(OnMerge);
             }
 
             private void OnMerge(IMessagePreContext<MergeRequest> ctx) => Seen = ctx.MessageName;

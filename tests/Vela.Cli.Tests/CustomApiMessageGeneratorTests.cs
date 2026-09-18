@@ -101,9 +101,9 @@ public class CustomApiMessageGeneratorTests
             BoundEntityLogicalName: "account"));
 
         Assert.Contains("public static class zava_AccountEstimateValueStepExtensions", code);
-        // Method name strips the publisher prefix; constrained to IStepBuilder<Account>; normal (Sync+Async) stage.
+        // Method name strips the publisher prefix; constrained to IStepTrigger<Account>; normal (Sync+Async) stage.
         Assert.Contains(
-            "public static Vela.StepBuilder.ITypedMessageStepStage<Account, zava_AccountEstimateValueRequest> OnAccountEstimateValue(this Vela.StepBuilder.IStepBuilder<Account> builder) => builder.On<zava_AccountEstimateValueRequest>();",
+            "public static Vela.Steps.ITypedStages<Account, zava_AccountEstimateValueRequest> OnAccountEstimateValue(this Vela.Steps.IStepTrigger<Account> builder) => builder.On<zava_AccountEstimateValueRequest>();",
             code);
         Assert.DoesNotContain("Onzava_", code);
         Assert.DoesNotContain("IAsyncOnly", code);
@@ -121,7 +121,7 @@ public class CustomApiMessageGeneratorTests
             BoundEntityLogicalName: "account"));
 
         Assert.Contains(
-            "public static Vela.StepBuilder.IAsyncOnlyTypedMessageStepStage<Account, zava_RecalcRequest> OnRecalc(this Vela.StepBuilder.IStepBuilder<Account> builder) => builder.OnAsyncOnly<zava_RecalcRequest>();",
+            "public static Vela.Steps.IAsyncOnlyTypedStages<Account, zava_RecalcRequest> OnRecalc(this Vela.Steps.IStepTrigger<Account> builder) => builder.OnAsyncOnly<zava_RecalcRequest>();",
             code);
     }
 
@@ -137,7 +137,7 @@ public class CustomApiMessageGeneratorTests
             BoundEntityLogicalName: null));
 
         Assert.Contains(
-            "public static Vela.StepBuilder.ITypedMessageStepStage<TEntity, zava_PingRequest> OnPing<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<zava_PingRequest>();",
+            "public static Vela.Steps.ITypedStages<TEntity, zava_PingRequest> OnPing<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<zava_PingRequest>();",
             code);
     }
 
@@ -186,7 +186,7 @@ public class CustomApiMessageGeneratorTests
             "N",
             map).Single().Code;
 
-        Assert.Contains("IStepBuilder<new_CustomEntity>", code);   // exact generated model type
+        Assert.Contains("IStepTrigger<new_CustomEntity>", code);   // exact generated model type
         Assert.DoesNotContain("NewCustomentity", code);            // not the naive PascalCase
     }
 

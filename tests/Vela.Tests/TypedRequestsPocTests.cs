@@ -26,7 +26,7 @@ namespace Vela.Tests
             public Probe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnMessage(Message).PostOperation().Sync().Handler<CreateRequest<TestAccount>>(OnMessageReceived);
+                => RegisterStep().OnMessage(Message).PostOperation().Sync().Handle<CreateRequest<TestAccount>>(OnMessageReceived);
 
             private void OnMessageReceived(IMessagePostContext<CreateRequest<TestAccount>> ctx)
                 => TargetName = ctx.Request.Target.Name;   // typed Request.Target

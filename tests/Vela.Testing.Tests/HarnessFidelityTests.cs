@@ -23,9 +23,9 @@ namespace Vela.Testing.Tests
             public CaptureIdentityOnAccountCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
+                => RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnCreated);
 
-            protected override void Execute(ILocalPluginContext ctx)
+            private void OnCreated(ICreatePostContext<FakeAccount> ctx)
                 => ctx.SystemService.Create(new Entity("vela_capture")
                 {
                     ["userid"] = ctx.UserId,
@@ -42,9 +42,9 @@ namespace Vela.Testing.Tests
             public CaptureParentOnTaskCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Subject);
+                => RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Subject).Handle(OnCreated);
 
-            protected override void Execute(ILocalPluginContext ctx)
+            private void OnCreated(ICreatePostContext<FakeTask> ctx)
             {
                 IPluginExecutionContext? parent = ctx.PluginExecutionContext.ParentContext;
                 ctx.SystemService.Create(new Entity("vela_capture")

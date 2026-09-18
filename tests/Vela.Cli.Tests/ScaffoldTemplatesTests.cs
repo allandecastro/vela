@@ -89,7 +89,7 @@ public class ScaffoldTemplatesTests
         Assert.Contains("ConfigureServices", code);
         Assert.Contains("GetRequiredService<IAccountFollowUpService>", code);
         // Binds a typed post-stage handler that resolves the DI service and reads the typed response.
-        Assert.Contains(".Handler(OnAccountCreated)", code);
+        Assert.Contains(".Handle(OnAccountCreated)", code);
         Assert.Contains("ICreatePostContext<Account>", code);
         Assert.Contains("ctx.Response.id", code);
     }
@@ -124,9 +124,9 @@ public class ScaffoldTemplatesTests
         Assert.DoesNotContain("ctx.TargetCollection", code);
         Assert.DoesNotContain(".ToEntity<", code);
 
-        // Every step is dormant: each registration ends with .Disabled(); (15), and every step binds a handler.
-        Assert.Equal(15, CountOccurrences(code, ".Disabled();"));
-        Assert.Equal(15, CountOccurrences(code, ".Handler("));
+        // Every step is dormant and binds a handler: each registration ends with .Disabled().Handle(...) (15).
+        Assert.Equal(15, CountOccurrences(code, ".Disabled().Handle("));
+        Assert.Equal(15, CountOccurrences(code, ".Handle("));
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public class ScaffoldTemplatesTests
     {
         string code = ScaffoldTemplates.ContactRouterPlugin("Zava");
 
-        Assert.Equal(2, CountOccurrences(code, ".Handler("));
+        Assert.Equal(2, CountOccurrences(code, ".Handle("));
         Assert.Contains("OnCreatePost", code);
         Assert.Contains("OnUpdatePost", code);
     }

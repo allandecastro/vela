@@ -114,17 +114,17 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(HandleCreate);
+                .Sync()
+                .WithFiltering(a => a.Name)
+                .Handle(HandleCreate);
 
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(HandleUpdate);
+                .Sync()
+                .WithFiltering(a => a.Name)
+                .Handle(HandleUpdate);
         }
 
         private void HandleCreate(ILocalPluginContext ctx)
@@ -148,10 +148,10 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .WithFiltering(a => a.Name);
         }
 
         protected override void Execute(ILocalPluginContext ctx)
@@ -172,9 +172,9 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnDelete()
+            RegisterStep().OnDelete()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous);
+                .Sync();
         }
 
         protected override void Execute(ILocalPluginContext ctx)
@@ -194,9 +194,9 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnRetrieveMultiple()
+            RegisterStep().OnRetrieveMultiple()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous);
+                .Sync();
         }
 
         protected override void Execute(ILocalPluginContext ctx)
@@ -213,15 +213,15 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .WithFiltering(a => a.Name);
 
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .WithFiltering(a => a.Name);
         }
     }
 
@@ -233,7 +233,7 @@ public sealed class MultiStepEntityPluginTests
 
         public void TryRegisterOutside()
         {
-            RegisterSteps();
+            RegisterStep();
         }
 
         protected override void RegisterPluginSteps()

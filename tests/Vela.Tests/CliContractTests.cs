@@ -27,10 +27,10 @@ namespace Vela.Tests
 
             protected override void RegisterPluginSteps()
             {
-                RegisterSteps().OnUpdate()
+                RegisterStep().OnUpdate()
                     .PostOperation()
-                    .Mode(ExecutionMode.Synchronous)
-                    .FilteringAttributes(a => a.Name);
+                    .Sync()
+                    .WithFiltering(a => a.Name);
             }
         }
 

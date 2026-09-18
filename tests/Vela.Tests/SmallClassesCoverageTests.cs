@@ -74,7 +74,6 @@ public sealed class SmallClassesCoverageTests
     [Fact]
     public void Register_entry_points()
     {
-        Assert.NotNull(Register.RegisterPluginStep<TestAccount>());
         Assert.NotNull(Register.RegisterCustomApi());
     }
 

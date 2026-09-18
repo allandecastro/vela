@@ -12,7 +12,7 @@ namespace Vela.Tests;
 
 // Covers EntityPluginBase<TEntity> step-definition assembly branches: the no-step guard, auto step-key
 // generation, the duplicate-trigger and missing-handler validations, the type-name fallback, and the
-// RegisterSteps()-outside-RegisterPluginSteps guard.
+// RegisterStep()-outside-RegisterPluginSteps guard.
 public sealed class EntityPluginBaseCoverageTests
 {
     private sealed class NoNameEntity : Entity
@@ -30,8 +30,8 @@ public sealed class EntityPluginBaseCoverageTests
     {
         public SingleAutoKeyStep() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name); // no .Key() -> auto-generated
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithFiltering(a => a.Name); // no .Key() -> auto-generated
         protected override void Execute(ILocalPluginContext ctx) { }
     }
 
@@ -40,8 +40,8 @@ public sealed class EntityPluginBaseCoverageTests
         public DuplicateTriggerSteps() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
-            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.AccountId);
+            RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name);
+            RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.AccountId);
         }
         protected override void Execute(ILocalPluginContext ctx) { }
     }
@@ -52,8 +52,8 @@ public sealed class EntityPluginBaseCoverageTests
         protected override void RegisterPluginSteps()
         {
             // Distinct triggers (different stages) pass the trigger check, but neither declares a Handler.
-            RegisterSteps().OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
-            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
+            RegisterStep().OnUpdate().PreOperation().Sync().WithFiltering(a => a.Name);
+            RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name);
         }
         protected override void Execute(ILocalPluginContext ctx) { }
     }
@@ -62,16 +62,16 @@ public sealed class EntityPluginBaseCoverageTests
     {
         public NoNamePlugin() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnDelete().PostOperation().Mode(ExecutionMode.Synchronous);
+            => RegisterStep().OnDelete().PostOperation().Sync();
         protected override void Execute(ILocalPluginContext ctx) { }
     }
 
     private sealed class RegisterOutside(string u, string s) : EntityPluginBase<TestAccount>(u, s)
     {
         public RegisterOutside() : this(null!, null!) { }
-        public void CallRegisterStepsOutside() => RegisterSteps(); // illegal: not inside RegisterPluginSteps()
+        public void CallRegisterStepsOutside() => RegisterStep(); // illegal: not inside RegisterPluginSteps()
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
+            => RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name);
         protected override void Execute(ILocalPluginContext ctx) { }
     }
 
@@ -113,7 +113,7 @@ public sealed class EntityPluginBaseCoverageTests
     }
 
     [Fact]
-    public void RegisterSteps_outside_RegisterPluginSteps_throws()
+    public void RegisterStep_outside_RegisterPluginSteps_throws()
     {
         Assert.Throws<InvalidOperationException>(() => new RegisterOutside().CallRegisterStepsOutside());
     }

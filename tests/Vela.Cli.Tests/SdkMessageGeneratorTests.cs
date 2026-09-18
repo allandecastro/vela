@@ -125,7 +125,7 @@ public class SdkMessageGeneratorTests
 
         Assert.Contains("public static class QualifyLeadStepExtensions", code);
         Assert.Contains(
-            "public static Vela.StepBuilder.ITypedMessageStepStage<Lead, QualifyLeadRequest> OnQualifyLead(this Vela.StepBuilder.IStepBuilder<Lead> builder) => builder.On<QualifyLeadRequest>();",
+            "public static Vela.Steps.ITypedStages<Lead, QualifyLeadRequest> OnQualifyLead(this Vela.Steps.IStepTrigger<Lead> builder) => builder.On<QualifyLeadRequest>();",
             code);
         // A concrete single-entity message does not emit the generic <TEntity> form.
         Assert.DoesNotContain("OnQualifyLead<TEntity>", code);
@@ -143,10 +143,10 @@ public class SdkMessageGeneratorTests
         });
 
         Assert.Contains(
-            "public static Vela.StepBuilder.ITypedMessageStepStage<Account, MergeRequest> OnMerge(this Vela.StepBuilder.IStepBuilder<Account> builder) => builder.On<MergeRequest>();",
+            "public static Vela.Steps.ITypedStages<Account, MergeRequest> OnMerge(this Vela.Steps.IStepTrigger<Account> builder) => builder.On<MergeRequest>();",
             code);
         Assert.Contains(
-            "public static Vela.StepBuilder.ITypedMessageStepStage<Contact, MergeRequest> OnMerge(this Vela.StepBuilder.IStepBuilder<Contact> builder) => builder.On<MergeRequest>();",
+            "public static Vela.Steps.ITypedStages<Contact, MergeRequest> OnMerge(this Vela.Steps.IStepTrigger<Contact> builder) => builder.On<MergeRequest>();",
             code);
     }
 
@@ -162,7 +162,7 @@ public class SdkMessageGeneratorTests
         });
 
         Assert.Contains(
-            "ITypedMessageStepStage<NewCustomentity, DoThingRequest> OnDoThing(this Vela.StepBuilder.IStepBuilder<NewCustomentity> builder)",
+            "ITypedStages<NewCustomentity, DoThingRequest> OnDoThing(this Vela.Steps.IStepTrigger<NewCustomentity> builder)",
             code);
     }
 
@@ -175,7 +175,7 @@ public class SdkMessageGeneratorTests
             Array.Empty<SdkMessageField>()));   // Entities defaults to empty -> all-entity message.
 
         Assert.Contains(
-            "public static Vela.StepBuilder.ITypedMessageStepStage<TEntity, CreateRequest> OnCreate<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<CreateRequest>();",
+            "public static Vela.Steps.ITypedStages<TEntity, CreateRequest> OnCreate<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<CreateRequest>();",
             code);
     }
 
@@ -192,9 +192,9 @@ public class SdkMessageGeneratorTests
             Entities = many,
         });
 
-        Assert.Contains("OnUpdate<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
+        Assert.Contains("OnUpdate<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
         // No per-entity overload was emitted.
-        Assert.DoesNotContain("IStepBuilder<Entity0>", code);
+        Assert.DoesNotContain("IStepTrigger<Entity0>", code);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public class SdkMessageGeneratorTests
             Entities = eight,
         });
 
-        Assert.Contains("ITypedMessageStepStage<Entity0, AssignRequest> OnAssign(this Vela.StepBuilder.IStepBuilder<Entity0> builder)", code);
+        Assert.Contains("ITypedStages<Entity0, AssignRequest> OnAssign(this Vela.Steps.IStepTrigger<Entity0> builder)", code);
         Assert.DoesNotContain("OnAssign<TEntity>", code);
     }
 
