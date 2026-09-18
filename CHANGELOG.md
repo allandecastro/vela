@@ -54,6 +54,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **BREAKING: every step must bind a handler with `.Handle(...)`.** A single-step plugin no longer overrides
   `Execute(ctx)`; it binds a typed handler just like a multi-step plugin. This is enforced at registration and by
   the `VELA002` analyzer.
+- **BREAKING: the step types moved to the `Vela.Steps` namespace.** `StepDefinition`, `ImageDefinition`,
+  `ExecutionMode`, `ImpersonationSource`, `SupportedDeployment` (and the builder surface) now live in
+  `Vela.Steps` instead of `Vela.StepBuilder`. Change `using Vela.StepBuilder;` to `using Vela.Steps;`.
 
 #### Removed
 
