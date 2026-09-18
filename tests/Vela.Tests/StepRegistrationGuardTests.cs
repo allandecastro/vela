@@ -39,9 +39,9 @@ public sealed class StepRegistrationGuardTests
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name).Handle(First);
+                .FilterOn(a => a.Name).Handle(First);
             RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name).Handle(Second);
+                .FilterOn(a => a.Name).Handle(Second);
         }
 
         private void First(ILocalPluginContext ctx) { }
@@ -56,9 +56,9 @@ public sealed class StepRegistrationGuardTests
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnCreate().PostOperation().Sync()
-                .WithFiltering(a => a.Name).Handle(OnCreated);
+                .FilterOn(a => a.Name).Handle(OnCreated);
             RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name).Handle(OnUpdated);
+                .FilterOn(a => a.Name).Handle(OnUpdated);
         }
 
         private void OnCreated(ILocalPluginContext ctx) { }

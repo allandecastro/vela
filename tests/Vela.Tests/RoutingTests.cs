@@ -24,7 +24,7 @@ namespace Vela.Tests
             Trigger(builder).OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name);
+                .FilterOn(a => a.Name);
 
             var definition = builder.Build();
 
@@ -41,7 +41,7 @@ namespace Vela.Tests
             Trigger(builder).OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name);
+                .FilterOn(a => a.Name);
 
             var definition = builder.Build();
 
@@ -56,7 +56,7 @@ namespace Vela.Tests
             Trigger(builder).OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithPreImage(a => a.Name)
                 .WithPostImage(a => a.Name);
 
@@ -78,7 +78,7 @@ namespace Vela.Tests
             Trigger(builder).OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithDescription("Test description");
 
             var definition = builder.Build();
@@ -93,7 +93,7 @@ namespace Vela.Tests
             Trigger(builder).OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(TestHandler);
 
             var definition = builder.Build();
@@ -124,7 +124,7 @@ namespace Vela.Tests
             Trigger(builder).OnUpdate()
                 .PreOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithPreImage(a => a.Name);
 
             var definition = builder.Build();
@@ -138,7 +138,7 @@ namespace Vela.Tests
             Trigger(builder).OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithPostImage(a => a.Name);
 
             var definition = builder.Build();
@@ -191,7 +191,7 @@ namespace Vela.Tests
         }
 
         // A filtering-required message reached through the permissive OnMessage(...) escape hatch cannot supply
-        // its filtering attribute (the permissive terminal has no WithFiltering), so Build() rejects it and
+        // its filtering attribute (the permissive terminal has no FilterOn), so Build() rejects it and
         // the error points at the typed OnUpdate()/OnCreate()/... methods instead.
         [Fact]
         public void StepBuilder_Build_RejectsFilteringMessageReachedViaOnMessage_AndSignpostsTypedMethods()

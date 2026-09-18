@@ -21,7 +21,7 @@ namespace Vela.Tests
             public CreateProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnCreated);
+                => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreated);
 
             private void OnCreated(ICreatePostContext<TestAccount> ctx)
             {
@@ -36,7 +36,7 @@ namespace Vela.Tests
             public UpdateProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnUpdated);
+                => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdated);
 
             private void OnUpdated(IUpdatePostContext<TestAccount> ctx)
                 => ViaRequest = ctx.Request.Target.Name;

@@ -670,7 +670,7 @@ protected override void RegisterPluginSteps()
     RegisterStep().OnCreate()                        // message: OnCreate/OnUpdate/OnDelete/OnMessage("...")
         .PostOperation()                             // stage: .PreValidation() | .PreOperation() | .PostOperation()
         .Sync()                                      // .Sync() | .Async() (Async is PostOperation-only)
-        .WithFiltering(a => a.Name)                  // (create/update) attributes that trigger the step
+        .FilterOn(a => a.Name)                  // (create/update) attributes that trigger the step
         .WithDescription("Runs after an account is created.")
         .WithPostImage(a => a.Name)                  // snapshot after the operation, limited to these columns
         .Handle(OnAccountCreated);                   // void OnAccountCreated(ICreatePostContext<Account> ctx)
@@ -695,7 +695,7 @@ Every step must end with `.Handle(...)`; a chain that stops earlier does not com
 ```csharp
 RegisterStep().OnUpdate()
     .PostOperation().Sync()
-    .WithFiltering(c => c.LastName)                  // (update) fire only when these columns change
+    .FilterOn(c => c.LastName)                  // (update) fire only when these columns change
     .WithPreImage(c => c.LastName)                   // before-snapshot for the handler
     .Handle(OnLastNameChanged);                      // void OnLastNameChanged(IUpdatePostContext<Contact> ctx)
 ```
@@ -707,7 +707,7 @@ RegisterStep().OnUpdate()
 | `.OnCreate()` … `.OnUpdate()` … `.OnMessage("custom_action")` | The message the step listens to. |
 | `.PreValidation()` / `.PreOperation()` / `.PostOperation()` | Pipeline stage. |
 | `.Sync()` / `.Async()` | Execution mode (Async is PostOperation-only). |
-| `.WithFiltering(...)` | (create/update) fire only when one of the listed columns changes. |
+| `.FilterOn(...)` | (create/update) fire only when one of the listed columns changes. |
 | `.WithPreImage(...)` / `.WithPostImage(...)` | Capture a before/after snapshot, scoped to named columns. |
 | `.WithExecutionOrder(n)` | Step rank when several steps share a message + stage. |
 | `.WithImpersonation(...)` | Run as `CallingUser` or `PluginOwner`. |
@@ -1360,7 +1360,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithDescription("Counts the contacts related to an account after it is updated.")
                 .Handle(OnAccountUpdated);
         }
@@ -1467,7 +1467,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithDescription("Schedules a 7-day follow-up task after an account is created.")
                 .WithPostImage(a => a.Name)
                 .Handle(OnAccountCreated);
@@ -1511,15 +1511,15 @@ namespace {{prefix}}.Plugins.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             // Create / Update carry a full entity Target; both require at least one filtering attribute.
-            RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Disabled().Handle(OnCreate);
-            RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Disabled().Handle(OnUpdate);
+            RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Disabled().Handle(OnCreate);
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Disabled().Handle(OnUpdate);
 
             // Delete carries an EntityReference Target.
             RegisterStep().OnDelete().PreOperation().Sync().Disabled().Handle(OnDelete);
 
             // Bulk messages carry a Targets collection; they also require a filtering attribute.
-            RegisterStep().OnCreateMultiple().PostOperation().Sync().WithFiltering(a => a.Name).Disabled().Handle(OnCreateMultiple);
-            RegisterStep().OnUpdateMultiple().PostOperation().Sync().WithFiltering(a => a.Name).Disabled().Handle(OnUpdateMultiple);
+            RegisterStep().OnCreateMultiple().PostOperation().Sync().FilterOn(a => a.Name).Disabled().Handle(OnCreateMultiple);
+            RegisterStep().OnUpdateMultiple().PostOperation().Sync().FilterOn(a => a.Name).Disabled().Handle(OnUpdateMultiple);
 
             // Read messages.
             RegisterStep().OnRetrieve().PostOperation().Sync().Disabled().Handle(OnRetrieve);
@@ -1636,7 +1636,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
+                .FilterOn(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
                 .WithDescription("Handles contact creation.")
                 .WithPostImage(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
                 .Handle(OnCreatePost);
@@ -1644,7 +1644,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(c => c.LastName)
+                .FilterOn(c => c.LastName)
                 .WithDescription("Handles contact last-name changes.")
                 .WithPreImage(c => c.LastName)
                 .Handle(OnUpdatePost);
@@ -2444,7 +2444,7 @@ namespace {{prefix}}.Integrations.Contact.Plugins
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Async()
-                .WithFiltering(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
+                .FilterOn(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
                 .WithDescription("Runs after a contact is created.")
                 .WithPostImage(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
                 .Handle(OnContactCreated);
@@ -2481,7 +2481,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Async()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithDescription("Pushes a newly created account downstream.")
                 .WithPostImage(a => a.Name)
                 .Handle(OnAccountCreated);
@@ -2489,7 +2489,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Async()
-                .WithFiltering(a => a.Name, a => a.Telephone1)
+                .FilterOn(a => a.Name, a => a.Telephone1)
                 .WithDescription("Pushes account changes downstream.")
                 .WithPreImage(a => a.Name, a => a.Telephone1)
                 .Handle(OnAccountChanged);

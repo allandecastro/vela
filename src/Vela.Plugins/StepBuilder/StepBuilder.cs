@@ -62,7 +62,7 @@ public sealed partial class StepBuilder<TEntity>
         {
             throw new InvalidOperationException(
                 $"Step on message '{_definition.Message}' must declare at least one filtering attribute via " +
-                "WithFiltering(...). An unfiltered Create/Update step fires on every change. Use the typed " +
+                "FilterOn(...). An unfiltered Create/Update step fires on every change. Use the typed " +
                 "OnCreate() / OnUpdate() / OnCreateMultiple() / OnUpdateMultiple() methods (which require the " +
                 "filtering attribute) rather than the permissive OnMessage(\"...\").");
         }

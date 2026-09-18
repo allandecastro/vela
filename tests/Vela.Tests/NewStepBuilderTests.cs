@@ -22,7 +22,7 @@ namespace Vela.Tests
             protected override void RegisterPluginSteps()
             {
                 RegisterStep().OnUpdate().PostOperation().Async()
-                    .WithFiltering(a => a.Name)
+                    .FilterOn(a => a.Name)
                     .WithPreImage(a => a.Name)
                     .WithPostImage("Snapshot", a => a.Name)
                     .WithDescription("audit")

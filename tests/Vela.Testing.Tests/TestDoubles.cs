@@ -77,7 +77,7 @@ namespace Vela.Testing.Tests
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnUpdated);
         }
 
@@ -102,7 +102,7 @@ namespace Vela.Testing.Tests
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreated);
         }
 
@@ -128,7 +128,7 @@ namespace Vela.Testing.Tests
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreated);
         }
 
@@ -249,7 +249,7 @@ namespace Vela.Testing.Tests
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreated);
         }
 

@@ -44,7 +44,7 @@ vela add --interactive
 - **Filtering attributes on a `Create`/`Update` plugin** (also `CreateMultiple`/`UpdateMultiple`): these
   messages require at least one filtering attribute. Pass `--filtering-attributes <Col1,Col2>` with the
   early-bound property name(s) that should trigger the step (for example `--filtering-attributes Name,Telephone1`
-  renders `WithFiltering(e => e.Name, e => e.Telephone1)`). If you omit it, `add` auto-selects a sensible
+  renders `FilterOn(e => e.Name, e => e.Telephone1)`). If you omit it, `add` auto-selects a sensible
   default column from the entity's generated early-bound model (its primary-name column) and marks it with an
   `auto-selected` comment so you can adjust it. The generated file always compiles and applies; if no column can
   be inferred (no generated model found), `add` fails with a clear message asking for `--filtering-attributes`

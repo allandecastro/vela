@@ -21,7 +21,7 @@ public class AccountPostUpdate : EntityPluginBase<Account>
         RegisterStep().OnUpdate()
             .PostOperation()
             .Sync()
-            .WithFiltering(a => a.Name)         // only fire when Name changes
+            .FilterOn(a => a.Name)         // only fire when Name changes
             .WithPreImage(a => a.Name)
             .Handle(OnAccountUpdated);          // stage-typed handler, bound by method group
     }

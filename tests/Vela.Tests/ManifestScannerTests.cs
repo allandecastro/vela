@@ -43,7 +43,7 @@ public sealed class ManifestScannerTests
             .OnUpdate()
             .PostOperation()
             .Sync()
-            .WithFiltering(a => a.Name);
+            .FilterOn(a => a.Name);
 
         StepDefinition definition = builder.Build();
 
@@ -60,7 +60,7 @@ public sealed class ManifestScannerTests
             .OnUpdate()
             .PostOperation()
             .Sync()
-            .WithFiltering(a => a.Name)
+            .FilterOn(a => a.Name)
             .Disabled()
             .WithUnsecureConfig("u-cfg")
             .WithSecureConfig("s-cfg");
@@ -182,7 +182,7 @@ public sealed class ManifestScannerTests
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnUpdate);
         }
 
@@ -198,13 +198,13 @@ public sealed class ManifestScannerTests
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreate);
 
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnUpdate);
         }
 

@@ -50,7 +50,7 @@ deployed into Dataverse, and matched at runtime to route the call to your handle
 %%{init: {"flowchart": {"subGraphTitleMargin": {"top": 6, "bottom": 18}, "nodeSpacing": 45, "rankSpacing": 50, "padding": 12}}}%%
 flowchart TB
     A["RegisterPluginSteps()"]
-    B["type-state fluent builder<br/>OnUpdate().PostOperation().Sync().WithFiltering(..).Handle(OnX)<br/><i>message → stage → mode → filtering → images</i>"]
+    B["type-state fluent builder<br/>OnUpdate().PostOperation().Sync().FilterOn(..).Handle(OnX)<br/><i>message → stage → mode → filtering → images</i>"]
     C["StepBuilder&lt;TEntity&gt;"]
     SD[["StepDefinition<br/><i>message, stage, mode, filtering, images, keys, config</i>"]]
     A --> B --> C

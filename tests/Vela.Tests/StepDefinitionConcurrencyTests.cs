@@ -62,9 +62,9 @@ public sealed class StepDefinitionConcurrencyTests
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnCreate().PostOperation().Sync()
-                .WithFiltering(a => a.Name).Handle(OnCreate);
+                .FilterOn(a => a.Name).Handle(OnCreate);
             RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name).Handle(OnUpdate);
+                .FilterOn(a => a.Name).Handle(OnUpdate);
         }
 
         private void OnCreate(ILocalPluginContext ctx)

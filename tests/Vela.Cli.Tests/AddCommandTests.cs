@@ -96,7 +96,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountBulk.cs"));
             Assert.Contains(expectedCall, content);
-            Assert.Contains(".WithFiltering(", content);
+            Assert.Contains(".FilterOn(", content);
         });
     }
 
@@ -110,7 +110,7 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountFiltered.cs"));
-            Assert.Contains(".WithFiltering(e => e.Name, e => e.Telephone1)", content);
+            Assert.Contains(".FilterOn(e => e.Name, e => e.Telephone1)", content);
         });
     }
 
@@ -150,7 +150,7 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(pluginsDir, "Account", "Plugins", "AccountAuto.cs"));
-            Assert.Contains(".WithFiltering(e => e.Name)", content);
+            Assert.Contains(".FilterOn(e => e.Name)", content);
         }
         finally
         {

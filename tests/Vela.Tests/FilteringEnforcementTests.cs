@@ -46,7 +46,7 @@ namespace Vela.Tests
         {
             StepBuilder<TestAccount> builder = New();
             Trigger(builder).OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name);
+                .FilterOn(a => a.Name);
 
             StepDefinition definition = builder.Build();
 
@@ -70,7 +70,7 @@ namespace Vela.Tests
         {
             StepBuilder<TestAccount> builder = New();
             Trigger(builder).OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name, a => a.Name);
+                .FilterOn(a => a.Name, a => a.Name);
 
             var ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
             Assert.Contains("Duplicate filtering attribute", ex.Message);
@@ -81,7 +81,7 @@ namespace Vela.Tests
         {
             StepBuilder<TestAccount> builder = New();
             Trigger(builder).OnUpdate().PreOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithPreImage("img", a => a.Name, a => a.Name);
 
             var ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
@@ -93,7 +93,7 @@ namespace Vela.Tests
         {
             StepBuilder<TestAccount> builder = New();
             Trigger(builder).OnUpdate().PreOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithPreImage("dup", a => a.Name)
                 .WithPreImage("dup", a => a.AccountId);
 

@@ -86,7 +86,7 @@ public sealed class StepBuilderCoverageTests
     {
         StepBuilder<TestAccount> builder = New();
         Trigger(builder).OnUpdate().PostOperation().Sync()
-            .WithFiltering(a => a.Name)
+            .FilterOn(a => a.Name)
             .WithPreImage(a => a.Name)
             .WithPostImage(); // no attributes -> full image
 
@@ -137,12 +137,12 @@ public sealed class StepBuilderCoverageTests
     {
         StepBuilder<TestAccount> dupFiltering = New();
         Trigger(dupFiltering).OnUpdate().PostOperation().Sync()
-            .WithFiltering(a => a.Name, a => a.Name); // duplicate
+            .FilterOn(a => a.Name, a => a.Name); // duplicate
         Assert.Throws<InvalidOperationException>(() => dupFiltering.Build());
 
         StepBuilder<TestAccount> dupAlias = New();
         Trigger(dupAlias).OnUpdate().PostOperation().Sync()
-            .WithFiltering(a => a.Name)
+            .FilterOn(a => a.Name)
             .WithPreImage("dup", a => a.Name)
             .WithPostImage("dup", a => a.AccountId); // duplicate alias across images
         Assert.Throws<InvalidOperationException>(() => dupAlias.Build());

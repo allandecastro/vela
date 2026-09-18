@@ -45,7 +45,7 @@ public class AddCommandFilteringWarningTests
             Assert.Contains("Did you mean 'Name'", warning);
 
             string content = File.ReadAllText(Path.Combine(pluginsDir, "Account", "Plugins", "AccountWarn.cs"));
-            Assert.Contains(".WithFiltering(e => e.name)", content);
+            Assert.Contains(".FilterOn(e => e.name)", content);
         }
         finally
         {

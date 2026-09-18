@@ -11,7 +11,7 @@ public class AccountPostUpdate : EntityPluginBase<Account>
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnUpdate().PostOperation().Sync()
-            .WithFiltering(a => a.Name).Handle(OnAccountUpdated);
+            .FilterOn(a => a.Name).Handle(OnAccountUpdated);
 
     private void OnAccountUpdated(IUpdatePostContext<Account> ctx) { /* ctx.Request.Target ... */ }
 }
@@ -24,8 +24,8 @@ Register several steps on one class and route each to its handler. See [Write a 
 ```csharp
 protected override void RegisterPluginSteps()
 {
-    RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnCreate);
-    RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnUpdate);
+    RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreate);
+    RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdate);
 }
 ```
 

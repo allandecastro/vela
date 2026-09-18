@@ -26,7 +26,7 @@ public sealed class AccountValidator : EntityPluginBase<Account>
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnUpdate().PreOperation().Sync()
-            .WithFiltering(a => a.Name)
+            .FilterOn(a => a.Name)
             .Handle(OnUpdating);
 
     private void OnUpdating(IUpdatePreContext<Account> ctx)

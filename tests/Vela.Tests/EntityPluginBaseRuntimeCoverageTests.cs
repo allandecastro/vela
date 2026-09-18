@@ -21,7 +21,7 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public TestAccount? Seen { get; private set; }
         public bool Ran { get; private set; }
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnUpdate);
+            => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdate);
         private void OnUpdate(IUpdatePostContext<TestAccount> ctx) { Seen = ctx.GetTarget<TestAccount>(); Ran = true; }
     }
 
@@ -31,8 +31,8 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public TwoHandlerSteps() : this(string.Empty, string.Empty) { }
         protected override void RegisterPluginSteps()
         {
-            RegisterStep().OnUpdate().PreOperation().Sync().WithFiltering(a => a.Name).Handle(HandleA);
-            RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(HandleB);
+            RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(a => a.Name).Handle(HandleA);
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(HandleB);
         }
         public void HandleA(ILocalPluginContext ctx) { }
         public void HandleB(ILocalPluginContext ctx) { }

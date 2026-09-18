@@ -42,7 +42,7 @@ namespace Vela.Tests
             protected override void RegisterPluginSteps()
             {
                 RegisterStep().OnUpdate().PostOperation().Sync()
-                    .WithFiltering(a => a.Name).Handle(OnUpdated);
+                    .FilterOn(a => a.Name).Handle(OnUpdated);
             }
 
             private void OnUpdated(IUpdatePostContext<TestAccount> ctx)
@@ -60,7 +60,7 @@ namespace Vela.Tests
             public UpdatePreProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnUpdate().PreOperation().Sync().WithFiltering(a => a.Name).Handle(OnUpdating);
+                => RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdating);
 
             private void OnUpdating(IUpdatePreContext<TestAccount> ctx)
                 => CapturedName = ctx.Request.Target.Name;   // Request-side data, available in pre
@@ -129,7 +129,7 @@ namespace Vela.Tests
                 => services.AddScoped<IGreeter>(_ => new Greeter());
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnCreated);
+                => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreated);
 
             private void OnCreated(ICreatePostContext<TestAccount> ctx)
                 => Greeted = ctx.GetRequiredService<IGreeter>().Greet();

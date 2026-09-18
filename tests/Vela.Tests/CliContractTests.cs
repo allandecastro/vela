@@ -31,7 +31,7 @@ namespace Vela.Tests
                 RegisterStep().OnUpdate()
                     .PostOperation()
                     .Sync()
-                    .WithFiltering(a => a.Name)
+                    .FilterOn(a => a.Name)
                     .Handle(OnUpdate);
             }
 

@@ -787,7 +787,7 @@ namespace Vela.StepBuilder
         IMergePostOperationConfig<TEntity> ISyncAsyncMode<IMergePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IMergePostOperationConfig<TEntity> ISyncAsyncMode<IMergePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
 
-        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
@@ -797,7 +797,7 @@ namespace Vela.StepBuilder
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePreValidationConfig<TEntity>.Handle(Action<ICreatePreContext<TEntity>> handler) { SetHandler(handler); }
-        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
@@ -807,7 +807,7 @@ namespace Vela.StepBuilder
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePreOperationConfig<TEntity>.Handle(Action<ICreatePreContext<TEntity>> handler) { SetHandler(handler); }
-        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
@@ -820,7 +820,7 @@ namespace Vela.StepBuilder
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePostOperationConfig<TEntity>.Handle(Action<ICreatePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
@@ -830,7 +830,7 @@ namespace Vela.StepBuilder
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePreValidationConfig<TEntity>.Handle(Action<IUpdatePreContext<TEntity>> handler) { SetHandler(handler); }
-        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
@@ -842,7 +842,7 @@ namespace Vela.StepBuilder
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePreOperationConfig<TEntity>.Handle(Action<IUpdatePreContext<TEntity>> handler) { SetHandler(handler); }
-        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
@@ -857,7 +857,7 @@ namespace Vela.StepBuilder
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePostOperationConfig<TEntity>.Handle(Action<IUpdatePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
@@ -867,7 +867,7 @@ namespace Vela.StepBuilder
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePreValidationConfig<TEntity>.Handle(Action<ICreateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
-        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
@@ -877,7 +877,7 @@ namespace Vela.StepBuilder
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePreOperationConfig<TEntity>.Handle(Action<ICreateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
-        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
@@ -890,7 +890,7 @@ namespace Vela.StepBuilder
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePostOperationConfig<TEntity>.Handle(Action<ICreateMultiplePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
@@ -900,7 +900,7 @@ namespace Vela.StepBuilder
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdateMultiplePreValidationConfig<TEntity>.Handle(Action<IUpdateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
-        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
@@ -912,7 +912,7 @@ namespace Vela.StepBuilder
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdateMultiplePreOperationConfig<TEntity>.Handle(Action<IUpdateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
-        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithFiltering(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.FilterOn(params Expression<Func<TEntity, object?>>[] attributes) { SetFilteringParams(attributes); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }

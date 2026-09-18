@@ -117,13 +117,13 @@ public sealed class MultiStepEntityPluginTests
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(HandleCreate);
 
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(HandleUpdate);
         }
 
@@ -151,7 +151,7 @@ public sealed class MultiStepEntityPluginTests
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnUpdate);
         }
 
@@ -219,12 +219,12 @@ public sealed class MultiStepEntityPluginTests
             RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name);
+                .FilterOn(a => a.Name);
 
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name);
+                .FilterOn(a => a.Name);
         }
     }
 

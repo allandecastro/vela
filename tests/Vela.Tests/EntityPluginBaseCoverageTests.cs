@@ -31,7 +31,7 @@ public sealed class EntityPluginBaseCoverageTests
         public SingleAutoKeyStep() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name) // no .WithStepKey() -> auto-generated
+                .FilterOn(a => a.Name) // no .WithStepKey() -> auto-generated
                 .Handle(OnUpdate);
         private void OnUpdate(IUpdatePostContext<TestAccount> ctx) { }
     }
@@ -41,8 +41,8 @@ public sealed class EntityPluginBaseCoverageTests
         public DuplicateTriggerSteps() : this(null!, null!) { }
         protected override void RegisterPluginSteps()
         {
-            RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name);
-            RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.AccountId);
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name);
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.AccountId);
         }
     }
 
@@ -52,8 +52,8 @@ public sealed class EntityPluginBaseCoverageTests
         protected override void RegisterPluginSteps()
         {
             // Distinct triggers (different stages) pass the trigger check, but neither binds a handler.
-            RegisterStep().OnUpdate().PreOperation().Sync().WithFiltering(a => a.Name);
-            RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name);
+            RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(a => a.Name);
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name);
         }
     }
 
@@ -70,7 +70,7 @@ public sealed class EntityPluginBaseCoverageTests
         public RegisterOutside() : this(null!, null!) { }
         public void CallRegisterStepsOutside() => RegisterStep(); // illegal: not inside RegisterPluginSteps()
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnUpdate);
+            => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdate);
         private void OnUpdate(IUpdatePostContext<TestAccount> ctx) { }
     }
 

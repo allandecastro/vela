@@ -68,7 +68,7 @@ internal static class StepInjector
             || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
             || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
         string filtering = needsFiltering
-            ? "                .WithFiltering(e => e.Id /* TODO: choose the attributes that should trigger this step */)\n"
+            ? "                .FilterOn(e => e.Id /* TODO: choose the attributes that should trigger this step */)\n"
             : string.Empty;
 
         string registration =

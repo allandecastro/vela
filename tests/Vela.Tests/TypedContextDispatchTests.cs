@@ -27,11 +27,11 @@ namespace Vela.Tests
 
             protected override void RegisterPluginSteps()
             {
-                RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnAny);
-                RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnAny);
+                RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnAny);
+                RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnAny);
                 RegisterStep().OnDelete().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnCreateMultiple().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnAny);
-                RegisterStep().OnUpdateMultiple().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnAny);
+                RegisterStep().OnCreateMultiple().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnAny);
+                RegisterStep().OnUpdateMultiple().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnAny);
                 RegisterStep().OnRetrieve().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrieveMultiple().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnAssociate().PostOperation().Sync().Handle(OnAny);

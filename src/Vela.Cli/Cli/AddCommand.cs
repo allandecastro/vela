@@ -517,7 +517,7 @@ internal static class AddCommand
 
             string lambdas = string.Join(", ", attributes.Select(a => $"e => e.{a}"));
             string note = autoSelected ? " /* auto-selected; change to the column(s) that should trigger this step */" : string.Empty;
-            filteringCall = $"\n                .WithFiltering({lambdas}){note}";
+            filteringCall = $"\n                .FilterOn({lambdas}){note}";
         }
 
         // The redesigned builder ends the chain with .Handle(...), bound to a named instance handler. A modelled

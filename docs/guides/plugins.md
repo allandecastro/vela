@@ -20,7 +20,7 @@ namespace Zava.Plugins.Account
             RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .WithFiltering(a => a.Name)            // Only trigger when Name changes
+                .FilterOn(a => a.Name)            // Only trigger when Name changes
                 .WithDescription("Handles account updates")
                 .WithPreImage(a => a.Name)             // Include Name in pre-image
                 .WithPostImage(a => a.Name)            // Include Name in post-image
@@ -51,7 +51,7 @@ public class AccountStepRouter : EntityPluginBase<Account>
         RegisterStep().OnCreate()
             .PostOperation()
             .Sync()
-            .WithFiltering(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
+            .FilterOn(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
             .WithDescription("Handles account creation after commit.")
             .WithPostImage(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)
             .Handle(OnCreatePost);
@@ -59,7 +59,7 @@ public class AccountStepRouter : EntityPluginBase<Account>
         RegisterStep().OnUpdate()
             .PostOperation()
             .Sync()
-            .WithFiltering(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
+            .FilterOn(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
             .WithDescription("Handles customer-facing account changes.")
             .WithPreImage(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)
             .WithPostImage(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)
@@ -119,7 +119,7 @@ The fluent builder enforces a specific order:
 2. **Stage** - `PreValidation()`, `PreOperation()`, or `PostOperation()` (typed methods; the stage you pick
    determines which images the rest of the chain will offer)
 3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only)
-4. **Filtering** - `WithFiltering(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
+4. **Filtering** - `FilterOn(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
    `CreateMultiple` and `UpdateMultiple`** (at least one attribute) and must come immediately after `Sync()` /
    `Async()`; not offered on other messages. An unfiltered Create/Update step would fire on every change, so the
    builder makes you state the trigger.
@@ -128,7 +128,7 @@ The fluent builder enforces a specific order:
 7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).
 
 > [!NOTE]
-> Column selectors (`WithFiltering`, the image selectors in `WithPreImage(...)` / `WithPostImage(...)`, and the typed query/change helpers) accept an
+> Column selectors (`FilterOn`, the image selectors in `WithPreImage(...)` / `WithPostImage(...)`, and the typed query/change helpers) accept an
 > early-bound column, e.g. `a => a.Name`. A bundled analyzer (`VELA001`, shipped in `Vela.Plugins`) flags, in the
 > editor and at build, a selector that targets a member of the base `Entity` type (such as `a => a.LogicalName` or
 > `a => a.Id`) rather than a real column - no reference or configuration needed.

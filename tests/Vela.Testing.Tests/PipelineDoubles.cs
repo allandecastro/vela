@@ -30,7 +30,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreate().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnAccountCreated);
 
         private void OnAccountCreated(ICreatePostContext<FakeAccount> ctx)
@@ -48,7 +48,7 @@ namespace Vela.Testing.Tests
         public StampResponseIdOnCreate(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnCreated);
+            => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreated);
 
         private void OnCreated(ICreatePostContext<FakeAccount> ctx)
             => ctx.SystemService.Create(new Entity("task")
@@ -65,7 +65,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreate().PostOperation().Sync()
-                .WithFiltering(a => a.Subject)
+                .FilterOn(a => a.Subject)
                 .Handle(OnTaskCreated);
 
         private void OnTaskCreated(ICreatePostContext<FakeTask> ctx)
@@ -94,7 +94,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnUpdated);
 
         private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
@@ -112,7 +112,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithStepKey(StepKey)
                 .Handle(OnUpdated);
 
@@ -130,7 +130,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name, a => a.OwnerId)
+                .FilterOn(a => a.Name, a => a.OwnerId)
                 .Handle(OnUpdated);
 
         private void OnUpdated(IUpdatePostContext<FakeOwnable> ctx)
@@ -147,7 +147,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.StateCode)
+                .FilterOn(a => a.StateCode)
                 .Handle(OnUpdated);
 
         private void OnUpdated(IUpdatePostContext<FakeOwnable> ctx)
@@ -163,7 +163,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithPreImage(a => a.Name)
                 .WithPostImage(a => a.Name)
                 .Handle(OnUpdated);
@@ -186,7 +186,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnUpdated);
 
         private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
@@ -203,7 +203,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreate().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreated);
 
         private void OnCreated(ICreatePostContext<FakeAccount> ctx)
@@ -217,7 +217,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreate().PostOperation().Async()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreated);
 
         private void OnCreated(ICreatePostContext<FakeAccount> ctx)
@@ -231,7 +231,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreate().PostOperation().Async()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreated);
 
         private void OnCreated(ICreatePostContext<FakeAccount> ctx)
@@ -245,7 +245,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreate().PostOperation().Sync()
-                .WithFiltering(a => a.Id)
+                .FilterOn(a => a.Id)
                 .Handle(OnCreated);
 
         private void OnCreated(ICreatePostContext<FakeAuto> ctx)
@@ -262,7 +262,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreateMultiple().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreatedMultiple);
 
         private void OnCreatedMultiple(ICreateMultiplePostContext<FakeAccount> ctx)
@@ -276,7 +276,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdateMultiple().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithPreImage(a => a.Name)
                 .WithPostImage(a => a.Name)
                 .Handle(OnUpdatedMultiple);
@@ -331,7 +331,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync()
-                .WithFiltering(a => a.Name)
+                .FilterOn(a => a.Name)
                 .WithPreImage() // no attributes -> the projected image keeps all columns
                 .Handle(OnUpdated);
 
