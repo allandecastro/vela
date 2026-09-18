@@ -120,12 +120,16 @@ The fluent builder enforces a specific order:
    determines which images the rest of the chain will offer)
 3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only)
 4. **Filtering** - `FilterOn(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
-   `CreateMultiple` and `UpdateMultiple`** (at least one attribute) and must come immediately after `Sync()` /
-   `Async()`; not offered on other messages. An unfiltered Create/Update step would fire on every change, so the
-   builder makes you state the trigger.
-5. **Optional** - `WithDescription()`, `WithImpersonation()`, `SupportedDeployment()`, `WithExecutionOrder()`, `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfig(...)`
+   `CreateMultiple` and `UpdateMultiple`** (at least one attribute; the first is mandatory at compile time);
+   not offered on other messages. An unfiltered Create/Update step would fire on every change, so the builder
+   makes you state the trigger.
+5. **Optional** - `WithDescription()`, `WithImpersonation()`, `WithSupportedDeployment()`, `WithExecutionOrder()`, `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfig(...)`
 6. **Images** - `WithPreImage(...)` and/or `WithPostImage(...)`
 7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).
+
+The message -> stage -> mode order is enforced by the type-state; steps 4-6 (`FilterOn` and the `With*` /
+`Disabled()` modifiers) return the same builder, so they can appear in any order between the mode and the
+terminal `Handle(...)`.
 
 > [!NOTE]
 > Column selectors (`FilterOn`, the image selectors in `WithPreImage(...)` / `WithPostImage(...)`, and the typed query/change helpers) accept an
@@ -250,7 +254,7 @@ and `Assign` messages are intentionally not modelled: update `statecode`/`status
 (kill-switch or phased rollout); `apply` sets the step's state accordingly and `plan` shows the transition. Re-enabling
 is just removing the `Disabled()` marker.
 
-**Step configuration** - `UnsecureConfig("...")` and `SecureConfig("...")` declare the configuration strings passed to the
+**Step configuration** - `WithUnsecureConfig("...")` and `WithSecureConfig("...")` declare the configuration strings passed to the
 plugin constructor `(string unsecureConfig, string secureConfig)`. Both are reconciled by `apply` (the secure value is
 stored on the linked `sdkmessageprocessingstepsecureconfig` row). Unsecure config appears verbatim in the `vela plan`
 JSON (it is non-sensitive by design); the **secure** value is **redacted to a hash** in plan/inspect output (and any
