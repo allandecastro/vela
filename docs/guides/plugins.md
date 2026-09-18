@@ -123,7 +123,7 @@ The fluent builder enforces a specific order:
    `CreateMultiple` and `UpdateMultiple`** (at least one attribute; the first is mandatory at compile time);
    not offered on other messages. An unfiltered Create/Update step would fire on every change, so the builder
    makes you state the trigger.
-5. **Optional** - `WithDescription()`, `WithImpersonation()`, `WithSupportedDeployment()`, `WithExecutionOrder()`, `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfig(...)`
+5. **Optional** - `WithDescription()`, `WithImpersonation()`, `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfig(...)`
 6. **Images** - `WithPreImage(...)` and/or `WithPostImage(...)`
 7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).
 
@@ -136,6 +136,31 @@ terminal `Handle(...)`.
 > early-bound column, e.g. `a => a.Name`. A bundled analyzer (`VELA001`, shipped in `Vela.Plugins`) flags, in the
 > editor and at build, a selector that targets a member of the base `Entity` type (such as `a => a.LogicalName` or
 > `a => a.Id`) rather than a real column - no reference or configuration needed.
+
+### Execution order (rank)
+
+`WithExecutionOrder(int order)` sets the step's **rank**: the `sdkmessageprocessingstep.rank` that orders the
+steps registered on the same message, primary entity, stage and mode. Lower ranks run first, and the rank
+defaults to `1` when you don't call it. Give steps distinct ranks to pin their relative order:
+
+```csharp
+// Lower rank runs first, so NormalizeName runs before ValidateName.
+RegisterStep().OnUpdate().PreOperation().Sync()
+    .FilterOn(a => a.Name)
+    .WithExecutionOrder(10)
+    .Handle(NormalizeName);
+
+RegisterStep().OnUpdate().PreOperation().Sync()
+    .FilterOn(a => a.Name)
+    .WithExecutionOrder(20)
+    .Handle(ValidateName);
+```
+
+> [!NOTE]
+> Two steps that share a rank on the same message, entity, stage and mode execute in an order Dataverse does not
+> define. `vela plan` and `vela apply` warn when a step you are deploying shares its rank with another step
+> already registered in the environment (including steps owned by other assemblies), so you can give them
+> distinct ranks. Under `--strict` the warning fails the run.
 
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:

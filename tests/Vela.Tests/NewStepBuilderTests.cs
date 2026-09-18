@@ -55,6 +55,36 @@ namespace Vela.Tests
             Assert.Empty(delete.PostImages);
         }
 
+        private sealed class ExecutionOrderPlugin : EntityPluginBase<TestAccount>
+        {
+            public ExecutionOrderPlugin() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+            {
+                RegisterStep().OnUpdate().PreOperation().Sync()
+                    .FilterOn(a => a.Name)
+                    .WithExecutionOrder(20)
+                    .Handle(ctx => { });
+
+                // No WithExecutionOrder() -> the rank defaults to 1.
+                RegisterStep().OnCreate().PreOperation().Sync()
+                    .FilterOn(a => a.Name)
+                    .Handle(ctx => { });
+            }
+        }
+
+        [Fact]
+        public void WithExecutionOrder_sets_the_rank_and_defaults_to_one_when_omitted()
+        {
+            StepDefinition[] defs = new ExecutionOrderPlugin().GetStepDefinitions();
+
+            StepDefinition update = defs.Single(d => d.Message == PluginMessages.Update);
+            Assert.Equal(20, update.ExecutionOrder);
+
+            StepDefinition create = defs.Single(d => d.Message == PluginMessages.Create);
+            Assert.Equal(1, create.ExecutionOrder);
+        }
+
         private static void StepImage_Post_Snapshot(StepDefinition update)
         {
             ImageDefinition post = Assert.Single(update.PostImages);
