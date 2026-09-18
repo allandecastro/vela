@@ -166,6 +166,43 @@ RegisterStep().OnUpdate().PreOperation().Sync()
 > already registered in the environment (including steps owned by other assemblies), so you can give them
 > distinct ranks. Under `--strict` the warning fails the run.
 
+### Typed images (compile-safe projections)
+
+`ctx.PreImage` / `ctx.PostImage` return the full early-bound entity, so nothing stops you reading a column the
+step never captured, which comes back as a silent `null`. The typed-image terminals hand the handler a **generated
+projection** that exposes only the columns declared in `WithPreImage(...)` / `WithPostImage(...)`, so reading an
+uncaptured column is a **compile error** and completion is filtered to what you actually captured.
+
+Use `Handle` with a second (and, for a step with both images, third) parameter typed as the generated projection.
+A build-time source generator emits the projection type from the captured columns; you name it once in the
+handler. The type is named `{PluginClass}_{Message}{Stage}_{PreImage|PostImage}` (with `_{Alias}` for a custom
+alias) in the `<YourNamespace>.Generated.Images` namespace.
+
+```csharp
+public sealed class AccountAudit : EntityPluginBase<Account>
+{
+    protected override void RegisterPluginSteps() =>
+        RegisterStep().OnUpdate().PostOperation().Sync()
+            .FilterOn(a => a.Name)
+            .WithPreImage(a => a.Name, a => a.Revenue)
+            .WithPostImage(a => a.Name)
+            .Handle((ctx,
+                     AccountAudit_UpdatePostOp_PreImage? pre,
+                     AccountAudit_UpdatePostOp_PostImage? post) =>
+            {
+                decimal? was = pre?.Revenue;   // captured -> available
+                // var x = pre?.Telephone1;    // compile error: not captured for this image
+            });
+}
+```
+
+- Additive and opt-in: the existing `.Handle(ctx => ...)` with `ctx.PreImage`/`ctx.PostImage` keeps working.
+- One image kind on the step -> `Handle<TImg>((ctx, img) => ...)`. Both kinds -> the three-parameter form above,
+  or `HandleWithPreImage<TImg>` / `HandleWithPostImage<TImg>` to take just one.
+- The projections are compiler-generated (they never appear as files in your source tree; `F12` opens them). A
+  capture with no explicit columns (`WithPreImage()`) keeps the full entity and generates nothing. If the column
+  list is not a literal set of selectors, the generator skips it and you keep the untyped image.
+
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:
 
