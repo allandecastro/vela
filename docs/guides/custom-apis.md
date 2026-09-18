@@ -5,7 +5,7 @@ response derive from `TypedRequest`/`TypedResponse`: each typed property is a on
 `Get<T>()` / `Set(value)` helpers (the parameter key defaults to the property name), reading and writing the
 underlying `Parameters`/`Results` bags. A single generated type therefore serves all three usages - authoring
 the Custom API, calling it (`service.Execute(new ScoreRequest { ... }).ToResponse<ScoreResponse>()`), and
-reacting to it (`On<ScoreRequest>()...Handler(...)`). Generate these types with
+reacting to it (`On<ScoreRequest>()...Handle(...)`). Generate these types with
 [`vela models --custom-apis`](models.md) or write them by hand as shown below:
 
 ```csharp
@@ -136,9 +136,9 @@ invalid registration does not compile:
 public sealed class AfterEstimate : EntityPluginBase<Account>   // API bound to account
 {
     protected override void RegisterPluginSteps()
-        => RegisterSteps().OnAccountEstimateValue()   // only exists on IStepBuilder<Account>
+        => RegisterStep().OnAccountEstimateValue()   // only exists on IStepBuilder<Account>
             .PostOperation().Async()                  // AsyncOnly API: .Sync() does not compile
-            .Handler(OnEstimated);
+            .Handle(OnEstimated);
 
     private void OnEstimated(IMessagePostContext<zava_AccountEstimateValueRequest> ctx) { /* ... */ }
 }

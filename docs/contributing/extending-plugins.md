@@ -22,14 +22,14 @@ these, in this order:
    model a Vela-owned request generic over `TEntity` (see `Vela.Messages.CreateRequest<TEntity>`) so its
    `ctx.Request.Target` is the early-bound `TEntity` instead of the SDK's base `Entity`; otherwise the handler can
    always fall back to the `ctx.GetTarget<T>()` extension.
-2. **Step interfaces** - `src/Vela.Plugins/StepBuilder/MessageSteps.cs`: a pre-stage step (its `.Handler` takes
+2. **Step interfaces** - `src/Vela.Plugins/StepBuilder/MessageSteps.cs`: a pre-stage step (its `.Handle` takes
    `Action<I<Message>PreContext<TEntity>>`) and a post-stage step (`Action<I<Message>PostContext<TEntity>>`), each
    extending the shared image terminal the (message, stage) supports (`INoImageStep` / `IPreImageStep` /
    `IPostImageStep` / `IPreAndPostImageStep`), plus the `I<Message>StepStage<TEntity>` stage selector routing
    PreValidation/PreOperation to the pre step and PostOperation to the post step. A message that carries images
    (like Create/Update/Delete) needs a distinct step per stage so each binds the stage-correct context.
 3. **`src/Vela.Plugins/StepBuilder/StepBuilder.cs`** - add the new interfaces to the class declaration list, add the
-   `On<Message>()` entry method, and the explicit stage / mode / (filtering) / `Handler` implementations (one Handler
+   `On<Message>()` entry method, and the explicit stage / mode / (filtering) / `Handle` implementations (one Handle
    per pre/post step).
 4. **`src/Vela.Plugins/StepBuilder/IStepBuilder.cs`** - the public `On<Message>()` entry.
 5. **`src/Vela.Plugins/Plugin/PluginStepsRegistrar.cs`** - the delegating `On<Message>()` for the multi-step router.

@@ -18,13 +18,12 @@ public class AccountPostUpdate : EntityPluginBase<Account>
 
     protected override void RegisterPluginSteps()
     {
-        RegisterSteps().OnUpdate()
+        RegisterStep().OnUpdate()
             .PostOperation()
             .Sync()
-            .FilteringAttributes(a => a.Name)   // only fire when Name changes
-            .Handler(OnAccountUpdated)          // stage-typed handler, bound by method group
-            .PreImage()
-                .Attributes(a => a.Name);
+            .WithFiltering(a => a.Name)         // only fire when Name changes
+            .WithPreImage(a => a.Name)
+            .Handle(OnAccountUpdated);          // stage-typed handler, bound by method group
     }
 
     private void OnAccountUpdated(IUpdatePostContext<Account> ctx)

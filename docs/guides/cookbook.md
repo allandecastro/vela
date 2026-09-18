@@ -10,8 +10,8 @@ Declare one step in `RegisterPluginSteps()`. See [Write a plugin](plugins.md).
 public class AccountPostUpdate : EntityPluginBase<Account>
 {
     protected override void RegisterPluginSteps() =>
-        RegisterSteps().OnUpdate().PostOperation().Sync()
-            .FilteringAttributes(a => a.Name).Handler(OnAccountUpdated);
+        RegisterStep().OnUpdate().PostOperation().Sync()
+            .WithFiltering(a => a.Name).Handle(OnAccountUpdated);
 
     private void OnAccountUpdated(IUpdatePostContext<Account> ctx) { /* ctx.Request.Target ... */ }
 }
@@ -24,8 +24,8 @@ Register several steps on one class and route each to its handler. See [Write a 
 ```csharp
 protected override void RegisterPluginSteps()
 {
-    RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreate);
-    RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdate);
+    RegisterStep().OnCreate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnCreate);
+    RegisterStep().OnUpdate().PostOperation().Sync().WithFiltering(a => a.Name).Handle(OnUpdate);
 }
 ```
 
