@@ -26,13 +26,14 @@ internal static partial class DataverseRegistration
     // and cannot be exercised by an offline unit test — mutating them only yields NoCoverage noise. The reader
     // helpers they orchestrate (GetPluginAssembly/GetPluginTypes/GetStepItems/GetCustomApiItems) are covered
     // directly through the IOrganizationService seam.
-    internal static RegistrationState BuildDataverseState(string[] sourceAssemblies, SharedOptions options, JsonSerializerOptions jsonOptions)
+    internal static RegistrationState BuildDataverseState(string[] sourceAssemblies, SharedOptions options, JsonSerializerOptions jsonOptions, IReadOnlyList<RankStep>? localDesiredSteps = null)
 {
     using ServiceClient client = CreateDataverseClient(options);
 
     IOrganizationService service = client;
     List<RegistrationItem> items = [];
     List<string> diagnostics = [];
+    HashSet<Guid> ourPluginTypeIds = [];
 
     foreach (string assemblyName in sourceAssemblies)
     {
@@ -50,6 +51,7 @@ internal static partial class DataverseRegistration
             continue;
         }
 
+        ourPluginTypeIds.UnionWith(pluginTypes.Keys);
         items.AddRange(GetStepItems(service, pluginTypes, jsonOptions));
 
         // Do NOT demote a custom-API read failure to a diagnostic: treating it as "no custom APIs" would
@@ -64,6 +66,14 @@ internal static partial class DataverseRegistration
     if (!string.IsNullOrWhiteSpace(options.WebResourcesRoot) && !string.IsNullOrWhiteSpace(options.SolutionUniqueName))
     {
         items.AddRange(ReadWebResourcesInSolution(service, options.SolutionUniqueName!, jsonOptions));
+    }
+
+    // Advisory: warn when a step being deployed shares its rank with another step on the same message/stage
+    // anywhere in the environment (execution order would be undefined). Reuses this connection; only runs when
+    // the caller passes the local desired steps.
+    if (localDesiredSteps is { Count: > 0 })
+    {
+        diagnostics.AddRange(BuildRankCollisionDiagnostics(service, localDesiredSteps, ourPluginTypeIds));
     }
 
     return new RegistrationState(

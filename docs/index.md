@@ -19,7 +19,7 @@ _disableBreadcrumb: true
 
 ## See it
 
-Write a step-registered plugin with a strongly-typed handler, then preview and apply it with the CLI:
+Register a plugin step with a strongly-typed handler, preview it, apply it, then test it with no connection and no mocking library:
 
 ```csharp
 public sealed class AccountValidator : EntityPluginBase<Account>
@@ -27,13 +27,11 @@ public sealed class AccountValidator : EntityPluginBase<Account>
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnUpdate().PreOperation().Sync()
             .FilterOn(a => a.Name)
-            .Handle(OnUpdating);
-
-    private void OnUpdating(IUpdatePreContext<Account> ctx)
-    {
-        if (string.IsNullOrWhiteSpace(ctx.Request.Target.Name))
-            throw new InvalidPluginExecutionException("Account name is required.");
-    }
+            .Handle(ctx =>
+            {
+                if (string.IsNullOrWhiteSpace(ctx.Request.Target.Name))
+                    throw new InvalidPluginExecutionException("Account name is required.");
+            });
 }
 ```
 
@@ -41,8 +39,6 @@ public sealed class AccountValidator : EntityPluginBase<Account>
 vela plan  --packages-dir ./artifacts --interactive   # preview the registration (read-only)
 vela apply --packages-dir ./artifacts --interactive   # upsert it into your environment
 ```
-
-Test it with no connection, no mocking library:
 
 ```csharp
 var ctx = PluginContext.For<Account>().WithTarget(new Account { Name = "" });
