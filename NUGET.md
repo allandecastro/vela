@@ -27,12 +27,13 @@ public class AccountPostUpdate : EntityPluginBase<Account>
     public AccountPostUpdate(string unsecure, string secure) : base(unsecure, secure) { }
 
     protected override void RegisterPluginSteps()
-        => RegisterSteps().OnUpdate()
+        => RegisterStep().OnUpdate()
                .PostOperation()
                .Sync()
-               .FilteringAttributes(a => a.Name);
+               .FilterOn(a => a.Name)
+               .Handle(OnUpdated);
 
-    protected override void Execute(ILocalPluginContext ctx)
+    private void OnUpdated(IUpdatePostContext<Account> ctx)
         => ctx.Trace($"Account renamed to '{ctx.GetTarget<Account>().Name}'");
 }
 ```

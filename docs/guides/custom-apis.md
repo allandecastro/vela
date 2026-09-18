@@ -136,7 +136,7 @@ invalid registration does not compile:
 public sealed class AfterEstimate : EntityPluginBase<Account>   // API bound to account
 {
     protected override void RegisterPluginSteps()
-        => RegisterStep().OnAccountEstimateValue()   // only exists on IStepBuilder<Account>
+        => RegisterStep().OnAccountEstimateValue()   // only exists on IStepTrigger<Account>
             .PostOperation().Async()                  // AsyncOnly API: .Sync() does not compile
             .Handle(OnEstimated);
 
@@ -144,7 +144,7 @@ public sealed class AfterEstimate : EntityPluginBase<Account>   // API bound to 
 }
 ```
 
-- **Entity applicability.** A bound (or collection-bound) API constrains the extension to `IStepBuilder<TEntity>`
+- **Entity applicability.** A bound (or collection-bound) API constrains the extension to `IStepTrigger<TEntity>`
   for its entity, so `OnAccountEstimateValue()` only compiles inside an `EntityPluginBase<Account>`; on any other
   entity it does not exist (a compile error). A global API emits a generic `On<Message><TEntity>()` instead.
 - **Allowed step type.** An **AsyncOnly** API returns an async-only stage that exposes only `.Async()`, so a
