@@ -58,6 +58,14 @@ public sealed partial class StepBuilder<TEntity>
     }
 
     /// <summary>
+    /// The actual handler delegate for this step, retained so the framework can invoke it directly instead of
+    /// re-resolving the handler by method name via reflection. This is what makes lambda handlers (including
+    /// ones that capture locals) and the typed-image <c>Handle&lt;TImg&gt;</c> wrapper work at execution time.
+    /// The metadata <see cref="StepDefinition"/> stays pure (name only); the delegate lives here on the builder.
+    /// </summary>
+    internal Delegate? RuntimeHandler { get; private set; }
+
+    /// <summary>
     /// Creates a new step builder for the specified entity type.
     /// </summary>
     public StepBuilder()
@@ -174,6 +182,7 @@ public sealed partial class StepBuilder<TEntity>
             throw new ArgumentException("Handler delegate must reference an instance method.", nameof(handler));
         }
 
+        RuntimeHandler = handler;
         SetHandler(handler.Method.Name);
     }
 

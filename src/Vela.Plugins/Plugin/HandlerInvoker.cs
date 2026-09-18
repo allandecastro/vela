@@ -82,5 +82,23 @@ namespace Vela.Plugin
                 throw;
             }
         }
+
+        /// <summary>
+        /// Invokes a retained handler <see cref="Delegate"/> directly with the built context, unwrapping the
+        /// <see cref="TargetInvocationException"/> so a handler's <see cref="InvalidPluginExecutionException"/>
+        /// (or any business exception) surfaces unchanged, exactly as the reflection path does.
+        /// </summary>
+        public static void InvokeDelegate(Delegate handler, object[] arguments)
+        {
+            try
+            {
+                handler.DynamicInvoke(arguments);
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                throw;
+            }
+        }
     }
 }

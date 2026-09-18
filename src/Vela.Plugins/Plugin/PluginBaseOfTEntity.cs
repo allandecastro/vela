@@ -25,6 +25,10 @@ namespace Vela.Plugin
     public abstract class EntityPluginBase<TEntity>(string unsecureConfig, string secureConfig, int maxDepth = 8) : PluginBase(unsecureConfig, secureConfig, maxDepth) where TEntity : Entity
     {
         private volatile StepDefinition[]? _stepDefinitions;
+        // Runtime handler delegates keyed by their (reference-identity) StepDefinition, retained so the matched
+        // step can be invoked directly instead of resolving the handler by method name. Built together with
+        // _stepDefinitions and published under the same lock; StepDefinition stays a pure metadata value object.
+        private Dictionary<StepDefinition, Delegate>? _handlersByDefinition;
         private List<StepBuilder<TEntity>>? _registeredSteps;
         private PluginStepsRegistrar<TEntity>? _steps;
         private readonly object _stepInitLock = new object();
@@ -64,7 +68,20 @@ namespace Vela.Plugin
                     _registeredSteps = null;
                 }
 
-                definitions.AddRange(registeredSteps.Select(step => step.Build()));
+                // Build each step and, in lockstep, capture its retained runtime handler delegate keyed by the
+                // definition instance (Build() returns the builder's single StepDefinition, so reference identity
+                // is stable and unique per step).
+                Dictionary<StepDefinition, Delegate> handlersByDefinition = new Dictionary<StepDefinition, Delegate>();
+                foreach (StepBuilder<TEntity> step in registeredSteps)
+                {
+                    StepDefinition built = step.Build();
+                    definitions.Add(built);
+                    if (step.RuntimeHandler != null)
+                    {
+                        handlersByDefinition[built] = step.RuntimeHandler;
+                    }
+                }
+
                 if (definitions.Count == 0)
                 {
                     throw new InvalidPluginExecutionException($"Plugin '{GetType().FullName}' must register at least one step.");
@@ -116,6 +133,7 @@ namespace Vela.Plugin
                 }
 
                 StepDefinition[] result = definitions.ToArray();
+                _handlersByDefinition = handlersByDefinition;
                 _stepDefinitions = result;
                 return result;
             }
@@ -174,6 +192,16 @@ namespace Vela.Plugin
             object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
                 ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
                 ?? ctx;
+
+            // Prefer invoking the retained delegate directly: it supports lambda handlers (including ones that
+            // capture locals, which the name-based reflection path cannot find) and the typed-image Handle<TImg>
+            // wrapper. Fall back to name-based reflection when no delegate was retained (defensive).
+            if (_handlersByDefinition != null && _handlersByDefinition.TryGetValue(matchedDefinition, out Delegate? runtimeHandler))
+            {
+                HandlerInvoker.InvokeDelegate(runtimeHandler, [argument]);
+                return;
+            }
+
             InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
         }
 
