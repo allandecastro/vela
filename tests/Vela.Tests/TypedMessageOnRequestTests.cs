@@ -3,14 +3,14 @@ using Vela.Constants;
 using Vela.Context;
 using Vela.Messages;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 using Vela.Tests.TestSupport;
 using Xunit;
 
 namespace Vela.Tests
 {
-    // Proves Feature B: RegisterSteps().On<TRequest>() derives the message name from the request type (its
+    // Proves Feature B: RegisterStep().On<TRequest>() derives the message name from the request type (its
     // RequestName), so there is no magic string, and it hands the caller a handler that is already typed to
     // TRequest - ctx.Request is IMessagePre/PostContext<TRequest> without restating the type on Handler(...).
     public sealed class TypedMessageOnRequestTests
@@ -41,7 +41,7 @@ namespace Vela.Tests
             public PostProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().On<CalculateAccountScoreRequest>().PostOperation().Sync().Handler(OnScore);
+                => RegisterStep().On<CalculateAccountScoreRequest>().PostOperation().Sync().Handle(OnScore);
 
             // No type argument on Handler: ctx.Request is typed to CalculateAccountScoreRequest already.
             private void OnScore(IMessagePostContext<CalculateAccountScoreRequest> ctx)
@@ -58,7 +58,7 @@ namespace Vela.Tests
             public PreProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().On<CalculateAccountScoreRequest>().PreOperation().Sync().Handler(OnScore);
+                => RegisterStep().On<CalculateAccountScoreRequest>().PreOperation().Sync().Handle(OnScore);
 
             private void OnScore(IMessagePreContext<CalculateAccountScoreRequest> ctx)
                 => CapturedWeight = ctx.Request.Weight;

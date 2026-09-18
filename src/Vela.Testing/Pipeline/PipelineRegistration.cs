@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
 using Microsoft.Xrm.Sdk;
-using Vela.StepBuilder;
+using Vela.Steps;
 
 namespace Vela.Testing
 {

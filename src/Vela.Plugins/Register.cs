@@ -1,5 +1,4 @@
 using Vela.CustomApi;
-using Vela.StepBuilder;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela;
@@ -9,17 +8,6 @@ namespace Vela;
 /// </summary>
 public static class Register
 {
-    /// <summary>
-    /// Starts configuring a plugin step for an early-bound entity.
-    /// </summary>
-    /// <typeparam name="TEntity">The entity type.</typeparam>
-    /// <returns>A fluent step builder.</returns>
-    public static IStepBuilder<TEntity> RegisterPluginStep<TEntity>()
-        where TEntity : Entity
-    {
-        return new StepBuilder<TEntity>();
-    }
-
     /// <summary>
     /// Starts configuring a Custom API definition.
     /// </summary>

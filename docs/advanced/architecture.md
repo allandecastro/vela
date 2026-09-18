@@ -50,7 +50,7 @@ deployed into Dataverse, and matched at runtime to route the call to your handle
 %%{init: {"flowchart": {"subGraphTitleMargin": {"top": 6, "bottom": 18}, "nodeSpacing": 45, "rankSpacing": 50, "padding": 12}}}%%
 flowchart TB
     A["RegisterPluginSteps()"]
-    B["type-state fluent builder<br/>OnUpdate().PostOperation().Mode(..).Filtering(..).Handler(OnX)<br/><i>message → stage → mode → filtering → images</i>"]
+    B["type-state fluent builder<br/>OnUpdate().PostOperation().Sync().FilterOn(..).Handle(OnX)<br/><i>message → stage → mode → filtering → images</i>"]
     C["StepBuilder&lt;TEntity&gt;"]
     SD[["StepDefinition<br/><i>message, stage, mode, filtering, images, keys, config</i>"]]
     A --> B --> C
@@ -69,7 +69,7 @@ flowchart TB
         I["PluginBase → ILocalPluginContext<br/><i>depth guard, DI container, tracing, snapshots</i>"]
         K["EntityPluginBase.ExecuteDataversePlugin(ctx)"]
         L["BuildTypedContext(message, stage, ctx)"]
-        N["I&lt;Message&gt;Context&lt;TEntity&gt; → .Handler(OnX)"]
+        N["I&lt;Message&gt;Context&lt;TEntity&gt; → .Handle(OnX)"]
         G --> I --> K --> L --> N
     end
 
@@ -88,9 +88,9 @@ flowchart TB
 2. **`EntityPluginBase<TEntity>` (the router).** Ties the plugin to one early-bound entity. On first use it runs
    `RegisterPluginSteps()` once, collects the `StepDefinition`s, and caches them (thread-safe, because the sandbox
    reuses one instance concurrently). At runtime it matches the current pipeline execution (message + stage + mode
-   + entity) to exactly one step, then either invokes that step's typed handler or, for a single-step plugin with
-   no handler, calls your `Execute(ctx)` override. Ambiguous or missing handlers fail fast with a clear message.
-3. **`StepBuilder<TEntity>` (the type-state builder).** `RegisterSteps()` returns a fluent chain whose *type* at
+   + entity) to exactly one step, then invokes that step's typed handler. Ambiguous or missing handlers fail fast
+   with a clear message.
+3. **`StepBuilder<TEntity>` (the type-state builder).** `RegisterStep()` returns a fluent chain whose *type* at
    each position only exposes the calls that are legal next: message → stage → mode → (filtering, where required)
    → images. The (message, stage) pair you pick only offers the images that combination actually supports, so an
    invalid image is a compile error, not a runtime surprise. `Build()` produces the immutable `StepDefinition`

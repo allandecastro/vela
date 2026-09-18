@@ -5,7 +5,7 @@ using System.Linq;
 using Microsoft.Xrm.Sdk;
 using Vela.CustomApi;
 using Vela.Manifest;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Xunit;
 
 namespace Vela.Tests;

@@ -273,8 +273,10 @@ public class ProjectScaffolderTests
 
         string? coreProject = FindRepoProject("Vela.Plugins");
         string? testingProject = FindRepoProject("Vela.Testing");
+        string? messagesProject = FindRepoProject("Vela.Messages");
         Assert.True(coreProject is not null, "Could not locate Vela.Plugins.csproj from the test directory.");
         Assert.True(testingProject is not null, "Could not locate Vela.Testing.csproj from the test directory.");
+        Assert.True(messagesProject is not null, "Could not locate Vela.Messages.csproj from the test directory.");
 
         RunInTempDir(temp =>
         {
@@ -291,6 +293,9 @@ public class ProjectScaffolderTests
             File.WriteAllText(Path.Combine(root, "nuget.config"),
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<configuration>\n  <packageSources>\n" +
                 "    <add key=\"local-packages\" value=\"local-packages\" />\n  </packageSources>\n</configuration>\n");
+            // Vela.Plugins depends on the Vela.Messages package, so it must be in the local feed too, otherwise
+            // the generated project's restore cannot resolve it (Vela.Messages 1.0.0 is not on nuget.org).
+            Assert.Equal(0, RunDotnet($"pack \"{messagesProject}\" -c Release -o \"{localFeed}\"", temp));
             Assert.Equal(0, RunDotnet($"pack \"{coreProject}\" -c Release -o \"{localFeed}\"", temp));
             Assert.Equal(0, RunDotnet($"pack \"{testingProject}\" -c Release -o \"{localFeed}\"", temp));
 

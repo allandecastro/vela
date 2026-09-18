@@ -9,7 +9,7 @@ A complete loop from plugin code to a registered, running step, using a solution
 using Vela.Context;
 using Vela.Constants;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Zava.Shared.Models.Generated;
 
 public class AccountPostUpdate : EntityPluginBase<Account>
@@ -18,13 +18,12 @@ public class AccountPostUpdate : EntityPluginBase<Account>
 
     protected override void RegisterPluginSteps()
     {
-        RegisterSteps().OnUpdate()
+        RegisterStep().OnUpdate()
             .PostOperation()
             .Sync()
-            .FilteringAttributes(a => a.Name)   // only fire when Name changes
-            .Handler(OnAccountUpdated)          // stage-typed handler, bound by method group
-            .PreImage()
-                .Attributes(a => a.Name);
+            .FilterOn(a => a.Name)         // only fire when Name changes
+            .WithPreImage(a => a.Name)
+            .Handle(OnAccountUpdated);          // stage-typed handler, bound by method group
     }
 
     private void OnAccountUpdated(IUpdatePostContext<Account> ctx)

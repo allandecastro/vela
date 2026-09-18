@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Vela.StepBuilder;
+namespace Vela.Steps;
 
 /// <summary>
 /// Helpers for working with step definition collections.

@@ -11,7 +11,7 @@ using Vela.Context;
 using Vela.CustomApi;
 using Vela.DI;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Xunit;
 
@@ -26,10 +26,11 @@ public sealed class PluginRuntimeCoverageTests
     private sealed class SampleStepPlugin(string unsecure, string secure) : EntityPluginBase<TestAccount>(unsecure, secure)
     {
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnUpdate);
 
-        protected override void Execute(ILocalPluginContext ctx) { }
+        private void OnUpdate(IUpdatePostContext<TestAccount> ctx) { }
     }
 
     private sealed class NotAPlugin

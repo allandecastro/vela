@@ -1,6 +1,6 @@
 using Vela.Constants;
 
-namespace Vela.StepBuilder;
+namespace Vela.Steps;
 
 /// <summary>
 /// Represents the complete configuration for a plugin step registration.

@@ -4,7 +4,7 @@ using Vela;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 using Vela.Tests.TestSupport;
 using Microsoft.Xrm.Sdk;
@@ -31,7 +31,7 @@ public sealed class MultiStepEntityPluginTests
     }
 
     [Fact]
-    public void EntityPluginBase_UsesExecuteForSingleStep()
+    public void EntityPluginBase_DispatchesToHandler_ForSingleStep()
     {
         SingleStepPlugin plugin = new SingleStepPlugin();
         IServiceProvider provider = PluginContext.For<TestAccount>()
@@ -65,9 +65,9 @@ public sealed class MultiStepEntityPluginTests
     }
 
     [Fact]
-    public void EntityPluginBase_RunsSingleStep_WhenMessageHasNoTarget()
+    public void EntityPluginBase_DispatchesHandler_WhenMessageHasNoTarget()
     {
-        // RetrieveMultiple carries no primary-entity Target; the single-step Execute(ctx) still runs.
+        // RetrieveMultiple carries no primary-entity Target; the step's handler still runs.
         TargetProbePlugin plugin = new TargetProbePlugin();
         IServiceProvider provider = PluginContext.For<TestAccount>()
             .OnMessage(PluginMessages.RetrieveMultiple)
@@ -92,7 +92,7 @@ public sealed class MultiStepEntityPluginTests
             .BuildServiceProvider();
 
         InvalidPluginExecutionException exception = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
-        Assert.Contains("missing Handler", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no handler", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -114,17 +114,17 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(HandleCreate);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(HandleCreate);
 
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(HandleUpdate);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(HandleUpdate);
         }
 
         private void HandleCreate(ILocalPluginContext ctx)
@@ -148,13 +148,14 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnUpdate);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdate(IUpdatePostContext<TestAccount> ctx)
         {
             Executed = true;
         }
@@ -172,12 +173,13 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnDelete()
+            RegisterStep().OnDelete()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous);
+                .Sync()
+                .Handle(OnDelete);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnDelete(IDeletePostContext<TestAccount> ctx)
         {
             Executed = true;
             CapturedId = ctx.GetTargetRef().Id;
@@ -194,12 +196,13 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnRetrieveMultiple()
+            RegisterStep().OnRetrieveMultiple()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous);
+                .Sync()
+                .Handle(OnRetrieveMultiple);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnRetrieveMultiple(IRetrieveMultiplePostContext<TestAccount> ctx)
         {
             Executed = true;
         }
@@ -213,15 +216,15 @@ public sealed class MultiStepEntityPluginTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name);
 
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name);
         }
     }
 
@@ -233,14 +236,10 @@ public sealed class MultiStepEntityPluginTests
 
         public void TryRegisterOutside()
         {
-            RegisterSteps();
+            RegisterStep();
         }
 
         protected override void RegisterPluginSteps()
-        {
-        }
-
-        protected override void Execute(ILocalPluginContext ctx)
         {
         }
     }

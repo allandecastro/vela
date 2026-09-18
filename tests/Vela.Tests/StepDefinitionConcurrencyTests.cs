@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Xunit;
 
@@ -61,10 +61,10 @@ public sealed class StepDefinitionConcurrencyTests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name).Handler(OnCreate);
-            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name).Handler(OnUpdate);
+            RegisterStep().OnCreate().PostOperation().Sync()
+                .FilterOn(a => a.Name).Handle(OnCreate);
+            RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Name).Handle(OnUpdate);
         }
 
         private void OnCreate(ILocalPluginContext ctx)

@@ -6,7 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using Vela.Constants;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
 

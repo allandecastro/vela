@@ -4,7 +4,7 @@ using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Xunit;
 
 namespace Vela.Testing.Tests

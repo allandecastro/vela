@@ -7,7 +7,7 @@ using Moq;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Xunit;
 
 namespace Vela.Tests
@@ -50,13 +50,13 @@ namespace Vela.Tests
         [MemberData(nameof(ModelledMessages))]
         public void Modelled_message_has_every_parallel_list_entry(string message)
         {
-            // 1. Builder entry On{Msg}() on the public IStepBuilder<TEntity>.
+            // 1. Builder entry On{Msg}() on the public IStepTrigger<TEntity>.
             Assert.True(
-                typeof(IStepBuilder<>).GetMethod($"On{message}") != null,
-                $"IStepBuilder<TEntity> is missing On{message}().");
+                typeof(Vela.Steps.IStepTrigger<>).GetMethod($"On{message}") != null,
+                $"IStepTrigger<TEntity> is missing On{message}().");
 
-            // 2. Step-stage interface I{Msg}StepStage<TEntity>.
-            AssertTypeExists($"Vela.StepBuilder.I{message}StepStage`1");
+            // 2. Step-stage interface I{Msg}Stages<TEntity>.
+            AssertTypeExists($"Vela.Steps.I{message}Stages`1");
 
             // 3. Pre/Post context interfaces and their runtime classes.
             AssertTypeExists($"Vela.Context.I{message}PreContext`1");
@@ -78,8 +78,8 @@ namespace Vela.Tests
             foreach (string message in ConstantOnly)
             {
                 Assert.True(
-                    typeof(IStepBuilder<>).GetMethod($"On{message}") == null,
-                    $"'{message}' is listed as constant-only but IStepBuilder now models On{message}(); remove it from ConstantOnly.");
+                    typeof(Vela.Steps.IStepTrigger<>).GetMethod($"On{message}") == null,
+                    $"'{message}' is listed as constant-only but IStepTrigger now models On{message}(); remove it from ConstantOnly.");
             }
         }
 

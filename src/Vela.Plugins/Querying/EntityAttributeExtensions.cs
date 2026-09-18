@@ -99,5 +99,5 @@ public static class EntityAttributeExtensions
 
     private static string GetAttributeLogicalName<TEntity>(Expression<Func<TEntity, object?>> expression)
         where TEntity : Entity
-        => Vela.StepBuilder.ExpressionHelper.GetAttributeLogicalName(expression);
+        => Vela.Steps.ExpressionHelper.GetAttributeLogicalName(expression);
 }

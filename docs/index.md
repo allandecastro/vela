@@ -25,9 +25,9 @@ Write a step-registered plugin with a strongly-typed handler, then preview and a
 public sealed class AccountValidator : EntityPluginBase<Account>
 {
     protected override void RegisterPluginSteps() =>
-        RegisterSteps().OnUpdate().PreOperation().Sync()
-            .FilteringAttributes(a => a.Name)
-            .Handler(OnUpdating);
+        RegisterStep().OnUpdate().PreOperation().Sync()
+            .FilterOn(a => a.Name)
+            .Handle(OnUpdating);
 
     private void OnUpdating(IUpdatePreContext<Account> ctx)
     {

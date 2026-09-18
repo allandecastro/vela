@@ -90,7 +90,7 @@ extension** per applicable entity (from the message's `sdkmessagefilter` `primar
 **compile-time entity applicability**: a generated `OnMyMessage()` only compiles inside the `EntityPluginBase<T>`
 for the table its `sdkmessagefilter` targets, exactly like the curated `On<Message>()` methods (below). A global
 message (`primaryobjecttypecode` `none`) or one applying to more than eight entities emits a single generic
-`On<Message><TEntity>()` instead. The requests also pair with the permissive `OnMessage(...).Handler<TRequest>()`
+`On<Message><TEntity>()` instead. The requests also pair with the permissive `OnMessage(...).Handle<TRequest>()`
 and with `On<TRequest>()` directly.
 
 ### Using a standard message (`QualifyLead`)
@@ -103,7 +103,7 @@ and the handler receives the typed `QualifyLeadRequest`/`QualifyLeadResponse`.
 public sealed class RouteQualifiedLead : EntityPluginBase<Lead>
 {
     protected override void RegisterPluginSteps() =>
-        RegisterSteps().OnQualifyLead().PostOperation().Sync().Handler(OnQualified);
+        RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnQualified);
 
     private void OnQualified(IQualifyLeadPostContext<Lead> ctx)
     {

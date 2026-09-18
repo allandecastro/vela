@@ -3,7 +3,7 @@ using Vela.Constants;
 using Vela.Context;
 using Vela.Messages;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 using Vela.Tests.TestSupport;
 using Xunit;
@@ -20,14 +20,14 @@ namespace Vela.Tests
     // top-level static class, exactly as the generator emits `{UniqueName}StepExtensions`.
     internal static class RecalcStepExtensions
     {
-        public static IAsyncOnlyTypedMessageStepStage<TestAccount, RecalcRequest> OnRecalc(this IStepBuilder<TestAccount> builder)
+        public static Vela.Steps.IAsyncOnlyTypedStages<TestAccount, RecalcRequest> OnRecalc(this Vela.Steps.IStepTrigger<TestAccount> builder)
             => builder.OnAsyncOnly<RecalcRequest>();
     }
 
     // Phase 3c: a Custom API whose allowedcustomprocessingsteptype is AsyncOnly generates an On<Message>() step
-    // extension that delegates to IStepBuilder<T>.OnAsyncOnly<TRequest>() and returns an async-only stage. This
+    // extension that delegates to IStepTrigger<T>.OnAsyncOnly<TRequest>() and returns an async-only stage. This
     // proves the framework plumbing end to end: the extension shape the generator emits compiles, registers, and
-    // dispatches; and IAsyncOnlyModeSelector exposes only Async() (the compile-time guarantee that .Sync() cannot
+    // dispatches; and IAsyncMode exposes only Async() (the compile-time guarantee that .Sync() cannot
     // be written on an async-only Custom API).
     public sealed class CustomApiAsyncOnlyStepTests
     {
@@ -38,7 +38,7 @@ namespace Vela.Tests
             public RecalcProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnRecalc().PostOperation().Async().Handler(OnRecalc);
+                => RegisterStep().OnRecalc().PostOperation().Async().Handle(OnRecalc);
 
             private void OnRecalc(IMessagePostContext<RecalcRequest> ctx) => Ran = true;
         }
@@ -61,7 +61,7 @@ namespace Vela.Tests
         [Fact]
         public void AsyncOnlyModeSelector_exposes_only_Async()
         {
-            var methods = typeof(IAsyncOnlyModeSelector<>).GetMethods().Select(m => m.Name).ToArray();
+            var methods = typeof(Vela.Steps.IAsyncMode<>).GetMethods().Select(m => m.Name).ToArray();
 
             Assert.Contains("Async", methods);
             Assert.DoesNotContain("Sync", methods);

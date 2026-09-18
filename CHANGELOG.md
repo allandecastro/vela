@@ -28,15 +28,46 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 #### Added
 
+- **Redesigned plugin step builder: `RegisterStep()`.** A guided, type-safe fluent chain -
+  `RegisterStep().On<Message>().<Stage>().<Sync()|Async()>().FilterOn(...).With*(...).Handle(handler)` - replaces
+  the previous `RegisterSteps()` builder. The message picks the stage set, the stage constrains the mode (async is
+  PostOperation-only) and the available images, and the chain must end with `.Handle(...)`. It also covers the
+  permissive `OnMessage("...")` path, the typed `On<TRequest>()` path and the async-only `OnAsyncOnly<TRequest>()`
+  path (used by the generated Custom API step extensions). Registration knobs are `With*` modifiers (`WithPreImage`
+  / `WithPostImage` / `WithDescription` / `WithExecutionOrder` / `WithStepKey` / `WithImpersonation` /
+  `WithSupportedDeployment` / `WithUnsecureConfig` / `WithSecureConfig`) plus `Disabled()`.
+- **Step-completion analyzer (`VELA002`), shipped in the `Vela.Plugins` package.** A Roslyn analyzer that reports
+  an error when a `RegisterStep()` chain does not end with `.Handle(...)`, so an unfinished step fails in the
+  editor and at build.
 - **Column-selector analyzer (`VELA001`), shipped in the `Vela.Plugins` package.** A Roslyn analyzer that reports
-  an error when a Vela column selector (`Expression<Func<TEntity, object>>`, used by `FilteringAttributes`, pre/post
-  image `Attributes(...)`, typed queries and the change/attribute helpers) targets a member declared on
+  an error when a Vela column selector (`Expression<Func<TEntity, object>>`, used by `FilterOn`, the pre/post image
+  selectors, typed queries and the change/attribute helpers) targets a member declared on
   `Microsoft.Xrm.Sdk.Entity` (for example `LogicalName`, `Id`, `RelatedEntities`) rather than a generated column
   property. It surfaces in the editor and fails the build. It is automatic (no reference or configuration needed)
   and does not touch plain LINQ `Func<...>` lambdas.
 
+#### Changed
+
+- **BREAKING: filtering attributes are declared with `FilterOn(...)` (was `FilteringAttributes(...)`).** It is
+  named `FilterOn`, not a `With*` modifier, because it is quasi-mandatory on Create / Update / CreateMultiple /
+  UpdateMultiple, unlike the optional `With*` image and settings modifiers.
+- **BREAKING: every step must bind a handler with `.Handle(...)`.** A single-step plugin no longer overrides
+  `Execute(ctx)`; it binds a typed handler just like a multi-step plugin. This is enforced at registration and by
+  the `VELA002` analyzer.
+- **BREAKING: the step types moved to the `Vela.Steps` namespace.** `StepDefinition`, `ImageDefinition`,
+  `ExecutionMode`, `ImpersonationSource`, `SupportedDeployment` (and the builder surface) now live in
+  `Vela.Steps` instead of `Vela.StepBuilder`. Change `using Vela.StepBuilder;` to `using Vela.Steps;`.
+
 #### Removed
 
+- **BREAKING: the legacy `RegisterSteps()` builder is removed.** Use
+  `RegisterStep().On<Message>()...Handle(...)`. The old fluent surface (`IStepBuilder<TEntity>`, the per-message
+  stage interfaces, `IModeSelector` / `IFilteringSelector` / `IStepConfig`, and the permissive / typed-message
+  interfaces) is gone.
+- **BREAKING: `Register.RegisterPluginStep<TEntity>()` is removed.** Register steps from a plugin's
+  `RegisterPluginSteps()` with `RegisterStep()`.
+- **BREAKING: the `EntityPluginBase<TEntity>.Execute(ILocalPluginContext)` fallback is removed.** Bind a typed
+  handler with `.Handle(...)` instead; a step with no handler now fails fast.
 - **BREAKING: `OnWhoAmI()` is gone.** `WhoAmI` is a global, entity-less message: it cannot be registered as an
   entity-bound plugin step (the platform rejects the entity-filtered step), so the typed `OnWhoAmI()` builder
   method and its context are removed to stop offering a registration that can never work. `WhoAmI` stays a message

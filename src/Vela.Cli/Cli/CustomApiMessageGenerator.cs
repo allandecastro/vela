@@ -138,7 +138,7 @@ public static class CustomApiMessageGenerator
 
     // Phase 3c: emit a registrability-gated On<Message>() step extension for the Custom API (see
     // .context/phase3c-customapi-registrability.md). A bound API (boundentitylogicalname set) constrains the
-    // extension to IStepBuilder<BoundEntity> for compile-time entity applicability; a global one emits a generic
+    // extension to Vela.Steps.IStepTrigger<BoundEntity> for compile-time entity applicability; a global one emits a generic
     // On<Message><TEntity>(). An AsyncOnly API (allowedcustomprocessingsteptype == 1) returns an async-only stage
     // (no .Sync()); a None (0) or private API emits no extension at all (only a comment), so the blessed path does
     // not compile - the generic On<XxxRequest>() escape hatch stays for explicit use, and Dataverse rejects an
@@ -171,8 +171,8 @@ public static class CustomApiMessageGenerator
 
         bool asyncOnly = message.AllowedStepType == 1;
         string stageType = asyncOnly
-            ? $"Vela.StepBuilder.IAsyncOnlyTypedMessageStepStage"
-            : $"Vela.StepBuilder.ITypedMessageStepStage";
+            ? $"Vela.Steps.IAsyncOnlyTypedStages"
+            : $"Vela.Steps.ITypedStages";
         string entry = asyncOnly ? $"OnAsyncOnly<{request}>" : $"On<{request}>";
         string method = $"On{methodBase}";
         bool bound = !string.IsNullOrWhiteSpace(message.BoundEntityLogicalName);
@@ -188,11 +188,11 @@ public static class CustomApiMessageGenerator
             string pascal = entityTypeNames != null && entityTypeNames.TryGetValue(logical, out string? typeName) && !string.IsNullOrEmpty(typeName)
                 ? typeName!
                 : PascalCase(logical);
-            sb.AppendLine($"        public static {stageType}<{pascal}, {request}> {method}(this Vela.StepBuilder.IStepBuilder<{pascal}> builder) => builder.{entry}();");
+            sb.AppendLine($"        public static {stageType}<{pascal}, {request}> {method}(this Vela.Steps.IStepTrigger<{pascal}> builder) => builder.{entry}();");
         }
         else
         {
-            sb.AppendLine($"        public static {stageType}<TEntity, {request}> {method}<TEntity>(this Vela.StepBuilder.IStepBuilder<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.{entry}();");
+            sb.AppendLine($"        public static {stageType}<TEntity, {request}> {method}<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.{entry}();");
         }
 
         sb.AppendLine("    }");

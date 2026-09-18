@@ -5,7 +5,7 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
 using Vela.Constants;
 using Vela.Context;
-using Vela.StepBuilder;
+using Vela.Steps;
 
 namespace Vela.Testing
 {

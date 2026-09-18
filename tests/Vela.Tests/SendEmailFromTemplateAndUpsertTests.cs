@@ -3,7 +3,7 @@ using Vela.Constants;
 using Vela.Context;
 using Vela.Messages;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 using Vela.Tests.TestSupport;
 using Xunit;
@@ -22,7 +22,7 @@ namespace Vela.Tests
             public SefProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnSendEmailFromTemplate().PostOperation().Sync().Handler(OnSent);
+                => RegisterStep().OnSendEmailFromTemplate().PostOperation().Sync().Handle(OnSent);
 
             private void OnSent(ISendEmailFromTemplatePostContext<TestAccount> ctx)
             {
@@ -38,7 +38,7 @@ namespace Vela.Tests
             public UpsertProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().On<UpsertRequest<TestAccount>>().PostOperation().Sync().Handler(OnUpsert);
+                => RegisterStep().On<UpsertRequest<TestAccount>>().PostOperation().Sync().Handle(OnUpsert);
 
             private void OnUpsert(IMessagePostContext<UpsertRequest<TestAccount>> ctx)
                 => TargetName = ctx.Request.Target?.Name;   // early-bound TEntity, message "Upsert" from RequestName

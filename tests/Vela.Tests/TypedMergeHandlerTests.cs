@@ -3,7 +3,7 @@ using Vela.Constants;
 using Vela.Context;
 using Vela.DI;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 using Vela.Tests.TestSupport;
 using Microsoft.Xrm.Sdk;
@@ -24,7 +24,7 @@ namespace Vela.Tests
 
             protected override void RegisterPluginSteps()
             {
-                RegisterSteps().OnMerge().PostOperation().Mode(ExecutionMode.Synchronous).Handler(OnMerged);
+                RegisterStep().OnMerge().PostOperation().Sync().Handle(OnMerged);
             }
 
             private void OnMerged(IMergePostContext<TestAccount> ctx)
@@ -41,8 +41,8 @@ namespace Vela.Tests
 
             protected override void RegisterPluginSteps()
             {
-                RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous)
-                    .FilteringAttributes(a => a.Name).Handler(OnUpdated);
+                RegisterStep().OnUpdate().PostOperation().Sync()
+                    .FilterOn(a => a.Name).Handle(OnUpdated);
             }
 
             private void OnUpdated(IUpdatePostContext<TestAccount> ctx)
@@ -60,7 +60,7 @@ namespace Vela.Tests
             public UpdatePreProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnUpdate().PreOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdating);
+                => RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdating);
 
             private void OnUpdating(IUpdatePreContext<TestAccount> ctx)
                 => CapturedName = ctx.Request.Target.Name;   // Request-side data, available in pre
@@ -129,7 +129,7 @@ namespace Vela.Tests
                 => services.AddScoped<IGreeter>(_ => new Greeter());
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreated);
+                => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreated);
 
             private void OnCreated(ICreatePostContext<TestAccount> ctx)
                 => Greeted = ctx.GetRequiredService<IGreeter>().Greet();

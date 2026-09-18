@@ -2,7 +2,7 @@ using System;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 using Vela.Tests.TestSupport;
 using Microsoft.Xrm.Sdk;
@@ -43,7 +43,7 @@ namespace Vela.Tests
             public PostProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnMessage(CustomMessage).PostOperation().Sync().Handler<DoThingRequest>(OnDoThing);
+                => RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle<DoThingRequest>(OnDoThing);
 
             private void OnDoThing(IMessagePostContext<DoThingRequest> ctx)
             {
@@ -59,7 +59,7 @@ namespace Vela.Tests
             public PreProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnMessage(CustomMessage).PreOperation().Sync().Handler<DoThingRequest>(OnDoThing);
+                => RegisterStep().OnMessage(CustomMessage).PreOperation().Sync().Handle<DoThingRequest>(OnDoThing);
 
             private void OnDoThing(IMessagePreContext<DoThingRequest> ctx)
                 => CapturedPayload = ctx.Request.Payload;   // typed, inferred, Request-side data in pre
@@ -78,7 +78,7 @@ namespace Vela.Tests
             public TypedTargetPostProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnMessage(CustomMessage).PostOperation().Sync().Handler<DoThingRequest>(OnDoThing);
+                => RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle<DoThingRequest>(OnDoThing);
 
             private void OnDoThing(IMessagePostContext<DoThingRequest, TestAccount> ctx)
             {
@@ -97,7 +97,7 @@ namespace Vela.Tests
             public TypedTargetPreProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterSteps().OnMessage(CustomMessage).PreOperation().Sync().Handler<DoThingRequest>(OnDoThing);
+                => RegisterStep().OnMessage(CustomMessage).PreOperation().Sync().Handle<DoThingRequest>(OnDoThing);
 
             private void OnDoThing(IMessagePreContext<DoThingRequest, TestAccount> ctx)
             {

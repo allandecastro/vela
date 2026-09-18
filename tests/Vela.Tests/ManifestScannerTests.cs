@@ -7,7 +7,7 @@ using Vela.Constants;
 using Vela.CustomApi;
 using Vela.Manifest;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Microsoft.Xrm.Sdk;
 using Xunit;
@@ -16,14 +16,20 @@ namespace Vela.Tests;
 
 public sealed class ManifestScannerTests
 {
+    // The fluent transitions are Vela.Steps interface members, so a step is built by driving a StepBuilder<T>
+    // through IStepTrigger<T> and then calling Build() on the kept reference.
+    private static IStepTrigger<TestAccount> Trigger(StepBuilder<TestAccount> builder) => builder;
+
     [Fact]
     public void RegisterPlugin_UsesTypedMessageName()
     {
-        StepDefinition definition = Register.RegisterPluginStep<TestAccount>()
+        StepBuilder<TestAccount> builder = new StepBuilder<TestAccount>();
+        Trigger(builder)
             .OnMessage<ZavaAccountUpdateMessage>()
             .PostOperation()
-            .Mode(ExecutionMode.Synchronous)
-            .Build();
+            .Sync();
+
+        StepDefinition definition = builder.Build();
 
         Assert.Equal("zava_account_update", definition.Message);
     }
@@ -31,12 +37,14 @@ public sealed class ManifestScannerTests
     [Fact]
     public void RegisterPluginStep_IsEnabledByDefault()
     {
-        StepDefinition definition = Register.RegisterPluginStep<TestAccount>()
+        StepBuilder<TestAccount> builder = new StepBuilder<TestAccount>();
+        Trigger(builder)
             .OnUpdate()
             .PostOperation()
-            .Mode(ExecutionMode.Synchronous)
-            .FilteringAttributes(a => a.Name)
-            .Build();
+            .Sync()
+            .FilterOn(a => a.Name);
+
+        StepDefinition definition = builder.Build();
 
         Assert.True(definition.Enabled);
         Assert.Equal(string.Empty, definition.UnsecureConfig);
@@ -46,15 +54,17 @@ public sealed class ManifestScannerTests
     [Fact]
     public void RegisterPluginStep_DisabledAndConfiguration_AreCaptured()
     {
-        StepDefinition definition = Register.RegisterPluginStep<TestAccount>()
+        StepBuilder<TestAccount> builder = new StepBuilder<TestAccount>();
+        Trigger(builder)
             .OnUpdate()
             .PostOperation()
-            .Mode(ExecutionMode.Synchronous)
-            .FilteringAttributes(a => a.Name)
+            .Sync()
+            .FilterOn(a => a.Name)
             .Disabled()
-            .UnsecureConfig("u-cfg")
-            .SecureConfig("s-cfg")
-            .Build();
+            .WithUnsecureConfig("u-cfg")
+            .WithSecureConfig("s-cfg");
+
+        StepDefinition definition = builder.Build();
 
         Assert.False(definition.Enabled);
         Assert.Equal("u-cfg", definition.UnsecureConfig);
@@ -168,13 +178,14 @@ public sealed class ManifestScannerTests
     {
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnUpdate);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdate(IUpdatePostContext<TestAccount> ctx)
         {
         }
     }
@@ -183,17 +194,17 @@ public sealed class ManifestScannerTests
     {
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(OnCreate);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnCreate);
 
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(OnUpdate);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnUpdate);
         }
 
         private void OnCreate(ILocalPluginContext ctx)
@@ -330,10 +341,6 @@ public sealed class ManifestScannerTests
         protected override void RegisterPluginSteps()
         {
             throw new InvalidOperationException("Intentional test failure.");
-        }
-
-        protected override void Execute(ILocalPluginContext ctx)
-        {
         }
     }
 }

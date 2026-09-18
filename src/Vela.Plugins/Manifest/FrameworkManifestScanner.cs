@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Vela.CustomApi;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 
 namespace Vela.Manifest;
 

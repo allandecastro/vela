@@ -3,7 +3,7 @@ using Microsoft.Xrm.Sdk;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing;
 using Vela.Tests.TestSupport;
 using Xunit;
@@ -21,8 +21,8 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public TestAccount? Seen { get; private set; }
         public bool Ran { get; private set; }
         protected override void RegisterPluginSteps()
-            => RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name);
-        protected override void Execute(ILocalPluginContext ctx) { Seen = ctx.GetTarget<TestAccount>(); Ran = true; }
+            => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdate);
+        private void OnUpdate(IUpdatePostContext<TestAccount> ctx) { Seen = ctx.GetTarget<TestAccount>(); Ran = true; }
     }
 
     // Two handler-backed steps (distinct triggers) so an unmatched message hits the "multiple steps" guard.
@@ -31,32 +31,32 @@ public sealed class EntityPluginBaseRuntimeCoverageTests
         public TwoHandlerSteps() : this(string.Empty, string.Empty) { }
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate().PreOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(HandleA);
-            RegisterSteps().OnUpdate().PostOperation().Mode(ExecutionMode.Synchronous).FilteringAttributes(a => a.Name).Handler(HandleB);
+            RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(a => a.Name).Handle(HandleA);
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(HandleB);
         }
         public void HandleA(ILocalPluginContext ctx) { }
         public void HandleB(ILocalPluginContext ctx) { }
     }
 
     [Fact]
-    public void Single_step_falls_back_to_Execute_when_no_step_matches_the_message()
+    public void No_matching_step_throws()
     {
         Probe plugin = new Probe();
-        // The step is on Update; run a Create context -> 0 matches -> Execute(ctx) still runs.
+        // The step is on Update; run a Create context -> 0 matches -> a clear error (no Execute fallback).
         IServiceProvider provider = PluginContext.For<TestAccount>()
             .OnCreate().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
             .WithTarget(new TestAccount { Name = "Acme" })
             .BuildServiceProvider();
 
-        plugin.Execute(provider);
-        Assert.True(plugin.Ran);
+        Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
+        Assert.False(plugin.Ran);
     }
 
     [Fact]
-    public void Multiple_steps_with_no_matching_step_raise_the_multi_step_guard()
+    public void No_matching_step_throws_even_with_multiple_steps()
     {
         TwoHandlerSteps plugin = new TwoHandlerSteps();
-        // Both steps are on Update; a Delete context matches neither, leaving >1 definitions unmatched.
+        // Both steps are on Update; a Delete context matches neither.
         IServiceProvider provider = PluginContext.For<TestAccount>()
             .OnDelete().Stage(PluginStages.PostOperation).Mode(ExecutionMode.Synchronous)
             .WithInputParameter("Target", new EntityReference("account", Guid.NewGuid()))

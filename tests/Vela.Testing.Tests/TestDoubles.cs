@@ -6,7 +6,7 @@ using Vela.Constants;
 using Vela.Context;
 using Vela.CustomApi;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 
 namespace Vela.Testing.Tests
 {
@@ -74,13 +74,14 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnUpdated);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
         {
             FakeAccount target = ctx.GetTarget<FakeAccount>();
             LastName = target.Name;
@@ -98,13 +99,14 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnCreated);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnCreated(ICreatePostContext<FakeAccount> ctx)
         {
             ctx.SystemService.Create(new Entity("task") { ["subject"] = ctx.Tag ?? "<no-tag>" });
         }
@@ -123,14 +125,14 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(OnCreated);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnCreated);
         }
 
-        private void OnCreated(ILocalPluginContext ctx)
+        private void OnCreated(ICreatePostContext<FakeAccount> ctx)
         {
             FakeAccount target = ctx.GetTarget<FakeAccount>();
             Handled = target.Name;
@@ -244,13 +246,14 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnCreated);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnCreated(ICreatePostContext<FakeAccount> ctx)
         {
             FakeAccount target = ctx.GetTarget<FakeAccount>();
             ctx.Trace("Provisioning account {0}", target.Name);

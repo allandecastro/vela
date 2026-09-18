@@ -1,9 +1,10 @@
 using System;
 using System.Reflection;
 using Vela.Constants;
+using Vela.Context;
 using Vela.CustomApi;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Xunit;
 
@@ -27,11 +28,14 @@ namespace Vela.Tests
 
             protected override void RegisterPluginSteps()
             {
-                RegisterSteps().OnUpdate()
+                RegisterStep().OnUpdate()
                     .PostOperation()
-                    .Mode(ExecutionMode.Synchronous)
-                    .FilteringAttributes(a => a.Name);
+                    .Sync()
+                    .FilterOn(a => a.Name)
+                    .Handle(OnUpdate);
             }
+
+            private void OnUpdate(IUpdatePostContext<TestAccount> ctx) { }
         }
 
         private sealed class ContractSampleApi : CustomApiBase

@@ -4,7 +4,7 @@ using System.Reflection;
 using Vela.Manifest;
 using Vela.Plugin;
 
-namespace Vela.StepBuilder
+namespace Vela.Steps
 {
     /// <summary>
     /// Reads step definitions from plugin assemblies for registration manifest generation.

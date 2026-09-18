@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Vela.Context;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
 using System.Security.Cryptography;
@@ -101,14 +101,17 @@ namespace Vela.Plugin
                                 "Merge them into a single step (combine the filtering attributes) or use a different stage/mode.");
                         }
                     }
+                }
 
-                    for (int i = 0; i < definitions.Count; i++)
+                // Every step must bind a handler with .Handle(...). There is no Execute(ctx) fallback, so a step
+                // with no handler has nothing to run; fail fast (the VELA002 analyzer catches this at compile time).
+                foreach (StepDefinition definition in definitions)
+                {
+                    if (string.IsNullOrWhiteSpace(definition.HandlerMethodName))
                     {
-                        if (string.IsNullOrWhiteSpace(definitions[i].HandlerMethodName))
-                        {
-                            throw new InvalidPluginExecutionException(
-                                $"Plugin '{GetType().FullName}' step at index {i} is missing Handler(...).");
-                        }
+                        throw new InvalidPluginExecutionException(
+                            $"Plugin '{GetType().FullName}' has a step on message '{definition.Message}' with no handler. " +
+                            "End the RegisterStep() chain with .Handle(...).");
                     }
                 }
 
@@ -127,12 +130,14 @@ namespace Vela.Plugin
         }
 
         /// <summary>
-        /// Fluent step registration entry point for <see cref="RegisterPluginSteps"/>.
+        /// Registers one step with the fluent builder:
+        /// <c>RegisterStep().On&lt;Message&gt;().&lt;Stage&gt;().&lt;Mode&gt;().With...().Handle(handler)</c>.
+        /// Call once per step inside <see cref="RegisterPluginSteps"/>.
         /// </summary>
-        protected IStepBuilder<TEntity> RegisterSteps()
+        protected Vela.Steps.IStepTrigger<TEntity> RegisterStep()
         {
             return _steps ?? throw new InvalidOperationException(
-                $"Plugin '{GetType().FullName}' can only call RegisterSteps() inside RegisterPluginSteps().");
+                $"Plugin '{GetType().FullName}' can only call RegisterStep() inside RegisterPluginSteps().");
         }
 
         /// <summary>
@@ -143,21 +148,9 @@ namespace Vela.Plugin
         }
 
         /// <summary>
-        /// Execute the plugin business logic for a single-step plugin. The message-specific request and
-        /// response are available through <paramref name="ctx"/> (for example <c>ctx.GetTarget&lt;TEntity&gt;()</c>
-        /// or <c>ctx.GetRequest&lt;UpdateRequest&gt;()</c>). Multi-step plugins bind a typed handler per step
-        /// instead of overriding this method.
-        /// </summary>
-        /// <param name="ctx">The local plugin context.</param>
-        protected virtual void Execute(ILocalPluginContext ctx)
-        {
-            throw new InvalidPluginExecutionException(
-                $"Plugin '{GetType().FullName}' must override Execute(ILocalPluginContext) or configure handlers in RegisterPluginSteps().");
-        }
-
-        /// <summary>
-        /// Routes the current pipeline execution to the matching typed step handler, or to the single-step
-        /// <see cref="Execute(ILocalPluginContext)"/> override when no handler is bound.
+        /// Routes the current pipeline execution to the matching step's typed handler. Every step binds a
+        /// handler with <c>.Handle(...)</c> (enforced in <see cref="GetStepDefinitions"/>), so there is no
+        /// untyped <c>Execute(ctx)</c> fallback.
         /// </summary>
         /// <param name="ctx">Local plugin context.</param>
         protected sealed override void ExecuteDataversePlugin(ILocalPluginContext ctx)
@@ -165,29 +158,23 @@ namespace Vela.Plugin
             StepDefinition[] definitions = GetStepDefinitions();
             StepDefinition? matchedDefinition = ResolveSingleMatchingStep(ctx, definitions);
 
-            if (matchedDefinition != null && !string.IsNullOrWhiteSpace(matchedDefinition.HandlerMethodName))
-            {
-                // Every handler takes a single strongly-typed argument. Resolution order matters when a typed
-                // request's name collides with a modelled message (e.g. On<MergeRequest>() resolves to "Merge"):
-                // that handler's parameter is IMessagePre/PostContext<TRequest>, which the modelled
-                // MergePreContext<TEntity> does NOT implement, so passing the modelled context throws. The generic
-                // message context (built from the handler's own parameter type) is therefore tried first; it
-                // returns null for a modelled handler (e.g. IMergeContext<TEntity>) and for the untyped permissive
-                // path, falling back to the per-message modelled context, then to the plain ILocalPluginContext.
-                object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
-                    ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
-                    ?? ctx;
-                InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
-                return;
-            }
-
-            if (definitions.Length > 1)
+            if (matchedDefinition == null)
             {
                 throw new InvalidPluginExecutionException(
-                    $"Plugin '{GetType().FullName}' has multiple steps and requires a handler for each matching step.");
+                    $"Plugin '{GetType().FullName}' has no registered step matching message '{ctx.MessageName}'.");
             }
 
-            Execute(ctx);
+            // Every handler takes a single strongly-typed argument. Resolution order matters when a typed
+            // request's name collides with a modelled message (e.g. On<MergeRequest>() resolves to "Merge"):
+            // that handler's parameter is IMessagePre/PostContext<TRequest>, which the modelled
+            // MergePreContext<TEntity> does NOT implement, so passing the modelled context throws. The generic
+            // message context (built from the handler's own parameter type) is therefore tried first; it
+            // returns null for a modelled handler (e.g. IMergeContext<TEntity>) and for the untyped permissive
+            // path, falling back to the per-message modelled context, then to the plain ILocalPluginContext.
+            object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
+                ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
+                ?? ctx;
+            InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
         }
 
         private static string GenerateAutoStepKey(StepDefinition definition)

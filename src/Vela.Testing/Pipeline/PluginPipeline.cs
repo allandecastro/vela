@@ -9,7 +9,7 @@ using Microsoft.Xrm.Sdk.Messages;
 using Vela.Constants;
 using Vela.CustomApi;
 using Vela.Manifest;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Testing.Security;
 
 namespace Vela.Testing

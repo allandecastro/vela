@@ -7,7 +7,7 @@ using Vela.Constants;
 using Vela.Context;
 using Vela.Querying;
 using Vela.Retry;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Xunit;
 
@@ -74,7 +74,6 @@ public sealed class SmallClassesCoverageTests
     [Fact]
     public void Register_entry_points()
     {
-        Assert.NotNull(Register.RegisterPluginStep<TestAccount>());
         Assert.NotNull(Register.RegisterCustomApi());
     }
 

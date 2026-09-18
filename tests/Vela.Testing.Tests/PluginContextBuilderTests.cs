@@ -4,7 +4,7 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Constants;
 using Vela.Context;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Xunit;
 
 namespace Vela.Testing.Tests

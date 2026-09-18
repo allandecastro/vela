@@ -44,7 +44,7 @@ vela add --interactive
 - **Filtering attributes on a `Create`/`Update` plugin** (also `CreateMultiple`/`UpdateMultiple`): these
   messages require at least one filtering attribute. Pass `--filtering-attributes <Col1,Col2>` with the
   early-bound property name(s) that should trigger the step (for example `--filtering-attributes Name,Telephone1`
-  renders `FilteringAttributes(e => e.Name, e => e.Telephone1)`). If you omit it, `add` auto-selects a sensible
+  renders `FilterOn(e => e.Name, e => e.Telephone1)`). If you omit it, `add` auto-selects a sensible
   default column from the entity's generated early-bound model (its primary-name column) and marks it with an
   `auto-selected` comment so you can adjust it. The generated file always compiles and applies; if no column can
   be inferred (no generated model found), `add` fails with a clear message asking for `--filtering-attributes`
@@ -58,11 +58,11 @@ vela add --interactive
   `PluginContext.For<…>()…Execute(…)`. Run it inside the test project (its `RootNamespace` must end in `.Tests`);
   use `--kind customapi` for a Custom API test (and omit `--entity` for a global one).
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
-  `RegisterSteps().On<Message>()…Handler(Handle<Message>)` registration (where `On<Message>()` is the curated
+  `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
   method, e.g. `OnUpdate()`, or `OnMessage("...")` for an unmodelled message, not the generic `On<TRequest>()`
   overload) and a matching handler method
-  (`--message`, optional `--handler <Method>`). It refuses single-step plugins (those using the `Execute(...)`
-  override) and any file it can't parse cleanly, so it never corrupts source.
+  (`--message`, optional `--handler <Method>`). It refuses a plugin that has no handler-bound step yet (add a
+  step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source.
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +
   a co-located `main.test.ts`) in the [web-resources project](client-side.md) and registers its entry in
   `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it

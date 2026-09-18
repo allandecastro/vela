@@ -660,18 +660,20 @@ vela add customapi ExportContact --entity Contact   # Custom API bound to a tabl
 ## Registering plugin steps
 
 A plugin derives from `EntityPluginBase<TEntity>` and declares its steps in the `RegisterPluginSteps()`
-override with the fluent `RegisterSteps()` builder - no step XML and no manual `pac` registration:
+override with the fluent `RegisterStep()` builder - no step XML and no manual `pac` registration. The chain is
+guided: pick the message, then the stage, then the mode, then the `With*` modifiers, and always end with
+`.Handle(...)`:
 
 ```csharp
 protected override void RegisterPluginSteps()
 {
-    RegisterSteps().OnCreate()                       // message: OnCreate/OnUpdate/OnDelete/OnMessage("...")
+    RegisterStep().OnCreate()                        // message: OnCreate/OnUpdate/OnDelete/OnMessage("...")
         .PostOperation()                             // stage: .PreValidation() | .PreOperation() | .PostOperation()
-        .Sync()             // Synchronous | Asynchronous
-        .FilteringAttributes(a => a.Name)            // (create/update) attributes that trigger the step
-        .Description("Runs after an account is created.")
-        .PostImage()                                 // snapshot after the operation...
-            .Attributes(a => a.Name);                // ...limited to these columns
+        .Sync()                                      // .Sync() | .Async() (Async is PostOperation-only)
+        .FilterOn(a => a.Name)                  // (create/update) attributes that trigger the step
+        .WithDescription("Runs after an account is created.")
+        .WithPostImage(a => a.Name)                  // snapshot after the operation, limited to these columns
+        .Handle(OnAccountCreated);                   // void OnAccountCreated(ICreatePostContext<Account> ctx)
 }
 ```
 
@@ -681,22 +683,21 @@ configures.
 
 ### Single-step vs multi-step
 
-- **Single-step** - register one step and override `Execute(ctx)`; read the record with `ctx.GetTarget<TEntity>()`
-  (or the message-specific request with `ctx.GetRequest<...>()`). See `AccountRelatedContactsPlugin`. Even a
-  single step can instead bind a typed `.Handler(...)` to get the stage-typed context (`ctx.Request` / `ctx.Response`,
-  with the record at `ctx.Request.Target`) - see `AccountPostCreatePlugin`.
-- **Multi-step ("router")** - register several steps in one class, giving each a `.Handler(Method)` bound to a
-  method; the framework dispatches to the right one. Each handler takes the message-typed context (for example
+- **Single-step** - register one step bound to one handler. The handler takes the stage-typed context
+  (`ctx.Request` / `ctx.Response`, with the record at `ctx.Request.Target`). See `AccountPostCreatePlugin`.
+- **Multi-step ("router")** - register several steps in one class, giving each its own `.Handle(Method)`; the
+  framework dispatches to the right one. Each handler takes the message-typed context (for example
   `ICreatePostContext<TEntity>` / `IUpdatePostContext<TEntity>`), exposing a strongly-typed `ctx.Request` (and, in a
-  Post step, `ctx.Response`). See `ContactRouterPlugin`. Every step in a multi-step plugin **must** declare a
-  handler - the build fails otherwise.
+  Post step, `ctx.Response`). See `ContactRouterPlugin`.
+
+Every step must end with `.Handle(...)`; a chain that stops earlier does not compile (analyzer VELA002).
 
 ```csharp
-RegisterSteps().OnUpdate()
+RegisterStep().OnUpdate()
     .PostOperation().Sync()
-    .FilteringAttributes(c => c.LastName)            // (update) fire only when these columns change
-    .Handler(OnLastNameChanged)                      // void OnLastNameChanged(IUpdatePostContext<Contact> ctx)
-    .PreImage().Attributes(c => c.LastName);         // before-snapshot for the handler
+    .FilterOn(c => c.LastName)                  // (update) fire only when these columns change
+    .WithPreImage(c => c.LastName)                   // before-snapshot for the handler
+    .Handle(OnLastNameChanged);                      // void OnLastNameChanged(IUpdatePostContext<Contact> ctx)
 ```
 
 ### Builder options
@@ -704,14 +705,15 @@ RegisterSteps().OnUpdate()
 | Builder call | What it does |
 | --- | --- |
 | `.OnCreate()` … `.OnUpdate()` … `.OnMessage("custom_action")` | The message the step listens to. |
-| `.Stage(...)` | Pipeline stage: `PreValidation`, `PreOperation`, `PostOperation`. |
-| `.Mode(...)` | `Synchronous` or `Asynchronous`. |
-| `.FilteringAttributes(...)` | (update) fire only when one of the listed columns changes. |
-| `.Handler(M)` | Method to dispatch to (required for multi-step); takes the message-typed context. |
-| `.PreImage()` / `.PostImage()` + `.Attributes(...)` | Capture a before/after snapshot, scoped to named columns. |
-| `.ExecutionOrder(n)` | Step rank when several steps share a message + stage. |
-| `.ImpersonateUsing(...)` | Run as `CallingUser` or `PluginOwner`. |
-| `.Description(...)` | Step description shown in Dataverse. |
+| `.PreValidation()` / `.PreOperation()` / `.PostOperation()` | Pipeline stage. |
+| `.Sync()` / `.Async()` | Execution mode (Async is PostOperation-only). |
+| `.FilterOn(...)` | (create/update) fire only when one of the listed columns changes. |
+| `.WithPreImage(...)` / `.WithPostImage(...)` | Capture a before/after snapshot, scoped to named columns. |
+| `.WithExecutionOrder(n)` | Step rank when several steps share a message + stage. |
+| `.WithImpersonation(...)` | Run as `CallingUser` or `PluginOwner`. |
+| `.WithDescription(...)` | Step description shown in Dataverse. |
+| `.Disabled()` | Register the step dormant (kill-switch / phased rollout). |
+| `.Handle(M)` | The handler the step dispatches to; takes the message-typed context. Required, last in the chain. |
 
 Read images back in a handler with `ctx.GetPreImage<TEntity>()` / `ctx.GetPostImage<TEntity>()`.
 
@@ -769,7 +771,7 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
 ### Resolving and using a service
 
 ```csharp
-protected override void Execute(ILocalPluginContext ctx)
+private void OnAccountCreated(ICreatePostContext<Account> ctx)
 {
     Account target = ctx.GetTarget<Account>();
     IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
@@ -1338,7 +1340,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Context;
     using Vela.Plugin;
     using Vela.Querying;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
     using {{prefix}}.Shared.Models.Generated;
@@ -1355,14 +1357,15 @@ namespace {{prefix}}.Plugins.Account.Plugins
     {
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .FilteringAttributes(a => a.Name)
-                .Description("Counts the contacts related to an account after it is updated.");
+                .FilterOn(a => a.Name)
+                .WithDescription("Counts the contacts related to an account after it is updated.")
+                .Handle(OnAccountUpdated);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
         {
             Account target = ctx.GetTarget<Account>();
 
@@ -1393,7 +1396,7 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
 {
     using System;
     using Vela.Constants;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Vela.Testing;
     using Microsoft.Xrm.Sdk;
     using Xunit;
@@ -1439,7 +1442,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Account.Services;
     using {{prefix}}.Shared.Models.Generated;
@@ -1461,14 +1464,13 @@ namespace {{prefix}}.Plugins.Account.Plugins
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .FilteringAttributes(a => a.Name)
-                .Handler(OnAccountCreated)
-                .Description("Schedules a 7-day follow-up task after an account is created.")
-                .PostImage()
-                    .Attributes(a => a.Name);
+                .FilterOn(a => a.Name)
+                .WithDescription("Schedules a 7-day follow-up task after an account is created.")
+                .WithPostImage(a => a.Name)
+                .Handle(OnAccountCreated);
         }
 
         // Typed handler: because the step is PostOperation, ctx is an ICreatePostContext<Account>, so ctx.Response
@@ -1493,7 +1495,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
@@ -1509,39 +1511,39 @@ namespace {{prefix}}.Plugins.Account.Plugins
         protected override void RegisterPluginSteps()
         {
             // Create / Update carry a full entity Target; both require at least one filtering attribute.
-            RegisterSteps().OnCreate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreate).Disabled();
-            RegisterSteps().OnUpdate().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdate).Disabled();
+            RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Disabled().Handle(OnCreate);
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Disabled().Handle(OnUpdate);
 
             // Delete carries an EntityReference Target.
-            RegisterSteps().OnDelete().PreOperation().Sync().Handler(OnDelete).Disabled();
+            RegisterStep().OnDelete().PreOperation().Sync().Disabled().Handle(OnDelete);
 
             // Bulk messages carry a Targets collection; they also require a filtering attribute.
-            RegisterSteps().OnCreateMultiple().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnCreateMultiple).Disabled();
-            RegisterSteps().OnUpdateMultiple().PostOperation().Sync().FilteringAttributes(a => a.Name).Handler(OnUpdateMultiple).Disabled();
+            RegisterStep().OnCreateMultiple().PostOperation().Sync().FilterOn(a => a.Name).Disabled().Handle(OnCreateMultiple);
+            RegisterStep().OnUpdateMultiple().PostOperation().Sync().FilterOn(a => a.Name).Disabled().Handle(OnUpdateMultiple);
 
             // Read messages.
-            RegisterSteps().OnRetrieve().PostOperation().Sync().Handler(OnRetrieve).Disabled();
-            RegisterSteps().OnRetrieveMultiple().PostOperation().Sync().Handler(OnRetrieveMultiple).Disabled();
+            RegisterStep().OnRetrieve().PostOperation().Sync().Disabled().Handle(OnRetrieve);
+            RegisterStep().OnRetrieveMultiple().PostOperation().Sync().Disabled().Handle(OnRetrieveMultiple);
 
             // Relationship messages.
-            RegisterSteps().OnAssociate().PostOperation().Sync().Handler(OnAssociate).Disabled();
-            RegisterSteps().OnDisassociate().PostOperation().Sync().Handler(OnDisassociate).Disabled();
+            RegisterStep().OnAssociate().PostOperation().Sync().Disabled().Handle(OnAssociate);
+            RegisterStep().OnDisassociate().PostOperation().Sync().Disabled().Handle(OnDisassociate);
 
             // Merge and sharing (access) messages.
-            RegisterSteps().OnMerge().PostOperation().Sync().Handler(OnMerge).Disabled();
-            RegisterSteps().OnGrantAccess().PostOperation().Sync().Handler(OnGrantAccess).Disabled();
-            RegisterSteps().OnModifyAccess().PostOperation().Sync().Handler(OnModifyAccess).Disabled();
-            RegisterSteps().OnRevokeAccess().PostOperation().Sync().Handler(OnRevokeAccess).Disabled();
+            RegisterStep().OnMerge().PostOperation().Sync().Disabled().Handle(OnMerge);
+            RegisterStep().OnGrantAccess().PostOperation().Sync().Disabled().Handle(OnGrantAccess);
+            RegisterStep().OnModifyAccess().PostOperation().Sync().Disabled().Handle(OnModifyAccess);
+            RegisterStep().OnRevokeAccess().PostOperation().Sync().Disabled().Handle(OnRevokeAccess);
 
             // Sharing reads (also valid on account).
-            RegisterSteps().OnRetrievePrincipalAccess().PostOperation().Sync().Handler(OnRetrievePrincipalAccess).Disabled();
-            RegisterSteps().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Handler(OnRetrieveSharedPrincipalsAndAccess).Disabled();
+            RegisterStep().OnRetrievePrincipalAccess().PostOperation().Sync().Disabled().Handle(OnRetrievePrincipalAccess);
+            RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Disabled().Handle(OnRetrieveSharedPrincipalsAndAccess);
 
             // Many more messages are modelled but belong to other tables, so they are not shown here on account:
             // e.g. QualifyLead (lead); WinOpportunity / LoseOpportunity / Generate*/Convert* (opportunity / quote /
             // order); AddToQueue / RouteTo (queue items); SendEmail / SendEmailFromTemplate (email); AddMembersTeam /
             // AddListMembersList (team / marketing list); CloseIncident (case); CancelContract / CloneContract
-            // (contract). Register them the same way from the matching EntityPluginBase<T> with RegisterSteps().On<Message>().
+            // (contract). Register them the same way from the matching EntityPluginBase<T> with RegisterStep().On<Message>().
         }
 
         // ctx.Request.Target is the early-bound Account; ctx.Response.id is the new record id (Post step).
@@ -1612,7 +1614,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Contact.Services;
     using {{prefix}}.Shared.Models.Generated;
@@ -1631,23 +1633,21 @@ namespace {{prefix}}.Plugins.Contact.Plugins
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
                 .Sync()
-                .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
-                .Handler(OnCreatePost)
-                .Description("Handles contact creation.")
-                .PostImage()
-                    .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
+                .FilterOn(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
+                .WithDescription("Handles contact creation.")
+                .WithPostImage(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
+                .Handle(OnCreatePost);
 
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .FilteringAttributes(c => c.LastName)
-                .Handler(OnUpdatePost)
-                .Description("Handles contact last-name changes.")
-                .PreImage()
-                    .Attributes(c => c.LastName);
+                .FilterOn(c => c.LastName)
+                .WithDescription("Handles contact last-name changes.")
+                .WithPreImage(c => c.LastName)
+                .Handle(OnUpdatePost);
         }
 
         // Each handler receives the message-typed context: ICreateContext exposes a CreateRequest, IUpdateContext
@@ -2035,7 +2035,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
 {
     using System;
     using Vela.Constants;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Contact.Plugins;
@@ -2181,14 +2181,13 @@ namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
     // These differ from the example templates above: they emit ONE file with a user-supplied name into an
     // existing project, following the same by-table conventions vela init uses.
 
-    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string filteringCall = "") =>
+    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string filteringCall = "", string handlerContextType = "ILocalPluginContext") =>
 $$"""
 namespace {{ns}}
 {
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.StepBuilder;
     using {{modelsNamespace}};
 
     /// <summary>Single-step plugin generated by <c>vela add plugin</c>.</summary>
@@ -2196,13 +2195,14 @@ namespace {{ns}}
     {
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().{{registrationCall}}
+            RegisterStep().{{registrationCall}}
                 .PostOperation()
                 .Sync(){{filteringCall}}
-                .Description("{{message}} {{entityType}} handler.");
+                .WithDescription("{{message}} {{entityType}} handler.")
+                .Handle(OnExecute);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnExecute({{handlerContextType}} ctx)
         {
             ctx.Trace("{{className}} executed for {0} '{1}'.", ctx.PrimaryEntityName, ctx.PrimaryEntityId);
 
@@ -2424,7 +2424,7 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
     using {{prefix}}.Shared.Services;
 
@@ -2441,16 +2441,16 @@ namespace {{prefix}}.Integrations.Contact.Plugins
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
                 .Async()
-                .FilteringAttributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
-                .Description("Runs after a contact is created.")
-                .PostImage()
-                    .Attributes(c => c.FirstName, c => c.LastName, c => c.EMailAddress1);
+                .FilterOn(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
+                .WithDescription("Runs after a contact is created.")
+                .WithPostImage(c => c.FirstName, c => c.LastName, c => c.EMailAddress1)
+                .Handle(OnContactCreated);
         }
 
-        protected override void Execute(ILocalPluginContext ctx)
+        private void OnContactCreated(ICreatePostContext<Contact> ctx)
         {
             Contact target = ctx.GetTarget<Contact>();
             IGreetingService greetings = ctx.GetRequiredService<IGreetingService>();
@@ -2467,7 +2467,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
@@ -2478,23 +2478,21 @@ namespace {{prefix}}.Integrations.Account.Plugins
     {
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
                 .Async()
-                .FilteringAttributes(a => a.Name)
-                .Handler(OnAccountCreated)
-                .Description("Pushes a newly created account downstream.")
-                .PostImage()
-                    .Attributes(a => a.Name);
+                .FilterOn(a => a.Name)
+                .WithDescription("Pushes a newly created account downstream.")
+                .WithPostImage(a => a.Name)
+                .Handle(OnAccountCreated);
 
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
                 .Async()
-                .FilteringAttributes(a => a.Name, a => a.Telephone1)
-                .Handler(OnAccountChanged)
-                .Description("Pushes account changes downstream.")
-                .PreImage()
-                    .Attributes(a => a.Name, a => a.Telephone1);
+                .FilterOn(a => a.Name, a => a.Telephone1)
+                .WithDescription("Pushes account changes downstream.")
+                .WithPreImage(a => a.Name, a => a.Telephone1)
+                .Handle(OnAccountChanged);
         }
 
         private void OnAccountCreated(ICreatePostContext<Account> ctx)

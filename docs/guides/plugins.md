@@ -1,12 +1,12 @@
 # Write a plugin
 
-Create a class inheriting `EntityPluginBase<TEntity>` and declare steps in `RegisterPluginSteps()` with `RegisterSteps()`:
+Create a class inheriting `EntityPluginBase<TEntity>` and declare steps in `RegisterPluginSteps()` with `RegisterStep()`:
 
 ```csharp
 using Vela.Context;
 using Vela.Constants;
 using Vela.Plugin;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Zava.Shared.Models.Generated;
 
 namespace Zava.Plugins.Account
@@ -17,16 +17,14 @@ namespace Zava.Plugins.Account
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnUpdate()
+            RegisterStep().OnUpdate()
                 .PostOperation()
                 .Sync()
-                .FilteringAttributes(a => a.Name)      // Only trigger when Name changes
-                .Handler(OnAccountUpdated)             // stage-typed handler, bound by method group
-                .Description("Handles account updates")
-                .PreImage()
-                    .Attributes(a => a.Name)           // Include Name in pre-image
-                .PostImage()
-                    .Attributes(a => a.Name);          // Include Name in post-image
+                .FilterOn(a => a.Name)            // Only trigger when Name changes
+                .WithDescription("Handles account updates")
+                .WithPreImage(a => a.Name)             // Include Name in pre-image
+                .WithPostImage(a => a.Name)            // Include Name in post-image
+                .Handle(OnAccountUpdated);             // stage-typed handler, bound by method group
         }
 
         // PostOperation Update step -> IUpdatePostContext<Account>: typed ctx.Request (and ctx.Response,
@@ -50,25 +48,22 @@ public class AccountStepRouter : EntityPluginBase<Account>
 
     protected override void RegisterPluginSteps()
     {
-        RegisterSteps().OnCreate()
+        RegisterStep().OnCreate()
             .PostOperation()
             .Sync()
-            .FilteringAttributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
-            .Handler(OnCreatePost)
-            .Description("Handles account creation after commit.")
-            .PostImage()
-                .Attributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1);
+            .FilterOn(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
+            .WithDescription("Handles account creation after commit.")
+            .WithPostImage(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)
+            .Handle(OnCreatePost);
 
-        RegisterSteps().OnUpdate()
+        RegisterStep().OnUpdate()
             .PostOperation()
             .Sync()
-            .FilteringAttributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
-            .Handler(OnUpdatePost)
-            .Description("Handles customer-facing account changes.")
-            .PreImage()
-                .Attributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)
-            .PostImage()
-                .Attributes(a => a.Name, a => a.Telephone1, a => a.EmailAddress1);
+            .FilterOn(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)  // required on Create/Update
+            .WithDescription("Handles customer-facing account changes.")
+            .WithPreImage(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)
+            .WithPostImage(a => a.Name, a => a.Telephone1, a => a.EmailAddress1)
+            .Handle(OnUpdatePost);
     }
 
     // Each handler takes the stage-typed message context. Both steps are PostOperation, so they get the Post
@@ -93,7 +88,7 @@ public class AccountStepRouter : EntityPluginBase<Account>
 ```
 
 Each step in a multi-step plugin must have a **distinct trigger** (message + stage + mode + entity) and its own
-`Handler(...)` (bound by method group, not a string). Two steps with the same trigger can't be told apart at
+`Handle(...)` (bound by method group, not a string). Two steps with the same trigger can't be told apart at
 runtime, so `Build()` rejects them - put the shared logic in one step (combine the filtering attributes) or use a
 different stage/mode. Because the handler is bound as a method group, the message and the handler's context type
 are checked at compile time: binding an `OnUpdate()` step to a `void Handle(ICreatePostContext<Account> ctx)` method
@@ -102,13 +97,13 @@ does not compile.
 ## Do / Don't (plugins)
 
 **Do**
-- Use `RegisterPluginSteps()` + `RegisterSteps().On...()` for single-step and multi-step plugins.
+- Use `RegisterPluginSteps()` + `RegisterStep().On...()` for single-step and multi-step plugins.
 - Use `ctx.GetRequiredService<T>()` for dependency resolution in handlers.
 - Read the primary record via `ctx.Request.Target` on the typed message contexts (already early-bound); `GetTarget<T>()` stays for the message-agnostic `OnMessage(...)` handlers where the request does not type the Target.
 - Read images with `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` instead of the raw `PreEntityImages` / `PostEntityImages` dictionaries.
 
 **Don't**
-- Start new plugin code on the older single-step `RegisterPluginStep<TEntity>()` shape; prefer overriding `RegisterPluginSteps()`.
+- Stop a step chain before `.Handle(...)`: every step must bind a typed handler (a chain that stops earlier is flagged by analyzer VELA002). Prefer `RegisterPluginSteps()` + `RegisterStep()....Handle(...)` over a no-handler `Execute(...)` override.
 - Cast context to `LocalPluginContext` in handlers.
 - Mix multiple registration styles in the same plugin class.
 
@@ -123,18 +118,21 @@ The fluent builder enforces a specific order:
    instead, or register through `OnMessage("SetState")` if you must target the legacy message.
 2. **Stage** - `PreValidation()`, `PreOperation()`, or `PostOperation()` (typed methods; the stage you pick
    determines which images the rest of the chain will offer)
-3. **Mode** - `Sync()` / `Async()` (shortcuts for `Mode(ExecutionMode.Synchronous)` / `Mode(ExecutionMode.Asynchronous)`)
-4. **Filtering** - `FilteringAttributes(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
-   `CreateMultiple` and `UpdateMultiple`** (at least one attribute) and must come immediately after `Mode(...)`;
+3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only)
+4. **Filtering** - `FilterOn(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
+   `CreateMultiple` and `UpdateMultiple`** (at least one attribute; the first is mandatory at compile time);
    not offered on other messages. An unfiltered Create/Update step would fire on every change, so the builder
    makes you state the trigger.
-5. **Optional** - `Description()`, `ImpersonateUsing()`, `SupportedDeployment()`, `ExecutionOrder()`, `Disabled()`, `UnsecureConfig(...)`, `SecureConfig(...)`
-6. **Images** - `PreImage().Attributes(...)` and/or `PostImage().Attributes(...)`
+5. **Optional** - `WithDescription()`, `WithImpersonation()`, `WithSupportedDeployment()`, `WithExecutionOrder()`, `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfig(...)`
+6. **Images** - `WithPreImage(...)` and/or `WithPostImage(...)`
+7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).
 
-Short aliases are available when you prefer action-style naming: `AddPreImage(...)`, `AddPostImage(...)`.
+The message -> stage -> mode order is enforced by the type-state; steps 4-6 (`FilterOn` and the `With*` /
+`Disabled()` modifiers) return the same builder, so they can appear in any order between the mode and the
+terminal `Handle(...)`.
 
 > [!NOTE]
-> Column selectors (`FilteringAttributes`, image `Attributes(...)`, and the typed query/change helpers) accept an
+> Column selectors (`FilterOn`, the image selectors in `WithPreImage(...)` / `WithPostImage(...)`, and the typed query/change helpers) accept an
 > early-bound column, e.g. `a => a.Name`. A bundled analyzer (`VELA001`, shipped in `Vela.Plugins`) flags, in the
 > editor and at build, a selector that targets a member of the base `Entity` type (such as `a => a.LogicalName` or
 > `a => a.Id`) rather than a real column - no reference or configuration needed.
@@ -188,14 +186,14 @@ entity-bound plugin step, so there is no `On...()` for them. You can still call 
 
 A step registered through `OnMessage("...")` (any other message) can bind its handler three ways:
 
-- `.Handler(OnX)` where `void OnX(ILocalPluginContext ctx)` - the plain, untyped context.
-- `.Handler<TRequest>(OnX)` where `void OnX(IMessagePreContext<TRequest> ctx)` (pre-stage) or
+- `.Handle(OnX)` where `void OnX(ILocalPluginContext ctx)` - the plain, untyped context.
+- `.Handle<TRequest>(OnX)` where `void OnX(IMessagePreContext<TRequest> ctx)` (pre-stage) or
   `IMessagePostContext<TRequest> ctx` (post-stage) - a **typed `ctx.Request`** over the live `InputParameters`.
   `TRequest` is any `OrganizationRequest` with a parameterless constructor: an SDK request class, or a request
   generated by [`vela models --messages` / `--custom-apis`](models.md). At post-stage `ctx.Response` is a base
   `OrganizationResponse` (read results via `ctx.Response.Results[...]`).
 - To also get early-bound images, take the two-argument context `IMessagePreContext<TRequest, TEntity>` /
-  `IMessagePostContext<TRequest, TEntity>` (same `.Handler<TRequest>(...)` binding), which adds **`ctx.PreImage`** /
+  `IMessagePostContext<TRequest, TEntity>` (same `.Handle<TRequest>(...)` binding), which adds **`ctx.PreImage`** /
   **`ctx.PostImage`** (the step's own `TEntity`, the plugin's entity - no extra type argument). Read the primary
   record from `ctx.Request.Target`, or early-bound with `ctx.GetTarget<TEntity>()`.
 
@@ -208,9 +206,9 @@ restating the type on `Handler`**:
 
 ```csharp
 protected override void RegisterPluginSteps()
-    => RegisterSteps().On<CalculateAccountScoreRequest>()   // message = CalculateAccountScoreRequest.RequestName
+    => RegisterStep().On<CalculateAccountScoreRequest>()    // message = CalculateAccountScoreRequest.RequestName
         .PostOperation().Sync()
-        .Handler(OnScore);                                  // no type argument here
+        .Handle(OnScore);                                   // no type argument here
 
 private void OnScore(IMessagePostContext<CalculateAccountScoreRequest> ctx)
 {
@@ -226,9 +224,10 @@ This is the same typing the curated `On<Message>()` methods give, without a hand
 extension per applicable entity (compile-time entity applicability, so `steps.OnQualifyLead()` only compiles on an
 `EntityPluginBase<Lead>`), delegating to `On<XxxRequest>()`. See [Generate models](models.md).
 
-A single-step `Execute(ctx)` override is not scoped to one message, so it does not expose `ctx.Request`. Read the
-record there with `ctx.GetTarget<T>()` (a full entity for `Create`/`Update`), `ctx.GetTargetRef()` (the
-`EntityReference` for `Delete`/`Associate`/`Disassociate`), or the message-specific `ctx.GetRequest<TRequest>()`.
+An untyped handler bound with `.Handle(OnX)` (taking `ILocalPluginContext`) is not scoped to one message, so it
+does not expose `ctx.Request`. Read the record there with `ctx.GetTarget<T>()` (a full entity for
+`Create`/`Update`), `ctx.GetTargetRef()` (the `EntityReference` for `Delete`/`Associate`/`Disassociate`), or the
+message-specific `ctx.GetRequest<TRequest>()`.
 
 | Message method | Handler context | `ctx.Request` | Primary record |
 | --- | --- | --- | --- |
@@ -255,7 +254,7 @@ and `Assign` messages are intentionally not modelled: update `statecode`/`status
 (kill-switch or phased rollout); `apply` sets the step's state accordingly and `plan` shows the transition. Re-enabling
 is just removing the `Disabled()` marker.
 
-**Step configuration** - `UnsecureConfig("...")` and `SecureConfig("...")` declare the configuration strings passed to the
+**Step configuration** - `WithUnsecureConfig("...")` and `WithSecureConfig("...")` declare the configuration strings passed to the
 plugin constructor `(string unsecureConfig, string secureConfig)`. Both are reconciled by `apply` (the secure value is
 stored on the linked `sdkmessageprocessingstepsecureconfig` row). Unsecure config appears verbatim in the `vela plan`
 JSON (it is non-sensitive by design); the **secure** value is **redacted to a hash** in plan/inspect output (and any
@@ -266,8 +265,8 @@ regular plugin step cannot register there.
 
 **Image validity is a compile error, not a runtime surprise.** The stage method you pick returns a builder
 that exposes **only** the images that (message, stage) actually supports, so a wrong image does not compile -
-in the IDE, without the CLI. For example `OnDelete().PostOperation()....PostImage()` and
-`OnUpdate().PreValidation()....PreImage()` and `OnCreate().PostOperation()....PreImage()` all fail to build.
+in the IDE, without the CLI. For example `OnDelete().PostOperation()....WithPostImage()` and
+`OnUpdate().PreValidation()....WithPreImage()` and `OnCreate().PostOperation()....WithPreImage()` all fail to build.
 The rules the chain encodes:
 
 1. `PreValidation` - no images (nothing captured yet).

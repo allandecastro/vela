@@ -1,22 +1,29 @@
 using System;
 using Vela.Context;
 using Vela.Constants;
-using Vela.StepBuilder;
+using Vela.Steps;
 using Vela.Tests.TestSupport;
 using Xunit;
 
 namespace Vela.Tests
 {
+    // Covers StepBuilder<TEntity> capture and the Build() backstop. The fluent transitions are Vela.Steps
+    // interface members, so the builder is driven through IStepTrigger<T> while a reference to the concrete
+    // StepBuilder<T> is kept to call Build() (the chain terminal is a void Handle(...) and cannot reach Build()).
     public sealed class StepBuilderTests
     {
+        private static StepBuilder<TestAccount> New() => new StepBuilder<TestAccount>();
+
+        private static IStepTrigger<TestAccount> Trigger(StepBuilder<TestAccount> builder) => builder;
+
         [Fact]
         public void StepBuilder_CapturesMessage()
         {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name);
 
             var definition = builder.Build();
 
@@ -29,11 +36,11 @@ namespace Vela.Tests
         [Fact]
         public void StepBuilder_CapturesFilteringAttributes()
         {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name);
 
             var definition = builder.Build();
 
@@ -44,15 +51,13 @@ namespace Vela.Tests
         [Fact]
         public void StepBuilder_CapturesImages()
         {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .PreImage()
-                    .Attributes(a => a.Name)
-                .PostImage()
-                    .Attributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .WithPreImage(a => a.Name)
+                .WithPostImage(a => a.Name);
 
             var definition = builder.Build();
 
@@ -68,12 +73,12 @@ namespace Vela.Tests
         [Fact]
         public void StepBuilder_CapturesDescription()
         {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Description("Test description");
+                .Sync()
+                .FilterOn(a => a.Name)
+                .WithDescription("Test description");
 
             var definition = builder.Build();
 
@@ -83,12 +88,12 @@ namespace Vela.Tests
         [Fact]
         public void StepBuilder_CapturesHandlerMethod_FromMethodGroup()
         {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnUpdate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .Handler(TestHandler);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .Handle(TestHandler);
 
             var definition = builder.Build();
 
@@ -96,13 +101,15 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void Sync_and_Async_are_shortcuts_for_Mode()
+        public void Sync_and_Async_set_the_mode()
         {
-            StepDefinition sync = new StepBuilder<TestAccount>().OnDelete().PostOperation().Sync().Build();
-            Assert.Equal(ExecutionMode.Synchronous, sync.Mode);
+            StepBuilder<TestAccount> syncBuilder = New();
+            Trigger(syncBuilder).OnDelete().PostOperation().Sync();
+            Assert.Equal(ExecutionMode.Synchronous, syncBuilder.Build().Mode);
 
-            StepDefinition async = new StepBuilder<TestAccount>().OnDelete().PostOperation().Async().Build();
-            Assert.Equal(ExecutionMode.Asynchronous, async.Mode);
+            StepBuilder<TestAccount> asyncBuilder = New();
+            Trigger(asyncBuilder).OnDelete().PostOperation().Async();
+            Assert.Equal(ExecutionMode.Asynchronous, asyncBuilder.Build().Mode);
         }
 
         // The typed stage chain now prevents an invalid image at compile time (a pre-image in PreValidation,
@@ -112,13 +119,12 @@ namespace Vela.Tests
         [Fact]
         public void StepBuilder_AllowsPreImageForPreOperationUpdate()
         {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnUpdate()
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnUpdate()
                 .PreOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .PreImage()
-                .Attributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .WithPreImage(a => a.Name);
 
             var definition = builder.Build();
             Assert.Single(definition.PreImages);
@@ -127,12 +133,12 @@ namespace Vela.Tests
         [Fact]
         public void StepBuilder_AllowsPostImageForPostOperationCreate()
         {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnCreate()
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .FilteringAttributes(a => a.Name)
-                .PostImage().Attributes(a => a.Name);
+                .Sync()
+                .FilterOn(a => a.Name)
+                .WithPostImage(a => a.Name);
 
             var definition = builder.Build();
             Assert.Single(definition.PostImages);
@@ -141,12 +147,11 @@ namespace Vela.Tests
         [Fact]
         public void StepBuilder_AllowsPreImageForPostOperationDelete()
         {
-            var builder = new StepBuilder<TestAccount>();
-            builder.OnDelete()
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnDelete()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .PreImage()
-                .Attributes(a => a.Name);
+                .Sync()
+                .WithPreImage(a => a.Name);
 
             var definition = builder.Build();
             Assert.Single(definition.PreImages);
@@ -159,44 +164,47 @@ namespace Vela.Tests
         [Fact]
         public void StepBuilder_Build_RejectsPostImageOnDelete_ViaPermissiveMessage()
         {
-            Assert.Throws<InvalidOperationException>(() =>
-                new StepBuilder<TestAccount>().OnMessage(PluginMessages.Delete)
-                    .PostOperation()
-                    .Mode(ExecutionMode.Synchronous)
-                    .PostImage()
-                    .Build());
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnMessage(PluginMessages.Delete)
+                .PostOperation()
+                .Sync()
+                .WithPostImage();
+
+            Assert.Throws<InvalidOperationException>(() => builder.Build());
         }
 
         [Fact]
         public void StepBuilder_Build_AllowsImagesOnUnmodelledMessage()
         {
-            StepDefinition definition = new StepBuilder<TestAccount>().OnMessage("acme_DoThing")
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnMessage("acme_DoThing")
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .PreImage().Attributes(a => a.Name)
-                .PostImage().Attributes(a => a.Name)
-                .Build();
+                .Sync()
+                .WithPreImage(a => a.Name)
+                .WithPostImage(a => a.Name);
+
+            StepDefinition definition = builder.Build();
 
             Assert.Single(definition.PreImages);
             Assert.Single(definition.PostImages);
         }
 
         // A filtering-required message reached through the permissive OnMessage(...) escape hatch cannot supply
-        // its filtering attribute (the permissive terminal has no FilteringAttributes), so Build() rejects it and
+        // its filtering attribute (the permissive terminal has no FilterOn), so Build() rejects it and
         // the error points at the typed OnUpdate()/OnCreate()/... methods instead.
         [Fact]
         public void StepBuilder_Build_RejectsFilteringMessageReachedViaOnMessage_AndSignpostsTypedMethods()
         {
-            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
-                new StepBuilder<TestAccount>().OnMessage(PluginMessages.Update)
-                    .PostOperation()
-                    .Mode(ExecutionMode.Synchronous)
-                    .Build());
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnMessage(PluginMessages.Update)
+                .PostOperation()
+                .Sync();
 
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
             Assert.Contains("OnUpdate()", ex.Message);
         }
 
-        private void TestHandler(ILocalPluginContext ctx)
+        private void TestHandler(IUpdatePostContext<TestAccount> ctx)
         {
         }
     }

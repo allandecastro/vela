@@ -6,14 +6,14 @@ namespace Vela.Cli.Tests;
 
 public class StepInjectorTests
 {
-    // A handler-based plugin (uses .Handler(...)), which is what 'vela add step' targets.
+    // A handler-based plugin (uses .Handle(...)), which is what 'vela add step' targets.
     private const string HandlerBased = """
 namespace Acme.Plugins.Account.Plugins
 {
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Acme.Shared.Models;
 
     public sealed class AccountRouter : EntityPluginBase<Account>
@@ -22,10 +22,10 @@ namespace Acme.Plugins.Account.Plugins
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous)
-                .Handler(HandleCreate);
+                .Sync()
+                .Handle(HandleCreate);
         }
 
         private void HandleCreate(ILocalPluginContext ctx)
@@ -35,14 +35,14 @@ namespace Acme.Plugins.Account.Plugins
 }
 """;
 
-    // A single-step plugin (uses the Execute override, no .Handler) — must be rejected.
+    // A plugin whose step chain never reaches .Handle(...) (no handler-bound step) — must be rejected.
     private const string SingleStep = """
 namespace Acme.Plugins.Account.Plugins
 {
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.StepBuilder;
+    using Vela.Steps;
     using Acme.Shared.Models;
 
     public sealed class AccountValidator : EntityPluginBase<Account>
@@ -51,9 +51,9 @@ namespace Acme.Plugins.Account.Plugins
 
         protected override void RegisterPluginSteps()
         {
-            RegisterSteps().OnCreate()
+            RegisterStep().OnCreate()
                 .PostOperation()
-                .Mode(ExecutionMode.Synchronous);
+                .Sync();
         }
 
         protected override void Execute(ILocalPluginContext ctx)
@@ -69,11 +69,11 @@ namespace Acme.Plugins.Account.Plugins
         bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", out string result, out string error);
 
         Assert.True(ok, error);
-        Assert.Contains("RegisterSteps().OnUpdate()", result);
-        Assert.Contains(".Handler(HandleUpdate);", result);
-        Assert.Contains("private void HandleUpdate(ILocalPluginContext ctx)", result);
+        Assert.Contains("RegisterStep().OnUpdate()", result);
+        Assert.Contains(".Handle(HandleUpdate);", result);
+        Assert.Contains("private void HandleUpdate(IUpdatePostContext<Account> ctx)", result);
         // The original step is preserved.
-        Assert.Contains(".Handler(HandleCreate);", result);
+        Assert.Contains(".Handle(HandleCreate);", result);
         // Braces stay balanced — the edit didn't corrupt the file.
         Assert.Equal(result.Count(c => c == '{'), result.Count(c => c == '}'));
     }
@@ -84,7 +84,7 @@ namespace Acme.Plugins.Account.Plugins
         bool ok = StepInjector.TryInject(HandlerBased, "Account", "acme_DoThing", "OnMessage(\"acme_DoThing\")", "HandleDoThing", out string result, out _);
 
         Assert.True(ok);
-        Assert.Contains("RegisterSteps().OnMessage(\"acme_DoThing\")", result);
+        Assert.Contains("RegisterStep().OnMessage(\"acme_DoThing\")", result);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ namespace Acme.Plugins.Account.Plugins
         bool ok = StepInjector.TryInject(SingleStep, "Account", "Update", "OnUpdate()", "HandleUpdate", out _, out string error);
 
         Assert.False(ok);
-        Assert.Contains("single-step", error);
+        Assert.Contains("handler-bound step", error);
     }
 
     [Fact]
