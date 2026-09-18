@@ -10,7 +10,7 @@ using Xunit;
 namespace Vela.Tests
 {
     // Smoke tests for the redesigned RegisterStep().On<Msg>().<Stage>().<Mode>().With...().Handle(...) builder.
-    // It must produce the same StepDefinition shape as the legacy RegisterSteps() chain.
+    // It must produce a correct StepDefinition shape (message, stage, mode, filtering, images, description).
     public class NewStepBuilderTests
     {
         private sealed class NewApiPlugin : EntityPluginBase<TestAccount>
