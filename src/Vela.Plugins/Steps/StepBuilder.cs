@@ -193,6 +193,16 @@ public sealed partial class StepBuilder<TEntity>
     internal void SetModeInternal(ExecutionMode mode) => _definition.Mode = mode;
     internal void SetHandlerInternal(Delegate handler) => SetHandler(handler);
 
+    // Retains a runtime handler delegate the framework invokes directly, while recording a separate method name
+    // for the registration manifest. Used by the typed-image Handle<TImg>(...) extension terminals: their real
+    // runtime delegate is a wrapper (it materializes the projection then calls the user handler), distinct from
+    // the user handler whose name belongs in the manifest.
+    internal void SetRuntimeHandlerInternal(Delegate runtimeHandler, string manifestMethodName)
+    {
+        RuntimeHandler = runtimeHandler ?? throw new ArgumentNullException(nameof(runtimeHandler));
+        SetHandler(manifestMethodName);
+    }
+
     // Setting mutations centralised so the interface implementations stay in lockstep (each explicit
     // implementation is just `Set...(value); return this;`).
     private void SetExecutionOrder(int order)
