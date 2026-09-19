@@ -113,6 +113,65 @@ namespace Vela.Steps
             Retain<TEntity>(config, wrapper, handler.Method.Name);
         }
 
+        // ---- Typed On<TRequest>() path -------------------------------------------------------------
+        // The handler receives the generic message context IMessagePostContext<TRequest> (as today), and the
+        // wrapper reads the image off its two-argument entity variant IMessagePostContext<TRequest, TEntity>,
+        // which the unified dispatch builds from the wrapper's own parameter type.
+
+        /// <summary>Typed path: handler receives a projection of the captured pre-image.</summary>
+        public static void Handle<TEntity, TRequest, TPreImage>(
+            this ITypedPreOperationConfig<TEntity, TRequest> config,
+            Action<IMessagePreContext<TRequest>, TPreImage?> handler)
+            where TEntity : Entity
+            where TRequest : OrganizationRequest, new()
+            where TPreImage : class, new()
+        {
+            RequireHandler(handler);
+            Action<IMessagePreContext<TRequest, TEntity>> wrapper = ctx => handler(ctx, ImageProjector.Project<TPreImage>(ctx.PreImage));
+            Retain<TEntity>(config, wrapper, handler.Method.Name);
+        }
+
+        /// <summary>Typed path: handler receives projections of both the captured pre- and post-image.</summary>
+        public static void Handle<TEntity, TRequest, TPreImage, TPostImage>(
+            this ITypedPostOperationConfig<TEntity, TRequest> config,
+            Action<IMessagePostContext<TRequest>, TPreImage?, TPostImage?> handler)
+            where TEntity : Entity
+            where TRequest : OrganizationRequest, new()
+            where TPreImage : class, new()
+            where TPostImage : class, new()
+        {
+            RequireHandler(handler);
+            Action<IMessagePostContext<TRequest, TEntity>> wrapper = ctx =>
+                handler(ctx, ImageProjector.Project<TPreImage>(ctx.PreImage), ImageProjector.Project<TPostImage>(ctx.PostImage));
+            Retain<TEntity>(config, wrapper, handler.Method.Name);
+        }
+
+        /// <summary>Typed path: handler receives a projection of the captured pre-image only.</summary>
+        public static void HandleWithPreImage<TEntity, TRequest, TPreImage>(
+            this ITypedPostOperationConfig<TEntity, TRequest> config,
+            Action<IMessagePostContext<TRequest>, TPreImage?> handler)
+            where TEntity : Entity
+            where TRequest : OrganizationRequest, new()
+            where TPreImage : class, new()
+        {
+            RequireHandler(handler);
+            Action<IMessagePostContext<TRequest, TEntity>> wrapper = ctx => handler(ctx, ImageProjector.Project<TPreImage>(ctx.PreImage));
+            Retain<TEntity>(config, wrapper, handler.Method.Name);
+        }
+
+        /// <summary>Typed path: handler receives a projection of the captured post-image only.</summary>
+        public static void HandleWithPostImage<TEntity, TRequest, TPostImage>(
+            this ITypedPostOperationConfig<TEntity, TRequest> config,
+            Action<IMessagePostContext<TRequest>, TPostImage?> handler)
+            where TEntity : Entity
+            where TRequest : OrganizationRequest, new()
+            where TPostImage : class, new()
+        {
+            RequireHandler(handler);
+            Action<IMessagePostContext<TRequest, TEntity>> wrapper = ctx => handler(ctx, ImageProjector.Project<TPostImage>(ctx.PostImage));
+            Retain<TEntity>(config, wrapper, handler.Method.Name);
+        }
+
         private static void RequireHandler(Delegate handler)
         {
             if (handler == null)
@@ -121,8 +180,8 @@ namespace Vela.Steps
             }
         }
 
-        // Casts the fluent config to the underlying builder and retains the wrapper delegate for direct dispatch,
-        // recording the user handler's method name for the registration manifest.
+        // Retains the wrapper delegate on the underlying builder (guided StepBuilder or typed adapter, both
+        // IRuntimeHandlerHost) for direct dispatch, recording the user handler's method name for the manifest.
         private static void Retain<TEntity>(IFluentStep config, Delegate wrapper, string manifestMethodName)
             where TEntity : Entity
         {
@@ -131,7 +190,7 @@ namespace Vela.Steps
                 throw new ArgumentNullException(nameof(config));
             }
 
-            ((StepBuilder<TEntity>)config).SetRuntimeHandlerInternal(wrapper, manifestMethodName);
+            ((IRuntimeHandlerHost)config).SetRuntimeHandler(wrapper, manifestMethodName);
         }
     }
 }

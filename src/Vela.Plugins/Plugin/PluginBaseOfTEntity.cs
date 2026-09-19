@@ -182,26 +182,29 @@ namespace Vela.Plugin
                     $"Plugin '{GetType().FullName}' has no registered step matching message '{ctx.MessageName}'.");
             }
 
-            // Every handler takes a single strongly-typed argument. Resolution order matters when a typed
-            // request's name collides with a modelled message (e.g. On<MergeRequest>() resolves to "Merge"):
-            // that handler's parameter is IMessagePre/PostContext<TRequest>, which the modelled
-            // MergePreContext<TEntity> does NOT implement, so passing the modelled context throws. The generic
-            // message context (built from the handler's own parameter type) is therefore tried first; it
-            // returns null for a modelled handler (e.g. IMergeContext<TEntity>) and for the untyped permissive
-            // path, falling back to the per-message modelled context, then to the plain ILocalPluginContext.
-            object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
-                ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
-                ?? ctx;
-
             // Prefer invoking the retained delegate directly: it supports lambda handlers (including ones that
             // capture locals, which the name-based reflection path cannot find) and the typed-image Handle<TImg>
-            // wrapper. Fall back to name-based reflection when no delegate was retained (defensive).
+            // wrapper. The context is built from the delegate's own first parameter type, the same rule used for
+            // the reflection path below - so guided (modelled context) and typed (generic message context) steps,
+            // and the typed-image wrappers, all resolve their context through one path.
             if (_handlersByDefinition != null && _handlersByDefinition.TryGetValue(matchedDefinition, out Delegate? runtimeHandler))
             {
-                HandlerInvoker.InvokeDelegate(runtimeHandler, [argument]);
+                Type parameterType = runtimeHandler.Method.GetParameters()[0].ParameterType;
+                object delegateArgument = BuildGenericMessageContextForType(parameterType, ctx)
+                    ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
+                    ?? ctx;
+                HandlerInvoker.InvokeDelegate(runtimeHandler, [delegateArgument]);
                 return;
             }
 
+            // Reflection fallback (no delegate retained). Resolution order matters when a typed request's name
+            // collides with a modelled message (e.g. On<MergeRequest>() resolves to "Merge"): that handler's
+            // parameter is IMessagePre/PostContext<TRequest>, which the modelled MergePreContext<TEntity> does NOT
+            // implement, so the generic message context (built from the handler's own parameter type) is tried
+            // first, then the per-message modelled context, then the plain ILocalPluginContext.
+            object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
+                ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
+                ?? ctx;
             InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
         }
 
@@ -354,45 +357,58 @@ namespace Vela.Plugin
                     continue;
                 }
 
-                Type parameterType = parameters[0].ParameterType;
-                if (!parameterType.IsGenericType)
+                object? context = BuildGenericMessageContextForType(parameters[0].ParameterType, ctx);
+                if (context != null)
                 {
-                    continue;
+                    return context;
                 }
-
-                // Disambiguate by the parameter's own generic type definition. A two-arg entity-typed context
-                // (IMessagePreContext<TRequest, TEntity>) is preferred, and it is matched here directly because
-                // the parameter type is that two-arg interface - even though it also implements the one-arg
-                // IMessagePreContext<TRequest>, the parameter's GetGenericTypeDefinition() reports the two-arg form.
-                Type definition = parameterType.GetGenericTypeDefinition();
-                Type contextDefinition;
-                Type[] parameterArguments = parameterType.GetGenericArguments();
-                if (definition == typeof(IMessagePreContext<,>))
-                {
-                    contextDefinition = typeof(MessagePreContext<,>);
-                }
-                else if (definition == typeof(IMessagePostContext<,>))
-                {
-                    contextDefinition = typeof(MessagePostContext<,>);
-                }
-                else if (definition == typeof(IMessagePreContext<>))
-                {
-                    contextDefinition = typeof(MessagePreContext<>);
-                }
-                else if (definition == typeof(IMessagePostContext<>))
-                {
-                    contextDefinition = typeof(MessagePostContext<>);
-                }
-                else
-                {
-                    continue;
-                }
-
-                Type contextType = contextDefinition.MakeGenericType(parameterArguments);
-                return Activator.CreateInstance(contextType, ctx);
             }
 
             return null;
+        }
+
+        // Builds the concrete generic message context (MessagePreContext / MessagePostContext, one- or two-arg)
+        // that matches a handler parameter typed as IMessagePre/PostContext<TRequest>[,TEntity], over the live
+        // pipeline context. Returns null for any other parameter type (a modelled context, or the plain
+        // ILocalPluginContext), so the caller falls back to the per-message modelled context. This is the single
+        // source of truth used both by the name-based reflection path and the retained-delegate path, so guided
+        // and typed steps resolve their context through one rule.
+        private static object? BuildGenericMessageContextForType(Type parameterType, ILocalPluginContext ctx)
+        {
+            if (!parameterType.IsGenericType)
+            {
+                return null;
+            }
+
+            // Disambiguate by the parameter's own generic type definition. A two-arg entity-typed context
+            // (IMessagePreContext<TRequest, TEntity>) is matched directly because the parameter type is that
+            // two-arg interface - even though it also implements the one-arg IMessagePreContext<TRequest>, the
+            // parameter's GetGenericTypeDefinition() reports the two-arg form.
+            Type definition = parameterType.GetGenericTypeDefinition();
+            Type contextDefinition;
+            if (definition == typeof(IMessagePreContext<,>))
+            {
+                contextDefinition = typeof(MessagePreContext<,>);
+            }
+            else if (definition == typeof(IMessagePostContext<,>))
+            {
+                contextDefinition = typeof(MessagePostContext<,>);
+            }
+            else if (definition == typeof(IMessagePreContext<>))
+            {
+                contextDefinition = typeof(MessagePreContext<>);
+            }
+            else if (definition == typeof(IMessagePostContext<>))
+            {
+                contextDefinition = typeof(MessagePostContext<>);
+            }
+            else
+            {
+                return null;
+            }
+
+            Type contextType = contextDefinition.MakeGenericType(parameterType.GetGenericArguments());
+            return Activator.CreateInstance(contextType, ctx);
         }
 
         private void InvokeTypedHandler(string methodName, object typedContext)

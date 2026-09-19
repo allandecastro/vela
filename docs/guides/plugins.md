@@ -204,6 +204,8 @@ public sealed class AccountAudit : EntityPluginBase<Account>
   list is not a literal set of selectors, the generator skips it and you keep the untyped image.
 - Analyzer `VELA004` flags a projection that reads a column the step did not capture (for example the wrong
   generated type), so a would-be silent `null` is a build error instead.
+- Works on the typed `On<TRequest>()` path too: the handler keeps its `IMessagePostContext<TRequest>` (or
+  `IMessagePreContext<TRequest>`) and takes the projection as an extra parameter.
 
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:

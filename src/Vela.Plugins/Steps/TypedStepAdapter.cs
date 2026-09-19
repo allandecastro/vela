@@ -26,13 +26,18 @@ namespace Vela.Steps
         IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>,
         ITypedPreValidationConfig<TEntity, TRequest>,
         ITypedPreOperationConfig<TEntity, TRequest>,
-        ITypedPostOperationConfig<TEntity, TRequest>
+        ITypedPostOperationConfig<TEntity, TRequest>,
+        IRuntimeHandlerHost
         where TEntity : Entity
         where TRequest : OrganizationRequest, new()
     {
         private readonly StepBuilder<TEntity> _b;
 
         public TypedStepAdapter(StepBuilder<TEntity> builder) => _b = builder;
+
+        // Typed-image Handle<TImg> extensions retain their wrapper delegate here; forward to the wrapped builder.
+        void IRuntimeHandlerHost.SetRuntimeHandler(Delegate runtimeHandler, string manifestMethodName)
+            => _b.SetRuntimeHandlerInternal(runtimeHandler, manifestMethodName);
 
         // ---- Stage choosers ----
         ISyncMode<ITypedPreValidationConfig<TEntity, TRequest>> ITypedStages<TEntity, TRequest>.PreValidation() { _b.SetStageInternal(PluginStages.PreValidation); return this; }

@@ -18,7 +18,16 @@ namespace Vela.Steps;
 /// runtime backstop the framework calls to materialise the <see cref="StepDefinition"/>.
 /// </summary>
 /// <typeparam name="TEntity">The entity type for this step.</typeparam>
-public sealed partial class StepBuilder<TEntity>
+/// <summary>
+/// Internal seam letting the typed-image <c>Handle&lt;TImg&gt;</c> extensions retain a wrapper delegate on either
+/// the guided builder (<see cref="StepBuilder{TEntity}"/>) or the typed adapter through a single cast.
+/// </summary>
+internal interface IRuntimeHandlerHost
+{
+    void SetRuntimeHandler(Delegate runtimeHandler, string manifestMethodName);
+}
+
+public sealed partial class StepBuilder<TEntity> : IRuntimeHandlerHost
     where TEntity : Entity
 {
     private readonly StepDefinition _definition = new();
@@ -202,6 +211,9 @@ public sealed partial class StepBuilder<TEntity>
         RuntimeHandler = runtimeHandler ?? throw new ArgumentNullException(nameof(runtimeHandler));
         SetHandler(manifestMethodName);
     }
+
+    void IRuntimeHandlerHost.SetRuntimeHandler(Delegate runtimeHandler, string manifestMethodName)
+        => SetRuntimeHandlerInternal(runtimeHandler, manifestMethodName);
 
     // Setting mutations centralised so the interface implementations stay in lockstep (each explicit
     // implementation is just `Set...(value); return this;`).
