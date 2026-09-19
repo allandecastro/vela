@@ -1,4 +1,4 @@
-# Analyzers (VELA001 - VELA004)
+# Analyzers (VELA001 - VELA003)
 
 Vela ships a small set of Roslyn analyzers inside the `Vela.Plugins` package. They run in the editor and at
 build with **no extra reference or configuration**, and each is reported as an **error** so a mistake fails fast
@@ -8,7 +8,6 @@ builder's rules, so both a human developer and an AI author get told what is val
 - [VELA001 - column selector targets a real column](#vela001)
 - [VELA002 - step chain must end with Handle](#vela002)
 - [VELA003 - a step modifier is set at most once](#vela003)
-- [VELA004 - typed image projection reads only captured columns](#vela004)
 
 ## VELA001
 
@@ -36,15 +35,3 @@ second call is flagged. `Disabled()` is exempt (it is an idempotent flag toggle)
 second call as well, so a chain split across locals is still caught at registration.
 
 **Fix:** call the modifier once (combine the arguments if needed, for example a single `FilterOn(a => a.A, a => a.B)`).
-
-## VELA004
-
-**A typed image projection must read only columns the step captured.** For a typed-image handler
-(`Handle<TImg>` / `Handle<TPre, TPost>` / `HandleWithPreImage` / `HandleWithPostImage`), each projection's columns
-must be a subset of the columns the step declared in the matching `WithPreImage(...)` / `WithPostImage(...)`. A
-column that was never captured is never populated, so it would be a silent `null` at runtime; the usual cause is
-binding the wrong generated projection (for example one copied from another step). A capture-all image
-(`WithPostImage()` with no columns) is exempt.
-
-**Fix:** use the projection generated for this step, or capture the missing column in `WithPreImage`/`WithPostImage`.
-See [Typed images](../guides/plugins.md#typed-images-compile-safe-projections).
