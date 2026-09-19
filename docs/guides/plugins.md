@@ -169,14 +169,16 @@ RegisterStep().OnUpdate().PreOperation().Sync()
 ### Typed images (compile-safe projections)
 
 `ctx.PreImage` / `ctx.PostImage` return the full early-bound entity, so nothing stops you reading a column the
-step never captured, which comes back as a silent `null`. The typed-image terminals hand the handler a **generated
-projection** that exposes only the columns declared in `WithPreImage(...)` / `WithPostImage(...)`, so reading an
-uncaptured column is a **compile error** and completion is filtered to what you actually captured.
+step never captured, which comes back as a silent `null`. Read the image instead through `ctx.PreImageAs<T>()` /
+`ctx.PostImageAs<T>()`, where `T` is a **generated projection** that exposes only the columns declared in
+`WithPreImage(...)` / `WithPostImage(...)`: reading an uncaptured column is then a **compile error**, and
+completion is filtered to what you captured.
 
-Use `Handle` with a second (and, for a step with both images, third) parameter typed as the generated projection.
-A build-time source generator emits the projection type from the captured columns; you name it once in the
-handler. The type is named `{PluginClass}_{Message}{Stage}_{PreImage|PostImage}` (with `_{Alias}` for a custom
-alias) in the `<YourNamespace>.Generated.Images` namespace.
+The step declaration keeps its usual shape (declare the images, then bind a named handler with `Handle(...)`);
+only the read inside the handler changes. A build-time source generator emits the projection type from the
+captured columns; you name it once at the read. The type is named
+`{PluginClass}_{Message}{Stage}_{PreImage|PostImage}` (with `_{Alias}` for a custom alias) in the
+`<YourNamespace>.Generated.Images` namespace.
 
 ```csharp
 public sealed class AccountAudit : EntityPluginBase<Account>
@@ -186,26 +188,24 @@ public sealed class AccountAudit : EntityPluginBase<Account>
             .FilterOn(a => a.Name)
             .WithPreImage(a => a.Name, a => a.Revenue)
             .WithPostImage(a => a.Name)
-            .Handle((ctx,
-                     AccountAudit_UpdatePostOp_PreImage? pre,
-                     AccountAudit_UpdatePostOp_PostImage? post) =>
-            {
-                decimal? was = pre?.Revenue;   // captured -> available
-                // var x = pre?.Telephone1;    // compile error: not captured for this image
-            });
+            .Handle(OnUpdated);
+
+    private void OnUpdated(IUpdatePostContext<Account> ctx)
+    {
+        var pre = ctx.PreImageAs<AccountAudit_UpdatePostOp_PreImage>();
+        decimal? was = pre?.Revenue;   // captured -> available
+        // var x = pre?.Telephone1;    // compile error: not captured for this image
+    }
 }
 ```
 
-- Additive and opt-in: the existing `.Handle(ctx => ...)` with `ctx.PreImage`/`ctx.PostImage` keeps working.
-- One image kind on the step -> `Handle<TImg>((ctx, img) => ...)`. Both kinds -> the three-parameter form above,
-  or `HandleWithPreImage<TImg>` / `HandleWithPostImage<TImg>` to take just one.
+- Additive and opt-in: the existing `ctx.PreImage` / `ctx.PostImage` (full entity) and `ctx.GetPreImage<T>()`
+  keep working. It mirrors the early-bound `ctx.GetPreImage<Account>()` accessor, so the read site is familiar;
+  pass a custom alias with `ctx.PostImageAs<T>("MyAlias")`.
+- Works on the guided path and the typed `On<TRequest>()` path alike (it is a context accessor).
 - The projections are compiler-generated (they never appear as files in your source tree; `F12` opens them). A
   capture with no explicit columns (`WithPreImage()`) keeps the full entity and generates nothing. If the column
   list is not a literal set of selectors, the generator skips it and you keep the untyped image.
-- Analyzer `VELA004` flags a projection that reads a column the step did not capture (for example the wrong
-  generated type), so a would-be silent `null` is a build error instead.
-- Works on the typed `On<TRequest>()` path too: the handler keeps its `IMessagePostContext<TRequest>` (or
-  `IMessagePreContext<TRequest>`) and takes the projection as an extra parameter.
 
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:

@@ -18,16 +18,7 @@ namespace Vela.Steps;
 /// runtime backstop the framework calls to materialise the <see cref="StepDefinition"/>.
 /// </summary>
 /// <typeparam name="TEntity">The entity type for this step.</typeparam>
-/// <summary>
-/// Internal seam letting the typed-image <c>Handle&lt;TImg&gt;</c> extensions retain a wrapper delegate on either
-/// the guided builder (<see cref="StepBuilder{TEntity}"/>) or the typed adapter through a single cast.
-/// </summary>
-internal interface IRuntimeHandlerHost
-{
-    void SetRuntimeHandler(Delegate runtimeHandler, string manifestMethodName);
-}
-
-public sealed partial class StepBuilder<TEntity> : IRuntimeHandlerHost
+public sealed partial class StepBuilder<TEntity>
     where TEntity : Entity
 {
     private readonly StepDefinition _definition = new();
@@ -201,19 +192,6 @@ public sealed partial class StepBuilder<TEntity> : IRuntimeHandlerHost
     internal void SetStageInternal(PluginStages stage) => _definition.Stage = stage;
     internal void SetModeInternal(ExecutionMode mode) => _definition.Mode = mode;
     internal void SetHandlerInternal(Delegate handler) => SetHandler(handler);
-
-    // Retains a runtime handler delegate the framework invokes directly, while recording a separate method name
-    // for the registration manifest. Used by the typed-image Handle<TImg>(...) extension terminals: their real
-    // runtime delegate is a wrapper (it materializes the projection then calls the user handler), distinct from
-    // the user handler whose name belongs in the manifest.
-    internal void SetRuntimeHandlerInternal(Delegate runtimeHandler, string manifestMethodName)
-    {
-        RuntimeHandler = runtimeHandler ?? throw new ArgumentNullException(nameof(runtimeHandler));
-        SetHandler(manifestMethodName);
-    }
-
-    void IRuntimeHandlerHost.SetRuntimeHandler(Delegate runtimeHandler, string manifestMethodName)
-        => SetRuntimeHandlerInternal(runtimeHandler, manifestMethodName);
 
     // Setting mutations centralised so the interface implementations stay in lockstep (each explicit
     // implementation is just `Set...(value); return this;`).
