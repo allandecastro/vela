@@ -147,6 +147,14 @@ namespace Vela.Analyzers
                         case "PostOperation": stage ??= "PostOp"; break;
                     }
 
+                    // Typed path: On<TRequest>() derives the message from the request type name (DeleteRequest ->
+                    // Delete, UpdateRequest<T> -> Update), matching how the runtime maps it.
+                    if (message is null && name == "On" && ma.Name is GenericNameSyntax generic &&
+                        generic.TypeArgumentList.Arguments.Count == 1)
+                    {
+                        message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
+                    }
+
                     current = ma.Expression;
                 }
                 else if (current is MemberAccessExpressionSyntax bare)
@@ -160,6 +168,29 @@ namespace Vela.Analyzers
             }
 
             return (message, stage);
+        }
+
+        // The message label for a typed On<TRequest>() step: the request type's simple name minus a trailing
+        // "Request" (DeleteRequest -> Delete, UpdateRequest<T> -> Update). Returns null if the shape is unexpected.
+        private static string? DeriveMessageFromRequest(TypeSyntax requestType)
+        {
+            string? typeName = requestType switch
+            {
+                GenericNameSyntax g => g.Identifier.ValueText,
+                IdentifierNameSyntax id => id.Identifier.ValueText,
+                QualifiedNameSyntax q => q.Right.Identifier.ValueText,
+                _ => null,
+            };
+
+            if (string.IsNullOrEmpty(typeName))
+            {
+                return null;
+            }
+
+            const string suffix = "Request";
+            return typeName!.Length > suffix.Length && typeName.EndsWith(suffix, System.StringComparison.Ordinal)
+                ? typeName.Substring(0, typeName.Length - suffix.Length)
+                : typeName;
         }
 
         private static (string? Alias, List<LambdaExpressionSyntax> Selectors) SplitArguments(InvocationExpressionSyntax invocation)

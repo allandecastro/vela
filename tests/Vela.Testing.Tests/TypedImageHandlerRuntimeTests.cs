@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Vela.Context;
 using Vela.Plugin;
 using Vela.Steps;
@@ -30,6 +31,19 @@ namespace Vela.Testing.Tests
                     ctx.SystemService.Create(new FakeTask { Subject = $"{pre?.Name}->{post?.Name}" }));
     }
 
+    // Typed On<TRequest>() path: the handler keeps its generic message context (IMessagePreContext<DeleteRequest>)
+    // and additionally receives the projection of the captured pre-image, via the unified delegate-driven dispatch.
+    public sealed class TypedDeletePreImage : EntityPluginBase<FakeAccount>
+    {
+        public TypedDeletePreImage(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<DeleteRequest>().PreOperation().Sync()
+                .WithPreImage(a => a.Name)
+                .Handle((IMessagePreContext<DeleteRequest> ctx, AccountNameImage? pre) =>
+                    ctx.SystemService.Create(new FakeTask { Subject = pre?.Name ?? "(none)" }));
+    }
+
     public sealed class TypedImageHandlerRuntimeTests
     {
         [Fact]
@@ -43,6 +57,19 @@ namespace Vela.Testing.Tests
 
             FakeTask task = Assert.Single(pipeline.GetAll("task")).ToEntity<FakeTask>();
             Assert.Equal("Old->New", task.Subject);
+        }
+
+        [Fact]
+        public void Typed_on_request_handler_receives_a_projection_of_the_captured_image()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<TypedDeletePreImage>()
+                .Seed(new FakeAccount { Id = id, Name = "Zava" });
+
+            pipeline.Service.Delete("account", id);
+
+            FakeTask task = Assert.Single(pipeline.GetAll("task")).ToEntity<FakeTask>();
+            Assert.Equal("Zava", task.Subject);
         }
     }
 }

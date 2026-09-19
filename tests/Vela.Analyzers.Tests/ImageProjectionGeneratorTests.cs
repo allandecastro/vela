@@ -30,6 +30,8 @@ namespace Vela.Steps
     public interface IStepConfig<TEntity> : IFluentStep
     {
         IStepConfig<TEntity> OnUpdate();
+        IStepConfig<TEntity> On<TRequest>();
+        IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
         IStepConfig<TEntity> Sync();
         IStepConfig<TEntity> FilterOn(Expression<Func<TEntity, object>> a);
@@ -62,6 +64,8 @@ namespace Demo
         [AttributeLogicalName(""revenue"")] public decimal? Revenue { get; set; }
         [AttributeLogicalName(""telephone1"")] public string Telephone1 { get; set; }
     }
+
+    public sealed class DeleteRequest { }
 }
 ";
 
@@ -155,5 +159,27 @@ namespace Demo
 ");
 
         Assert.Contains("class AliasedImage_UpdatePostOp_PreImage_Snapshot", output);
+    }
+
+    [Fact]
+    public void Emits_a_projection_for_the_typed_on_request_path()
+    {
+        // On<DeleteRequest>() derives the message "Delete" from the request type name.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class TypedDelete : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<DeleteRequest>().PreOperation().Sync()
+                .WithPreImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.Contains("class TypedDelete_DeletePreOp_PreImage", output);
+        Assert.Contains("AttributeLogicalName(\"name\")", output);
     }
 }
