@@ -202,6 +202,8 @@ public sealed class AccountAudit : EntityPluginBase<Account>
 - The projections are compiler-generated (they never appear as files in your source tree; `F12` opens them). A
   capture with no explicit columns (`WithPreImage()`) keeps the full entity and generates nothing. If the column
   list is not a literal set of selectors, the generator skips it and you keep the untyped image.
+- Analyzer `VELA004` flags a projection that reads a column the step did not capture (for example the wrong
+  generated type), so a would-be silent `null` is a build error instead.
 
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:
