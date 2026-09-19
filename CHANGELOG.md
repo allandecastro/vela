@@ -24,6 +24,36 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.16.0] - 2026-09-19 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.16.0` (all three packages ship at this version).
+
+### Added
+
+- **Typed image projections.** Read a step's captured pre/post image as a generated projection with
+  `ctx.PreImageAs<T>()` / `ctx.PostImageAs<T>()` (with an optional alias overload), where `T` exposes only the
+  columns declared in `WithPreImage(...)` / `WithPostImage(...)`. Reading a column the step did not capture is a
+  compile error instead of a silent `null`, and completion is filtered to what was captured. A build-time
+  incremental source generator (shipped in the `Vela.Plugins` analyzer package) emits the projection types into
+  `<Namespace>.Generated.Images`, named `{PluginClass}_{Message}{Stage}_{PreImage|PostImage}[_{Alias}]`; it is
+  additive and skips anything not statically analyzable (you keep the full early-bound image). Works on the guided
+  and the typed `On<TRequest>()` paths.
+- **Duplicate-modifier analyzer (`VELA003`), shipped in the `Vela.Plugins` package.** Reports an error when a
+  single-value step modifier (`FilterOn` or a `With...` setter) is set more than once on the same step.
+
+### Changed
+
+- **A step's single-value modifiers are set-once.** `FilterOn` and the `With...` setters previously overwrote the
+  earlier value when called twice, silently dropping it; the builder now throws at registration and `VELA003`
+  flags it at build. `Disabled()` stays an idempotent toggle.
+- **Step handlers are invoked through the retained delegate**, with the handler context built from the delegate's
+  own parameter type - one rule shared by the guided and typed paths.
+
+### Fixed
+
+- **Lambda step handlers that capture local variables now run.** They were previously resolved by method name and
+  silently not found; the actual delegate is now invoked directly.
+
 ## [0.15.0] - 2026-09-18 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.15.0` (all three packages ship at this version).
