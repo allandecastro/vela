@@ -206,6 +206,9 @@ public sealed class AccountAudit : EntityPluginBase<Account>
   keep working. It mirrors the early-bound `ctx.GetPreImage<Account>()` accessor, so the read site is familiar;
   pass a custom alias with `ctx.PostImageAs<T>("MyAlias")`.
 - Works on the guided path and the typed `On<TRequest>()` path alike (it is a context accessor).
+- **Bulk steps** (`OnCreateMultiple` / `OnUpdateMultiple`) read per-record projections with `ctx.PreImagesAs<T>()`
+  / `ctx.PostImagesAs<T>()`, which return an `IReadOnlyList<T?>` aligned with `ctx.GetTargets()` (or a single
+  record with `ctx.PostImageAs<T>(index)`).
 - Reading a column the step did not capture is a normal C# "no such member" compile error on the projection
   (the column simply is not on the type). The `global using` needs C# 10; on older `LangVersion` it is skipped
   and you add `using <YourNamespace>.Generated.Images;` yourself (completion still offers it).

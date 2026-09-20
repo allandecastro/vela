@@ -30,6 +30,7 @@ namespace Vela.Steps
     public interface IStepConfig<TEntity> : IFluentStep
     {
         IStepConfig<TEntity> OnUpdate();
+        IStepConfig<TEntity> OnUpdateMultiple();
         IStepConfig<TEntity> On<TRequest>();
         IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
@@ -181,6 +182,28 @@ namespace Demo
 
         Assert.Contains("class TypedDelete_DeletePreOp_PreImage", output);
         Assert.Contains("AttributeLogicalName(\"name\")", output);
+    }
+
+    [Fact]
+    public void Emits_a_projection_for_a_bulk_step()
+    {
+        // OnUpdateMultiple() maps to the "UpdateMultiple" message (lambda handler -> fallback name).
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class BulkAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdateMultiple().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .WithPostImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.Contains("class BulkAudit_UpdateMultiplePostOp_PostImage", output);
     }
 
     [Fact]
