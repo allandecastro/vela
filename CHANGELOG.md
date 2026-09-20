@@ -24,6 +24,24 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.17.0] - 2026-09-20 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.17.0` (all three packages ship at this version).
+
+### Changed
+
+- **BREAKING: typed image projection types are renamed to `{PluginClass}_{Handler}_{PreImage|PostImage}`** (for a
+  named-method handler; a lambda handler falls back to `{PluginClass}_{Message}{Stage}_{PreImage|PostImage}`), for
+  example `AccountAudit_OnUpdated_PostImage`. This makes the type easy to guess from your own class and method, and
+  the plugin-class prefix keeps it unique across plugins in the same namespace. Update any `ctx.PreImageAs<...>()`
+  / `ctx.PostImageAs<...>()` type arguments written against the previous `{PluginClass}_{Message}{Stage}_...` name.
+
+### Added
+
+- **The image-projection generator emits a `global using`** for each `<Namespace>.Generated.Images` namespace
+  (C# 10+; skipped on older `LangVersion`), so completion offers the projection type as you type
+  `ctx.PostImageAs<` with no `using` to add. The generated type also carries an explicit XML doc summary.
+
 ## [0.16.0] - 2026-09-19 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.16.0` (all three packages ship at this version).
