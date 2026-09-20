@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed (CLI)
+
+- Scaffolded plugin projects (`{prefix}.Plugins` and `{prefix}.Integrations`) now carry
+  `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]`. Without it, passing an early-bound entity
+  (for example `new Account { ... }`) to `ctx.UserService.Create`/`Update` inside a plugin failed at
+  runtime on a real environment with a `SerializationException` ("The deserializer has no knowledge of any
+  type that maps to the name '&lt;namespace&gt;:Account'"). Existing projects can add the attribute manually.
+
 ## [0.18.0] - 2026-09-20 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.18.0` (all three packages ship at this version).
