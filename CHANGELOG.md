@@ -24,6 +24,18 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.18.0] - 2026-09-20 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.18.0` (all three packages ship at this version).
+
+### Added
+
+- **Typed per-record images for bulk steps.** `CreateMultiple` / `UpdateMultiple` handlers read each record's
+  captured image as the generated projection with `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()` (an
+  `IReadOnlyList<T?>` aligned with `ctx.GetTargets()`), or a single record with `ctx.PreImageAs<T>(index)` /
+  `ctx.PostImageAs<T>(index)`. Additive; the raw `BulkPreEntityImagesCollection` / `BulkPostEntityImagesCollection`
+  accessors are unchanged.
+
 ## [0.17.0] - 2026-09-20 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.17.0` (all three packages ship at this version).
