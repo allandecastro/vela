@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
@@ -17,7 +18,7 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
     /// <inheritdoc />
     public Guid Create(Entity entity)
     {
-        return Trace("Create", $"entity={entity?.LogicalName}", () => _innerService.Create(entity));
+        return Trace("Create", $"entity={entity?.LogicalName}", () => _innerService.Create(ToBaseEntity(entity)));
     }
 
     /// <inheritdoc />
@@ -29,7 +30,7 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
     /// <inheritdoc />
     public void Update(Entity entity)
     {
-        Trace("Update", $"entity={entity?.LogicalName}; id={entity?.Id}", () => _innerService.Update(entity));
+        Trace("Update", $"entity={entity?.LogicalName}; id={entity?.Id}", () => _innerService.Update(ToBaseEntity(entity)));
     }
 
     /// <inheritdoc />
@@ -42,6 +43,10 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
     public OrganizationResponse Execute(OrganizationRequest request)
     {
         string requestName = request?.RequestName ?? "UnknownRequest";
+        if (request != null)
+        {
+            SanitizeEarlyBoundParameters(request);
+        }
         return Trace("Execute", $"request={requestName}", () => _innerService.Execute(request));
     }
 
@@ -68,6 +73,47 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
             _ => $"query={query?.GetType().Name ?? "null"}"
         };
         return Trace("RetrieveMultiple", details, () => _innerService.RetrieveMultiple(query));
+    }
+
+    // An early-bound entity (a subclass of Entity, e.g. a generated Account) fails to serialize into the
+    // Dataverse sandbox unless the plugin assembly is a proxy-types assembly, throwing a SerializationException
+    // ("The deserializer has no knowledge of any type that maps to the name '<namespace>:Account'"). Downcasting
+    // to the base Entity keeps the same LogicalName, Id and attributes, so the write succeeds regardless. This
+    // makes ctx.UserService accept early-bound entities out of the box, including in projects that predate the
+    // scaffold's [assembly: ProxyTypesAssembly].
+    private static Entity? ToBaseEntity(Entity? entity) =>
+        entity == null || entity.GetType() == typeof(Entity) ? entity : entity.ToEntity<Entity>();
+
+    // Downcast early-bound entities carried inside a request (Target, Targets, and any other Entity /
+    // EntityCollection parameter) for the same reason - covers CreateRequest/UpdateRequest, CreateMultiple/
+    // UpdateMultiple, Upsert, and custom requests.
+    private static void SanitizeEarlyBoundParameters(OrganizationRequest request)
+    {
+        if (request.Parameters == null || request.Parameters.Count == 0)
+        {
+            return;
+        }
+
+        foreach (string key in request.Parameters.Keys.ToArray())
+        {
+            switch (request.Parameters[key])
+            {
+                case Entity entity when entity.GetType() != typeof(Entity):
+                    request.Parameters[key] = entity.ToEntity<Entity>();
+                    break;
+                case EntityCollection collection:
+                    for (int i = 0; i < collection.Entities.Count; i++)
+                    {
+                        Entity item = collection.Entities[i];
+                        if (item != null && item.GetType() != typeof(Entity))
+                        {
+                            collection.Entities[i] = item.ToEntity<Entity>();
+                        }
+                    }
+
+                    break;
+            }
+        }
     }
 
     private TResult Trace<TResult>(string operation, string details, Func<TResult> action)
