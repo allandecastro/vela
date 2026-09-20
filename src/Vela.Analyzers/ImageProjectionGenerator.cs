@@ -29,7 +29,8 @@ namespace Vela.Analyzers
                 .Where(static m => m is not null)
                 .Select(static (m, _) => m!.Value);
 
-            context.RegisterSourceOutput(models.Collect(), static (spc, items) => Emit(spc, items));
+            var withOptions = models.Collect().Combine(context.ParseOptionsProvider);
+            context.RegisterSourceOutput(withOptions, static (spc, pair) => Emit(spc, pair.Left, pair.Right));
         }
 
         private static bool IsImageInvocation(SyntaxNode node)
@@ -103,7 +104,12 @@ namespace Vela.Analyzers
 
             string role = isPre ? "PreImage" : "PostImage";
             string aliasSuffix = string.IsNullOrEmpty(alias) ? string.Empty : "_" + Sanitize(alias!);
-            string typeName = $"{pluginSymbol.Name}_{messageLabel}{stageLabel}_{role}{aliasSuffix}";
+            // Prefer naming the projection after the (named-method) handler bound with .Handle(...), so a developer
+            // can guess it from their own method: OnAccountUpdated_PostImage. Fall back to plugin + message + stage
+            // for a lambda handler, which has no name.
+            string? handlerName = FindHandlerMethodName(invocation);
+            string baseName = handlerName is null ? $"{pluginSymbol.Name}_{messageLabel}{stageLabel}" : Sanitize(handlerName);
+            string typeName = $"{baseName}_{role}{aliasSuffix}";
             string ns = pluginSymbol.ContainingNamespace.IsGlobalNamespace
                 ? "Generated.Images"
                 : pluginSymbol.ContainingNamespace.ToDisplayString() + ".Generated.Images";
@@ -119,6 +125,35 @@ namespace Vela.Analyzers
                     t.TypeArguments[0] is INamedTypeSymbol entity)
                 {
                     return entity;
+                }
+            }
+
+            return null;
+        }
+
+        // The method name bound in the terminal .Handle(...) of this step's chain (walking outward from the
+        // WithPreImage/WithPostImage call), or null when the handler is a lambda (no name to key off).
+        private static string? FindHandlerMethodName(InvocationExpressionSyntax imageInvocation)
+        {
+            for (SyntaxNode? node = imageInvocation.Parent; node is not null; node = node.Parent)
+            {
+                if (node is InvocationExpressionSyntax inv &&
+                    inv.Expression is MemberAccessExpressionSyntax ma &&
+                    ma.Name.Identifier.ValueText == "Handle" &&
+                    inv.ArgumentList.Arguments.Count == 1)
+                {
+                    return inv.ArgumentList.Arguments[0].Expression switch
+                    {
+                        IdentifierNameSyntax id => id.Identifier.ValueText,
+                        MemberAccessExpressionSyntax m => m.Name.Identifier.ValueText,
+                        _ => null, // lambda or other -> fall back to the plugin/message/stage name
+                    };
+                }
+
+                // Stop at the enclosing member/statement boundary; the terminal Handle is within this chain.
+                if (node is MemberDeclarationSyntax || node is StatementSyntax)
+                {
+                    break;
                 }
             }
 
@@ -270,11 +305,12 @@ namespace Vela.Analyzers
             return result.Length == 0 || char.IsDigit(result[0]) ? "_" + result : result;
         }
 
-        private static void Emit(SourceProductionContext context, ImmutableArray<ProjectionModel> models)
+        private static void Emit(SourceProductionContext context, ImmutableArray<ProjectionModel> models, ParseOptions parseOptions)
         {
             // Dedup by fully-qualified type name: identical captures (same shape reached twice) collapse to one
-            // type; distinct shapes have distinct names by construction (plugin + message + stage + role + alias).
+            // type; distinct shapes have distinct names by construction (handler/plugin + message + stage + role).
             HashSet<string> emitted = new HashSet<string>();
+            SortedSet<string> namespaces = new SortedSet<string>(System.StringComparer.Ordinal);
             foreach (ProjectionModel projectionModel in models)
             {
                 string fullName = projectionModel.Namespace + "." + projectionModel.TypeName;
@@ -283,7 +319,25 @@ namespace Vela.Analyzers
                     continue;
                 }
 
+                namespaces.Add(projectionModel.Namespace);
                 context.AddSource(Sanitize(fullName) + ".g.cs", SourceText.From(Render(projectionModel), Encoding.UTF8));
+            }
+
+            // Emit a global using per generated namespace so the projection types surface in completion (typing
+            // ctx.PostImageAs<...>) without an explicit using. global using is a C# 10 feature, so this is skipped
+            // on older LangVersion consumers, where import completion or an explicit using still work.
+            if (namespaces.Count > 0 &&
+                parseOptions is CSharpParseOptions options &&
+                options.LanguageVersion >= LanguageVersion.CSharp10)
+            {
+                StringBuilder usings = new StringBuilder();
+                usings.AppendLine("// <auto-generated/> Vela typed image projection global usings. Do not edit.");
+                foreach (string ns in namespaces)
+                {
+                    usings.AppendLine($"global using global::{ns};");
+                }
+
+                context.AddSource("VelaGeneratedImages.GlobalUsings.g.cs", SourceText.From(usings.ToString(), Encoding.UTF8));
             }
         }
 
@@ -295,7 +349,11 @@ namespace Vela.Analyzers
             sb.AppendLine();
             sb.AppendLine($"namespace {model.Namespace}");
             sb.AppendLine("{");
-            sb.AppendLine($"    /// <summary>Generated projection of the columns captured for this step's image.</summary>");
+            sb.AppendLine("    /// <summary>");
+            sb.AppendLine("    /// Generated projection: exposes only the columns this step captured in WithPreImage/WithPostImage(...).");
+            sb.AppendLine("    /// A column the step did not capture is absent here (reading it is a compile error, not a silent null);");
+            sb.AppendLine("    /// add it to the capture to read it. Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().");
+            sb.AppendLine("    /// </summary>");
             sb.AppendLine($"    public sealed class {model.TypeName}");
             sb.AppendLine("    {");
             foreach (ProjectionColumn column in model.Columns)
