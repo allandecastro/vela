@@ -124,6 +124,21 @@ Framework line, published as `framework-v0.15.0` (all three packages ship at thi
   constant, remains callable from a handler (`service.Execute(new WhoAmIRequest())`), and can still be generated as
   a typed request with `vela models --messages`.
 
+## [0.10.0] - 2026-09-20 (Vela.Cli)
+
+CLI line (`Vela.Cli`), published as `cli-v0.10.0`.
+
+### Added
+
+- **`plan` / `apply` warn on plugin step execution-order (rank) collisions.** When a step being deployed shares
+  its `rank` with another step on the same message, entity, stage and mode anywhere in the target environment
+  (including steps owned by other assemblies), a diagnostic is emitted, since their relative execution order is
+  undefined. It shows in `plan` / `apply` output and fails the run under `--strict`.
+
+### Changed
+
+- The default scaffold framework version (`vela init` offline fallback) is now `0.17.0`.
+
 ## [0.9.0] - 2026-09-18 (Vela.Cli)
 
 CLI line (`Vela.Cli`), published as `cli-v0.9.0`.
