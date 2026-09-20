@@ -176,9 +176,11 @@ completion is filtered to what you captured.
 
 The step declaration keeps its usual shape (declare the images, then bind a named handler with `Handle(...)`);
 only the read inside the handler changes. A build-time source generator emits the projection type from the
-captured columns; you name it once at the read. The type is named
-`{PluginClass}_{Message}{Stage}_{PreImage|PostImage}` (with `_{Alias}` for a custom alias) in the
-`<YourNamespace>.Generated.Images` namespace.
+captured columns and **names it after your handler method**, so it is easy to guess: a step whose handler is
+`OnUpdated` gets `OnUpdated_PreImage` / `OnUpdated_PostImage` (with `_{Alias}` for a custom alias). They live in
+the `<YourNamespace>.Generated.Images` namespace, which the generator also exposes with a `global using`, so
+completion offers the type as you type `ctx.PostImageAs<` with no `using` to add. (A lambda handler has no name,
+so its projection falls back to `{PluginClass}_{Message}{Stage}_{PreImage|PostImage}`.)
 
 ```csharp
 public sealed class AccountAudit : EntityPluginBase<Account>
@@ -192,7 +194,7 @@ public sealed class AccountAudit : EntityPluginBase<Account>
 
     private void OnUpdated(IUpdatePostContext<Account> ctx)
     {
-        var pre = ctx.PreImageAs<AccountAudit_UpdatePostOp_PreImage>();
+        var pre = ctx.PreImageAs<OnUpdated_PreImage>();   // named after this handler
         decimal? was = pre?.Revenue;   // captured -> available
         // var x = pre?.Telephone1;    // compile error: not captured for this image
     }
@@ -203,6 +205,9 @@ public sealed class AccountAudit : EntityPluginBase<Account>
   keep working. It mirrors the early-bound `ctx.GetPreImage<Account>()` accessor, so the read site is familiar;
   pass a custom alias with `ctx.PostImageAs<T>("MyAlias")`.
 - Works on the guided path and the typed `On<TRequest>()` path alike (it is a context accessor).
+- Reading a column the step did not capture is a normal C# "no such member" compile error on the projection
+  (the column simply is not on the type). The `global using` needs C# 10; on older `LangVersion` it is skipped
+  and you add `using <YourNamespace>.Generated.Images;` yourself (completion still offers it).
 - The projections are compiler-generated (they never appear as files in your source tree; `F12` opens them). A
   capture with no explicit columns (`WithPreImage()`) keeps the full entity and generates nothing. If the column
   list is not a literal set of selectors, the generator skips it and you keep the untyped image.

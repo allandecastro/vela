@@ -182,4 +182,48 @@ namespace Demo
         Assert.Contains("class TypedDelete_DeletePreOp_PreImage", output);
         Assert.Contains("AttributeLogicalName(\"name\")", output);
     }
+
+    [Fact]
+    public void Names_the_projection_after_the_named_handler_method()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class NamedHandlerPlugin : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .WithPostImage(a => a.Name)
+                .Handle(OnUpdated);
+
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.Contains("class OnUpdated_PostImage", output);
+    }
+
+    [Fact]
+    public void Emits_a_global_using_for_the_generated_namespace()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class GlobalUsingPlugin : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .WithPostImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.Contains("global using global::Demo.Generated.Images;", output);
+    }
 }
