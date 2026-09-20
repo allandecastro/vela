@@ -108,7 +108,11 @@ namespace Vela.Analyzers
             // can guess it from their own method: OnAccountUpdated_PostImage. Fall back to plugin + message + stage
             // for a lambda handler, which has no name.
             string? handlerName = FindHandlerMethodName(invocation);
-            string baseName = handlerName is null ? $"{pluginSymbol.Name}_{messageLabel}{stageLabel}" : Sanitize(handlerName);
+            // Always prefix with the plugin class so the name is unique: the handler method name alone (e.g.
+            // "OnUpdated") is common and would collide across plugin classes in the same namespace.
+            string baseName = handlerName is null
+                ? $"{pluginSymbol.Name}_{messageLabel}{stageLabel}"
+                : $"{pluginSymbol.Name}_{Sanitize(handlerName)}";
             string typeName = $"{baseName}_{role}{aliasSuffix}";
             string ns = pluginSymbol.ContainingNamespace.IsGlobalNamespace
                 ? "Generated.Images"

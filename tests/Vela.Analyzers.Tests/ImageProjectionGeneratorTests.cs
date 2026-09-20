@@ -203,7 +203,7 @@ namespace Demo
 }
 ");
 
-        Assert.Contains("class OnUpdated_PostImage", output);
+        Assert.Contains("class NamedHandlerPlugin_OnUpdated_PostImage", output);
     }
 
     [Fact]

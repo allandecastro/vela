@@ -177,7 +177,8 @@ completion is filtered to what you captured.
 The step declaration keeps its usual shape (declare the images, then bind a named handler with `Handle(...)`);
 only the read inside the handler changes. A build-time source generator emits the projection type from the
 captured columns and **names it after your handler method**, so it is easy to guess: a step whose handler is
-`OnUpdated` gets `OnUpdated_PreImage` / `OnUpdated_PostImage` (with `_{Alias}` for a custom alias). They live in
+`OnUpdated` on plugin `AccountAudit` gets `AccountAudit_OnUpdated_PreImage` / `AccountAudit_OnUpdated_PostImage`
+(with `_{Alias}` for a custom alias; the plugin class prefix keeps the name unique across classes). They live in
 the `<YourNamespace>.Generated.Images` namespace, which the generator also exposes with a `global using`, so
 completion offers the type as you type `ctx.PostImageAs<` with no `using` to add. (A lambda handler has no name,
 so its projection falls back to `{PluginClass}_{Message}{Stage}_{PreImage|PostImage}`.)
@@ -194,7 +195,7 @@ public sealed class AccountAudit : EntityPluginBase<Account>
 
     private void OnUpdated(IUpdatePostContext<Account> ctx)
     {
-        var pre = ctx.PreImageAs<OnUpdated_PreImage>();   // named after this handler
+        var pre = ctx.PreImageAs<AccountAudit_OnUpdated_PreImage>();   // {plugin}_{handler}_PreImage
         decimal? was = pre?.Revenue;   // captured -> available
         // var x = pre?.Telephone1;    // compile error: not captured for this image
     }
