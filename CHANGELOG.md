@@ -24,32 +24,20 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Added (CLI)
+## [0.19.0] - 2026-09-21 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
-- **Transparent, headless auth via the ambient Azure credential.** With only `--url` (and no
-  `--connection-string`, client-secret flags, or `--interactive`), `plan`/`apply`/`inspect`/`models` now
-  acquire a Dataverse token from the ambient Azure credential chain (`Azure.Identity` `DefaultAzureCredential`):
-  a local `az login` session, or a managed identity / workload identity in CI - no browser and no flag. A bare
-  `vela apply --url https://org.crm.dynamics.com --solution <name>` just works when you are already `az login`-ed
-  or running under a managed identity. Explicit `--connection-string` / client-secret / `--interactive` still
-  take precedence.
+Framework line, published as `framework-v0.19.0` (all three packages ship at this version).
 
-### Fixed (Framework)
+### Changed - breaking
 
-- Generated typed image projections declare reference-type columns as nullable (for example `string? Name`).
-  A captured image column can be absent or null, and the generated file is `#nullable enable`, so the previous
-  non-nullable properties raised `CS8618` in nullable-enabled consumer projects.
-- An unhandled exception in a plugin now surfaces its real cause to the caller. The wrapping
-  `InvalidPluginExecutionException` message includes the plugin type and the inner exception's type and message
-  (for example `SerializationException: ...`) instead of a generic "an unexpected error occurred", and the
-  original exception is preserved as the inner exception. The full stack trace is still written to the plugin
-  trace log.
-- `ctx.UserService` (and the other wrapped services) now downcast early-bound entities to the base `Entity`
-  before every `Create`/`Update`/`Execute`, so passing an early-bound entity (for example `new Account { ... }`)
-  from plugin code works even when the plugin assembly is not a proxy-types assembly. Previously this failed
-  at runtime on a real environment with a `SerializationException` ("The deserializer has no knowledge of any
-  type that maps to the name '&lt;namespace&gt;:Account'"). Covers direct `Create`/`Update` and the `Target` /
-  `Targets` entities carried by `CreateRequest`/`UpdateRequest`/`CreateMultiple`/`UpdateMultiple` via `Execute`.
+- Typed custom API request/response classes must now derive from `Vela.Messages.CustomApiRequest` /
+  `CustomApiResponse` (passing the API unique name to the base constructor) instead of `TypedRequest` /
+  `TypedResponse`. `vela models --custom-apis` generates the new form; **regenerate your custom API models** (or
+  update hand-written ones) so their parameters bind to the full Dataverse keys. `TypedRequest`/`TypedResponse`
+  remain for standard/SDK messages and are unchanged.
+
+### Fixed
+
 - **Custom API parameters now work on a real environment.** Dataverse names a custom API's parameters by their
   full unique name - `{apiUniqueName}.{param}` for request inputs and `{apiUniqueName}.{prop}.response` for
   response outputs - both in the OData operation and in the plugin's `InputParameters`/`OutputParameters`.
@@ -59,19 +47,39 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   short handler names to and from the full Dataverse keys around dispatch, and the new
   `Vela.Messages.CustomApiRequest` / `CustomApiResponse` bases key their bags with the full names while property
   bodies stay short.
+- `ctx.UserService` (and the other wrapped services) now downcast early-bound entities to the base `Entity`
+  before every `Create`/`Update`/`Execute`, so passing an early-bound entity (for example `new Account { ... }`)
+  from plugin code works even when the plugin assembly is not a proxy-types assembly. Previously this failed
+  at runtime on a real environment with a `SerializationException` ("The deserializer has no knowledge of any
+  type that maps to the name '&lt;namespace&gt;:Account'"). Covers direct `Create`/`Update` and the `Target` /
+  `Targets` entities carried by `CreateRequest`/`UpdateRequest`/`CreateMultiple`/`UpdateMultiple` via `Execute`.
+- An unhandled exception in a plugin now surfaces its real cause to the caller. The wrapping
+  `InvalidPluginExecutionException` message includes the plugin type and the inner exception's type and message
+  (for example `SerializationException: ...`) instead of a generic "an unexpected error occurred", and the
+  original exception is preserved as the inner exception. The full stack trace is still written to the plugin
+  trace log.
+- Generated typed image projections declare reference-type columns as nullable (for example `string? Name`).
+  A captured image column can be absent or null, and the generated file is `#nullable enable`, so the previous
+  non-nullable properties raised `CS8618` in nullable-enabled consumer projects.
 
-### Changed (Framework) - breaking
+## [0.11.0] - 2026-09-21 (Vela.Cli)
 
-- Typed custom API request/response classes must now derive from `Vela.Messages.CustomApiRequest` /
-  `CustomApiResponse` (passing the API unique name to the base constructor) instead of `TypedRequest` /
-  `TypedResponse`. `vela models --custom-apis` generates the new form; **regenerate your custom API models** (or
-  update hand-written ones) so their parameters bind to the full Dataverse keys. `TypedRequest`/`TypedResponse`
-  remain for standard/SDK messages and are unchanged.
+CLI line, published as `cli-v0.11.0`. Scaffold default core version bumped to `0.19.0`.
 
-### Fixed (CLI)
+### Added
+
+- **Transparent, headless auth via the ambient Azure credential.** With only `--url` (and no
+  `--connection-string`, client-secret flags, or `--interactive`), `plan`/`apply`/`inspect`/`models` now
+  acquire a Dataverse token from the ambient Azure credential chain (`Azure.Identity` `DefaultAzureCredential`):
+  a local `az login` session, or a managed identity / workload identity in CI - no browser and no flag. A bare
+  `vela apply --url https://org.crm.dynamics.com --solution <name>` just works when you are already `az login`-ed
+  or running under a managed identity. Explicit `--connection-string` / client-secret / `--interactive` still
+  take precedence.
+
+### Fixed
 
 - Scaffolded plugin projects (`{prefix}.Plugins` and `{prefix}.Integrations`) now carry
-  `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]` as well, the standard belt-and-suspenders for the
+  `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]`, the standard belt-and-suspenders for the
   early-bound serialization issue above (also covers early-bound entities nested in deep-insert graphs, which
   the runtime downcast does not reach).
 - `vela models --custom-apis` and the scaffolded custom API samples emit request/response types deriving from
