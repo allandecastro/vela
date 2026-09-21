@@ -36,7 +36,7 @@ internal static class ModelsCommand
     private static readonly HashSet<string> FlagOptions = new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--solution-roles", "--forms", "--tables", "--no-annotations", "--overwrite", "--verbose", "-v", "--json",
-        "--interactive", "-i", "--help", "-h",
+        "--interactive", "-i", "--help", "-h", "--verify",
     };
 
     // Value options that may appear bare (present with no value = "all"): --messages / --custom-apis. Every other
@@ -183,6 +183,15 @@ internal static class ModelsCommand
         outDir = ResolveCSharpOutputDir(args, outDir);
 
         bool dataAnnotations = !HasFlag(args, "--no-annotations");
+
+        // --verify does not write: it regenerates the scoped entity models from live metadata in memory and
+        // compares them, column by column, against the files already on disk, then reports drift. It verifies the
+        // C# early-bound entity model only (the typed-image blind spot); custom-api/message/role scopes are ignored.
+        if (HasFlag(args, "--verify"))
+        {
+            bool ignoredScopes = customApis.Length > 0 || allCustomApis || messages.Length > 0 || allMessages || roles.Length > 0 || solutionRoles;
+            return RunModelVerify(args, interactive, solution, entities, ns!, outDir, dataAnnotations, json, ignoredScopes);
+        }
 
         // Optional plugin package inputs (offline scan): when provided, collect the unique names of the Custom APIs
         // the developer authored in code so ALL-mode --custom-apis can exclude them (they already have those classes).
@@ -375,6 +384,186 @@ internal static class ModelsCommand
         catch (Exception ex)
         {
             return FailWithException(ex, ExitError, options.Verbose);
+        }
+    }
+
+    // The --verify path: regenerate the scoped entity models from live metadata in memory and compare them,
+    // column by column, against the files already on disk. Reports drift (a column the live schema no longer has,
+    // a retyped column, or a column added live) and returns ExitDriftDetected when anything is out of sync, so CI
+    // can fail a stale model. Never writes. Verifies the C# early-bound entity model only.
+    private static int RunModelVerify(string[] args, bool interactive, string? solution, string[] entities, string ns, string outDir, bool dataAnnotations, bool json, bool ignoredScopes)
+    {
+        if (ignoredScopes)
+        {
+            Console.Error.WriteLine("Warning: --verify checks the C# early-bound entity model only; --custom-apis / --messages / --roles / --solution-roles are ignored.");
+        }
+
+        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
+        {
+            return exitCode;
+        }
+
+        SharedOptions options = new SharedOptions(
+            PackagePaths: [],
+            PackageAssembly: null,
+            ConnectionString: connectionString,
+            OAuthUrl: oauthUrl,
+            OAuthToken: oauthToken,
+            SolutionUniqueName: solution,
+            Environment: url,
+            OutPath: outDir,
+            AutoApprove: false,
+            Interactive: interactive,
+            Strict: false,
+            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
+
+        try
+        {
+            using ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
+            IOrganizationService service = client;
+
+            List<string> logicalNames = ResolveLogicalNames(service, solution, entities);
+            if (logicalNames.Count == 0)
+            {
+                return Fail("No tables resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            EntityMetadata[] metadata = logicalNames.Select(name => ReadEntity(service, name)).ToArray();
+            IReadOnlyList<GeneratedModel> live = ModelGenerator.Generate(metadata, new ModelGenOptions(ns, dataAnnotations));
+
+            List<string> liveSources = live.Select(m => m.Code).ToList();
+            List<string> localSources = ReadLocalModelSources(outDir);
+
+            ModelDriftChecker.ModelDriftReport report = ModelDriftChecker.Compare(liveSources, localSources);
+
+            if (json)
+            {
+                Console.WriteLine(JsonSerializer.Serialize(BuildDriftReport(url, ns, report), new JsonSerializerOptions { WriteIndented = true }));
+            }
+            else
+            {
+                WriteDriftReport(url, ns, report);
+            }
+
+            return report.HasDrift ? ExitDriftDetected : ExitSuccess;
+        }
+        catch (DataverseConnectionException ex)
+        {
+            return FailWithException(ex, ExitConnectionFailure, options.Verbose);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return FailWithException(ex, ExitFileNotFound, options.Verbose);
+        }
+        catch (Exception ex)
+        {
+            return FailWithException(ex, ExitError, options.Verbose);
+        }
+    }
+
+    // Reads every C# source under the model output directory. The drift extractor keeps only entity classes
+    // (files carrying the EntityLogicalNameValue constant) and ignores option-set / support files, so reading all
+    // of them is safe; a file we cannot read is warned about and skipped rather than aborting the check.
+    private static List<string> ReadLocalModelSources(string outDir)
+    {
+        List<string> sources = new List<string>();
+        if (!Directory.Exists(outDir))
+        {
+            return sources;
+        }
+
+        foreach (string file in Directory.EnumerateFiles(outDir, "*.cs", SearchOption.AllDirectories))
+        {
+            try
+            {
+                sources.Add(File.ReadAllText(file));
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Warning: could not read '{file}': {ex.Message}");
+            }
+        }
+
+        return sources;
+    }
+
+    // The --verify --json report: one entry per scoped table with its drift, plus a top-level hasDrift flag.
+    private static object BuildDriftReport(string? environment, string ns, ModelDriftChecker.ModelDriftReport report) =>
+        new
+        {
+            mode = "verify",
+            environment,
+            @namespace = ns,
+            hasDrift = report.HasDrift,
+            tables = report.Entities.Select(e => new
+            {
+                entity = e.EntityLogicalName,
+                inSync = !e.HasDrift,
+                missingLocalFile = e.MissingLocalFile,
+                removedInDataverse = e.RemovedInDataverse,
+                typeChanged = e.TypeChanged.Select(t => new { t.LogicalName, t.LocalType, t.LiveType }).ToArray(),
+                addedInDataverse = e.AddedInDataverse,
+            }).ToArray(),
+        };
+
+    // The default human --verify report: one line per table, with the drifted columns indented under it.
+    private static void WriteDriftReport(string? environment, string ns, ModelDriftChecker.ModelDriftReport report)
+    {
+        bool color = ConsoleTheme.StdoutColor;
+        Console.WriteLine(ConsoleTheme.Heading($"verify {environment} (namespace {ns})", color));
+
+        foreach (ModelDriftChecker.EntityDrift drift in report.Entities)
+        {
+            if (!drift.HasDrift)
+            {
+                Console.WriteLine($"  {drift.EntityLogicalName}: {ConsoleTheme.Added("in sync", color)}");
+                continue;
+            }
+
+            if (drift.MissingLocalFile)
+            {
+                Console.WriteLine($"  {drift.EntityLogicalName}: {ConsoleTheme.Changed("no generated file on disk (run vela models to generate it)", color)}");
+                continue;
+            }
+
+            Console.WriteLine($"  {ConsoleTheme.Changed(drift.EntityLogicalName + ": drift", color)}");
+
+            if (drift.RemovedInDataverse.Count > 0)
+            {
+                Console.WriteLine(ConsoleTheme.Removed("    removed in Dataverse (local model has columns the schema no longer has; typed reads return null):", color));
+                foreach (string column in drift.RemovedInDataverse)
+                {
+                    Console.WriteLine(ConsoleTheme.Removed($"      - {column}", color));
+                }
+            }
+
+            if (drift.TypeChanged.Count > 0)
+            {
+                Console.WriteLine(ConsoleTheme.Changed("    type changed in Dataverse (regenerate):", color));
+                foreach (ModelDriftChecker.AttributeTypeChange change in drift.TypeChanged)
+                {
+                    Console.WriteLine(ConsoleTheme.Changed($"      - {change.LogicalName}: local {change.LocalType} {ConsoleTheme.Arrow} live {change.LiveType}", color));
+                }
+            }
+
+            if (drift.AddedInDataverse.Count > 0)
+            {
+                Console.WriteLine(ConsoleTheme.Added("    added in Dataverse (regenerate to include):", color));
+                foreach (string column in drift.AddedInDataverse)
+                {
+                    Console.WriteLine(ConsoleTheme.Added($"      + {column}", color));
+                }
+            }
+        }
+
+        int driftCount = report.Entities.Count(e => e.HasDrift);
+        if (driftCount == 0)
+        {
+            ConsoleTheme.WriteSuccessLine($"All {report.Entities.Count} table(s) are in sync with the live schema.");
+        }
+        else
+        {
+            Console.WriteLine(ConsoleTheme.Changed($"Drift detected in {driftCount} of {report.Entities.Count} table(s). Regenerate the model to resync.", color));
         }
     }
 
@@ -1189,6 +1378,7 @@ internal static class ModelsCommand
         Console.WriteLine("                            (--forms and --tables can be combined: one run emits both plus a shared option-sets/ folder and one index.ts barrel)");
         Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
         Console.WriteLine("  --out <dir>               output directory (default: current directory)");
+        Console.WriteLine("  --verify                  do not write: check the generated entity model on disk against the live schema and report drift (exit 5 on drift; ideal for CI)");
         Console.WriteLine("  --json                    print a JSON report of the generated files (for scripts/agents)");
         Console.WriteLine("  --no-annotations          omit DataAnnotations ([StringLength]/[Range])");
         Console.WriteLine("  --overwrite               overwrite existing files");

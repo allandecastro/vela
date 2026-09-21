@@ -24,6 +24,13 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added (CLI)
+
+- `vela models --verify` - a read-only drift check that compares the generated early-bound entity model on disk
+  against the live Dataverse schema and reports columns removed, retyped, or added in the org, without writing.
+  It exits `5` when the model is out of sync (and `0` when it matches), so CI can fail a build on a stale model
+  that would otherwise return silent runtime nulls. Supports `--json` for a machine-readable report.
+
 ## [0.19.0] - 2026-09-21 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.19.0` (all three packages ship at this version).

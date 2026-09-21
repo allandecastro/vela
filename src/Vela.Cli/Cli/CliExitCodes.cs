@@ -14,5 +14,10 @@ internal static class CliExitCodes
     /// it is the shared catch-all across commands, not specific to parsing.</summary>
     public const int ExitError = 4;
 
+    /// <summary>Drift was detected by a read-only check (currently <c>vela models --verify</c>): the command ran
+    /// successfully but found the local model out of sync with the live schema. A distinct code (5) lets CI tell a
+    /// "your model is stale" result apart from a genuine command failure (4) or a connection problem (6).</summary>
+    public const int ExitDriftDetected = 5;
+
     public const int ExitConnectionFailure = 6;
 }
