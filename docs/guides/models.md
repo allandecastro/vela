@@ -54,6 +54,30 @@ vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models
 The test harness's `FakeEntityMetadata.From<T>()` recovers all of this by reflection, so a derived fake metadata
 carries required level and lookup targets with no hand-written overrides.
 
+## Verify drift against the live schema (`--verify`)
+
+The generated model is compile-time-safe against the *model*, not the org. If a column is deleted or renamed in
+Dataverse but the model is not regenerated, the code still compiles and a typed read (including a typed image
+projection) returns a silent `null` at runtime. `--verify` closes that gap:
+
+```bash
+# Compare the entity model already on disk against the live schema. Writes nothing.
+vela models --verify --entities account,contact --url https://org.crm.dynamics.com
+```
+
+It regenerates the scoped entity models from live metadata in memory and compares them, column by column, against
+the files already on disk (found via the same `--out` / namespace resolution used to generate them). For each
+table it reports:
+
+- **removed in Dataverse** - a column the local model still has but the live schema no longer does (the runtime
+  `null` blind spot);
+- **type changed** - a column whose generated member type differs (for example `int?` to `decimal?`);
+- **added in Dataverse** - a column present live but missing from the local model (regenerate to include it).
+
+`--verify` writes nothing and exits `5` when any table is out of sync (and `0` when the model matches), so it
+drops straight into CI to fail a build on a stale model. Add `--json` for a machine-readable report. It checks
+the C# early-bound entity model only; `--custom-apis` / `--messages` / `--roles` scopes are ignored.
+
 ## Custom API message classes (`--custom-apis`)
 
 `--custom-apis` generates typed `OrganizationRequest`/`OrganizationResponse` classes into a `Messages/` subfolder:

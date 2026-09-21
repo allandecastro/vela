@@ -99,6 +99,27 @@ internal static class OutputWriter
                 writer.WriteLine($"    after : {ConsoleTheme.Added(after, color)}");
             }
         }
+
+        WriteDiagnostics(preview.Diagnostics, writer, color);
+    }
+
+    /// <summary>
+    /// Renders any plan/apply diagnostics (currently step execution-order collision warnings) as an amber
+    /// <c>warnings:</c> block. Shown in the default human summary so a rank collision is visible without
+    /// <c>--json</c> or <c>--strict</c>; it stays advisory (never fails the command on its own).
+    /// </summary>
+    public static void WriteDiagnostics(IReadOnlyList<string> diagnostics, TextWriter writer, bool color)
+    {
+        if (diagnostics is null || diagnostics.Count == 0)
+        {
+            return;
+        }
+
+        writer.WriteLine(ConsoleTheme.Changed($"warnings ({diagnostics.Count}):", color));
+        foreach (string diagnostic in diagnostics)
+        {
+            writer.WriteLine(ConsoleTheme.Changed($"  {ConsoleTheme.Bullet} {diagnostic}", color));
+        }
     }
 
     // Colors a per-parameter diff line by its leading verb so a Custom API change reads like the top-level diff.

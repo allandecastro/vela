@@ -267,6 +267,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         PlanPreview preview = BuildPlanPreview("apply-execute-preview", options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && preview.Diagnostics.Length > 0)
         {
+            WriteDiagnostics(preview.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
             return Fail($"Strict mode failed with {preview.Diagnostics.Length} diagnostic(s).", ExitError, includeUsage: false);
         }
 
@@ -351,6 +352,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
 
         if (options.Strict && result.Diagnostics.Length > 0)
         {
+            WriteDiagnostics(result.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
             return Fail($"Strict mode failed with {result.Diagnostics.Length} diagnostic(s) after apply.", ExitError, includeUsage: false);
         }
 
@@ -369,6 +371,12 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
                 // Unexpected: the environment still differs after a successful apply - surface it.
                 Console.Out.WriteLine("Note: the environment still shows differences after apply:");
                 WritePlanSummary(result, Console.Out, ConsoleTheme.StdoutColor);
+            }
+            else
+            {
+                // A clean apply skips the summary above, but rank collisions are not resolved by applying,
+                // so still surface any diagnostics (WritePlanSummary already includes them when it runs).
+                WriteDiagnostics(result.Diagnostics, Console.Out, ConsoleTheme.StdoutColor);
             }
 
             return ExitSuccess;
@@ -421,6 +429,7 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
         PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && plan.Diagnostics.Length > 0)
         {
+            WriteDiagnostics(plan.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
             return Fail($"Strict mode failed with {plan.Diagnostics.Length} diagnostic(s).", ExitError, includeUsage: false);
         }
 
