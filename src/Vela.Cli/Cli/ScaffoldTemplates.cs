@@ -1727,11 +1727,10 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     }
 
     /// <summary>Request parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
-    public sealed class EstimateValueRequest : TypedRequest
+    public sealed class EstimateValueRequest : CustomApiRequest
     {
-        public EstimateValueRequest()
+        public EstimateValueRequest() : base("{{ApiPrefix(prefix)}}_AccountEstimateValue")
         {
-            RequestName = "{{ApiPrefix(prefix)}}_AccountEstimateValue";
         }
 
         public Guid AccountId
@@ -1750,8 +1749,12 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     }
 
     /// <summary>Response parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
-    public sealed class EstimateValueResponse : TypedResponse
+    public sealed class EstimateValueResponse : CustomApiResponse
     {
+        public EstimateValueResponse() : base("{{ApiPrefix(prefix)}}_AccountEstimateValue")
+        {
+        }
+
         public decimal EstimatedValue
         {
             get => Get<decimal>();
@@ -1802,11 +1805,10 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     }
 
     /// <summary>Request parameters for <see cref="ContactValidateCustomApi"/>.</summary>
-    public sealed class ContactValidateRequest : TypedRequest
+    public sealed class ContactValidateRequest : CustomApiRequest
     {
-        public ContactValidateRequest()
+        public ContactValidateRequest() : base("{{ApiPrefix(prefix)}}_ContactValidate")
         {
-            RequestName = "{{ApiPrefix(prefix)}}_ContactValidate";
         }
 
         public Guid ContactId
@@ -1817,8 +1819,12 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     }
 
     /// <summary>Response parameters for <see cref="ContactValidateCustomApi"/>.</summary>
-    public sealed class ContactValidateResponse : TypedResponse
+    public sealed class ContactValidateResponse : CustomApiResponse
     {
+        public ContactValidateResponse() : base("{{ApiPrefix(prefix)}}_ContactValidate")
+        {
+        }
+
         public bool IsValid
         {
             get => Get<bool>();
@@ -2386,8 +2392,9 @@ namespace {{ns}}
     }
 
     /// <summary>
-    /// Request for <see cref="{{className}}"/>. Derives from <see cref="TypedRequest"/> so the same type
-    /// serves authoring, calling (<c>service.Execute(new {{className}}Request { ... }).ToResponse&lt;{{className}}Response&gt;()</c>),
+    /// Request for <see cref="{{className}}"/>. Derives from <see cref="CustomApiRequest"/> so each property keys
+    /// the Parameters bag with the full Dataverse name <c>{{uniqueName}}.{prop}</c> while the body stays short. The
+    /// same type serves authoring, calling (<c>service.Execute(new {{className}}Request { ... }).ToResponse&lt;{{className}}Response&gt;()</c>),
     /// and reacting. Add typed properties over the base <c>Get&lt;T&gt;()</c> / <c>Set(value)</c> helpers, for example:
     /// <code>
     /// public Guid RecordId
@@ -2397,17 +2404,17 @@ namespace {{ns}}
     /// }
     /// </code>
     /// </summary>
-    public sealed class {{className}}Request : TypedRequest
+    public sealed class {{className}}Request : CustomApiRequest
     {
-        public {{className}}Request()
+        public {{className}}Request() : base("{{uniqueName}}")
         {
-            RequestName = "{{uniqueName}}";
         }
     }
 
     /// <summary>
-    /// Response for <see cref="{{className}}"/>. Derives from <see cref="TypedResponse"/>. Add typed
-    /// properties over the base <c>Get&lt;T&gt;()</c> / <c>Set(value)</c> helpers, for example:
+    /// Response for <see cref="{{className}}"/>. Derives from <see cref="CustomApiResponse"/> (keys the Results bag
+    /// with <c>{{uniqueName}}.{prop}.response</c>). Add typed properties over the base <c>Get&lt;T&gt;()</c> /
+    /// <c>Set(value)</c> helpers, for example:
     /// <code>
     /// public string Status
     /// {
@@ -2416,8 +2423,11 @@ namespace {{ns}}
     /// }
     /// </code>
     /// </summary>
-    public sealed class {{className}}Response : TypedResponse
+    public sealed class {{className}}Response : CustomApiResponse
     {
+        public {{className}}Response() : base("{{uniqueName}}")
+        {
+        }
     }
 }
 """;
@@ -2554,11 +2564,10 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     }
 
     /// <summary>Request parameters for <see cref="ContactExportCustomApi"/>.</summary>
-    public sealed class ContactExportRequest : TypedRequest
+    public sealed class ContactExportRequest : CustomApiRequest
     {
-        public ContactExportRequest()
+        public ContactExportRequest() : base("{{ApiPrefix(prefix)}}_ContactExport")
         {
-            RequestName = "{{ApiPrefix(prefix)}}_ContactExport";
         }
 
         public Guid ContactId
@@ -2569,8 +2578,12 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     }
 
     /// <summary>Response parameters for <see cref="ContactExportCustomApi"/>.</summary>
-    public sealed class ContactExportResponse : TypedResponse
+    public sealed class ContactExportResponse : CustomApiResponse
     {
+        public ContactExportResponse() : base("{{ApiPrefix(prefix)}}_ContactExport")
+        {
+        }
+
         public string ExternalId
         {
             get => Get<string>();
@@ -2616,11 +2629,10 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     }
 
     /// <summary>Request parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
-    public sealed class AccountReconcileRequest : TypedRequest
+    public sealed class AccountReconcileRequest : CustomApiRequest
     {
-        public AccountReconcileRequest()
+        public AccountReconcileRequest() : base("{{ApiPrefix(prefix)}}_AccountReconcile")
         {
-            RequestName = "{{ApiPrefix(prefix)}}_AccountReconcile";
         }
 
         public Guid AccountId
@@ -2631,8 +2643,12 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     }
 
     /// <summary>Response parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
-    public sealed class AccountReconcileResponse : TypedResponse
+    public sealed class AccountReconcileResponse : CustomApiResponse
     {
+        public AccountReconcileResponse() : base("{{ApiPrefix(prefix)}}_AccountReconcile")
+        {
+        }
+
         public string Status
         {
             get => Get<string>();

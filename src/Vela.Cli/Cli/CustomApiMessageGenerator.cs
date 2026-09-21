@@ -96,18 +96,26 @@ public static class CustomApiMessageGenerator
         sb.AppendLine("    using Microsoft.Xrm.Sdk;");
         sb.AppendLine();
 
-        // Request
+        // Request. Derives from CustomApiRequest so each property keys the Parameters bag with the full
+        // Dataverse parameter name "{apiUniqueName}.{prop}" while the property bodies stay short.
         sb.AppendLine($"    /// <summary>Typed request for the <c>{message.UniqueName}</c> Custom API.</summary>");
-        sb.AppendLine($"    public partial class {request} : Vela.Messages.TypedRequest");
+        sb.AppendLine($"    public partial class {request} : Vela.Messages.CustomApiRequest");
         sb.AppendLine("    {");
-        sb.AppendLine($"        public {request}()");
+        sb.AppendLine($"        public {request}() : base(\"{message.UniqueName}\")");
         sb.AppendLine("        {");
-        sb.AppendLine($"            RequestName = \"{message.UniqueName}\";");
         sb.AppendLine("        }");
 
         if (message.IsBoundToEntity)
         {
-            AppendParameter(sb, new CustomApiParameter("Target", 5), readOnly: false);
+            // The bound record is passed under the standard, unprefixed "Target" key (not "{api}.Target"),
+            // so it bypasses the CustomApiRequest prefixing and reads Parameters["Target"] directly.
+            sb.AppendLine();
+            sb.AppendLine("        /// <summary>The bound record (Parameters[\"Target\"]).</summary>");
+            sb.AppendLine("        public EntityReference Target");
+            sb.AppendLine("        {");
+            sb.AppendLine("            get => Parameters.Contains(\"Target\") && Parameters[\"Target\"] is EntityReference reference ? reference : null;");
+            sb.AppendLine("            set => Parameters[\"Target\"] = value;");
+            sb.AppendLine("        }");
         }
 
         foreach (CustomApiParameter parameter in message.RequestParameters)
@@ -118,10 +126,14 @@ public static class CustomApiMessageGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        // Response
+        // Response. Derives from CustomApiResponse so each property keys the Results bag with the full Dataverse
+        // response property name "{apiUniqueName}.{prop}.response".
         sb.AppendLine($"    /// <summary>Typed response for the <c>{message.UniqueName}</c> Custom API.</summary>");
-        sb.AppendLine($"    public partial class {response} : Vela.Messages.TypedResponse");
+        sb.AppendLine($"    public partial class {response} : Vela.Messages.CustomApiResponse");
         sb.AppendLine("    {");
+        sb.AppendLine($"        public {response}() : base(\"{message.UniqueName}\")");
+        sb.AppendLine("        {");
+        sb.AppendLine("        }");
 
         foreach (CustomApiParameter property in message.ResponseProperties)
         {

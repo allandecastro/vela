@@ -1,12 +1,14 @@
 # Write a Custom API
 
 For Custom APIs, use `CustomApiBase<TRequest, TResponse>` and the fluent registration hook. The request and
-response derive from `TypedRequest`/`TypedResponse`: each typed property is a one-liner over the base
-`Get<T>()` / `Set(value)` helpers (the parameter key defaults to the property name), reading and writing the
-underlying `Parameters`/`Results` bags. A single generated type therefore serves all three usages - authoring
-the Custom API, calling it (`service.Execute(new ScoreRequest { ... }).ToResponse<ScoreResponse>()`), and
-reacting to it (`On<ScoreRequest>()...Handle(...)`). Generate these types with
-[`vela models --custom-apis`](models.md) or write them by hand as shown below:
+response derive from `CustomApiRequest`/`CustomApiResponse` (pass the API unique name to the base constructor):
+each typed property is a one-liner over the base `Get<T>()` / `Set(value)` helpers, and the base keys the
+underlying `Parameters`/`Results` bags with the **full Dataverse names** Dataverse actually uses
+(`{apiUniqueName}.{param}` for inputs, `{apiUniqueName}.{prop}.response` for outputs) while your property bodies
+stay short. A single generated type therefore serves all three usages - authoring the Custom API, calling it
+(`service.Execute(new ScoreRequest { ... }).ToResponse<ScoreResponse>()`), and reacting to it
+(`On<ScoreRequest>()...Handle(...)`). Generate these types with [`vela models --custom-apis`](models.md) or write
+them by hand as shown below:
 
 ```csharp
 public class CalculateAccountScore : CustomApiBase<ScoreRequest, ScoreResponse>
@@ -33,9 +35,9 @@ public class CalculateAccountScore : CustomApiBase<ScoreRequest, ScoreResponse>
     }
 }
 
-public class ScoreRequest : TypedRequest
+public class ScoreRequest : CustomApiRequest
 {
-    public ScoreRequest() { RequestName = "zava_CalculateAccountScore"; }
+    public ScoreRequest() : base("zava_CalculateAccountScore") { }
 
     public Guid AccountId
     {
@@ -50,8 +52,10 @@ public class ScoreRequest : TypedRequest
     }
 }
 
-public class ScoreResponse : TypedResponse
+public class ScoreResponse : CustomApiResponse
 {
+    public ScoreResponse() : base("zava_CalculateAccountScore") { }
+
     public int Score
     {
         get => Get<int>();
@@ -60,9 +64,17 @@ public class ScoreResponse : TypedResponse
 }
 ```
 
-`TypedRequest` / `TypedResponse` live in `Vela.Messages`. The `Get<T>()` / `Set(value)` helpers infer the
-parameter key from the property name, so a property is a plain one-liner - no `Parameters.Contains(...)`
-boilerplate. A read-only response property can drop the setter: `public int Score => Get<int>();`.
+`CustomApiRequest` / `CustomApiResponse` (and the base `TypedRequest` / `TypedResponse` for standard messages)
+live in `Vela.Messages`. The `Get<T>()` / `Set(value)` helpers infer the parameter key from the property name and
+the base prepends the API unique name, so a property is a plain one-liner - no `Parameters.Contains(...)`
+boilerplate and no need to spell out the full key. A read-only response property can drop the setter:
+`public int Score => Get<int>();`.
+
+> **Why a dedicated base.** Dataverse names a custom API's parameters `{apiUniqueName}.{param}` (inputs) and
+> `{apiUniqueName}.{prop}.response` (outputs) - that is the value the OData operation exposes and the key the
+> plugin's `InputParameters`/`OutputParameters` use. `CustomApiRequest`/`CustomApiResponse` apply that naming for
+> you. A hand-written request that derives from the plain `TypedRequest` would key by the short name and silently
+> read `null` on a real environment, so derive custom API requests/responses from `CustomApiRequest`/`CustomApiResponse`.
 
 **Optional request parameters.** Request parameters are required by default. Mark one optional with the
 `Add(x => x.AsOfDate, optional: true, "...")` overload (the third argument sets the parameter description). By
@@ -73,10 +85,11 @@ where `customapiresponseproperty` has no `isoptional`).
 
 `CustomApiBase<TRequest, TResponse>` constrains `TRequest : OrganizationRequest` and
 `TResponse : OrganizationResponse` (the same constraint on `Register.RegisterCustomApi<TRequest, TResponse>()`
-and `ICustomApiBuilder<TRequest, TResponse>`). Deriving from `TypedRequest` / `TypedResponse` satisfies it, since
-those bases are themselves an `OrganizationRequest` / `OrganizationResponse`. This is why one generated type serves
-authoring, calling, and reacting: the request you build to `service.Execute(...)` and the request you bind with
-`On<TRequest>()` are the exact type the Custom API is authored with.
+and `ICustomApiBuilder<TRequest, TResponse>`). `CustomApiRequest` / `CustomApiResponse` satisfy it, since they
+derive from `TypedRequest` / `TypedResponse`, which are themselves an `OrganizationRequest` / `OrganizationResponse`.
+This is why one generated type serves authoring, calling, and reacting: the request you build to
+`service.Execute(...)` and the request you bind with `On<TRequest>()` are the exact type the Custom API is authored
+with.
 
 The framework hydrates the request over the live `InputParameters` (so `request.AccountId` reads the actual
 input) and copies the response's `Results` back to `OutputParameters` after `Execute` returns. The generic base

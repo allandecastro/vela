@@ -21,14 +21,16 @@ public class CustomApiMessageGeneratorTests
 
         string code = Generate(message);
 
-        Assert.Contains("public partial class zava_RecalculateRequest : Vela.Messages.TypedRequest", code);
-        Assert.Contains("RequestName = \"zava_Recalculate\";", code);
+        Assert.Contains("public partial class zava_RecalculateRequest : Vela.Messages.CustomApiRequest", code);
+        // The API unique name flows to the base so keys are "{api}.{prop}" / "{api}.{prop}.response".
+        Assert.Contains("public zava_RecalculateRequest() : base(\"zava_Recalculate\")", code);
         Assert.Contains("public EntityReference Target", code);   // bound → implicit Target
         Assert.Contains("public int AccountId", code);
         Assert.Contains("get => Get<int>();", code);
         Assert.Contains("set => Set(value);", code);
 
-        Assert.Contains("public partial class zava_RecalculateResponse : Vela.Messages.TypedResponse", code);
+        Assert.Contains("public partial class zava_RecalculateResponse : Vela.Messages.CustomApiResponse", code);
+        Assert.Contains("public zava_RecalculateResponse() : base(\"zava_Recalculate\")", code);
         Assert.DoesNotContain("From(OrganizationResponse", code);   // wrap via ToResponse<T>() instead
         Assert.Contains("public decimal Total => Get<decimal>();", code);
     }
@@ -74,7 +76,7 @@ public class CustomApiMessageGeneratorTests
         string code = Generate(new CustomApiMessage("zava_Ping", false, Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>()));
 
         Assert.DoesNotContain("public EntityReference Target", code);
-        Assert.Contains("public partial class zava_PingRequest : Vela.Messages.TypedRequest", code);
+        Assert.Contains("public partial class zava_PingRequest : Vela.Messages.CustomApiRequest", code);
     }
 
     [Fact]

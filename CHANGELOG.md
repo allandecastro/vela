@@ -32,6 +32,23 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   at runtime on a real environment with a `SerializationException` ("The deserializer has no knowledge of any
   type that maps to the name '&lt;namespace&gt;:Account'"). Covers direct `Create`/`Update` and the `Target` /
   `Targets` entities carried by `CreateRequest`/`UpdateRequest`/`CreateMultiple`/`UpdateMultiple` via `Execute`.
+- **Custom API parameters now work on a real environment.** Dataverse names a custom API's parameters by their
+  full unique name - `{apiUniqueName}.{param}` for request inputs and `{apiUniqueName}.{prop}.response` for
+  response outputs - both in the OData operation and in the plugin's `InputParameters`/`OutputParameters`.
+  Previously Vela's runtime and typed request/response used the short property name on both sides, so on a real
+  environment a custom API handler read `null` inputs and its outputs were dropped (the in-memory harness mirrors
+  short names on both sides, so this was invisible in tests). Now the lightweight `CustomApiBase` translates
+  short handler names to and from the full Dataverse keys around dispatch, and the new
+  `Vela.Messages.CustomApiRequest` / `CustomApiResponse` bases key their bags with the full names while property
+  bodies stay short.
+
+### Changed (Framework) - breaking
+
+- Typed custom API request/response classes must now derive from `Vela.Messages.CustomApiRequest` /
+  `CustomApiResponse` (passing the API unique name to the base constructor) instead of `TypedRequest` /
+  `TypedResponse`. `vela models --custom-apis` generates the new form; **regenerate your custom API models** (or
+  update hand-written ones) so their parameters bind to the full Dataverse keys. `TypedRequest`/`TypedResponse`
+  remain for standard/SDK messages and are unchanged.
 
 ### Fixed (CLI)
 
@@ -39,6 +56,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]` as well, the standard belt-and-suspenders for the
   early-bound serialization issue above (also covers early-bound entities nested in deep-insert graphs, which
   the runtime downcast does not reach).
+- `vela models --custom-apis` and the scaffolded custom API samples emit request/response types deriving from
+  `CustomApiRequest`/`CustomApiResponse` (see the framework change above).
 
 ## [0.18.0] - 2026-09-20 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
