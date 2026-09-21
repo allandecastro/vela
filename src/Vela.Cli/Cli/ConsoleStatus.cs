@@ -34,4 +34,24 @@ internal static class ConsoleStatus
             .Start(label, _ => result = action());
         return result;
     }
+
+    /// <summary>
+    /// Like <see cref="Run{T}(string, Func{T})"/>, but hands <paramref name="action"/> a <c>report</c> callback
+    /// it can call to update the spinner text as it progresses (e.g. "Reading plugin steps..."). When no spinner
+    /// is shown (redirected stderr / no color), <c>report</c> is a no-op so scripted output is unchanged.
+    /// </summary>
+    public static T Run<T>(string label, Func<Action<string>, T> action)
+    {
+        if (!ConsoleTheme.StderrColor)
+        {
+            return action(static _ => { });
+        }
+
+        T result = default!;
+        ErrorConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .SpinnerStyle(new Style(new Color(99, 102, 241))) // brand indigo
+            .Start(label, ctx => result = action(text => ctx.Status(text)));
+        return result;
+    }
 }

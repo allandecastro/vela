@@ -88,6 +88,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - `apply` reports what it executed instead of a misleading "+0 -0 ~0". After "Apply complete." it now prints
   the executed counts (created / updated / deleted, plus a re-published plugin package when applicable) rather
   than the post-apply re-plan summary, which was always empty precisely because the apply had just succeeded.
+- `plan`/`apply`/`inspect` now report progress while reading the environment instead of a single static spinner:
+  the status updates through phases ("Connecting…", "Reading plugin steps and custom APIs…", "Reading web
+  resources…", "Checking execution-order collisions…"). Scripted / redirected runs are unchanged.
 - `vela init --prefix Vela` is now rejected with a clear message. It generated a `Vela.Plugins` project whose id
   matches (case-insensitively) the `Vela.Plugins` package it references, which NuGet rejects with "NU1108: Cycle
   detected", so the solution never restored. Choose a different prefix (for example your publisher prefix).
