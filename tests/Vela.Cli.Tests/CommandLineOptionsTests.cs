@@ -296,6 +296,34 @@ public class CommandLineOptionsTests
     }
 
     [Fact]
+    public void TryResolveConnection_ConnectionString_Succeeds()
+    {
+        string[] args = ["--connection-string", "AuthType=OAuth;Url=https://x.crm.dynamics.com"];
+
+        bool ok = CommandLineOptions.TryResolveConnection(
+            args, interactive: false, out string? cs, out _, out _, out _, out int exitCode);
+
+        Assert.True(ok);
+        Assert.Equal(ExitSuccess, exitCode);
+        Assert.Contains("AuthType=OAuth", cs);
+    }
+
+    [Fact]
+    public void TryResolveConnection_PartialClientSecretCreds_FailsWithInvalidArguments()
+    {
+        // --url + --client-id but no secret/tenant, non-interactive: still an argument error. The ambient
+        // Azure-credential path only kicks in when ONLY --url is provided (no client-id/secret/tenant), so a
+        // half-specified app registration must not silently fall back to the ambient credential.
+        string[] args = ["--url", "https://zava.crm.dynamics.com", "--client-id", "app-id"];
+
+        bool ok = CommandLineOptions.TryResolveConnection(
+            args, interactive: false, out _, out _, out _, out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
     public void BuildClientSecretConnectionString_FormatsAllFields()
     {
         string cs = CommandLineOptions.BuildClientSecretConnectionString(
