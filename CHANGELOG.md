@@ -77,6 +77,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `version` field, which Dataverse rejects ("PluginPackage version cannot be updated"), failing apply mid-run
   whenever the package version was bumped. The update now writes only the package content; Dataverse derives the
   version from the uploaded `.nupkg`.
+- `vela init --prefix Vela` is now rejected with a clear message. It generated a `Vela.Plugins` project whose id
+  matches (case-insensitively) the `Vela.Plugins` package it references, which NuGet rejects with "NU1108: Cycle
+  detected", so the solution never restored. Choose a different prefix (for example your publisher prefix).
 
 ## [0.18.0] - 2026-09-20 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

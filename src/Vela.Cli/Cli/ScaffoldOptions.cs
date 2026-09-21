@@ -154,6 +154,21 @@ internal sealed record ScaffoldOptions(
             return false;
         }
 
+        // The generated projects are named {prefix}.Plugins / .Shared / ... and reference the framework packages
+        // Vela.Plugins / Vela.Testing / Vela.Messages. NuGet package ids are case-insensitive, so a prefix of
+        // "Vela" makes the generated "Vela.Plugins" project share its id with the Vela.Plugins package it
+        // references - a self-referential cycle NuGet rejects with "NU1108: Cycle detected", so the solution
+        // never restores. Reject it up front with an actionable message.
+        if (string.Equals(prefix, "Vela", StringComparison.OrdinalIgnoreCase))
+        {
+            exitCode = Fail(
+                "Prefix 'Vela' collides with the Vela framework packages: the generated 'Vela.Plugins' project would have " +
+                "the same (case-insensitive) id as the 'Vela.Plugins' package it references, which NuGet rejects (NU1108: " +
+                "Cycle detected). Choose a different prefix, such as your Dataverse publisher prefix.",
+                ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
         string? output = TryReadOption(args, "--output") ?? TryReadOption(args, "-o");
         if (string.IsNullOrWhiteSpace(output) && interactive)
         {
