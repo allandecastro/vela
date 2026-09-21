@@ -74,7 +74,13 @@ namespace Vela.Plugin
             {
                 localContext.Trace("Unhandled exception: {0}", ex);
                 localContext.TraceExecutionSnapshot("unhandled-exception");
-                throw new InvalidPluginExecutionException("An unexpected error occurred while executing the plugin.", ex);
+                // Surface the real cause (type + message) to the caller instead of a generic "an error occurred":
+                // the caller only ever sees the InvalidPluginExecutionException message, and a generic one hides
+                // the actual failure (for example a SerializationException from passing an early-bound entity to a
+                // service call). The full stack trace stays in the plugin trace log (the "Unhandled exception"
+                // line above) and in the inner exception passed here.
+                throw new InvalidPluginExecutionException(
+                    $"Unhandled exception in plugin '{GetType().FullName}': {ex.GetType().Name}: {ex.Message}", ex);
             }
         }
 

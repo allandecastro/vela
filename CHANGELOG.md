@@ -36,6 +36,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- An unhandled exception in a plugin now surfaces its real cause to the caller. The wrapping
+  `InvalidPluginExecutionException` message includes the plugin type and the inner exception's type and message
+  (for example `SerializationException: ...`) instead of a generic "an unexpected error occurred", and the
+  original exception is preserved as the inner exception. The full stack trace is still written to the plugin
+  trace log.
 - `ctx.UserService` (and the other wrapped services) now downcast early-bound entities to the base `Entity`
   before every `Create`/`Update`/`Execute`, so passing an early-bound entity (for example `new Account { ... }`)
   from plugin code works even when the plugin assembly is not a proxy-types assembly. Previously this failed
