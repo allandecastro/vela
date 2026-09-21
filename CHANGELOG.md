@@ -24,6 +24,22 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed (Framework)
+
+- `ctx.UserService` (and the other wrapped services) now downcast early-bound entities to the base `Entity`
+  before every `Create`/`Update`/`Execute`, so passing an early-bound entity (for example `new Account { ... }`)
+  from plugin code works even when the plugin assembly is not a proxy-types assembly. Previously this failed
+  at runtime on a real environment with a `SerializationException` ("The deserializer has no knowledge of any
+  type that maps to the name '&lt;namespace&gt;:Account'"). Covers direct `Create`/`Update` and the `Target` /
+  `Targets` entities carried by `CreateRequest`/`UpdateRequest`/`CreateMultiple`/`UpdateMultiple` via `Execute`.
+
+### Fixed (CLI)
+
+- Scaffolded plugin projects (`{prefix}.Plugins` and `{prefix}.Integrations`) now carry
+  `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]` as well, the standard belt-and-suspenders for the
+  early-bound serialization issue above (also covers early-bound entities nested in deep-insert graphs, which
+  the runtime downcast does not reach).
+
 ## [0.18.0] - 2026-09-20 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.18.0` (all three packages ship at this version).

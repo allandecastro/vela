@@ -415,6 +415,14 @@ string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.
 
 Dataverse operation tracing is automatic through wrapped services (`UserService`, `SystemService`, `CreateOrganizationService`): each call logs operation name (`Create`, `Update`, `RetrieveMultiple`, `Execute`, ...), timestamp, duration, and pipeline context.
 
+> **Writing early-bound entities.** `ctx.UserService` accepts early-bound entities (for example
+> `new Account { ... }`) directly - the wrapped services downcast them to the base `Entity` before each
+> `Create`/`Update`/`Execute`, so you never hit the sandbox `SerializationException` ("The deserializer has no
+> knowledge of any type that maps to the name '&lt;namespace&gt;:Account'"). `vela init` also marks the plugin
+> project as a proxy-types assembly (`<AssemblyAttribute Include="Microsoft.Xrm.Sdk.Client.ProxyTypesAssemblyAttribute" />`),
+> which additionally covers early-bound entities nested in a deep-insert graph. If you write such graphs from an
+> older project, add that attribute (or `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]`) to your plugin project.
+
 When plugin telemetry is available in runtime (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`), trace messages are also forwarded to plugin telemetry for Application Insights correlation.
 
 Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment setting (`Off` / `Exception` / `All`) - not anything in code. There is no framework-level verbosity switch: server-side plugins run in Microsoft's sandbox where OS environment variables cannot be set, so a runtime verbosity flag would have no effect online. What you control in code is *what extra detail* you trace, at the call site.

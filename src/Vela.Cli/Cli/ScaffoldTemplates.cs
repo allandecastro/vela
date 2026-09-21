@@ -1277,6 +1277,14 @@ $$"""
     <ProjectReference Include="..\{{sharedProjectName}}\{{sharedProjectName}}.csproj" />
   </ItemGroup>
 
+  <!-- Register this assembly's early-bound entity types with the SDK serializer. Without it, passing an
+       early-bound entity (e.g. new Account { ... }) to ctx.UserService.Create/Update inside a plugin fails at
+       runtime with a SerializationException ("The deserializer has no knowledge of any type that maps to the
+       name '<namespace>:Account'"), because the sandbox cannot resolve the generated subclass. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="Microsoft.Xrm.Sdk.Client.ProxyTypesAssemblyAttribute" />
+  </ItemGroup>
+
   <!-- The package version is pinned to 1.0.0 (so `vela plan/apply` can reference a stable artifacts path) while
        the assembly version auto-increments (1.0.*). Because the .nupkg filename never changes, Pack's incremental
        check can keep a STALE package after a code-only change and deploy an old assembly. Delete the package

@@ -34,6 +34,9 @@ public class ScaffoldTemplatesTests
         // The build (not `dotnet pack`) produces the plugin package; PackageOutputPath drops it in artifacts/.
         Assert.Contains("<PackageOutputPath>$(MSBuildProjectDirectory)\\..\\..\\artifacts</PackageOutputPath>", csproj);
         Assert.Contains("net462", csproj);
+        // Early-bound entities passed to ctx.UserService inside a plugin need the assembly marked as a proxy-types
+        // assembly, or the sandbox throws a SerializationException at runtime.
+        Assert.Contains("<AssemblyAttribute Include=\"Microsoft.Xrm.Sdk.Client.ProxyTypesAssemblyAttribute\" />", csproj);
     }
 
     [Fact]
