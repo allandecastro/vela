@@ -46,6 +46,18 @@ public class ScaffoldOptionsTests
         Assert.Equal(ExitInvalidArguments, exitCode);
     }
 
+    [Theory]
+    [InlineData("Vela")]
+    [InlineData("vela")]
+    [InlineData("VELA")]
+    public void TryParse_RejectsVelaPrefix_WhichCollidesWithFrameworkPackages(string prefix)
+    {
+        // {prefix}.Plugins == Vela.Plugins (case-insensitive) -> a project sharing the id of the package it
+        // references -> NuGet NU1108 "Cycle detected". Must be rejected up front.
+        Assert.False(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", prefix], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
     [Fact]
     public void TryParse_AcceptsKnownOptions_AndBareDoubleDash()
     {
