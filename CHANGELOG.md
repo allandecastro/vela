@@ -32,8 +32,14 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   environment variable value when set, otherwise the definition's default, read through the elevated system
   service. Reads are memoized per execution; pass `cacheFor` to cache across executions on hot paths. Secret-type
   variables are not supported (Key Vault) and throw a clear error.
-
-## [0.13.0] - 2026-09-21 (Vela.Cli)
+- Leveled, structured telemetry from a handler: `ctx.LogInformation/LogWarning/LogError/LogDebug/LogTrace/LogCritical(...)`
+  (with `LogError(exception, ...)`), `ctx.LogMetric(name, value)`, and `ctx.BeginLogScope((k, v), ...)` for custom
+  Application Insights dimensions. Entries carry default pipeline dimensions (CorrelationId, MessageName, Stage,
+  Mode, Depth, PrimaryEntityName, PrimaryEntityId) plus any scope properties, and route to Application Insights at
+  the correct severity when the environment has it configured. Telemetry never throws and always writes to the
+  plug-in trace log, so entries survive when Application Insights is not set up. `ctx.Trace(...)` is unchanged
+  (equivalent to `LogInformation`). The test harness adds `PluginContextBuilder.WithLogger(...)` and a
+  `RecordingLogger` (`builder.LogCapture`) to assert emitted telemetry.
 
 CLI line, published as `cli-v0.13.0`. Framework unchanged (`0.19.0`).
 

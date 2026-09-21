@@ -22,6 +22,8 @@
       href: environment-variables.md
     - name: Managed identity
       href: managed-identity.md
+    - name: Telemetry & Application Insights
+      href: telemetry.md
 - name: Testing
   href: testing.md
 - name: Security model in tests

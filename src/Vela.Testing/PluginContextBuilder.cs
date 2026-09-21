@@ -20,7 +20,9 @@ namespace Vela.Testing
         where TEntity : Entity
     {
         private readonly RecordingTracingService _recorder = new RecordingTracingService();
+        private readonly RecordingLogger _loggerRecorder = new RecordingLogger();
         private ITracingService _tracingService;
+        private Microsoft.Extensions.Logging.ILogger _logger;
         private IManagedIdentityService? _managedIdentityService;
         private bool _triggerConfigured;
 
@@ -28,6 +30,7 @@ namespace Vela.Testing
         public PluginContextBuilder()
         {
             _tracingService = _recorder;
+            _logger = _loggerRecorder;
             Context = new FakePluginExecutionContext();
             Factory = new HookOrganizationServiceFactory();
 
@@ -46,6 +49,9 @@ namespace Vela.Testing
 
         /// <summary>The default recording tracer. Captures traces unless <see cref="WithTracingService"/> overrides it.</summary>
         public RecordingTracingService TraceCapture => _recorder;
+
+        /// <summary>The default recording logger. Captures <c>ctx.LogInformation</c>/<c>LogError</c>/... entries unless <see cref="WithLogger"/> overrides it.</summary>
+        public RecordingLogger LogCapture => _loggerRecorder;
 
         /// <summary>Sets the message to <c>Create</c>.</summary>
         public PluginContextBuilder<TEntity> OnCreate() => OnMessage(PluginMessages.Create);
@@ -257,6 +263,13 @@ namespace Vela.Testing
             return this;
         }
 
+        /// <summary>Overrides the logger (disables the default <see cref="LogCapture"/> recorder).</summary>
+        public PluginContextBuilder<TEntity> WithLogger(Microsoft.Extensions.Logging.ILogger logger)
+        {
+            _logger = logger;
+            return this;
+        }
+
         /// <summary>Sets the environment id (a string on the platform context).</summary>
         public PluginContextBuilder<TEntity> WithEnvironmentId(string environmentId)
         {
@@ -285,7 +298,8 @@ namespace Vela.Testing
             {
                 [typeof(IPluginExecutionContext)] = Context,
                 [typeof(IOrganizationServiceFactory)] = Factory,
-                [typeof(ITracingService)] = _tracingService
+                [typeof(ITracingService)] = _tracingService,
+                [typeof(Microsoft.Extensions.Logging.ILogger)] = _logger
             };
 
             if (_managedIdentityService != null)

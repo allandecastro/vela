@@ -121,6 +121,15 @@ namespace Vela.Context
         public IOrganizationService AsSystem() => _inner.AsSystem();
         /// <inheritdoc />
         public void Trace(string format, params object[] args) => _inner.Trace(format, args);
+
+        /// <inheritdoc />
+        public void Log(LogLevel level, Exception? exception, string message, params object[] args) => _inner.Log(level, exception, message, args);
+
+        /// <inheritdoc />
+        public IDisposable BeginLogScope(IReadOnlyDictionary<string, object?> properties) => _inner.BeginLogScope(properties);
+
+        /// <inheritdoc />
+        public void LogMetric(string name, double value, IReadOnlyDictionary<string, object?>? properties = null) => _inner.LogMetric(name, value, properties);
         /// <inheritdoc />
         public string AcquireManagedIdentityToken(IEnumerable<string> scopes) => _inner.AcquireManagedIdentityToken(scopes);
         /// <inheritdoc />
