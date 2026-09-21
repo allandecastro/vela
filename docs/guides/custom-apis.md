@@ -187,20 +187,28 @@ The method name is the unique name minus its publisher prefix, PascalCased (`zav
 ## Changing an existing Custom API
 
 Most Custom API metadata reconciles in place on the next `apply`: display name, description, request/response
-parameters, `ExecutePrivilege`, and `IsPrivate`. Several fields are fixed by Dataverse when the Custom API is
-first created and cannot be changed afterward:
+parameters, `ExecutePrivilege`, and `IsPrivate`. `plan` and `apply` diff the request inputs and response outputs
+**per parameter**, so a change reads as exactly which parameters were added, removed, or retyped rather than the
+whole API showing as one opaque change.
+
+A request parameter's or response property's **type** is fixed at creation (the parameter's `Type` column is
+create-only, and it also encodes collection-ness). When the type changes, `apply` **deletes and recreates that
+one parameter** with the new type - only the affected parameter, leaving the Custom API and its other parameters
+in place. A parameter's optionality (`isOptional`) and entity binding reconcile in place without a recreate.
+
+Several **API-level** fields are fixed by Dataverse when the Custom API is first created and cannot be changed
+afterward:
 
 - function versus action (`AsFunction()` / `AsAction()`),
 - the binding type (`BoundTo<T>()` versus global),
 - the bound entity,
 - the allowed custom-processing-step type,
-- whether it is enabled for workflow (`WorkflowSdkStepEnabled`),
-- a request parameter's or response property's **type** (the parameter's `Type` column is create-only).
+- whether it is enabled for workflow (`WorkflowSdkStepEnabled`).
 
 Dataverse silently ignores updates to these, so `apply` fails fast with a clear message rather than reporting a
-change that never takes effect (which would otherwise re-appear on every plan). To change one of them, delete
-the Custom API or the affected parameter (remove it from the package and `apply`, or delete it in Dataverse)
-and re-apply to recreate it with the new shape.
+change that never takes effect (which would otherwise re-appear on every plan). To change one of them, delete the
+Custom API (remove it from the package and `apply`, or delete it in Dataverse) and re-apply to recreate it with
+the new shape.
 
 **Workflow-enabled Custom APIs** (`WorkflowSdkStepEnabled`) have extra rules that `apply` validates locally
 before writing: the Custom API must be an action (not a function), and its parameters cannot use the `Entity`,

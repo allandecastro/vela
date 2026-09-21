@@ -331,7 +331,7 @@ public sealed class DataverseRegistrationCustomApiTests
     }
 
     [Fact]
-    public void SyncRequestParameters_throws_when_an_existing_parameter_type_changes()
+    public void SyncRequestParameters_deletes_and_recreates_a_parameter_whose_type_changed()
     {
         var existingId = Guid.NewGuid();
         var existing = new Entity("customapirequestparameter", existingId)
@@ -343,13 +343,21 @@ public sealed class DataverseRegistrationCustomApiTests
         {
             OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
         };
-        // Desired type differs (String vs Integer). A parameter's type is create-only, so this must fail fast
-        // rather than emit an update Dataverse ignores (which would never converge).
+        // Desired type differs (String vs Integer). A parameter's type is create-only, so the one parameter is
+        // deleted and recreated with the new type (in place; the API and its other parameters are untouched),
+        // rather than emitting an update Dataverse ignores (which would never converge).
         var param = new CustomApiParameterApplyDefinition("Amount", IsOptional: false, ParameterTypeName: "System.String", IsCollection: false, LogicalEntityName: null);
 
-        Assert.Throws<InvalidOperationException>(
-            () => DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false));
-        Assert.Empty(svc.Updated); // nothing written when the type can't change
+        DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
+
+        (string entity, Guid id) = Assert.Single(svc.Deleted);
+        Assert.Equal("customapirequestparameter", entity);
+        Assert.Equal(existingId, id); // the stale-typed row is removed
+
+        Entity created = Assert.Single(svc.Created); // and recreated with the new type
+        Assert.Equal("Amount", created.GetAttributeValue<string>("name"));
+        Assert.Equal(SdkConstants.CustomApiParameterType.String, created.GetAttributeValue<OptionSetValue>("type").Value);
+        Assert.Empty(svc.Updated); // never an in-place update for a type change
     }
 
     [Fact]

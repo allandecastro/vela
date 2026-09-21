@@ -31,11 +31,21 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   It exits `5` when the model is out of sync (and `0` when it matches), so CI can fail a build on a stale model
   that would otherwise return silent runtime nulls. Supports `--json` for a machine-readable report.
 
+### Changed (CLI)
+
+- `plan` / `apply` now diff a changed Custom API **per parameter**: request inputs and response outputs that were
+  added, removed, or retyped are listed individually (with a before/after type), instead of the whole API showing
+  as one opaque change.
+
 ### Fixed (CLI)
 
 - `plan` and `apply` now surface step execution-order (rank) collision warnings in the default terminal
   summary as a `warnings:` block, not only in `--json` output. `--strict` also prints the collision text
   before failing, instead of just a diagnostic count.
+- `apply` now converges a Custom API request-parameter / response-property **type change** by deleting and
+  recreating just that one parameter (its `Type` column is create-only), instead of failing the apply. Only the
+  affected parameter is touched; the Custom API and its other parameters stay in place. Optionality and entity
+  binding still reconcile in place.
 
 ## [0.19.0] - 2026-09-21 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

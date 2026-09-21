@@ -74,9 +74,27 @@ internal static class OutputWriter
             writer.WriteLine(ConsoleTheme.Changed("changes:", color));
             foreach (RegistrationChange change in preview.Diff.Changed)
             {
+                writer.WriteLine(ConsoleTheme.Changed($"  ~ {change.Kind}: {change.Type}", color));
+
+                // For a Custom API, show which request/response parameters were added, removed, or retyped rather
+                // than dumping the whole before/after object - the parameter list is where changes almost always
+                // are, and the per-parameter view maps directly to what apply does. Fall back to the object diff
+                // when the change is elsewhere (a parent-level field) so nothing is silently hidden.
+                List<string> paramChanges = string.Equals(change.Kind, "custom-api", StringComparison.Ordinal)
+                    ? DescribeCustomApiParamChanges(change.Before, change.After)
+                    : [];
+                if (paramChanges.Count > 0)
+                {
+                    foreach (string line in paramChanges)
+                    {
+                        writer.WriteLine(ColorParamChange(line, color));
+                    }
+
+                    continue;
+                }
+
                 string before = DescribeDefinition(change.Before);
                 string after = DescribeDefinition(change.After);
-                writer.WriteLine(ConsoleTheme.Changed($"  ~ {change.Kind}: {change.Type}", color));
                 writer.WriteLine($"    before: {ConsoleTheme.Removed(before, color)}");
                 writer.WriteLine($"    after : {ConsoleTheme.Added(after, color)}");
             }
@@ -102,6 +120,105 @@ internal static class OutputWriter
         {
             writer.WriteLine(ConsoleTheme.Changed($"  {ConsoleTheme.Bullet} {diagnostic}", color));
         }
+    }
+
+    // Colors a per-parameter diff line by its leading verb so a Custom API change reads like the top-level diff.
+    private static string ColorParamChange(string line, bool color)
+    {
+        string trimmed = line.TrimStart();
+        if (trimmed.StartsWith("+ ", StringComparison.Ordinal))
+        {
+            return ConsoleTheme.Added(line, color);
+        }
+
+        if (trimmed.StartsWith("- ", StringComparison.Ordinal))
+        {
+            return ConsoleTheme.Removed(line, color);
+        }
+
+        return ConsoleTheme.Changed(line, color);
+    }
+
+    /// <summary>
+    /// Renders a Custom API change as a per-parameter diff: request inputs and response outputs that were added,
+    /// removed, or changed (type, collection-ness, optionality, or entity binding), matched by name. Returns an
+    /// empty list when the two definitions have identical parameter sets (the change was in a parent-level field),
+    /// so the caller can fall back to the whole-object diff.
+    /// </summary>
+    public static List<string> DescribeCustomApiParamChanges(JsonElement before, JsonElement after)
+    {
+        List<string> lines = [];
+        DiffParamCollection(before, after, "inputParameters", "input param", lines);
+        DiffParamCollection(before, after, "outputParameters", "output param", lines);
+        return lines;
+    }
+
+    private static void DiffParamCollection(JsonElement before, JsonElement after, string arrayName, string label, List<string> lines)
+    {
+        Dictionary<string, string> beforeParams = ReadParams(before, arrayName);
+        Dictionary<string, string> afterParams = ReadParams(after, arrayName);
+
+        foreach (KeyValuePair<string, string> removed in beforeParams.Where(p => !afterParams.ContainsKey(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            lines.Add($"    - {label}: {removed.Key} {removed.Value}");
+        }
+
+        foreach (KeyValuePair<string, string> added in afterParams.Where(p => !beforeParams.ContainsKey(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            lines.Add($"    + {label}: {added.Key} {added.Value}");
+        }
+
+        foreach (KeyValuePair<string, string> present in afterParams.Where(p => beforeParams.ContainsKey(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            string beforeSig = beforeParams[present.Key];
+            if (!string.Equals(beforeSig, present.Value, StringComparison.Ordinal))
+            {
+                lines.Add($"    ~ {label}: {present.Key} {beforeSig} {ConsoleTheme.Arrow} {present.Value}");
+            }
+        }
+    }
+
+    // Reduces a Custom API parameter array to name -> a compact "[type; flags]" signature used for the diff.
+    private static Dictionary<string, string> ReadParams(JsonElement definition, string arrayName)
+    {
+        Dictionary<string, string> map = new(StringComparer.OrdinalIgnoreCase);
+        if (definition.ValueKind != JsonValueKind.Object
+            || !definition.TryGetProperty(arrayName, out JsonElement array)
+            || array.ValueKind != JsonValueKind.Array)
+        {
+            return map;
+        }
+
+        foreach (JsonElement element in array.EnumerateArray())
+        {
+            string? name = TryGetString(element, "name");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            List<string> facets = [TryGetString(element, "parameterTypeName") ?? "?"];
+            if (TryGetBool(element, "isCollection"))
+            {
+                facets.Add("collection");
+            }
+
+            string? boundEntity = TryGetString(element, "logicalEntityName");
+            if (!string.IsNullOrWhiteSpace(boundEntity))
+            {
+                facets.Add($"entity={boundEntity}");
+            }
+
+            // isOptional is absent on response properties (always required), so it only affects request inputs.
+            if (element.TryGetProperty("isOptional", out JsonElement optional) && optional.ValueKind == JsonValueKind.True)
+            {
+                facets.Add("optional");
+            }
+
+            map[name!] = $"[{string.Join("; ", facets)}]";
+        }
+
+        return map;
     }
 
     // Colors a diff verb (create/update/delete) to match the added/changed/removed palette; other verbs
