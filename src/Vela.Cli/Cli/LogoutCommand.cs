@@ -29,7 +29,8 @@ internal static class LogoutCommand
             return exitCode;
         }
 
-        UserConfig.ClearTokenCache();
+        InteractiveTokenCache.Clear(); // the current cross-platform MSAL cache file
+        UserConfig.ClearTokenCache();  // the legacy Dataverse-SDK token.dat (pre-fix caches)
         UserConfig.Clear();
         Console.WriteLine("Signed out: removed the cached interactive-login token and the remembered Dataverse URL.");
         return ExitSuccess;
