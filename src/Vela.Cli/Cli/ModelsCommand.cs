@@ -464,7 +464,7 @@ internal static class ModelsCommand
     // Reads every C# source under the model output directory. The drift extractor keeps only entity classes
     // (files carrying the EntityLogicalNameValue constant) and ignores option-set / support files, so reading all
     // of them is safe; a file we cannot read is warned about and skipped rather than aborting the check.
-    private static List<string> ReadLocalModelSources(string outDir)
+    internal static List<string> ReadLocalModelSources(string outDir)
     {
         List<string> sources = new List<string>();
         if (!Directory.Exists(outDir))
@@ -488,7 +488,7 @@ internal static class ModelsCommand
     }
 
     // The --verify --json report: one entry per scoped table with its drift, plus a top-level hasDrift flag.
-    private static object BuildDriftReport(string? environment, string ns, ModelDriftChecker.ModelDriftReport report) =>
+    internal static object BuildDriftReport(string? environment, string ns, ModelDriftChecker.ModelDriftReport report) =>
         new
         {
             mode = "verify",

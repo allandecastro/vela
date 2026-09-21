@@ -1,4 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.Xrm.Sdk.Metadata;
 using Vela.Cli;
 using Vela.Cli.Tests.TestSupport;
@@ -134,5 +138,99 @@ public class ModelDriftCheckerTests
         Assert.False(report.HasDrift);
         Assert.Single(report.Entities);
         Assert.Equal("account", report.Entities[0].EntityLogicalName);
+    }
+
+    // ---- ReadLocalModelSources (the disk-reading half the org E2E exercised) -----------------------
+
+    [Fact]
+    public void ReadLocalModelSources_reads_cs_files_recursively_and_ignores_non_cs()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "vela-verify-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "sub"));
+        File.WriteAllText(Path.Combine(dir, "Account.cs"), "// account");
+        File.WriteAllText(Path.Combine(dir, "sub", "Contact.cs"), "// contact");
+        File.WriteAllText(Path.Combine(dir, "notes.txt"), "ignore me");
+        try
+        {
+            List<string> sources = ModelsCommand.ReadLocalModelSources(dir);
+
+            Assert.Equal(2, sources.Count);
+            Assert.Contains("// account", sources);
+            Assert.Contains("// contact", sources);
+            Assert.DoesNotContain("ignore me", sources);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReadLocalModelSources_returns_empty_for_a_missing_directory()
+    {
+        string missing = Path.Combine(Path.GetTempPath(), "vela-verify-missing-" + Guid.NewGuid().ToString("N"));
+
+        Assert.Empty(ModelsCommand.ReadLocalModelSources(missing));
+    }
+
+    // ---- BuildDriftReport (the --json contract) ----------------------------------------------------
+
+    [Fact]
+    public void BuildDriftReport_serializes_a_camelCase_json_contract()
+    {
+        var report = new ModelDriftChecker.ModelDriftReport(
+        [
+            new ModelDriftChecker.EntityDrift("account", MissingLocalFile: false,
+                RemovedInDataverse: ["vela_bogus"],
+                TypeChanged: [new ModelDriftChecker.AttributeTypeChange("accountnumber", "int?", "string")],
+                AddedInDataverse: ["accountratingcode"]),
+        ]);
+
+        JsonElement root = SerializeReport(ModelsCommand.BuildDriftReport("https://org.crm.dynamics.com", "E2E.Models", report));
+
+        Assert.Equal("verify", root.GetProperty("mode").GetString());
+        Assert.Equal("https://org.crm.dynamics.com", root.GetProperty("environment").GetString());
+        Assert.Equal("E2E.Models", root.GetProperty("namespace").GetString());
+        Assert.True(root.GetProperty("hasDrift").GetBoolean());
+
+        JsonElement table = root.GetProperty("tables")[0];
+        Assert.Equal("account", table.GetProperty("entity").GetString());
+        Assert.False(table.GetProperty("inSync").GetBoolean());
+        Assert.False(table.GetProperty("missingLocalFile").GetBoolean());
+        Assert.Equal("vela_bogus", table.GetProperty("removedInDataverse")[0].GetString());
+        Assert.Equal("accountratingcode", table.GetProperty("addedInDataverse")[0].GetString());
+
+        JsonElement typeChange = table.GetProperty("typeChanged")[0];
+        // The nested record must be camelCase too (regression: it once serialized as LogicalName/LocalType/LiveType).
+        Assert.Equal("accountnumber", typeChange.GetProperty("logicalName").GetString());
+        Assert.Equal("int?", typeChange.GetProperty("localType").GetString());
+        Assert.Equal("string", typeChange.GetProperty("liveType").GetString());
+    }
+
+    [Fact]
+    public void BuildDriftReport_marks_a_clean_report_as_not_drifted()
+    {
+        var report = new ModelDriftChecker.ModelDriftReport(
+        [
+            new ModelDriftChecker.EntityDrift("account", MissingLocalFile: false, [], [], []),
+        ]);
+
+        JsonElement root = SerializeReport(ModelsCommand.BuildDriftReport(null, "N", report));
+
+        Assert.False(root.GetProperty("hasDrift").GetBoolean());
+        Assert.True(root.GetProperty("tables")[0].GetProperty("inSync").GetBoolean());
+    }
+
+    [Fact]
+    public void ExitDriftDetected_is_five()
+    {
+        // The drift exit code is part of the CLI contract (CI keys off it); lock the value.
+        Assert.Equal(5, CliExitCodes.ExitDriftDetected);
+    }
+
+    private static JsonElement SerializeReport(object dto)
+    {
+        string json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        return JsonDocument.Parse(json).RootElement.Clone();
     }
 }
