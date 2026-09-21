@@ -381,9 +381,17 @@ The rules the chain encodes:
 - `ctx.Tag` / `ctx.GetSharedVariable("key")` / `ctx.TryGetSharedVariable<T>("key", out var v)` - Read shared variables: the client-supplied `tag`, a value set by an earlier plugin in the same operation, or one inherited from the parent context of a cascaded operation
 - `ctx.IsApplicationUser`, `ctx.EnvironmentId`, `ctx.TenantId`, `ctx.InitiatingUserAgent`, `ctx.IsPortalsClientCall`, `ctx.PortalsContactId` - Extended execution context helpers with graceful fallback
 - `service.UploadFile(target, "vela_doc", "name.ext", bytes)` / `service.DownloadFile(target, "vela_doc")` / `service.DeleteFile(...)` - One-call File/Image column helpers (`using Vela.Files;`) that drive the block upload/download protocol for you
+- `ctx.GetEnvironmentVariable("adc_ApiBaseUrl")` / `ctx.GetEnvironmentVariableAs<int>("adc_MaxRetries")` - Read a Dataverse environment variable (see [Environment variables](#environment-variables) below)
 - `ctx.AcquireManagedIdentityToken(scopes)` - Acquire token via `IManagedIdentityService` when available
 - `ctx.TraceMethod("details")` - Trace caller method name with correlation/stage/depth
 - `ctx.TraceExecutionSnapshot("phase")` - Trace a structured context snapshot, including full Target/Image/Input/Output attribute values with PascalCase sections
+
+### Environment variables
+
+Read Dataverse environment variables from a handler with `ctx.GetEnvironmentVariable("adc_X")` /
+`ctx.GetEnvironmentVariableAs<T>("adc_X")` (plus `fallback` overloads and `TryGet...`). The effective value is the
+environment variable value when set, otherwise the definition's default. See
+[Environment variables](environment-variables.md) for typing, missing-value handling, and caching.
 
 ### Reacting only to real changes: HasChanged
 

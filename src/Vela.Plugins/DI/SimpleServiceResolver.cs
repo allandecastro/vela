@@ -40,6 +40,7 @@ namespace Vela.DI
             resolver.AddScoped(_ => context.Logger ?? NullLogger.Instance);
             resolver.AddScoped<Func<Guid?, IOrganizationService>>(_ => userId => context.CreateOrganizationService(userId));
             resolver.AddScoped<IPluginCacheService>(_ => GlobalCacheService);
+            resolver.AddScoped<IEnvironmentVariableReader>(_ => new EnvironmentVariableReader(context, GlobalCacheService));
             if (context.ManagedIdentityService != null)
             {
                 resolver.AddScoped<IManagedIdentityService>(_ => context.ManagedIdentityService);

@@ -24,6 +24,15 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added (framework)
+
+- Read Dataverse environment variables from a handler: `ctx.GetEnvironmentVariable("adc_X")`,
+  `ctx.GetEnvironmentVariableAs<T>("adc_X")` (primitives/Guid/DateTime via invariant parsing, complex/JSON types
+  via JSON), plus `fallback` overloads and `TryGet...` variants for missing values. The effective value is the
+  environment variable value when set, otherwise the definition's default, read through the elevated system
+  service. Reads are memoized per execution; pass `cacheFor` to cache across executions on hot paths. Secret-type
+  variables are not supported (Key Vault) and throw a clear error.
+
 ## [0.13.0] - 2026-09-21 (Vela.Cli)
 
 CLI line, published as `cli-v0.13.0`. Framework unchanged (`0.19.0`).
