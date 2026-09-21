@@ -19,13 +19,33 @@ namespace Vela.Messages
         /// <summary>Reads a typed value from <c>Parameters</c> (defaults when absent). Key defaults to the property name.</summary>
         /// <typeparam name="T">The parameter's CLR type.</typeparam>
         /// <param name="name">The parameter key; defaults to the calling property's name.</param>
-        protected T Get<T>([CallerMemberName] string name = "") => Parameters.Contains(name) && Parameters[name] is T typed ? typed : default!;
+        protected virtual T Get<T>([CallerMemberName] string name = "") => Parameters.Contains(name) && Parameters[name] is T typed ? typed : default!;
 
         /// <summary>Writes a typed value into <c>Parameters</c>. Key defaults to the property name.</summary>
         /// <typeparam name="T">The parameter's CLR type.</typeparam>
         /// <param name="value">The value to store.</param>
         /// <param name="name">The parameter key; defaults to the calling property's name.</param>
-        protected void Set<T>(T value, [CallerMemberName] string name = "") => Parameters[name] = value!;
+        protected virtual void Set<T>(T value, [CallerMemberName] string name = "") => Parameters[name] = value!;
+    }
+
+    /// <summary>
+    /// Base class for a typed <b>Custom API</b> request. Dataverse names a custom API's request parameters
+    /// <c>{apiUniqueName}.{paramName}</c> (that is the value exposed by the OData operation and used in the
+    /// plugin's <c>InputParameters</c>), so this base keys the <c>Parameters</c> bag with that full name while the
+    /// authored/generated property bodies stay short (<c>get =&gt; Get&lt;Guid&gt;();</c>). Pass the API unique name to
+    /// the base constructor once. Standard SDK/typed messages keep using <see cref="TypedRequest"/> unchanged.
+    /// </summary>
+    public abstract class CustomApiRequest : TypedRequest
+    {
+        /// <summary>Creates the request and sets <see cref="OrganizationRequest.RequestName"/> to the API unique name.</summary>
+        /// <param name="apiUniqueName">The custom API unique name (for example <c>publisher_MyApi</c>).</param>
+        protected CustomApiRequest(string apiUniqueName) => RequestName = apiUniqueName;
+
+        /// <inheritdoc />
+        protected override T Get<T>([CallerMemberName] string name = "") => base.Get<T>($"{RequestName}.{name}");
+
+        /// <inheritdoc />
+        protected override void Set<T>(T value, [CallerMemberName] string name = "") => base.Set(value, $"{RequestName}.{name}");
     }
 
     /// <summary>
@@ -38,13 +58,35 @@ namespace Vela.Messages
         /// <summary>Reads a typed value from <c>Results</c> (defaults when absent). Key defaults to the property name.</summary>
         /// <typeparam name="T">The result's CLR type.</typeparam>
         /// <param name="name">The result key; defaults to the calling property's name.</param>
-        protected T Get<T>([CallerMemberName] string name = "") => Results.Contains(name) && Results[name] is T typed ? typed : default!;
+        protected virtual T Get<T>([CallerMemberName] string name = "") => Results.Contains(name) && Results[name] is T typed ? typed : default!;
 
         /// <summary>Writes a typed value into <c>Results</c>. Key defaults to the property name.</summary>
         /// <typeparam name="T">The result's CLR type.</typeparam>
         /// <param name="value">The value to store.</param>
         /// <param name="name">The result key; defaults to the calling property's name.</param>
-        protected void Set<T>(T value, [CallerMemberName] string name = "") => Results[name] = value!;
+        protected virtual void Set<T>(T value, [CallerMemberName] string name = "") => Results[name] = value!;
+    }
+
+    /// <summary>
+    /// Base class for a typed <b>Custom API</b> response. Dataverse names a custom API's response properties
+    /// <c>{apiUniqueName}.{propName}.response</c> in the plugin's <c>OutputParameters</c> and in the returned
+    /// <c>Results</c>, so this base keys the <c>Results</c> bag with that full name while the authored/generated
+    /// property bodies stay short (<c>get =&gt; Get&lt;decimal&gt;();</c>). Pass the API unique name to the base
+    /// constructor once. Standard/typed responses keep using <see cref="TypedResponse"/> unchanged.
+    /// </summary>
+    public abstract class CustomApiResponse : TypedResponse
+    {
+        private readonly string _apiUniqueName;
+
+        /// <summary>Creates the response bound to the custom API whose response properties it maps.</summary>
+        /// <param name="apiUniqueName">The custom API unique name (for example <c>publisher_MyApi</c>).</param>
+        protected CustomApiResponse(string apiUniqueName) => _apiUniqueName = apiUniqueName;
+
+        /// <inheritdoc />
+        protected override T Get<T>([CallerMemberName] string name = "") => base.Get<T>($"{_apiUniqueName}.{name}.response");
+
+        /// <inheritdoc />
+        protected override void Set<T>(T value, [CallerMemberName] string name = "") => base.Set(value, $"{_apiUniqueName}.{name}.response");
     }
 
     /// <summary>A typed Create request whose <c>Target</c> is the early-bound <typeparamref name="TEntity"/>.</summary>

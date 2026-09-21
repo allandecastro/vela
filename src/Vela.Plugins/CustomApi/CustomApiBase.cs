@@ -121,7 +121,44 @@ namespace Vela.CustomApi
         /// <param name="ctx">Local plugin context.</param>
         protected override void ExecuteDataversePlugin(ILocalPluginContext ctx)
         {
+            CustomApiDefinition definition = GetCustomApiDefinition();
+            ExposeInputsUnderShortNames(ctx, definition);
             ExecuteRegisteredHandler(ctx);
+            PublishOutputsUnderDataverseNames(ctx, definition);
+        }
+
+        // Dataverse keys a custom API's input parameters as "{apiUniqueName}.{name}" (the OData operation
+        // parameter name), so expose each declared input under its short name too. Handler code can then read
+        // ctx.GetInputParameter("Name") both on a real environment and in the in-memory harness (where the bag is
+        // already keyed short - the copy is then a no-op).
+        private static void ExposeInputsUnderShortNames(ILocalPluginContext ctx, CustomApiDefinition definition)
+        {
+            ParameterCollection input = ctx.PluginExecutionContext.InputParameters;
+            string prefix = definition.UniqueName + ".";
+            foreach (CustomApiParameterDefinition parameter in definition.InputParameters)
+            {
+                string full = prefix + parameter.Name;
+                if (input.Contains(full) && !input.Contains(parameter.Name))
+                {
+                    input[parameter.Name] = input[full];
+                }
+            }
+        }
+
+        // Dataverse expects a custom API's response properties under "{apiUniqueName}.{name}.response", so copy
+        // each value the handler wrote under its short name to that full key. Otherwise the platform returns the
+        // response property empty (the handler's short-keyed output is dropped).
+        private static void PublishOutputsUnderDataverseNames(ILocalPluginContext ctx, CustomApiDefinition definition)
+        {
+            ParameterCollection output = ctx.PluginExecutionContext.OutputParameters;
+            string prefix = definition.UniqueName + ".";
+            foreach (CustomApiParameterDefinition parameter in definition.OutputParameters)
+            {
+                if (output.Contains(parameter.Name))
+                {
+                    output[prefix + parameter.Name + ".response"] = output[parameter.Name];
+                }
+            }
         }
 
         private CustomApiDefinition BuildDefinition()
