@@ -48,6 +48,7 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `--roles "A,B"` | A dependency-light `Roles` class (missing names are skipped with a warning) |
 | `--solution-roles` | Every security role in `--solution` |
 | `--forms` / `--tables` | TypeScript FormModel files / Web API record interfaces (preview) |
+| `--verify` | Do not write: compare the generated entity model on disk against the live schema and report drift (exit `5` on drift) |
 | `--lang csharp\|ts` | Output language (C# default; forms/tables are TypeScript) |
 | `--namespace`, `--out`, `--no-annotations`, `--overwrite` | Output shaping |
 
@@ -62,4 +63,5 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `2` | Invalid arguments |
 | `3` | File not found |
 | `4` | Parse/read or other error |
+| `5` | Drift detected (`vela models --verify` found the local model out of sync) |
 | `6` | Dataverse connection failure |
