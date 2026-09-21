@@ -40,6 +40,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   plug-in trace log, so entries survive when Application Insights is not set up. `ctx.Trace(...)` is unchanged
   (equivalent to `LogInformation`). The test harness adds `PluginContextBuilder.WithLogger(...)` and a
   `RecordingLogger` (`builder.LogCapture`) to assert emitted telemetry.
+- New analyzer **VELA004**: a step handler passed to `.Handle(...)` must be an instance method, not a `static`
+  method (a static handler cannot reach the plugin instance state and does not fit the handler dispatch). Instance
+  method groups and lambdas are unaffected. Bundled in `Vela.Plugins`, reported as a build error.
 
 CLI line, published as `cli-v0.13.0`. Framework unchanged (`0.19.0`).
 
