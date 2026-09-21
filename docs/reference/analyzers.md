@@ -7,9 +7,17 @@ configuration. Each analyzer is reported as an **error** so a mistake fails fast
 runtime surprise. Together they let the compiler enforce the fluent step builder's rules, so both a human
 developer and an AI author get told what is valid up front.
 
+| Rule | Category | Severity | What it catches |
+| --- | --- | --- | --- |
+| [VELA001](#vela001) | Vela.Usage | Error | A column selector targets a base `Entity` member, not a real Dataverse column |
+| [VELA002](#vela002) | Vela.Usage | Error | A `RegisterStep()` chain never ends with `.Handle(...)` |
+| [VELA003](#vela003) | Vela.Usage | Error | A single-value step modifier is set more than once |
+| [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
+
 - [VELA001 - column selector targets a real column](#vela001)
 - [VELA002 - step chain must end with Handle](#vela002)
 - [VELA003 - a step modifier is set at most once](#vela003)
+- [VELA004 - handler must be an instance method](#vela004)
 - [Typed image projection generator](#typed-image-projection-generator)
 
 ## VELA001
@@ -38,6 +46,16 @@ second call is flagged. `Disabled()` is exempt (it is an idempotent flag toggle)
 second call as well, so a chain split across locals is still caught at registration.
 
 **Fix:** call the modifier once (combine the arguments if needed, for example a single `FilterOn(a => a.A, a => a.B)`).
+
+## VELA004
+
+**A step handler must be an instance method, not a `static` method.** The handler passed to `.Handle(...)` runs
+against the plugin instance, so it can reach its state: services resolved from the lightweight DI, the step's
+unsecure/secure config, and any other instance member. A `static` method group cannot, and does not fit the
+framework's instance-bound handler dispatch, so `.Handle(SomeStaticMethod)` is flagged. Instance method groups
+(`.Handle(OnCreate)`) and lambdas (`.Handle(ctx => ...)`) are fine.
+
+**Fix:** remove `static` from the handler method, or use a lambda.
 
 ## Typed image projection generator
 
