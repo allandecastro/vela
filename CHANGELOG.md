@@ -24,7 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Added (framework)
+## [0.20.0] - 2026-09-21 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.20.0` (all three packages ship at this version).
+
+### Added
 
 - Read Dataverse environment variables from a handler: `ctx.GetEnvironmentVariable("adc_X")`,
   `ctx.GetEnvironmentVariableAs<T>("adc_X")` (primitives/Guid/DateTime via invariant parsing, complex/JSON types
