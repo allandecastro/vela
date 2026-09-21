@@ -24,6 +24,12 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed (CLI)
+
+- `plan` and `apply` now surface step execution-order (rank) collision warnings in the default terminal
+  summary as a `warnings:` block, not only in `--json` output. `--strict` also prints the collision text
+  before failing, instead of just a diagnostic count.
+
 ## [0.19.0] - 2026-09-21 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.19.0` (all three packages ship at this version).
