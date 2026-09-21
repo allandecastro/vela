@@ -16,6 +16,9 @@ namespace Vela.Context
     {
         private readonly ITracingService _safeTracingService;
         private readonly object? _pluginTelemetryLogger;
+        private readonly string? _pluginTypeName;
+        private string? _currentHandler;
+        private int _scopeDepth;
         private readonly Guid? _environmentId;
         private readonly Guid? _tenantId;
         private readonly string _initiatingUserAgent;
@@ -30,9 +33,10 @@ namespace Vela.Context
         /// Initializes a new instance of the <see cref="LocalPluginContext"/> class.
         /// </summary>
         /// <param name="serviceProvider">Runtime service provider.</param>
-        public LocalPluginContext(IServiceProvider serviceProvider)
+        public LocalPluginContext(IServiceProvider serviceProvider, string? pluginTypeName = null)
         {
             ServiceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _pluginTypeName = pluginTypeName;
             PluginExecutionContext = ResolveExecutionContext(serviceProvider);
             TracingService = serviceProvider.GetService(typeof(ITracingService)) as ITracingService ?? new NullTracingService();
             _safeTracingService = TracingService;
@@ -263,8 +267,10 @@ namespace Vela.Context
             string formatted = args == null || args.Length == 0 ? message : string.Format(message, args);
 
             // Always land in the plug-in trace log, so entries survive whether or not Application Insights is
-            // configured. Information stays unprefixed (back-compat with Trace); other levels carry a tag.
-            _safeTracingService.Trace(level == LogLevel.Information ? formatted : $"[{level}] {formatted}");
+            // configured. Information stays unprefixed (back-compat with Trace); other levels carry a tag. Active
+            // BeginLogScope depth indents the trace-log line so nested operations read as a tree.
+            string indent = _scopeDepth > 0 ? new string(' ', _scopeDepth * 2) : string.Empty;
+            _safeTracingService.Trace(indent + (level == LogLevel.Information ? formatted : $"[{level}] {formatted}"));
             if (exception != null)
             {
                 _safeTracingService.Trace(exception.ToString());
@@ -289,11 +295,16 @@ namespace Vela.Context
             properties = properties ?? throw new ArgumentNullException(nameof(properties));
 
             // Push the scope onto both logger channels so the properties become Application Insights dimensions on
-            // every subsequent log until disposed. The trace log is plain text and does not carry dimensions.
+            // every subsequent log until disposed, and bump the depth so trace-log lines indent under the scope.
+            _scopeDepth++;
             IDisposable? melScope = Logger.BeginScope(properties);
             IDisposable? telemetryScope = (_pluginTelemetryLogger as ILogger)?.BeginScope(properties);
-            return new CompositeDisposable(melScope, telemetryScope);
+            return new ScopeHandle(this, melScope, telemetryScope);
         }
+
+        // Sets the currently executing handler method name for the "Method" telemetry dimension. Called by the
+        // dispatch just before it invokes the handler; cleared implicitly when the execution (and this context) ends.
+        internal void SetCurrentHandler(string? handlerMethod) => _currentHandler = handlerMethod;
 
         /// <inheritdoc />
         public void LogMetric(string name, double value, IReadOnlyDictionary<string, object?>? properties = null)
@@ -318,33 +329,62 @@ namespace Vela.Context
 
         // The framework's default Application Insights dimensions, derived from the execution context. Attached to
         // every log/metric; user BeginLogScope properties stack on top.
-        private Dictionary<string, object?> DefaultDimensions() => new Dictionary<string, object?>
+        private Dictionary<string, object?> DefaultDimensions()
         {
-            ["CorrelationId"] = CorrelationId,
-            ["MessageName"] = MessageName,
-            ["Stage"] = Stage,
-            ["Mode"] = Mode,
-            ["Depth"] = Depth,
-            ["PrimaryEntityName"] = PrimaryEntityName,
-            ["PrimaryEntityId"] = PrimaryEntityId,
-        };
+            var dimensions = new Dictionary<string, object?>
+            {
+                ["CorrelationId"] = CorrelationId,
+                ["MessageName"] = MessageName,
+                ["Stage"] = Stage,
+                ["Mode"] = Mode,
+                ["Depth"] = Depth,
+                ["PrimaryEntityName"] = PrimaryEntityName,
+                ["PrimaryEntityId"] = PrimaryEntityId,
+            };
 
-        // Disposes the (possibly null) scope handles from BeginLogScope's two channels.
-        private sealed class CompositeDisposable : IDisposable
+            if (!string.IsNullOrEmpty(_pluginTypeName))
+            {
+                dimensions["PluginType"] = _pluginTypeName;
+            }
+
+            if (!string.IsNullOrEmpty(_currentHandler))
+            {
+                dimensions["Method"] = _currentHandler;
+            }
+
+            return dimensions;
+        }
+
+        // Disposes the (possibly null) scope handles from BeginLogScope's two channels and pops the trace-log
+        // indentation depth. Idempotent.
+        private sealed class ScopeHandle : IDisposable
         {
+            private readonly LocalPluginContext _context;
             private readonly IDisposable? _first;
             private readonly IDisposable? _second;
+            private bool _disposed;
 
-            public CompositeDisposable(IDisposable? first, IDisposable? second)
+            public ScopeHandle(LocalPluginContext context, IDisposable? first, IDisposable? second)
             {
+                _context = context;
                 _first = first;
                 _second = second;
             }
 
             public void Dispose()
             {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
                 _first?.Dispose();
                 _second?.Dispose();
+                if (_context._scopeDepth > 0)
+                {
+                    _context._scopeDepth--;
+                }
             }
         }
 

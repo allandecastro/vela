@@ -39,7 +39,7 @@ namespace Vela.Plugin
         /// <param name="serviceProvider">Runtime service provider.</param>
         public void Execute(IServiceProvider serviceProvider)
         {
-            LocalPluginContext localContext = new LocalPluginContext(serviceProvider ?? throw new InvalidPluginExecutionException(nameof(serviceProvider)));
+            LocalPluginContext localContext = new LocalPluginContext(serviceProvider ?? throw new InvalidPluginExecutionException(nameof(serviceProvider)), GetType().FullName);
             ConfigureServices(localContext.Resolver, localContext);
 
             Stopwatch stopwatch = Stopwatch.StartNew();

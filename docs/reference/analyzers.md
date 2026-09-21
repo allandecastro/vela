@@ -13,11 +13,13 @@ developer and an AI author get told what is valid up front.
 | [VELA002](#vela002) | Vela.Usage | Error | A `RegisterStep()` chain never ends with `.Handle(...)` |
 | [VELA003](#vela003) | Vela.Usage | Error | A single-value step modifier is set more than once |
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
+| [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
 
 - [VELA001 - column selector targets a real column](#vela001)
 - [VELA002 - step chain must end with Handle](#vela002)
 - [VELA003 - a step modifier is set at most once](#vela003)
 - [VELA004 - handler must be an instance method](#vela004)
+- [VELA005 - no duplicate column in a selector list](#vela005)
 - [Typed image projection generator](#typed-image-projection-generator)
 
 ## VELA001
@@ -56,6 +58,16 @@ framework's instance-bound handler dispatch, so `.Handle(SomeStaticMethod)` is f
 (`.Handle(OnCreate)`) and lambdas (`.Handle(ctx => ...)`) are fine.
 
 **Fix:** remove `static` from the handler method, or use a lambda.
+
+## VELA005
+
+**Do not list the same column twice in one selector list.** `FilterOn(...)`, `WithPreImage(...)`, and
+`WithPostImage(...)` take a list of column selectors; repeating a column (for example
+`FilterOn(a => a.Name, a => a.Name)`) has no effect and is almost always a copy/paste slip. Only lambda column
+selectors are compared, so a leading image alias string is ignored, and the same column in two different calls
+(one in `FilterOn`, one in `WithPreImage`) is fine.
+
+**Fix:** list each column once.
 
 ## Typed image projection generator
 
