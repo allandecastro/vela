@@ -24,20 +24,24 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Added (CLI)
+## [0.12.0] - 2026-09-21 (Vela.Cli)
+
+CLI line, published as `cli-v0.12.0`. Framework unchanged (`0.19.0`).
+
+### Added
 
 - `vela models --verify` - a read-only drift check that compares the generated early-bound entity model on disk
   against the live Dataverse schema and reports columns removed, retyped, or added in the org, without writing.
   It exits `5` when the model is out of sync (and `0` when it matches), so CI can fail a build on a stale model
   that would otherwise return silent runtime nulls. Supports `--json` for a machine-readable report.
 
-### Changed (CLI)
+### Changed
 
 - `plan` / `apply` now diff a changed Custom API **per parameter**: request inputs and response outputs that were
   added, removed, or retyped are listed individually (with a before/after type), instead of the whole API showing
   as one opaque change.
 
-### Fixed (CLI)
+### Fixed
 
 - `plan` and `apply` now surface step execution-order (rank) collision warnings in the default terminal
   summary as a `warnings:` block, not only in `--json` output. `--strict` also prints the collision text
