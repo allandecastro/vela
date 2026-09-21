@@ -381,9 +381,46 @@ The rules the chain encodes:
 - `ctx.Tag` / `ctx.GetSharedVariable("key")` / `ctx.TryGetSharedVariable<T>("key", out var v)` - Read shared variables: the client-supplied `tag`, a value set by an earlier plugin in the same operation, or one inherited from the parent context of a cascaded operation
 - `ctx.IsApplicationUser`, `ctx.EnvironmentId`, `ctx.TenantId`, `ctx.InitiatingUserAgent`, `ctx.IsPortalsClientCall`, `ctx.PortalsContactId` - Extended execution context helpers with graceful fallback
 - `service.UploadFile(target, "vela_doc", "name.ext", bytes)` / `service.DownloadFile(target, "vela_doc")` / `service.DeleteFile(...)` - One-call File/Image column helpers (`using Vela.Files;`) that drive the block upload/download protocol for you
+- `ctx.GetEnvironmentVariable("adc_ApiBaseUrl")` / `ctx.GetEnvironmentVariableAs<int>("adc_MaxRetries")` - Read a Dataverse environment variable (see [Environment variables](#environment-variables) below)
 - `ctx.AcquireManagedIdentityToken(scopes)` - Acquire token via `IManagedIdentityService` when available
 - `ctx.TraceMethod("details")` - Trace caller method name with correlation/stage/depth
 - `ctx.TraceExecutionSnapshot("phase")` - Trace a structured context snapshot, including full Target/Image/Input/Output attribute values with PascalCase sections
+
+### Environment variables
+
+Read Dataverse environment variables from a handler. The effective value is the environment variable **value**
+when one is set, otherwise the definition's **default value** - resolved through the elevated system service, so it
+works regardless of the calling user's privilege.
+
+```csharp
+string url    = ctx.GetEnvironmentVariable("adc_ApiBaseUrl");           // effective string value
+int    retries = ctx.GetEnvironmentVariableAs<int>("adc_MaxRetries");   // int/long/decimal/double/bool/Guid/DateTime
+MyCfg  config = ctx.GetEnvironmentVariableAs<MyCfg>("adc_Config");      // a JSON-typed variable -> your type
+```
+
+Three ways to handle a variable that has no effective value (the definition is missing, or it has no value and no
+default):
+
+```csharp
+// 1) Required: throws InvalidPluginExecutionException when there is no effective value.
+string url = ctx.GetEnvironmentVariable("adc_ApiBaseUrl");
+
+// 2) Fallback: returns your default instead of throwing.
+int retries = ctx.GetEnvironmentVariableAs<int>("adc_MaxRetries", fallback: 3);
+
+// 3) Try: branch on presence (also returns false when the value cannot convert to T).
+if (ctx.TryGetEnvironmentVariable("adc_FeatureFlag", out string? flag)) { /* ... */ }
+```
+
+By default a value is read fresh once per execution (repeated reads in the same run hit Dataverse once). For a hot
+path, pass `cacheFor` to reuse the value across executions for that duration:
+
+```csharp
+string url = ctx.GetEnvironmentVariable("adc_ApiBaseUrl", cacheFor: TimeSpan.FromMinutes(5));
+```
+
+**Secret**-type environment variables are not supported (their value resolves through Azure Key Vault); reading one
+throws a clear error. `String`, `Number`, `Boolean`, `JSON`, and `Data Source` types are supported.
 
 ### Reacting only to real changes: HasChanged
 
