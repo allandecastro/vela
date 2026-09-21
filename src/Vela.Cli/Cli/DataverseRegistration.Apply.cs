@@ -340,10 +340,55 @@ internal static partial class DataverseRegistration
     {
         Id = existing.Id
     };
-    update["version"] = package.Version;
+    // Only write content: Dataverse derives the pluginpackage version from the uploaded .nupkg and rejects an
+    // explicit write of the version field on an existing package ("PluginPackage version cannot be updated"),
+    // which used to fail apply mid-run whenever the package version was bumped.
     update["content"] = packageContent;
     service.Update(update);
     return existing.Id;
+}
+
+    // Read-only counterpart of EnsurePluginPackages: true if any plugin package would be created or have its
+    // content updated. The registration diff only covers steps/custom APIs, so a code-only change (same step and
+    // custom-API definitions, but a rebuilt assembly) is otherwise invisible and apply would report "no changes"
+    // and deploy nothing. This mirrors UpsertPluginPackage's create/skip decision exactly (same prefix, same
+    // import bytes, same content compare) without writing.
+    internal static bool PluginPackagesNeedPublish(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories)
+{
+    if (packagePayloads.Length == 0)
+    {
+        return false;
+    }
+
+    string? solutionPrefix = string.IsNullOrWhiteSpace(solutionUniqueName)
+        ? null
+        : ResolveSolutionCustomizationPrefix(service, solutionUniqueName);
+
+    foreach (PluginPackagePayload package in packagePayloads)
+    {
+        if (!File.Exists(package.PackagePath))
+        {
+            // Let the real publish surface the missing-file error rather than silently short-circuiting.
+            return true;
+        }
+
+        string desiredPackageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
+        byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName, tempDirectories);
+        string packageContent = Convert.ToBase64String(packageBytes);
+        Entity? existing = GetPluginPackage(service, desiredPackageName);
+        if (existing == null)
+        {
+            return true;
+        }
+
+        string existingContent = existing.GetAttributeValue<string>("content") ?? string.Empty;
+        if (!string.Equals(existingContent, packageContent, StringComparison.Ordinal))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
     internal static string NormalizePackageNameWithPrefix(string packageName, string? solutionPrefix)

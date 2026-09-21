@@ -270,7 +270,15 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
             return Fail($"Strict mode failed with {preview.Diagnostics.Length} diagnostic(s).", ExitError, includeUsage: false);
         }
 
-        if (!preview.HasChanges)
+        using ServiceClient client = CreateDataverseClient(options);
+        IOrganizationService service = client;
+
+        // A code-only change (unchanged step/custom-API definitions but a rebuilt assembly) is invisible to the
+        // registration diff, so also check whether the plugin package content differs from what is deployed - the
+        // assembly must still be re-published even when the step/custom-API diff is empty.
+        bool packageNeedsPublish = PluginPackagesNeedPublish(service, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
+
+        if (!preview.HasChanges && !packageNeedsPublish)
         {
             if (WantsHumanOutput(options))
             {
@@ -308,8 +316,11 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         switch (ApplyConfirmation.Decide(options.AutoApprove, Console.IsInputRedirected, () =>
         {
             WritePlanSummary(preview with { Mode = "apply" }, Console.Error, ConsoleTheme.StderrColor);
+            // Surface a code-only republish (changed assembly with an otherwise-empty diff) so the prompt is not
+            // a misleading "0 to create / 0 to update / 0 to delete".
+            string packageNote = packageNeedsPublish ? " + plugin package (code change)" : string.Empty;
             Console.Error.Write(
-                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
+                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete{packageNote} against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
             return Console.ReadLine();
         }))
         {
@@ -322,8 +333,6 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
                 return ExitSuccess;
         }
 
-        using ServiceClient client = CreateDataverseClient(options);
-        IOrganizationService service = client;
         ApplyDiff(service, diff, local.SourceAssemblyPayloads, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey);
 
         RegistrationState after = ConsoleStatus.Run(
