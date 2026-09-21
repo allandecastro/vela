@@ -357,7 +357,20 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         if (WantsHumanOutput(options))
         {
             Console.Out.WriteLine(ConsoleTheme.Success("Apply complete.", ConsoleTheme.StdoutColor));
-            WritePlanSummary(result, Console.Out, ConsoleTheme.StdoutColor);
+            // Report what was EXECUTED (from the pre-apply diff), not the post-apply re-plan - that re-plan is
+            // "+0 -0 ~0" precisely because the apply succeeded, which read as "nothing happened".
+            string executed =
+                $"Executed against {options.Environment ?? "Dataverse"}: {diff.Added.Length} created, " +
+                $"{diff.Changed.Length} updated, {diff.Removed.Length} deleted" +
+                (packageNeedsPublish ? ", plugin package re-published" : string.Empty) + ".";
+            Console.Out.WriteLine(executed);
+            if (result.HasChanges)
+            {
+                // Unexpected: the environment still differs after a successful apply - surface it.
+                Console.Out.WriteLine("Note: the environment still shows differences after apply:");
+                WritePlanSummary(result, Console.Out, ConsoleTheme.StdoutColor);
+            }
+
             return ExitSuccess;
         }
 

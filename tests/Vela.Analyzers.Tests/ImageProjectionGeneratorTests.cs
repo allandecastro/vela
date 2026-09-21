@@ -113,7 +113,9 @@ namespace Demo
         Assert.Contains("namespace Demo.Generated.Images", output);
         Assert.Contains("class AccountAudit_UpdatePostOp_PostImage", output);
         Assert.Contains("AttributeLogicalName(\"name\")", output);
-        Assert.Contains("Name", output);
+        // Reference-type columns are nullable (an image column can be absent/null) so the #nullable-enable
+        // generated file does not warn CS8618.
+        Assert.Contains("string? Name", output);
         Assert.Contains("AttributeLogicalName(\"revenue\")", output);
         Assert.Contains("Revenue", output);
         // A column that was NOT captured must not appear on the projection.

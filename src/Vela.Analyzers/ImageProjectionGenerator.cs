@@ -268,6 +268,13 @@ namespace Vela.Analyzers
             }
 
             string typeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            // A captured image column can be absent/null, and the generated file is `#nullable enable`, so a
+            // reference-type property must be nullable or it warns CS8618 (non-nullable never initialized).
+            if (property.Type.IsReferenceType && !typeName.EndsWith("?", System.StringComparison.Ordinal))
+            {
+                typeName += "?";
+            }
+
             return new ProjectionColumn(property.Name, typeName, logicalName);
         }
 
