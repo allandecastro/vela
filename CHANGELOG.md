@@ -36,6 +36,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- Generated typed image projections declare reference-type columns as nullable (for example `string? Name`).
+  A captured image column can be absent or null, and the generated file is `#nullable enable`, so the previous
+  non-nullable properties raised `CS8618` in nullable-enabled consumer projects.
 - An unhandled exception in a plugin now surfaces its real cause to the caller. The wrapping
   `InvalidPluginExecutionException` message includes the plugin type and the inner exception's type and message
   (for example `SerializationException: ...`) instead of a generic "an unexpected error occurred", and the
@@ -82,6 +85,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `version` field, which Dataverse rejects ("PluginPackage version cannot be updated"), failing apply mid-run
   whenever the package version was bumped. The update now writes only the package content; Dataverse derives the
   version from the uploaded `.nupkg`.
+- `apply` reports what it executed instead of a misleading "+0 -0 ~0". After "Apply complete." it now prints
+  the executed counts (created / updated / deleted, plus a re-published plugin package when applicable) rather
+  than the post-apply re-plan summary, which was always empty precisely because the apply had just succeeded.
 - `vela init --prefix Vela` is now rejected with a clear message. It generated a `Vela.Plugins` project whose id
   matches (case-insensitively) the `Vela.Plugins` package it references, which NuGet rejects with "NU1108: Cycle
   detected", so the solution never restored. Choose a different prefix (for example your publisher prefix).
