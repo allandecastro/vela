@@ -421,11 +421,8 @@ RegisterStep().OnUpdate().PostOperation().Sync()
 - `HasAnyChanged(a => a.A, a => a.B)` is the any-of form. You don't need `HasChanged` at all when reacting to the
   `Target` presence is enough, and it is unavailable on Create (there is no prior state to diff against).
 
-Managed identity example:
-
-```csharp
-string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });
-```
+Managed identity: acquire a token for an external API without a stored secret with
+`ctx.AcquireManagedIdentityToken(scopes)` - see [Managed identity](managed-identity.md).
 
 Dataverse operation tracing is automatic through wrapped services (`UserService`, `SystemService`, `CreateOrganizationService`): each call logs operation name (`Create`, `Update`, `RetrieveMultiple`, `Execute`, ...), timestamp, duration, and pipeline context.
 

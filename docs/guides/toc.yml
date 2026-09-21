@@ -14,10 +14,14 @@
   href: custom-apis.md
 - name: Dependency injection
   href: dependency-injection.md
-- name: Caching
-  href: caching.md
-- name: Environment variables
-  href: environment-variables.md
+- name: Built-in services
+  items:
+    - name: Caching
+      href: caching.md
+    - name: Environment variables
+      href: environment-variables.md
+    - name: Managed identity
+      href: managed-identity.md
 - name: Testing
   href: testing.md
 - name: Security model in tests
