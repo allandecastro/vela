@@ -438,7 +438,7 @@ internal static class ModelsCommand
 
             if (json)
             {
-                Console.WriteLine(JsonSerializer.Serialize(BuildDriftReport(url, ns, report), new JsonSerializerOptions { WriteIndented = true }));
+                Console.WriteLine(JsonSerializer.Serialize(BuildDriftReport(url, ns, report), new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
             }
             else
             {
