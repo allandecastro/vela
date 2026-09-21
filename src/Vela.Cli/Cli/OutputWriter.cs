@@ -376,7 +376,7 @@ internal static class OutputWriter
 
         console.MarkupLine("[bold]Auth options:[/]");
         Console.WriteLine("  Client secret resolution order: --client-secret <value> (warned), --client-secret-stdin, DATAVERSE_CLIENT_SECRET env var.");
-        Console.WriteLine("  --interactive persists the login token (~/.vela/token.dat) so repeat runs are silent; --fresh-login forces a new prompt, 'vela logout' clears it.");
+        Console.WriteLine("  --interactive persists the login token (cross-platform cache under ~/.vela) so repeat runs are silent; --fresh-login forces a new prompt, 'vela logout' clears it.");
         Console.WriteLine("  --auth-client-id <appId>   Override the MSAL public client id used for --interactive browser login.");
         Console.WriteLine("  --authority <url>          Override the MSAL authority (e.g. for sovereign clouds).");
         Console.WriteLine("  --verbose also prints full exception stack traces on failure.");

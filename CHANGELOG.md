@@ -24,13 +24,18 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Fixed (CLI)
+## [0.13.0] - 2026-09-21 (Vela.Cli)
+
+CLI line, published as `cli-v0.13.0`. Framework unchanged (`0.19.0`).
+
+### Fixed
 
 - Interactive browser login (`--interactive`) now persists its token cache **cross-platform**, so a repeat run
   signs in silently on macOS and Linux instead of re-opening the browser every time. The previous cache went
   through the Dataverse SDK's `TokenCacheStorePath`, which is DPAPI-encrypted and Windows-only. The cache is now
   a file under the config dir (`~/.vela`): DPAPI-encrypted on Windows, a user-only file on macOS/Linux.
-  `--fresh-login` forgets the cached account, and `vela logout` removes the cache.
+  `--fresh-login` forgets the cached account, and `vela logout` removes the cache. Applies to every command that
+  connects to Dataverse (`plan`, `apply`, `inspect`, `models`), which share the same cache.
 
 ## [0.12.0] - 2026-09-21 (Vela.Cli)
 
