@@ -5,6 +5,13 @@ on:
     branches: [ main ]
   pull_request:
 
+# Cancel an in-progress run when a newer commit is pushed to the same branch / PR, so successive pushes do not
+# pile up redundant Windows runs (each push otherwise starts a fresh run and leaves the previous one running).
+# Keyed by ref: a PR's runs cancel each other; pushes to main cancel each other; the two never interfere.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # Windows PowerShell 5.1 is always present on the Windows runner; use it as the default shell for run steps.
 defaults:
   run:
