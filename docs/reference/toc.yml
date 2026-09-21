@@ -1,6 +1,6 @@
 - name: CLI cheat sheet
   href: cli-cheatsheet.md
-- name: Analyzers (VELA001-003)
+- name: Analyzers and generators
   href: analyzers.md
 - name: Limitations
   href: limitations.md

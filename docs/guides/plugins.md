@@ -216,9 +216,11 @@ public sealed class AccountAudit : EntityPluginBase<Account>
 - Reading a column the step did not capture is a normal C# "no such member" compile error on the projection
   (the column simply is not on the type). The `global using` needs C# 10; on older `LangVersion` it is skipped
   and you add `using <YourNamespace>.Generated.Images;` yourself (completion still offers it).
-- The projections are compiler-generated (they never appear as files in your source tree; `F12` opens them). A
-  capture with no explicit columns (`WithPreImage()`) keeps the full entity and generates nothing. If the column
-  list is not a literal set of selectors, the generator skips it and you keep the untyped image.
+- The projections are compiler-generated (they never appear as files in your source tree; `F12` opens them) by a
+  source generator bundled in `Vela.Plugins` - see [Typed image projection generator](../reference/analyzers.md#typed-image-projection-generator)
+  for how it names types and behaves when the early-bound model changes. A capture with no explicit columns
+  (`WithPreImage()`) keeps the full entity and generates nothing. If the column list is not a literal set of
+  selectors, the generator skips it and you keep the untyped image.
 
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:
