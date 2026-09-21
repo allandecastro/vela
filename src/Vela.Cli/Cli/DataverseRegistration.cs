@@ -26,8 +26,11 @@ internal static partial class DataverseRegistration
     // and cannot be exercised by an offline unit test — mutating them only yields NoCoverage noise. The reader
     // helpers they orchestrate (GetPluginAssembly/GetPluginTypes/GetStepItems/GetCustomApiItems) are covered
     // directly through the IOrganizationService seam.
-    internal static RegistrationState BuildDataverseState(string[] sourceAssemblies, SharedOptions options, JsonSerializerOptions jsonOptions, IReadOnlyList<RankStep>? localDesiredSteps = null)
+    internal static RegistrationState BuildDataverseState(string[] sourceAssemblies, SharedOptions options, JsonSerializerOptions jsonOptions, IReadOnlyList<RankStep>? localDesiredSteps = null, Action<string>? report = null)
 {
+    void Report(string phase) => report?.Invoke(phase);
+
+    Report("Connecting to Dataverse…");
     using ServiceClient client = CreateDataverseClient(options);
 
     IOrganizationService service = client;
@@ -35,6 +38,7 @@ internal static partial class DataverseRegistration
     List<string> diagnostics = [];
     HashSet<Guid> ourPluginTypeIds = [];
 
+    Report("Reading plugin steps and custom APIs…");
     foreach (string assemblyName in sourceAssemblies)
     {
         Entity? pluginAssembly = GetPluginAssembly(service, assemblyName);
@@ -65,6 +69,7 @@ internal static partial class DataverseRegistration
     // never reads (and therefore never deletes) them. Scoped to the target solution (componenttype 61).
     if (!string.IsNullOrWhiteSpace(options.WebResourcesRoot) && !string.IsNullOrWhiteSpace(options.SolutionUniqueName))
     {
+        Report("Reading web resources…");
         items.AddRange(ReadWebResourcesInSolution(service, options.SolutionUniqueName!, jsonOptions));
     }
 
@@ -73,6 +78,7 @@ internal static partial class DataverseRegistration
     // the caller passes the local desired steps.
     if (localDesiredSteps is { Count: > 0 })
     {
+        Report("Checking execution-order collisions…");
         diagnostics.AddRange(BuildRankCollisionDiagnostics(service, localDesiredSteps, ourPluginTypeIds));
     }
 

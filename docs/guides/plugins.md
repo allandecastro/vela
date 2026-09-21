@@ -206,9 +206,13 @@ public sealed class AccountAudit : EntityPluginBase<Account>
   keep working. It mirrors the early-bound `ctx.GetPreImage<Account>()` accessor, so the read site is familiar;
   pass a custom alias with `ctx.PostImageAs<T>("MyAlias")`.
 - Works on the guided path and the typed `On<TRequest>()` path alike (it is a context accessor).
-- **Bulk steps** (`OnCreateMultiple` / `OnUpdateMultiple`) read per-record projections with `ctx.PreImagesAs<T>()`
-  / `ctx.PostImagesAs<T>()`, which return an `IReadOnlyList<T?>` aligned with `ctx.GetTargets()` (or a single
-  record with `ctx.PostImageAs<T>(index)`).
+- **Bulk operations:** Dataverse does not allow entity images on `CreateMultiple` / `UpdateMultiple` steps
+  (a `*Multiple` step that captures a `WithPreImage`/`WithPostImage` is rejected at `vela plan`/`apply`). Capture
+  the image on the single **`OnCreate()` / `OnUpdate()`** step instead: that step also runs for bulk operations,
+  firing per record, so each invocation reads its record's projection with the singular `ctx.PreImageAs<T>()` /
+  `ctx.PostImageAs<T>()`. (The list accessors `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()`, aligned with
+  `ctx.GetTargets()`, exist for a native `*Multiple` batch context and are exercised via the in-memory test
+  harness, where per-record image collections can be supplied.)
 - Reading a column the step did not capture is a normal C# "no such member" compile error on the projection
   (the column simply is not on the type). The `global using` needs C# 10; on older `LangVersion` it is skipped
   and you add `using <YourNamespace>.Generated.Images;` yourself (completion still offers it).

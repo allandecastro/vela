@@ -186,7 +186,7 @@ static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptio
         RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
-            () => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local)));
+            report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
 
         var localSteps = local.Items.Where(IsStep)
             .OrderBy(x => x.Type, StringComparer.Ordinal)
@@ -262,7 +262,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
-            () => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local)));
+            report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
         RegistrationDiff diff = BuildDiff(local, current);
         PlanPreview preview = BuildPlanPreview("apply-execute-preview", options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && preview.Diagnostics.Length > 0)
@@ -337,7 +337,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
 
         RegistrationState after = ConsoleStatus.Run(
             "Re-reading Dataverse state…",
-            () => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local)));
+            report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
         RegistrationDiff afterDiff = BuildDiff(local, after);
         PlanPreview result = BuildPlanPreview("apply-execute", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics) with
         {
@@ -416,7 +416,7 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
         RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
-            () => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local)));
+            report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
         RegistrationDiff diff = BuildDiff(local, current);
         PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && plan.Diagnostics.Length > 0)
