@@ -58,6 +58,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   the runtime downcast does not reach).
 - `vela models --custom-apis` and the scaffolded custom API samples emit request/response types deriving from
   `CustomApiRequest`/`CustomApiResponse` (see the framework change above).
+- **`apply` now redeploys a code-only change.** The registration diff only covers steps and custom APIs, so a
+  rebuilt assembly with unchanged step/custom-API definitions used to report "No changes detected; nothing
+  executed" and leave the old code running. `apply` now also compares the plugin package content against what is
+  deployed (read-only, prefix-aware) and re-publishes it when the binary differs, even when the step/custom-API
+  diff is empty. A byte-identical package is still skipped.
+- **`apply` no longer fails when a plugin package is updated.** Updating an existing `pluginpackage` wrote the
+  `version` field, which Dataverse rejects ("PluginPackage version cannot be updated"), failing apply mid-run
+  whenever the package version was bumped. The update now writes only the package content; Dataverse derives the
+  version from the uploaded `.nupkg`.
 
 ## [0.18.0] - 2026-09-20 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

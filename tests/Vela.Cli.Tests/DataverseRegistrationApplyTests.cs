@@ -304,7 +304,9 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Entity updated = Assert.Single(svc.Updated);
         Assert.Equal("pluginpackage", updated.LogicalName);
         Assert.Equal(existingId, updated.Id);
-        Assert.Equal("9.9.9", updated.GetAttributeValue<string>("version"));
+        // Dataverse derives the version from the uploaded .nupkg and rejects an explicit version write on an
+        // existing package, so the update writes content only.
+        Assert.False(updated.Contains("version"));
         Assert.Equal(Convert.ToBase64String(bytes), updated.GetAttributeValue<string>("content"));
         Assert.False(updated.Contains("solutionid"));
         Assert.Empty(svc.Created);
@@ -353,6 +355,47 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         Entity updated = Assert.Single(svc.Updated);
         Assert.Equal(Convert.ToBase64String(newBytes), updated.GetAttributeValue<string>("content"));
+    }
+
+    [Fact]
+    public void PluginPackagesNeedPublish_true_when_package_is_new()
+    {
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-new"));
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection() };
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
+
+        Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+    }
+
+    [Fact]
+    public void PluginPackagesNeedPublish_true_when_content_differs()
+    {
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-new"));
+        var existing = new Entity("pluginpackage", Guid.NewGuid());
+        existing["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes("pkg-old"));
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
+
+        Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+    }
+
+    [Fact]
+    public void PluginPackagesNeedPublish_false_when_content_identical()
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes("pkg-same");
+        string path = NewTempFile(bytes);
+        var existing = new Entity("pluginpackage", Guid.NewGuid());
+        existing["content"] = Convert.ToBase64String(bytes);
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
+
+        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+    }
+
+    [Fact]
+    public void PluginPackagesNeedPublish_false_when_no_payloads()
+    {
+        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(new TestSupport.FakeOrgService(), Array.Empty<PluginPackagePayload>(), solutionUniqueName: null, new List<string>()));
     }
 
     [Fact]
