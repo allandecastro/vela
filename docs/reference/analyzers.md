@@ -3,9 +3,10 @@
 Vela ships a small set of Roslyn **analyzers** and one **source generator** inside the `Vela.Plugins` package
 (they live in the bundled `Vela.Analyzers` assembly). There is **no separate analyzer package or project to
 reference** - they come with `Vela.Plugins` automatically and run in the editor and at build with no extra
-configuration. Each analyzer is reported as an **error** so a mistake fails fast instead of surfacing as a silent
-runtime surprise. Together they let the compiler enforce the fluent step builder's rules, so both a human
-developer and an AI author get told what is valid up front.
+configuration. The rules that catch a genuine mistake are reported as **errors** so they fail fast instead of
+surfacing as a silent runtime surprise; advisory rules (currently only VELA006) are **warnings** and never break a
+build. Together they let the compiler enforce the fluent step builder's rules, so both a human developer and an AI
+author get told what is valid up front.
 
 | Rule | Category | Severity | What it catches |
 | --- | --- | --- | --- |
@@ -14,12 +15,14 @@ developer and an AI author get told what is valid up front.
 | [VELA003](#vela003) | Vela.Usage | Error | A single-value step modifier is set more than once |
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
 | [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
+| [VELA006](#vela006) | Vela.Usage | Warning | Prefer the typed trigger (`OnCreate()`) over `OnMessage("create")` for a modelled message |
 
 - [VELA001 - column selector targets a real column](#vela001)
 - [VELA002 - step chain must end with Handle](#vela002)
 - [VELA003 - a step modifier is set at most once](#vela003)
 - [VELA004 - handler must be an instance method](#vela004)
 - [VELA005 - no duplicate column in a selector list](#vela005)
+- [VELA006 - prefer the typed trigger over OnMessage(string)](#vela006)
 - [Typed image projection generator](#typed-image-projection-generator)
 
 ## VELA001
@@ -68,6 +71,17 @@ selectors are compared, so a leading image alias string is ignored, and the same
 (one in `FilterOn`, one in `WithPreImage`) is fine.
 
 **Fix:** list each column once.
+
+## VELA006
+
+**Prefer the typed step trigger over the permissive `OnMessage(string)` for a message Vela models.** For a modelled
+message there is a typed trigger - `OnCreate()`, `OnUpdate()`, `OnDelete()`, the `*Multiple` variants,
+`OnRetrieve()` / `OnRetrieveMultiple()`, `OnAssociate()` / `OnDisassociate()`, `OnMerge()` - that gives a typed
+handler context and compile-time entity applicability, so `OnMessage("create")` is flagged. Unlike the other
+rules this is a **warning**, not an error: `OnMessage("...")` stays valid and is the right tool for a message Vela
+does not model (only a literal message string with a modelled name is flagged).
+
+**Fix:** switch to the typed trigger, for example `OnCreate()` instead of `OnMessage("create")`.
 
 ## Typed image projection generator
 

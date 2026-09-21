@@ -33,6 +33,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - New analyzer **VELA005**: the same column listed twice in a single `FilterOn(...)` / `WithPreImage(...)` /
   `WithPostImage(...)` call is reported as a build error (a repeated column has no effect). Only lambda column
   selectors are compared; a leading image alias string and the same column across different calls are fine.
+- New analyzer **VELA006** (warning): prefer the typed step trigger (`OnCreate()`, `OnUpdate()`, ...) over the
+  permissive `OnMessage("create")` string form for a message Vela models. Advisory only - `OnMessage("...")` stays
+  valid for unmodelled messages, so it is a warning, not an error (only a literal modelled message name is flagged).
 
 ## [0.20.0] - 2026-09-21 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
