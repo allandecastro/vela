@@ -238,6 +238,36 @@ namespace Vela.Context
         void Trace(string format, params object[] args);
 
         /// <summary>
+        /// Writes a log entry at the given severity to the plug-in trace log and, when the environment has
+        /// Application Insights configured, to Application Insights (with the pipeline dimensions and any active
+        /// <see cref="BeginLogScope"/> properties). Always writes to the trace log, so entries are never lost when
+        /// Application Insights is not set up. Never throws for telemetry reasons. Prefer the leveled extension
+        /// helpers (<c>LogInformation</c>, <c>LogWarning</c>, <c>LogError</c>, ...).
+        /// </summary>
+        /// <param name="level">Severity.</param>
+        /// <param name="exception">Optional exception to attach.</param>
+        /// <param name="message">Message template (structured args bind to Application Insights dimensions).</param>
+        /// <param name="args">Template args.</param>
+        void Log(LogLevel level, Exception? exception, string message, params object[] args);
+
+        /// <summary>
+        /// Begins a logging scope: the given properties are attached as Application Insights custom dimensions to
+        /// every log written until the returned handle is disposed (on top of the framework's default dimensions).
+        /// Nestable.
+        /// </summary>
+        /// <param name="properties">Custom dimensions to attach.</param>
+        IDisposable BeginLogScope(IReadOnlyDictionary<string, object?> properties);
+
+        /// <summary>
+        /// Emits a custom metric to Application Insights (when configured) and a structured log line. No-op for the
+        /// metric channel when Application Insights is not set up; never throws.
+        /// </summary>
+        /// <param name="name">Metric name.</param>
+        /// <param name="value">Metric value.</param>
+        /// <param name="properties">Optional custom dimensions.</param>
+        void LogMetric(string name, double value, IReadOnlyDictionary<string, object?>? properties = null);
+
+        /// <summary>
         /// Acquires a managed identity access token for the given scopes.
         /// </summary>
         /// <param name="scopes">Requested scopes.</param>
