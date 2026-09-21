@@ -24,6 +24,19 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Changed (CLI)
+
+- `plan` / `apply` now diff a changed Custom API **per parameter**: request inputs and response outputs that were
+  added, removed, or retyped are listed individually (with a before/after type), instead of the whole API showing
+  as one opaque change.
+
+### Fixed (CLI)
+
+- `apply` now converges a Custom API request-parameter / response-property **type change** by deleting and
+  recreating just that one parameter (its `Type` column is create-only), instead of failing the apply. Only the
+  affected parameter is touched; the Custom API and its other parameters stay in place. Optionality and entity
+  binding still reconcile in place.
+
 ## [0.19.0] - 2026-09-21 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.19.0` (all three packages ship at this version).

@@ -257,38 +257,37 @@ internal static partial class DataverseRegistration
                 ? $"[{parameter.ParameterTypeName}{(parameter.IsOptional ? ", optional" : "")}]"
                 : $"[{parameter.ParameterTypeName}]";
 
+            bool recreate = false;
             if (existingByName.TryGetValue(parameter.Name, out Entity? existing))
             {
-                // A parameter's type is create-only: Dataverse silently ignores an update to it (the value simply
-                // stays), so applying a type change would report success but never converge - every later plan
-                // would show the same phantom change. Fail fast with guidance, like the parent Custom API
-                // immutables (EnsureCustomApiImmutablesUnchanged).
                 int existingType = existing.GetAttributeValue<OptionSetValue>("type")?.Value ?? -1;
-                if (existingType != typeCode)
+                if (existingType == typeCode)
                 {
-                    throw new InvalidOperationException(
-                        $"Custom API '{apiUniqueName}': parameter '{parameter.Name}' type ({existingType} -> {typeCode}) " +
-                        "cannot be changed on an existing parameter. A parameter's type is set at creation and Dataverse " +
-                        "ignores such updates, so applying would report success but never converge. Remove the parameter " +
-                        "(or the Custom API) and re-apply to recreate it with the new type.");
+                    Entity update = new Entity(spec.EntityName)
+                    {
+                        Id = existing.Id
+                    };
+                    if (spec.IncludeIsOptional)
+                    {
+                        update["isoptional"] = parameter.IsOptional;
+                    }
+                    // type is unchanged here (matched above), so it is not written on update.
+                    // Always write logicalentityname (null clears it). Only setting it when non-empty left a stale
+                    // value behind when a parameter's entity binding was removed, so the live read kept surfacing the
+                    // old table and every subsequent plan/apply reported the Custom API as "changed" forever.
+                    update["logicalentityname"] = string.IsNullOrWhiteSpace(parameter.LogicalEntityName) ? null : parameter.LogicalEntityName;
+                    service.Update(update);
+                    LogOperation(spec.LogTag, "update", parameter.Name, details, verbose, indent: true);
+                    continue;
                 }
 
-                Entity update = new Entity(spec.EntityName)
-                {
-                    Id = existing.Id
-                };
-                if (spec.IncludeIsOptional)
-                {
-                    update["isoptional"] = parameter.IsOptional;
-                }
-                // type is immutable (guarded unchanged above), so it is not written on update.
-                // Always write logicalentityname (null clears it). Only setting it when non-empty left a stale
-                // value behind when a parameter's entity binding was removed, so the live read kept surfacing the
-                // old table and every subsequent plan/apply reported the Custom API as "changed" forever.
-                update["logicalentityname"] = string.IsNullOrWhiteSpace(parameter.LogicalEntityName) ? null : parameter.LogicalEntityName;
-                service.Update(update);
-                LogOperation(spec.LogTag, "update", parameter.Name, details, verbose, indent: true);
-                continue;
+                // A parameter's type (which also encodes collection-ness) is create-only: Dataverse silently
+                // ignores an update to it, so an in-place update would report success but never converge - every
+                // later plan would show the same phantom change. Delete this one parameter and recreate it with the
+                // new type below. Only the affected parameter is touched; the Custom API and its other parameters
+                // stay in place (mirrors how step images do delete+recreate for their create-only fields).
+                service.Delete(spec.EntityName, existing.Id);
+                recreate = true;
             }
 
             Entity create = new Entity(spec.EntityName);
@@ -307,7 +306,7 @@ internal static partial class DataverseRegistration
                 create["logicalentityname"] = parameter.LogicalEntityName;
             }
             service.Create(create);
-            LogOperation(spec.LogTag, "create", parameter.Name, details, verbose, indent: true);
+            LogOperation(spec.LogTag, recreate ? "recreate" : "create", parameter.Name, details, verbose, indent: true);
         }
 
         foreach (Entity existing in existingRows)
