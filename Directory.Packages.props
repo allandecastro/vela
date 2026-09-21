@@ -16,6 +16,9 @@
     <!-- Transparent, headless auth: acquire a Dataverse token from the ambient credential (az login locally,
          managed identity / workload identity in CI) via DefaultAzureCredential, no browser and no flag. -->
     <PackageVersion Include="Azure.Identity" Version="1.13.2" />
+    <!-- Cross-platform MSAL token cache for the interactive browser login (persists the token on macOS/Linux, not
+         just Windows DPAPI). Pinned to the version already resolved transitively via the Dataverse client. -->
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.67.2" />
     <PackageVersion Include="Spectre.Console" Version="0.49.1" />
     <!-- Pins the patched System.Security.Cryptography.Xml over the vulnerable 8.0.2 pulled transitively by the
          Dataverse client. 8.0.3 itself later picked up advisories (NU1903), so track the latest 8.x servicing patch. -->

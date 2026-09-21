@@ -411,27 +411,16 @@ internal static class CommandLineOptions
 
             if (oauthInteractive)
             {
-                string? authority = TryReadOption(args, "--authority");
-                if (!string.IsNullOrWhiteSpace(authority))
-                {
-                    // A custom authority (sovereign cloud) can't be expressed in an OAuth connection string, so
-                    // fall back to the token-callback path (this one does not persist a token cache).
-                    oauthUrl = url!;
-                    oauthToken = AcquireTokenInteractive(url!, TryReadOption(args, "--auth-client-id"), authority);
-                }
-                else
-                {
-                    // Preferred: let the Dataverse SDK run the browser login and persist/reuse the token via
-                    // TokenCacheStorePath, so a repeat run is silent. --fresh-login forces a new prompt.
-                    bool freshLogin = HasFlag(args, "--fresh-login");
-                    if (freshLogin)
-                    {
-                        UserConfig.ClearTokenCache();
-                    }
-
-                    UserConfig.EnsureConfigDir();
-                    connectionString = BuildOAuthConnectionString(url!, TryReadOption(args, "--auth-client-id"), UserConfig.TokenCachePath, freshLogin);
-                }
+                // Run the browser login through our own MSAL public client and connect via the token callback.
+                // The token is persisted by a cross-platform cache (see InteractiveTokenCache), so a repeat run is
+                // silent on macOS/Linux too - not only on Windows. A custom --authority (sovereign cloud) flows
+                // through the same path. --fresh-login forgets the cached account and forces a new prompt.
+                oauthUrl = url!;
+                oauthToken = AcquireTokenInteractive(
+                    url!,
+                    TryReadOption(args, "--auth-client-id"),
+                    TryReadOption(args, "--authority"),
+                    HasFlag(args, "--fresh-login"));
             }
             else if (!string.IsNullOrWhiteSpace(url)
                 && string.IsNullOrWhiteSpace(tenantId)
@@ -477,26 +466,10 @@ internal static class CommandLineOptions
         return $"AuthType=ClientSecret;Url={url};TenantId={tenantId};ClientId={clientId};ClientSecret={clientSecret};RequireNewInstance=true";
     }
 
-    // The Microsoft-provided sample public client (AppId + RedirectUri) for Dataverse interactive OAuth flows,
-    // documented for development use. It is the same client the previous custom MSAL flow used.
+    // The Microsoft-provided sample public client for Dataverse interactive OAuth flows, documented for
+    // development use. It has http://localhost registered as a loopback redirect (MSAL's system-browser flow
+    // rejects any non-loopback redirect URI).
     public const string DefaultInteractiveClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
-    // Must be a loopback URI: MSAL's system-browser interactive flow rejects any non-loopback redirect
-    // ("Only loopback redirect uri is supported ..."), which broke the default --interactive path. The
-    // well-known public client above has http://localhost registered for exactly this flow.
-    private const string DefaultInteractiveRedirectUri = "http://localhost";
-
-    /// <summary>
-    /// Builds the interactive OAuth connection string. The Dataverse SDK opens the browser on first use and, via
-    /// <c>TokenCacheStorePath</c>, persists the MSAL token (DPAPI-encrypted on Windows) so later runs reuse it
-    /// silently (<c>LoginPrompt=Auto</c>). <paramref name="freshLogin"/> forces a new prompt (<c>Always</c>).
-    /// </summary>
-    public static string BuildOAuthConnectionString(string url, string? appId, string tokenCachePath, bool freshLogin)
-    {
-        string clientId = string.IsNullOrWhiteSpace(appId) ? DefaultInteractiveClientId : appId!;
-        string loginPrompt = freshLogin ? "Always" : "Auto";
-        return $"AuthType=OAuth;Url={url};AppId={clientId};RedirectUri={DefaultInteractiveRedirectUri};" +
-               $"TokenCacheStorePath={tokenCachePath};LoginPrompt={loginPrompt};RequireNewInstance=true";
-    }
 
     // Resolves the client secret, preferring the DATAVERSE_CLIENT_SECRET env var or stdin over the command line.
     // A secret passed via --client-secret is honored for back-compat but warned about, since it leaks into
@@ -553,15 +526,15 @@ internal static class CommandLineOptions
     }
 
     // Interactive browser login. The MSAL public client id and authority default to the well-known
-    // multi-tenant values but are overridable for sovereign clouds / custom app registrations.
-    public static string AcquireTokenInteractive(string url, string? authClientId, string? authority)
+    // multi-tenant values but are overridable for sovereign clouds / custom app registrations. The token is
+    // persisted by a cross-platform cache (InteractiveTokenCache), so a later run reuses it silently on every OS
+    // instead of re-opening the browser. freshLogin forgets the cached account and forces a new prompt.
+    public static string AcquireTokenInteractive(string url, string? authClientId, string? authority, bool freshLogin = false)
     {
-        // Default MSAL public client used for interactive browser login.
-        const string defaultInteractiveClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
         const string defaultInteractiveAuthority = "https://login.microsoftonline.com/common";
 
-        string publicClientId = string.IsNullOrWhiteSpace(authClientId) ? defaultInteractiveClientId : authClientId;
-        string resolvedAuthority = string.IsNullOrWhiteSpace(authority) ? defaultInteractiveAuthority : authority;
+        string publicClientId = string.IsNullOrWhiteSpace(authClientId) ? DefaultInteractiveClientId : authClientId!;
+        string resolvedAuthority = string.IsNullOrWhiteSpace(authority) ? defaultInteractiveAuthority : authority!;
         string scope = url.TrimEnd('/') + "/.default";
 
         var app = Microsoft.Identity.Client.PublicClientApplicationBuilder
@@ -570,20 +543,42 @@ internal static class CommandLineOptions
             .WithDefaultRedirectUri()
             .Build();
 
-        // Try silent auth first (cached token from a previous login)
-        var accounts = app.GetAccountsAsync().GetAwaiter().GetResult();
-        if (accounts.Any())
+        // Persist the token cache across runs (DPAPI file on Windows, user-only file on macOS/Linux). This is
+        // what makes a repeat run silent on macOS/Linux, which the Dataverse SDK's Windows-only cache did not.
+        InteractiveTokenCache.RegisterOn(app);
+
+        var accounts = app.GetAccountsAsync().GetAwaiter().GetResult().ToList();
+        if (freshLogin)
+        {
+            // --fresh-login: drop the cached account(s) so the browser prompts for a new sign-in.
+            foreach (var account in accounts)
+            {
+                try
+                {
+                    app.RemoveAsync(account).GetAwaiter().GetResult();
+                }
+                catch
+                {
+                    // Best-effort: a stale account that cannot be removed still gets overridden by the prompt below.
+                }
+            }
+
+            accounts.Clear();
+        }
+
+        // Try silent auth first (cached token from a previous login).
+        if (accounts.Count > 0)
         {
             try
             {
-                var silent = app.AcquireTokenSilent([scope], accounts.First())
+                var silent = app.AcquireTokenSilent([scope], accounts[0])
                     .ExecuteAsync().GetAwaiter().GetResult();
                 return silent.AccessToken;
             }
             catch (Microsoft.Identity.Client.MsalUiRequiredException) { }
         }
 
-        // Open browser for interactive login
+        // Open browser for interactive login.
         Console.Error.WriteLine("Opening browser for Microsoft login...");
         var result = app.AcquireTokenInteractive([scope])
             .WithPrompt(Microsoft.Identity.Client.Prompt.SelectAccount)
