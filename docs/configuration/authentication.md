@@ -5,19 +5,39 @@ write registration state - `plan`, `apply` and [`vela models`](../guides/models.
 All of these share the **same connection flags**, so once you know how to authenticate
 one, you know how to authenticate them all.
 
-There are three ways to connect:
+There are four ways to connect:
 
+- the **ambient Azure credential** (just `--url` - uses your `az login` or a managed identity, no browser),
 - a full **connection string**,
-- **client id / client secret** (an app registration - the usual choice for CI),
+- **client id / client secret** (an app registration),
 - **interactive browser login** (a wizard, for local use).
 
 ## Connection options
 
 | Option | Flags | When to use |
 | --- | --- | --- |
+| Ambient credential | `--url` (only) | The simplest, headless default: local `az login` or a managed identity / workload identity in CI. |
 | Connection string | `--connection-string` | You already have a Dataverse connection string. |
 | Client id / secret | `--url` + `--tenant-id` + `--client-id` + `--client-secret` | Unattended automation / CI with an app registration. |
 | Interactive | `--interactive` | Local use - signs in through the browser with a wizard. |
+
+## Ambient Azure credential (recommended)
+
+When you pass **only** `--url` (no connection string, no client-secret flags, no `--interactive`), Vela acquires
+a Dataverse token from the ambient Azure credential chain (`Azure.Identity` `DefaultAzureCredential`) - no
+browser and no extra flag:
+
+```bash
+# Uses your existing 'az login' locally, or a managed identity / workload identity in CI
+az login   # once, if you are not already signed in
+vela plan --package ./artifacts/Zava.Plugins.1.0.0.nupkg --url https://zava.crm.dynamics.com --solution Zava
+vela apply --package ./artifacts/Zava.Plugins.1.0.0.nupkg --url https://zava.crm.dynamics.com --solution Zava --auto-approve
+```
+
+The credential chain covers environment variables, workload identity / managed identity (CI and Azure-hosted
+runners), and a local `az login` session, so the same command works on a developer machine and in a pipeline.
+Any explicit method below (`--connection-string`, client-secret flags, or `--interactive`) takes precedence when
+provided.
 
 ## Client id / client secret
 

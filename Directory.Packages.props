@@ -13,6 +13,9 @@
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageVersion Include="System.ComponentModel.Annotations" Version="5.0.0" />
     <PackageVersion Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.2.10" />
+    <!-- Transparent, headless auth: acquire a Dataverse token from the ambient credential (az login locally,
+         managed identity / workload identity in CI) via DefaultAzureCredential, no browser and no flag. -->
+    <PackageVersion Include="Azure.Identity" Version="1.13.2" />
     <PackageVersion Include="Spectre.Console" Version="0.49.1" />
     <!-- Pins the patched System.Security.Cryptography.Xml over the vulnerable 8.0.2 pulled transitively by the
          Dataverse client. 8.0.3 itself later picked up advisories (NU1903), so track the latest 8.x servicing patch. -->

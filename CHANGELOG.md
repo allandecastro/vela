@@ -24,6 +24,16 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added (CLI)
+
+- **Transparent, headless auth via the ambient Azure credential.** With only `--url` (and no
+  `--connection-string`, client-secret flags, or `--interactive`), `plan`/`apply`/`inspect`/`models` now
+  acquire a Dataverse token from the ambient Azure credential chain (`Azure.Identity` `DefaultAzureCredential`):
+  a local `az login` session, or a managed identity / workload identity in CI - no browser and no flag. A bare
+  `vela apply --url https://org.crm.dynamics.com --solution <name>` just works when you are already `az login`-ed
+  or running under a managed identity. Explicit `--connection-string` / client-secret / `--interactive` still
+  take precedence.
+
 ### Fixed (Framework)
 
 - `ctx.UserService` (and the other wrapped services) now downcast early-bound entities to the base `Entity`

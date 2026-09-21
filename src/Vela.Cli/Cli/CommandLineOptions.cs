@@ -433,13 +433,33 @@ internal static class CommandLineOptions
                     connectionString = BuildOAuthConnectionString(url!, TryReadOption(args, "--auth-client-id"), UserConfig.TokenCachePath, freshLogin);
                 }
             }
+            else if (!string.IsNullOrWhiteSpace(url)
+                && string.IsNullOrWhiteSpace(tenantId)
+                && string.IsNullOrWhiteSpace(clientId)
+                && string.IsNullOrWhiteSpace(clientSecret))
+            {
+                // No explicit credentials and not --interactive: acquire a token transparently from the ambient
+                // Azure credential (environment, managed identity / workload identity in CI, and 'az login'
+                // locally) via DefaultAzureCredential. No browser and no flag - a bare `vela apply --url ...`
+                // just works when the user is already `az login`-ed or running under a managed identity.
+                string? token = TryAcquireAmbientToken(url, out string? ambientError);
+                if (token == null)
+                {
+                    exitCode = Fail(ambientError!, ExitConnectionFailure);
+                    return false;
+                }
+
+                oauthUrl = url;
+                oauthToken = token;
+            }
             else if (string.IsNullOrWhiteSpace(url) ||
                 string.IsNullOrWhiteSpace(tenantId) ||
                 string.IsNullOrWhiteSpace(clientId) ||
                 string.IsNullOrWhiteSpace(clientSecret))
             {
                 exitCode = Fail(
-                    "Missing Dataverse auth. Provide --connection-string OR --url + --tenant-id + --client-id + --client-secret OR use --interactive for browser login.",
+                    "Missing Dataverse auth. Provide --connection-string OR --url + --tenant-id + --client-id + --client-secret OR use --interactive for browser login. " +
+                    "With only --url, Vela uses your ambient Azure credential (az login / managed identity).",
                     ExitInvalidArguments);
                 return false;
             }
@@ -505,6 +525,31 @@ internal static class CommandLineOptions
         }
 
         return Environment.GetEnvironmentVariable("DATAVERSE_CLIENT_SECRET");
+    }
+
+    // Transparent, headless auth: acquire a Dataverse access token from the ambient Azure credential chain via
+    // DefaultAzureCredential - environment variables, workload identity / managed identity (CI, Azure-hosted),
+    // and a local `az login` session. No browser and no flag: a bare `vela apply --url ...` works when the user
+    // is already `az login`-ed or running under a managed identity. Returns null with a message on failure.
+    public static string? TryAcquireAmbientToken(string url, out string? error)
+    {
+        string scope = url.TrimEnd('/') + "/.default";
+        try
+        {
+            var credential = new Azure.Identity.DefaultAzureCredential();
+            Azure.Core.AccessToken token = credential.GetToken(new Azure.Core.TokenRequestContext([scope]));
+            error = null;
+            return token.Token;
+        }
+        catch (Exception ex)
+        {
+            error =
+                "Could not acquire a Dataverse token from the ambient Azure credential (az login / managed " +
+                "identity / environment). Run 'az login', or pass --connection-string, or " +
+                "--url + --tenant-id + --client-id + --client-secret, or --interactive for a browser login. " +
+                $"Details: {ex.Message}";
+            return null;
+        }
     }
 
     // Interactive browser login. The MSAL public client id and authority default to the well-known
