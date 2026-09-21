@@ -31,6 +31,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   It exits `5` when the model is out of sync (and `0` when it matches), so CI can fail a build on a stale model
   that would otherwise return silent runtime nulls. Supports `--json` for a machine-readable report.
 
+### Fixed (CLI)
+
+- `plan` and `apply` now surface step execution-order (rank) collision warnings in the default terminal
+  summary as a `warnings:` block, not only in `--json` output. `--strict` also prints the collision text
+  before failing, instead of just a diagnostic count.
+
 ## [0.19.0] - 2026-09-21 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.19.0` (all three packages ship at this version).

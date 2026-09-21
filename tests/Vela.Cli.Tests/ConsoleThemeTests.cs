@@ -63,6 +63,36 @@ public class ConsoleThemeTests
     }
 
     [Fact]
+    public void WritePlanSummary_surfaces_diagnostics_as_a_warnings_block()
+    {
+        var diff = new RegistrationDiff([], [], [], [], [], [], [])
+        {
+            Summary = new DiffSummary(0, 0, 0),
+        };
+        PlanPreview preview = OutputWriter.BuildPlanPreview(
+            "plan", "https://zava.crm.dynamics.com", diff,
+            ["Execution-order collision: 2 steps share rank 1 on Update of account at PostOpSync."],
+            []);
+
+        var sw = new StringWriter();
+        OutputWriter.WritePlanSummary(preview, sw, color: false);
+        string output = sw.ToString();
+
+        Assert.Contains("warnings (1):", output);
+        Assert.Contains("Execution-order collision: 2 steps share rank 1", output);
+        Assert.DoesNotContain("\x1b[", output);
+    }
+
+    [Fact]
+    public void WriteDiagnostics_writes_nothing_when_there_are_no_diagnostics()
+    {
+        var sw = new StringWriter();
+        OutputWriter.WriteDiagnostics([], sw, color: false);
+
+        Assert.Equal(string.Empty, sw.ToString());
+    }
+
+    [Fact]
     public void WriteStateSummary_lists_steps_and_counts_in_plain_text()
     {
         RegistrationItem step = Item("step", "Zava.Plugins.Foo", "{\"name\":\"Foo\"}");
