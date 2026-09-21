@@ -193,6 +193,7 @@ namespace Vela.Plugin
                 object delegateArgument = BuildGenericMessageContextForType(parameterType, ctx)
                     ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
                     ?? ctx;
+                (ctx as LocalPluginContext)?.SetCurrentHandler(runtimeHandler.Method.Name);
                 HandlerInvoker.InvokeDelegate(runtimeHandler, [delegateArgument]);
                 return;
             }
@@ -205,6 +206,7 @@ namespace Vela.Plugin
             object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
                 ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
                 ?? ctx;
+            (ctx as LocalPluginContext)?.SetCurrentHandler(matchedDefinition.HandlerMethodName);
             InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
         }
 

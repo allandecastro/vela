@@ -104,6 +104,7 @@ namespace Vela.CustomApi
                     $"Custom API '{GetType().FullName}' must configure Handler(...) or override ExecuteDataversePlugin.");
             }
 
+            (ctx as LocalPluginContext)?.SetCurrentHandler(methodName);
             HandlerInvoker.ResolveAndInvoke(
                 this,
                 methodName,

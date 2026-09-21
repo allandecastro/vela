@@ -18,8 +18,9 @@ Levels: `LogTrace`, `LogDebug`, `LogInformation`, `LogWarning`, `LogError`, `Log
 ## Custom dimensions (scopes)
 
 Vela attaches a default set of dimensions to every entry, from the execution context:
-`CorrelationId`, `MessageName`, `Stage`, `Mode`, `Depth`, `PrimaryEntityName`, `PrimaryEntityId`. Query and
-correlate on these in Application Insights.
+`CorrelationId`, `MessageName`, `Stage`, `Mode`, `Depth`, `PrimaryEntityName`, `PrimaryEntityId`, `PluginType`
+(the plugin/Custom API class), and `Method` (the handler method currently running). Query and correlate on these
+in Application Insights.
 
 Add your own with a scope - they apply to every log written until the handle is disposed, and nest:
 
@@ -30,6 +31,9 @@ using (ctx.BeginLogScope(("OrderId", orderId), ("Region", "EU")))
     ctx.LogError(ex, "Order failed");         // same dimensions
 }
 ```
+
+A scope also **indents** the plug-in trace log lines written inside it (nested scopes indent further), so the trace
+log reads as a tree. Application Insights entries carry the scope as dimensions rather than indentation.
 
 ## Metrics
 

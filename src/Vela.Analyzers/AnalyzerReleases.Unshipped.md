@@ -9,3 +9,5 @@ VELA001 | Vela.Usage | Error | ColumnSelectorAnalyzer
 VELA002 | Vela.Usage | Error | StepCompletionAnalyzer
 VELA003 | Vela.Usage | Error | DuplicateModifierAnalyzer
 VELA004 | Vela.Usage | Error | StaticHandlerAnalyzer
+VELA005 | Vela.Usage | Error | DuplicateColumnAnalyzer
+VELA006 | Vela.Usage | Warning | PreferTypedMessageAnalyzer
