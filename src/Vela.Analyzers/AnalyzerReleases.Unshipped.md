@@ -11,3 +11,6 @@ VELA003 | Vela.Usage | Error | DuplicateModifierAnalyzer
 VELA004 | Vela.Usage | Error | StaticHandlerAnalyzer
 VELA005 | Vela.Usage | Error | DuplicateColumnAnalyzer
 VELA006 | Vela.Usage | Warning | PreferTypedMessageAnalyzer
+VELA007 | Vela.Usage | Error | ImageStageAnalyzer
+VELA008 | Vela.Usage | Error | DuplicateStepTriggerAnalyzer
+VELA009 | Vela.Usage | Error | HasChangedPreImageAnalyzer

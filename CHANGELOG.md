@@ -24,6 +24,18 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added (framework)
+
+- New analyzer **VELA007** (error): a pre-image on a Create step, or a post-image on a Delete step, is rejected -
+  the message can never provide it. Targets the permissive `OnMessage("create"|"delete")` path (the typed triggers
+  already prevent it via the builder type-state); an unmodelled message is left alone.
+- New analyzer **VELA008** (error): two steps in one plugin sharing the same trigger (message + stage + mode) are
+  flagged, matching the runtime's one-step-per-trigger rule. Only complete, statically determinable chains in
+  `RegisterPluginSteps()` are compared.
+- New analyzer **VELA009** (error): `HasChanged` / `HasAnyChanged` in a handler whose step registers no pre-image
+  will throw at runtime. Flagged only in the unambiguous case (instance-method handler bound to exactly one step
+  chain with no `WithPreImage(...)`, default alias); lambdas, shared handlers, and custom aliases are left alone.
+
 ## [0.21.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.21.0` (all three packages ship at this version).
