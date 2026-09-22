@@ -19,10 +19,11 @@ defaults:
 
 jobs:
   build-test-pack:
-    # GitHub-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run there.
+    # Self-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run on Windows; moved
+    # off GitHub-hosted runners to avoid GitHub Actions billing. The runner must be online for checks to report.
     # Only same-repo branches (head repo == base repo) and pushes to main run CI; fork PRs are skipped.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 20 # build+test is fast; cap a hung run
     env:
       # The service account can't write to the default install root 'C:\Program Files\dotnet', so setup-dotnet

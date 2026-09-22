@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build-deploy:
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows]
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
