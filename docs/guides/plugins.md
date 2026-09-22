@@ -253,7 +253,9 @@ the `ctx.GetTarget<T>()` extension stays available.
 Vela also owns `UpsertRequest<TEntity>` / `UpsertResponse` for **calling** Upsert from plugin code:
 `service.Execute(new UpsertRequest<Account> { Target = account }).ToResponse<UpsertResponse>()` returns
 `RecordCreated` (whether the row was inserted or updated) and the affected `Target` reference. Upsert is a message
-you call rather than register a step on, so it has no curated `On...()` method.
+you call rather than register a step on, so it has no curated `On...()` method. To upsert by a **business key**,
+`service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` copies the key onto the target and returns
+`(Created, Target)` in one call (see [alternate keys](models.md#what-the-generated-table-classes-contain)).
 
 The modelled messages with a typed context are:
 

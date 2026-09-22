@@ -208,9 +208,28 @@ public class ModelGeneratorTests
 
         string code = ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Shared.Models.Generated")).Single().Code;
 
-        Assert.Contains("public static EntityReference ByAccountNumberKey(params object[] keyValues)", code);
+        // The key column type flows through to a typed parameter (accountnumber is a string).
+        Assert.Contains("public static EntityReference ByAccountNumberKey(string accountNumber)", code);
         Assert.Contains("KeyAttributeCollection keys = new KeyAttributeCollection();", code);
-        Assert.Contains("\"accountnumber\"", code);
+        Assert.Contains("keys[\"accountnumber\"] = accountNumber;", code);
+    }
+
+    [Fact]
+    public void AlternateKey_EmitsOneTypedParameterPerKeyColumn()
+    {
+        // A composite alternate key becomes one typed parameter per column, in declared order.
+        EntityMetadata md = MetadataFactory.Entity("invoiceline", "InvoiceLine")
+            .PrimaryId("invoicelineid", "InvoiceLineId")
+            .String("code", "Code")
+            .Integer("year", "Year")
+            .Key("new_codeyearkey", "CodeYearKey", "code", "year")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Shared.Models.Generated")).Single().Code;
+
+        Assert.Contains("public static EntityReference ByCodeYearKey(string code, int year)", code);
+        Assert.Contains("keys[\"code\"] = code;", code);
+        Assert.Contains("keys[\"year\"] = year;", code);
     }
 
     [Fact]

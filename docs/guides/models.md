@@ -49,7 +49,13 @@ vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models
   choices become an `IList<Enum>`).
 - **File** columns typed as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail).
 - **Alternate keys as typed factories**: `Account.ByAccountNumberKey("A-001")` returns a key-based
-  `EntityReference`.
+  `EntityReference`. Each key column is a **typed parameter** (a composite key takes one per column, in order), so
+  wrong types or arity fail at compile time. Use the reference to set a lookup
+  (`contact.ParentCustomerId = Account.ByAccountNumberKey("A-001")`), to read the record with
+  `ctx.UserService.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name)`, or to create-or-update
+  by business key with `ctx.UserService.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` (returns whether
+  a record was created). The factory is a method (not a property), so it can never be used as a column in
+  `FilterOn`/`Select`.
 - **Typed relationship navigation properties** (see below).
 
 The test harness's `FakeEntityMetadata.From<T>()` recovers all of this by reflection, so a derived fake metadata

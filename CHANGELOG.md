@@ -31,6 +31,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   only) and typed 1:N child collections, each annotated with `[RelationshipSchemaName(...)]`. A relationship whose
   target table is not in the generated set, and polymorphic / Customer / Owner lookups, keep their raw
   `EntityReference` (no typed nav).
+- Alternate-key factories are now **strongly typed**: `Account.ByAccountNumberKey(...)` takes one typed parameter
+  per key column (a composite key takes several, in declared order) instead of `params object[]`, so a wrong type
+  or arity fails at compile time. Still returns a key-based `EntityReference`.
 
 ### Added (Framework)
 
@@ -41,6 +44,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - New analyzer **VELA010** (error): a generated relationship navigation property used in a column selector
   (`FilterOn`/`Select`/`Where`/`OrderBy`/`WithPreImage`/`WithPostImage`). The runtime column resolvers now also
   reject a relationship property with a clear error instead of silently building a bogus column.
+- Read and upsert by alternate key (in `Vela.Context`): `service.RetrieveByKey<TEntity>(keyRef, columns...)`
+  retrieves the record a key-based `EntityReference` points at, early-bound, without knowing its GUID; and
+  `service.UpsertByKey(entity, keyRef)` create-or-updates by business key in one call, returning
+  `(Created, Target)`. The in-memory test harness now resolves key-based references and executes Upsert
+  (create-or-update matched by primary id or alternate key).
 
 ## [0.23.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
