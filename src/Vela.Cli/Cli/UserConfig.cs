@@ -46,6 +46,14 @@ internal static class UserConfig
         try
         {
             Directory.CreateDirectory(ConfigDir);
+
+            // The config dir holds the token cache and config; on Unix restrict it to the owner (0700) so the
+            // cached access/refresh tokens and token.dat are not readable by other local users under a default
+            // umask (matching how the Azure CLI protects its plaintext token store). Best-effort.
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(ConfigDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
         }
         catch
         {

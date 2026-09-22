@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
@@ -68,11 +69,27 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
         string details = query switch
         {
             QueryExpression expression => $"query=QueryExpression; entity={expression.EntityName}; top={expression.TopCount?.ToString() ?? "null"}",
-            FetchExpression fetch => $"query=FetchExpression; fetchxml={fetch.Query}",
+            FetchExpression fetch => $"query=FetchExpression; fetchxml={RedactFetchXmlValues(fetch.Query)}",
             QueryByAttribute byAttribute => $"query=QueryByAttribute; entity={byAttribute.EntityName}",
             _ => $"query={query?.GetType().Name ?? "null"}"
         };
         return Trace("RetrieveMultiple", details, () => _innerService.RetrieveMultiple(query));
+    }
+
+    // FetchXML condition values can be PII (emails, names, ids); the plug-in trace log is broadly readable and
+    // often exported, so redact the literal values while keeping the query shape (entities, attributes, operators)
+    // for diagnostics. Covers both the attribute form (value="...") and the multi-value element form (<value>...</value>).
+    internal static string RedactFetchXmlValues(string? fetchXml)
+    {
+        if (string.IsNullOrEmpty(fetchXml))
+        {
+            return fetchXml ?? string.Empty;
+        }
+
+        string redacted = Regex.Replace(fetchXml, "value\\s*=\\s*\"[^\"]*\"", "value=\"***\"");
+        redacted = Regex.Replace(redacted, "value\\s*=\\s*'[^']*'", "value='***'");
+        redacted = Regex.Replace(redacted, "(<value[^>]*>)[^<]*(</value>)", "$1***$2");
+        return redacted;
     }
 
     // An early-bound entity (a subclass of Entity, e.g. a generated Account) fails to serialize into the
