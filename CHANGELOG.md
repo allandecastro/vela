@@ -24,7 +24,12 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Added (Framework)
+## [0.25.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.25.0` (all three packages ship at this version). Three plugin-authoring
+analyzers and a code-fix suite.
+
+### Added
 
 - Three plugin-authoring analyzers: **VELA011** (warning) a writable field (mutable state) on a plugin type - the
   sandbox reuses instances, so it leaks state and races; **VELA012** (warning) throwing an exception other than
