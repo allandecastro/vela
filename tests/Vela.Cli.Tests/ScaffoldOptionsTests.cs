@@ -38,6 +38,16 @@ public class ScaffoldOptionsTests
         Assert.Equal(ExitInvalidArguments, exitCode);
     }
 
+    [Theory]   // CLI-001: the non-interactive path must reject Windows reserved device names, not just the regex.
+    [InlineData("CON")]
+    [InlineData("COM1")]
+    [InlineData("NUL.txt")]
+    public void TryParse_RejectsWindowsReservedSolutionName(string name)
+    {
+        Assert.False(ScaffoldOptions.TryParse([name, "--prefix", "Zava"], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
     [Fact]
     public void TryParse_RejectsUnknownOption()
     {

@@ -215,6 +215,23 @@ public class ModelGeneratorTests
     }
 
     [Fact]
+    public void AlternateKey_LookupColumn_TypedAsGuid()
+    {
+        // A lookup alternate-key column is keyed on the referenced record's Guid, so the factory takes a Guid.
+        EntityMetadata md = MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .Lookup("parentcustomerid", "ParentCustomerId", "account")
+            .Key("new_parentkey", "ParentKey", "parentcustomerid")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "Contact.cs").Code;
+
+        Assert.Contains("public static EntityReference ByParentKey(Guid parentCustomerId)", code);
+        Assert.Contains("keys[\"parentcustomerid\"] = parentCustomerId;", code);
+    }
+
+    [Fact]
     public void AlternateKey_EmitsOneTypedParameterPerKeyColumn()
     {
         // A composite alternate key becomes one typed parameter per column, in declared order.

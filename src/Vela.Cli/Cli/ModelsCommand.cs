@@ -144,6 +144,13 @@ internal static class ModelsCommand
             // option-sets/ folder and one complete barrel (index.ts) covering both.
             string scope = forms && tables ? "--forms --tables" : forms ? "--forms" : "--tables";
 
+            // --verify is a C#-model-only drift check; combining it with the write-only TS scopes would otherwise
+            // silently write files, so reject it rather than surprising a CI check.
+            if (HasFlag(args, "--verify"))
+            {
+                return Fail($"--verify checks the C# early-bound model only; it cannot be combined with {scope}.", ExitInvalidArguments, includeUsage: false);
+            }
+
             // TypeScript is the only output for the client-side scopes, so --lang defaults to ts and only an
             // explicit non-ts value is rejected.
             string tsLang = (langOption ?? "ts").Trim().ToLowerInvariant();
