@@ -58,4 +58,29 @@ namespace Demo
 }";
         await Verify.VerifyAnalyzerAsync(code);
     }
+
+    [Fact]
+    public async Task Flags_named_argument_allColumns_true()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk.Query;
+    public class Use { public object M() => {|#0:new ColumnSet(allColumns: true)|}; }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected());
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_same_named_type_in_another_namespace()
+    {
+        string code = @"
+namespace Other { public class ColumnSet { public ColumnSet(bool all) { } } }
+namespace Demo
+{
+    using Other;
+    public class Use { public object M() => new ColumnSet(true); }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
 }

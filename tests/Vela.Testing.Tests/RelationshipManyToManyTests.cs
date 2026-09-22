@@ -36,6 +36,25 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void AssociateRelated_skips_members_without_an_id()
+        {
+            InMemoryOrganizationService service = NewService();
+            Guid accountId = service.Create(new Entity("account"));
+            Guid ada = service.Create(new Entity("contact") { ["firstname"] = "Ada" });
+
+            DeepAccount account = new DeepAccount { Id = accountId };
+            account.RelatedContacts.Add(new DeepContact { Id = ada });
+            account.RelatedContacts.Add(new DeepContact());   // no id -> skipped, not associated
+            service.AssociateRelated(account);
+
+            DeepAccount got = service.RetrieveWithRelated<DeepAccount>(
+                new EntityReference("account", accountId),
+                q => q.Include(a => a.RelatedContacts));
+            Assert.Single(got.RelatedContacts);
+            Assert.Equal(ada, got.RelatedContacts[0].Id);
+        }
+
+        [Fact]
         public void AssociateRelated_requires_an_id_on_the_entity()
         {
             InMemoryOrganizationService service = NewService();

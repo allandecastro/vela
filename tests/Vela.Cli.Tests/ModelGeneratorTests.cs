@@ -435,6 +435,25 @@ public class ModelGeneratorTests
     }
 
     [Fact]
+    public void RelationshipSchemaName_attribute_matches_the_runtime_contract()
+    {
+        // Contract pin: Vela.Plugins RelationshipNavMap matches the attribute by the type name
+        // "RelationshipSchemaNameAttribute" and reads the "SchemaName" and "ManyToMany" properties by name. If the
+        // generator renames any of these, the runtime silently stops recognising navs - so pin the exact shape here.
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .OneToMany("contact_customer_accounts", "contact", "parentcustomerid")
+            .Build();
+
+        string attr = ModelGenerator.Generate(new[] { account, Contact() }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "RelationshipSchemaNameAttribute.cs").Code;
+
+        Assert.Contains("class RelationshipSchemaNameAttribute", attr);
+        Assert.Contains("public string SchemaName", attr);
+        Assert.Contains("public bool ManyToMany", attr);
+    }
+
+    [Fact]
     public void Emits_the_RelationshipSchemaName_support_attribute_file_only_when_used()
     {
         EntityMetadata account = MetadataFactory.Entity("account", "Account")
