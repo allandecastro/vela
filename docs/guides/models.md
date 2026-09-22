@@ -93,8 +93,27 @@ account.Contacts.Add(new Contact { FirstName = "Grace", LastName = "Hopper" });
 Guid accountId = ctx.UserService.CreateWithRelated(account);   // account + two contacts, one transaction
 ```
 
-A typed `Include(...)` for relationship-aware reads is on the roadmap; until then, read related records with the
-`RelationshipQueryCollection` pattern in [Escape hatches](escape-hatches.md#creating-a-record-with-its-related-records).
+**Relationship-aware read (`Include`).** Retrieve a record together with related records in one call and have the
+navigation properties hydrated, with `RetrieveWithRelated` (from `Vela.Context`). The target can be an id or an
+alternate-key reference:
+
+```csharp
+using Vela.Context;
+
+SalesOrder order = ctx.UserService.RetrieveWithRelated<SalesOrder>(
+    new EntityReference(SalesOrder.EntityLogicalNameValue, orderId),
+    q => q.Include(o => o.Parent_Account)     // N:1 parent, typed
+          .Include(o => o.Order_Details),     // 1:N children, typed
+    o => o.Name);                             // root columns (optional; all columns when omitted)
+
+string customer = order.Parent_Account?.Name;
+decimal total = order.Order_Details.Sum(l => l.LineTotal ?? 0);
+```
+
+This is a **single-record** read: Dataverse nests related records on `Retrieve` (not `RetrieveMultiple`), **one
+level deep**, and each related query is subject to the **5000-row page cap**, so use it for bounded relationships.
+For a set of records, or deeper graphs, run a second query on the children and stitch by the parent lookup. N:N
+Include and a typed associate are on the roadmap.
 
 ## Verify drift against the live schema (`--verify`)
 
