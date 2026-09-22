@@ -205,7 +205,12 @@ public sealed class AccountAudit : EntityPluginBase<Account>
 - Additive and opt-in: the existing `ctx.PreImage` / `ctx.PostImage` (full entity) and `ctx.GetPreImage<T>()`
   keep working. It mirrors the early-bound `ctx.GetPreImage<Account>()` accessor, so the read site is familiar;
   pass a custom alias with `ctx.PostImageAs<T>("MyAlias")`.
-- Works on the guided path and the typed `On<TRequest>()` path alike (it is a context accessor).
+- Works on the guided path, the typed `On<TRequest>()` path and the permissive `OnMessage("...")` /
+  `OnMessage<TMarker>()` path alike (it is a context accessor). On the permissive path the projection is named
+  from the message: a string literal is capitalized into the name segment (`OnMessage("update")` on plugin
+  `PermissiveAudit` with a lambda handler gives `PermissiveAudit_UpdatePostOp_PostImage`), and a marker type uses
+  its type name; a message passed as a variable is not statically known, so the generator skips it and you keep
+  the untyped image.
 - **Bulk operations:** Dataverse does not allow entity images on `CreateMultiple` / `UpdateMultiple` steps
   (a `*Multiple` step that captures a `WithPreImage`/`WithPostImage` is rejected at `vela plan`/`apply`). Capture
   the image on the single **`OnCreate()` / `OnUpdate()`** step instead: that step also runs for bulk operations,

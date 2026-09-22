@@ -128,7 +128,11 @@ Key points:
   drift surfaces as a build error, never a stale value.
 - **Naming.** A projection is named `{PluginClass}_{Handler}_{Pre|Post}Image` (plus the alias when one is given),
   and a `global using` for `<YourNamespace>.Generated.Images` is emitted on C# 10+ so the type is offered by
-  completion without an explicit `using`.
+  completion without an explicit `using`. A lambda handler (no name) falls back to
+  `{PluginClass}_{Message}{Stage}_{Pre|Post}Image`, where the message comes from the trigger: the guided
+  `OnCreate()`..., the typed `On<TRequest>()`, or the permissive `OnMessage("...")` / `OnMessage<TMarker>()`
+  (a literal message is capitalized into the segment; a non-literal message is not statically known, so the
+  step is skipped).
 - **Opt-in and additive.** A capture with no explicit columns (`WithPreImage()`) keeps the full early-bound
   entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it and
   you keep the untyped image.

@@ -32,6 +32,8 @@ namespace Vela.Steps
         IStepConfig<TEntity> OnUpdate();
         IStepConfig<TEntity> OnUpdateMultiple();
         IStepConfig<TEntity> On<TRequest>();
+        IStepConfig<TEntity> OnMessage(string messageName);
+        IStepConfig<TEntity> OnMessage<TMessage>();
         IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
         IStepConfig<TEntity> Sync();
@@ -229,6 +231,97 @@ namespace Demo
 ");
 
         Assert.Contains("class NamedHandlerPlugin_OnUpdated_PostImage", output);
+    }
+
+    [Fact]
+    public void Emits_a_projection_for_the_permissive_string_message_path()
+    {
+        // OnMessage("update") is the permissive/string trigger: the message is the string literal, capitalized
+        // into the type-name segment (update -> Update), so a string-triggered step still gets a typed image.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class PermissiveAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage(""update"").PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .WithPostImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.Contains("class PermissiveAudit_UpdatePostOp_PostImage", output);
+        Assert.Contains("AttributeLogicalName(\"name\")", output);
+    }
+
+    [Fact]
+    public void Emits_a_projection_for_a_custom_message_string()
+    {
+        // A non-standard message string (a custom message) sanitizes and capitalizes into a legal type-name
+        // segment, so custom-message steps get a typed image too.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class CustomMessageAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage(""gh_recalculate"").PostOperation().Sync()
+                .WithPostImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.Contains("class CustomMessageAudit_Gh_recalculatePostOp_PostImage", output);
+    }
+
+    [Fact]
+    public void Emits_a_projection_for_the_permissive_generic_message_path()
+    {
+        // OnMessage<TMessage>() derives the message from the marker type name, same rule as On<TRequest>().
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class Merge { }
+    public sealed class GenericMessageAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage<Merge>().PostOperation().Sync()
+                .WithPostImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.Contains("class GenericMessageAudit_MergePostOp_PostImage", output);
+    }
+
+    [Fact]
+    public void Emits_nothing_for_a_non_literal_message()
+    {
+        // A message passed as a variable/const is not statically resolvable, so no projection is generated
+        // (the developer keeps the full early-bound image), consistent with the unresolved-capture fallback.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class DynamicMessageAudit : EntityPluginBase<Account>
+    {
+        private const string Msg = ""update"";
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage(Msg).PostOperation().Sync()
+                .WithPostImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.DoesNotContain("Generated.Images", output);
     }
 
     [Fact]

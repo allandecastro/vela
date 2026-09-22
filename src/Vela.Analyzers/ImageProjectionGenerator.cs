@@ -11,12 +11,13 @@ namespace Vela.Analyzers
 {
     /// <summary>
     /// Emits, per step, a projection type that exposes only the columns the step captured in
-    /// <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c>. A handler bound with the typed-image
-    /// <c>Handle&lt;TImg&gt;(...)</c> terminal then receives that projection, so reading a column the step did not
-    /// capture is a compile error instead of a silent <c>null</c>. Generated types land in
-    /// <c>&lt;pluginNamespace&gt;.Generated.Images</c>; the generator is purely additive (it never rewrites the
-    /// fluent chain) and silently skips anything it cannot resolve statically (the developer keeps the full
-    /// early-bound image in that case).
+    /// <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c>. The handler reads it via
+    /// <c>ctx.PreImageAs&lt;T&gt;()</c> / <c>ctx.PostImageAs&lt;T&gt;()</c>, so reading a column the step did not
+    /// capture is a compile error instead of a silent <c>null</c>. Covers the guided (<c>OnCreate()</c>...), typed
+    /// (<c>On&lt;TRequest&gt;()</c>) and permissive (<c>OnMessage("...")</c> / <c>OnMessage&lt;TMessage&gt;()</c>)
+    /// trigger paths. Generated types land in <c>&lt;pluginNamespace&gt;.Generated.Images</c>; the generator is
+    /// purely additive (it never rewrites the fluent chain) and silently skips anything it cannot resolve
+    /// statically (the developer keeps the full early-bound image in that case).
     /// </summary>
     [Generator(LanguageNames.CSharp)]
     public sealed class ImageProjectionGenerator : IIncrementalGenerator
@@ -194,6 +195,15 @@ namespace Vela.Analyzers
                         message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
                     }
 
+                    // Permissive path: OnMessage("create") / OnMessage<TMessage>() name the projection from the
+                    // message too, so a string-triggered step gets a typed image like the guided/typed paths do.
+                    // Only a statically resolvable message (string literal or type argument) yields a name; a
+                    // variable message stays null -> graceful fallback (no projection), like any unresolved capture.
+                    if (message is null && name == "OnMessage")
+                    {
+                        message = ResolvePermissiveMessage(inv, ma);
+                    }
+
                     current = ma.Expression;
                 }
                 else if (current is MemberAccessExpressionSyntax bare)
@@ -231,6 +241,32 @@ namespace Vela.Analyzers
                 ? typeName.Substring(0, typeName.Length - suffix.Length)
                 : typeName;
         }
+
+        // The message label for a permissive OnMessage(...) step. OnMessage<TMessage>() reuses the request/marker
+        // type-name rule (same as On<TRequest>()); OnMessage("literal") uses the string literal, sanitized and
+        // capitalized into a legal, guessable type-name segment (e.g. "create" -> Create). A non-literal argument
+        // (a variable/const reference) is not statically resolvable, so it returns null and no projection is emitted.
+        private static string? ResolvePermissiveMessage(InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax member)
+        {
+            if (member.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Count == 1)
+            {
+                return DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
+            }
+
+            SeparatedSyntaxList<ArgumentSyntax> arguments = invocation.ArgumentList.Arguments;
+            if (arguments.Count == 1 &&
+                arguments[0].Expression is LiteralExpressionSyntax literal &&
+                literal.IsKind(SyntaxKind.StringLiteralExpression))
+            {
+                string raw = literal.Token.ValueText.Trim();
+                return string.IsNullOrEmpty(raw) ? null : Capitalize(Sanitize(raw));
+            }
+
+            return null;
+        }
+
+        private static string Capitalize(string value)
+            => value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value.Substring(1);
 
         private static (string? Alias, List<LambdaExpressionSyntax> Selectors) SplitArguments(InvocationExpressionSyntax invocation)
         {
