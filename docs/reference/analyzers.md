@@ -17,13 +17,7 @@ author get told what is valid up front.
 | [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
 | [VELA006](#vela006) | Vela.Usage | Warning | Prefer the typed trigger (`OnCreate()`) over `OnMessage("create")` for a modelled message |
 
-- [VELA001 - column selector targets a real column](#vela001)
-- [VELA002 - step chain must end with Handle](#vela002)
-- [VELA003 - a step modifier is set at most once](#vela003)
-- [VELA004 - handler must be an instance method](#vela004)
-- [VELA005 - no duplicate column in a selector list](#vela005)
-- [VELA006 - prefer the typed trigger over OnMessage(string)](#vela006)
-- [Typed image projection generator](#typed-image-projection-generator)
+Plus the [typed image projection generator](#typed-image-projection-generator) that ships in the same assembly.
 
 ## VELA001
 
