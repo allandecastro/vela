@@ -5,7 +5,7 @@
 Vela is a framework (`Vela.Plugins`) + CLI (`Vela.Cli`, command `vela`) for building Microsoft
 Dataverse plugins and Custom APIs, with a safe, preview-first `plan` → `apply` workflow.
 
-`Vela.Plugins` also bundles Roslyn analyzers (VELA001-VELA003, which catch invalid step/column usage at build
+`Vela.Plugins` also bundles Roslyn analyzers (VELA001-VELA010, which catch invalid step/column usage at build
 time) and source generators (typed image projections) - no extra reference or setup.
 
 ## Install

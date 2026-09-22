@@ -50,9 +50,45 @@ vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models
 - **File** columns typed as `Guid?` (the `fileid`) and **Image** columns as `byte[]` (the thumbnail).
 - **Alternate keys as typed factories**: `Account.ByAccountNumberKey("A-001")` returns a key-based
   `EntityReference`.
+- **Typed relationship navigation properties** (see below).
 
 The test harness's `FakeEntityMetadata.From<T>()` recovers all of this by reflection, so a derived fake metadata
 carries required level and lookup targets with no hand-written overrides.
+
+## Relationship navigation properties
+
+When you generate a table together with its related tables, each class also gets typed relationship navigation
+properties, annotated with `[RelationshipSchemaName("...")]`:
+
+- **N:1** (a lookup on this table) becomes a single typed parent, named after the lookup without its `Id` suffix,
+  for example `PrimaryContactId` (the foreign key) gains a `PrimaryContact` of type `Contact`. Only **single-target**
+  lookups get a nav; a Customer / Owner / polymorphic lookup keeps just its `EntityReference` (there is no single
+  target type to expose).
+- **1:N** (children of this table) becomes a typed collection, for example `account.Contacts` of type
+  `IList<Contact>`.
+
+A relationship whose target table is not part of the same generation is skipped (its class would not exist).
+N:N relationships are not generated yet.
+
+A navigation property is **not a column**: it cannot be used in `FilterOn` / `Select` / `Where` / `OrderBy` /
+`WithPreImage` (select the lookup foreign-key column instead, e.g. `a.PrimaryContactId`). The analyzer
+[VELA010](../reference/analyzers.md#vela010) flags this at build time, and the runtime resolvers reject it.
+
+**Deep insert.** Populate the 1:N collections and create the whole graph in one transaction with
+`CreateWithRelated` (from `Vela.Context`), which projects the collections into `Entity.RelatedEntities` for you:
+
+```csharp
+using Vela.Context;
+
+var account = new Account { Name = "Contoso" };
+account.Contacts.Add(new Contact { FirstName = "Ada", LastName = "Lovelace" });
+account.Contacts.Add(new Contact { FirstName = "Grace", LastName = "Hopper" });
+
+Guid accountId = ctx.UserService.CreateWithRelated(account);   // account + two contacts, one transaction
+```
+
+A typed `Include(...)` for relationship-aware reads is on the roadmap; until then, read related records with the
+`RelationshipQueryCollection` pattern in [Escape hatches](escape-hatches.md#creating-a-record-with-its-related-records).
 
 ## Verify drift against the live schema (`--verify`)
 

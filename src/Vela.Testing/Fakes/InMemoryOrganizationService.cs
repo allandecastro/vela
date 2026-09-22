@@ -433,7 +433,64 @@ namespace Vela.Testing
             RealignOwningBusinessUnit(stored);
             _alternateKeys.Enforce(stored, Table(stored.LogicalName).Values);
             Table(stored.LogicalName)[stored.Id] = stored;
+
+            // Deep insert: create the related records held in the target's RelatedEntities (1:N children), linking
+            // each child back to the just-created parent. Recurses through Create for multi-level graphs.
+            CreateRelatedEntities(entity, stored.LogicalName, stored.Id);
             return stored.Id;
+        }
+
+        // Creates the 1:N children carried in a deep-insert target's RelatedEntities. The child's parent lookup is
+        // set from the relationship's ReferencingAttribute, so the relationship must be declared (WithRelationship /
+        // WithParentalRelationship / WithReferentialRelationship) - the generated nav property carries only the
+        // schema name, not the child foreign-key column. N:N deep associate is not handled here.
+        private void CreateRelatedEntities(Entity parent, string parentEntity, Guid parentId)
+        {
+            foreach (KeyValuePair<Relationship, EntityCollection> pair in parent.RelatedEntities)
+            {
+                EntityCollection collection = pair.Value;
+                if (collection?.Entities == null || collection.Entities.Count == 0)
+                {
+                    continue;
+                }
+
+                string childEntity = collection.Entities[0].LogicalName;
+                OneToManyRegistry.OneToMany relationship = ResolveOneToManyForDeepInsert(pair.Key.SchemaName, parentEntity, childEntity);
+                foreach (Entity child in collection.Entities)
+                {
+                    child[relationship.ReferencingAttribute] = new EntityReference(parentEntity, parentId);
+                    Create(child);
+                }
+            }
+        }
+
+        private OneToManyRegistry.OneToMany ResolveOneToManyForDeepInsert(string schemaName, string parentEntity, string childEntity)
+        {
+            List<OneToManyRegistry.OneToMany> candidates = _oneToMany.ChildRelationshipsOf(parentEntity)
+                .Where(r => string.Equals(r.ReferencingEntity, childEntity, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // Prefer an exact schema-name match when several relationships link the same pair of tables.
+            OneToManyRegistry.OneToMany? bySchema = candidates
+                .FirstOrDefault(r => string.Equals(r.SchemaName, schemaName, StringComparison.OrdinalIgnoreCase));
+            if (bySchema != null)
+            {
+                return bySchema;
+            }
+
+            if (candidates.Count == 1)
+            {
+                return candidates[0];
+            }
+
+            if (candidates.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Deep insert: no 1:N relationship from '{parentEntity}' to '{childEntity}' (schema '{schemaName}') is declared on the in-memory service. Declare it with WithRelationship/WithParentalRelationship/WithReferentialRelationship.");
+            }
+
+            throw new InvalidOperationException(
+                $"Deep insert: several 1:N relationships link '{parentEntity}' to '{childEntity}' and none matches schema '{schemaName}'. Declare the relationship using its real schema name so it can be resolved.");
         }
 
         // 0x80040217 ObjectDoesNotExist — the platform's fault code for a record that does not exist. Real plugins

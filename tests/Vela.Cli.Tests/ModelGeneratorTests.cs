@@ -357,4 +357,98 @@ public class ModelGeneratorTests
         Assert.Contains("[RequiredLevel(Microsoft.Xrm.Sdk.Metadata.AttributeRequiredLevel.SystemRequired)]", code);
         Assert.Contains("[LookupTargets(\"contact\")]", code);
     }
+
+    private static EntityMetadata Contact() =>
+        MetadataFactory.Entity("contact", "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName", maxLength: 50)
+            .Lookup("parentcustomerid", "ParentCustomerId", "account")
+            .Build();
+
+    [Fact]
+    public void Generates_N1_nav_property_when_target_is_in_the_batch()
+    {
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .Lookup("primarycontactid", "PrimaryContactId", "contact")
+            .ManyToOne("account_primary_contact", "primarycontactid", "contact")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { account, Contact() }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        // The raw FK stays; a typed nav named after the FK minus "Id" is added, carrying the relationship schema name.
+        Assert.Contains("public EntityReference PrimaryContactId", code);
+        Assert.Contains("[RelationshipSchemaName(\"account_primary_contact\")]", code);
+        Assert.Contains("public Contact? PrimaryContact { get; set; }", code);
+    }
+
+    [Fact]
+    public void Generates_1N_child_collection_when_child_is_in_the_batch()
+    {
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .OneToMany("contact_customer_accounts", "contact", "parentcustomerid")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { account, Contact() }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.Contains("[RelationshipSchemaName(\"contact_customer_accounts\")]", code);
+        Assert.Contains("public System.Collections.Generic.IList<Contact> Contacts { get; set; } = new System.Collections.Generic.List<Contact>();", code);
+    }
+
+    [Fact]
+    public void Emits_the_RelationshipSchemaName_support_attribute_file_only_when_used()
+    {
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .OneToMany("contact_customer_accounts", "contact", "parentcustomerid")
+            .Build();
+
+        var withRel = ModelGenerator.Generate(new[] { account, Contact() }, new ModelGenOptions("Acme.Models"));
+        Assert.Contains(withRel, m => m.FileName == "RelationshipSchemaNameAttribute.cs");
+
+        // No relationship metadata -> no support file.
+        var withoutRel = ModelGenerator.Generate(new[] { Account() }, new ModelGenOptions("Acme.Models"));
+        Assert.DoesNotContain(withoutRel, m => m.FileName == "RelationshipSchemaNameAttribute.cs");
+    }
+
+    [Fact]
+    public void Skips_a_relationship_whose_target_table_is_not_generated()
+    {
+        // Account references contact, but only Account is generated -> no Contact class exists, so no nav (the
+        // code would not compile). The raw EntityReference still carries the link.
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .Lookup("primarycontactid", "PrimaryContactId", "contact")
+            .ManyToOne("account_primary_contact", "primarycontactid", "contact")
+            .OneToMany("contact_customer_accounts", "contact", "parentcustomerid")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { account }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.DoesNotContain("[RelationshipSchemaName(", code);
+        Assert.Contains("public EntityReference PrimaryContactId", code);
+    }
+
+    [Fact]
+    public void Skips_a_polymorphic_lookup_nav_keeping_the_EntityReference()
+    {
+        // A Customer/polymorphic lookup shows up as several N:1 relationships on the SAME referencing attribute.
+        // There is no single target type, so no typed nav is generated; the EntityReference stays.
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .Customer("customerid", "CustomerId", "account", "contact")
+            .ManyToOne("account_customer_accounts", "customerid", "account")
+            .ManyToOne("contact_customer_accounts_poly", "customerid", "contact")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { account, Contact() }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.DoesNotContain("[RelationshipSchemaName(", code);
+        Assert.Contains("public EntityReference CustomerId", code);
+    }
 }

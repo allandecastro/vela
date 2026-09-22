@@ -100,9 +100,23 @@ records that already exist). Deep insert has platform limits (bounded depth, and
 creates), so keep the graph shallow.
 
 > [!TIP]
-> Typed relationship support (generated relationship properties, an `Include(...)` for reads, and a typed deep
-> insert for writes) is on the roadmap. Until then, the patterns above are the supported way, and they stay fully
-> typed on the records themselves.
+> **Typed deep insert (no schema strings).** When you generate the related tables together, `vela models` also
+> emits typed relationship navigation properties (a single parent for N:1, a collection for 1:N), so the deep
+> insert above becomes:
+> ```csharp
+> using Vela.Context;
+>
+> var account = new Account { Name = "Contoso" };
+> account.Contacts.Add(new Contact { FirstName = "Ada", LastName = "Lovelace" });
+> account.Contacts.Add(new Contact { FirstName = "Grace", LastName = "Hopper" });
+>
+> Guid accountId = ctx.UserService.CreateWithRelated(account);   // account + two contacts, one transaction
+> ```
+> `CreateWithRelated` projects the populated 1:N collections into `RelatedEntities` for you. The typed `Include(...)`
+> for relationship-aware reads and standard N:N handling are still on the roadmap; until then use the
+> `RelationshipQueryCollection` read above. A navigation property is not a column, so it cannot be used in
+> `FilterOn`/`Select`/`Where`/`WithPreImage` (the analyzer VELA010 catches that); select the lookup column
+> (`PrimaryContactId`) instead.
 
 ## See also
 
