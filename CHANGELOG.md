@@ -24,7 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Added (Framework)
+## [0.23.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.23.0` (all three packages ship at this version).
+
+### Added
 
 - Typed image projections now cover the permissive `OnMessage("...")` / `OnMessage<TMarker>()` trigger path, not
   just the guided (`OnCreate()`...) and typed (`On<TRequest>()`) paths. A string-triggered step that captures
