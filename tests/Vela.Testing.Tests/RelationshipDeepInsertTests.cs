@@ -16,6 +16,8 @@ namespace Vela.Testing.Tests
         public RelationshipSchemaNameAttribute(string schemaName) => SchemaName = schemaName ?? string.Empty;
 
         public string SchemaName { get; }
+
+        public bool ManyToMany { get; set; }
     }
 
     [EntityLogicalName(EntityLogicalNameValue)]
@@ -37,6 +39,10 @@ namespace Vela.Testing.Tests
 
         [RelationshipSchemaName("contact_customer_accounts")]
         public IList<DeepContact> Contacts { get; set; } = new List<DeepContact>();
+
+        // N:N to contacts (existing records are associated, not created).
+        [RelationshipSchemaName("account_contacts_nn", ManyToMany = true)]
+        public IList<DeepContact> RelatedContacts { get; set; } = new List<DeepContact>();
     }
 
     [EntityLogicalName(EntityLogicalNameValue)]

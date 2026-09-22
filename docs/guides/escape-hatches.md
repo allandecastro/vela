@@ -114,9 +114,9 @@ creates), so keep the graph shallow.
 >
 > Guid accountId = ctx.UserService.CreateWithRelated(account);   // account + two contacts, one transaction
 > ```
-> `CreateWithRelated` projects the populated 1:N collections into `RelatedEntities` for you, and
-> `RetrieveWithRelated<T>(target, q => q.Include(...))` reads them back typed (single-record). Standard N:N handling
-> (Include + a typed associate) is still on the roadmap. A navigation property is not a column, so it cannot be used in
+> `CreateWithRelated` projects the populated 1:N collections into `RelatedEntities` for you,
+> `RetrieveWithRelated<T>(target, q => q.Include(...))` reads them back typed (single-record, N:1/1:N/N:N), and
+> `AssociateRelated(entity)` associates the existing records in the N:N collections. A navigation property is not a column, so it cannot be used in
 > `FilterOn`/`Select`/`Where`/`WithPreImage` (the analyzer VELA010 catches that); select the lookup column
 > (`PrimaryContactId`) instead.
 

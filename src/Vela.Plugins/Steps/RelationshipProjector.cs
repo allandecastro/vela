@@ -28,8 +28,9 @@ namespace Vela.Steps
 
             foreach (RelationshipNav nav in RelationshipNavMap.For(entity.GetType()))
             {
-                // Only 1:N/N:N collection navs deep-insert children; a single N:1 parent is not projected here.
-                if (!nav.IsCollection || entity.RelatedEntities.Contains(new Relationship(nav.SchemaName)))
+                // Only 1:N child collections deep-insert. A single N:1 parent is not projected, and a N:N collection
+                // associates existing records (see AssociateRelated) rather than creating them, so both are skipped.
+                if (!nav.IsCollection || nav.IsManyToMany || entity.RelatedEntities.Contains(new Relationship(nav.SchemaName)))
                 {
                     continue;
                 }

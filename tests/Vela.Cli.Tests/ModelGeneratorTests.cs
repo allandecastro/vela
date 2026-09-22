@@ -453,6 +453,49 @@ public class ModelGeneratorTests
     }
 
     [Fact]
+    public void Generates_an_NN_collection_marked_ManyToMany()
+    {
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .ManyToMany("account_contacts_nn", "account", "contact")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { account, Contact() }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.Contains("[RelationshipSchemaName(\"account_contacts_nn\", ManyToMany = true)]", code);
+        Assert.Contains("public System.Collections.Generic.IList<Contact> Contacts { get; set; } = new System.Collections.Generic.List<Contact>();", code);
+    }
+
+    [Fact]
+    public void Skips_a_self_referential_NN()
+    {
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .ManyToMany("account_related_accounts", "account", "account")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { account }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.DoesNotContain("ManyToMany = true", code);
+    }
+
+    [Fact]
+    public void Skips_an_NN_whose_other_table_is_not_generated()
+    {
+        EntityMetadata account = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .ManyToMany("account_teams_nn", "account", "team")
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { account }, new ModelGenOptions("Acme.Models"))
+            .Single(m => m.FileName == "Account.cs").Code;
+
+        Assert.DoesNotContain("ManyToMany = true", code);
+    }
+
+    [Fact]
     public void Skips_a_polymorphic_lookup_nav_keeping_the_EntityReference()
     {
         // A Customer/polymorphic lookup shows up as several N:1 relationships on the SAME referencing attribute.
