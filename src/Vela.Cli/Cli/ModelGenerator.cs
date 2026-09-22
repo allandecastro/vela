@@ -240,25 +240,81 @@ public static class ModelGenerator
             .OrderBy(k => k.LogicalName ?? k.SchemaName, StringComparer.Ordinal)
             .ToArray();
 
+        Dictionary<string, AttributeMetadata> byLogical = (entity.Attributes ?? Array.Empty<AttributeMetadata>())
+            .Where(a => !string.IsNullOrWhiteSpace(a?.LogicalName))
+            .GroupBy(a => a.LogicalName!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
         foreach (EntityKeyMetadata key in keys)
         {
+            // Keep the "Key" suffix so callers read as ByAccountNumberKey(...). An alternate key can be made of
+            // several columns, so each key attribute becomes its own typed parameter, in the key's declared order.
             string method = UniqueName("By" + CSharpIdentifier.EscapeKeyword(key.SchemaName ?? Pascalize(key.LogicalName ?? "Key")), usedNames);
-            string attributes = string.Join(", ", key.KeyAttributes.Select(a => $"\"{a}\""));
+
+            HashSet<string> paramNames = new HashSet<string>(StringComparer.Ordinal);
+            List<(string LogicalName, string ParamName, string Type)> parts = new List<(string, string, string)>();
+            foreach (string attributeLogical in key.KeyAttributes)
+            {
+                byLogical.TryGetValue(attributeLogical, out AttributeMetadata? attribute);
+                string paramType = KeyParamType(attribute);
+                string paramName = UniqueName(KeyParamName(attributeLogical, attribute), paramNames);
+                parts.Add((attributeLogical, paramName, paramType));
+            }
+
+            string signature = string.Join(", ", parts.Select(p => $"{p.Type} {p.ParamName}"));
 
             sb.AppendLine();
-            sb.AppendLine($"        /// <summary>Reference by alternate key (<c>{XmlEscape(string.Join(", ", key.KeyAttributes))}</c>). Pass the key values in order.</summary>");
-            sb.AppendLine($"        public static EntityReference {method}(params object[] keyValues)");
+            sb.AppendLine($"        /// <summary>Reference by alternate key (<c>{XmlEscape(string.Join(", ", key.KeyAttributes))}</c>).</summary>");
+            sb.AppendLine($"        public static EntityReference {method}({signature})");
             sb.AppendLine("        {");
-            sb.AppendLine($"            string[] attributes = {{ {attributes} }};");
             sb.AppendLine("            KeyAttributeCollection keys = new KeyAttributeCollection();");
-            sb.AppendLine("            for (int i = 0; i < attributes.Length && i < keyValues.Length; i++)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                keys[attributes[i]] = keyValues[i];");
-            sb.AppendLine("            }");
+            foreach ((string LogicalName, string ParamName, string Type) part in parts)
+            {
+                sb.AppendLine($"            keys[\"{part.LogicalName}\"] = {part.ParamName};");
+            }
+
             sb.AppendLine();
             sb.AppendLine("            return new EntityReference(EntityLogicalNameValue, keys);");
             sb.AppendLine("        }");
         }
+    }
+
+    // The non-nullable CLR type to accept for an alternate-key column parameter (the value stored in the
+    // KeyAttributeCollection). Unknown / unresolved attributes fall back to object so generation never breaks.
+    private static string KeyParamType(AttributeMetadata? attribute)
+    {
+        if (attribute is FileAttributeMetadata)
+        {
+            return "Guid";
+        }
+
+        if (attribute is ImageAttributeMetadata)
+        {
+            return "byte[]";
+        }
+
+        return attribute?.AttributeType switch
+        {
+            AttributeTypeCode.String or AttributeTypeCode.Memo => "string",
+            AttributeTypeCode.Integer => "int",
+            AttributeTypeCode.BigInt => "long",
+            AttributeTypeCode.Decimal => "decimal",
+            AttributeTypeCode.Double => "double",
+            AttributeTypeCode.Money => "Money",
+            AttributeTypeCode.Boolean => "bool",
+            AttributeTypeCode.DateTime => "DateTime",
+            AttributeTypeCode.Uniqueidentifier => "Guid",
+            AttributeTypeCode.Lookup or AttributeTypeCode.Customer or AttributeTypeCode.Owner => "EntityReference",
+            AttributeTypeCode.Picklist or AttributeTypeCode.State or AttributeTypeCode.Status => "OptionSetValue",
+            _ => "object",
+        };
+    }
+
+    private static string KeyParamName(string logicalName, AttributeMetadata? attribute)
+    {
+        string prop = (attribute?.SchemaName ?? Pascalize(logicalName)).TrimStart('@');
+        string camel = string.IsNullOrEmpty(prop) ? logicalName : char.ToLowerInvariant(prop[0]) + prop.Substring(1);
+        return CSharpIdentifier.EscapeKeyword(camel);
     }
 
     // Emits typed relationship navigation properties in the same class file: N:1 (single-target only) as a single

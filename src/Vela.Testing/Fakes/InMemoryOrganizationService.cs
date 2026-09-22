@@ -507,6 +507,121 @@ namespace Vela.Testing
                 new FaultReason(message));
         }
 
+        // Resolves an EntityReference to a record id: a direct id when set, otherwise an alternate-key lookup
+        // (KeyAttributes) - the record whose columns match every key attribute. Throws the platform not-found fault
+        // when no record matches, so RetrieveByKey and key-based Update/Delete behave like a real service.
+        private Guid ResolveReference(EntityReference reference)
+        {
+            if (reference.Id != Guid.Empty || reference.KeyAttributes == null || reference.KeyAttributes.Count == 0)
+            {
+                return reference.Id;
+            }
+
+            if (TryResolveReference(reference, out Guid id))
+            {
+                return id;
+            }
+
+            string keys = string.Join(", ", reference.KeyAttributes.Select(k => $"{k.Key}={k.Value}"));
+            string message = $"{reference.LogicalName} with alternate key ({keys}) Does Not Exist";
+            throw new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { ErrorCode = ObjectDoesNotExist, Message = message },
+                new FaultReason(message));
+        }
+
+        // Non-throwing reference resolution: a direct id (when it exists), else an alternate-key match. Returns
+        // false when nothing matches (used by upsert to decide create vs update).
+        private bool TryResolveReference(EntityReference reference, out Guid id)
+        {
+            id = Guid.Empty;
+            if (reference.Id != Guid.Empty)
+            {
+                if (Table(reference.LogicalName).ContainsKey(reference.Id))
+                {
+                    id = reference.Id;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (reference.KeyAttributes == null || reference.KeyAttributes.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (Entity candidate in Table(reference.LogicalName).Values)
+            {
+                if (reference.KeyAttributes.All(k =>
+                        candidate.Attributes.TryGetValue(k.Key, out object? value) && KeyValueEquals(value, k.Value)))
+                {
+                    id = candidate.Id;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // Create-or-update by primary id or alternate key. Matches real Dataverse: a matching record is updated,
+        // otherwise one is created; the response reports which happened and the affected reference.
+        private UpsertResponse ExecuteUpsert(Entity target)
+        {
+            EntityReference key = target.Id != Guid.Empty
+                ? new EntityReference(target.LogicalName, target.Id)
+                : new EntityReference(target.LogicalName) { KeyAttributes = target.KeyAttributes };
+
+            UpsertResponse response = new UpsertResponse();
+            if (TryResolveReference(key, out Guid existingId))
+            {
+                Entity toUpdate = EntityValues.Clone(target);
+                toUpdate.Id = existingId;
+                toUpdate.KeyAttributes.Clear();
+                Update(toUpdate);
+                response.Results["RecordCreated"] = false;
+                response.Results["Target"] = new EntityReference(target.LogicalName, existingId);
+                return response;
+            }
+
+            Entity toCreate = EntityValues.Clone(target);
+            // The alternate-key columns are real columns: seed them from the key so the new record carries them.
+            foreach (KeyValuePair<string, object> pair in target.KeyAttributes)
+            {
+                if (!toCreate.Attributes.Contains(pair.Key))
+                {
+                    toCreate[pair.Key] = pair.Value;
+                }
+            }
+
+            toCreate.KeyAttributes.Clear();
+            Guid newId = Create(toCreate);
+            response.Results["RecordCreated"] = true;
+            response.Results["Target"] = new EntityReference(target.LogicalName, newId);
+            return response;
+        }
+
+        // Compares an alternate-key value to a stored attribute value, unwrapping the reference types Dataverse
+        // uses for key columns so equality is by identity/value, not object reference.
+        private static bool KeyValueEquals(object? stored, object? key)
+        {
+            if (stored is EntityReference storedRef && key is EntityReference keyRef)
+            {
+                return storedRef.Id == keyRef.Id;
+            }
+
+            if (stored is OptionSetValue storedOption && key is OptionSetValue keyOption)
+            {
+                return storedOption.Value == keyOption.Value;
+            }
+
+            if (stored is Money storedMoney && key is Money keyMoney)
+            {
+                return storedMoney.Value == keyMoney.Value;
+            }
+
+            return Equals(stored, key);
+        }
+
         public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
         {
             if (!Table(entityName).TryGetValue(id, out Entity? stored))
@@ -663,6 +778,14 @@ namespace Vela.Testing
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {
+            // Upsert is matched by RequestName so both the SDK UpsertRequest and Vela's typed UpsertRequest<T>
+            // (a plain OrganizationRequest with RequestName "Upsert") flow through the same create-or-update path.
+            if (string.Equals(request.RequestName, "Upsert", StringComparison.OrdinalIgnoreCase) &&
+                request.Parameters.TryGetValue("Target", out object? upsertTarget) && upsertTarget is Entity targetEntity)
+            {
+                return ExecuteUpsert(targetEntity);
+            }
+
             switch (request)
             {
                 case CreateRequest create:
@@ -687,7 +810,8 @@ namespace Vela.Testing
                 case RetrieveRequest retrieve:
                 {
                     RetrieveResponse response = new RetrieveResponse();
-                    response.Results["Entity"] = Retrieve(retrieve.Target.LogicalName, retrieve.Target.Id, retrieve.ColumnSet);
+                    Guid id = ResolveReference(retrieve.Target);
+                    response.Results["Entity"] = Retrieve(retrieve.Target.LogicalName, id, retrieve.ColumnSet);
                     return response;
                 }
 
