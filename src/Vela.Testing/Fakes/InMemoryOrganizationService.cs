@@ -643,6 +643,26 @@ namespace Vela.Testing
                 string otherEntity = childQuery.EntityName;
                 ColumnSet columns = childQuery.ColumnSet ?? new ColumnSet(true);
 
+                // N:N: resolved by the real schema name (the registry / metadata key it directly). Walk the intersect
+                // rows on this entity's side and retrieve the related records.
+                if (TryResolveManyToMany(pair.Key.SchemaName, out RelationshipRegistry.ManyToMany m2m))
+                {
+                    (string callerAttribute, string relatedAttribute) = m2m.AttributesFor(entityName);
+                    List<Entity> associated = new List<Entity>();
+                    foreach (Entity row in Table(m2m.IntersectEntity).Values)
+                    {
+                        if (EntityValues.AreEqual(EntityValues.GetValue(row, callerAttribute), id) &&
+                            EntityValues.GetValue(row, relatedAttribute) is EntityReference relatedRef &&
+                            Table(otherEntity).ContainsKey(relatedRef.Id))
+                        {
+                            associated.Add(Retrieve(otherEntity, relatedRef.Id, columns));
+                        }
+                    }
+
+                    entity.RelatedEntities[pair.Key] = new EntityCollection(associated);
+                    continue;
+                }
+
                 // 1:N: this entity is the parent (referenced) side -> children whose lookup points back at it.
                 OneToManyRegistry.OneToMany? oneToMany = _oneToMany.ChildRelationshipsOf(entityName)
                     .FirstOrDefault(r => string.Equals(r.ReferencingEntity, otherEntity, StringComparison.OrdinalIgnoreCase));
@@ -1156,9 +1176,21 @@ namespace Vela.Testing
         // once metadata is registered). Throws the registry's guidance message if neither has it.
         private RelationshipRegistry.ManyToMany ResolveManyToMany(string schemaName)
         {
-            if (_relationships.TryResolve(schemaName, out RelationshipRegistry.ManyToMany declared))
+            if (TryResolveManyToMany(schemaName, out RelationshipRegistry.ManyToMany relationship))
             {
-                return declared;
+                return relationship;
+            }
+
+            return _relationships.Resolve(schemaName); // not found anywhere → throws the standard guidance
+        }
+
+        // Non-throwing N:N resolution: a declared WithManyToMany relationship, else one recovered from registered
+        // EntityMetadata. Used by Include reads to tell a N:N schema name from a 1:N/N:1 one.
+        private bool TryResolveManyToMany(string schemaName, out RelationshipRegistry.ManyToMany relationship)
+        {
+            if (_relationships.TryResolve(schemaName, out relationship))
+            {
+                return true;
             }
 
             foreach (EntityMetadata meta in _metadata.Values)
@@ -1167,16 +1199,18 @@ namespace Vela.Testing
                     .FirstOrDefault(r => string.Equals(r.SchemaName, schemaName, StringComparison.OrdinalIgnoreCase));
                 if (m2m != null)
                 {
-                    return new RelationshipRegistry.ManyToMany(
+                    relationship = new RelationshipRegistry.ManyToMany(
                         m2m.IntersectEntityName,
                         m2m.Entity1LogicalName,
                         m2m.Entity1IntersectAttribute,
                         m2m.Entity2LogicalName,
                         m2m.Entity2IntersectAttribute);
+                    return true;
                 }
             }
 
-            return _relationships.Resolve(schemaName); // not found anywhere → throws the standard guidance
+            relationship = default;
+            return false;
         }
 
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)

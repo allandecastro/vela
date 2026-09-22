@@ -26,11 +26,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
-- Typed relationship navigation properties in generated early-bound models (issue #207, first slice). `vela models`
-  now fetches relationship metadata and emits, in the same class file, a typed N:1 parent (single-target lookups
-  only) and typed 1:N child collections, each annotated with `[RelationshipSchemaName(...)]`. A relationship whose
-  target table is not in the generated set, and polymorphic / Customer / Owner lookups, keep their raw
-  `EntityReference` (no typed nav).
+- Typed relationship navigation properties in generated early-bound models (issue #207). `vela models` fetches
+  relationship metadata and emits, in the same class file, a typed N:1 parent (single-target lookups only), typed
+  1:N child collections, and typed **N:N** collections (marked `ManyToMany`), each annotated with
+  `[RelationshipSchemaName(...)]`. A relationship whose target table is not in the generated set, polymorphic /
+  Customer / Owner lookups, and self-referential N:N are skipped (kept as the raw `EntityReference`, or no nav).
 - Alternate-key factories are now **strongly typed**: `Account.ByAccountNumberKey(...)` takes one typed parameter
   per key column (a composite key takes several, in declared order) instead of `params object[]`, so a wrong type
   or arity fails at compile time. Still returns a key-based `EntityReference`.
@@ -42,10 +42,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `Relationship` schema string. The in-memory test harness supports the deep insert (declare the relationship with
   `WithRelationship`/`WithParentalRelationship`).
 - Typed relationship-aware read: `service.RetrieveWithRelated<TEntity>(target, q => q.Include(o => o.Nav), columns)`
-  (in `Vela.Context`) retrieves a record together with related records (N:1 parent and 1:N children) in one call and
-  hydrates the generated navigation properties. Single-record only (Dataverse nests related records on `Retrieve`,
-  one level deep, 5000-row child page cap). The in-memory harness now honors `RelatedEntitiesQuery` on retrieve.
-  N:N Include and a typed associate remain on the roadmap.
+  (in `Vela.Context`) retrieves a record together with related records (N:1 parent, 1:N children, and N:N members)
+  in one call and hydrates the generated navigation properties. Single-record only (Dataverse nests related records
+  on `Retrieve`, one level deep, 5000-row child page cap). The in-memory harness now honors `RelatedEntitiesQuery`
+  on retrieve (1:N, N:1 and N:N).
+- Typed N:N associate: `service.AssociateRelated(entity)` (in `Vela.Context`) associates the existing records held
+  in the generated N:N navigation collections (an N:N link connects records that already exist). `CreateWithRelated`
+  ignores N:N collections; it only deep-inserts 1:N children.
 - New analyzer **VELA010** (error): a generated relationship navigation property used in a column selector
   (`FilterOn`/`Select`/`Where`/`OrderBy`/`WithPreImage`/`WithPostImage`). The runtime column resolvers now also
   reject a relationship property with a clear error instead of silently building a bogus column.

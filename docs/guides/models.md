@@ -72,9 +72,10 @@ properties, annotated with `[RelationshipSchemaName("...")]`:
   target type to expose).
 - **1:N** (children of this table) becomes a typed collection, for example `account.Contacts` of type
   `IList<Contact>`.
+- **N:N** (many-to-many) becomes a typed collection of the other table, marked `ManyToMany` (its members are
+  associated, not created). Self-referential N:N is not generated (the two directions would need distinct names).
 
 A relationship whose target table is not part of the same generation is skipped (its class would not exist).
-N:N relationships are not generated yet.
 
 A navigation property is **not a column**: it cannot be used in `FilterOn` / `Select` / `Where` / `OrderBy` /
 `WithPreImage` (select the lookup foreign-key column instead, e.g. `a.PrimaryContactId`). The analyzer
@@ -112,8 +113,13 @@ decimal total = order.Order_Details.Sum(l => l.LineTotal ?? 0);
 
 This is a **single-record** read: Dataverse nests related records on `Retrieve` (not `RetrieveMultiple`), **one
 level deep**, and each related query is subject to the **5000-row page cap**, so use it for bounded relationships.
-For a set of records, or deeper graphs, run a second query on the children and stitch by the parent lookup. N:N
-Include and a typed associate are on the roadmap.
+For a set of records, or deeper graphs, run a second query on the children and stitch by the parent lookup.
+`Include` also works for **N:N** relationships (it reads the associated records).
+
+**Associate (N:N).** An N:N link connects records that already exist, so you associate rather than create: populate
+the N:N collection with existing records (each with its id) and call `ctx.UserService.AssociateRelated(account)`,
+which associates every populated N:N collection. (`CreateWithRelated` deliberately ignores N:N collections - it only
+deep-inserts 1:N children.)
 
 ## Verify drift against the live schema (`--verify`)
 

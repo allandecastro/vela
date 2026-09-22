@@ -387,6 +387,33 @@ public static class ModelGenerator
             sb.AppendLine($"        [RelationshipSchemaName(\"{relationship.SchemaName}\")]");
             sb.AppendLine($"        public System.Collections.Generic.IList<{childClass}> {navName} {{ get; set; }} = new System.Collections.Generic.List<{childClass}>();");
         }
+
+        // N:N (ManyToMany): a typed collection of the OTHER table. Self-referential N:N (both sides this table) are
+        // skipped for now (the two directions would need distinct names). Marked ManyToMany = true so the deep-insert
+        // projector skips them (they associate existing records, not create) and the associate helper picks them up.
+        var manyToMany = (entity.ManyToManyRelationships ?? Array.Empty<ManyToManyRelationshipMetadata>())
+            .Where(r => r != null && !string.IsNullOrWhiteSpace(r.SchemaName) &&
+                        !string.IsNullOrWhiteSpace(r.Entity1LogicalName) && !string.IsNullOrWhiteSpace(r.Entity2LogicalName))
+            .Where(r => !string.Equals(r.Entity1LogicalName, r.Entity2LogicalName, StringComparison.OrdinalIgnoreCase))
+            .Select(r => (Relationship: r, Other: string.Equals(r.Entity1LogicalName, entity.LogicalName, StringComparison.OrdinalIgnoreCase) ? r.Entity2LogicalName : r.Entity1LogicalName))
+            .Where(x => logicalToClass.ContainsKey(x.Other))
+            .OrderBy(x => x.Relationship.SchemaName, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach ((ManyToManyRelationshipMetadata relationship, string other) in manyToMany)
+        {
+            string otherClass = logicalToClass[other];
+            string plural = Pluralize(otherClass.TrimStart('@'));
+            string navName = usedNames.Contains(plural)
+                ? UniqueName(CSharpIdentifier.EscapeKeyword(Pascalize(relationship.SchemaName)), usedNames)
+                : UniqueName(CSharpIdentifier.EscapeKeyword(plural), usedNames);
+            features.Add(RelationshipSchemaNameFeature);
+
+            sb.AppendLine();
+            sb.AppendLine($"        /// <summary>N:N relationship <c>{XmlEscape(relationship.SchemaName)}</c> to <c>{XmlEscape(other)}</c>. Add existing records and associate; hydrated by a relationship-aware read.</summary>");
+            sb.AppendLine($"        [RelationshipSchemaName(\"{relationship.SchemaName}\", ManyToMany = true)]");
+            sb.AppendLine($"        public System.Collections.Generic.IList<{otherClass}> {navName} {{ get; set; }} = new System.Collections.Generic.List<{otherClass}>();");
+        }
     }
 
     // Drops a trailing "Id"/"id" so a lookup FK property maps to a friendly nav name (PrimaryContactId ->
@@ -635,10 +662,11 @@ public static class ModelGenerator
         sb.AppendLine("    using System;");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    /// Marks a generated relationship navigation property (N:1 parent or 1:N child collection) with its");
-        sb.AppendLine("    /// Dataverse relationship schema name. It is NOT a column: the querying and image column resolvers");
-        sb.AppendLine("    /// reject a property carrying this attribute (use a relationship-aware read/deep-insert instead), and");
-        sb.AppendLine("    /// <c>FakeEntityMetadata.From&lt;T&gt;()</c> recovers relationship metadata from it.");
+        sb.AppendLine("    /// Marks a generated relationship navigation property (N:1 parent, 1:N child collection, or N:N");
+        sb.AppendLine("    /// collection) with its Dataverse relationship schema name. It is NOT a column: the querying and");
+        sb.AppendLine("    /// image column resolvers reject a property carrying this attribute (use a relationship-aware");
+        sb.AppendLine("    /// read/deep-insert/associate instead). <c>ManyToMany</c> is true for a N:N collection (associate");
+        sb.AppendLine("    /// existing records) versus a 1:N collection (deep-insert children).");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine("    [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]");
         sb.AppendLine("    public sealed class RelationshipSchemaNameAttribute : Attribute");
@@ -649,6 +677,8 @@ public static class ModelGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
         sb.AppendLine("        public string SchemaName { get; }");
+        sb.AppendLine();
+        sb.AppendLine("        public bool ManyToMany { get; set; }");
         sb.AppendLine("    }");
         sb.AppendLine("}");
         return sb.ToString();

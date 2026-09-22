@@ -13,17 +13,19 @@ namespace Vela.Steps
     /// </summary>
     internal readonly struct RelationshipNav
     {
-        public RelationshipNav(PropertyInfo property, string schemaName, bool isCollection, Type elementType)
+        public RelationshipNav(PropertyInfo property, string schemaName, bool isCollection, bool isManyToMany, Type elementType)
         {
             Property = property;
             SchemaName = schemaName;
             IsCollection = isCollection;
+            IsManyToMany = isManyToMany;
             ElementType = elementType;
         }
 
         public PropertyInfo Property { get; }
         public string SchemaName { get; }
         public bool IsCollection { get; }
+        public bool IsManyToMany { get; }
         public Type ElementType { get; }
     }
 
@@ -42,26 +44,30 @@ namespace Vela.Steps
         // The [RelationshipSchemaName] value on a property, or null when it is not a relationship nav.
         public static string? GetSchemaName(PropertyInfo property)
         {
-            Attribute? attribute = property.GetCustomAttributes()
-                .FirstOrDefault(a => a.GetType().Name == "RelationshipSchemaNameAttribute");
+            Attribute? attribute = GetAttribute(property);
             return attribute?.GetType().GetProperty("SchemaName")?.GetValue(attribute) as string;
         }
+
+        private static Attribute? GetAttribute(PropertyInfo property) =>
+            property.GetCustomAttributes().FirstOrDefault(a => a.GetType().Name == "RelationshipSchemaNameAttribute");
 
         private static RelationshipNav[] Build(Type type)
         {
             List<RelationshipNav> navs = new List<RelationshipNav>();
             foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                string? schemaName = GetSchemaName(property);
-                if (string.IsNullOrEmpty(schemaName))
+                Attribute? attribute = GetAttribute(property);
+                if (attribute?.GetType().GetProperty("SchemaName")?.GetValue(attribute) is not string schemaName ||
+                    string.IsNullOrEmpty(schemaName))
                 {
                     continue;
                 }
 
+                bool isManyToMany = attribute.GetType().GetProperty("ManyToMany")?.GetValue(attribute) is bool m && m;
                 bool isCollection = property.PropertyType != typeof(string) &&
                     typeof(IEnumerable).IsAssignableFrom(property.PropertyType);
                 Type elementType = isCollection ? ElementTypeOf(property.PropertyType) : property.PropertyType;
-                navs.Add(new RelationshipNav(property, schemaName!, isCollection, elementType));
+                navs.Add(new RelationshipNav(property, schemaName, isCollection, isManyToMany, elementType));
             }
 
             return navs.ToArray();

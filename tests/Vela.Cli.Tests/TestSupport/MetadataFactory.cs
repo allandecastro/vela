@@ -18,6 +18,7 @@ internal sealed class MetadataFactory
     private readonly List<EntityKeyMetadata> _keys = new List<EntityKeyMetadata>();
     private readonly List<OneToManyRelationshipMetadata> _manyToOne = new List<OneToManyRelationshipMetadata>();
     private readonly List<OneToManyRelationshipMetadata> _oneToMany = new List<OneToManyRelationshipMetadata>();
+    private readonly List<ManyToManyRelationshipMetadata> _manyToMany = new List<ManyToManyRelationshipMetadata>();
     private AttributeMetadata? _last;
 
     private MetadataFactory(string logicalName, string schemaName)
@@ -324,9 +325,26 @@ internal sealed class MetadataFactory
         return this;
     }
 
+    // N:N relationship between entity1 and entity2 (order does not matter to the generator; it picks the "other").
+    public MetadataFactory ManyToMany(string schemaName, string entity1, string entity2)
+    {
+        ManyToManyRelationshipMetadata rel = new ManyToManyRelationshipMetadata();
+        Set(rel, nameof(ManyToManyRelationshipMetadata.SchemaName), schemaName);
+        Set(rel, nameof(ManyToManyRelationshipMetadata.Entity1LogicalName), entity1);
+        Set(rel, nameof(ManyToManyRelationshipMetadata.Entity2LogicalName), entity2);
+        Set(rel, nameof(ManyToManyRelationshipMetadata.IntersectEntityName), schemaName);
+        _manyToMany.Add(rel);
+        return this;
+    }
+
     public EntityMetadata Build()
     {
         Set(_entity, nameof(EntityMetadata.Attributes), _attributes.ToArray());
+        if (_manyToMany.Count > 0)
+        {
+            Set(_entity, nameof(EntityMetadata.ManyToManyRelationships), _manyToMany.ToArray());
+        }
+
         if (_keys.Count > 0)
         {
             Set(_entity, nameof(EntityMetadata.Keys), _keys.ToArray());
