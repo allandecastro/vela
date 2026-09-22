@@ -427,6 +427,11 @@ namespace Vela.Testing
             {
                 stored.Id = _idSequence();
             }
+            else if (Table(stored.LogicalName).ContainsKey(stored.Id))
+            {
+                // Caller supplied an id that already exists: the platform rejects a duplicate primary key.
+                throw RecordAlreadyExists(stored.LogicalName, stored.Id);
+            }
 
             _autoNumbers.Apply(stored);
             _systemFields.ApplyOnCreate(entity, stored, Actor(), _clock(), NextVersion());
@@ -504,6 +509,17 @@ namespace Vela.Testing
             string message = $"{entityName} With Id = {id:D} Does Not Exist";
             return new FaultException<OrganizationServiceFault>(
                 new OrganizationServiceFault { ErrorCode = ObjectDoesNotExist, Message = message },
+                new FaultReason(message));
+        }
+
+        // 0x80040237 DuplicateRecord — the platform's fault for inserting a row whose primary key already exists.
+        private const int DuplicateRecord = unchecked((int)0x80040237);
+
+        private static FaultException<OrganizationServiceFault> RecordAlreadyExists(string entityName, Guid id)
+        {
+            string message = $"A {entityName} record with Id = {id:D} already exists.";
+            return new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { ErrorCode = DuplicateRecord, Message = message },
                 new FaultReason(message));
         }
 
@@ -664,8 +680,13 @@ namespace Vela.Testing
                 }
 
                 // 1:N: this entity is the parent (referenced) side -> children whose lookup points back at it.
-                OneToManyRegistry.OneToMany? oneToMany = _oneToMany.ChildRelationshipsOf(entityName)
-                    .FirstOrDefault(r => string.Equals(r.ReferencingEntity, otherEntity, StringComparison.OrdinalIgnoreCase));
+                // Prefer an exact schema-name match (when two relationships link the same table pair), else the pair.
+                List<OneToManyRegistry.OneToMany> childCandidates = _oneToMany.ChildRelationshipsOf(entityName)
+                    .Where(r => string.Equals(r.ReferencingEntity, otherEntity, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                OneToManyRegistry.OneToMany? oneToMany =
+                    childCandidates.FirstOrDefault(r => string.Equals(r.SchemaName, pair.Key.SchemaName, StringComparison.OrdinalIgnoreCase))
+                    ?? childCandidates.FirstOrDefault();
                 if (oneToMany != null)
                 {
                     QueryExpression query = new QueryExpression(otherEntity) { ColumnSet = columns };
@@ -675,8 +696,13 @@ namespace Vela.Testing
                 }
 
                 // N:1: this entity is the child (referencing) side -> the single parent its lookup points at.
-                OneToManyRegistry.OneToMany? manyToOne = _oneToMany.ParentRelationshipsOf(entityName)
-                    .FirstOrDefault(r => string.Equals(r.ReferencedEntity, otherEntity, StringComparison.OrdinalIgnoreCase));
+                // Prefer an exact schema-name match, else the table pair.
+                List<OneToManyRegistry.OneToMany> parentCandidates = _oneToMany.ParentRelationshipsOf(entityName)
+                    .Where(r => string.Equals(r.ReferencedEntity, otherEntity, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                OneToManyRegistry.OneToMany? manyToOne =
+                    parentCandidates.FirstOrDefault(r => string.Equals(r.SchemaName, pair.Key.SchemaName, StringComparison.OrdinalIgnoreCase))
+                    ?? parentCandidates.FirstOrDefault();
                 if (manyToOne != null &&
                     stored.GetAttributeValue<EntityReference>(manyToOne.ReferencingAttribute) is EntityReference parentRef &&
                     Table(otherEntity).ContainsKey(parentRef.Id))
@@ -685,6 +711,23 @@ namespace Vela.Testing
                     entity.RelatedEntities[pair.Key] = new EntityCollection(new List<Entity> { parent });
                 }
             }
+        }
+
+        // Resolves a write target that identifies its row by alternate key (Id empty + KeyAttributes) to a concrete
+        // Id, returning a clone with the Id set and the key attributes cleared, so update-by-key works like a real
+        // org. A target with an Id (or no key) is returned unchanged.
+        private Entity ResolveWriteTarget(Entity target)
+        {
+            if (target.Id != Guid.Empty || target.KeyAttributes == null || target.KeyAttributes.Count == 0)
+            {
+                return target;
+            }
+
+            Guid id = ResolveReference(new EntityReference(target.LogicalName) { KeyAttributes = target.KeyAttributes });
+            Entity resolved = EntityValues.Clone(target);
+            resolved.Id = id;
+            resolved.KeyAttributes.Clear();
+            return resolved;
         }
 
         public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
@@ -786,7 +829,13 @@ namespace Vela.Testing
         internal void DeleteInternal(string entityName, Guid id, Action<string, Guid> removeRecord)
         {
             EnsureWritable(entityName);
-            if (_security != null && Table(entityName).TryGetValue(id, out Entity? stored))
+            if (!Table(entityName).TryGetValue(id, out Entity? stored))
+            {
+                // Deleting a non-existent record is a not-found fault on the platform, not a silent no-op.
+                throw RecordDoesNotExist(entityName, id);
+            }
+
+            if (_security != null)
             {
                 DemandAccess(entityName, Privilege.Delete, stored);
             }
@@ -862,13 +911,13 @@ namespace Vela.Testing
 
                 case UpdateRequest update:
                 {
-                    Update(update.Target);
+                    Update(ResolveWriteTarget(update.Target));
                     return new UpdateResponse();
                 }
 
                 case DeleteRequest delete:
                 {
-                    Delete(delete.Target.LogicalName, delete.Target.Id);
+                    Delete(delete.Target.LogicalName, ResolveReference(delete.Target));
                     return new DeleteResponse();
                 }
 

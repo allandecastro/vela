@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.ServiceModel;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.Testing
@@ -54,8 +55,12 @@ namespace Vela.Testing
 
                 if (duplicate)
                 {
-                    throw new InvalidOperationException(
-                        $"A duplicate {entity.LogicalName} record already exists for alternate key ({string.Join(", ", key)}).");
+                    // 0x80060892 DuplicateRecordKeyValueExists - the platform's alternate-key duplicate fault, so a
+                    // test asserting on the fault/ErrorCode behaves the same against a real org.
+                    string message = $"A duplicate {entity.LogicalName} record already exists for alternate key ({string.Join(", ", key)}).";
+                    throw new FaultException<OrganizationServiceFault>(
+                        new OrganizationServiceFault { ErrorCode = unchecked((int)0x80060892), Message = message },
+                        new FaultReason(message));
                 }
             }
         }

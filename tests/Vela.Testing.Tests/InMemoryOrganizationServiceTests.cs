@@ -156,7 +156,7 @@ namespace Vela.Testing.Tests
 
             crm.Create(new Entity("account") { ["accountnumber"] = "ACC-1" });
 
-            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => crm.Create(new Entity("account") { ["accountnumber"] = "ACC-1" }));
             Assert.Contains("alternate key", ex.Message);
         }
@@ -221,7 +221,7 @@ namespace Vela.Testing.Tests
             crm.Create(new Entity("widget") { ["code"] = "W1" });
 
             // All attributes match an existing row: duplicate.
-            Assert.Throws<InvalidOperationException>(
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => crm.Create(new Entity("widget") { ["code"] = "W1", ["region"] = "EU" }));
         }
 
@@ -234,7 +234,7 @@ namespace Vela.Testing.Tests
             crm.Create(new Entity("account") { ["accountnumber"] = "ACC-1" });
             Guid second = crm.Create(new Entity("account") { ["accountnumber"] = "ACC-2" });
 
-            Assert.Throws<InvalidOperationException>(
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => crm.Update(new Entity("account") { Id = second, ["accountnumber"] = "ACC-1" }));
 
             // The failed update must not have mutated the record.
