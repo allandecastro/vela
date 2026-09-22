@@ -4,8 +4,10 @@ Vela is a thin, opt-in layer over the Dataverse SDK, not a walled garden. Every 
 underlying SDK object, so a gap in the framework is always "drop one level", never a wall. You keep Vela's typed
 models, context and services, and reach for the raw SDK only for the one thing that is missing.
 
-This page lists the escape hatches and shows the two relationship scenarios Vela does not yet wrap in typed sugar:
-reading a record together with its related records, and creating a record together with its related records.
+This page lists the escape hatches and shows the raw SDK patterns behind Vela's typed relationship helpers
+(`RetrieveWithRelated` / `CreateWithRelated` / `AssociateRelated`, see
+[Relationship navigation properties](models.md#relationship-navigation-properties)) - useful for relationships you
+did not generate a model for, or when you need full control over the request.
 
 ## The raw organization service
 

@@ -3,10 +3,11 @@
 Vela ships a small set of Roslyn **analyzers** and one **source generator** inside the `Vela.Plugins` package
 (they live in the bundled `Vela.Analyzers` assembly). There is **no separate analyzer package or project to
 reference** - they come with `Vela.Plugins` automatically and run in the editor and at build with no extra
-configuration. The rules that catch a genuine mistake are reported as **errors** so they fail fast instead of
-surfacing as a silent runtime surprise; advisory rules (currently only VELA006) are **warnings** and never break a
-build. Together they let the compiler enforce the fluent step builder's rules, so both a human developer and an AI
-author get told what is valid up front.
+configuration. Rules that catch a build-breaking mistake in the fluent step builder are reported as **errors** so
+they fail fast instead of surfacing as a silent runtime surprise; advisory and best-practice rules (VELA006 usage,
+VELA011 reliability, VELA012 usage, VELA013 performance) are **warnings** and never break a build. Together they
+let the compiler enforce the framework's rules, so both a human developer and an AI author get told what is valid up
+front. Several rules also ship an IDE **code fix** (see below).
 
 | Rule | Category | Severity | What it catches |
 | --- | --- | --- | --- |

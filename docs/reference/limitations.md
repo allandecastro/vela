@@ -78,9 +78,10 @@ untouched.
   the plugin types and calling `GetStepDefinitions()` / `GetCustomApiDefinition()`, so `plan`/`apply` execute
   code from the scanned `.nupkg`. This is inherent (the definitions come from the plugin itself) - **only scan
   packages you build or trust.** An isolating load context would not change this; the code still runs.
-- **Authentication:** connection string, client secret (env var / stdin / arg), and interactive MSAL
-  (sovereign clouds via `--auth-client-id` / `--authority`). **No certificate auth** and **no managed-identity
-  connection** (managed identity is only relevant to `vela sign` for MI plugins). Prefer `DATAVERSE_CLIENT_SECRET`
+- **Authentication:** a bare `--url` uses the **ambient Azure credential** (`DefaultAzureCredential`: `az login`,
+  environment variables, workload identity, and **managed identity**) - the recommended default for CI and agents;
+  plus connection string, client secret (env var / stdin / arg), and interactive MSAL (sovereign clouds via
+  `--auth-client-id` / `--authority`). **No certificate auth.** Prefer `DATAVERSE_CLIENT_SECRET`
   or `--client-secret-stdin` (piped) over `--client-secret` (exposed to shell history / process listings; the
   CLI warns). `--client-secret-stdin` requires stdin to be piped, not an interactive terminal.
 - **Secrets in output.** Secure step configuration is **redacted to a hash** in all `plan`/`inspect` output -
@@ -98,8 +99,10 @@ untouched.
   `--solution`/`--entities`, Custom API message classes via `--custom-apis`, and a dependency-light `Roles` class
   (real role privileges + root role id, in the shared models project) via `--roles`/`--solution-roles` (a
   `--roles` name not found in the environment is warned about and skipped; the run only fails when none resolve).
-  **Out of scope:** relationship
-  navigation properties + `OrganizationServiceContext`/LINQ (lazy loading/change-tracking don't fit the plugin
+  It also generates **typed relationship navigation properties** (N:1 / 1:N / N:N, read with `RetrieveWithRelated`
+  / written with `CreateWithRelated` / `AssociateRelated`; see
+  [Relationship navigation properties](../guides/models.md#relationship-navigation-properties)).
+  **Out of scope:** `OrganizationServiceContext`/LINQ (lazy loading/change-tracking don't fit the plugin
   sandbox - use `Query.For<T>()`), localized multi-language labels, and custom class/property casing - use
   `pac modelbuilder` if you need those. Role generation covers **table** privileges only - non-entity /
   miscellaneous privileges (Export to Excel, Act on Behalf of Another User, etc.) are deliberately skipped.

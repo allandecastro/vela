@@ -46,7 +46,7 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 - **`vela` CLI** - preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), and package signing.
 - **Idempotent apply** - safe upsert/delete of steps, Custom APIs, and images against a live environment.
 - **No-connection testing** - run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency, with an **opt-in security model** (roles, privileges, business units, teams, sharing and relationship cascades) when you need it.
-- **Client-side (preview, work in progress)** - TypeScript FormModel generation (`vela models --forms --lang ts`), the opt-in web resources project scaffold (`vela init --web-resources`) and web resource deploy (`vela plan`/`apply --webresources`) for the [vela-client](https://github.com/allandecastro/vela) runtime. These are new and may change.
+- **Client-side (preview, work in progress)** - TypeScript FormModel generation (`vela models --forms --lang ts`), the opt-in web resources project scaffold (`vela init --web-resources`) and web resource deploy (`vela plan`/`apply --webresources`) for the `vela-client` runtime (a separate library). These are new and may change.
 
 ## Packages
 
@@ -79,7 +79,7 @@ vela plan  --packages-dir artifacts --interactive
 # 5. Apply the changes (idempotent create/update/delete).
 #    apply writes by default: on a terminal it shows the plan and asks you to confirm.
 #    Add --auto-approve to skip the prompt in CI / unattended runs.
-vela apply --packages-dir artifacts --interactive
+vela apply --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
 Then head to the **[documentation](https://allandecastro.github.io/vela/)** for guides on writing plugins,
