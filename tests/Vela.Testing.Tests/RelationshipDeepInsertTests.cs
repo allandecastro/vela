@@ -62,6 +62,10 @@ namespace Vela.Testing.Tests
             get => GetAttributeValue<EntityReference>("parentcustomerid");
             set => SetAttributeValue("parentcustomerid", value);
         }
+
+        // N:1 nav back to the parent account (single-target), for Include-read tests.
+        [RelationshipSchemaName("contact_customer_accounts")]
+        public DeepAccount? ParentCustomer { get; set; }
     }
 
     public sealed class RelationshipDeepInsertTests

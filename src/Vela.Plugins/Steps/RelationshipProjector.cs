@@ -1,9 +1,5 @@
-using System;
 using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.Steps
@@ -17,9 +13,6 @@ namespace Vela.Steps
     /// </summary>
     public static class RelationshipProjector
     {
-        // Per type: the collection nav properties (property + relationship schema name), cached (plugins run hot).
-        private static readonly ConcurrentDictionary<Type, KeyValuePair<PropertyInfo, string>[]> Maps = new();
-
         /// <summary>
         /// Moves each populated 1:N navigation collection on <paramref name="entity"/> into
         /// <see cref="Entity.RelatedEntities"/>, recursing into the children. A relationship already present in
@@ -33,14 +26,15 @@ namespace Vela.Steps
                 return entity!;
             }
 
-            foreach (KeyValuePair<PropertyInfo, string> entry in GetMap(entity.GetType()))
+            foreach (RelationshipNav nav in RelationshipNavMap.For(entity.GetType()))
             {
-                if (entity.RelatedEntities.Contains(new Relationship(entry.Value)))
+                // Only 1:N/N:N collection navs deep-insert children; a single N:1 parent is not projected here.
+                if (!nav.IsCollection || entity.RelatedEntities.Contains(new Relationship(nav.SchemaName)))
                 {
                     continue;
                 }
 
-                if (entry.Key.GetValue(entity) is not IEnumerable value || value is string)
+                if (nav.Property.GetValue(entity) is not IEnumerable value || value is string)
                 {
                     continue;
                 }
@@ -57,42 +51,11 @@ namespace Vela.Steps
 
                 if (children.Count > 0)
                 {
-                    entity.RelatedEntities[new Relationship(entry.Value)] = new EntityCollection(children);
+                    entity.RelatedEntities[new Relationship(nav.SchemaName)] = new EntityCollection(children);
                 }
             }
 
             return entity;
-        }
-
-        private static KeyValuePair<PropertyInfo, string>[] GetMap(Type type) =>
-            Maps.GetOrAdd(type, static t =>
-            {
-                List<KeyValuePair<PropertyInfo, string>> map = new List<KeyValuePair<PropertyInfo, string>>();
-                foreach (PropertyInfo property in t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                {
-                    // Only 1:N/N:N collection navs deep-insert children; a single N:1 parent is not projected here.
-                    if (!typeof(IEnumerable).IsAssignableFrom(property.PropertyType) || property.PropertyType == typeof(string))
-                    {
-                        continue;
-                    }
-
-                    string? schemaName = GetRelationshipSchemaName(property);
-                    if (!string.IsNullOrEmpty(schemaName))
-                    {
-                        map.Add(new KeyValuePair<PropertyInfo, string>(property, schemaName!));
-                    }
-                }
-
-                return map.ToArray();
-            });
-
-        // The generated [RelationshipSchemaName(...)] attribute lives in the consumer's namespace, so it is matched
-        // by name and its SchemaName is read reflectively (no type reference to generated code).
-        private static string? GetRelationshipSchemaName(PropertyInfo property)
-        {
-            Attribute? attribute = property.GetCustomAttributes()
-                .FirstOrDefault(a => a.GetType().Name == "RelationshipSchemaNameAttribute");
-            return attribute?.GetType().GetProperty("SchemaName")?.GetValue(attribute) as string;
         }
     }
 }

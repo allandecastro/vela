@@ -622,6 +622,51 @@ namespace Vela.Testing
             return Equals(stored, key);
         }
 
+        // Include support: fills a retrieved record's RelatedEntities from a RelationshipQueryCollection (1:N
+        // children and N:1 parent). The relationship is resolved by the (this-entity, other-entity) pair against the
+        // declared 1:N relationships - the real Dataverse schema name is not in the registry - mirroring how the
+        // deep insert resolves relationships. Declare relationships with WithRelationship for this to resolve.
+        private void PopulateRetrievedRelations(Entity entity, string entityName, Guid id, RelationshipQueryCollection related)
+        {
+            if (!Table(entityName).TryGetValue(id, out Entity? stored))
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<Relationship, QueryBase> pair in related)
+            {
+                if (pair.Value is not QueryExpression childQuery || string.IsNullOrEmpty(childQuery.EntityName))
+                {
+                    continue;
+                }
+
+                string otherEntity = childQuery.EntityName;
+                ColumnSet columns = childQuery.ColumnSet ?? new ColumnSet(true);
+
+                // 1:N: this entity is the parent (referenced) side -> children whose lookup points back at it.
+                OneToManyRegistry.OneToMany? oneToMany = _oneToMany.ChildRelationshipsOf(entityName)
+                    .FirstOrDefault(r => string.Equals(r.ReferencingEntity, otherEntity, StringComparison.OrdinalIgnoreCase));
+                if (oneToMany != null)
+                {
+                    QueryExpression query = new QueryExpression(otherEntity) { ColumnSet = columns };
+                    query.Criteria.AddCondition(oneToMany.ReferencingAttribute, ConditionOperator.Equal, id);
+                    entity.RelatedEntities[pair.Key] = RetrieveMultiple(query);
+                    continue;
+                }
+
+                // N:1: this entity is the child (referencing) side -> the single parent its lookup points at.
+                OneToManyRegistry.OneToMany? manyToOne = _oneToMany.ParentRelationshipsOf(entityName)
+                    .FirstOrDefault(r => string.Equals(r.ReferencedEntity, otherEntity, StringComparison.OrdinalIgnoreCase));
+                if (manyToOne != null &&
+                    stored.GetAttributeValue<EntityReference>(manyToOne.ReferencingAttribute) is EntityReference parentRef &&
+                    Table(otherEntity).ContainsKey(parentRef.Id))
+                {
+                    Entity parent = Retrieve(otherEntity, parentRef.Id, columns);
+                    entity.RelatedEntities[pair.Key] = new EntityCollection(new List<Entity> { parent });
+                }
+            }
+        }
+
         public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
         {
             if (!Table(entityName).TryGetValue(id, out Entity? stored))
@@ -811,7 +856,13 @@ namespace Vela.Testing
                 {
                     RetrieveResponse response = new RetrieveResponse();
                     Guid id = ResolveReference(retrieve.Target);
-                    response.Results["Entity"] = Retrieve(retrieve.Target.LogicalName, id, retrieve.ColumnSet);
+                    Entity entity = Retrieve(retrieve.Target.LogicalName, id, retrieve.ColumnSet);
+                    if (retrieve.RelatedEntitiesQuery != null && retrieve.RelatedEntitiesQuery.Count > 0)
+                    {
+                        PopulateRetrievedRelations(entity, retrieve.Target.LogicalName, id, retrieve.RelatedEntitiesQuery);
+                    }
+
+                    response.Results["Entity"] = entity;
                     return response;
                 }
 

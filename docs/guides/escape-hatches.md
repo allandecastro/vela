@@ -42,8 +42,10 @@ object raw = ctx.PluginExecutionContext.InputParameters["Target"];
 ## Reading a record with its related records
 
 Dataverse returns a record together with its related records in a single call through a
-`RelationshipQueryCollection`. There is no typed Vela wrapper yet, but you still build the related query with
-`Query.For<TEntity>()` and read the results back through the typed early-bound models:
+`RelationshipQueryCollection`. For generated relationship navigation properties, prefer the typed
+`ctx.UserService.RetrieveWithRelated<T>(target, q => q.Include(o => o.Nav))`
+(see [relationship-aware read](models.md#relationship-navigation-properties)); the raw pattern below stays available
+for un-generated relationships or full control:
 
 ```csharp
 using Microsoft.Xrm.Sdk;
@@ -112,9 +114,9 @@ creates), so keep the graph shallow.
 >
 > Guid accountId = ctx.UserService.CreateWithRelated(account);   // account + two contacts, one transaction
 > ```
-> `CreateWithRelated` projects the populated 1:N collections into `RelatedEntities` for you. The typed `Include(...)`
-> for relationship-aware reads and standard N:N handling are still on the roadmap; until then use the
-> `RelationshipQueryCollection` read above. A navigation property is not a column, so it cannot be used in
+> `CreateWithRelated` projects the populated 1:N collections into `RelatedEntities` for you, and
+> `RetrieveWithRelated<T>(target, q => q.Include(...))` reads them back typed (single-record). Standard N:N handling
+> (Include + a typed associate) is still on the roadmap. A navigation property is not a column, so it cannot be used in
 > `FilterOn`/`Select`/`Where`/`WithPreImage` (the analyzer VELA010 catches that); select the lookup column
 > (`PrimaryContactId`) instead.
 

@@ -41,6 +41,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   related records held in its generated 1:N navigation collections, in one transaction, so you never hand-write a
   `Relationship` schema string. The in-memory test harness supports the deep insert (declare the relationship with
   `WithRelationship`/`WithParentalRelationship`).
+- Typed relationship-aware read: `service.RetrieveWithRelated<TEntity>(target, q => q.Include(o => o.Nav), columns)`
+  (in `Vela.Context`) retrieves a record together with related records (N:1 parent and 1:N children) in one call and
+  hydrates the generated navigation properties. Single-record only (Dataverse nests related records on `Retrieve`,
+  one level deep, 5000-row child page cap). The in-memory harness now honors `RelatedEntitiesQuery` on retrieve.
+  N:N Include and a typed associate remain on the roadmap.
 - New analyzer **VELA010** (error): a generated relationship navigation property used in a column selector
   (`FilterOn`/`Select`/`Where`/`OrderBy`/`WithPreImage`/`WithPostImage`). The runtime column resolvers now also
   reject a relationship property with a clear error instead of silently building a bogus column.
