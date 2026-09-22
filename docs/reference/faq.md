@@ -32,11 +32,13 @@ message and stage at compile time, so binding an `OnUpdate()` step to an `ICreat
 with `ctx.Request.Target`; every step chain must end with `.Handle(...)`, so a typed handler is always bound.
 For a lightweight Custom API handler the signature is `void Handler(ILocalPluginContext)`.
 
-### Can `plan`/`apply` authenticate with a certificate or a managed-identity connection?
+### Can `plan`/`apply` authenticate with a managed identity or a certificate?
 
-No. Supported authentication is connection string, client secret (env var / stdin / arg), and interactive MSAL
-(with sovereign-cloud overrides). There is no certificate auth and no managed-identity connection - managed
-identity is only relevant to `vela sign` for MI plugins. See [limitations](limitations.md).
+Managed identity: yes. A bare `--url` uses the ambient Azure credential (`DefaultAzureCredential`: `az login`,
+environment variables, workload identity, and managed identity) - the recommended default for CI and agents.
+Certificate auth: no. The other supported methods are connection string, client secret (env var / stdin / arg),
+and interactive MSAL (with sovereign-cloud overrides). See [authentication](../configuration/authentication.md)
+and [limitations](limitations.md).
 
 ### Does `apply` manage solutions, security roles, or environment variables?
 
@@ -85,8 +87,11 @@ See [security model](../guides/security-model.md).
 
 ### Can `vela models` generate relationship navigation properties or LINQ / OrganizationServiceContext?
 
-No - those are out of scope (lazy loading and change-tracking don't fit the plugin sandbox; use `Query.For<T>()`
-instead). Localized multi-language labels and custom class/property casing are also out of scope; use
+Relationship navigation properties: yes. `vela models` generates typed N:1 / 1:N / N:N navs, read with
+`RetrieveWithRelated` and written with `CreateWithRelated` / `AssociateRelated` (see
+[Relationship navigation properties](../guides/models.md#relationship-navigation-properties)).
+LINQ / `OrganizationServiceContext` is out of scope (lazy loading and change-tracking don't fit the plugin sandbox;
+use `Query.For<T>()` instead), as are localized multi-language labels and custom class/property casing; use
 `pac modelbuilder` if you need those. See [limitations](limitations.md).
 
 ### Does `vela sign` support Key Vault or HSM signing?

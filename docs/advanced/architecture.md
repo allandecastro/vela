@@ -10,13 +10,18 @@ framework itself; if you just want to *use* Vela, start with the
 ```text
 Vela.sln
 src/
-  Vela.Plugins/   # Framework runtime, contracts, primitives, and shared definitions
-  Vela.Cli/       # CLI (command `vela`) for manifests and Dataverse sync
-  Vela.Testing/   # Test harness package
+  Vela.Plugins/    # Framework runtime, contracts, primitives, shared definitions (bundles the analyzers + code fixes)
+  Vela.Messages/   # SDK-only typed request/response bases (shared by plugins and net10 callers)
+  Vela.Cli/        # CLI (command `vela`) for manifests and Dataverse sync
+  Vela.Testing/    # In-memory test harness package
+  Vela.Analyzers/  # Roslyn analyzers + source generators (shipped inside Vela.Plugins)
+  Vela.CodeFixes/  # Roslyn code fixes (shipped inside Vela.Plugins)
 tests/
-  Vela.Tests/          # Runtime/framework unit tests
-  Vela.Testing.Tests/  # In-memory harness/pipeline tests
-  Vela.Cli.Tests/      # CLI unit tests
+  Vela.Tests/            # Runtime/framework unit tests
+  Vela.Testing.Tests/    # In-memory harness/pipeline tests
+  Vela.Cli.Tests/        # CLI unit tests
+  Vela.Analyzers.Tests/  # Analyzer + source-generator tests
+  Vela.CodeFixes.Tests/  # Code-fix tests
 .github/workflows/ci.yml
 ```
 
