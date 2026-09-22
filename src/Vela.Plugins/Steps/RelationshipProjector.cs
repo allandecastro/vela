@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.Steps
@@ -26,6 +27,20 @@ namespace Vela.Steps
                 return entity!;
             }
 
+            PopulateRelatedEntities(entity, new HashSet<Entity>(ReferenceComparer.Instance));
+            return entity;
+        }
+
+        // The visited set (reference equality) breaks cycles: a graph where A holds B and B holds A back would
+        // otherwise recurse forever and tear down the sandbox with an uncatchable StackOverflowException. A node
+        // already being projected is added to its parent's collection but not descended into again.
+        private static void PopulateRelatedEntities(Entity entity, HashSet<Entity> visited)
+        {
+            if (!visited.Add(entity))
+            {
+                return;
+            }
+
             foreach (RelationshipNav nav in RelationshipNavMap.For(entity.GetType()))
             {
                 // Only 1:N child collections deep-insert. A single N:1 parent is not projected, and a N:N collection
@@ -45,7 +60,7 @@ namespace Vela.Steps
                 {
                     if (item is Entity child)
                     {
-                        PopulateRelatedEntities(child);
+                        PopulateRelatedEntities(child, visited);
                         children.Add(child);
                     }
                 }
@@ -55,8 +70,16 @@ namespace Vela.Steps
                     entity.RelatedEntities[new Relationship(nav.SchemaName)] = new EntityCollection(children);
                 }
             }
+        }
 
-            return entity;
+        // Reference-equality set membership (net462 has no ReferenceEqualityComparer).
+        private sealed class ReferenceComparer : IEqualityComparer<Entity>
+        {
+            public static readonly ReferenceComparer Instance = new ReferenceComparer();
+
+            public bool Equals(Entity x, Entity y) => ReferenceEquals(x, y);
+
+            public int GetHashCode(Entity obj) => RuntimeHelpers.GetHashCode(obj);
         }
     }
 }

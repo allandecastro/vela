@@ -32,7 +32,19 @@ namespace Vela.Steps
                     continue;
                 }
 
-                var definition = GetStepDefinitionFromType(type);
+                // Assembly-wide scan is best-effort: a single plugin whose step build throws (e.g. one that
+                // registers nothing) is skipped rather than failing the whole scan. A direct caller of
+                // GetStepDefinitionFromType still gets the exception surfaced.
+                StepDefinition[]? definition;
+                try
+                {
+                    definition = GetStepDefinitionFromType(type);
+                }
+                catch (InvalidOperationException)
+                {
+                    continue;
+                }
+
                 if (definition != null)
                 {
                     definitions.AddRange(definition);
@@ -91,10 +103,14 @@ namespace Vela.Steps
 
                 return null;
             }
-            catch
+            catch (System.Reflection.TargetInvocationException ex)
             {
-                // If we can't instantiate the plugin, skip it
-                return null;
+                // The plugin's step build (ctor / GetStepDefinitions) threw - surface it instead of silently
+                // dropping the plugin, so a real configuration error (missing FilterOn, duplicate trigger, no
+                // handler) is not swallowed and reported as "no steps".
+                throw new System.InvalidOperationException(
+                    $"Failed to read step definitions from plugin '{pluginType.FullName}': {ex.InnerException?.Message ?? ex.Message}",
+                    ex.InnerException ?? ex);
             }
         }
     }
