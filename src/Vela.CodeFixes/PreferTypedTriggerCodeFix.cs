@@ -16,7 +16,8 @@ namespace Vela.CodeFixes
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(PreferTypedTriggerCodeFix)), Shared]
     public sealed class PreferTypedTriggerCodeFix : CodeFixProvider
     {
-        // Modelled messages that have a typed On...() trigger, by their lower-cased message name.
+        // Modelled messages that have a typed On...() trigger, by their lower-cased message name. Must stay in sync
+        // with PreferTypedMessageAnalyzer.TypedTriggers so every flagged message gets a fix.
         private static readonly Dictionary<string, string> TypedTriggers = new Dictionary<string, string>
         {
             ["create"] = "OnCreate",
@@ -24,6 +25,11 @@ namespace Vela.CodeFixes
             ["delete"] = "OnDelete",
             ["createmultiple"] = "OnCreateMultiple",
             ["updatemultiple"] = "OnUpdateMultiple",
+            ["retrieve"] = "OnRetrieve",
+            ["retrievemultiple"] = "OnRetrieveMultiple",
+            ["associate"] = "OnAssociate",
+            ["disassociate"] = "OnDisassociate",
+            ["merge"] = "OnMerge",
         };
 
         public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("VELA006");

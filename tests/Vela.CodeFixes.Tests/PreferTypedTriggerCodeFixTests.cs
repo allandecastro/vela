@@ -18,6 +18,7 @@ namespace Vela.Steps
     {
         IFakeStep OnMessage(string message);
         IFakeStep OnCreate();
+        IFakeStep OnUpdate();
         void Handle();
     }
 }
@@ -35,6 +36,16 @@ namespace Demo
         string after = Harness.Replace("BODY", "RegisterStep().OnCreate().Handle();");
         DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.PreferTypedMessageAnalyzer.DiagnosticId, DiagnosticSeverity.Warning)
             .WithLocation(0).WithArguments("OnCreate", "create");
+        await Verify.VerifyCodeFixAsync(before, expected, after);
+    }
+
+    [Fact]
+    public async Task Replaces_OnMessage_update_with_OnUpdate()
+    {
+        string before = Harness.Replace("BODY", "RegisterStep().{|#0:OnMessage|}(\"update\").Handle();");
+        string after = Harness.Replace("BODY", "RegisterStep().OnUpdate().Handle();");
+        DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.PreferTypedMessageAnalyzer.DiagnosticId, DiagnosticSeverity.Warning)
+            .WithLocation(0).WithArguments("OnUpdate", "update");
         await Verify.VerifyCodeFixAsync(before, expected, after);
     }
 }
