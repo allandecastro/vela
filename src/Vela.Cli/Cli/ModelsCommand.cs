@@ -827,7 +827,7 @@ internal static class ModelsCommand
     private static EntityMetadata ReadEntity(IOrganizationService service, string logicalName)
     {
         RetrieveEntityResponse response = (RetrieveEntityResponse)service.Execute(
-            new RetrieveEntityRequest { LogicalName = logicalName, EntityFilters = EntityFilters.Attributes | EntityFilters.Entity });
+            new RetrieveEntityRequest { LogicalName = logicalName, EntityFilters = EntityFilters.Attributes | EntityFilters.Entity | EntityFilters.Relationships });
         return response.EntityMetadata;
     }
 

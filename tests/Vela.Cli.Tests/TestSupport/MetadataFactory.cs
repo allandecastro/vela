@@ -16,6 +16,8 @@ internal sealed class MetadataFactory
     private readonly EntityMetadata _entity = new EntityMetadata();
     private readonly List<AttributeMetadata> _attributes = new List<AttributeMetadata>();
     private readonly List<EntityKeyMetadata> _keys = new List<EntityKeyMetadata>();
+    private readonly List<OneToManyRelationshipMetadata> _manyToOne = new List<OneToManyRelationshipMetadata>();
+    private readonly List<OneToManyRelationshipMetadata> _oneToMany = new List<OneToManyRelationshipMetadata>();
     private AttributeMetadata? _last;
 
     private MetadataFactory(string logicalName, string schemaName)
@@ -298,12 +300,46 @@ internal sealed class MetadataFactory
         return this;
     }
 
+    // N:1 relationship: a lookup (referencingAttribute) on THIS entity pointing at referencedEntity.
+    public MetadataFactory ManyToOne(string schemaName, string referencingAttribute, string referencedEntity)
+    {
+        OneToManyRelationshipMetadata rel = new OneToManyRelationshipMetadata();
+        Set(rel, nameof(OneToManyRelationshipMetadata.SchemaName), schemaName);
+        Set(rel, nameof(OneToManyRelationshipMetadata.ReferencingAttribute), referencingAttribute);
+        Set(rel, nameof(OneToManyRelationshipMetadata.ReferencingEntity), _entity.LogicalName);
+        Set(rel, nameof(OneToManyRelationshipMetadata.ReferencedEntity), referencedEntity);
+        _manyToOne.Add(rel);
+        return this;
+    }
+
+    // 1:N relationship: children in referencingEntity point back at THIS entity via referencingAttribute (their FK).
+    public MetadataFactory OneToMany(string schemaName, string referencingEntity, string referencingAttribute)
+    {
+        OneToManyRelationshipMetadata rel = new OneToManyRelationshipMetadata();
+        Set(rel, nameof(OneToManyRelationshipMetadata.SchemaName), schemaName);
+        Set(rel, nameof(OneToManyRelationshipMetadata.ReferencingEntity), referencingEntity);
+        Set(rel, nameof(OneToManyRelationshipMetadata.ReferencingAttribute), referencingAttribute);
+        Set(rel, nameof(OneToManyRelationshipMetadata.ReferencedEntity), _entity.LogicalName);
+        _oneToMany.Add(rel);
+        return this;
+    }
+
     public EntityMetadata Build()
     {
         Set(_entity, nameof(EntityMetadata.Attributes), _attributes.ToArray());
         if (_keys.Count > 0)
         {
             Set(_entity, nameof(EntityMetadata.Keys), _keys.ToArray());
+        }
+
+        if (_manyToOne.Count > 0)
+        {
+            Set(_entity, nameof(EntityMetadata.ManyToOneRelationships), _manyToOne.ToArray());
+        }
+
+        if (_oneToMany.Count > 0)
+        {
+            Set(_entity, nameof(EntityMetadata.OneToManyRelationships), _oneToMany.ToArray());
         }
 
         return _entity;

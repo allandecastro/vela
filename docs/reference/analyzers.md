@@ -19,6 +19,7 @@ author get told what is valid up front.
 | [VELA007](#vela007) | Vela.Usage | Error | A pre-image on Create, or a post-image on Delete (the message can never provide it) |
 | [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share the same trigger (message + stage + mode) |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
+| [VELA010](#vela010) | Vela.Usage | Error | A generated relationship navigation property used in a column selector |
 
 Plus the [typed image projection generator](#typed-image-projection-generator) that ships in the same assembly.
 
@@ -108,6 +109,18 @@ and the call uses the default pre-image alias. Lambda handlers, handlers shared 
 left alone to avoid false positives.
 
 **Fix:** add `WithPreImage(...)` (the columns you compare) to the step, or remove the change check.
+
+## VELA010
+
+**A relationship is not a column.** The generated early-bound classes expose relationship navigation properties
+(a single typed parent for N:1, a typed collection for 1:N) carrying `[RelationshipSchemaName(...)]`. Passing one to
+a column selector (`FilterOn`, `Select`, `Where`, `OrderBy`, `WithPreImage`, `WithPostImage`) is a mistake: a
+relationship has no storable column, and at runtime the resolver rejects it (without this rule it would silently
+build a bogus column from the property name). Only Vela's own selectors are checked, so ordinary LINQ
+`Select`/`Where` is never flagged.
+
+**Fix:** select the lookup foreign-key column instead (for example `a.PrimaryContactId`, not `a.PrimaryContact`),
+or load related records with a deep insert / relationship-aware read rather than a column selector.
 
 ## Typed image projection generator
 

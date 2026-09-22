@@ -36,10 +36,18 @@ public static class ModelGenerator
         Dictionary<string, OptionSetMetadata> globals = new Dictionary<string, OptionSetMetadata>(StringComparer.Ordinal);
         HashSet<string> features = new HashSet<string>(StringComparer.Ordinal);
 
-        List<GeneratedModel> files = entities
+        EntityMetadata[] ordered = entities
             .Where(e => !string.IsNullOrWhiteSpace(e?.LogicalName))
             .OrderBy(e => e.LogicalName, StringComparer.Ordinal)
-            .Select(e => new GeneratedModel($"{ClassName(e)}.cs", GenerateOne(e, options, globals, features)))
+            .ToArray();
+
+        // Map every generated table's logical name to its class name, so a relationship nav property can be typed
+        // to the target class. A relationship whose target table is not in this batch is skipped (its class would
+        // not exist), keeping the generated code compilable.
+        Dictionary<string, string> logicalToClass = ordered.ToDictionary(e => e.LogicalName, ClassName, StringComparer.Ordinal);
+
+        List<GeneratedModel> files = ordered
+            .Select(e => new GeneratedModel($"{ClassName(e)}.cs", GenerateOne(e, options, globals, features, logicalToClass)))
             .ToList();
 
         // Global option sets are shared across tables → one standalone enum file each.
@@ -60,13 +68,19 @@ public static class ModelGenerator
             files.Add(new GeneratedModel("LookupTargetsAttribute.cs", GenerateLookupTargetsAttributeFile(options.Namespace)));
         }
 
+        if (features.Contains(RelationshipSchemaNameFeature))
+        {
+            files.Add(new GeneratedModel("RelationshipSchemaNameAttribute.cs", GenerateRelationshipSchemaNameAttributeFile(options.Namespace)));
+        }
+
         return files;
     }
 
     private const string RequiredLevelFeature = "requiredLevel";
     private const string LookupTargetsFeature = "lookupTargets";
+    private const string RelationshipSchemaNameFeature = "relationshipSchemaName";
 
-    private static string GenerateOne(EntityMetadata entity, ModelGenOptions options, IDictionary<string, OptionSetMetadata> globals, ISet<string> features)
+    private static string GenerateOne(EntityMetadata entity, ModelGenOptions options, IDictionary<string, OptionSetMetadata> globals, ISet<string> features, IReadOnlyDictionary<string, string> logicalToClass)
     {
         string className = ClassName(entity);
         string logicalName = entity.LogicalName;
@@ -125,6 +139,8 @@ public static class ModelGenerator
         }
 
         AppendAlternateKeys(sb, entity, usedNames);
+
+        AppendRelationships(sb, entity, attributes, usedNames, features, logicalToClass);
 
         // Local (entity-specific) option sets are emitted as enums nested in the table class.
         foreach ((string Name, OptionSetMetadata OptionSet) local in localEnums)
@@ -243,6 +259,114 @@ public static class ModelGenerator
             sb.AppendLine("            return new EntityReference(EntityLogicalNameValue, keys);");
             sb.AppendLine("        }");
         }
+    }
+
+    // Emits typed relationship navigation properties in the same class file: N:1 (single-target only) as a single
+    // typed parent, 1:N as a typed child collection. Each carries [RelationshipSchemaName("...")] (NOT
+    // [AttributeLogicalName]) so the querying/image column resolvers and the drift checker never treat it as a
+    // column. A relationship whose target table is not in this generation batch is skipped (its class would not
+    // exist). Polymorphic / Customer / Owner lookups (a lookup with more than one N:1 relationship) are skipped -
+    // they keep their raw EntityReference. N:N is not emitted here (it ships with the read/associate slice).
+    private static void AppendRelationships(StringBuilder sb, EntityMetadata entity, AttributeMetadata[] attributes, HashSet<string> usedNames, ISet<string> features, IReadOnlyDictionary<string, string> logicalToClass)
+    {
+        // N:1 (ManyToOne): group by the referencing (FK) attribute; a lookup with several relationships is
+        // polymorphic (Customer/Owner/multi-target) and gets no typed nav.
+        var manyToOne = (entity.ManyToOneRelationships ?? Array.Empty<OneToManyRelationshipMetadata>())
+            .Where(r => r != null && !string.IsNullOrWhiteSpace(r.ReferencingAttribute) && !string.IsNullOrWhiteSpace(r.ReferencedEntity))
+            .GroupBy(r => r.ReferencingAttribute, StringComparer.Ordinal)
+            .Where(g => g.Count() == 1)
+            .Select(g => g.Single())
+            .Where(r => logicalToClass.ContainsKey(r.ReferencedEntity))
+            .OrderBy(r => r.SchemaName, StringComparer.Ordinal)
+            .ToArray();
+
+        Dictionary<string, AttributeMetadata> byLogical = attributes
+            .Where(a => !string.IsNullOrWhiteSpace(a.LogicalName))
+            .GroupBy(a => a.LogicalName!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        foreach (OneToManyRelationshipMetadata relationship in manyToOne)
+        {
+            string targetClass = logicalToClass[relationship.ReferencedEntity];
+            // Name the nav after the FK property minus a trailing "Id" (PrimaryContactId -> PrimaryContact); fall
+            // back to the relationship schema name when that yields nothing.
+            string fkProperty = byLogical.TryGetValue(relationship.ReferencingAttribute, out AttributeMetadata? fk)
+                ? PropertyName(fk)
+                : Pascalize(relationship.ReferencingAttribute);
+            string baseName = StripIdSuffix(fkProperty);
+            if (string.IsNullOrEmpty(baseName))
+            {
+                baseName = Pascalize(relationship.SchemaName);
+            }
+
+            string navName = UniqueName(CSharpIdentifier.EscapeKeyword(baseName), usedNames);
+            features.Add(RelationshipSchemaNameFeature);
+
+            sb.AppendLine();
+            sb.AppendLine($"        /// <summary>N:1 relationship <c>{XmlEscape(relationship.SchemaName)}</c> to <c>{XmlEscape(relationship.ReferencedEntity)}</c>. Populate for a deep insert; hydrated by a relationship-aware read.</summary>");
+            sb.AppendLine($"        [RelationshipSchemaName(\"{relationship.SchemaName}\")]");
+            sb.AppendLine($"        public {targetClass}? {navName} {{ get; set; }}");
+        }
+
+        // 1:N (OneToMany): a typed child collection per relationship whose child table is in the batch.
+        var oneToMany = (entity.OneToManyRelationships ?? Array.Empty<OneToManyRelationshipMetadata>())
+            .Where(r => r != null && !string.IsNullOrWhiteSpace(r.ReferencingEntity) && !string.IsNullOrWhiteSpace(r.SchemaName))
+            .Where(r => logicalToClass.ContainsKey(r.ReferencingEntity))
+            .OrderBy(r => r.SchemaName, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (OneToManyRelationshipMetadata relationship in oneToMany)
+        {
+            string childClass = logicalToClass[relationship.ReferencingEntity];
+            // Prefer a friendly pluralized child-class name (Contact -> Contacts); when several relationships point
+            // at the same child, later ones fall back to the relationship schema name so nothing collides.
+            string plural = Pluralize(childClass.TrimStart('@'));
+            string navName = usedNames.Contains(plural)
+                ? UniqueName(CSharpIdentifier.EscapeKeyword(Pascalize(relationship.SchemaName)), usedNames)
+                : UniqueName(CSharpIdentifier.EscapeKeyword(plural), usedNames);
+            features.Add(RelationshipSchemaNameFeature);
+
+            sb.AppendLine();
+            sb.AppendLine($"        /// <summary>1:N relationship <c>{XmlEscape(relationship.SchemaName)}</c> to <c>{XmlEscape(relationship.ReferencingEntity)}</c>. Add children for a deep insert; hydrated by a relationship-aware read.</summary>");
+            sb.AppendLine($"        [RelationshipSchemaName(\"{relationship.SchemaName}\")]");
+            sb.AppendLine($"        public System.Collections.Generic.IList<{childClass}> {navName} {{ get; set; }} = new System.Collections.Generic.List<{childClass}>();");
+        }
+    }
+
+    // Drops a trailing "Id"/"id" so a lookup FK property maps to a friendly nav name (PrimaryContactId ->
+    // PrimaryContact). Returns the input unchanged when it does not end in Id.
+    private static string StripIdSuffix(string name)
+    {
+        if (name != null && name.Length > 2 && name.EndsWith("Id", StringComparison.Ordinal))
+        {
+            return name.Substring(0, name.Length - 2);
+        }
+
+        return name ?? string.Empty;
+    }
+
+    // Naive English pluralizer, enough for deterministic collection nav names (Contact -> Contacts,
+    // Opportunity -> Opportunities, Address -> Addresses). Collisions are resolved by the caller.
+    private static string Pluralize(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return name;
+        }
+
+        if (name.EndsWith("y", StringComparison.Ordinal) && name.Length > 1 && !"aeiou".Contains(char.ToLowerInvariant(name[name.Length - 2])))
+        {
+            return name.Substring(0, name.Length - 1) + "ies";
+        }
+
+        if (name.EndsWith("s", StringComparison.Ordinal) || name.EndsWith("x", StringComparison.Ordinal) ||
+            name.EndsWith("z", StringComparison.Ordinal) || name.EndsWith("ch", StringComparison.Ordinal) ||
+            name.EndsWith("sh", StringComparison.Ordinal))
+        {
+            return name + "es";
+        }
+
+        return name + "s";
     }
 
     // Choice attributes (Picklist/State/Status) with an option set become strongly-typed enums: local sets are
@@ -441,6 +565,34 @@ public static class ModelGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
         sb.AppendLine("        public AttributeRequiredLevel Level { get; }");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private static string GenerateRelationshipSchemaNameAttributeFile(string ns)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated/>");
+        sb.AppendLine($"namespace {ns}");
+        sb.AppendLine("{");
+        sb.AppendLine("    using System;");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Marks a generated relationship navigation property (N:1 parent or 1:N child collection) with its");
+        sb.AppendLine("    /// Dataverse relationship schema name. It is NOT a column: the querying and image column resolvers");
+        sb.AppendLine("    /// reject a property carrying this attribute (use a relationship-aware read/deep-insert instead), and");
+        sb.AppendLine("    /// <c>FakeEntityMetadata.From&lt;T&gt;()</c> recovers relationship metadata from it.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]");
+        sb.AppendLine("    public sealed class RelationshipSchemaNameAttribute : Attribute");
+        sb.AppendLine("    {");
+        sb.AppendLine("        public RelationshipSchemaNameAttribute(string schemaName)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            this.SchemaName = schemaName ?? string.Empty;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        public string SchemaName { get; }");
         sb.AppendLine("    }");
         sb.AppendLine("}");
         return sb.ToString();

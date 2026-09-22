@@ -14,3 +14,4 @@ VELA006 | Vela.Usage | Warning | PreferTypedMessageAnalyzer
 VELA007 | Vela.Usage | Error | ImageStageAnalyzer
 VELA008 | Vela.Usage | Error | DuplicateStepTriggerAnalyzer
 VELA009 | Vela.Usage | Error | HasChangedPreImageAnalyzer
+VELA010 | Vela.Usage | Error | RelationshipColumnSelectorAnalyzer

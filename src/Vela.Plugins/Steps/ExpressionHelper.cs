@@ -25,6 +25,7 @@ internal static class ExpressionHelper
         var property = member.Member as PropertyInfo;
         if (property != null)
         {
+            EnsureNotRelationship(property);
             var attribute = property.GetCustomAttribute<AttributeLogicalNameAttribute>();
             if (attribute != null)
             {
@@ -65,6 +66,7 @@ internal static class ExpressionHelper
             throw new ArgumentException("Expression must target a property.", nameof(expression));
         }
 
+        EnsureNotRelationship(property);
         var attribute = property.GetCustomAttribute<AttributeLogicalNameAttribute>();
         return attribute?.LogicalName ?? property.Name.ToLowerInvariant();
     }
@@ -120,5 +122,22 @@ internal static class ExpressionHelper
         }
 
         return body as MemberExpression;
+    }
+
+    // A generated relationship navigation property carries [RelationshipSchemaName(...)] (not a column). Selecting
+    // it as a column (FilterOn/Select/Where/WithPreImage/OrderBy) would otherwise silently fall back to the
+    // property name and build a bogus column, so reject it with a clear message. Matched by attribute name so this
+    // works without a type reference to the generated, per-namespace attribute.
+    private static void EnsureNotRelationship(PropertyInfo property)
+    {
+        foreach (var attribute in property.GetCustomAttributes())
+        {
+            if (attribute.GetType().Name == "RelationshipSchemaNameAttribute")
+            {
+                throw new ArgumentException(
+                    $"'{property.Name}' is a relationship, not a column. Load related records with a relationship-aware read or deep insert; only columns can be used in FilterOn/Select/Where/WithPreImage/OrderBy.",
+                    nameof(property));
+            }
+        }
     }
 }

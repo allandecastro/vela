@@ -24,6 +24,24 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added (CLI)
+
+- Typed relationship navigation properties in generated early-bound models (issue #207, first slice). `vela models`
+  now fetches relationship metadata and emits, in the same class file, a typed N:1 parent (single-target lookups
+  only) and typed 1:N child collections, each annotated with `[RelationshipSchemaName(...)]`. A relationship whose
+  target table is not in the generated set, and polymorphic / Customer / Owner lookups, keep their raw
+  `EntityReference` (no typed nav).
+
+### Added (Framework)
+
+- Typed deep insert: `service.CreateWithRelated(entity)` (in `Vela.Context`) creates a record together with the
+  related records held in its generated 1:N navigation collections, in one transaction, so you never hand-write a
+  `Relationship` schema string. The in-memory test harness supports the deep insert (declare the relationship with
+  `WithRelationship`/`WithParentalRelationship`).
+- New analyzer **VELA010** (error): a generated relationship navigation property used in a column selector
+  (`FilterOn`/`Select`/`Where`/`OrderBy`/`WithPreImage`/`WithPostImage`). The runtime column resolvers now also
+  reject a relationship property with a clear error instead of silently building a bogus column.
+
 ## [0.23.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.23.0` (all three packages ship at this version).
