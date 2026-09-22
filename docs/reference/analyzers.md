@@ -16,6 +16,9 @@ author get told what is valid up front.
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
 | [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
 | [VELA006](#vela006) | Vela.Usage | Warning | Prefer the typed trigger (`OnCreate()`) over `OnMessage("create")` for a modelled message |
+| [VELA007](#vela007) | Vela.Usage | Error | A pre-image on Create, or a post-image on Delete (the message can never provide it) |
+| [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share the same trigger (message + stage + mode) |
+| [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
 
 Plus the [typed image projection generator](#typed-image-projection-generator) that ships in the same assembly.
 
@@ -76,6 +79,35 @@ rules this is a **warning**, not an error: `OnMessage("...")` stays valid and is
 does not model (only a literal message string with a modelled name is flagged).
 
 **Fix:** switch to the typed trigger, for example `OnCreate()` instead of `OnMessage("create")`.
+
+## VELA007
+
+**Do not register an image the message can never provide.** A **pre-image on a Create** step (there is no prior row
+state before a create) and a **post-image on a Delete** step (the row no longer exists afterwards) are impossible,
+and the runtime rejects them. The typed triggers already prevent this through the builder's type-state, so this
+targets the permissive `OnMessage("create"|"delete")` path where `WithPreImage(...)` / `WithPostImage(...)` are
+exposed unconditionally. The message is read from the chain; a message Vela does not model is left alone.
+
+**Fix:** use the image the message supports - a post-image for Create, a pre-image for Delete - or drop the image.
+
+## VELA008
+
+**Register at most one step per trigger in a plugin.** Dataverse allows a single step per trigger - message + stage
++ mode + entity - and the runtime throws at registration when a plugin defines two. Two `RegisterStep()` chains in
+the same `RegisterPluginSteps()` with the same message, stage, and mode are flagged (the entity is fixed per
+plugin). Only complete chains whose message and stage are statically determinable are compared.
+
+**Fix:** merge the two steps into one (combine their filtering attributes), or move one to a different stage/mode.
+
+## VELA009
+
+**`HasChanged` / `HasAnyChanged` need a registered pre-image.** They diff the `Target` against the step's pre-image
+and throw at runtime when none is registered. This is flagged only in the unambiguous case: the handler is an
+instance method bound to exactly one `RegisterStep()` chain in the same class, that chain has no `WithPreImage(...)`,
+and the call uses the default pre-image alias. Lambda handlers, handlers shared across steps, and custom aliases are
+left alone to avoid false positives.
+
+**Fix:** add `WithPreImage(...)` (the columns you compare) to the step, or remove the change check.
 
 ## Typed image projection generator
 
