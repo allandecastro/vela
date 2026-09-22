@@ -24,7 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Added (framework)
+## [0.21.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.21.0` (all three packages ship at this version).
+
+### Added
 
 - Telemetry: two more default Application Insights dimensions on every log - `PluginType` (the plugin/Custom API
   class) and `Method` (the handler method currently running). A `BeginLogScope(...)` also now indents the plug-in
