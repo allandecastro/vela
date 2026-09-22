@@ -24,18 +24,12 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Added (CLI)
+## [0.24.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
-- Typed relationship navigation properties in generated early-bound models (issue #207). `vela models` fetches
-  relationship metadata and emits, in the same class file, a typed N:1 parent (single-target lookups only), typed
-  1:N child collections, and typed **N:N** collections (marked `ManyToMany`), each annotated with
-  `[RelationshipSchemaName(...)]`. A relationship whose target table is not in the generated set, polymorphic /
-  Customer / Owner lookups, and self-referential N:N are skipped (kept as the raw `EntityReference`, or no nav).
-- Alternate-key factories are now **strongly typed**: `Account.ByAccountNumberKey(...)` takes one typed parameter
-  per key column (a composite key takes several, in declared order) instead of `params object[]`, so a wrong type
-  or arity fails at compile time. Still returns a key-based `EntityReference`.
+Framework line, published as `framework-v0.24.0` (all three packages ship at this version). Completes typed
+relationships (#207) and adds alternate-key read/upsert.
 
-### Added (Framework)
+### Added
 
 - Typed deep insert: `service.CreateWithRelated(entity)` (in `Vela.Context`) creates a record together with the
   related records held in its generated 1:N navigation collections, in one transaction, so you never hand-write a
@@ -57,6 +51,21 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `service.UpsertByKey(entity, keyRef)` create-or-updates by business key in one call, returning
   `(Created, Target)`. The in-memory test harness now resolves key-based references and executes Upsert
   (create-or-update matched by primary id or alternate key).
+
+## [0.14.0] - 2026-09-22 (Vela.Cli)
+
+CLI line, published as `cli-v0.14.0`. Generation for typed relationships (#207) and typed alternate keys.
+
+### Added
+
+- Typed relationship navigation properties in generated early-bound models (issue #207). `vela models` fetches
+  relationship metadata and emits, in the same class file, a typed N:1 parent (single-target lookups only), typed
+  1:N child collections, and typed **N:N** collections (marked `ManyToMany`), each annotated with
+  `[RelationshipSchemaName(...)]`. A relationship whose target table is not in the generated set, polymorphic /
+  Customer / Owner lookups, and self-referential N:N are skipped (kept as the raw `EntityReference`, or no nav).
+- Alternate-key factories are now **strongly typed**: `Account.ByAccountNumberKey(...)` takes one typed parameter
+  per key column (a composite key takes several, in declared order) instead of `params object[]`, so a wrong type
+  or arity fails at compile time. Still returns a key-based `EntityReference`.
 
 ## [0.23.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
