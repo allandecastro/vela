@@ -20,12 +20,15 @@
     <ProjectReference Include="..\Vela.Messages\Vela.Messages.csproj" />
   </ItemGroup>
 
-  <!-- Ship the Vela.Analyzers Roslyn analyzer inside this package (analyzers/dotnet/cs) so every consumer gets the
-       column-selector diagnostic (VELA001) automatically, with no extra reference. The ProjectReference (no output
-       assembly) sequences the analyzer build before this project is packed. -->
+  <!-- Ship the Vela.Analyzers Roslyn analyzers and Vela.CodeFixes code fixes inside this package
+       (analyzers/dotnet/cs) so every consumer gets the diagnostics and IDE quick-fixes automatically, with no extra
+       reference. The ProjectReferences (no output assembly) sequence those builds before this project is packed. -->
   <ItemGroup>
     <ProjectReference Include="..\Vela.Analyzers\Vela.Analyzers.csproj" ReferenceOutputAssembly="false" />
     <None Include="..\Vela.Analyzers\bin\$(Configuration)\netstandard2.0\Vela.Analyzers.dll"
+          Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <ProjectReference Include="..\Vela.CodeFixes\Vela.CodeFixes.csproj" ReferenceOutputAssembly="false" />
+    <None Include="..\Vela.CodeFixes\bin\$(Configuration)\netstandard2.0\Vela.CodeFixes.dll"
           Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 

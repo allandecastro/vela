@@ -24,6 +24,16 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added (Framework)
+
+- Three plugin-authoring analyzers: **VELA011** (warning) a writable field (mutable state) on a plugin type - the
+  sandbox reuses instances, so it leaks state and races; **VELA012** (warning) throwing an exception other than
+  `InvalidPluginExecutionException` from a plugin, which hides the message from the caller; **VELA013** (warning)
+  `new ColumnSet(true)` retrieving every column.
+- IDE **code fixes** for VELA003, VELA004, VELA005, VELA006, VELA007 and VELA012, in a new `Vela.CodeFixes`
+  assembly bundled inside `Vela.Plugins` alongside the analyzers (no extra reference). For example VELA006 rewrites
+  `OnMessage("create")` to `OnCreate()`, and VELA012 changes the thrown type to `InvalidPluginExecutionException`.
+
 ## [0.24.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.24.0` (all three packages ship at this version). Completes typed

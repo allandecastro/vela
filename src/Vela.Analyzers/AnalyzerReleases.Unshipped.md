@@ -15,3 +15,6 @@ VELA007 | Vela.Usage | Error | ImageStageAnalyzer
 VELA008 | Vela.Usage | Error | DuplicateStepTriggerAnalyzer
 VELA009 | Vela.Usage | Error | HasChangedPreImageAnalyzer
 VELA010 | Vela.Usage | Error | RelationshipColumnSelectorAnalyzer
+VELA011 | Vela.Reliability | Warning | MutablePluginStateAnalyzer
+VELA012 | Vela.Usage | Warning | PluginExceptionTypeAnalyzer
+VELA013 | Vela.Performance | Warning | RetrieveAllColumnsAnalyzer
