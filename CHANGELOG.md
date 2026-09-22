@@ -24,6 +24,15 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added (Framework)
+
+- Typed image projections now cover the permissive `OnMessage("...")` / `OnMessage<TMarker>()` trigger path, not
+  just the guided (`OnCreate()`...) and typed (`On<TRequest>()`) paths. A string-triggered step that captures
+  explicit `WithPreImage`/`WithPostImage` columns gets the same compile-safe `ctx.PreImageAs<T>()` /
+  `ctx.PostImageAs<T>()` projection. The projection is named from the message (a string literal is capitalized
+  into the name segment, a marker type uses its type name); a message passed as a variable is not statically
+  known, so the generator skips it and the untyped image is kept.
+
 ## [0.22.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.22.0` (all three packages ship at this version).
