@@ -131,9 +131,9 @@ internal sealed record ScaffoldOptions(
             return false;
         }
 
-        if (!SolutionNamePattern.IsMatch(name))
+        if (!IsValidSolutionName(name))
         {
-            exitCode = Fail($"Invalid solution name '{name}'. Use letters, digits, '.', '-' or '_'.", ExitInvalidArguments, includeUsage: false);
+            exitCode = Fail($"Invalid solution name '{name}'. Use letters, digits, '.', '-' or '_', and avoid Windows reserved names (CON, PRN, AUX, NUL, COM1-9, LPT1-9).", ExitInvalidArguments, includeUsage: false);
             return false;
         }
 

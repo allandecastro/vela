@@ -304,7 +304,9 @@ public static class ModelGenerator
             AttributeTypeCode.Boolean => "bool",
             AttributeTypeCode.DateTime => "DateTime",
             AttributeTypeCode.Uniqueidentifier => "Guid",
-            AttributeTypeCode.Lookup or AttributeTypeCode.Customer or AttributeTypeCode.Owner => "EntityReference",
+            // An alternate key on a lookup is keyed on the referenced record's Guid, not the EntityReference, so the
+            // factory accepts a Guid (matching how Dataverse indexes the key).
+            AttributeTypeCode.Lookup or AttributeTypeCode.Customer or AttributeTypeCode.Owner => "Guid",
             AttributeTypeCode.Picklist or AttributeTypeCode.State or AttributeTypeCode.Status => "OptionSetValue",
             _ => "object",
         };

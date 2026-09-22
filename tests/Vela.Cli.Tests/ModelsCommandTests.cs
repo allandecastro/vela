@@ -17,6 +17,13 @@ public class ModelsCommandTests
         Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--soluton", "Zava"]));
     }
 
+    [Fact]   // CLI-004: --verify is C#-model only; combining it with the write-only TS scopes must fail, not write.
+    public void Run_RejectsVerify_WithFormsOrTables_BeforeConnecting()
+    {
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--forms", "--verify", "--solution", "Zava"]));
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(["--tables", "--verify", "--solution", "Zava"]));
+    }
+
     [Fact]
     public void Run_Help_PrintsUsage_AndSucceeds()
     {
