@@ -20,6 +20,13 @@ author get told what is valid up front.
 | [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share the same trigger (message + stage + mode) |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
 | [VELA010](#vela010) | Vela.Usage | Error | A generated relationship navigation property used in a column selector |
+| [VELA011](#vela011) | Vela.Reliability | Warning | A writable field (mutable state) on a plugin type |
+| [VELA012](#vela012) | Vela.Usage | Warning | Throwing an exception other than `InvalidPluginExecutionException` from a plugin |
+| [VELA013](#vela013) | Vela.Performance | Warning | `new ColumnSet(true)` retrieves every column |
+
+Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
+VELA006, VELA007 and VELA012. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins` alongside the
+analyzers.
 
 Plus the [typed image projection generator](#typed-image-projection-generator) that ships in the same assembly.
 
@@ -121,6 +128,30 @@ build a bogus column from the property name). Only Vela's own selectors are chec
 
 **Fix:** select the lookup foreign-key column instead (for example `a.PrimaryContactId`, not `a.PrimaryContact`),
 or load related records with a deep insert / relationship-aware read rather than a column selector.
+
+## VELA011
+
+**Mutable plugin state.** A writable field on a plugin / Custom API type is shared state: the Dataverse sandbox
+caches and reuses plugin instances across executions and calls them concurrently, so a mutable field leaks data
+between unrelated operations and races. Only writable fields are flagged; `const`, `readonly` and `static readonly`
+(immutable configuration) are fine.
+
+**Fix:** keep per-execution state in locals or on the execution context; make constants `const` / `readonly`.
+
+## VELA012
+
+**Throw `InvalidPluginExecutionException`.** Only `InvalidPluginExecutionException` surfaces its message to the
+caller (and the UI); any other exception thrown from a plugin is reported as a generic, unhelpful error. Rethrows
+(`throw;` / `throw ex;`) are left alone. A code fix changes the thrown type, keeping the arguments.
+
+**Fix:** `throw new InvalidPluginExecutionException("...")` for user-facing failures.
+
+## VELA013
+
+**Retrieving all columns.** `new ColumnSet(true)` fetches every column, moving far more data than a plugin needs.
+Request only the columns you use (the explicit `SelectAll()` on a typed query states the intent and is left alone).
+
+**Fix:** pass the specific columns to `ColumnSet`, or use the typed `Select(...)`.
 
 ## Typed image projection generator
 

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Roslyn code fixes target netstandard2.0 so they load in every IDE. Shipped inside the Vela.Plugins
+         package (analyzers/dotnet/cs) alongside Vela.Analyzers, not as its own package. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>Vela.CodeFixes</RootNamespace>
+    <AssemblyName>Vela.CodeFixes</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
