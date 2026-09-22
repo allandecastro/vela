@@ -22,6 +22,7 @@ namespace Vela.CodeFixes
         public override async Task RegisterCodeFixesAsync(CodeFixContext context)
         {
             SyntaxNode? root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
+            SemanticModel? model = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
             if (root == null)
             {
                 return;
@@ -32,14 +33,29 @@ namespace Vela.CodeFixes
                 SyntaxNode handler = root.FindNode(diagnostic.Location.SourceSpan);
                 // The handler is a method name (StaticHandler) or member access (Handlers.OnCreate); the method
                 // name is the last simple name. FindNode may return the enclosing argument, so search within it.
-                string? name = handler.DescendantNodesAndSelf().OfType<SimpleNameSyntax>().LastOrDefault()?.Identifier.ValueText;
-                if (name == null)
+                SimpleNameSyntax? nameNode = handler.DescendantNodesAndSelf().OfType<SimpleNameSyntax>().LastOrDefault();
+                if (nameNode == null)
                 {
                     continue;
                 }
 
-                MethodDeclarationSyntax? declaration = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                    .FirstOrDefault(d => d.Identifier.ValueText == name && d.Modifiers.Any(SyntaxKind.StaticKeyword));
+                // Prefer the bound method symbol (correct with overloads); fall back to a name match. A method group
+                // resolves via CandidateSymbols, not Symbol.
+                MethodDeclarationSyntax? declaration = null;
+                if (model != null)
+                {
+                    SymbolInfo info = model.GetSymbolInfo(nameNode, context.CancellationToken);
+                    if ((info.Symbol ?? info.CandidateSymbols.FirstOrDefault()) is IMethodSymbol method)
+                    {
+                        declaration = method.DeclaringSyntaxReferences
+                            .Select(r => r.GetSyntax(context.CancellationToken))
+                            .OfType<MethodDeclarationSyntax>()
+                            .FirstOrDefault(d => d.Modifiers.Any(SyntaxKind.StaticKeyword));
+                    }
+                }
+
+                declaration ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                    .FirstOrDefault(d => d.Identifier.ValueText == nameNode.Identifier.ValueText && d.Modifiers.Any(SyntaxKind.StaticKeyword));
                 if (declaration == null)
                 {
                     continue;
