@@ -57,6 +57,18 @@ jobs:
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
           -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=87
           -p:Include="[Vela.Testing]*"
+      - name: Coverage gate (branch) — analyzers
+        run: >
+          dotnet test tests/Vela.Analyzers.Tests/Vela.Analyzers.Tests.csproj -c Release
+          -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
+          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=78
+          -p:Include="[Vela.Analyzers]*"
+      - name: Coverage gate (branch) — code fixes
+        run: >
+          dotnet test tests/Vela.CodeFixes.Tests/Vela.CodeFixes.Tests.csproj -c Release
+          -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
+          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=65
+          -p:Include="[Vela.CodeFixes]*"
 
       # Vela.Plugins (the plugin runtime) is exercised by BOTH Vela.Tests and Vela.Testing.Tests, so its
       # coverage is the merge of the two: collect the first run to JSON, then merge the second over it and

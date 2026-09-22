@@ -48,8 +48,12 @@ namespace Vela.Steps
             return attribute?.GetType().GetProperty("SchemaName")?.GetValue(attribute) as string;
         }
 
+        // Matched by simple name because the generated attribute lives in the consumer's namespace. The SDK's own
+        // Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute (emitted by pac modelbuilder) shares that name, so it is
+        // excluded - a pac-modelbuilder model mixed with Vela is never mistaken for a Vela relationship nav.
         private static Attribute? GetAttribute(PropertyInfo property) =>
-            property.GetCustomAttributes().FirstOrDefault(a => a.GetType().Name == "RelationshipSchemaNameAttribute");
+            property.GetCustomAttributes().FirstOrDefault(a =>
+                a.GetType().Name == "RelationshipSchemaNameAttribute" && a.GetType().Namespace != "Microsoft.Xrm.Sdk");
 
         private static RelationshipNav[] Build(Type type)
         {

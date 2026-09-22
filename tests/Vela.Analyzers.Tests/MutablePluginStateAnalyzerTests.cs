@@ -10,6 +10,7 @@ public sealed class MutablePluginStateAnalyzerTests
 {
     private const string Harness = @"
 namespace Microsoft.Xrm.Sdk { public interface IPlugin { } }
+namespace Vela.Plugin { public abstract class EntityPluginBase<T> { } }
 ";
 
     private static DiagnosticResult Expected(string field) =>
@@ -61,6 +62,40 @@ namespace Demo
         private const int Max = 5;
         private readonly int _id = 1;
         private static readonly string Name = ""x"";
+        public void Execute(System.IServiceProvider sp) { }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_writable_field_on_a_Vela_base_class_plugin()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class Account { }
+    public sealed class MyPlugin : EntityPluginBase<Account>
+    {
+        private int {|#0:_count|};
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected("_count"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_mutable_auto_property()
+    {
+        // A writable auto-property's backing field is compiler-generated (AssociatedSymbol set), so it is not
+        // flagged - only plain writable fields are.
+        string code = Harness + @"
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin : IPlugin
+    {
+        public int Count { get; set; }
         public void Execute(System.IServiceProvider sp) { }
     }
 }";

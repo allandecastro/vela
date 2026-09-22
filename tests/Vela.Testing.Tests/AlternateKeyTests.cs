@@ -65,6 +65,23 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void RetrieveByKey_and_UpsertByKey_work_with_a_composite_key()
+        {
+            InMemoryOrganizationService service = new InMemoryOrganizationService().WithAlternateKey("account", "code", "region");
+            Guid id = service.Create(new Entity("account") { ["code"] = "C1", ["region"] = "EU", ["name"] = "Old" });
+            EntityReference key = new EntityReference("account", new KeyAttributeCollection { { "code", "C1" }, { "region", "EU" } });
+
+            DeepAccount got = service.RetrieveByKey<DeepAccount>(key, a => a.Name);
+            Assert.Equal(id, got.Id);
+            Assert.Equal("Old", got.Name);
+
+            (bool created, EntityReference reference) = service.UpsertByKey(new DeepAccount { Name = "New" }, key);
+            Assert.False(created);
+            Assert.Equal(id, reference.Id);
+            Assert.Equal("New", service.Retrieve("account", id, new ColumnSet("name")).GetAttributeValue<string>("name"));
+        }
+
+        [Fact]
         public void UpsertByKey_updates_the_existing_record_when_the_key_matches()
         {
             InMemoryOrganizationService service = new InMemoryOrganizationService();

@@ -76,6 +76,23 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Does_not_flag_a_subclass_of_InvalidPluginExecutionException()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    public class MyPluginException : InvalidPluginExecutionException { public MyPluginException(string m) : base(m) { } }
+    public class MyPlugin : IPlugin
+    {
+        public void Execute(IServiceProvider sp) { throw new MyPluginException(""bad""); }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
     public async Task Does_not_flag_a_throw_outside_a_plugin()
     {
         string code = Harness + @"
