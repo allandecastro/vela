@@ -24,7 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Added (framework)
+## [0.22.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.22.0` (all three packages ship at this version).
+
+### Added
 
 - New analyzer **VELA007** (error): a pre-image on a Create step, or a post-image on a Delete step, is rejected -
   the message can never provide it. Targets the permissive `OnMessage("create"|"delete")` path (the typed triggers
