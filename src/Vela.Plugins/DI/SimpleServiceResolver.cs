@@ -73,17 +73,17 @@ namespace Vela.DI
         /// <inheritdoc />
         public object? GetService(Type serviceType)
         {
-            if (_scopedInstances.ContainsKey(serviceType))
+            if (_scopedInstances.TryGetValue(serviceType, out object? scopedInstance))
             {
-                return _scopedInstances[serviceType];
+                return scopedInstance;
             }
 
-            if (!_factories.ContainsKey(serviceType))
+            if (!_factories.TryGetValue(serviceType, out Func<IPluginServiceResolver, object>? factory))
             {
                 return null;
             }
 
-            object service = _factories[serviceType](this);
+            object service = factory(this);
             if (_scopedRegistrations.Contains(serviceType))
             {
                 _scopedInstances[serviceType] = service;

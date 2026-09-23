@@ -22,9 +22,11 @@ namespace Vela.Steps
         /// <summary>
         /// Copies related records from <paramref name="source"/>'s <see cref="Entity.RelatedEntities"/> onto the
         /// typed relationship navigation properties of <paramref name="target"/>. Only relationships present on the
-        /// source are set; the rest keep their default (empty list / null). Returns <paramref name="target"/>.
+        /// source are set; the rest keep their default (empty list / null). Returns <paramref name="target"/>. A nav
+        /// that cannot be assigned by reflection (a hand-edited array or getter-only property) is skipped and, when
+        /// <paramref name="tracing"/> is supplied, traced instead of throwing a raw reflection error.
         /// </summary>
-        public static Entity Hydrate(Entity source, Entity target)
+        public static Entity Hydrate(Entity source, Entity target, ITracingService? tracing = null)
         {
             if (source == null || target == null)
             {
@@ -36,6 +38,17 @@ namespace Vela.Steps
                 Relationship relationship = new Relationship(nav.SchemaName);
                 if (!source.RelatedEntities.Contains(relationship))
                 {
+                    continue;
+                }
+
+                if (!nav.IsHydratable)
+                {
+                    // A generated nav is a settable List&lt;T&gt;/parent; a hand-edited array or getter-only nav
+                    // cannot be filled by reflection, so skip it (trace) rather than fail the whole read.
+                    tracing?.Trace(
+                        "RelationshipHydrator: navigation '{0}' ({1}) skipped - property is not a writable, list-assignable relationship nav.",
+                        nav.Property.Name,
+                        nav.SchemaName);
                     continue;
                 }
 

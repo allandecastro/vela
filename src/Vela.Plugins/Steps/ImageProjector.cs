@@ -22,9 +22,12 @@ namespace Vela.Steps
         /// Projects <paramref name="image"/> onto a new <typeparamref name="TImg"/>. Returns <c>null</c> when the
         /// image is absent (mirroring the nullable early-bound <c>ctx.PreImage</c>/<c>ctx.PostImage</c>). Only
         /// attributes present on both the image and the projection are copied; the value is copied as-is (the
-        /// generated property type matches the early-bound column type), so no coercion is needed.
+        /// generated property type matches the early-bound column type), so no coercion is needed. An attribute whose
+        /// runtime value type does not match the projection property (for example after a metadata change since the
+        /// model was generated) is skipped and, when <paramref name="tracing"/> is supplied, traced so the drop is
+        /// diagnosable rather than a silent <c>null</c>.
         /// </summary>
-        public static TImg? Project<TImg>(Entity? image) where TImg : class, new()
+        public static TImg? Project<TImg>(Entity? image, ITracingService? tracing = null) where TImg : class, new()
         {
             if (image == null)
             {
@@ -34,12 +37,22 @@ namespace Vela.Steps
             TImg target = new TImg();
             foreach (KeyValuePair<PropertyInfo, string> entry in GetMap(typeof(TImg)))
             {
-                if (image.Attributes.TryGetValue(entry.Value, out object? value) &&
-                    value != null &&
-                    entry.Key.PropertyType.IsInstanceOfType(value))
+                if (!image.Attributes.TryGetValue(entry.Value, out object? value) || value == null)
                 {
-                    entry.Key.SetValue(target, value);
+                    continue;
                 }
+
+                if (!entry.Key.PropertyType.IsInstanceOfType(value))
+                {
+                    tracing?.Trace(
+                        "ImageProjector: attribute '{0}' skipped - expected {1} but the image value was {2}.",
+                        entry.Value,
+                        entry.Key.PropertyType.FullName,
+                        value.GetType().FullName);
+                    continue;
+                }
+
+                entry.Key.SetValue(target, value);
             }
 
             return target;
