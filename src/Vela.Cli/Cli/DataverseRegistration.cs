@@ -91,8 +91,17 @@ internal static partial class DataverseRegistration
         Diagnostics: diagnostics.ToArray());
 }
 
+    // The SDK's ServiceClient defaults MaxConnectionTimeout to 4 minutes. On a large org the up-front read
+    // (plugin steps, custom APIs, and especially the environment-wide rank-check read of
+    // sdkmessageprocessingstep) can exceed that, so raise the effective default to 10 minutes and let callers
+    // override it with --timeout. MaxConnectionTimeout is a static (process-wide) TimeSpan, so it is set once
+    // here before any ServiceClient is constructed.
+    private const int DefaultConnectionTimeoutMinutes = 10;
+
     internal static ServiceClient CreateDataverseClient(SharedOptions options)
 {
+    ServiceClient.MaxConnectionTimeout = TimeSpan.FromMinutes(options.TimeoutMinutes ?? DefaultConnectionTimeoutMinutes);
+
     if (!string.IsNullOrEmpty(options.OAuthUrl) && options.OAuthToken != null)
     {
         string token = options.OAuthToken;

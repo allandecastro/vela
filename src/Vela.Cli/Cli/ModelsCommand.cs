@@ -255,6 +255,11 @@ internal static class ModelsCommand
             return exitCode;
         }
 
+        if (!TryReadTimeoutMinutes(args, out int? timeoutMinutes, out int timeoutExit))
+        {
+            return timeoutExit;
+        }
+
         SharedOptions options = new SharedOptions(
             PackagePaths: [],
             PackageAssembly: null,
@@ -267,7 +272,8 @@ internal static class ModelsCommand
             AutoApprove: false,
             Interactive: interactive,
             Strict: false,
-            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
+            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"),
+            TimeoutMinutes: timeoutMinutes);
 
         try
         {
@@ -410,6 +416,11 @@ internal static class ModelsCommand
             return exitCode;
         }
 
+        if (!TryReadTimeoutMinutes(args, out int? timeoutMinutes, out int timeoutExit))
+        {
+            return timeoutExit;
+        }
+
         SharedOptions options = new SharedOptions(
             PackagePaths: [],
             PackageAssembly: null,
@@ -422,7 +433,8 @@ internal static class ModelsCommand
             AutoApprove: false,
             Interactive: interactive,
             Strict: false,
-            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
+            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"),
+            TimeoutMinutes: timeoutMinutes);
 
         try
         {
@@ -585,6 +597,11 @@ internal static class ModelsCommand
             return exitCode;
         }
 
+        if (!TryReadTimeoutMinutes(args, out int? timeoutMinutes, out int timeoutExit))
+        {
+            return timeoutExit;
+        }
+
         SharedOptions options = new SharedOptions(
             PackagePaths: [],
             PackageAssembly: null,
@@ -597,7 +614,8 @@ internal static class ModelsCommand
             AutoApprove: false,
             Interactive: interactive,
             Strict: false,
-            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
+            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"),
+            TimeoutMinutes: timeoutMinutes);
 
         try
         {
@@ -1390,5 +1408,6 @@ internal static class ModelsCommand
         Console.WriteLine("  --no-annotations          omit DataAnnotations ([StringLength]/[Range])");
         Console.WriteLine("  --overwrite               overwrite existing files");
         Console.WriteLine("  connection: --connection-string | --url + --tenant-id + --client-id + --client-secret | --interactive");
+        Console.WriteLine("  --timeout <minutes>       max Dataverse connection timeout in minutes (1-60, default 10; raise for very large orgs)");
     }
 }
