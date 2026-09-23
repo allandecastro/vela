@@ -58,7 +58,8 @@ namespace Vela.Testing.Tests
             Guid accountId = Guid.NewGuid();
             Guid contactId = Guid.NewGuid();
             InMemoryOrganizationService crm = new InMemoryOrganizationService()
-                .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid");
+                .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid")
+                .Seed(new Entity("account") { Id = accountId }, new Entity("contact") { Id = contactId });
 
             // Caller is the SECOND entity (contact) -> its lookup column is the second attribute.
             crm.Associate("contact", contactId, new Relationship("account_contacts"),
@@ -75,7 +76,8 @@ namespace Vela.Testing.Tests
             Guid parentId = Guid.NewGuid();
             Guid childId = Guid.NewGuid();
             InMemoryOrganizationService crm = new InMemoryOrganizationService()
-                .WithManyToMany("account_parent", "account_hierarchy", "account", "parentid", "account", "childid");
+                .WithManyToMany("account_parent", "account_hierarchy", "account", "parentid", "account", "childid")
+                .Seed(new Entity("account") { Id = parentId }, new Entity("account") { Id = childId });
 
             crm.Associate("account", parentId, new Relationship("account_parent"),
                 new EntityReferenceCollection { new EntityReference("account", childId) });

@@ -50,7 +50,8 @@ namespace Vela.Testing.Tests
             Guid accountId = Guid.NewGuid();
             Guid contactId = Guid.NewGuid();
             PluginPipeline pipeline = PluginPipeline.Empty()
-                .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid");
+                .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid")
+                .Seed(new Entity("account") { Id = accountId }, new Entity("contact") { Id = contactId });
 
             pipeline.Service.Associate("account", accountId, new Relationship("account_contacts"),
                 new EntityReferenceCollection { new EntityReference("contact", contactId) });

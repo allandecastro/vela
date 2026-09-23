@@ -463,8 +463,11 @@ namespace Vela.Testing
                 OneToManyRegistry.OneToMany relationship = ResolveOneToManyForDeepInsert(pair.Key.SchemaName, parentEntity, childEntity);
                 foreach (Entity child in collection.Entities)
                 {
-                    child[relationship.ReferencingAttribute] = new EntityReference(parentEntity, parentId);
-                    Create(child);
+                    // Clone before stamping the parent FK so the deep insert never mutates the caller's child
+                    // entities (a real service round-trips copies, leaving the request graph untouched).
+                    Entity toCreate = EntityValues.Clone(child);
+                    toCreate[relationship.ReferencingAttribute] = new EntityReference(parentEntity, parentId);
+                    Create(toCreate);
                 }
             }
         }
@@ -664,18 +667,23 @@ namespace Vela.Testing
                 if (TryResolveManyToMany(pair.Key.SchemaName, out RelationshipRegistry.ManyToMany m2m))
                 {
                     (string callerAttribute, string relatedAttribute) = m2m.AttributesFor(entityName);
-                    List<Entity> associated = new List<Entity>();
+                    List<object> associatedIds = new List<object>();
                     foreach (Entity row in Table(m2m.IntersectEntity).Values)
                     {
                         if (EntityValues.AreEqual(EntityValues.GetValue(row, callerAttribute), id) &&
                             EntityValues.GetValue(row, relatedAttribute) is EntityReference relatedRef &&
                             Table(otherEntity).ContainsKey(relatedRef.Id))
                         {
-                            associated.Add(Retrieve(otherEntity, relatedRef.Id, columns));
+                            associatedIds.Add(relatedRef.Id);
                         }
                     }
 
-                    entity.RelatedEntities[pair.Key] = new EntityCollection(associated);
+                    // Materialize the associated records through the same query path as RetrieveMultiple so the
+                    // child query's Criteria/Orders/TopCount/paging are honoured (an empty set yields no rows).
+                    QueryExpression associatedQuery = new QueryExpression(otherEntity) { ColumnSet = columns };
+                    associatedQuery.Criteria.AddCondition(otherEntity + "id", ConditionOperator.In, associatedIds.ToArray());
+                    ApplyChildQueryShape(associatedQuery, childQuery);
+                    entity.RelatedEntities[pair.Key] = RetrieveMultiple(associatedQuery);
                     continue;
                 }
 
@@ -691,6 +699,7 @@ namespace Vela.Testing
                 {
                     QueryExpression query = new QueryExpression(otherEntity) { ColumnSet = columns };
                     query.Criteria.AddCondition(oneToMany.ReferencingAttribute, ConditionOperator.Equal, id);
+                    ApplyChildQueryShape(query, childQuery);
                     entity.RelatedEntities[pair.Key] = RetrieveMultiple(query);
                     continue;
                 }
@@ -707,10 +716,31 @@ namespace Vela.Testing
                     stored.GetAttributeValue<EntityReference>(manyToOne.ReferencingAttribute) is EntityReference parentRef &&
                     Table(otherEntity).ContainsKey(parentRef.Id))
                 {
-                    Entity parent = Retrieve(otherEntity, parentRef.Id, columns);
-                    entity.RelatedEntities[pair.Key] = new EntityCollection(new List<Entity> { parent });
+                    // Run through the query path so the child query's Criteria/Orders/paging apply to the parent too
+                    // (e.g. a Criteria that the parent fails to match filters it out, as it does on a real org).
+                    QueryExpression parentQuery = new QueryExpression(otherEntity) { ColumnSet = columns };
+                    parentQuery.Criteria.AddCondition(otherEntity + "id", ConditionOperator.Equal, parentRef.Id);
+                    ApplyChildQueryShape(parentQuery, childQuery);
+                    entity.RelatedEntities[pair.Key] = RetrieveMultiple(parentQuery);
                 }
             }
+        }
+
+        // Copies a related-entities child query's shape - its Criteria (nested under the fake's own relationship
+        // filter so the caller's query object is never mutated), Orders, TopCount, paging and Distinct - onto the
+        // query the fake builds to materialize the relation, so Include honours the child query like a real org.
+        private static void ApplyChildQueryShape(QueryExpression built, QueryExpression childQuery)
+        {
+            if (childQuery.Criteria != null &&
+                (childQuery.Criteria.Conditions.Count > 0 || childQuery.Criteria.Filters.Count > 0))
+            {
+                built.Criteria.AddFilter(childQuery.Criteria);
+            }
+
+            built.Orders.AddRange(childQuery.Orders);
+            built.TopCount = childQuery.TopCount;
+            built.PageInfo = childQuery.PageInfo;
+            built.Distinct = childQuery.Distinct;
         }
 
         // Resolves a write target that identifies its row by alternate key (Id empty + KeyAttributes) to a concrete
@@ -1150,7 +1180,10 @@ namespace Vela.Testing
                     items.Add(new ExecuteMultipleResponseItem
                     {
                         RequestIndex = i,
-                        Fault = new OrganizationServiceFault { Message = ex.Message },
+                        // Carry the platform fault's ErrorCode as well as its Message: real plugins branch on the
+                        // ErrorCode of a per-item fault (e.g. ObjectDoesNotExist), so a message-only fault would
+                        // hide the code the caller inspects.
+                        Fault = ExecuteMultipleItemFault(ex),
                     });
 
                     if (!continueOnError)
@@ -1164,6 +1197,23 @@ namespace Vela.Testing
             response.Results["IsFaulted"] = faulted;
             response.Results["Responses"] = items;
             return response;
+        }
+
+        // Builds the per-item fault for a faulted child request. A FaultException<OrganizationServiceFault> carries
+        // the platform fault (ErrorCode + Message) in its Detail, so that is copied through verbatim - mirroring the
+        // real ExecuteMultiple. Any other exception has no ErrorCode, so only its message is surfaced.
+        private static OrganizationServiceFault ExecuteMultipleItemFault(Exception exception)
+        {
+            if (exception is FaultException<OrganizationServiceFault> fault && fault.Detail != null)
+            {
+                return new OrganizationServiceFault
+                {
+                    ErrorCode = fault.Detail.ErrorCode,
+                    Message = fault.Detail.Message,
+                };
+            }
+
+            return new OrganizationServiceFault { Message = exception.Message };
         }
 
         // All-or-nothing: snapshot the store, run every child request, and roll back the whole batch if any throws.
@@ -1262,10 +1312,30 @@ namespace Vela.Testing
             return false;
         }
 
+        // Verifies the calling record and every related record exist before an Associate/Disassociate touches the
+        // intersect, so relating to a missing record throws the platform not-found fault (ObjectDoesNotExist) exactly
+        // as a real org does, rather than silently writing a dangling intersect row.
+        private void DemandAssociationTargetsExist(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
+        {
+            if (!Table(entityName).ContainsKey(entityId))
+            {
+                throw RecordDoesNotExist(entityName, entityId);
+            }
+
+            foreach (EntityReference related in relatedEntities)
+            {
+                if (!Table(related.LogicalName).ContainsKey(related.Id))
+                {
+                    throw RecordDoesNotExist(related.LogicalName, related.Id);
+                }
+            }
+        }
+
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
             DemandAssociationAccess(entityName, entityId, relatedEntities);
             RelationshipRegistry.ManyToMany rel = ResolveManyToMany(relationship.SchemaName);
+            DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
             EntityReference caller = new EntityReference(entityName, entityId);
@@ -1280,7 +1350,7 @@ namespace Vela.Testing
                     continue;
                 }
 
-                Entity row = new Entity(rel.IntersectEntity, Guid.NewGuid())
+                Entity row = new Entity(rel.IntersectEntity, _idSequence())
                 {
                     [callerAttribute] = caller,
                     [relatedAttribute] = related,
@@ -1297,6 +1367,7 @@ namespace Vela.Testing
         {
             DemandAssociationAccess(entityName, entityId, relatedEntities);
             RelationshipRegistry.ManyToMany rel = ResolveManyToMany(relationship.SchemaName);
+            DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
             HashSet<Guid> relatedIds = new HashSet<Guid>(relatedEntities.Select(r => r.Id));

@@ -25,6 +25,26 @@ namespace Vela.Testing
                 throw new ArgumentException("Intersect entity is required.", nameof(intersectEntity));
             }
 
+            if (string.IsNullOrWhiteSpace(firstEntity))
+            {
+                throw new ArgumentException("First entity is required.", nameof(firstEntity));
+            }
+
+            if (string.IsNullOrWhiteSpace(firstAttribute))
+            {
+                throw new ArgumentException("First intersect attribute is required.", nameof(firstAttribute));
+            }
+
+            if (string.IsNullOrWhiteSpace(secondEntity))
+            {
+                throw new ArgumentException("Second entity is required.", nameof(secondEntity));
+            }
+
+            if (string.IsNullOrWhiteSpace(secondAttribute))
+            {
+                throw new ArgumentException("Second intersect attribute is required.", nameof(secondAttribute));
+            }
+
             _relationships[schemaName] = new ManyToMany(intersectEntity, firstEntity, firstAttribute, secondEntity, secondAttribute);
         }
 

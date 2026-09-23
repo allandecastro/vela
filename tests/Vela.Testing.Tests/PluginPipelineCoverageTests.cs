@@ -26,7 +26,8 @@ namespace Vela.Testing.Tests
         {
             Guid accountId = Guid.NewGuid();
             Guid contactId = Guid.NewGuid();
-            PluginPipeline pipeline = WithRelationship(PluginPipeline.Empty().Register<OnAccountAssociate>());
+            PluginPipeline pipeline = WithRelationship(PluginPipeline.Empty().Register<OnAccountAssociate>())
+                .Seed(new Entity("account") { Id = accountId }, new Entity("contact") { Id = contactId });
 
             pipeline.Service.Associate("account", accountId, new Relationship(Schema), Related(contactId));
 
@@ -39,7 +40,8 @@ namespace Vela.Testing.Tests
         {
             Guid accountId = Guid.NewGuid();
             Guid contactId = Guid.NewGuid();
-            PluginPipeline pipeline = WithRelationship(PluginPipeline.Empty().Register<OnAccountDisassociateAsync>());
+            PluginPipeline pipeline = WithRelationship(PluginPipeline.Empty().Register<OnAccountDisassociateAsync>())
+                .Seed(new Entity("account") { Id = accountId }, new Entity("contact") { Id = contactId });
 
             Relationship rel = new Relationship(Schema);
             pipeline.Service.Associate("account", accountId, rel, Related(contactId)); // no associate step registered
