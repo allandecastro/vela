@@ -29,23 +29,18 @@ namespace Vela.Messages
     }
 
     /// <summary>
-    /// Base class for a typed <b>Custom API</b> request. Dataverse names a custom API's request parameters
-    /// <c>{apiUniqueName}.{paramName}</c> (that is the value exposed by the OData operation and used in the
-    /// plugin's <c>InputParameters</c>), so this base keys the <c>Parameters</c> bag with that full name while the
-    /// authored/generated property bodies stay short (<c>get =&gt; Get&lt;Guid&gt;();</c>). Pass the API unique name to
-    /// the base constructor once. Standard SDK/typed messages keep using <see cref="TypedRequest"/> unchanged.
+    /// Base class for a typed <b>Custom API</b> request. A custom API's request parameters carry bare-identifier
+    /// uniquenames equal to their plain names, so Dataverse exposes them - and the plugin's <c>InputParameters</c>
+    /// are keyed - by that plain name. This base therefore inherits the plain-name keying of
+    /// <see cref="TypedRequest"/> (the <c>Parameters</c> bag is keyed by the property name); it only sets
+    /// <see cref="OrganizationRequest.RequestName"/> to the API unique name. Pass the API unique name to the base
+    /// constructor once. Standard SDK/typed messages keep using <see cref="TypedRequest"/> unchanged.
     /// </summary>
     public abstract class CustomApiRequest : TypedRequest
     {
         /// <summary>Creates the request and sets <see cref="OrganizationRequest.RequestName"/> to the API unique name.</summary>
         /// <param name="apiUniqueName">The custom API unique name (for example <c>publisher_MyApi</c>).</param>
         protected CustomApiRequest(string apiUniqueName) => RequestName = apiUniqueName;
-
-        /// <inheritdoc />
-        protected override T Get<T>([CallerMemberName] string name = "") => base.Get<T>($"{RequestName}.{name}");
-
-        /// <inheritdoc />
-        protected override void Set<T>(T value, [CallerMemberName] string name = "") => base.Set(value, $"{RequestName}.{name}");
     }
 
     /// <summary>
@@ -68,25 +63,19 @@ namespace Vela.Messages
     }
 
     /// <summary>
-    /// Base class for a typed <b>Custom API</b> response. Dataverse names a custom API's response properties
-    /// <c>{apiUniqueName}.{propName}.response</c> in the plugin's <c>OutputParameters</c> and in the returned
-    /// <c>Results</c>, so this base keys the <c>Results</c> bag with that full name while the authored/generated
-    /// property bodies stay short (<c>get =&gt; Get&lt;decimal&gt;();</c>). Pass the API unique name to the base
-    /// constructor once. Standard/typed responses keep using <see cref="TypedResponse"/> unchanged.
+    /// Base class for a typed <b>Custom API</b> response. A custom API's response properties carry bare-identifier
+    /// uniquenames equal to their plain names, so the plugin's <c>OutputParameters</c> and the returned
+    /// <c>Results</c> are keyed by that plain name. This base therefore inherits the plain-name keying of
+    /// <see cref="TypedResponse"/> (the <c>Results</c> bag is keyed by the property name). Pass the API unique name
+    /// to the base constructor once. Standard/typed responses keep using <see cref="TypedResponse"/> unchanged.
     /// </summary>
     public abstract class CustomApiResponse : TypedResponse
     {
-        private readonly string _apiUniqueName;
-
         /// <summary>Creates the response bound to the custom API whose response properties it maps.</summary>
         /// <param name="apiUniqueName">The custom API unique name (for example <c>publisher_MyApi</c>).</param>
-        protected CustomApiResponse(string apiUniqueName) => _apiUniqueName = apiUniqueName;
-
-        /// <inheritdoc />
-        protected override T Get<T>([CallerMemberName] string name = "") => base.Get<T>($"{_apiUniqueName}.{name}.response");
-
-        /// <inheritdoc />
-        protected override void Set<T>(T value, [CallerMemberName] string name = "") => base.Set(value, $"{_apiUniqueName}.{name}.response");
+        protected CustomApiResponse(string apiUniqueName)
+        {
+        }
     }
 
     /// <summary>A typed Create request whose <c>Target</c> is the early-bound <typeparamref name="TEntity"/>.</summary>

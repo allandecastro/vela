@@ -872,12 +872,12 @@ public class DataverseRegistrationReaderTests
 
         Entity reqParam = created.Single(e => e.LogicalName == "customapirequestparameter");
         Assert.Equal("Amount", reqParam.GetAttributeValue<string>("name"));
-        Assert.Equal("zava_DoThing.Amount", reqParam.GetAttributeValue<string>("uniquename"));
+        Assert.Equal("Amount", reqParam.GetAttributeValue<string>("uniquename")); // bare identifier, no "{api}." prefix
         Assert.Equal(SdkConstants.CustomApiParameterType.Decimal, reqParam.GetAttributeValue<OptionSetValue>("type").Value);
 
         Entity respParam = created.Single(e => e.LogicalName == "customapiresponseproperty");
         Assert.Equal("Result", respParam.GetAttributeValue<string>("name"));
-        Assert.Equal("zava_DoThing.Result.response", respParam.GetAttributeValue<string>("uniquename")); // response suffix
+        Assert.Equal("Result", respParam.GetAttributeValue<string>("uniquename")); // bare identifier, no "{api}." prefix
     }
 
     [Fact]
@@ -901,7 +901,7 @@ public class DataverseRegistrationReaderTests
         var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
         mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
             .Returns(Collection(
-                new Entity("customapirequestparameter", keepId) { ["name"] = "Keep", ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.String) }, // type matches desired: exercises update, not a type change
+                new Entity("customapirequestparameter", keepId) { ["name"] = "Keep", ["uniquename"] = "Keep", ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.String) }, // name+type+uniquename match desired: exercises update, not a self-heal or type change
                 new Entity("customapirequestparameter", dropId) { ["name"] = "Drop" }));
         mock.Setup(s => s.Update(It.IsAny<Entity>())).Callback((Entity e) => updated.Add(e));
 
