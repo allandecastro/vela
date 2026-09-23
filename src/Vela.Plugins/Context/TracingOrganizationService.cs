@@ -119,15 +119,24 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
                     request.Parameters[key] = entity.ToEntity<Entity>();
                     break;
                 case EntityCollection collection:
-                    for (int i = 0; i < collection.Entities.Count; i++)
+                    // Build a new collection of downcast copies rather than overwriting the caller's entries in
+                    // place - the request parameter often references caller-owned entities the plug-in still reads
+                    // after the Execute, so mutating them here would surprise the caller.
+                    EntityCollection sanitized = new EntityCollection
                     {
-                        Entity item = collection.Entities[i];
-                        if (item != null && item.GetType() != typeof(Entity))
-                        {
-                            collection.Entities[i] = item.ToEntity<Entity>();
-                        }
+                        EntityName = collection.EntityName,
+                        MoreRecords = collection.MoreRecords,
+                        PagingCookie = collection.PagingCookie,
+                        MinActiveRowVersion = collection.MinActiveRowVersion,
+                        TotalRecordCount = collection.TotalRecordCount,
+                        TotalRecordCountLimitExceeded = collection.TotalRecordCountLimitExceeded,
+                    };
+                    foreach (Entity item in collection.Entities)
+                    {
+                        sanitized.Entities.Add(item != null && item.GetType() != typeof(Entity) ? item.ToEntity<Entity>() : item);
                     }
 
+                    request.Parameters[key] = sanitized;
                     break;
             }
         }

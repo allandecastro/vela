@@ -13,13 +13,14 @@ namespace Vela.Steps
     /// </summary>
     internal readonly struct RelationshipNav
     {
-        public RelationshipNav(PropertyInfo property, string schemaName, bool isCollection, bool isManyToMany, Type elementType)
+        public RelationshipNav(PropertyInfo property, string schemaName, bool isCollection, bool isManyToMany, Type elementType, bool isHydratable)
         {
             Property = property;
             SchemaName = schemaName;
             IsCollection = isCollection;
             IsManyToMany = isManyToMany;
             ElementType = elementType;
+            IsHydratable = isHydratable;
         }
 
         public PropertyInfo Property { get; }
@@ -27,6 +28,11 @@ namespace Vela.Steps
         public bool IsCollection { get; }
         public bool IsManyToMany { get; }
         public Type ElementType { get; }
+
+        // True when the read hydrator can assign to this nav: a settable property whose type accepts the value the
+        // hydrator produces (a List&lt;ElementType&gt; for a collection, or an ElementType instance for a parent). A
+        // hand-edited model with an array or a getter-only nav is false and is skipped instead of throwing.
+        public bool IsHydratable { get; }
     }
 
     /// <summary>
@@ -71,7 +77,9 @@ namespace Vela.Steps
                 bool isCollection = property.PropertyType != typeof(string) &&
                     typeof(IEnumerable).IsAssignableFrom(property.PropertyType);
                 Type elementType = isCollection ? ElementTypeOf(property.PropertyType) : property.PropertyType;
-                navs.Add(new RelationshipNav(property, schemaName, isCollection, isManyToMany, elementType));
+                bool isHydratable = property.CanWrite &&
+                    (!isCollection || property.PropertyType.IsAssignableFrom(typeof(List<>).MakeGenericType(elementType)));
+                navs.Add(new RelationshipNav(property, schemaName, isCollection, isManyToMany, elementType, isHydratable));
             }
 
             return navs.ToArray();
