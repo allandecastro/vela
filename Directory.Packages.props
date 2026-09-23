@@ -3,6 +3,10 @@
        (xunit, coverlet, Moq, …) are pinned once instead of duplicated across each project. -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Apply the central PackageVersions to transitive dependencies too, so a pinned security patch (for example
+         System.Security.Cryptography.Xml below) overrides a vulnerable version pulled in transitively, in every
+         project (not only the ones that happen to reference it directly). -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <ItemGroup>
