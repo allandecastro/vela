@@ -1,2 +1,22 @@
 ; Shipped analyzer releases
 ; https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.Analyzers/ReleaseTrackingAnalyzers.Help.md
+
+## Release 0.25.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA001 | Vela.Usage | Error | ColumnSelectorAnalyzer
+VELA002 | Vela.Usage | Error | StepCompletionAnalyzer
+VELA003 | Vela.Usage | Error | DuplicateModifierAnalyzer
+VELA004 | Vela.Usage | Error | StaticHandlerAnalyzer
+VELA005 | Vela.Usage | Error | DuplicateColumnAnalyzer
+VELA006 | Vela.Usage | Warning | PreferTypedMessageAnalyzer
+VELA007 | Vela.Usage | Error | ImageStageAnalyzer
+VELA008 | Vela.Usage | Error | DuplicateStepTriggerAnalyzer
+VELA009 | Vela.Usage | Error | HasChangedPreImageAnalyzer
+VELA010 | Vela.Usage | Error | RelationshipColumnSelectorAnalyzer
+VELA011 | Vela.Reliability | Warning | MutablePluginStateAnalyzer
+VELA012 | Vela.Usage | Warning | PluginExceptionTypeAnalyzer
+VELA013 | Vela.Performance | Warning | RetrieveAllColumnsAnalyzer

@@ -291,7 +291,30 @@ namespace Vela.Analyzers
 
         private static ProjectionColumn? ResolveColumn(LambdaExpressionSyntax selector, SemanticModel model)
         {
-            if (selector.Body is not MemberAccessExpressionSyntax memberAccess ||
+            if (selector.Body is not ExpressionSyntax body)
+            {
+                return null;
+            }
+
+            // a => (object)a.Value / a => a.Value as object — see through a leading cast (CastExpression) or `as`
+            // (an AsExpression BinaryExpression) to the member access, matching ColumnSelectorAnalyzer, so a cast
+            // selector is not silently dropped (which would suppress the whole projection).
+            while (true)
+            {
+                switch (body)
+                {
+                    case CastExpressionSyntax cast:
+                        body = cast.Expression;
+                        continue;
+                    case BinaryExpressionSyntax asExpr when asExpr.IsKind(SyntaxKind.AsExpression):
+                        body = asExpr.Left;
+                        continue;
+                }
+
+                break;
+            }
+
+            if (body is not MemberAccessExpressionSyntax memberAccess ||
                 model.GetSymbolInfo(memberAccess).Symbol is not IPropertySymbol property)
             {
                 return null;
@@ -352,22 +375,67 @@ namespace Vela.Analyzers
             return result.Length == 0 || char.IsDigit(result[0]) ? "_" + result : result;
         }
 
+        // A stable string identity of a projection's captured columns, used both to collapse identical shapes and
+        // to disambiguate a name collision across distinct shapes.
+        private static string ColumnSignature(ProjectionModel model)
+            => string.Join(";", model.Columns.Select(c => c.PropertyName + ":" + c.TypeName + ":" + c.LogicalName));
+
+        // A deterministic (process-independent) FNV-1a hash rendered as 8 hex chars. string.GetHashCode is
+        // randomized per process, so it must not feed a generated type name; this keeps the disambiguated name
+        // stable across builds.
+        private static string StableHash(string value)
+        {
+            unchecked
+            {
+                const uint offset = 2166136261;
+                const uint prime = 16777619;
+                uint hash = offset;
+                foreach (char c in value)
+                {
+                    hash = (hash ^ c) * prime;
+                }
+
+                return hash.ToString("x8");
+            }
+        }
+
         private static void Emit(SourceProductionContext context, ImmutableArray<ProjectionModel> models, ParseOptions parseOptions)
         {
-            // Dedup by fully-qualified type name: identical captures (same shape reached twice) collapse to one
-            // type; distinct shapes have distinct names by construction (handler/plugin + message + stage + role).
-            HashSet<string> emitted = new HashSet<string>();
-            SortedSet<string> namespaces = new SortedSet<string>(System.StringComparer.Ordinal);
+            // Collapse genuinely-identical projections (same name AND same column shape reached twice) to one type,
+            // keyed on name + column shape. Two steps that resolve to the same name but capture different columns
+            // (for example two steps binding the same named handler with different WithPostImage columns) are NOT
+            // the same projection: they are kept distinct here and disambiguated below, so the later one is not
+            // silently dropped.
+            HashSet<string> seen = new HashSet<string>(System.StringComparer.Ordinal);
+            Dictionary<string, int> nameCounts = new Dictionary<string, int>(System.StringComparer.Ordinal);
+            List<ProjectionModel> distinct = new List<ProjectionModel>();
             foreach (ProjectionModel projectionModel in models)
             {
                 string fullName = projectionModel.Namespace + "." + projectionModel.TypeName;
-                if (!emitted.Add(fullName))
+                if (!seen.Add(fullName + "|" + ColumnSignature(projectionModel)))
                 {
                     continue;
                 }
 
-                namespaces.Add(projectionModel.Namespace);
-                context.AddSource(Sanitize(fullName) + ".g.cs", SourceText.From(Render(projectionModel), Encoding.UTF8));
+                distinct.Add(projectionModel);
+                nameCounts[fullName] = nameCounts.TryGetValue(fullName, out int count) ? count + 1 : 1;
+            }
+
+            SortedSet<string> namespaces = new SortedSet<string>(System.StringComparer.Ordinal);
+            foreach (ProjectionModel projectionModel in distinct)
+            {
+                string fullName = projectionModel.Namespace + "." + projectionModel.TypeName;
+                ProjectionModel toEmit = projectionModel;
+                if (nameCounts[fullName] > 1)
+                {
+                    // Name collision across distinct column shapes: append a stable hash of the shape so both
+                    // projections are emitted with unique, legal type names instead of one winning.
+                    toEmit = projectionModel.WithTypeName(projectionModel.TypeName + "_" + StableHash(ColumnSignature(projectionModel)));
+                }
+
+                string emitFullName = toEmit.Namespace + "." + toEmit.TypeName;
+                namespaces.Add(toEmit.Namespace);
+                context.AddSource(Sanitize(emitFullName) + ".g.cs", SourceText.From(Render(toEmit), Encoding.UTF8));
             }
 
             // Emit a global using per generated namespace so the projection types surface in completion (typing
@@ -414,7 +482,9 @@ namespace Vela.Analyzers
             return sb.ToString();
         }
 
-        private readonly struct ProjectionColumn
+        // Value equality (not the default ImmutableArray reference equality) so the incremental generator caches the
+        // model between keystrokes instead of re-running every edit.
+        private readonly struct ProjectionColumn : System.IEquatable<ProjectionColumn>
         {
             public ProjectionColumn(string propertyName, string typeName, string logicalName)
             {
@@ -426,9 +496,28 @@ namespace Vela.Analyzers
             public string PropertyName { get; }
             public string TypeName { get; }
             public string LogicalName { get; }
+
+            public bool Equals(ProjectionColumn other) =>
+                PropertyName == other.PropertyName && TypeName == other.TypeName && LogicalName == other.LogicalName;
+
+            public override bool Equals(object? obj) => obj is ProjectionColumn other && Equals(other);
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = 17;
+                    hash = (hash * 31) + (PropertyName?.GetHashCode() ?? 0);
+                    hash = (hash * 31) + (TypeName?.GetHashCode() ?? 0);
+                    hash = (hash * 31) + (LogicalName?.GetHashCode() ?? 0);
+                    return hash;
+                }
+            }
         }
 
-        private readonly struct ProjectionModel
+        // Value equality (Columns compared element-wise via SequenceEqual, not by ImmutableArray reference) so the
+        // incremental generator caches the model between keystrokes instead of re-running every edit.
+        private readonly struct ProjectionModel : System.IEquatable<ProjectionModel>
         {
             public ProjectionModel(string @namespace, string typeName, ImmutableArray<ProjectionColumn> columns)
             {
@@ -440,6 +529,31 @@ namespace Vela.Analyzers
             public string Namespace { get; }
             public string TypeName { get; }
             public ImmutableArray<ProjectionColumn> Columns { get; }
+
+            public ProjectionModel WithTypeName(string typeName) => new ProjectionModel(Namespace, typeName, Columns);
+
+            public bool Equals(ProjectionModel other) =>
+                Namespace == other.Namespace &&
+                TypeName == other.TypeName &&
+                Columns.SequenceEqual(other.Columns);
+
+            public override bool Equals(object? obj) => obj is ProjectionModel other && Equals(other);
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = 17;
+                    hash = (hash * 31) + (Namespace?.GetHashCode() ?? 0);
+                    hash = (hash * 31) + (TypeName?.GetHashCode() ?? 0);
+                    foreach (ProjectionColumn column in Columns)
+                    {
+                        hash = (hash * 31) + column.GetHashCode();
+                    }
+
+                    return hash;
+                }
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
 using System.Linq;
@@ -74,11 +75,25 @@ namespace Vela.CodeFixes
         private static MethodDeclarationSyntax RemoveStatic(MethodDeclarationSyntax declaration)
         {
             SyntaxToken staticToken = declaration.Modifiers.First(m => m.IsKind(SyntaxKind.StaticKeyword));
-            SyntaxTokenList kept = SyntaxFactory.TokenList(declaration.Modifiers.Where(m => !m.IsKind(SyntaxKind.StaticKeyword)));
+            List<SyntaxToken> kept = declaration.Modifiers.Where(m => !m.IsKind(SyntaxKind.StaticKeyword)).ToList();
 
-            return kept.Count > 0
-                ? declaration.WithModifiers(kept)
-                : declaration.WithModifiers(kept).WithReturnType(declaration.ReturnType.WithLeadingTrivia(staticToken.LeadingTrivia));
+            if (kept.Count == 0)
+            {
+                // static was the only modifier: hand its leading trivia (the method's indentation/newline) to the
+                // return type so the method keeps its position.
+                return declaration.WithModifiers(SyntaxFactory.TokenList())
+                    .WithReturnType(declaration.ReturnType.WithLeadingTrivia(staticToken.LeadingTrivia));
+            }
+
+            // If static was the leading modifier, its leading trivia carried the method's indentation/newline;
+            // transfer it to the new first modifier so removing static does not collapse the method onto the
+            // previous line.
+            if (declaration.Modifiers[0].IsKind(SyntaxKind.StaticKeyword))
+            {
+                kept[0] = kept[0].WithLeadingTrivia(staticToken.LeadingTrivia);
+            }
+
+            return declaration.WithModifiers(SyntaxFactory.TokenList(kept));
         }
     }
 }

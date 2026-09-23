@@ -61,6 +61,20 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Removes_all_duplicates_when_a_modifier_repeats_three_times_VELA003()
+    {
+        // Three calls -> two diagnostics on nested invocation nodes. The fix-all must remove both redundant calls
+        // in one rewrite (the BatchFixer would drop one via overlapping ReplaceNode edits).
+        string before = DupHarness.Replace("BODY", "RegisterStep().WithExecutionOrder(1).{|#0:WithExecutionOrder|}(2).{|#1:WithExecutionOrder|}(3).Handle();");
+        string after = DupHarness.Replace("BODY", "RegisterStep().WithExecutionOrder(1).Handle();");
+        DiagnosticResult first = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments("WithExecutionOrder");
+        DiagnosticResult second = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(1).WithArguments("WithExecutionOrder");
+        await VerifyDup.VerifyCodeFixAsync(before, new[] { first, second }, after);
+    }
+
+    [Fact]
     public async Task Removes_an_invalid_image_VELA007()
     {
         string before = ImageHarness.Replace("BODY", "RegisterStep().OnMessage(\"create\").PostOperation().Sync().{|#0:WithPreImage|}(\"name\").Handle();");

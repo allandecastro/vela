@@ -60,28 +60,10 @@ namespace Vela.Analyzers
                 return;
             }
 
-            if (ImplementsFluent(type, fluent))
+            if (FluentStep.ImplementsFluent(type, fluent))
             {
                 context.ReportDiagnostic(Diagnostic.Create(Rule, statement.Expression.GetLocation()));
             }
-        }
-
-        private static bool ImplementsFluent(ITypeSymbol type, INamedTypeSymbol fluent)
-        {
-            if (SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, fluent))
-            {
-                return true;
-            }
-
-            foreach (INamedTypeSymbol iface in type.AllInterfaces)
-            {
-                if (SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, fluent))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
     }
 }

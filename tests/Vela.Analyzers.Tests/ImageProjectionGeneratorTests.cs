@@ -325,6 +325,59 @@ namespace Demo
     }
 
     [Fact]
+    public void Resolves_a_column_selector_behind_a_cast()
+    {
+        // a => (object)a.Name must not suppress the projection: the cast is unwrapped to the member access.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class CastAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithPostImage(a => (object)a.Name, a => a.Revenue as object)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.Contains("class CastAudit_UpdatePostOp_PostImage", output);
+        Assert.Contains("AttributeLogicalName(\"name\")", output);
+        Assert.Contains("AttributeLogicalName(\"revenue\")", output);
+    }
+
+    [Fact]
+    public void Emits_both_projections_when_one_named_handler_binds_two_different_shapes()
+    {
+        // Two steps bind the same named handler with different captured columns: both projections must be emitted
+        // (the later one must not collapse into the earlier by name), disambiguated by a column-shape hash.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class SharedHandlerPlugin : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(Shared);
+            RegisterStep().OnUpdate().PreOperation().Sync().WithPostImage(a => a.Revenue).Handle(Shared);
+        }
+
+        private void Shared() { }
+    }
+}
+");
+
+        // Both captured columns survive - the second shape is not dropped by the dedup.
+        Assert.Contains("AttributeLogicalName(\"name\")", output);
+        Assert.Contains("AttributeLogicalName(\"revenue\")", output);
+        // Two distinct projection types are generated for the one handler name.
+        int typeCount = System.Text.RegularExpressions.Regex.Matches(output, @"class SharedHandlerPlugin_Shared_PostImage").Count;
+        Assert.Equal(2, typeCount);
+    }
+
+    [Fact]
     public void Emits_a_global_using_for_the_generated_namespace()
     {
         string output = RunAndConcat(@"
