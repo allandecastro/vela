@@ -24,6 +24,17 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.26.1] - 2026-09-23 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.26.1`. Security patch.
+
+### Fixed
+
+- Enable NuGet central **transitive pinning** so the patched `System.Security.Cryptography.Xml` (8.0.4) overrides
+  the vulnerable 8.0.2 that `Vela.Messages` pulled in transitively (GHSA-37gx-xxp4-5rgx and related, High
+  severity). A consumer of `Vela.Messages` no longer resolves the vulnerable transitive package. (`Vela.Cli` was
+  already patched through a direct reference.)
+
 ## [0.26.0] - 2026-09-23 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.26.0` (all three packages ship at this version). Custom API calling
