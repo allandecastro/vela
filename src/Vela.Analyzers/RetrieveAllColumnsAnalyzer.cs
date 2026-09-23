@@ -31,27 +31,70 @@ namespace Vela.Analyzers
         {
             context.EnableConcurrentExecution();
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-            context.RegisterSyntaxNodeAction(AnalyzeCreation, SyntaxKind.ObjectCreationExpression);
+            context.RegisterSyntaxNodeAction(
+                AnalyzeCreation,
+                SyntaxKind.ObjectCreationExpression,
+                SyntaxKind.ImplicitObjectCreationExpression);
         }
 
         private static void AnalyzeCreation(SyntaxNodeAnalysisContext context)
         {
-            ObjectCreationExpressionSyntax creation = (ObjectCreationExpressionSyntax)context.Node;
+            // Handle both the explicit `new ColumnSet(...)` and the target-typed `new(...)` forms.
+            ArgumentListSyntax? argumentList;
+            InitializerExpressionSyntax? initializer;
+            switch (context.Node)
+            {
+                case ObjectCreationExpressionSyntax explicitCreation:
+                    argumentList = explicitCreation.ArgumentList;
+                    initializer = explicitCreation.Initializer;
+                    break;
+                case ImplicitObjectCreationExpressionSyntax implicitCreation:
+                    argumentList = implicitCreation.ArgumentList;
+                    initializer = implicitCreation.Initializer;
+                    break;
+                default:
+                    return;
+            }
 
-            // A single `true` argument is the retrieve-all overload: new ColumnSet(true) / new ColumnSet(allColumns: true).
-            SeparatedSyntaxList<ArgumentSyntax>? arguments = creation.ArgumentList?.Arguments;
-            if (arguments is not { Count: 1 } || !arguments.Value[0].Expression.IsKind(SyntaxKind.TrueLiteralExpression))
+            // Retrieve-all is expressed either as the single `true` constructor argument (new ColumnSet(true) /
+            // new ColumnSet(allColumns: true)) or as an object initializer setting AllColumns = true.
+            if (!IsRetrieveAllArgument(argumentList) && !IsAllColumnsInitializer(initializer))
             {
                 return;
             }
 
-            if (context.SemanticModel.GetTypeInfo(creation, context.CancellationToken).Type is not INamedTypeSymbol type ||
+            if (context.SemanticModel.GetTypeInfo((ExpressionSyntax)context.Node, context.CancellationToken).Type is not INamedTypeSymbol type ||
                 type.Name != "ColumnSet" || type.ContainingNamespace?.ToDisplayString() != "Microsoft.Xrm.Sdk.Query")
             {
                 return;
             }
 
-            context.ReportDiagnostic(Diagnostic.Create(Rule, creation.GetLocation()));
+            context.ReportDiagnostic(Diagnostic.Create(Rule, context.Node.GetLocation()));
+        }
+
+        private static bool IsRetrieveAllArgument(ArgumentListSyntax? argumentList)
+        {
+            SeparatedSyntaxList<ArgumentSyntax>? arguments = argumentList?.Arguments;
+            return arguments is { Count: 1 } && arguments.Value[0].Expression.IsKind(SyntaxKind.TrueLiteralExpression);
+        }
+
+        private static bool IsAllColumnsInitializer(InitializerExpressionSyntax? initializer)
+        {
+            if (initializer is null)
+            {
+                return false;
+            }
+
+            foreach (ExpressionSyntax expression in initializer.Expressions)
+            {
+                if (expression is AssignmentExpressionSyntax { Left: IdentifierNameSyntax { Identifier: { ValueText: "AllColumns" } } } assignment &&
+                    assignment.Right.IsKind(SyntaxKind.TrueLiteralExpression))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

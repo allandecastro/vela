@@ -104,6 +104,20 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_a_relationship_nav_behind_a_cast()
+    {
+        string code = InMethod("RegisterStep().FilterOn(a => (object){|#0:a.Contacts|}).Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("Contacts", "FilterOn"));
+    }
+
+    [Fact]
+    public async Task Flags_a_relationship_nav_behind_an_as_expression()
+    {
+        string code = InMethod("RegisterStep().FilterOn(a => {|#0:a.Contacts|} as object).Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("Contacts", "FilterOn"));
+    }
+
+    [Fact]
     public async Task Does_not_flag_a_real_column()
     {
         string code = InMethod("RegisterStep().FilterOn(a => a.Name).Handle();");

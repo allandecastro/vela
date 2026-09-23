@@ -15,6 +15,7 @@ namespace Microsoft.Xrm.Sdk.Query
     {
         public ColumnSet(bool allColumns) { }
         public ColumnSet(params string[] columns) { }
+        public bool AllColumns { get; set; }
     }
 }
 ";
@@ -69,6 +70,54 @@ namespace Demo
     public class Use { public object M() => {|#0:new ColumnSet(allColumns: true)|}; }
 }";
         await Verify.VerifyAnalyzerAsync(code, Expected());
+    }
+
+    [Fact]
+    public async Task Flags_target_typed_new_true()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk.Query;
+    public class Use { public ColumnSet M() => {|#0:new(true)|}; }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected());
+    }
+
+    [Fact]
+    public async Task Flags_object_initializer_AllColumns_true()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk.Query;
+    public class Use { public ColumnSet M() => {|#0:new ColumnSet { AllColumns = true }|}; }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected());
+    }
+
+    [Fact]
+    public async Task Flags_target_typed_new_with_AllColumns_initializer()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk.Query;
+    public class Use { public ColumnSet M() => {|#0:new() { AllColumns = true }|}; }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected());
+    }
+
+    [Fact]
+    public async Task Does_not_flag_object_initializer_AllColumns_false()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk.Query;
+    public class Use { public ColumnSet M() => new ColumnSet { AllColumns = false }; }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
     }
 
     [Fact]

@@ -40,7 +40,18 @@ namespace Vela.Analyzers
         {
             context.EnableConcurrentExecution();
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-            context.RegisterSyntaxNodeAction(AnalyzeInvocation, SyntaxKind.InvocationExpression);
+            context.RegisterCompilationStartAction(start =>
+            {
+                // Gate on a Vela marker type so we do not resolve symbols for every LINQ Select/Where/OrderBy in a
+                // compilation that does not reference Vela at all (the namespace filter still runs per invocation,
+                // but only after this cheap up-front check clears).
+                if (start.Compilation.GetTypeByMetadataName("Vela.Steps.IFluentStep") is null)
+                {
+                    return;
+                }
+
+                start.RegisterSyntaxNodeAction(AnalyzeInvocation, SyntaxKind.InvocationExpression);
+            });
         }
 
         private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
@@ -92,10 +103,21 @@ namespace Vela.Analyzers
                 return null;
             }
 
-            // a => (object)a.Nav / a => a.Nav as X — see through a leading cast to the member access.
-            while (body is CastExpressionSyntax cast)
+            // a => (object)a.Nav / a => a.Nav as X — see through a leading cast (CastExpression) or `as`
+            // (an AsExpression BinaryExpression) to the member access.
+            while (true)
             {
-                body = cast.Expression;
+                switch (body)
+                {
+                    case CastExpressionSyntax cast:
+                        body = cast.Expression;
+                        continue;
+                    case BinaryExpressionSyntax asExpr when asExpr.IsKind(SyntaxKind.AsExpression):
+                        body = asExpr.Left;
+                        continue;
+                }
+
+                break;
             }
 
             return body;

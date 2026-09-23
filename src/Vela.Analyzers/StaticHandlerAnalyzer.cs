@@ -75,7 +75,7 @@ namespace Vela.Analyzers
             }
 
             // Only the fluent builder's own Handle counts; a same-named method on an unrelated type is ignored.
-            if (!IsFluentMethod(context.SemanticModel, invocation, fluent, context.CancellationToken))
+            if (!FluentStep.IsFluentMethod(context.SemanticModel, invocation, fluent, context.CancellationToken))
             {
                 return;
             }
@@ -107,34 +107,6 @@ namespace Vela.Analyzers
             {
                 methodName = info.CandidateSymbols[0].Name;
                 return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsFluentMethod(SemanticModel model, InvocationExpressionSyntax invocation, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
-        {
-            if (model.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method)
-            {
-                return false;
-            }
-
-            return ImplementsFluent(method.ContainingType, fluent);
-        }
-
-        private static bool ImplementsFluent(ITypeSymbol type, INamedTypeSymbol fluent)
-        {
-            if (SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, fluent))
-            {
-                return true;
-            }
-
-            foreach (INamedTypeSymbol iface in type.AllInterfaces)
-            {
-                if (SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, fluent))
-                {
-                    return true;
-                }
             }
 
             return false;
