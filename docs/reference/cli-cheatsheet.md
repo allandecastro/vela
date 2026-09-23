@@ -33,6 +33,7 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `--interactive` | Browser (MSAL) login; token cached at `~/.vela/token.dat`. Safe under redirected stdin (never blocks on a prompt) |
 | `--fresh-login` | Force a new interactive prompt |
 | `--auth-client-id` / `--authority` | Override the MSAL client / authority (sovereign clouds) |
+| `--timeout <minutes>` | Dataverse request timeout (default 10, range 1 to 60); raise for a large org or slow cold start |
 | `--environment <label>` | Display label for the run (falls back to `--url`) |
 
 ## Models scopes

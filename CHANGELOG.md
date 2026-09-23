@@ -24,6 +24,67 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.26.0] - 2026-09-23 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.26.0` (all three packages ship at this version). Custom API calling
+fix plus runtime, harness and analyzer hardening from the maturity review.
+
+### Changed
+
+- **Custom API parameter naming.** Generated typed Custom API request/response classes now key their parameter
+  and result bags by the plain parameter name (for example `Pong`) rather than a dotted, fully-qualified name.
+  This matches how Dataverse names Custom API parameters and is what makes a Vela-created Custom API callable on a
+  real environment (see Fixed). The typed property bodies are unchanged, so code that reads `response.Pong` keeps
+  working; only the underlying bag key changed.
+
+### Fixed
+
+- **Custom APIs are callable on Dataverse.** The plugin runtime (`CustomApiBase`) and the typed message bases in
+  `Vela.Messages` previously read inputs and published outputs under dotted keys (`{api}.{name}` and
+  `{api}.{name}.response`); Dataverse rejects a dot in a parameter or response identifier, so a Custom API created
+  by Vela could not be invoked. Inputs and outputs now flow under the plain parameter name.
+- The tracing service no longer mutates the caller's `EntityCollection` when down-casting early-bound parameters
+  (it builds a new collection of copies).
+- The typed image projector traces an attribute whose runtime value type does not match the projection property
+  instead of silently dropping it.
+- The relationship hydrator skips (and traces) a navigation property that is not writable instead of throwing a
+  raw reflection error.
+- **Test harness fidelity** (`Vela.Testing`): `ExecuteMultiple` preserves the fault `ErrorCode` on per-item
+  failures; `Include` honours the child query's filter/order/top/paging; `Associate`/`Disassociate` validate that
+  the target and related records exist; intersect ids are deterministic; deep insert clones the caller's child
+  entities before stamping the parent key; `RelationshipRegistry.Add` validates its arguments.
+- **Analyzers**: VELA013 also flags target-typed `new(true)` and `new ColumnSet { AllColumns = true }`; VELA010
+  unwraps an `as` cast; the image-projection generator no longer collapses two projections that share a handler
+  type name but capture different columns; and several code-fix trivia and fix-all edge cases were corrected.
+
+## [0.15.0] - 2026-09-23 (Vela.Cli)
+
+CLI line, published as `cli-v0.15.0`. Configurable connection timeout, the Custom API naming fix at apply time,
+and quality cleanups.
+
+### Added
+
+- `--timeout <minutes>` on every connected command (`plan` / `apply` / `inspect` / `models`): sets the Dataverse
+  request timeout. The default is raised to **10 minutes** (from the SDK default of 4) so a large environment or a
+  plugin sandbox cold start does not abort the run; override it up to 60 minutes for extreme cases.
+
+### Fixed
+
+- **Custom API registration is callable.** `vela apply` writes Custom API request-parameter and response-property
+  unique names as plain, dot-free identifiers (matching Dataverse's own convention), so the Custom APIs it creates
+  can be invoked. A Custom API previously deployed with the old dotted names self-heals (the affected parameter is
+  recreated) on the next apply.
+- The execution-order (rank) collision scan is scoped to the touched entities when every touched coordinate is
+  entity-bound, reading far fewer rows on a large org.
+- Generated model file names are sanitised and the resolved path is asserted to stay under the output directory.
+- The alternate-key factory method name is escaped after composition, so a keyword schema no longer produces a
+  malformed identifier.
+
+### Changed
+
+- Internal de-duplication of package-path resolution, positional / `.csproj` resolution, and temp-directory
+  cleanup across the CLI commands (no behavioural change).
+
 ## [0.25.0] - 2026-09-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.25.0` (all three packages ship at this version). Three plugin-authoring
