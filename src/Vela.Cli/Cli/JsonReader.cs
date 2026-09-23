@@ -116,12 +116,16 @@ internal static class JsonReader
                 string? parameterTypeName = TryGetString(value, "parameterTypeName") ?? TryGetString(value, "typeName");
                 bool isCollection = TryGetBool(value, "isCollection");
                 string? logicalEntityName = TryGetString(value, "logicalEntityName");
+                // The local/desired side carries no uniqueName (it is not in the package metadata); its expected
+                // value is the bare parameter name. The live side supplies the actual Dataverse uniquename, so a
+                // drifted (dotted) live value diffs against the bare expected value and triggers reconciliation.
+                string uniqueName = TryGetString(value, "uniqueName") ?? name;
                 (parameterTypeName, isCollection) = CanonicalizeCustomApiType(parameterTypeName, isCollection, logicalEntityName);
-                return (name, isOptional, parameterTypeName, isCollection, logicalEntityName);
+                return (name, isOptional, parameterTypeName, isCollection, logicalEntityName, uniqueName);
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.name))
             .OrderBy(x => x.name, StringComparer.Ordinal)
-            .Select(x => CustomApiShape.InputParameter(x.name, x.isOptional, x.parameterTypeName, x.isCollection, x.logicalEntityName))
+            .Select(x => CustomApiShape.InputParameter(x.name, x.isOptional, x.parameterTypeName, x.isCollection, x.logicalEntityName, x.uniqueName))
             .ToArray();
     }
 
@@ -139,12 +143,13 @@ internal static class JsonReader
                 string? parameterTypeName = TryGetString(value, "parameterTypeName") ?? TryGetString(value, "typeName");
                 bool isCollection = TryGetBool(value, "isCollection");
                 string? logicalEntityName = TryGetString(value, "logicalEntityName");
+                string uniqueName = TryGetString(value, "uniqueName") ?? name;
                 (parameterTypeName, isCollection) = CanonicalizeCustomApiType(parameterTypeName, isCollection, logicalEntityName);
-                return (name, parameterTypeName, isCollection, logicalEntityName);
+                return (name, parameterTypeName, isCollection, logicalEntityName, uniqueName);
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.name))
             .OrderBy(x => x.name, StringComparer.Ordinal)
-            .Select(x => CustomApiShape.OutputParameter(x.name, x.parameterTypeName, x.isCollection, x.logicalEntityName))
+            .Select(x => CustomApiShape.OutputParameter(x.name, x.parameterTypeName, x.isCollection, x.logicalEntityName, x.uniqueName))
             .ToArray();
     }
 

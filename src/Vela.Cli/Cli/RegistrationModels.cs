@@ -31,4 +31,4 @@ public sealed record StepApplyDefinition(string PluginTypeName, string Message, 
 public sealed record ImageApplyDefinition(string Alias, string[] Attributes);
 public sealed record StepImageApplyDefinition(string Alias, string[] Attributes, int ImageType);
 public sealed record CustomApiApplyDefinition(string PluginTypeName, string UniqueName, bool IsFunction, bool IsBound, string? BoundEntityLogicalName, string? ExecutePrivilegeName, bool IsPrivate, int AllowedCustomProcessingStepType, int BindingType, bool WorkflowSdkStepEnabled, CustomApiParameterApplyDefinition[] InputParameters, CustomApiParameterApplyDefinition[] OutputParameters);
-public sealed record CustomApiParameterApplyDefinition(string Name, bool IsOptional, string? ParameterTypeName, bool IsCollection, string? LogicalEntityName);
+public sealed record CustomApiParameterApplyDefinition(string Name, bool IsOptional, string? ParameterTypeName, bool IsCollection, string? LogicalEntityName, string UniqueName = "");

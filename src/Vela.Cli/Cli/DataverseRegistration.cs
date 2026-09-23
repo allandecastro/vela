@@ -433,12 +433,12 @@ internal static partial class DataverseRegistration
 
         object[] inputParameters = requestParams.TryGetValue(api.Id, out var input)
             ? input.OrderBy(x => x.Name, StringComparer.Ordinal)
-                .Select(x => CustomApiShape.InputParameter(x.Name, x.IsOptional, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName))
+                .Select(x => CustomApiShape.InputParameter(x.Name, x.IsOptional, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName, x.UniqueName))
                 .ToArray()
             : [];
         object[] outputParameters = responseParams.TryGetValue(api.Id, out var output)
             ? output.OrderBy(x => x.Name, StringComparer.Ordinal)
-                .Select(x => CustomApiShape.OutputParameter(x.Name, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName))
+                .Select(x => CustomApiShape.OutputParameter(x.Name, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName, x.UniqueName))
                 .ToArray()
             : [];
 
@@ -462,7 +462,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression query = new QueryExpression("customapirequestparameter")
     {
-        ColumnSet = new ColumnSet("customapiid", "name", "isoptional", "type", "logicalentityname")
+        ColumnSet = new ColumnSet("customapiid", "name", "isoptional", "type", "logicalentityname", "uniquename")
     };
     query.Criteria.AddCondition("customapiid", ConditionOperator.In, apiIds.Cast<object>().ToArray());
 
@@ -484,13 +484,14 @@ internal static partial class DataverseRegistration
         int typeCode = row.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10;
         string? logicalEntityName = row.GetAttributeValue<string>("logicalentityname");
         (string typeName, bool isCollection) = ResolveCustomApiTypeName(typeCode, logicalEntityName);
+        string uniqueName = row.GetAttributeValue<string>("uniquename") ?? string.Empty;
         if (!map.TryGetValue(apiId, out List<CustomApiParameterApplyDefinition>? list))
         {
             list = [];
             map[apiId] = list;
         }
 
-        list.Add(new CustomApiParameterApplyDefinition(name, isOptional, typeName, isCollection, logicalEntityName));
+        list.Add(new CustomApiParameterApplyDefinition(name, isOptional, typeName, isCollection, logicalEntityName, uniqueName));
     }
 
     return map.ToDictionary(x => x.Key, x => x.Value.ToArray());
@@ -506,7 +507,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression query = new QueryExpression("customapiresponseproperty")
     {
-        ColumnSet = new ColumnSet("customapiid", "name", "type", "logicalentityname")
+        ColumnSet = new ColumnSet("customapiid", "name", "type", "logicalentityname", "uniquename")
     };
     query.Criteria.AddCondition("customapiid", ConditionOperator.In, apiIds.Cast<object>().ToArray());
 
@@ -527,13 +528,14 @@ internal static partial class DataverseRegistration
         int typeCode = row.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10;
         string? logicalEntityName = row.GetAttributeValue<string>("logicalentityname");
         (string typeName, bool isCollection) = ResolveCustomApiTypeName(typeCode, logicalEntityName);
+        string uniqueName = row.GetAttributeValue<string>("uniquename") ?? string.Empty;
         if (!map.TryGetValue(apiId, out List<CustomApiParameterApplyDefinition>? list))
         {
             list = [];
             map[apiId] = list;
         }
 
-        list.Add(new CustomApiParameterApplyDefinition(name, false, typeName, isCollection, logicalEntityName));
+        list.Add(new CustomApiParameterApplyDefinition(name, false, typeName, isCollection, logicalEntityName, uniqueName));
     }
 
     return map.ToDictionary(x => x.Key, x => x.Value.ToArray());
