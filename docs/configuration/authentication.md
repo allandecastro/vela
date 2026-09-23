@@ -95,5 +95,20 @@ MSAL login with:
 | `--auth-client-id` | The client id used for the interactive MSAL login. |
 | `--authority` | The authority (login) endpoint to sign in against. |
 
+## Connection timeout
+
+Every connected command talks to Dataverse with a default request timeout of **10 minutes**. On a very large
+environment, or on the first run after a deploy while the plugin sandbox cold-starts, a single request can take
+longer than the default; raise it with `--timeout <minutes>`:
+
+| Flag | Purpose |
+| --- | --- |
+| `--timeout <minutes>` | Dataverse request timeout in minutes (default 10, range 1 to 60). Raise it for a large org or a slow cold start. |
+
+```bash
+vela apply --package ./artifacts/Zava.Plugins.1.0.0.nupkg `
+  --url https://zava.crm.dynamics.com --solution Zava --auto-approve --timeout 20
+```
+
 For running unattended in CI, including `--strict` and `--verbose`, see
 [Environments & CI](environments-secrets.md).

@@ -79,6 +79,7 @@ vela plan  --packages-dir artifacts --interactive
 # 5. Apply the changes (idempotent create/update/delete).
 #    apply writes by default: on a terminal it shows the plan and asks you to confirm.
 #    Add --auto-approve to skip the prompt in CI / unattended runs.
+#    On a very large org, raise the request timeout with --timeout <minutes> (default 10).
 vela apply --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
