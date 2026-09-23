@@ -757,6 +757,19 @@ internal static class ModelsCommand
 
         Directory.CreateDirectory(outDir);
 
+        // Defence in depth: a generated file name is always a relative path under outDir, but assert every resolved
+        // path stays inside so a malformed or hostile file-name segment can never write outside the output directory.
+        string outRoot = Path.GetFullPath(outDir);
+        foreach (GeneratedModel model in models)
+        {
+            string resolved = Path.GetFullPath(Path.Combine(outDir, model.FileName));
+            if (!string.Equals(resolved, outRoot, StringComparison.Ordinal)
+                && !resolved.StartsWith(outRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                return Fail($"Generated file name '{model.FileName}' resolves outside the output directory. Refusing to write.", ExitInvalidArguments, includeUsage: false);
+            }
+        }
+
         if (!overwrite)
         {
             List<string> existing = models
