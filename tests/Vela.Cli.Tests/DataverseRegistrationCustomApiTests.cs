@@ -284,7 +284,7 @@ public sealed class DataverseRegistrationCustomApiTests
         Assert.Equal("Target", created.GetAttributeValue<string>("name"));
         Assert.Equal("Target", created.GetAttributeValue<string>("displayname"));
         Assert.Equal("Target", created.GetAttributeValue<string>("description"));
-        Assert.Equal("zava_DoThing.Target", created.GetAttributeValue<string>("uniquename"));
+        Assert.Equal("Target", created.GetAttributeValue<string>("uniquename")); // bare identifier, no "{api}." prefix
         Assert.True(created.GetAttributeValue<bool>("isoptional"));
         Assert.Equal(SdkConstants.CustomApiParameterType.String, created.GetAttributeValue<OptionSetValue>("type").Value);
         Assert.Equal("account", created.GetAttributeValue<string>("logicalentityname"));
@@ -311,6 +311,7 @@ public sealed class DataverseRegistrationCustomApiTests
         var existing = new Entity("customapirequestparameter", existingId)
         {
             ["name"] = "Target",
+            ["uniquename"] = "Target", // already the bare name: no self-heal, this test exercises the update path
             ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.Integer), // matches desired: this test exercises the update path, not a type change
         };
         var svc = new TestSupport.FakeOrgService
@@ -361,12 +362,43 @@ public sealed class DataverseRegistrationCustomApiTests
     }
 
     [Fact]
+    public void SyncRequestParameters_self_heals_a_legacy_dotted_unique_name()
+    {
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("customapirequestparameter", existingId)
+        {
+            ["name"] = "Amount",
+            ["uniquename"] = "zava_DoThing.Amount", // a legacy dotted uniquename from the old scheme (uncallable)
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.String), // type matches desired
+        };
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
+        };
+        // Same name and type, but the live uniquename is dotted. uniquename is create-only, so the parameter is
+        // deleted and recreated with the correct bare uniquename so a re-apply converges on a callable API.
+        var param = new CustomApiParameterApplyDefinition("Amount", IsOptional: false, ParameterTypeName: "System.String", IsCollection: false, LogicalEntityName: null);
+
+        DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
+
+        (string entity, Guid id) = Assert.Single(svc.Deleted);
+        Assert.Equal("customapirequestparameter", entity);
+        Assert.Equal(existingId, id); // the dotted row is removed
+
+        Entity created = Assert.Single(svc.Created); // and recreated with the bare uniquename
+        Assert.Equal("Amount", created.GetAttributeValue<string>("name"));
+        Assert.Equal("Amount", created.GetAttributeValue<string>("uniquename"));
+        Assert.Empty(svc.Updated); // never an in-place update for a create-only field
+    }
+
+    [Fact]
     public void SyncRequestParameters_clears_logicalentityname_when_blank_on_update()
     {
         var existingId = Guid.NewGuid();
         var existing = new Entity("customapirequestparameter", existingId)
         {
             ["name"] = "Target",
+            ["uniquename"] = "Target", // already the bare name: no self-heal, only the binding changes
             ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.String), // matches desired; only the binding changes
             ["logicalentityname"] = "account", // a stale entity binding on the live row
         };
@@ -404,7 +436,7 @@ public sealed class DataverseRegistrationCustomApiTests
     }
 
     [Fact]
-    public void SyncResponseProperties_uses_response_entity_suffix_and_no_isoptional()
+    public void SyncResponseProperties_uses_bare_unique_name_and_no_isoptional()
     {
         var svc = new TestSupport.FakeOrgService();
         // isOptional is ignored for response properties (IncludeIsOptional = false).
@@ -414,7 +446,9 @@ public sealed class DataverseRegistrationCustomApiTests
 
         Entity created = Assert.Single(svc.Created);
         Assert.Equal("customapiresponseproperty", created.LogicalName);
-        Assert.Equal("zava_DoThing.Result.response", created.GetAttributeValue<string>("uniquename"));
+        // The uniquename is the bare parameter name (no "{api}." prefix, no ".response" suffix). It is unique only
+        // within the Custom API, and a dot in it would make the operation uncallable on a real org.
+        Assert.Equal("Result", created.GetAttributeValue<string>("uniquename"));
         Assert.False(created.Contains("isoptional")); // response properties carry no isoptional column
         // The query targets the response-property table.
         Assert.Contains(svc.Queries, q => q.EntityName == "customapiresponseproperty");

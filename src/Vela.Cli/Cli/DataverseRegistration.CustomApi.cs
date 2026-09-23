@@ -202,21 +202,23 @@ internal static partial class DataverseRegistration
         string EntityName,
         string IdColumn,
         string LogTag,
-        string UniqueNameSuffix,
         bool IncludeIsOptional);
 
     private static readonly ParameterSyncSpec RequestParameterSpec = new(
         EntityName: "customapirequestparameter",
         IdColumn: "customapirequestparameterid",
         LogTag: "input-param",
-        UniqueNameSuffix: string.Empty,
         IncludeIsOptional: true);
 
+    // A parameter/response-property uniquename must be a BARE identifier equal to the plain parameter name (no
+    // dot). It is unique only within its Custom API, not globally. Dataverse uses it as the OData request-parameter
+    // / response-property name, and a dot makes the whole operation uncallable on a real org ("The property name
+    // '<api>.<name>' is invalid; property names must not contain '.'"). Inputs are then delivered, and outputs read,
+    // under that plain name - which is exactly what the handler reads/writes.
     private static readonly ParameterSyncSpec ResponsePropertySpec = new(
         EntityName: "customapiresponseproperty",
         IdColumn: "customapiresponsepropertyid",
         LogTag: "output-param",
-        UniqueNameSuffix: ".response",
         IncludeIsOptional: false);
 
     internal static void SyncCustomApiRequestParameters(IOrganizationService service, Guid apiId, string apiUniqueName, CustomApiParameterApplyDefinition[] desired, bool verbose = true)
@@ -233,7 +235,7 @@ internal static partial class DataverseRegistration
         ParameterSyncSpec spec,
         bool verbose)
     {
-        List<string> columns = new() { spec.IdColumn, "name", "type", "logicalentityname" };
+        List<string> columns = new() { spec.IdColumn, "name", "uniquename", "type", "logicalentityname" };
         if (spec.IncludeIsOptional)
         {
             columns.Add("isoptional");
@@ -261,7 +263,12 @@ internal static partial class DataverseRegistration
             if (existingByName.TryGetValue(parameter.Name, out Entity? existing))
             {
                 int existingType = existing.GetAttributeValue<OptionSetValue>("type")?.Value ?? -1;
-                if (existingType == typeCode)
+                // A previously-deployed parameter may carry a dotted uniquename (the old "{api}.{name}" scheme),
+                // which makes the Custom API uncallable on a real org. uniquename is create-only, so - like the
+                // type-change path below - the only way to converge is delete+recreate with the correct bare name.
+                bool uniqueNameMismatch = !string.Equals(
+                    existing.GetAttributeValue<string>("uniquename"), parameter.Name, StringComparison.Ordinal);
+                if (existingType == typeCode && !uniqueNameMismatch)
                 {
                     Entity update = new Entity(spec.EntityName)
                     {
@@ -281,11 +288,12 @@ internal static partial class DataverseRegistration
                     continue;
                 }
 
-                // A parameter's type (which also encodes collection-ness) is create-only: Dataverse silently
-                // ignores an update to it, so an in-place update would report success but never converge - every
-                // later plan would show the same phantom change. Delete this one parameter and recreate it with the
-                // new type below. Only the affected parameter is touched; the Custom API and its other parameters
-                // stay in place (mirrors how step images do delete+recreate for their create-only fields).
+                // A parameter's type (which also encodes collection-ness) and its uniquename are both create-only:
+                // Dataverse silently ignores an update to either, so an in-place update would report success but
+                // never converge - every later plan would show the same phantom change (and a dotted uniquename
+                // would keep the API uncallable). Delete this one parameter and recreate it with the correct type
+                // and bare uniquename below. Only the affected parameter is touched; the Custom API and its other
+                // parameters stay in place (mirrors how step images do delete+recreate for their create-only fields).
                 service.Delete(spec.EntityName, existing.Id);
                 recreate = true;
             }
@@ -295,7 +303,7 @@ internal static partial class DataverseRegistration
             create["name"] = parameter.Name;
             create["displayname"] = parameter.Name;
             create["description"] = parameter.Name;
-            create["uniquename"] = $"{apiUniqueName}.{parameter.Name}{spec.UniqueNameSuffix}";
+            create["uniquename"] = parameter.Name;
             if (spec.IncludeIsOptional)
             {
                 create["isoptional"] = parameter.IsOptional;

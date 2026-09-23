@@ -22,7 +22,7 @@ public class CustomApiMessageGeneratorTests
         string code = Generate(message);
 
         Assert.Contains("public partial class zava_RecalculateRequest : Vela.Messages.CustomApiRequest", code);
-        // The API unique name flows to the base so keys are "{api}.{prop}" / "{api}.{prop}.response".
+        // The API unique name flows to the base as RequestName; the bags are keyed by the plain property name.
         Assert.Contains("public zava_RecalculateRequest() : base(\"zava_Recalculate\")", code);
         Assert.Contains("public EntityReference Target", code);   // bound → implicit Target
         Assert.Contains("public int AccountId", code);

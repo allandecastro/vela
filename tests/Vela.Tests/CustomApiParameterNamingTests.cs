@@ -7,10 +7,10 @@ using Xunit;
 
 namespace Vela.Tests;
 
-// Dataverse names a custom API's parameters by their full unique name ("{api}.{param}" for inputs,
-// "{api}.{prop}.response" for outputs). These tests lock in that the typed CustomApiRequest/CustomApiResponse
-// bases key their bags accordingly, and that the lightweight CustomApiBase translates short handler names to and
-// from those full keys.
+// A custom API's request parameters and response properties carry bare-identifier uniquenames equal to their
+// plain names, so Dataverse keys inputs and outputs by that plain name. These tests lock in that the typed
+// CustomApiRequest/CustomApiResponse bases key their bags by the plain property name, and that the lightweight
+// CustomApiBase reads inputs and publishes outputs under the plain name with no name bridging.
 public sealed class CustomApiParameterNamingTests
 {
     private sealed class EchoRequest : CustomApiRequest
@@ -28,24 +28,22 @@ public sealed class CustomApiParameterNamingTests
     }
 
     [Fact]
-    public void CustomApiRequest_keys_parameters_by_full_unique_name()
+    public void CustomApiRequest_keys_parameters_by_plain_name()
     {
         EchoRequest request = new EchoRequest { Message = "hi" };
 
-        Assert.True(request.Parameters.Contains("test_Echo.Message"));
-        Assert.False(request.Parameters.Contains("Message"));
-        Assert.Equal("hi", request.Parameters["test_Echo.Message"]);
-        Assert.Equal("hi", request.Message); // short property round-trips through the full key
+        Assert.True(request.Parameters.Contains("Message"));
+        Assert.Equal("hi", request.Parameters["Message"]);
+        Assert.Equal("hi", request.Message); // property round-trips through the plain key
     }
 
     [Fact]
-    public void CustomApiResponse_keys_results_by_full_response_name()
+    public void CustomApiResponse_keys_results_by_plain_name()
     {
         EchoResponse response = new EchoResponse { Echo = "echo:hi" };
 
-        Assert.True(response.Results.Contains("test_Echo.Echo.response"));
-        Assert.False(response.Results.Contains("Echo"));
-        Assert.Equal("echo:hi", response.Results["test_Echo.Echo.response"]);
+        Assert.True(response.Results.Contains("Echo"));
+        Assert.Equal("echo:hi", response.Results["Echo"]);
         Assert.Equal("echo:hi", response.Echo);
     }
 
@@ -66,18 +64,18 @@ public sealed class CustomApiParameterNamingTests
     }
 
     [Fact]
-    public void Lightweight_custom_api_reads_full_keyed_input_and_publishes_full_keyed_output()
+    public void Lightweight_custom_api_reads_plain_keyed_input_and_publishes_plain_keyed_output()
     {
         EchoLightApi api = new EchoLightApi();
         LocalPluginContext context = PluginContext.ForMessage("test_EchoLight").Build();
-        // Simulate a real environment: Dataverse delivers the input under the full unique name.
-        context.PluginExecutionContext.InputParameters["test_EchoLight.Message"] = "hi";
+        // Simulate a real environment: Dataverse delivers the input under the plain (bare) name.
+        context.PluginExecutionContext.InputParameters["Message"] = "hi";
 
         api.Execute(context.ServiceProvider);
 
         ParameterCollection output = context.PluginExecutionContext.OutputParameters;
-        // The handler read the full-keyed input (echo:hi, not echo:) and its output is published under the
-        // full response key Dataverse expects.
-        Assert.Equal("echo:hi", output["test_EchoLight.Echo.response"]);
+        // The handler read the plain-keyed input (echo:hi, not echo:) and its output is published under the plain
+        // response key Dataverse expects.
+        Assert.Equal("echo:hi", output["Echo"]);
     }
 }

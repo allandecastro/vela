@@ -96,8 +96,8 @@ public static class CustomApiMessageGenerator
         sb.AppendLine("    using Microsoft.Xrm.Sdk;");
         sb.AppendLine();
 
-        // Request. Derives from CustomApiRequest so each property keys the Parameters bag with the full
-        // Dataverse parameter name "{apiUniqueName}.{prop}" while the property bodies stay short.
+        // Request. Derives from CustomApiRequest, which keys the Parameters bag by the plain property name (the
+        // Custom API's request parameters carry bare-identifier uniquenames equal to their plain names).
         sb.AppendLine($"    /// <summary>Typed request for the <c>{message.UniqueName}</c> Custom API.</summary>");
         sb.AppendLine($"    public partial class {request} : Vela.Messages.CustomApiRequest");
         sb.AppendLine("    {");
@@ -126,8 +126,8 @@ public static class CustomApiMessageGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        // Response. Derives from CustomApiResponse so each property keys the Results bag with the full Dataverse
-        // response property name "{apiUniqueName}.{prop}.response".
+        // Response. Derives from CustomApiResponse, which keys the Results bag by the plain property name (the
+        // Custom API's response properties carry bare-identifier uniquenames equal to their plain names).
         sb.AppendLine($"    /// <summary>Typed response for the <c>{message.UniqueName}</c> Custom API.</summary>");
         sb.AppendLine($"    public partial class {response} : Vela.Messages.CustomApiResponse");
         sb.AppendLine("    {");
