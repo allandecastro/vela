@@ -68,6 +68,19 @@ fix plus runtime, harness and analyzer hardening from the maturity review.
   unwraps an `as` cast; the image-projection generator no longer collapses two projections that share a handler
   type name but capture different columns; and several code-fix trivia and fix-all edge cases were corrected.
 
+## [0.15.1] - 2026-09-23 (Vela.Cli)
+
+CLI line, published as `cli-v0.15.1`. Makes the Custom API dot-free-name self-heal actually trigger on upgrade.
+
+### Fixed
+
+- The Custom API parameter/response `uniquename` is now part of the plan/apply diff. A Custom API deployed by a
+  pre-0.15.0 CLI (with dotted, uncallable names) is otherwise byte-identical in the diff, so `apply` reported "no
+  change" and never ran the self-heal. The diff now compares the live `uniquename` against the expected bare name,
+  so a drifted API is detected as changed and reconciled (its parameters recreated dot-free) on the next `apply`;
+  a correctly-named API does not diff. Verified end to end on a real environment (a re-applied Custom API becomes
+  callable and round-trips through its plugin).
+
 ## [0.15.0] - 2026-09-23 (Vela.Cli)
 
 CLI line, published as `cli-v0.15.0`. Configurable connection timeout, the Custom API naming fix at apply time,

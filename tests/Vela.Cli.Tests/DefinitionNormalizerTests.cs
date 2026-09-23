@@ -176,4 +176,26 @@ public class DefinitionNormalizerTests
 
         Assert.Equal(JsonSerializer.Serialize(a), JsonSerializer.Serialize(b));
     }
+
+    [Fact]
+    public void CustomApi_dotted_parameter_uniquename_diffs_from_desired_while_bare_matches()
+    {
+        // Desired/local side carries no uniqueName, so it canonicalizes to the bare parameter name.
+        JsonElement desired = DefinitionNormalizer.NormalizeCustomApiDefinition(
+            Json(new { uniqueName = "zava_Api", outputParameters = new object[] { new { name = "Result" } } }), Options);
+
+        // A Custom API deployed by an older CLI minted a dotted response-property uniquename ("{api}.{name}.response")
+        // that Dataverse cannot serve. The live read now carries that value, so it must diff against the desired shape.
+        JsonElement liveDotted = DefinitionNormalizer.NormalizeCustomApiDefinition(
+            Json(new { uniqueName = "zava_Api", outputParameters = new object[] { new { name = "Result", uniqueName = "zava_Api.Result.response" } } }),
+            Options);
+
+        // A correctly-deployed API carries the bare uniquename and must NOT phantom-diff.
+        JsonElement liveBare = DefinitionNormalizer.NormalizeCustomApiDefinition(
+            Json(new { uniqueName = "zava_Api", outputParameters = new object[] { new { name = "Result", uniqueName = "Result" } } }),
+            Options);
+
+        Assert.NotEqual(JsonSerializer.Serialize(desired), JsonSerializer.Serialize(liveDotted));
+        Assert.Equal(JsonSerializer.Serialize(desired), JsonSerializer.Serialize(liveBare));
+    }
 }

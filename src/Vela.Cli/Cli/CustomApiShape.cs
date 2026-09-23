@@ -39,9 +39,12 @@ internal static class CustomApiShape
             outputParameters,
         };
 
-    public static object InputParameter(string name, bool isOptional, string? parameterTypeName, bool isCollection, string? logicalEntityName)
-        => new { name, isOptional, parameterTypeName, isCollection, logicalEntityName };
+    // uniqueName is part of the shape so a parameter/response-property whose live Dataverse uniquename has drifted
+    // from the expected bare name (an API deployed by an older CLI that minted dotted names, which Dataverse cannot
+    // serve) is detected as a change and reconciled by apply, instead of hiding behind an otherwise-identical shape.
+    public static object InputParameter(string name, bool isOptional, string? parameterTypeName, bool isCollection, string? logicalEntityName, string uniqueName)
+        => new { name, isOptional, parameterTypeName, isCollection, logicalEntityName, uniqueName };
 
-    public static object OutputParameter(string name, string? parameterTypeName, bool isCollection, string? logicalEntityName)
-        => new { name, parameterTypeName, isCollection, logicalEntityName };
+    public static object OutputParameter(string name, string? parameterTypeName, bool isCollection, string? logicalEntityName, string uniqueName)
+        => new { name, parameterTypeName, isCollection, logicalEntityName, uniqueName };
 }
