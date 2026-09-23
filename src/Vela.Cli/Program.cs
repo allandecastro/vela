@@ -480,26 +480,6 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
 static bool WantsHumanOutput(SharedOptions options) =>
     !options.Json && string.IsNullOrWhiteSpace(options.OutPath) && !Console.IsOutputRedirected;
 
-// Best-effort cleanup of the temp directories created while extracting/transforming packages.
-// Failures are surfaced to stderr rather than silently swallowed so a leaked directory is visible.
-static void CleanupTempDirectories(List<string> tempDirectories)
-{
-    foreach (string directory in tempDirectories)
-    {
-        try
-        {
-            if (Directory.Exists(directory))
-            {
-                Directory.Delete(directory, recursive: true);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Warning: failed to delete temp directory '{directory}': {ex.Message}");
-        }
-    }
-}
-
 // This file is the CLI entry point and command orchestration only. The implementation lives in the
 // Vela.Cli namespace: RegistrationModels, CliExitCodes, JsonReader,
 // DefinitionNormalizer, DiffEngine, OutputWriter, ApplyResumeReport, CommandLineOptions,

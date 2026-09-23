@@ -86,7 +86,7 @@ internal static class AddCommand
             return Fail($"Unknown 'add' kind '{args[0]}'. Expected 'plugin', 'customapi', 'service', 'test', 'step', 'form-script' or 'ribbon-script'.", ExitInvalidArguments, includeUsage: false);
         }
 
-        string? name = FindPositional(args.Skip(1).ToArray());
+        string? name = FindPositional(args.Skip(1).ToArray(), ValueOptions);
         if (string.IsNullOrWhiteSpace(name))
         {
             return Fail($"Missing name. Usage: vela add {kind} <Name> [--entity <ModelType>] [--project <csproj>] [--force]", ExitInvalidArguments, includeUsage: false);
@@ -130,7 +130,7 @@ internal static class AddCommand
     // refuses to overwrite an existing file without --force; the entry-map insertion stays idempotent.
     private static int AddFormScript(string[] args)
     {
-        string? raw = FindPositional(args.Skip(1).ToArray());
+        string? raw = FindPositional(args.Skip(1).ToArray(), ValueOptions);
         if (string.IsNullOrWhiteSpace(raw))
         {
             return Fail("Missing table. Usage: vela add form-script <entity> [--project <web-resources dir>] [--force]", ExitInvalidArguments, includeUsage: false);
@@ -210,7 +210,7 @@ internal static class AddCommand
     // without --force; the entry-map insertion stays idempotent. The maker wires the button to the printed namespace.
     private static int AddRibbonScript(string[] args)
     {
-        string? raw = FindPositional(args.Skip(1).ToArray());
+        string? raw = FindPositional(args.Skip(1).ToArray(), ValueOptions);
         if (string.IsNullOrWhiteSpace(raw))
         {
             return Fail("Missing table. Usage: vela add ribbon-script <entity> [--project <web-resources dir>] [--force]", ExitInvalidArguments, includeUsage: false);
@@ -701,10 +701,10 @@ internal static class AddCommand
         projectFile = string.Empty;
         error = string.Empty;
 
-        string[] candidates = Directory.GetFiles(directory, "*.csproj", SearchOption.TopDirectoryOnly);
-        if (candidates.Length == 1)
+        string? single = SingleCsproj(directory, out string[] candidates);
+        if (single != null)
         {
-            projectFile = candidates[0];
+            projectFile = single;
             return true;
         }
 
@@ -893,27 +893,6 @@ internal static class AddCommand
     {
         "--force", "--json", "--bound", "--global", "--function", "--action", "--interactive", "-i", "--help", "-h",
     };
-
-    private static string? FindPositional(string[] args)
-    {
-        for (int i = 0; i < args.Length; i++)
-        {
-            string current = args[i];
-            if (current.StartsWith('-'))
-            {
-                if (i + 1 < args.Length && ValueOptions.Contains(current))
-                {
-                    i++;
-                }
-
-                continue;
-            }
-
-            return current;
-        }
-
-        return null;
-    }
 
     private static void PrintAddUsage()
     {

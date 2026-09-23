@@ -242,86 +242,60 @@ internal static class CommandLineOptions
             }
         }
 
-        List<string> packagePaths = [];
-        packagePaths.AddRange(ReadMultiOption(args, "--package"));
-        packagePaths.AddRange(ReadMultiOption(args, "-p"));
-
-        string? packagesDir = TryReadOption(args, "--packages-dir");
-        if (!string.IsNullOrWhiteSpace(packagesDir))
+        // Resolve --package/-p/--packages-dir to validated, de-duplicated full paths (shared with `vela models`).
+        if (!TryResolvePackagePaths(args, out List<string> packagePaths, out exitCode))
         {
-            string fullDir = Path.GetFullPath(packagesDir);
-            if (!Directory.Exists(fullDir))
-            {
-                exitCode = Fail($"Packages directory not found: {fullDir}", ExitFileNotFound, includeUsage: false);
-                return false;
-            }
-
-            packagePaths.AddRange(Directory.GetFiles(fullDir, "*.nupkg", SearchOption.TopDirectoryOnly));
+            return false;
         }
 
+        // With no package option, fall back to a positional package path, then interactive prompts. A web resources
+        // root makes this optional (a web-resource-only deploy is valid), so only that path may finish empty.
         if (packagePaths.Count == 0)
         {
+            List<string> fallback = [];
             string? positional = TryReadFirstPositional(args, SharedValueOptions);
             if (!string.IsNullOrWhiteSpace(positional))
             {
-                packagePaths.Add(positional);
+                fallback.Add(positional);
             }
-        }
 
-        // With a web resources root, running without any plugin package is valid (web-resource-only deploy).
-        if (packagePaths.Count == 0 && string.IsNullOrWhiteSpace(webResourcesRoot))
-        {
-            if (interactive)
+            if (fallback.Count == 0 && string.IsNullOrWhiteSpace(webResourcesRoot) && interactive)
             {
                 string? packagePrompt = Prompt("Package .nupkg path (or leave empty to use a folder):");
                 if (!string.IsNullOrWhiteSpace(packagePrompt))
                 {
-                    packagePaths.Add(packagePrompt);
+                    fallback.Add(packagePrompt);
                 }
                 else
                 {
                     string? folderPrompt = Prompt("Packages folder path:");
                     if (!string.IsNullOrWhiteSpace(folderPrompt))
                     {
-                        packagesDir = folderPrompt;
-                        string fullDir = Path.GetFullPath(packagesDir);
+                        string fullDir = Path.GetFullPath(folderPrompt);
                         if (!Directory.Exists(fullDir))
                         {
                             exitCode = Fail($"Packages directory not found: {fullDir}", ExitFileNotFound, includeUsage: false);
                             return false;
                         }
 
-                        packagePaths.AddRange(Directory.GetFiles(fullDir, "*.nupkg", SearchOption.TopDirectoryOnly));
+                        fallback.AddRange(Directory.GetFiles(fullDir, "*.nupkg", SearchOption.TopDirectoryOnly));
                     }
                 }
             }
 
-            if (packagePaths.Count == 0)
+            if (fallback.Count > 0 && !TryResolvePackagePaths(args, fallback, out packagePaths, out exitCode))
+            {
+                return false;
+            }
+
+            if (packagePaths.Count == 0 && string.IsNullOrWhiteSpace(webResourcesRoot))
             {
                 exitCode = Fail("Missing package input. Use --package <file.nupkg> (repeatable) or --packages-dir <folder>.", ExitInvalidArguments);
                 return false;
             }
         }
 
-        string[] resolvedPackages = packagePaths
-            .Select(Path.GetFullPath)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        foreach (string packagePath in resolvedPackages)
-        {
-            if (!File.Exists(packagePath))
-            {
-                exitCode = Fail($"Package not found: {packagePath}", ExitFileNotFound, includeUsage: false);
-                return false;
-            }
-
-            if (!packagePath.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
-            {
-                exitCode = Fail($"Package must be a .nupkg file: {packagePath}", ExitInvalidArguments, includeUsage: false);
-                return false;
-            }
-        }
+        string[] resolvedPackages = packagePaths.ToArray();
 
         if (!TryReadTimeoutMinutes(args, out int? timeoutMinutes, out exitCode))
         {
@@ -353,6 +327,64 @@ internal static class CommandLineOptions
             WebResourcesRoot: webResourcesRoot,
             Json: args.Any(x => string.Equals(x, "--json", StringComparison.OrdinalIgnoreCase)),
             TimeoutMinutes: timeoutMinutes);
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves the plugin-package inputs to full, de-duplicated, validated <c>.nupkg</c> paths: <c>--package</c>
+    /// (repeatable), its <c>-p</c> short alias, and <c>--packages-dir</c> (a folder of <c>.nupkg</c>). Shared by the
+    /// plan/apply/inspect parser and <c>vela models</c> so the package-path convention lives in one place. Returns
+    /// true with a (possibly empty) list; false plus an exit code on a missing directory or package path.
+    /// </summary>
+    public static bool TryResolvePackagePaths(string[] args, out List<string> packagePaths, out int exitCode) =>
+        TryResolvePackagePaths(args, null, out packagePaths, out exitCode);
+
+    /// <summary>
+    /// The <see cref="TryResolvePackagePaths(string[], out List{string}, out int)"/> overload that also folds in the
+    /// caller-collected <paramref name="seed"/> paths (a positional token or an interactive prompt from the shared
+    /// parser), validating them the same way as the option-supplied ones.
+    /// </summary>
+    public static bool TryResolvePackagePaths(string[] args, IEnumerable<string>? seed, out List<string> packagePaths, out int exitCode)
+    {
+        exitCode = ExitSuccess;
+        List<string> paths = seed is null ? [] : new List<string>(seed);
+        paths.AddRange(ReadMultiOption(args, "--package"));
+        paths.AddRange(ReadMultiOption(args, "-p")); // -p is the shared short alias for --package (as in plan/apply)
+
+        string? packagesDir = TryReadOption(args, "--packages-dir");
+        if (!string.IsNullOrWhiteSpace(packagesDir))
+        {
+            string fullDir = Path.GetFullPath(packagesDir);
+            if (!Directory.Exists(fullDir))
+            {
+                packagePaths = [];
+                exitCode = Fail($"Packages directory not found: {fullDir}", ExitFileNotFound, includeUsage: false);
+                return false;
+            }
+
+            paths.AddRange(Directory.GetFiles(fullDir, "*.nupkg", SearchOption.TopDirectoryOnly));
+        }
+
+        packagePaths = paths
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (string packagePath in packagePaths)
+        {
+            if (!File.Exists(packagePath))
+            {
+                exitCode = Fail($"Package not found: {packagePath}", ExitFileNotFound, includeUsage: false);
+                return false;
+            }
+
+            if (!packagePath.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+            {
+                exitCode = Fail($"Package must be a .nupkg file: {packagePath}", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -704,6 +736,44 @@ internal static class CommandLineOptions
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Returns the first positional argument: the first token that does not start with <c>-</c> and is not the value
+    /// of a value-taking option in <paramref name="valueOptions"/>. Returns null when there is none. Unlike
+    /// <see cref="TryReadFirstPositional"/>, a value option always consumes the following token (so a name that itself
+    /// starts with <c>-</c> is still skipped as that option's value). Shared by <c>vela add</c> and <c>vela scaffold</c>.
+    /// </summary>
+    public static string? FindPositional(string[] args, HashSet<string> valueOptions)
+    {
+        for (int i = 0; i < args.Length; i++)
+        {
+            string current = args[i];
+            if (current.StartsWith('-'))
+            {
+                if (i + 1 < args.Length && valueOptions.Contains(current))
+                {
+                    i++;
+                }
+
+                continue;
+            }
+
+            return current;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the single top-level <c>.csproj</c> in <paramref name="directory"/>, or null when there is none or
+    /// more than one. <paramref name="candidates"/> exposes every match so a caller can tailor a "none"/"multiple"
+    /// message. Shared by <c>vela add</c> and <c>vela models</c>.
+    /// </summary>
+    public static string? SingleCsproj(string directory, out string[] candidates)
+    {
+        candidates = Directory.GetFiles(directory, "*.csproj", SearchOption.TopDirectoryOnly);
+        return candidates.Length == 1 ? candidates[0] : null;
     }
 
     /// <summary>True when <paramref name="flag"/> appears anywhere in <paramref name="args"/> (case-insensitive).</summary>

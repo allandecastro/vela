@@ -246,7 +246,7 @@ internal static class ModelsCommand
             }
             finally
             {
-                CleanupTempDirectories(tempDirectories);
+                PackageScanner.CleanupTempDirectories(tempDirectories);
             }
         }
 
@@ -883,52 +883,6 @@ internal static class ModelsCommand
         return map;
     }
 
-    // Resolves the optional plugin package inputs (--package, repeatable; --packages-dir, a folder of .nupkg) to full
-    // paths, mirroring how plan/apply parse them. Returns true with a (possibly empty) list; false plus an exit code
-    // on a bad path. No package option given = an empty list, and Custom API ALL mode stays unfiltered.
-    private static bool TryResolvePackagePaths(string[] args, out List<string> packagePaths, out int exitCode)
-    {
-        exitCode = ExitSuccess;
-        List<string> paths = ReadMultiOption(args, "--package");
-        paths.AddRange(ReadMultiOption(args, "-p")); // -p is the shared short alias for --package (as in plan/apply)
-
-        string? packagesDir = TryReadOption(args, "--packages-dir");
-        if (!string.IsNullOrWhiteSpace(packagesDir))
-        {
-            string fullDir = Path.GetFullPath(packagesDir);
-            if (!Directory.Exists(fullDir))
-            {
-                packagePaths = new List<string>();
-                exitCode = Fail($"Packages directory not found: {fullDir}", ExitFileNotFound, includeUsage: false);
-                return false;
-            }
-
-            paths.AddRange(Directory.GetFiles(fullDir, "*.nupkg", SearchOption.TopDirectoryOnly));
-        }
-
-        packagePaths = paths
-            .Select(Path.GetFullPath)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        foreach (string packagePath in packagePaths)
-        {
-            if (!File.Exists(packagePath))
-            {
-                exitCode = Fail($"Package not found: {packagePath}", ExitFileNotFound, includeUsage: false);
-                return false;
-            }
-
-            if (!packagePath.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
-            {
-                exitCode = Fail($"Package must be a .nupkg file: {packagePath}", ExitInvalidArguments, includeUsage: false);
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     // The unique names of every Custom API authored in the scanned package(s), from the normalized "custom-api" items.
     // Case-insensitive so it matches the environment's uniquename regardless of casing.
     internal static HashSet<string> AuthoredCustomApiUniqueNames(RegistrationState state)
@@ -963,26 +917,6 @@ internal static class ModelsCommand
         List<string> kept = all.Where(n => !authoredUniqueNames.Contains(n)).ToList();
         excludedCount = all.Count - kept.Count;
         return kept;
-    }
-
-    // Best-effort removal of the temp folders the package scan extracted into (mirrors Program.CleanupTempDirectories,
-    // which is a Program-scoped local function and so not reachable here).
-    private static void CleanupTempDirectories(List<string> tempDirectories)
-    {
-        foreach (string directory in tempDirectories)
-        {
-            try
-            {
-                if (Directory.Exists(directory))
-                {
-                    Directory.Delete(directory, recursive: true);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Warning: failed to delete temp directory '{directory}': {ex.Message}");
-            }
-        }
     }
 
     // Reads every Custom API (with its request parameters and response properties) in a fixed number of paged
@@ -1288,7 +1222,7 @@ internal static class ModelsCommand
     private static string? FindProjectInDirectory(string directory)
     {
         // A single top-level .csproj is the unambiguous project (running from a project folder).
-        string? single = SingleCsproj(directory);
+        string? single = SingleCsproj(directory, out _);
         if (single != null)
         {
             return single;
@@ -1297,12 +1231,6 @@ internal static class ModelsCommand
         // Otherwise, when run from a solution root, derive the namespace from a representative project listed
         // in the .sln so `vela models` "just works" from the root like plan/apply do.
         return ProjectFromSolution(directory);
-    }
-
-    private static string? SingleCsproj(string directory)
-    {
-        string[] candidates = Directory.GetFiles(directory, "*.csproj", SearchOption.TopDirectoryOnly);
-        return candidates.Length == 1 ? candidates[0] : null;
     }
 
     // Picks a representative project from a single .sln in the directory. Any role-suffixed project yields the
