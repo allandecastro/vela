@@ -280,6 +280,28 @@ public class ModelsCommandTests
         }
     }
 
+    [Theory]
+    [InlineData("../escape.ts")]
+    [InlineData("../../escape.ts")]
+    [InlineData("sub/../../escape.ts")]
+    public void WriteModels_Refuses_File_Name_That_Escapes_Output_Directory(string fileName)
+    {
+        string dir = TempDir();
+        try
+        {
+            int exit = ModelsCommand.WriteModels(
+                new[] { new GeneratedModel(fileName, "// evil") }, dir, overwrite: true, json: false, summarySuffix: "");
+
+            Assert.Equal(ExitInvalidArguments, exit);
+            // The traversal target one level above the output directory must never be created.
+            Assert.False(System.IO.File.Exists(System.IO.Path.Combine(dir, "..", "escape.ts")));
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public void BuildGenerationReport_Lists_Files_In_Order()
     {

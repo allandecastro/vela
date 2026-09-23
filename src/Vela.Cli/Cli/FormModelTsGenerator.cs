@@ -557,9 +557,29 @@ public static class FormModelTsGenerator
         return char.IsDigit(name[0]) ? "_" + name : name;
     }
 
-    // Nested layout: forms/<entity logical name, lower-cased>/<slug>.form.ts. The folder carries the entity, so the
+    // Nested layout: forms/<entity logical name, sanitized>/<slug>.form.ts. The folder carries the entity, so the
     // file name itself drops the entity prefix.
-    private static string FileName(string entity, string formName) => $"forms/{entity.ToLowerInvariant()}/{Slug(formName)}.form.ts";
+    private static string FileName(string entity, string formName) => $"forms/{SanitizeSegment(entity)}/{Slug(formName)}.form.ts";
+
+    // Characters stripped from a path segment: the union of the Windows-reserved set and control characters, so the
+    // result is a safe file name on every platform (Path.GetInvalidFileNameChars only reports "/" and NUL on Unix).
+    private static readonly char[] ReservedSegmentChars =
+        "<>:\"/\\|?*".ToCharArray().Concat(Enumerable.Range(0, 32).Select(i => (char)i)).ToArray();
+
+    // Reduces a value to a safe single path segment: lower-cased, with every path separator and character that is
+    // invalid or reserved in a file name stripped, and leading/trailing dots and spaces removed. Dataverse logical
+    // names are already lower-case letters, digits and underscores, so well-formed input is returned unchanged; a
+    // hostile or malformed logical name can never inject a subfolder ("a/b"), escape the forms/ directory ("..") or
+    // produce an invalid file name. An empty result falls back to "_" so a segment is always emitted.
+    private static string SanitizeSegment(string value)
+    {
+        string cleaned = new string(value
+            .Where(c => Array.IndexOf(ReservedSegmentChars, c) < 0)
+            .ToArray())
+            .Trim('.', ' ')
+            .ToLowerInvariant();
+        return cleaned.Length == 0 ? "_" : cleaned;
+    }
 
     // Ensures a name is unique within the batch by appending 2, 3, ... on collision (matching ModelGenerator).
     private static string UniqueName(string name, HashSet<string> used)

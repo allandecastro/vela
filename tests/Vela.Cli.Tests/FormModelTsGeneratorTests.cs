@@ -334,6 +334,30 @@ public class FormModelTsGeneratorTests
         Assert.Contains("export const ContactFooBar2 = {", files[1].Code);
     }
 
+    [Theory]
+    [InlineData("con/tact")]
+    [InlineData("../contact")]
+    [InlineData("con:tact")]
+    [InlineData("con\\tact")]
+    public void Entity_Segment_Is_Sanitized_To_A_Safe_Single_Path_Segment(string logicalName)
+    {
+        // A hostile or malformed logical name must not inject a subfolder or escape the forms/ directory: the entity
+        // folder segment is stripped of path separators and invalid file-name characters (leading/trailing dots too).
+        EntityMetadata entity = MetadataFactory.Entity(logicalName, "Contact")
+            .PrimaryId("contactid", "ContactId")
+            .String("firstname", "FirstName").Display("First Name")
+            .Build();
+
+        var files = FormModelTsGenerator.Generate(new[]
+        {
+            new FormSource("id", "Main", "Info", FormXmlParser.Parse(OneSection("s", "firstname")), entity),
+        });
+
+        string formFile = files.Single(f => f.FileName.EndsWith(".form.ts", System.StringComparison.Ordinal)).FileName;
+        Assert.Equal("forms/contact/info.form.ts", formFile);
+        Assert.DoesNotContain("..", formFile);
+    }
+
     [Fact]
     public void Generate_Null_Throws()
     {

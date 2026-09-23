@@ -27,6 +27,15 @@ by what you are doing. New here? Follow [Install](../getting-started/install.md)
   <a class="vela-card" href="caching.md"><span class="t">Caching</span><span class="d">TTL cache with refresh for plugin data.</span></a>
 </div>
 
+## Built-in services
+
+<div class="vela-cards">
+  <a class="vela-card" href="environment-variables.md"><span class="t">Environment variables</span><span class="d">Read Dataverse environment variables from a plugin, typed.</span></a>
+  <a class="vela-card" href="managed-identity.md"><span class="t">Managed identity</span><span class="d">Call external APIs with a managed-identity token, no stored secret.</span></a>
+  <a class="vela-card" href="telemetry.md"><span class="t">Telemetry & Application Insights</span><span class="d">Emit leveled, structured telemetry from a plugin handler.</span></a>
+  <a class="vela-card" href="escape-hatches.md"><span class="t">Escape hatches</span><span class="d">Drop to the raw Dataverse SDK when a helper does not cover a case.</span></a>
+</div>
+
 ## Test
 
 <div class="vela-cards">
