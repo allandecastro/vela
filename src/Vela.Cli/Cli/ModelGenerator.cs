@@ -249,7 +249,8 @@ public static class ModelGenerator
         {
             // Keep the "Key" suffix so callers read as ByAccountNumberKey(...). An alternate key can be made of
             // several columns, so each key attribute becomes its own typed parameter, in the key's declared order.
-            string method = UniqueName("By" + CSharpIdentifier.EscapeKeyword(key.SchemaName ?? Pascalize(key.LogicalName ?? "Key")), usedNames);
+            // Escape AFTER composing so a keyword SchemaName (e.g. "class") yields a valid "ByClass", not "By@class".
+            string method = UniqueName(CSharpIdentifier.EscapeKeyword("By" + (key.SchemaName ?? Pascalize(key.LogicalName ?? "Key"))), usedNames);
 
             HashSet<string> paramNames = new HashSet<string>(StringComparer.Ordinal);
             List<(string LogicalName, string ParamName, string Type)> parts = new List<(string, string, string)>();

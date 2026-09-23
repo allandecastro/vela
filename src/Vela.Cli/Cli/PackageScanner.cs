@@ -137,6 +137,28 @@ internal static class PackageScanner
         SecureConfigByStepKey: secureConfigByStepKey);
 }
 
+    // Best-effort cleanup of the temp directories created while extracting/transforming packages (see
+    // ExtractPackage / DataverseRegistration.ReadPackageBytesForImport). Failures are surfaced to stderr rather
+    // than silently swallowed so a leaked directory is visible. Shared by Program (plan/apply/inspect) and
+    // `vela models` so the cleanup lives in one place.
+    internal static void CleanupTempDirectories(List<string> tempDirectories)
+{
+    foreach (string directory in tempDirectories)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Warning: failed to delete temp directory '{directory}': {ex.Message}");
+        }
+    }
+}
+
     // An isolated, byte-loading assembly load context. Loading assemblies from bytes (never LoadFrom /
     // LoadFromAssemblyPath) means the underlying .dll files are never locked, so the extracted temp folders can
     // be deleted right after the scan - on Windows LoadFrom holds the file open for the process lifetime, which

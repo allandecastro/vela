@@ -118,7 +118,7 @@ internal sealed record ScaffoldOptions(
         // Resolve the name from --name, else the first positional token. FindPositional skips only the
         // values of value-taking options, so boolean flags (e.g. `init --force MySolution`) do not
         // swallow the name - unlike the shared TryReadFirstPositional heuristic.
-        string? name = TryReadOption(args, "--name") ?? FindPositional(args);
+        string? name = TryReadOption(args, "--name") ?? FindPositional(args, ValueOptions);
 
         if (string.IsNullOrWhiteSpace(name) && interactive)
         {
@@ -333,29 +333,6 @@ internal sealed record ScaffoldOptions(
         "--force", "--json", "--managed-identity", "--mi", "--no-console", "--no-integrations", "--no-tests",
         "--web-resources", "--webresources", "--interactive", "-i", "--help", "-h",
     };
-
-    // Returns the first positional argument (a token not starting with '-' and not the value of a
-    // value-taking option), or null if there is none.
-    private static string? FindPositional(string[] args)
-    {
-        for (int i = 0; i < args.Length; i++)
-        {
-            string current = args[i];
-            if (current.StartsWith('-'))
-            {
-                if (i + 1 < args.Length && ValueOptions.Contains(current))
-                {
-                    i++;
-                }
-
-                continue;
-            }
-
-            return current;
-        }
-
-        return null;
-    }
 
     private static bool PromptYesNo(string label, bool defaultYes)
     {
