@@ -348,7 +348,7 @@ internal static class OutputWriter
 
         console.MarkupLine("[bold]Commands:[/]");
         WriteCommand(console, "plan", "Preview registration changes; never writes to Dataverse.");
-        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--webresources <folder> (preview)] [connection options] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose] [--json]");
+        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--webresources <folder> (preview)] [connection options] [--timeout <minutes>] [--environment <label>] [--out <file>] [--interactive] [--strict] [--verbose] [--json]");
         WriteCommand(console, "apply", "Same inputs as plan; writes the changes (prompts for confirmation).");
         Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--auto-approve|--yes] [--strict] [--verbose] [--json]");
         WriteCommand(console, "inspect", "Compare local packages with the live environment.");
@@ -359,7 +359,7 @@ internal static class OutputWriter
         Console.WriteLine("      (plugin|service|customapi|test|step) <Name> [...]   run 'vela add --help' for the full options");
         WriteCommand(console, "models", "Generate early-bound model classes (C#) or TypeScript (preview).");
         Console.WriteLine("      scope: --solution <uniquename> | --entities <a,b,c> | --custom-apis [<a,b,c>] | --messages [<a,b,c>] | --roles <a,b,c> | --solution-roles (combinable)");
-        Console.WriteLine("      [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--lang csharp|ts] [--forms and/or --tables (preview, TypeScript)] [connection options]");
+        Console.WriteLine("      [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--lang csharp|ts] [--forms and/or --tables (preview, TypeScript)] [connection options] [--timeout <minutes>]");
         Console.WriteLine("      run 'vela models --help' for the full scope/option reference");
         WriteCommand(console, "sign", "Sign a plugin package.");
         Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
@@ -379,6 +379,7 @@ internal static class OutputWriter
         Console.WriteLine("  --interactive persists the login token (cross-platform cache under ~/.vela) so repeat runs are silent; --fresh-login forces a new prompt, 'vela logout' clears it.");
         Console.WriteLine("  --auth-client-id <appId>   Override the MSAL public client id used for --interactive browser login.");
         Console.WriteLine("  --authority <url>          Override the MSAL authority (e.g. for sovereign clouds).");
+        Console.WriteLine("  --timeout <minutes>        Max Dataverse connection timeout in minutes (1-60, default 10; raise for very large orgs).");
         Console.WriteLine("  --verbose also prints full exception stack traces on failure.");
         console.WriteLine();
 

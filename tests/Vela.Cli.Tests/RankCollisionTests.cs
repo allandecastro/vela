@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 using Vela.Cli;
 using Vela.Cli.Tests.TestSupport;
 using Xunit;
@@ -169,7 +170,7 @@ public sealed class RankCollisionTests
         };
 
         List<RankStep> steps = DataverseRegistration.GetEnvironmentRankSteps(
-            service, ["Update"], new HashSet<Guid> { ours });
+            service, ["Update"], new HashSet<Guid> { ours }, ["account"], hasGlobalCoordinate: false);
 
         RankStep only = Assert.Single(steps);
         Assert.Equal("OtherStep", only.Label);
@@ -180,10 +181,64 @@ public sealed class RankCollisionTests
     public void GetEnvironmentRankSteps_returns_empty_without_querying_when_no_messages()
     {
         var service = new FakeOrgService();
-        List<RankStep> steps = DataverseRegistration.GetEnvironmentRankSteps(service, [], new HashSet<Guid>());
+        List<RankStep> steps = DataverseRegistration.GetEnvironmentRankSteps(service, [], new HashSet<Guid>(), [], hasGlobalCoordinate: false);
 
         Assert.Empty(steps);
         Assert.Empty(service.Queries);
+    }
+
+    // ---- GetEnvironmentRankSteps query SHAPE (row-scoping optimization) ----------------------------
+
+    private static LinkEntity FilterLink(QueryExpression query)
+        => query.LinkEntities.Single(l => l.LinkToEntityName == "sdkmessagefilter");
+
+    [Fact]
+    public void GetEnvironmentRankSteps_scopes_the_filter_link_to_touched_entities_when_no_global_coordinate()
+    {
+        var service = new FakeOrgService();
+
+        DataverseRegistration.GetEnvironmentRankSteps(
+            service, ["Update", "Create"], new HashSet<Guid>(), ["account", "contact"], hasGlobalCoordinate: false);
+
+        QueryExpression query = Assert.Single(service.Queries);
+        LinkEntity filterLink = FilterLink(query);
+
+        Assert.Equal(JoinOperator.Inner, filterLink.JoinOperator);
+        ConditionExpression condition = Assert.Single(
+            filterLink.LinkCriteria.Conditions,
+            c => c.AttributeName == "primaryobjecttypecode");
+        Assert.Equal(ConditionOperator.In, condition.Operator);
+        Assert.Equal(new object[] { "account", "contact" }, condition.Values);
+    }
+
+    [Fact]
+    public void GetEnvironmentRankSteps_keeps_leftouter_unrestricted_when_a_global_coordinate_is_present()
+    {
+        var service = new FakeOrgService();
+
+        DataverseRegistration.GetEnvironmentRankSteps(
+            service, ["Update"], new HashSet<Guid>(), ["account"], hasGlobalCoordinate: true);
+
+        QueryExpression query = Assert.Single(service.Queries);
+        LinkEntity filterLink = FilterLink(query);
+
+        Assert.Equal(JoinOperator.LeftOuter, filterLink.JoinOperator);
+        Assert.DoesNotContain(filterLink.LinkCriteria.Conditions, c => c.AttributeName == "primaryobjecttypecode");
+    }
+
+    [Fact]
+    public void GetEnvironmentRankSteps_keeps_leftouter_unrestricted_when_no_touched_entities()
+    {
+        var service = new FakeOrgService();
+
+        DataverseRegistration.GetEnvironmentRankSteps(
+            service, ["Update"], new HashSet<Guid>(), [], hasGlobalCoordinate: false);
+
+        QueryExpression query = Assert.Single(service.Queries);
+        LinkEntity filterLink = FilterLink(query);
+
+        Assert.Equal(JoinOperator.LeftOuter, filterLink.JoinOperator);
+        Assert.DoesNotContain(filterLink.LinkCriteria.Conditions, c => c.AttributeName == "primaryobjecttypecode");
     }
 
     // ---- BuildRankCollisionDiagnostics (orchestration) ---------------------------------------------
@@ -237,5 +292,44 @@ public sealed class RankCollisionTests
 
         Assert.Empty(warnings);
         Assert.Empty(service.Queries);
+    }
+
+    [Fact]
+    public void BuildRankCollisionDiagnostics_scopes_the_env_read_to_touched_entities_when_all_local_steps_are_entity_bound()
+    {
+        var service = new FakeOrgService();
+
+        DataverseRegistration.BuildRankCollisionDiagnostics(
+            service,
+            [Step("Update", "account", 40, 0, 1, "A"), Step("Create", "contact", 20, 0, 1, "B")],
+            new HashSet<Guid>());
+
+        QueryExpression query = Assert.Single(service.Queries);
+        LinkEntity filterLink = FilterLink(query);
+
+        Assert.Equal(JoinOperator.Inner, filterLink.JoinOperator);
+        ConditionExpression condition = Assert.Single(
+            filterLink.LinkCriteria.Conditions,
+            c => c.AttributeName == "primaryobjecttypecode");
+        Assert.Equal(ConditionOperator.In, condition.Operator);
+        Assert.Equal(new[] { "account", "contact" }, condition.Values.Cast<string>().OrderBy(x => x));
+    }
+
+    [Fact]
+    public void BuildRankCollisionDiagnostics_keeps_unrestricted_read_when_a_global_coordinate_is_present()
+    {
+        var service = new FakeOrgService();
+
+        // "Associate" is a global message (no primary entity), so scoping by entity would be lossy: keep LeftOuter.
+        DataverseRegistration.BuildRankCollisionDiagnostics(
+            service,
+            [Step("Update", "account", 40, 0, 1, "A"), Step("Associate", "", 40, 0, 1, "B")],
+            new HashSet<Guid>());
+
+        QueryExpression query = Assert.Single(service.Queries);
+        LinkEntity filterLink = FilterLink(query);
+
+        Assert.Equal(JoinOperator.LeftOuter, filterLink.JoinOperator);
+        Assert.DoesNotContain(filterLink.LinkCriteria.Conditions, c => c.AttributeName == "primaryobjecttypecode");
     }
 }

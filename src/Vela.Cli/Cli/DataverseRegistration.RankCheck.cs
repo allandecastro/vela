@@ -56,7 +56,7 @@ internal static partial class DataverseRegistration
     /// handled by <paramref name="excludePluginTypeIds"/> (the plugin types being deployed — their live steps
     /// are represented by the local desired set instead, so counting both would be a false positive).
     /// </summary>
-    internal static List<RankStep> GetEnvironmentRankSteps(IOrganizationService service, IReadOnlyCollection<string> messageNames, ISet<Guid> excludePluginTypeIds)
+    internal static List<RankStep> GetEnvironmentRankSteps(IOrganizationService service, IReadOnlyCollection<string> messageNames, ISet<Guid> excludePluginTypeIds, IReadOnlyCollection<string> touchedEntities, bool hasGlobalCoordinate)
     {
         List<RankStep> result = [];
         if (messageNames.Count == 0)
@@ -76,7 +76,22 @@ internal static partial class DataverseRegistration
         messageLink.Columns = new ColumnSet("name");
         messageLink.LinkCriteria.AddCondition("name", ConditionOperator.In, messageNames.Cast<object>().ToArray());
 
-        LinkEntity filterLink = query.AddLink("sdkmessagefilter", "sdkmessagefilterid", "sdkmessagefilterid", JoinOperator.LeftOuter);
+        // When every touched coordinate is entity-bound, only steps on those same entities can ever land on a
+        // touched (message, entity, stage, mode) coordinate, so an Inner join filtered by primaryobjecttypecode
+        // reads far fewer rows on a big org WITHOUT changing the result (BuildRankCollisionDiagnostics filters to
+        // the touched coordinates anyway). A global coordinate (entity-less message / custom API) has no
+        // primaryobjecttypecode to match, so in that case keep the unrestricted LeftOuter link for correctness.
+        LinkEntity filterLink;
+        if (!hasGlobalCoordinate && touchedEntities.Count > 0)
+        {
+            filterLink = query.AddLink("sdkmessagefilter", "sdkmessagefilterid", "sdkmessagefilterid", JoinOperator.Inner);
+            filterLink.LinkCriteria.AddCondition("primaryobjecttypecode", ConditionOperator.In, touchedEntities.Cast<object>().ToArray());
+        }
+        else
+        {
+            filterLink = query.AddLink("sdkmessagefilter", "sdkmessagefilterid", "sdkmessagefilterid", JoinOperator.LeftOuter);
+        }
+
         filterLink.EntityAlias = "filter";
         filterLink.Columns = new ColumnSet("primaryobjecttypecode");
 
@@ -125,7 +140,17 @@ internal static partial class DataverseRegistration
             .Where(m => !string.IsNullOrWhiteSpace(m))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        List<RankStep> envSteps = GetEnvironmentRankSteps(service, messages, ourPluginTypeIds);
+        // The distinct entities the deployment lands on, and whether any touched coordinate is global (entity-less
+        // message / custom API). Together these let GetEnvironmentRankSteps scope the read to the touched entities
+        // when it is loss-free to do so (no global coordinate present).
+        HashSet<string> touchedEntities = localDesiredSteps
+            .Select(s => s.EntityLogicalName)
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool hasGlobalCoordinate = localDesiredSteps
+            .Any(s => string.IsNullOrWhiteSpace(s.EntityLogicalName) || DefinitionNormalizer.IsGlobalMessage(s.Message));
+
+        List<RankStep> envSteps = GetEnvironmentRankSteps(service, messages, ourPluginTypeIds, touchedEntities, hasGlobalCoordinate);
 
         // Only report collisions on coordinates the deployment touches; a step lands there when a local desired
         // step occupies that (message, entity, stage, mode).

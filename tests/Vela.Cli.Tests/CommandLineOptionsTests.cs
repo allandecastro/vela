@@ -311,6 +311,115 @@ public class CommandLineOptionsTests
         Assert.Contains("ClientSecret=secret", cs);
         Assert.Contains("RequireNewInstance=true", cs);
     }
+
+    // ---- --timeout (connection timeout in minutes) ------------------------------------------------
+
+    [Fact]
+    public void TryReadTimeoutMinutes_absent_leaves_null_and_succeeds()
+    {
+        bool ok = CommandLineOptions.TryReadTimeoutMinutes(["--url", "https://x.crm.dynamics.com"], out int? minutes, out int exit);
+
+        Assert.True(ok);
+        Assert.Equal(ExitSuccess, exit);
+        Assert.Null(minutes);
+    }
+
+    [Fact]
+    public void TryReadTimeoutMinutes_parses_a_valid_value()
+    {
+        bool ok = CommandLineOptions.TryReadTimeoutMinutes(["--timeout", "15"], out int? minutes, out int exit);
+
+        Assert.True(ok);
+        Assert.Equal(ExitSuccess, exit);
+        Assert.Equal(15, minutes);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("99")]
+    [InlineData("abc")]
+    public void TryReadTimeoutMinutes_rejects_out_of_range_or_non_numeric_values(string value)
+    {
+        bool ok = CommandLineOptions.TryReadTimeoutMinutes(["--timeout", value], out int? minutes, out int exit);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exit);
+        Assert.Null(minutes);
+    }
+
+    [Fact]
+    public void TryParseSharedOptions_wires_timeout_onto_shared_options()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"vela-timeout-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, "Sample.Plugins.1.0.0.nupkg"), [0x50, 0x4b]);
+        try
+        {
+            string[] args =
+            [
+                "--packages-dir", dir, "--timeout", "15",
+                "--connection-string", "AuthType=OAuth;Url=https://x.crm.dynamics.com"
+            ];
+            bool ok = CommandLineOptions.TryParseSharedOptions(args, out SharedOptions options, out int exit);
+
+            Assert.True(ok);
+            Assert.Equal(ExitSuccess, exit);
+            Assert.Equal(15, options.TimeoutMinutes);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryParseSharedOptions_leaves_timeout_null_when_absent()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"vela-timeout-none-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, "Sample.Plugins.1.0.0.nupkg"), [0x50, 0x4b]);
+        try
+        {
+            string[] args =
+            [
+                "--packages-dir", dir,
+                "--connection-string", "AuthType=OAuth;Url=https://x.crm.dynamics.com"
+            ];
+            bool ok = CommandLineOptions.TryParseSharedOptions(args, out SharedOptions options, out int exit);
+
+            Assert.True(ok);
+            Assert.Equal(ExitSuccess, exit);
+            Assert.Null(options.TimeoutMinutes);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryParseSharedOptions_rejects_an_invalid_timeout()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"vela-timeout-bad-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, "Sample.Plugins.1.0.0.nupkg"), [0x50, 0x4b]);
+        try
+        {
+            string[] args =
+            [
+                "--packages-dir", dir, "--timeout", "99",
+                "--connection-string", "AuthType=OAuth;Url=https://x.crm.dynamics.com"
+            ];
+            bool ok = CommandLineOptions.TryParseSharedOptions(args, out _, out int exit);
+
+            Assert.False(ok);
+            Assert.Equal(ExitInvalidArguments, exit);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
@@ -19,7 +20,7 @@ internal static class CommandLineOptions
     internal static readonly HashSet<string> ConnectionValueOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "--connection-string", "--url", "--tenant-id", "--client-id", "--client-secret",
-        "--auth-client-id", "--authority",
+        "--auth-client-id", "--authority", "--timeout",
     };
 
     internal static readonly HashSet<string> ConnectionFlagOptions = new(StringComparer.OrdinalIgnoreCase)
@@ -322,6 +323,11 @@ internal static class CommandLineOptions
             }
         }
 
+        if (!TryReadTimeoutMinutes(args, out int? timeoutMinutes, out exitCode))
+        {
+            return false;
+        }
+
         if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out exitCode))
         {
             return false;
@@ -345,7 +351,36 @@ internal static class CommandLineOptions
             Strict: args.Any(x => string.Equals(x, "--strict", StringComparison.OrdinalIgnoreCase)),
             Verbose: args.Any(x => string.Equals(x, "--verbose", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-v", StringComparison.OrdinalIgnoreCase)),
             WebResourcesRoot: webResourcesRoot,
-            Json: args.Any(x => string.Equals(x, "--json", StringComparison.OrdinalIgnoreCase)));
+            Json: args.Any(x => string.Equals(x, "--json", StringComparison.OrdinalIgnoreCase)),
+            TimeoutMinutes: timeoutMinutes);
+        return true;
+    }
+
+    /// <summary>
+    /// Reads and validates the optional <c>--timeout</c> connection option (a whole number of minutes, 1..60).
+    /// Shared by the plan/apply/inspect parser and by <c>vela models</c> so both honour the same connection
+    /// timeout. Returns true with <paramref name="timeoutMinutes"/> null when <c>--timeout</c> is absent, and
+    /// false with an <see cref="CliExitCodes.ExitInvalidArguments"/> code when it is present but not a whole
+    /// number of minutes in range.
+    /// </summary>
+    public static bool TryReadTimeoutMinutes(string[] args, out int? timeoutMinutes, out int exitCode)
+    {
+        timeoutMinutes = null;
+        exitCode = ExitSuccess;
+
+        string? raw = TryReadOption(args, "--timeout");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int minutes) || minutes < 1 || minutes > 60)
+        {
+            exitCode = Fail("--timeout must be a whole number of minutes between 1 and 60.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
+        timeoutMinutes = minutes;
         return true;
     }
 
