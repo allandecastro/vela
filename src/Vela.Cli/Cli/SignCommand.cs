@@ -152,6 +152,14 @@ internal static class SignCommand
                         byte[] bytes = Convert.FromBase64String(options.PfxBase64!.Trim());
                         tempPfx = Path.Combine(Path.GetTempPath(), $"vela-sign-{Guid.NewGuid():N}.pfx");
                         File.WriteAllBytes(tempPfx, bytes);
+                        // The decoded PFX carries the private key. On Unix the temp file is world-readable by
+                        // default; restrict it to the owner so it isn't exposed during the signing window.
+                        // Best-effort: a chmod failure must not abort signing.
+                        if (!OperatingSystem.IsWindows())
+                        {
+                            try { File.SetUnixFileMode(tempPfx, UnixFileMode.UserRead | UnixFileMode.UserWrite); }
+                            catch { /* best-effort hardening; proceed even if the mode can't be set */ }
+                        }
                         // Wipe the decoded certificate from the managed heap once it's on disk — it's no longer
                         // needed in memory and shouldn't linger until GC.
                         Array.Clear(bytes, 0, bytes.Length);
@@ -197,6 +205,10 @@ internal static class SignCommand
                 if (!options.Json) { Console.WriteLine($"Signing '{options.PackagePath}' with PFX {source} ..."); }
                 psi.ArgumentList.Add("--certificate-path");
                 psi.ArgumentList.Add(pfxFile);
+                // 'dotnet nuget sign' accepts the PFX password ONLY as this argv argument — there is no env-var or
+                // stdin alternative. On a multi-user host the value is visible to other users via 'ps'/proc for the
+                // duration of the child process. This cannot be remediated without replacing the signing mechanism;
+                // callers sharing a host should prefer --certificate-fingerprint (an installed cert) over --pfx-password.
                 psi.ArgumentList.Add("--certificate-password");
                 psi.ArgumentList.Add(password!);
             }
