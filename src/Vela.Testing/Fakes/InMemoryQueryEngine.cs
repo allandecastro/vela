@@ -627,6 +627,30 @@ namespace Vela.Testing
                 return false;
             }
 
+            // SQL three-valued logic also makes an ordered comparison "unknown" when the operand it compares against
+            // is null (for Between, either bound), so the row is excluded rather than throwing inside
+            // EntityValues.Compare(actual, null).
+            switch (condition.Operator)
+            {
+                case ConditionOperator.GreaterThan:
+                case ConditionOperator.GreaterEqual:
+                case ConditionOperator.LessThan:
+                case ConditionOperator.LessEqual:
+                    if (Operand(0) == null)
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionOperator.Between:
+                    if (Operand(0) == null || Operand(1) == null)
+                    {
+                        return false;
+                    }
+
+                    break;
+            }
+
             switch (condition.Operator)
             {
                 case ConditionOperator.Null:

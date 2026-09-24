@@ -270,18 +270,18 @@ namespace Vela.Testing.Tests
             Assert.Contains("entity", ex.Message);
         }
 
-        // Comparing against a missing operand throws the "cannot compare" message (kills mutating that message and
-        // covers the previously-uncovered throw in EntityValues.Compare).
+        // An ordered comparison against a missing operand is "unknown" under SQL three-valued logic, so the row is
+        // excluded rather than throwing inside EntityValues.Compare(actual, null) — matching real Dataverse.
         [Fact]
-        public void Comparison_without_an_operand_throws_the_compare_message()
+        public void Comparison_without_an_operand_excludes_the_row()
         {
             InMemoryOrganizationService crm = Crm(new Entity("account") { Id = Guid.NewGuid(), ["numberofemployees"] = 10 });
 
-            NotSupportedException ex = Assert.Throws<NotSupportedException>(() => crm.RetrieveMultiple(new FetchExpression(
+            EntityCollection result = crm.RetrieveMultiple(new FetchExpression(
                 "<fetch><entity name='account'><attribute name='name'/>" +
-                "<filter><condition attribute='numberofemployees' operator='gt'/></filter></entity></fetch>")));
+                "<filter><condition attribute='numberofemployees' operator='gt'/></filter></entity></fetch>"));
 
-            Assert.Contains("compare", ex.Message);
+            Assert.Empty(result.Entities);
         }
     }
 }

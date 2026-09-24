@@ -85,6 +85,30 @@ namespace Vela.Testing.Security
             return record == null ? Array.Empty<PrincipalAccess>() : new List<PrincipalAccess>(record.Values).ToArray();
         }
 
+        /// <summary>Deep-copies the whole table so a transaction/operation can roll back to this point.</summary>
+        internal SharingTable Clone()
+        {
+            SharingTable copy = new SharingTable();
+            copy.CopyFrom(this);
+            return copy;
+        }
+
+        /// <summary>Replaces this table's contents with a deep copy of <paramref name="source"/> (rollback).</summary>
+        internal void CopyFrom(SharingTable source)
+        {
+            _grants.Clear();
+            foreach (KeyValuePair<(string Entity, Guid Record), Dictionary<Guid, PrincipalAccess>> record in source._grants)
+            {
+                Dictionary<Guid, PrincipalAccess> inner = new Dictionary<Guid, PrincipalAccess>();
+                foreach (KeyValuePair<Guid, PrincipalAccess> grant in record.Value)
+                {
+                    inner[grant.Key] = new PrincipalAccess { Principal = grant.Value.Principal, AccessMask = grant.Value.AccessMask };
+                }
+
+                _grants[record.Key] = inner;
+            }
+        }
+
         private Dictionary<Guid, PrincipalAccess>? RecordGrants(EntityReference target, bool create) =>
             RecordGrants(target.LogicalName, target.Id, create);
 

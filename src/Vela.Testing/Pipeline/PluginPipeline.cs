@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.ServiceModel;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -685,7 +686,7 @@ namespace Vela.Testing
                     items.Add(new ExecuteMultipleResponseItem
                     {
                         RequestIndex = i,
-                        Fault = new OrganizationServiceFault { Message = ex.Message },
+                        Fault = ItemFault(ex),
                     });
 
                     if (!continueOnError)
@@ -701,11 +702,28 @@ namespace Vela.Testing
             return response;
         }
 
+        // Builds the per-item fault for a faulted child, mirroring the store's ExecuteMultipleItemFault: a
+        // FaultException<OrganizationServiceFault> carries the platform fault (ErrorCode + Message) in its Detail, so
+        // that is copied through verbatim; any other exception has no ErrorCode, so only its message is surfaced.
+        private static OrganizationServiceFault ItemFault(Exception exception)
+        {
+            if (exception is FaultException<OrganizationServiceFault> fault && fault.Detail != null)
+            {
+                return new OrganizationServiceFault
+                {
+                    ErrorCode = fault.Detail.ErrorCode,
+                    Message = fault.Detail.Message,
+                };
+            }
+
+            return new OrganizationServiceFault { Message = exception.Message };
+        }
+
         // All-or-nothing: snapshot the store, run every child through the pipeline, and roll back the whole batch
         // if any child throws. Mirrors the store's ExecuteTransaction but with plugin steps firing per child.
         private ExecuteTransactionResponse ExecuteTransactionThroughPipeline(ExecuteTransactionRequest request)
         {
-            Dictionary<string, Dictionary<Guid, Entity>> snapshot = _store.Snapshot();
+            var snapshot = _store.Snapshot();
             OrganizationResponseCollection responses = new OrganizationResponseCollection();
 
             try
@@ -965,7 +983,7 @@ namespace Vela.Testing
                         $"Vela pipeline stopped at depth {_depth} (cap {_maxDepth}). Likely infinite recursion between plugins.");
                 }
 
-                Dictionary<string, Dictionary<Guid, Entity>> snapshot = _store.Snapshot();
+                var snapshot = _store.Snapshot();
                 List<Action> asyncQueue = new List<Action>();
                 T result;
                 try
