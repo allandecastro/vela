@@ -1459,7 +1459,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
     /// typed, and shows dependency injection via <see cref="ConfigureServices"/> plus a table-scoped service
     /// (<see cref="IAccountFollowUpService"/>) resolved with <c>ctx.GetRequiredService&lt;T&gt;()</c>.
     /// </summary>
-    public sealed class AccountPostCreatePlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+    // partial: the typed image projection is generated as a nested type inside this class (VELA014).
+    public sealed partial class AccountPostCreatePlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
@@ -1486,8 +1487,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
         {
             // Typed image projection (generated from the step's WithPostImage capture): exposes only the
             // captured column(s), so reading anything the step did not capture is a compile error, not a
-            // silent null. The projection type is {PluginClass}_{Handler}_PostImage.
-            var postImage = ctx.PostImageAs<AccountPostCreatePlugin_OnAccountCreated_PostImage>();
+            // silent null. The projection is a nested type named {Handler}_PostImage, read here unqualified.
+            var postImage = ctx.PostImageAs<OnAccountCreated_PostImage>();
             IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
 
             Guid taskId = followUp.CreateFollowUpTask(ctx.Response.id, postImage.Name);
@@ -1631,7 +1632,8 @@ namespace {{prefix}}.Plugins.Contact.Plugins
     /// handler method. Every step in a multi-step plugin must declare a <c>Handler(...)</c>. Also shows a
     /// router consuming a table-scoped service (<see cref="IContactDuplicateService"/>) via DI.
     /// </summary>
-    public sealed class ContactRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
+    // partial: the typed image projections are generated as nested types inside this class (VELA014).
+    public sealed partial class ContactRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
@@ -1665,7 +1667,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         {
             // Typed image projection generated from this step's WithPostImage capture (only the captured
             // columns are exposed - reading an uncaptured column is a compile error, not a silent null).
-            var postImage = ctx.PostImageAs<ContactRouterPlugin_OnCreatePost_PostImage>();
+            var postImage = ctx.PostImageAs<OnCreatePost_PostImage>();
             ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
 
             IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
@@ -1679,7 +1681,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         private void OnUpdatePost(IUpdatePostContext<Contact> ctx)
         {
             // Typed image projection generated from this step's WithPreImage capture (LastName only).
-            var preImage = ctx.PreImageAs<ContactRouterPlugin_OnUpdatePost_PreImage>();
+            var preImage = ctx.PreImageAs<OnUpdatePost_PreImage>();
             ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Request.Target.LastName);
         }
     }
@@ -1851,7 +1853,7 @@ namespace {{prefix}}.Plugins.GlobalCustomApis
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{ApiPrefix(prefix)}}_Ping", nameof(Handle))
+            RegisterCustomApi("{{ApiPrefix(prefix)}}_Ping", Handle)
                 .DisplayName("Ping")
                 .Description("Returns a pong message; useful for connectivity checks.")
                 .AsAction()
@@ -2348,7 +2350,7 @@ namespace {{ns}}
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{uniqueName}}", nameof(Handle))
+            RegisterCustomApi("{{uniqueName}}", Handle)
                 .DisplayName("{{className}}")
                 .Description("TODO: describe this Custom API.")
                 .{{operation}};
@@ -2451,7 +2453,8 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     /// Single-step integration plugin: runs asynchronously after a contact is created. Demonstrates
     /// dependency injection of the cross-table <see cref="IGreetingService"/> in a second plugin package.
     /// </summary>
-    public sealed class ContactSyncPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
+    // partial: capturing a typed image (WithPostImage selectors) generates a nested projection type (VELA014).
+    public sealed partial class ContactSyncPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
@@ -2492,7 +2495,8 @@ namespace {{prefix}}.Integrations.Account.Plugins
     /// Multi-step integration router: one class handling create and update of accounts, each bound to
     /// a dedicated handler method.
     /// </summary>
-    public sealed class AccountSyncRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+    // partial: the typed image projections are generated as nested types inside this class (VELA014).
+    public sealed partial class AccountSyncRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
         protected override void RegisterPluginSteps()
         {
@@ -2516,14 +2520,14 @@ namespace {{prefix}}.Integrations.Account.Plugins
         private void OnAccountCreated(ICreatePostContext<Account> ctx)
         {
             // Typed image projection generated from this step's WithPostImage capture (Name only).
-            var postImage = ctx.PostImageAs<AccountSyncRouterPlugin_OnAccountCreated_PostImage>();
+            var postImage = ctx.PostImageAs<OnAccountCreated_PostImage>();
             ctx.Trace("Sync: account created '{0}'", postImage.Name);
         }
 
         private void OnAccountChanged(IUpdatePostContext<Account> ctx)
         {
             // Typed image projection generated from this step's WithPreImage capture (Name + Telephone1).
-            var preImage = ctx.PreImageAs<AccountSyncRouterPlugin_OnAccountChanged_PreImage>();
+            var preImage = ctx.PreImageAs<OnAccountChanged_PreImage>();
             ctx.Trace("Sync: account '{0}' changed", preImage.Name);
         }
     }
@@ -2672,7 +2676,7 @@ namespace {{prefix}}.Integrations.GlobalCustomApis
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{ApiPrefix(prefix)}}_IntegrationHeartbeat", nameof(Handle))
+            RegisterCustomApi("{{ApiPrefix(prefix)}}_IntegrationHeartbeat", Handle)
                 .DisplayName("Integration Heartbeat")
                 .Description("Returns the integration status.")
                 .AsFunction()
