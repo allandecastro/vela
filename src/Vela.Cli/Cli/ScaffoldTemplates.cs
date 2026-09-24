@@ -1348,7 +1348,6 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Context;
     using Vela.Plugin;
     using Vela.Querying;
-    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
     using {{prefix}}.Shared.Models.Generated;
@@ -1450,7 +1449,6 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Account.Services;
     using {{prefix}}.Shared.Models.Generated;
@@ -1486,7 +1484,10 @@ namespace {{prefix}}.Plugins.Account.Plugins
         // ILocalPluginContext, so images and services work as usual.
         private void OnAccountCreated(ICreatePostContext<Account> ctx)
         {
-            Account postImage = ctx.GetPostImage<Account>();
+            // Typed image projection (generated from the step's WithPostImage capture): exposes only the
+            // captured column(s), so reading anything the step did not capture is a compile error, not a
+            // silent null. The projection type is {PluginClass}_{Handler}_PostImage.
+            var postImage = ctx.PostImageAs<AccountPostCreatePlugin_OnAccountCreated_PostImage>();
             IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
 
             Guid taskId = followUp.CreateFollowUpTask(ctx.Response.id, postImage.Name);
@@ -1503,7 +1504,6 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
@@ -1622,7 +1622,6 @@ namespace {{prefix}}.Plugins.Contact.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.Steps;
     using Microsoft.Xrm.Sdk;
     using {{prefix}}.Plugins.Contact.Services;
     using {{prefix}}.Shared.Models.Generated;
@@ -1664,7 +1663,9 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         // ILocalPluginContext, so images, services and tracing remain available.
         private void OnCreatePost(ICreatePostContext<Contact> ctx)
         {
-            Contact postImage = ctx.GetPostImage<Contact>();
+            // Typed image projection generated from this step's WithPostImage capture (only the captured
+            // columns are exposed - reading an uncaptured column is a compile error, not a silent null).
+            var postImage = ctx.PostImageAs<ContactRouterPlugin_OnCreatePost_PostImage>();
             ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
 
             IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
@@ -1677,7 +1678,8 @@ namespace {{prefix}}.Plugins.Contact.Plugins
 
         private void OnUpdatePost(IUpdatePostContext<Contact> ctx)
         {
-            Contact preImage = ctx.GetPreImage<Contact>();
+            // Typed image projection generated from this step's WithPreImage capture (LastName only).
+            var preImage = ctx.PreImageAs<ContactRouterPlugin_OnUpdatePost_PreImage>();
             ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Request.Target.LastName);
         }
     }
@@ -2442,7 +2444,6 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     using Vela.Context;
     using Vela.DI;
     using Vela.Plugin;
-    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
     using {{prefix}}.Shared.Services;
 
@@ -2485,7 +2486,6 @@ namespace {{prefix}}.Integrations.Account.Plugins
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
-    using Vela.Steps;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
@@ -2515,13 +2515,15 @@ namespace {{prefix}}.Integrations.Account.Plugins
 
         private void OnAccountCreated(ICreatePostContext<Account> ctx)
         {
-            Account postImage = ctx.GetPostImage<Account>();
+            // Typed image projection generated from this step's WithPostImage capture (Name only).
+            var postImage = ctx.PostImageAs<AccountSyncRouterPlugin_OnAccountCreated_PostImage>();
             ctx.Trace("Sync: account created '{0}'", postImage.Name);
         }
 
         private void OnAccountChanged(IUpdatePostContext<Account> ctx)
         {
-            Account preImage = ctx.GetPreImage<Account>();
+            // Typed image projection generated from this step's WithPreImage capture (Name + Telephone1).
+            var preImage = ctx.PreImageAs<AccountSyncRouterPlugin_OnAccountChanged_PreImage>();
             ctx.Trace("Sync: account '{0}' changed", preImage.Name);
         }
     }
