@@ -24,6 +24,30 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Changed (Framework)
+
+- **Typed image projections are now nested in the plugin's `partial` class with a short name (breaking).** The
+  generated projection type is emitted as a nested type inside the plugin class and named
+  `{Handler}_{Pre|Post}Image`, instead of `{PluginClass}_{Handler}_{Pre|Post}Image` in a separate
+  `<Namespace>.Generated.Images` namespace exposed via a `global using`. Read it unqualified, for example
+  `ctx.PostImageAs<OnUpdated_PostImage>()`. The lambda-handler fallback likewise drops the plugin prefix
+  (`{Message}{Stage}_{Pre|Post}Image`), and the `Generated.Images` namespace and its `global using` are removed.
+  **Migration:** drop the `{PluginClass}_` prefix at each `PreImageAs`/`PostImageAs` read site and declare the
+  plugin class `partial` (see VELA014).
+
+### Added (Framework)
+
+- **VELA014** (analyzer + code fix, ships in `Vela.Plugins`): a plugin that captures a typed image
+  (`WithPreImage`/`WithPostImage` with column selectors) must be declared `partial`, so the generated nested
+  projection can reopen the class. Without `partial` the build otherwise failed with an obscure `CS0260`; the code
+  fix adds the modifier.
+
+### Changed (CLI)
+
+- Scaffolded plugins that capture typed images are now generated `partial` and read the short nested projection
+  name (`ctx.PostImageAs<OnAccountCreated_PostImage>()`). Scaffolded lightweight Custom APIs bind their handler via
+  a method group (`RegisterCustomApi("...", Handle)`) instead of `nameof(Handle)`.
+
 ## [0.26.2] - 2026-09-24 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.26.2`. Correctness and test-harness fidelity hardening from the code

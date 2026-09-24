@@ -15,9 +15,11 @@ namespace Vela.Analyzers
     /// <c>ctx.PreImageAs&lt;T&gt;()</c> / <c>ctx.PostImageAs&lt;T&gt;()</c>, so reading a column the step did not
     /// capture is a compile error instead of a silent <c>null</c>. Covers the guided (<c>OnCreate()</c>...), typed
     /// (<c>On&lt;TRequest&gt;()</c>) and permissive (<c>OnMessage("...")</c> / <c>OnMessage&lt;TMessage&gt;()</c>)
-    /// trigger paths. Generated types land in <c>&lt;pluginNamespace&gt;.Generated.Images</c>; the generator is
-    /// purely additive (it never rewrites the fluent chain) and silently skips anything it cannot resolve
-    /// statically (the developer keeps the full early-bound image in that case).
+    /// trigger paths. Each type is emitted as a nested type inside the plugin's own <c>partial</c> class (named
+    /// <c>{Handler}_{PreImage|PostImage}</c>, so the handler reads it unqualified), which is why a plugin declaring
+    /// typed images must be <c>partial</c> (VELA014). The generator is purely additive (it never rewrites the fluent
+    /// chain) and silently skips anything it cannot resolve statically (the developer keeps the full early-bound
+    /// image in that case).
     /// </summary>
     [Generator(LanguageNames.CSharp)]
     public sealed class ImageProjectionGenerator : IIncrementalGenerator
@@ -30,8 +32,7 @@ namespace Vela.Analyzers
                 .Where(static m => m is not null)
                 .Select(static (m, _) => m!.Value);
 
-            var withOptions = models.Collect().Combine(context.ParseOptionsProvider);
-            context.RegisterSourceOutput(withOptions, static (spc, pair) => Emit(spc, pair.Left, pair.Right));
+            context.RegisterSourceOutput(models.Collect(), static (spc, collected) => Emit(spc, collected));
         }
 
         private static bool IsImageInvocation(SyntaxNode node)
@@ -105,21 +106,30 @@ namespace Vela.Analyzers
 
             string role = isPre ? "PreImage" : "PostImage";
             string aliasSuffix = string.IsNullOrEmpty(alias) ? string.Empty : "_" + Sanitize(alias!);
-            // Prefer naming the projection after the (named-method) handler bound with .Handle(...), so a developer
-            // can guess it from their own method: OnAccountUpdated_PostImage. Fall back to plugin + message + stage
-            // for a lambda handler, which has no name.
+            // Name the projection after the (named-method) handler bound with .Handle(...), so a developer can guess
+            // it from their own method: OnAccountUpdated_PostImage. Fall back to message + stage for a lambda
+            // handler, which has no name. The plugin class name is no longer prefixed: the projection is emitted as a
+            // nested type inside the plugin's own partial class, so the class scope already keeps it unique and lets
+            // the handler read it unqualified (ctx.PostImageAs&lt;OnAccountUpdated_PostImage&gt;()).
             string? handlerName = FindHandlerMethodName(invocation);
-            // Always prefix with the plugin class so the name is unique: the handler method name alone (e.g.
-            // "OnUpdated") is common and would collide across plugin classes in the same namespace.
             string baseName = handlerName is null
-                ? $"{pluginSymbol.Name}_{messageLabel}{stageLabel}"
-                : $"{pluginSymbol.Name}_{Sanitize(handlerName)}";
+                ? $"{messageLabel}{stageLabel}"
+                : Sanitize(handlerName);
             string typeName = $"{baseName}_{role}{aliasSuffix}";
-            string ns = pluginSymbol.ContainingNamespace.IsGlobalNamespace
-                ? "Generated.Images"
-                : pluginSymbol.ContainingNamespace.ToDisplayString() + ".Generated.Images";
 
-            return new ProjectionModel(ns, typeName, columns.ToImmutableArray());
+            // The containing type chain (outermost first, ending at the plugin class) so the projection can be
+            // nested inside the plugin's partial class, plus the enclosing namespace.
+            List<string> containingTypes = new List<string>();
+            for (INamedTypeSymbol? t = pluginSymbol; t is not null; t = t.ContainingType)
+            {
+                containingTypes.Insert(0, t.Name);
+            }
+
+            string ns = pluginSymbol.ContainingNamespace.IsGlobalNamespace
+                ? string.Empty
+                : pluginSymbol.ContainingNamespace.ToDisplayString();
+
+            return new ProjectionModel(ns, containingTypes.ToImmutableArray(), typeName, columns.ToImmutableArray());
         }
 
         private static INamedTypeSymbol? ResolveEntityType(INamedTypeSymbol pluginSymbol)
@@ -399,7 +409,7 @@ namespace Vela.Analyzers
             }
         }
 
-        private static void Emit(SourceProductionContext context, ImmutableArray<ProjectionModel> models, ParseOptions parseOptions)
+        private static void Emit(SourceProductionContext context, ImmutableArray<ProjectionModel> models)
         {
             // Collapse genuinely-identical projections (same name AND same column shape reached twice) to one type,
             // keyed on name + column shape. Two steps that resolve to the same name but capture different columns
@@ -411,7 +421,7 @@ namespace Vela.Analyzers
             List<ProjectionModel> distinct = new List<ProjectionModel>();
             foreach (ProjectionModel projectionModel in models)
             {
-                string fullName = projectionModel.Namespace + "." + projectionModel.TypeName;
+                string fullName = FullName(projectionModel);
                 if (!seen.Add(fullName + "|" + ColumnSignature(projectionModel)))
                 {
                     continue;
@@ -421,39 +431,28 @@ namespace Vela.Analyzers
                 nameCounts[fullName] = nameCounts.TryGetValue(fullName, out int count) ? count + 1 : 1;
             }
 
-            SortedSet<string> namespaces = new SortedSet<string>(System.StringComparer.Ordinal);
             foreach (ProjectionModel projectionModel in distinct)
             {
-                string fullName = projectionModel.Namespace + "." + projectionModel.TypeName;
+                string fullName = FullName(projectionModel);
                 ProjectionModel toEmit = projectionModel;
                 if (nameCounts[fullName] > 1)
                 {
-                    // Name collision across distinct column shapes: append a stable hash of the shape so both
-                    // projections are emitted with unique, legal type names instead of one winning.
+                    // Name collision across distinct column shapes (same plugin class, same handler name, different
+                    // captured columns): append a stable hash of the shape so both projections are emitted with
+                    // unique, legal type names instead of one winning.
                     toEmit = projectionModel.WithTypeName(projectionModel.TypeName + "_" + StableHash(ColumnSignature(projectionModel)));
                 }
 
-                string emitFullName = toEmit.Namespace + "." + toEmit.TypeName;
-                namespaces.Add(toEmit.Namespace);
-                context.AddSource(Sanitize(emitFullName) + ".g.cs", SourceText.From(Render(toEmit), Encoding.UTF8));
+                context.AddSource(Sanitize(FullName(toEmit)) + ".g.cs", SourceText.From(Render(toEmit), Encoding.UTF8));
             }
+        }
 
-            // Emit a global using per generated namespace so the projection types surface in completion (typing
-            // ctx.PostImageAs<...>) without an explicit using. global using is a C# 10 feature, so this is skipped
-            // on older LangVersion consumers, where import completion or an explicit using still work.
-            if (namespaces.Count > 0 &&
-                parseOptions is CSharpParseOptions options &&
-                options.LanguageVersion >= LanguageVersion.CSharp10)
-            {
-                StringBuilder usings = new StringBuilder();
-                usings.AppendLine("// <auto-generated/> Vela typed image projection global usings. Do not edit.");
-                foreach (string ns in namespaces)
-                {
-                    usings.AppendLine($"global using global::{ns};");
-                }
-
-                context.AddSource("VelaGeneratedImages.GlobalUsings.g.cs", SourceText.From(usings.ToString(), Encoding.UTF8));
-            }
+        // The fully-qualified generated name: namespace (if any) + the containing type chain + the projection type,
+        // used to collapse duplicates, disambiguate collisions and key the generated file name.
+        private static string FullName(ProjectionModel model)
+        {
+            string prefix = model.Namespace.Length == 0 ? string.Empty : model.Namespace + ".";
+            return prefix + string.Join(".", model.ContainingTypes) + "." + model.TypeName;
         }
 
         private static string Render(ProjectionModel model)
@@ -462,25 +461,55 @@ namespace Vela.Analyzers
             sb.AppendLine("// <auto-generated/> Vela typed image projection. Do not edit.");
             sb.AppendLine("#nullable enable");
             sb.AppendLine();
-            sb.AppendLine($"namespace {model.Namespace}");
-            sb.AppendLine("{");
-            sb.AppendLine("    /// <summary>");
-            sb.AppendLine("    /// Generated projection: exposes only the columns this step captured in WithPreImage/WithPostImage(...).");
-            sb.AppendLine("    /// A column the step did not capture is absent here (reading it is a compile error, not a silent null);");
-            sb.AppendLine("    /// add it to the capture to read it. Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().");
-            sb.AppendLine("    /// </summary>");
-            sb.AppendLine($"    public sealed class {model.TypeName}");
-            sb.AppendLine("    {");
-            foreach (ProjectionColumn column in model.Columns)
+
+            int indent = 0;
+            bool hasNamespace = model.Namespace.Length != 0;
+            if (hasNamespace)
             {
-                sb.AppendLine($"        [global::Microsoft.Xrm.Sdk.AttributeLogicalName(\"{column.LogicalName}\")]");
-                sb.AppendLine($"        public {column.TypeName} {column.PropertyName} {{ get; set; }}");
+                sb.AppendLine($"namespace {model.Namespace}");
+                sb.AppendLine("{");
+                indent++;
             }
 
-            sb.AppendLine("    }");
-            sb.AppendLine("}");
+            // Reopen the plugin class (and any enclosing types) as partial parts so the projection is a nested type
+            // the handler can read unqualified. The plugin's own declaration must therefore be partial (VELA014).
+            foreach (string containingType in model.ContainingTypes)
+            {
+                sb.AppendLine($"{Pad(indent)}partial class {containingType}");
+                sb.AppendLine($"{Pad(indent)}{{");
+                indent++;
+            }
+
+            sb.AppendLine($"{Pad(indent)}/// <summary>");
+            sb.AppendLine($"{Pad(indent)}/// Generated projection: exposes only the columns this step captured in WithPreImage/WithPostImage(...).");
+            sb.AppendLine($"{Pad(indent)}/// A column the step did not capture is absent here (reading it is a compile error, not a silent null);");
+            sb.AppendLine($"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().");
+            sb.AppendLine($"{Pad(indent)}/// </summary>");
+            sb.AppendLine($"{Pad(indent)}public sealed class {model.TypeName}");
+            sb.AppendLine($"{Pad(indent)}{{");
+            foreach (ProjectionColumn column in model.Columns)
+            {
+                sb.AppendLine($"{Pad(indent + 1)}[global::Microsoft.Xrm.Sdk.AttributeLogicalName(\"{column.LogicalName}\")]");
+                sb.AppendLine($"{Pad(indent + 1)}public {column.TypeName} {column.PropertyName} {{ get; set; }}");
+            }
+
+            sb.AppendLine($"{Pad(indent)}}}");
+
+            foreach (string _ in model.ContainingTypes)
+            {
+                indent--;
+                sb.AppendLine($"{Pad(indent)}}}");
+            }
+
+            if (hasNamespace)
+            {
+                sb.AppendLine("}");
+            }
+
             return sb.ToString();
         }
+
+        private static string Pad(int levels) => new string(' ', levels * 4);
 
         // Value equality (not the default ImmutableArray reference equality) so the incremental generator caches the
         // model between keystrokes instead of re-running every edit.
@@ -519,21 +548,24 @@ namespace Vela.Analyzers
         // incremental generator caches the model between keystrokes instead of re-running every edit.
         private readonly struct ProjectionModel : System.IEquatable<ProjectionModel>
         {
-            public ProjectionModel(string @namespace, string typeName, ImmutableArray<ProjectionColumn> columns)
+            public ProjectionModel(string @namespace, ImmutableArray<string> containingTypes, string typeName, ImmutableArray<ProjectionColumn> columns)
             {
                 Namespace = @namespace;
+                ContainingTypes = containingTypes;
                 TypeName = typeName;
                 Columns = columns;
             }
 
             public string Namespace { get; }
+            public ImmutableArray<string> ContainingTypes { get; }
             public string TypeName { get; }
             public ImmutableArray<ProjectionColumn> Columns { get; }
 
-            public ProjectionModel WithTypeName(string typeName) => new ProjectionModel(Namespace, typeName, Columns);
+            public ProjectionModel WithTypeName(string typeName) => new ProjectionModel(Namespace, ContainingTypes, typeName, Columns);
 
             public bool Equals(ProjectionModel other) =>
                 Namespace == other.Namespace &&
+                ContainingTypes.SequenceEqual(other.ContainingTypes) &&
                 TypeName == other.TypeName &&
                 Columns.SequenceEqual(other.Columns);
 
@@ -545,6 +577,11 @@ namespace Vela.Analyzers
                 {
                     int hash = 17;
                     hash = (hash * 31) + (Namespace?.GetHashCode() ?? 0);
+                    foreach (string containing in ContainingTypes)
+                    {
+                        hash = (hash * 31) + (containing?.GetHashCode() ?? 0);
+                    }
+
                     hash = (hash * 31) + (TypeName?.GetHashCode() ?? 0);
                     foreach (ProjectionColumn column in Columns)
                     {

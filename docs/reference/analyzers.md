@@ -24,6 +24,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA011](#vela011) | Vela.Reliability | Warning | A writable field (mutable state) on a plugin type |
 | [VELA012](#vela012) | Vela.Usage | Warning | Throwing an exception other than `InvalidPluginExecutionException` from a plugin |
 | [VELA013](#vela013) | Vela.Performance | Warning | `new ColumnSet(true)` retrieves every column |
+| [VELA014](#vela014) | Vela.Usage | Error | A plugin that captures a typed image must be declared `partial` |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
 VELA006, VELA007 and VELA012. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins` alongside the
@@ -154,6 +155,16 @@ Request only the columns you use (the explicit `SelectAll()` on a typed query st
 
 **Fix:** pass the specific columns to `ColumnSet`, or use the typed `Select(...)`.
 
+## VELA014
+
+**Plugin with typed images must be `partial`.** When a step captures explicit columns
+(`WithPreImage(a => a.X, ...)` / `WithPostImage(...)`), the source generator emits the projection type as a
+**nested type inside the plugin's own class**, so it needs a second `partial` declaration of that class. Without
+`partial` the build fails with an obscure `CS0260`; this rule reports it up front on the plugin class.
+
+**Fix:** add the `partial` modifier to the plugin class (the code fix does this). A capture with no explicit
+columns (`WithPreImage()`) generates nothing and does not require `partial`.
+
 ## Typed image projection generator
 
 The same bundled `Vela.Analyzers` assembly also contains an incremental **source generator**
@@ -171,13 +182,14 @@ Key points:
   captured column is removed or renamed in the early-bound model (for example after re-running `vela models`),
   the `WithPreImage`/`WithPostImage` selector and the handler that reads the projection stop compiling - the
   drift surfaces as a build error, never a stale value.
-- **Naming.** A projection is named `{PluginClass}_{Handler}_{Pre|Post}Image` (plus the alias when one is given),
-  and a `global using` for `<YourNamespace>.Generated.Images` is emitted on C# 10+ so the type is offered by
-  completion without an explicit `using`. A lambda handler (no name) falls back to
-  `{PluginClass}_{Message}{Stage}_{Pre|Post}Image`, where the message comes from the trigger: the guided
-  `OnCreate()`..., the typed `On<TRequest>()`, or the permissive `OnMessage("...")` / `OnMessage<TMarker>()`
-  (a literal message is capitalized into the segment; a non-literal message is not statically known, so the
-  step is skipped).
+- **Naming and nesting.** A projection is emitted as a **nested type inside the plugin's own `partial` class**,
+  named `{Handler}_{Pre|Post}Image` (plus the alias when one is given). Because it is scoped to the plugin class it
+  needs no plugin-name prefix and no `using`: the handler reads it unqualified
+  (`ctx.PostImageAs<OnUpdated_PostImage>()`). This is why a plugin that captures a typed image must be declared
+  `partial` ([VELA014](#vela014)). A lambda handler (no name) falls back to `{Message}{Stage}_{Pre|Post}Image`,
+  where the message comes from the trigger: the guided `OnCreate()`..., the typed `On<TRequest>()`, or the
+  permissive `OnMessage("...")` / `OnMessage<TMarker>()` (a literal message is capitalized into the segment; a
+  non-literal message is not statically known, so the step is skipped).
 - **Opt-in and additive.** A capture with no explicit columns (`WithPreImage()`) keeps the full early-bound
   entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it and
   you keep the untyped image.

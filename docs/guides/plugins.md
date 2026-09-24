@@ -176,15 +176,15 @@ completion is filtered to what you captured.
 
 The step declaration keeps its usual shape (declare the images, then bind a named handler with `Handle(...)`);
 only the read inside the handler changes. A build-time source generator emits the projection type from the
-captured columns and **names it after your handler method**, so it is easy to guess: a step whose handler is
-`OnUpdated` on plugin `AccountAudit` gets `AccountAudit_OnUpdated_PreImage` / `AccountAudit_OnUpdated_PostImage`
-(with `_{Alias}` for a custom alias; the plugin class prefix keeps the name unique across classes). They live in
-the `<YourNamespace>.Generated.Images` namespace, which the generator also exposes with a `global using`, so
-completion offers the type as you type `ctx.PostImageAs<` with no `using` to add. (A lambda handler has no name,
-so its projection falls back to `{PluginClass}_{Message}{Stage}_{PreImage|PostImage}`.)
+captured columns as a **nested type inside your plugin's own `partial` class**, and **names it after your handler
+method**, so it is short and easy to guess: a step whose handler is `OnUpdated` gets `OnUpdated_PreImage` /
+`OnUpdated_PostImage` (with `_{Alias}` for a custom alias). Because it is nested in the plugin class, the handler
+reads it **unqualified**, no `using` to add. This is why a plugin that captures a typed image must be declared
+`partial`: the analyzer [VELA014](../reference/analyzers.md#vela014) reminds you, with a one-click fix. (A lambda
+handler has no name, so its projection falls back to `{Message}{Stage}_{PreImage|PostImage}`.)
 
 ```csharp
-public sealed class AccountAudit : EntityPluginBase<Account>
+public sealed partial class AccountAudit : EntityPluginBase<Account>   // partial: the projection nests here
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnUpdate().PostOperation().Sync()
@@ -195,7 +195,7 @@ public sealed class AccountAudit : EntityPluginBase<Account>
 
     private void OnUpdated(IUpdatePostContext<Account> ctx)
     {
-        var pre = ctx.PreImageAs<AccountAudit_OnUpdated_PreImage>();   // {plugin}_{handler}_PreImage
+        var pre = ctx.PreImageAs<OnUpdated_PreImage>();   // {handler}_PreImage, nested in the plugin
         decimal? was = pre?.Revenue;   // captured -> available
         // var x = pre?.Telephone1;    // compile error: not captured for this image
     }
@@ -207,10 +207,9 @@ public sealed class AccountAudit : EntityPluginBase<Account>
   pass a custom alias with `ctx.PostImageAs<T>("MyAlias")`.
 - Works on the guided path, the typed `On<TRequest>()` path and the permissive `OnMessage("...")` /
   `OnMessage<TMarker>()` path alike (it is a context accessor). On the permissive path the projection is named
-  from the message: a string literal is capitalized into the name segment (`OnMessage("update")` on plugin
-  `PermissiveAudit` with a lambda handler gives `PermissiveAudit_UpdatePostOp_PostImage`), and a marker type uses
-  its type name; a message passed as a variable is not statically known, so the generator skips it and you keep
-  the untyped image.
+  from the message: a string literal is capitalized into the name segment (`OnMessage("update")` with a lambda
+  handler gives `UpdatePostOp_PostImage`, nested in the plugin), and a marker type uses its type name; a message
+  passed as a variable is not statically known, so the generator skips it and you keep the untyped image.
 - **Bulk operations:** Dataverse does not allow entity images on `CreateMultiple` / `UpdateMultiple` steps
   (a `*Multiple` step that captures a `WithPreImage`/`WithPostImage` is rejected at `vela plan`/`apply`). Capture
   the image on the single **`OnCreate()` / `OnUpdate()`** step instead: that step also runs for bulk operations,
@@ -219,8 +218,9 @@ public sealed class AccountAudit : EntityPluginBase<Account>
   `ctx.GetTargets()`, exist for a native `*Multiple` batch context and are exercised via the in-memory test
   harness, where per-record image collections can be supplied.)
 - Reading a column the step did not capture is a normal C# "no such member" compile error on the projection
-  (the column simply is not on the type). The `global using` needs C# 10; on older `LangVersion` it is skipped
-  and you add `using <YourNamespace>.Generated.Images;` yourself (completion still offers it).
+  (the column simply is not on the type). The projection is nested in your plugin's `partial` class, so the handler
+  reads it unqualified with no `using` to add; a plugin that captures a typed image must therefore be `partial`
+  ([VELA014](../reference/analyzers.md#vela014), with a one-click fix).
 - The projections are compiler-generated (they never appear as files in your source tree; `F12` opens them) by a
   source generator bundled in `Vela.Plugins` - see [Typed image projection generator](../reference/analyzers.md#typed-image-projection-generator)
   for how it names types and behaves when the early-bound model changes. A capture with no explicit columns
