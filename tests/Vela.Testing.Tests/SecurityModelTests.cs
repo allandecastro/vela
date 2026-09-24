@@ -833,6 +833,33 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Creating_for_another_owner_depth_checks_assign_against_the_prospective_owner()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(OtherBu)
+                    // Org-level Create satisfies depth for any owner; Assign is only BusinessUnit-level, so it must
+                    // be depth/BU-checked against the record's prospective owner, not treated as a blanket grant.
+                    .Role("author", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Create)
+                        .Grant("account", AccessLevel.BusinessUnit, Privilege.Assign))
+                    .User(Alice, SalesBu, "author")
+                    .User(Carol, SalesBu)   // same BU as Alice
+                    .User(Bob, OtherBu));   // different BU
+
+            // Same-BU owner: a BusinessUnit-level Assign reaches the prospective owner.
+            Assert.NotEqual(Guid.Empty,
+                svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Carol) }));
+
+            // Other-BU owner: a BusinessUnit-level Assign does NOT reach the prospective owner, so the assignment
+            // implied by the create is denied. With the record omitted from the Assign check this wrongly succeeded.
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+        }
+
+        [Fact]
         public void Creating_on_behalf_stamps_the_owners_business_unit_not_the_callers()
         {
             Guid record = Guid.NewGuid();

@@ -264,16 +264,34 @@ namespace Vela.Context
                 return;
             }
 
-            string formatted = args == null || args.Length == 0 ? message : string.Format(message, args);
+            string formatted;
+            if (args == null || args.Length == 0)
+            {
+                formatted = message;
+            }
+            else
+            {
+                // A caller whose placeholder count exceeds the supplied args (or a malformed template) makes
+                // string.Format throw FormatException. The logger must never throw, so fall back to the literal
+                // message on failure rather than surfacing the formatting error to the plug-in pipeline.
+                try
+                {
+                    formatted = string.Format(message, args);
+                }
+                catch (FormatException)
+                {
+                    formatted = message;
+                }
+            }
 
             // Always land in the plug-in trace log, so entries survive whether or not Application Insights is
             // configured. Information stays unprefixed (back-compat with Trace); other levels carry a tag. Active
             // BeginLogScope depth indents the trace-log line so nested operations read as a tree.
             string indent = _scopeDepth > 0 ? new string(' ', _scopeDepth * 2) : string.Empty;
-            _safeTracingService.Trace(indent + (level == LogLevel.Information ? formatted : $"[{level}] {formatted}"));
+            SafeTrace(indent + (level == LogLevel.Information ? formatted : $"[{level}] {formatted}"));
             if (exception != null)
             {
-                _safeTracingService.Trace(exception.ToString());
+                SafeTrace(exception.ToString());
             }
 
             // Platform MEL logger (routes to Application Insights when the environment supplies it; NullLogger
@@ -515,6 +533,12 @@ namespace Vela.Context
 
         // Identity formatter: logs a pre-formatted string verbatim, bypassing MEL message-template parsing.
         private static readonly Func<string, Exception?, string> LiteralFormatter = (state, _) => state;
+
+        // Traces an ALREADY-COMPOSED string safely. Dataverse's ITracingService.Trace runs string.Format even when
+        // no args are supplied, so a pre-built line containing a literal '{' or '}' (e.g. a serialized entity
+        // snapshot) would throw FormatException. Passing the text as the {0} argument means string.Format never
+        // parses the braces inside it.
+        private void SafeTrace(string text) => _safeTracingService.Trace("{0}", text);
 
         private void ForwardToPluginTelemetryLogger(LogLevel level, Exception? exception, string formatted)
         {

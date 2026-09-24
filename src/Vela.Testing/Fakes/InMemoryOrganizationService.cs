@@ -1219,7 +1219,7 @@ namespace Vela.Testing
         // All-or-nothing: snapshot the store, run every child request, and roll back the whole batch if any throws.
         private ExecuteTransactionResponse ExecuteTransaction(ExecuteTransactionRequest request)
         {
-            Dictionary<string, Dictionary<Guid, Entity>> snapshot = Snapshot();
+            StoreSnapshot snapshot = Snapshot();
             OrganizationResponseCollection responses = new OrganizationResponseCollection();
 
             try
@@ -1399,10 +1399,18 @@ namespace Vela.Testing
             return false;
         }
 
-        internal Dictionary<string, Dictionary<Guid, Entity>> Snapshot()
+        // Captures ALL mutable stores so a transaction/operation rollback is complete: the record store, the sharing
+        // (PoA) table, the access-team grants, the file blobs, and the row-version counter. A partial snapshot would
+        // leave a rolled-back batch with, say, a share or a file that its failed write had created.
+        internal StoreSnapshot Snapshot()
         {
-            Dictionary<string, Dictionary<Guid, Entity>> copy =
-                new Dictionary<string, Dictionary<Guid, Entity>>(StringComparer.OrdinalIgnoreCase);
+            StoreSnapshot copy = new StoreSnapshot
+            {
+                Sharing = _sharing.Clone(),
+                AccessTeams = _accessTeams.Clone(),
+                Version = _version,
+            };
+
             foreach (KeyValuePair<string, Dictionary<Guid, Entity>> table in _store)
             {
                 Dictionary<Guid, Entity> inner = new Dictionary<Guid, Entity>();
@@ -1411,16 +1419,21 @@ namespace Vela.Testing
                     inner[record.Key] = EntityValues.Clone(record.Value);
                 }
 
-                copy[table.Key] = inner;
+                copy.Store[table.Key] = inner;
+            }
+
+            foreach (KeyValuePair<Guid, FileBlob> file in _files)
+            {
+                copy.Files[file.Key] = CloneFileBlob(file.Value);
             }
 
             return copy;
         }
 
-        internal void RestoreTo(Dictionary<string, Dictionary<Guid, Entity>> snapshot)
+        internal void RestoreTo(StoreSnapshot snapshot)
         {
             _store.Clear();
-            foreach (KeyValuePair<string, Dictionary<Guid, Entity>> table in snapshot)
+            foreach (KeyValuePair<string, Dictionary<Guid, Entity>> table in snapshot.Store)
             {
                 Dictionary<Guid, Entity> inner = new Dictionary<Guid, Entity>();
                 foreach (KeyValuePair<Guid, Entity> record in table.Value)
@@ -1430,6 +1443,40 @@ namespace Vela.Testing
 
                 _store[table.Key] = inner;
             }
+
+            _sharing.CopyFrom(snapshot.Sharing);
+            _accessTeams.CopyFrom(snapshot.AccessTeams);
+
+            _files.Clear();
+            foreach (KeyValuePair<Guid, FileBlob> file in snapshot.Files)
+            {
+                _files[file.Key] = CloneFileBlob(file.Value);
+            }
+
+            _version = snapshot.Version;
+        }
+
+        private static FileBlob CloneFileBlob(FileBlob blob) => new FileBlob
+        {
+            Content = (byte[])blob.Content.Clone(),
+            FileName = blob.FileName,
+            MimeType = blob.MimeType,
+        };
+
+        // A point-in-time deep copy of every mutable store, taken by Snapshot() and re-applied by RestoreTo() so an
+        // ExecuteTransaction (or any pipeline operation) rolls back cleanly. Nested so it can reference FileBlob.
+        internal sealed class StoreSnapshot
+        {
+            public Dictionary<string, Dictionary<Guid, Entity>> Store { get; } =
+                new Dictionary<string, Dictionary<Guid, Entity>>(StringComparer.OrdinalIgnoreCase);
+
+            public Dictionary<Guid, FileBlob> Files { get; } = new Dictionary<Guid, FileBlob>();
+
+            public SharingTable Sharing { get; set; } = new SharingTable();
+
+            public AccessTeamGrants AccessTeams { get; set; } = new AccessTeamGrants();
+
+            public long Version { get; set; }
         }
 
         // --- File/Image column block protocol (matched by RequestName; see ExecuteByName) ---
@@ -1609,7 +1656,7 @@ namespace Vela.Testing
             where T : class
             => request.Parameters.TryGetValue(name, out object? value) && value is T typed ? typed : null;
 
-        private sealed class FileBlob
+        internal sealed class FileBlob
         {
             public byte[] Content = Array.Empty<byte>();
             public string FileName = string.Empty;

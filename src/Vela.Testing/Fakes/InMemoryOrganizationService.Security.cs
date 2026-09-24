@@ -260,7 +260,9 @@ namespace Vela.Testing
             bool ownedByCaller = string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId;
             if (!ownedByCaller)
             {
-                _security.Demand(_currentUserId, entity.LogicalName, Privilege.Assign, null);
+                // Pass the prospective record (with its owner/BU set) so Assign is depth/BU-checked against the
+                // record's target owner, exactly as a real org checks an assignment — not treated as a blanket grant.
+                _security.Demand(_currentUserId, entity.LogicalName, Privilege.Assign, prospective);
             }
         }
 

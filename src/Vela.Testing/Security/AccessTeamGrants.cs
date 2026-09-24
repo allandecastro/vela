@@ -59,6 +59,24 @@ namespace Vela.Testing.Security
             return rights;
         }
 
+        /// <summary>Deep-copies the whole grant table so a transaction/operation can roll back to this point.</summary>
+        internal AccessTeamGrants Clone()
+        {
+            AccessTeamGrants copy = new AccessTeamGrants();
+            copy.CopyFrom(this);
+            return copy;
+        }
+
+        /// <summary>Replaces this table's contents with a deep copy of <paramref name="source"/> (rollback).</summary>
+        internal void CopyFrom(AccessTeamGrants source)
+        {
+            _grants.Clear();
+            foreach (KeyValuePair<(string Entity, Guid Record), Dictionary<(Guid User, Guid Template), AccessRights>> record in source._grants)
+            {
+                _grants[record.Key] = new Dictionary<(Guid, Guid), AccessRights>(record.Value);
+            }
+        }
+
         private static (string, Guid) Key(string entityName, Guid recordId) => (entityName.ToLowerInvariant(), recordId);
     }
 }
