@@ -70,6 +70,35 @@ internal static class InteractiveTokenCache
             builder = builder.WithUnprotectedFile();
         }
 
-        return MsalCacheHelper.CreateAsync(builder.Build()).GetAwaiter().GetResult();
+        MsalCacheHelper helper = MsalCacheHelper.CreateAsync(builder.Build()).GetAwaiter().GetResult();
+
+        // On macOS/Linux the cache is a plaintext file written with the default umask (often world/group-readable).
+        // The parent dir is already 0700 (UserConfig.EnsureConfigDir), but harden the FILE to owner-only too.
+        // The helper writes the file lazily, so chmod on every CacheChanged (covers the freshly-created case) and
+        // once now (covers the common repeat-run case where the file already exists). Best-effort throughout.
+        if (!OperatingSystem.IsWindows())
+        {
+            helper.CacheChanged += (_, _) => RestrictCacheFileToOwner();
+            RestrictCacheFileToOwner();
+        }
+
+        return helper;
+    }
+
+    /// <summary>Best-effort: restrict the token-cache file to owner read/write (0600) on non-Windows, if it exists.</summary>
+    private static void RestrictCacheFileToOwner()
+    {
+        try
+        {
+            string path = Path.Combine(UserConfig.ConfigDir, CacheFileName);
+            if (!OperatingSystem.IsWindows() && File.Exists(path))
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+        }
+        catch
+        {
+            // Best-effort hardening: a chmod failure must not break token persistence.
+        }
     }
 }

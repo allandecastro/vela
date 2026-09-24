@@ -509,6 +509,9 @@ public sealed class DataverseRegistrationCustomApiTests
     [InlineData("System.String", true, SdkConstants.CustomApiParameterType.StringArray)]
     [InlineData("Microsoft.Xrm.Sdk.Entity", true, SdkConstants.CustomApiParameterType.EntityCollection)]
     [InlineData("System.Int32", true, SdkConstants.CustomApiParameterType.Integer)] // collection of a non-string/non-entity scalar falls through to Integer
+    // IList<EntityReference>: the element name CONTAINS "Entity" but is not exactly "Entity", so it must fall
+    // through to the scalar EntityReference code, NOT be mistyped as EntityCollection.
+    [InlineData("Microsoft.Xrm.Sdk.EntityReference", true, SdkConstants.CustomApiParameterType.EntityReference)]
     [InlineData("System.Boolean", false, SdkConstants.CustomApiParameterType.Boolean)]
     [InlineData("Microsoft.Xrm.Sdk.EntityReference", false, SdkConstants.CustomApiParameterType.EntityReference)]
     [InlineData("Microsoft.Xrm.Sdk.Entity", false, SdkConstants.CustomApiParameterType.Entity)]

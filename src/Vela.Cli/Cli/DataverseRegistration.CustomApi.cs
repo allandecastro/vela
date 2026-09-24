@@ -398,16 +398,17 @@ internal static partial class DataverseRegistration
 {
     string simple = SimpleTypeName((parameterTypeName ?? "System.String").Trim());
 
-    // Only String and Entity element types have a Custom API collection code (StringArray / EntityCollection);
-    // any other element type has no collection representation, so it falls through to its scalar code (unchanged).
+    // Only the exact String and Entity element types have a Custom API collection code (StringArray /
+    // EntityCollection). Match on equality, not substring: an element type that merely CONTAINS "Entity" (e.g.
+    // "EntityReference") or "String" is NOT a collection type and must fall through to its scalar code below.
     if (isCollection)
     {
-        if (simple.IndexOf("String", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (string.Equals(simple, "String", StringComparison.OrdinalIgnoreCase))
         {
             return SdkConstants.CustomApiParameterType.StringArray;
         }
 
-        if (simple.IndexOf("Entity", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (string.Equals(simple, "Entity", StringComparison.OrdinalIgnoreCase))
         {
             return SdkConstants.CustomApiParameterType.EntityCollection;
         }
