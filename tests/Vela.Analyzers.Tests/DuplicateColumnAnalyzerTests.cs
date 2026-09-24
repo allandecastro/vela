@@ -98,4 +98,66 @@ namespace Demo
         string code = InMethod("RegisterStep().FilterOn(a => a.Name).WithPreImage(a => a.Name).Handle();");
         await Verify.VerifyAnalyzerAsync(code);
     }
+
+    // Typed-query surface: Vela.Querying.Query.For<T>().Select(...). IFluentStep must still exist so the analyzer's
+    // compilation-start gate runs; the Select column list itself is recognised by its Vela.Querying namespace.
+    private const string QueryHarness = @"
+using System;
+using System.Linq.Expressions;
+
+namespace Vela.Steps
+{
+    public interface IFluentStep { }
+}
+
+namespace Acme
+{
+    public class Account
+    {
+        public string Name { get; set; }
+        public string City { get; set; }
+    }
+}
+
+namespace Vela.Querying
+{
+    public sealed class TypedQuery<TEntity>
+    {
+        public TypedQuery<TEntity> Select(params Expression<Func<TEntity, object>>[] columns) => this;
+    }
+
+    public static class Query
+    {
+        public static TypedQuery<TEntity> For<TEntity>() => new TypedQuery<TEntity>();
+    }
+}
+";
+
+    private static string InQueryMethod(string body) => QueryHarness + @"
+namespace Demo
+{
+    using Vela.Querying;
+    public class Use
+    {
+        public void M()
+        {
+            " + body + @"
+        }
+    }
+}
+";
+
+    [Fact]
+    public async Task Flags_a_duplicate_column_in_typed_query_Select()
+    {
+        string code = InQueryMethod("Query.For<Acme.Account>().Select(c => c.Name, {|#0:c => c.Name|});");
+        await Verify.VerifyAnalyzerAsync(code, Expected("Name"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_distinct_columns_in_typed_query_Select()
+    {
+        string code = InQueryMethod("Query.For<Acme.Account>().Select(c => c.Name, c => c.City);");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
 }
