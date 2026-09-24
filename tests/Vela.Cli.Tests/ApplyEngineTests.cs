@@ -6,6 +6,7 @@ using System.Text.Json;
 using Vela.Cli;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 using Moq;
 using Xunit;
@@ -134,46 +135,19 @@ public class ApplyEngineTests
     [Fact]
     public void ApplyDiff_disables_step_and_reconciles_configuration()
     {
-        Guid createdSecureConfigId = Guid.NewGuid();
-        var created = new List<Entity>();
-        var updated = new List<Entity>();
-        SetStateRequest? setState = null;
-
-        var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
-        mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
-            .Returns((QueryBase q) =>
+        // Driven through the batched write path (FakeOrgService dispatches each ExecuteMultiple child), so the step
+        // row, its secure-config row + link, and the disable SetState still all land.
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
             {
-                string? entity = (q as QueryExpression)?.EntityName;
-                switch (entity)
-                {
-                    case "pluginassembly":
-                        var asm = new EntityCollection();
-                        asm.Entities.Add(new Entity("pluginassembly", Guid.NewGuid()));
-                        return asm;
-                    case "plugintype":
-                        var types = new EntityCollection();
-                        types.Entities.Add(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType });
-                        return types;
-                    case "sdkmessage":
-                        var msg = new EntityCollection();
-                        msg.Entities.Add(new Entity("sdkmessage", Guid.NewGuid()));
-                        return msg;
-                    default:
-                        return new EntityCollection(); // no existing step/images
-                }
-            });
-        mock.Setup(s => s.Create(It.IsAny<Entity>()))
-            .Returns((Entity e) =>
-            {
-                created.Add(e);
-                return e.LogicalName == "sdkmessageprocessingstepsecureconfig" ? createdSecureConfigId : Guid.NewGuid();
-            });
-        mock.Setup(s => s.Update(It.IsAny<Entity>())).Callback((Entity e) => updated.Add(e));
-        mock.Setup(s => s.Retrieve("sdkmessageprocessingstep", It.IsAny<Guid>(), It.IsAny<ColumnSet>()))
-            .Returns((string en, Guid id, ColumnSet _) => new Entity(en, id)); // no existing secure config link
-        mock.Setup(s => s.Execute(It.IsAny<OrganizationRequest>()))
-            .Callback((OrganizationRequest r) => { if (r is SetStateRequest sr) setState = sr; })
-            .Returns(new OrganizationResponse());
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType }),
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
+                _ => new EntityCollection(), // no existing step/images
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id), // no existing secure-config link
+        };
 
         JsonElement def = Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", enabled = false, unsecureConfig = "u-cfg", secureConfig = "s-cfg" });
         var diff = new RegistrationDiff(
@@ -185,21 +159,23 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(mock.Object, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
 
         // Unsecure config is written directly onto the step entity.
-        Entity step = created.Single(e => e.LogicalName == "sdkmessageprocessingstep");
+        Entity step = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstep");
         Assert.Equal("u-cfg", step.GetAttributeValue<string>("configuration"));
 
         // Secure config lives on its own row, created with the value and linked back to the step.
-        Entity secure = created.Single(e => e.LogicalName == "sdkmessageprocessingstepsecureconfig");
+        Entity secure = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstepsecureconfig");
         Assert.Equal("s-cfg", secure.GetAttributeValue<string>("secureconfig"));
-        Assert.Contains(updated, e => e.LogicalName == "sdkmessageprocessingstep"
-            && e.GetAttributeValue<EntityReference>("sdkmessageprocessingstepsecureconfigid")?.Id == createdSecureConfigId);
+        Assert.Contains(svc.Updated, e => e.LogicalName == "sdkmessageprocessingstep"
+            && e.GetAttributeValue<EntityReference>("sdkmessageprocessingstepsecureconfigid")?.Id == secure.Id);
 
-        // Disabled step transitions to the inactive state.
+        // Disabled step transitions to the inactive state (via a batched SetState in tier 2).
+        SetStateRequest? setState = FindBatchedSetState(svc);
         Assert.NotNull(setState);
-        Assert.Equal(1, setState!.State.Value);
+        Assert.Equal(step.Id, setState!.EntityMoniker.Id);
+        Assert.Equal(1, setState.State.Value);
         Assert.Equal(2, setState.Status.Value);
     }
 
@@ -207,22 +183,14 @@ public class ApplyEngineTests
     public void ApplyDiff_deletes_removed_step_through_the_service_seam()
     {
         // Demonstrates the apply orchestration is fully drivable through the IOrganizationService seam
-        // (no live org): a removed step is located by name and deleted.
+        // (no live org): a removed step is located by name and deleted via a batched DeleteRequest.
         Guid stepId = Guid.NewGuid();
-        var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
-        mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
-            .Returns((QueryBase q) =>
-            {
-                string? entity = (q as QueryExpression)?.EntityName;
-                if (entity == "sdkmessageprocessingstep")
-                {
-                    var ec = new EntityCollection();
-                    ec.Entities.Add(new Entity("sdkmessageprocessingstep", stepId));
-                    return ec;
-                }
-
-                return new EntityCollection(); // no plugin assemblies/types needed for a remove-only diff
-            });
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep"
+                ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", stepId))
+                : new EntityCollection(), // no plugin assemblies/types needed for a remove-only diff
+        };
 
         var removed = new RegistrationItem("step", PluginType,
             Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "MyStep" }));
@@ -235,9 +203,25 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(mock.Object, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
 
-        mock.Verify(s => s.Delete("sdkmessageprocessingstep", stepId), Times.Once);
+        Assert.Contains(("sdkmessageprocessingstep", stepId), svc.Deleted);
+    }
+
+    private static SetStateRequest? FindBatchedSetState(TestSupport.FakeOrgService svc)
+    {
+        foreach (ExecuteMultipleRequest batch in svc.Batches)
+        {
+            foreach (OrganizationRequest child in batch.Requests)
+            {
+                if (child is SetStateRequest setState)
+                {
+                    return setState;
+                }
+            }
+        }
+
+        return null;
     }
 
     [Fact]

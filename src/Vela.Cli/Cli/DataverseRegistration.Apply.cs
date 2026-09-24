@@ -21,7 +21,7 @@ namespace Vela.Cli;
 /// <summary> Applies a registration diff: ordering, package/assembly/type sync, resume report. </summary>
 internal static partial class DataverseRegistration
 {
-    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, AssemblyPayload[] sourceAssemblyPayloads, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null)
+    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, AssemblyPayload[] sourceAssemblyPayloads, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null, int batchChunkSize = DefaultBatchChunkSize)
 {
     // When a solution is given, route every create/update through it so all components (package, assembly, types,
     // steps, images, secure config, Custom APIs and their parameters) are added to it — not just the package.
@@ -72,38 +72,9 @@ internal static partial class DataverseRegistration
     {
         // Delete obsolete steps and custom APIs BEFORE uploading the new package.
         // Dataverse refuses to replace plugin types that still have steps registered,
-        // so we must clear them first.
-        foreach (RegistrationItem item in removedSteps)
-        {
-            try
-            {
-                string stepKey = TryGetString(item.Definition, "stepKey") ?? item.Type;
-                LogOperation("step", "delete", stepKey, verbose: verbose);
-                DeleteStepByDefinition(service, item.Definition);
-            }
-            catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
-            {
-                Console.Error.WriteLine($"Warning: skipping step delete for '{item.Type}' (managed by custom API): {ex.Message}");
-            }
-
-            done++;
-        }
-
-        foreach (RegistrationItem item in removedApis)
-        {
-            try
-            {
-                string uniqueName = TryGetString(item.Definition, "uniqueName") ?? item.Type;
-                LogOperation("custom-api", "delete", uniqueName, verbose: verbose);
-                DeleteCustomApi(service, item.Definition);
-            }
-            catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
-            {
-                Console.Error.WriteLine($"Warning: skipping custom API delete for '{item.Type}': {ex.Message}");
-            }
-
-            done++;
-        }
+        // so we must clear them first. Deletes are batched in reverse dependency order
+        // (custom-API parameters/response-properties first, then steps and custom APIs).
+        ApplyDeletesBatched(service, solutionUniqueName, removedSteps, removedApis, verbose, batchChunkSize, ref done);
 
         EnsurePluginPackages(svc, packagePayloads, solutionUniqueName, tempDirectories, verbose);
 
@@ -145,47 +116,14 @@ internal static partial class DataverseRegistration
             ? ResolveSolutionCustomizationPrefix(service, solutionUniqueName!)
             : null;
 
-        foreach (RegistrationItem item in addedApis)
-        {
-            try
-            {
-                UpsertCustomApi(svc, pluginTypeIds, item.Definition, verbose, customApiSolutionPrefix);
-            }
-            catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
-            {
-                Console.Error.WriteLine($"Warning: skipping custom API upsert for '{item.Type}': {ex.Message}");
-            }
-
-            done++;
-        }
-
-        foreach (RegistrationChange change in changedApis)
-        {
-            try
-            {
-                UpsertCustomApi(svc, pluginTypeIds, change.After, verbose, customApiSolutionPrefix);
-            }
-            catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
-            {
-                Console.Error.WriteLine($"Warning: skipping custom API update for '{change.Type}': {ex.Message}");
-            }
-
-            done++;
-        }
-
         // Shared across every step in this run so message/filter ids are queried once, not per step.
         StepMetadataCache metadataCache = new StepMetadataCache();
-        foreach (RegistrationItem item in addedSteps)
-        {
-            UpsertStep(svc, pluginTypeIds, item.Definition, verbose, metadataCache, secureConfigByStepKey);
-            done++;
-        }
 
-        foreach (RegistrationChange change in changedSteps)
-        {
-            UpsertStep(svc, pluginTypeIds, change.After, verbose, metadataCache, secureConfigByStepKey);
-            done++;
-        }
+        // Custom APIs and steps are written via chunked ExecuteMultiple, dependency-tiered so a child never precedes
+        // its just-created parent: tier 1 upserts the step/custom-API rows, tier 2 writes their images, parameters,
+        // response properties, secure config and state.
+        ApplyUpsertsBatched(service, solutionUniqueName, pluginTypeIds, addedApis, changedApis, addedSteps, changedSteps,
+            customApiSolutionPrefix, secureConfigByStepKey, metadataCache, verbose, batchChunkSize, ref done);
 
         // Safeguard: every web resource name must start with the solution's publisher prefix (its top-level folder),
         // or Dataverse rejects the create. Validate once, up front, before any web-resource mutation.

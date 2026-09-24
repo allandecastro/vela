@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.ServiceModel;
+using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace Vela.Cli.Tests.TestSupport;
@@ -22,6 +25,13 @@ internal sealed class FakeOrgService : IOrganizationService
     public List<Entity> Updated { get; } = new();
     public List<(string Entity, Guid Id)> Deleted { get; } = new();
     public List<OrganizationRequest> Executed { get; } = new();
+
+    /// <summary>Every <see cref="ExecuteMultipleRequest"/> issued, in order — assert chunking and tier ordering here.</summary>
+    public List<ExecuteMultipleRequest> Batches { get; } = new();
+
+    /// <summary>When true, <see cref="Execute"/> throws on an <see cref="ExecuteMultipleRequest"/> to simulate an
+    /// environment that cannot run the batch (not supported / timeout), forcing the one-by-one fallback.</summary>
+    public bool FailWholeBatch { get; set; }
 
     /// <summary>Routes <see cref="RetrieveMultiple"/> by entity name; the default lambda returns an empty page.</summary>
     public void RouteRetrieveMultiple(Func<string, EntityCollection> byEntity)
@@ -56,7 +66,107 @@ internal sealed class FakeOrgService : IOrganizationService
     public OrganizationResponse Execute(OrganizationRequest request)
     {
         Executed.Add(request);
-        return new OrganizationResponse();
+        return request switch
+        {
+            ExecuteMultipleRequest batch => RunExecuteMultiple(batch),
+            // Fallback path (one-by-one): route CUD requests through the recording methods so Created/Updated/Deleted
+            // stay populated exactly as they would for a direct Create/Update/Delete call.
+            CreateRequest create => Response("CreateResponse", "id", Create(create.Target)),
+            UpdateRequest update => Apply(() => Update(update.Target), new UpdateResponse()),
+            DeleteRequest delete => Apply(() => Delete(delete.Target.LogicalName, delete.Target.Id), new DeleteResponse()),
+            _ => new OrganizationResponse(),
+        };
+    }
+
+    // Mirrors the platform's ExecuteMultiple: run each child in order; ContinueOnError keeps going past a per-item
+    // fault; ReturnResponses collects per-item Response/Fault (carrying the child fault's ErrorCode + Message).
+    private ExecuteMultipleResponse RunExecuteMultiple(ExecuteMultipleRequest request)
+    {
+        Batches.Add(request);
+        if (FailWholeBatch)
+        {
+            throw new NotSupportedException("ExecuteMultiple is not supported (simulated).");
+        }
+
+        bool continueOnError = request.Settings?.ContinueOnError ?? false;
+        bool returnResponses = request.Settings?.ReturnResponses ?? false;
+        ExecuteMultipleResponseItemCollection items = new ExecuteMultipleResponseItemCollection();
+        bool faulted = false;
+
+        for (int i = 0; i < request.Requests.Count; i++)
+        {
+            try
+            {
+                OrganizationResponse childResponse = RunChild(request.Requests[i]);
+                if (returnResponses)
+                {
+                    items.Add(new ExecuteMultipleResponseItem { RequestIndex = i, Response = childResponse });
+                }
+            }
+            catch (Exception ex)
+            {
+                faulted = true;
+                items.Add(new ExecuteMultipleResponseItem { RequestIndex = i, Fault = ToFault(ex) });
+                if (!continueOnError)
+                {
+                    break;
+                }
+            }
+        }
+
+        ExecuteMultipleResponse response = new ExecuteMultipleResponse();
+        response.Results["IsFaulted"] = faulted;
+        response.Results["Responses"] = items;
+        return response;
+    }
+
+    // Dispatches a batched child through the recording methods (Created/Updated/Deleted), without touching Executed
+    // (which records only top-level Execute calls).
+    private OrganizationResponse RunChild(OrganizationRequest request)
+    {
+        switch (request)
+        {
+            case CreateRequest create:
+                return Response("CreateResponse", "id", Create(create.Target));
+            case UpdateRequest update:
+                Update(update.Target);
+                return new UpdateResponse();
+            case DeleteRequest delete:
+                Delete(delete.Target.LogicalName, delete.Target.Id);
+                return new DeleteResponse();
+            case SetStateRequest:
+                return new SetStateResponse();
+            default:
+                return new OrganizationResponse();
+        }
+    }
+
+    private static OrganizationServiceFault ToFault(Exception ex)
+    {
+        if (ex is FaultException<OrganizationServiceFault> fault)
+        {
+            OrganizationServiceFault detail = fault.Detail ?? new OrganizationServiceFault();
+            return new OrganizationServiceFault
+            {
+                ErrorCode = detail.ErrorCode,
+                Message = string.IsNullOrEmpty(detail.Message) ? fault.Message : detail.Message,
+            };
+        }
+
+        return new OrganizationServiceFault { Message = ex.Message };
+    }
+
+    private static OrganizationResponse Response(string name, string key, object value)
+    {
+        OrganizationResponse response = new OrganizationResponse { ResponseName = name };
+        response.Results[key] = value;
+        return response;
+    }
+
+    private static OrganizationResponse Apply(Action action, OrganizationResponse response)
+    {
+        action();
+        return response;
     }
 
     public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)

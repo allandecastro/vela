@@ -55,6 +55,10 @@ vela plan `
 
 `plan`, `apply` and `inspect` are safe to run under redirected or piped stdin (CI, agents): they never block waiting on a prompt. The optional "package assembly name" prompt only appears on a real terminal, and interactive OAuth prompts are terminal-only too, so a scripted run that supplies its inputs on the command line runs to completion (or fails with a clear message) without hanging.
 
+### Batched writes
+
+`apply` sends its writes in **batches** rather than one request per record: the create/update/delete operations are grouped into dependency tiers (the step and custom API rows first, then their images, parameters, secure config and state) and each tier is flushed in chunked `ExecuteMultiple` requests. This collapses hundreds of round-trips into a handful, so `apply` is much faster on a large environment and far less likely to hit the connection timeout. Deletes run in the reverse order (children before parents). The output is unchanged: results are still reported **per plugin and per custom API**. If a whole batch cannot run on a given environment (for example `ExecuteMultiple` is unavailable, or a request times out), that chunk automatically falls back to one-by-one execution, so batching never makes `apply` less reliable. See [connection timeout](../configuration/authentication.md#connection-timeout) to raise the per-request budget on a very large org.
+
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
 ## Deploy web resources (`--webresources`)
@@ -91,7 +95,7 @@ clear message otherwise. Generate the TypeScript form models the scripts build o
 
 ## Resuming a failed apply
 
-`apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. The output is an ordered resume report listing what was applied and what was not, then the failing operation and its reason. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply` (add `--auto-approve` in CI): the operations that already succeeded become no-ops and the run continues from where it stopped, converging to a clean `plan`.
+`apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. Batching does not change this: each chunk runs with continue-on-error, so a single failed item does not abort the rest, and a tier-2 child (image, parameter) whose tier-1 row failed is skipped and reported rather than orphaned. The output is a per-owner report listing, for each plugin and custom API, what was applied and what failed and why. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply` (add `--auto-approve` in CI): the operations that already succeeded become no-ops and the failed ones are reconciled, converging to a clean `plan`.
 
 ## Registration manifest
 
