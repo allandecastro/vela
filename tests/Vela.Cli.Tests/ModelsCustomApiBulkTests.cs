@@ -63,7 +63,7 @@ public sealed class ModelsCustomApiBulkTests
             _ => new EntityCollection(),
         });
 
-        var result = ModelsCommand.ReadAllCustomApis(svc);
+        var result = CustomApiReader.ReadAllCustomApis(svc);
 
         // Exactly three queries, one per table, regardless of how many APIs exist (no N+1).
         Assert.Equal(3, svc.Queries.Count);
@@ -99,19 +99,19 @@ public sealed class ModelsCustomApiBulkTests
             string project = Path.Combine(dir, "Acme.Shared.csproj");
             File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><RootNamespace>Acme.Shared</RootNamespace></PropertyGroup></Project>");
 
-            string resolved = ModelsCommand.ResolveCSharpOutputDir(["--project", project], "FALLBACK");
+            string resolved = ProjectNamespaceResolver.ResolveCSharpOutputDir(["--project", project], "FALLBACK");
             Assert.Equal(Path.Combine(dir, "Models", "Generated"), resolved);
 
             // Explicit --out or --namespace: keep the caller's fallback.
-            Assert.Equal("FALLBACK", ModelsCommand.ResolveCSharpOutputDir(["--project", project, "--out", "x"], "FALLBACK"));
-            Assert.Equal("FALLBACK", ModelsCommand.ResolveCSharpOutputDir(["--project", project, "--namespace", "N"], "FALLBACK"));
+            Assert.Equal("FALLBACK", ProjectNamespaceResolver.ResolveCSharpOutputDir(["--project", project, "--out", "x"], "FALLBACK"));
+            Assert.Equal("FALLBACK", ProjectNamespaceResolver.ResolveCSharpOutputDir(["--project", project, "--namespace", "N"], "FALLBACK"));
 
             // No project resolvable: fall back.
             string emptyDir = Path.Combine(Path.GetTempPath(), "vela-empty-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(emptyDir);
             try
             {
-                Assert.Equal("FALLBACK", ModelsCommand.ResolveCSharpOutputDir(["--project", emptyDir], "FALLBACK"));
+                Assert.Equal("FALLBACK", ProjectNamespaceResolver.ResolveCSharpOutputDir(["--project", emptyDir], "FALLBACK"));
             }
             finally
             {

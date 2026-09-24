@@ -36,7 +36,7 @@ public class ModelsCommandTests
         // E5: a missing role must not abort the whole run — ReadRootRole returns null so the caller can skip it,
         // warn, and still generate the roles that resolved.
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
-        Assert.Null(ModelsCommand.ReadRootRole(svc, "Nonexistent Role"));
+        Assert.Null(RoleReader.ReadRootRole(svc, "Nonexistent Role"));
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class ModelsCommandTests
         role["parentrootroleid"] = new EntityReference("role", id); // its own root
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(role) };
 
-        Entity? found = ModelsCommand.ReadRootRole(svc, "Salesperson");
+        Entity? found = RoleReader.ReadRootRole(svc, "Salesperson");
         Assert.NotNull(found);
         Assert.Equal(id, found!.Id);
     }
@@ -68,7 +68,7 @@ public class ModelsCommandTests
             OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(param),
         };
 
-        var result = ModelsCommand.ReadCustomApiParameters(svc, "customapirequestparameter", Guid.NewGuid());
+        var result = CustomApiReader.ReadCustomApiParameters(svc, "customapirequestparameter", Guid.NewGuid());
 
         CustomApiParameter one = Assert.Single(result);
         Assert.Equal("ContactId", one.Name);
@@ -95,7 +95,7 @@ public class ModelsCommandTests
             OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(required, optional),
         };
 
-        var result = ModelsCommand.ReadCustomApiParameters(svc, "customapirequestparameter", Guid.NewGuid());
+        var result = CustomApiReader.ReadCustomApiParameters(svc, "customapirequestparameter", Guid.NewGuid());
 
         Assert.False(result.Single(p => p.Name == "AccountId").IsOptional);
         Assert.True(result.Single(p => p.Name == "AsOfDate").IsOptional);
@@ -113,7 +113,7 @@ public class ModelsCommandTests
             OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(prop),
         };
 
-        var result = ModelsCommand.ReadCustomApiParameters(svc, "customapiresponseproperty", Guid.NewGuid());
+        var result = CustomApiReader.ReadCustomApiParameters(svc, "customapiresponseproperty", Guid.NewGuid());
 
         // Response properties have no isoptional column, so it is neither requested nor set.
         Assert.False(Assert.Single(result).IsOptional);
@@ -154,7 +154,7 @@ public class ModelsCommandTests
                 "Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Acme.Plugins\", \"src\\Acme.Plugins\\Acme.Plugins.csproj\", \"{11111111-1111-1111-1111-111111111111}\"\nEndProject\n" +
                 "Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Acme.Shared\", \"src\\Acme.Shared\\Acme.Shared.csproj\", \"{22222222-2222-2222-2222-222222222222}\"\nEndProject\n");
 
-            string? ns = ModelsCommand.ResolveNamespace(new[] { "--project", root });
+            string? ns = ProjectNamespaceResolver.ResolveNamespace(new[] { "--project", root });
 
             Assert.Equal("Acme.Shared.Models.Generated", ns);
         }
@@ -180,7 +180,7 @@ public class ModelsCommandTests
                 "Microsoft Visual Studio Solution File, Format Version 12.00\n" +
                 "Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Acme.Plugins\", \"src\\Acme.Plugins\\Acme.Plugins.csproj\", \"{11111111-1111-1111-1111-111111111111}\"\nEndProject\n");
 
-            Assert.Null(ModelsCommand.ResolveNamespace(new[] { "-p", root }));
+            Assert.Null(ProjectNamespaceResolver.ResolveNamespace(new[] { "-p", root }));
         }
         finally
         {
@@ -194,7 +194,7 @@ public class ModelsCommandTests
         string root = TempDir();
         try
         {
-            Assert.Null(ModelsCommand.ResolveNamespace(new[] { "--project", root }));
+            Assert.Null(ProjectNamespaceResolver.ResolveNamespace(new[] { "--project", root }));
         }
         finally
         {

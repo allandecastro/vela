@@ -58,13 +58,13 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         string nupkg = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture");
 
         RegistrationState state = PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg), Web, _temps);
-        HashSet<string> authored = ModelsCommand.AuthoredCustomApiUniqueNames(state);
+        HashSet<string> authored = CustomApiReader.AuthoredCustomApiUniqueNames(state);
 
         Assert.Contains("sample_DoThing", authored);
 
         // Case-insensitive match against the environment's uniquename, and other Custom APIs are kept.
         string[] allInEnvironment = { "sample_DoThing", "zava_KeepMe", "other_KeepMeToo" };
-        IReadOnlyList<string> kept = ModelsCommand.ExcludeAuthoredCustomApis(allInEnvironment, authored, out int excluded);
+        IReadOnlyList<string> kept = CustomApiReader.ExcludeAuthoredCustomApis(allInEnvironment, authored, out int excluded);
 
         Assert.Equal(1, excluded);
         Assert.Equal(new[] { "zava_KeepMe", "other_KeepMeToo" }, kept.ToArray());
@@ -76,13 +76,13 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         string[] all = { "zava_Alpha", "zava_Beta" };
 
         // No authored names -> nothing excluded (the no-package default: ALL = every Custom API).
-        IReadOnlyList<string> unfiltered = ModelsCommand.ExcludeAuthoredCustomApis(all, new HashSet<string>(), out int noneExcluded);
+        IReadOnlyList<string> unfiltered = CustomApiReader.ExcludeAuthoredCustomApis(all, new HashSet<string>(), out int noneExcluded);
         Assert.Equal(0, noneExcluded);
         Assert.Equal(all, unfiltered.ToArray());
 
         // A differently-cased authored name still matches and is removed.
         HashSet<string> authored = new(StringComparer.OrdinalIgnoreCase) { "ZAVA_ALPHA" };
-        IReadOnlyList<string> filtered = ModelsCommand.ExcludeAuthoredCustomApis(all, authored, out int oneExcluded);
+        IReadOnlyList<string> filtered = CustomApiReader.ExcludeAuthoredCustomApis(all, authored, out int oneExcluded);
         Assert.Equal(1, oneExcluded);
         Assert.Equal(new[] { "zava_Beta" }, filtered.ToArray());
     }

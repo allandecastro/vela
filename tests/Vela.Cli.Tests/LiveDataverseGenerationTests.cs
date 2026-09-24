@@ -38,7 +38,7 @@ public class LiveDataverseGenerationTests
         string? solution = Environment.GetEnvironmentVariable("VELA_LIVE_SOLUTION");
         string[] tables = string.IsNullOrWhiteSpace(solution)
             ? (Environment.GetEnvironmentVariable("VELA_LIVE_TABLES") ?? "account,contact").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            : ModelsCommand.ResolveLogicalNames(service, solution, Array.Empty<string>()).ToArray();
+            : EntityMetadataReader.ResolveLogicalNames(service, solution, Array.Empty<string>()).ToArray();
         Assert.NotEmpty(tables);
         Console.WriteLine($"SCOPE: {(string.IsNullOrWhiteSpace(solution) ? "tables" : "solution " + solution)} -> {tables.Length} table(s): {string.Join(", ", tables.Take(12))}");
 
