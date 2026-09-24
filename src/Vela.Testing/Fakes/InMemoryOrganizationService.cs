@@ -467,6 +467,16 @@ namespace Vela.Testing
                     // entities (a real service round-trips copies, leaving the request graph untouched).
                     Entity toCreate = EntityValues.Clone(child);
                     toCreate[relationship.ReferencingAttribute] = new EntityReference(parentEntity, parentId);
+
+                    // EntityValues.Clone copies only attributes, so carry over the child's own RelatedEntities
+                    // to the record being created; Create -> CreateRelatedEntities then recurses into them,
+                    // making a multi-level deep insert (grandchildren and deeper) work like the platform. The
+                    // nested entities are themselves cloned before being created, so the caller's graph is untouched.
+                    foreach (KeyValuePair<Relationship, EntityCollection> nested in child.RelatedEntities)
+                    {
+                        toCreate.RelatedEntities[nested.Key] = nested.Value;
+                    }
+
                     Create(toCreate);
                 }
             }
