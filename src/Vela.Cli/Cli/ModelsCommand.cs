@@ -5,9 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
-using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
-using Microsoft.Xrm.Sdk.Query;
 using static Vela.Cli.CliExitCodes;
 using static Vela.Cli.CommandLineOptions;
 using static Vela.Cli.OutputWriter;
@@ -18,6 +16,9 @@ namespace Vela.Cli;
 /// Implements <c>vela models</c>: reads table metadata over the same Dataverse connection as plan/apply and
 /// generates early-bound classes via <see cref="ModelGenerator"/>. Scope by <c>--solution</c> (derived from the
 /// solution's components — what <c>pac modelbuilder</c> can't do) and/or an explicit <c>--entities</c> list.
+/// The scope parsing, Dataverse reads and namespace resolution are delegated to focused collaborators
+/// (<see cref="ModelsScope"/>, <see cref="EntityMetadataReader"/>, <see cref="CustomApiReader"/>,
+/// <see cref="RoleReader"/>, <see cref="ProjectNamespaceResolver"/>); this class orchestrates them.
 /// </summary>
 internal static class ModelsCommand
 {
@@ -61,57 +62,14 @@ internal static class ModelsCommand
             return optExit;
         }
 
-        string? solution = TryReadOption(args, "--solution");
-        string[] entities = (TryReadOption(args, "--entities") ?? string.Empty)
-            .Split([','], StringSplitOptions.RemoveEmptyEntries)
-            // Dataverse entity logical names are lower-case; normalize so `--entities Account` resolves the same as
-            // `account` (B7 - matches how add form-script/ribbon-script already lower-case the entity name).
-            .Select(x => x.Trim().ToLowerInvariant())
-            .Where(x => x.Length > 0)
-            .ToArray();
+        ModelsScope scope = ModelsScope.Parse(args);
 
-        // --custom-apis mirrors --messages: absent, targeted (a list), or bare (present with no value = all).
-        bool customApisRequested = HasFlag(args, "--custom-apis");
-        string[] customApis = (TryReadOptionValue(args, "--custom-apis") ?? string.Empty)
-            .Split([','], StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        // Bare `--custom-apis` (present, no explicit list) = generate every Custom API in the environment.
-        bool allCustomApis = customApisRequested && customApis.Length == 0;
-
-        // --messages has three states: absent, present-with-a-list (targeted), and present-with-no-value (all).
-        // HasFlag detects presence; TryReadOptionValue reads the list only when the next token is a real value
-        // (not another option), so a bare `--messages` (all mode) doesn't swallow the following flag as its value.
-        bool messagesRequested = HasFlag(args, "--messages");
-        string[] messages = (TryReadOptionValue(args, "--messages") ?? string.Empty)
-            .Split([','], StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        // Bare `--messages` (present, but no explicit list) = generate all consumable messages, filtered.
-        bool allMessages = messagesRequested && messages.Length == 0;
-
-        string[] roles = (TryReadOption(args, "--roles") ?? string.Empty)
-            .Split([','], StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        // --solution-roles pulls every security role in --solution (like --solution does for tables).
-        bool solutionRoles = HasFlag(args, "--solution-roles");
-
-        if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0 && customApis.Length == 0 && !allCustomApis && messages.Length == 0 && !allMessages && roles.Length == 0 && !solutionRoles)
+        if (scope.IsEmpty)
         {
             return Fail("Specify a scope: --solution <uniquename>, --entities <a,b,c>, --custom-apis [<a,b,c>], --messages [<a,b,c>], --roles <a,b,c> and/or --solution-roles. (Refusing to generate every table.)", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (solutionRoles && string.IsNullOrWhiteSpace(solution))
+        if (scope.SolutionRoles && string.IsNullOrWhiteSpace(scope.Solution))
         {
             return Fail("--solution-roles requires --solution <uniquename>.", ExitInvalidArguments, includeUsage: false);
         }
@@ -120,7 +78,7 @@ internal static class ModelsCommand
         // (hundreds of files). That surprises callers who expected only their own, so warn up front and point at
         // the ways to narrow it. (`--package`/`--packages-dir` already excludes the Custom APIs authored in code.)
         bool excludesAuthored = HasFlag(args, "--package") || HasFlag(args, "--packages-dir");
-        if (allCustomApis && !excludesAuthored)
+        if (scope.AllCustomApis && !excludesAuthored)
         {
             Console.Error.WriteLine("Warning: --custom-apis with no value generates every Custom API in the environment, including system ones (this can be hundreds of files). Pass --custom-apis <a,b,c> to target specific ones, or --package/--packages-dir to exclude the Custom APIs you authored in code.");
         }
@@ -142,13 +100,13 @@ internal static class ModelsCommand
         {
             // --forms and --tables may be combined: a single run then emits form models, table types, the shared
             // option-sets/ folder and one complete barrel (index.ts) covering both.
-            string scope = forms && tables ? "--forms --tables" : forms ? "--forms" : "--tables";
+            string scopeLabel = forms && tables ? "--forms --tables" : forms ? "--forms" : "--tables";
 
             // --verify is a C#-model-only drift check; combining it with the write-only TS scopes would otherwise
             // silently write files, so reject it rather than surprising a CI check.
             if (HasFlag(args, "--verify"))
             {
-                return Fail($"--verify checks the C# early-bound model only; it cannot be combined with {scope}.", ExitInvalidArguments, includeUsage: false);
+                return Fail($"--verify checks the C# early-bound model only; it cannot be combined with {scopeLabel}.", ExitInvalidArguments, includeUsage: false);
             }
 
             // TypeScript is the only output for the client-side scopes, so --lang defaults to ts and only an
@@ -156,21 +114,21 @@ internal static class ModelsCommand
             string tsLang = (langOption ?? "ts").Trim().ToLowerInvariant();
             if (tsLang != "ts")
             {
-                return Fail($"vela models {scope} only supports TypeScript output.", ExitInvalidArguments, includeUsage: false);
+                return Fail($"vela models {scopeLabel} only supports TypeScript output.", ExitInvalidArguments, includeUsage: false);
             }
 
-            if (string.IsNullOrWhiteSpace(solution) && entities.Length == 0)
+            if (string.IsNullOrWhiteSpace(scope.Solution) && scope.Entities.Length == 0)
             {
-                return Fail($"vela models {scope} needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
+                return Fail($"vela models {scopeLabel} needs a table scope: --solution <uniquename> and/or --entities <a,b,c>.", ExitInvalidArguments, includeUsage: false);
             }
 
             // These scopes only read tables; anything else is ignored, so say so rather than dropping it silently.
-            if (customApis.Length > 0 || allCustomApis || messages.Length > 0 || allMessages || roles.Length > 0 || solutionRoles)
+            if (scope.HasCustomApiMessageOrRoleScope)
             {
-                Console.Error.WriteLine($"Warning: {scope} generates TypeScript output only; --custom-apis / --messages / --roles / --solution-roles are ignored.");
+                Console.Error.WriteLine($"Warning: {scopeLabel} generates TypeScript output only; --custom-apis / --messages / --roles / --solution-roles are ignored.");
             }
 
-            return RunTsModels(args, forms, tables, solution, entities, outDir, overwrite, interactive, json);
+            return RunTsModels(args, forms, tables, scope.Solution, scope.Entities, outDir, overwrite, interactive, json);
         }
 
         string lang = (langOption ?? "csharp").Trim().ToLowerInvariant();
@@ -179,7 +137,7 @@ internal static class ModelsCommand
             return Fail("--lang applies to --forms / --tables (TypeScript output) only.", ExitInvalidArguments, includeUsage: false);
         }
 
-        string? ns = ResolveNamespace(args);
+        string? ns = ProjectNamespaceResolver.ResolveNamespace(args);
         if (string.IsNullOrWhiteSpace(ns))
         {
             return Fail("Could not infer a namespace. Pass --namespace <ns> (or run inside a project so it can be derived).", ExitInvalidArguments, includeUsage: false);
@@ -187,7 +145,7 @@ internal static class ModelsCommand
 
         // With no explicit --out, write into the inferred project's Models/Generated folder so the files land where
         // the namespace (<Prefix>.Shared.Models.Generated) says, instead of the project root.
-        outDir = ResolveCSharpOutputDir(args, outDir);
+        outDir = ProjectNamespaceResolver.ResolveCSharpOutputDir(args, outDir);
 
         bool dataAnnotations = !HasFlag(args, "--no-annotations");
 
@@ -196,8 +154,7 @@ internal static class ModelsCommand
         // C# early-bound entity model only (the typed-image blind spot); custom-api/message/role scopes are ignored.
         if (HasFlag(args, "--verify"))
         {
-            bool ignoredScopes = customApis.Length > 0 || allCustomApis || messages.Length > 0 || allMessages || roles.Length > 0 || solutionRoles;
-            return RunModelVerify(args, interactive, solution, entities, ns!, outDir, dataAnnotations, json, ignoredScopes);
+            return RunModelVerify(args, interactive, scope.Solution, scope.Entities, ns!, outDir, dataAnnotations, json, scope.HasCustomApiMessageOrRoleScope);
         }
 
         // Optional plugin package inputs (offline scan): when provided, collect the unique names of the Custom APIs
@@ -213,7 +170,7 @@ internal static class ModelsCommand
         // from the package (see PackageScanner's SECURITY note), so don't run it when nothing would consume the names
         // (targeted --custom-apis is never filtered; --messages excludes Custom-API-backed messages by itself).
         HashSet<string> authoredCustomApis = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (allCustomApis && packagePaths.Count > 0)
+        if (scope.AllCustomApis && packagePaths.Count > 0)
         {
             List<string> tempDirectories = new List<string>();
             try
@@ -236,7 +193,7 @@ internal static class ModelsCommand
                 // NormalizeCustomApiDefinition emits it and how PackageScannerBuildStateTests reads it.
                 JsonSerializerOptions scanJson = new JsonSerializerOptions(JsonSerializerDefaults.Web);
                 RegistrationState scanned = PackageScanner.BuildLocalStateFromPackages(scanOptions, scanJson, tempDirectories);
-                authoredCustomApis = AuthoredCustomApiUniqueNames(scanned);
+                authoredCustomApis = CustomApiReader.AuthoredCustomApiUniqueNames(scanned);
             }
             catch (Exception ex)
             {
@@ -266,7 +223,7 @@ internal static class ModelsCommand
             ConnectionString: connectionString,
             OAuthUrl: oauthUrl,
             OAuthToken: oauthToken,
-            SolutionUniqueName: solution,
+            SolutionUniqueName: scope.Solution,
             Environment: url,
             OutPath: outDir,
             AutoApprove: false,
@@ -286,27 +243,27 @@ internal static class ModelsCommand
             // On<Message>() step extensions reference the exact model type (e.g. new_CustomEntity), not a naive
             // PascalCase of the logical name. Built once, only when a message/custom-api generation needs it.
             IReadOnlyDictionary<string, string>? entityTypeNamesCache = null;
-            IReadOnlyDictionary<string, string> EntityTypeNames() => entityTypeNamesCache ??= BuildEntityTypeNameMap(service);
+            IReadOnlyDictionary<string, string> EntityTypeNames() => entityTypeNamesCache ??= EntityMetadataReader.BuildEntityTypeNameMap(service);
 
-            List<string> logicalNames = ResolveLogicalNames(service, solution, entities);
+            List<string> logicalNames = EntityMetadataReader.ResolveLogicalNames(service, scope.Solution, scope.Entities);
             if (logicalNames.Count > 0)
             {
-                EntityMetadata[] metadata = logicalNames.Select(name => ReadEntity(service, name)).ToArray();
+                EntityMetadata[] metadata = logicalNames.Select(name => EntityMetadataReader.ReadEntity(service, name)).ToArray();
                 models.AddRange(ModelGenerator.Generate(metadata, new ModelGenOptions(ns!, dataAnnotations)));
             }
 
-            if (customApis.Length > 0 || allCustomApis)
+            if (scope.CustomApis.Length > 0 || scope.AllCustomApis)
             {
                 CustomApiMessage[] customApiMessages;
-                if (allCustomApis)
+                if (scope.AllCustomApis)
                 {
                     // Bare --custom-apis = every Custom API in the environment. Read them all in a few paged queries
                     // (one per table) and join in memory, instead of one-plus-two round-trips per API, which times
                     // out on large environments (#211). Then drop any the developer authored in the provided
                     // package(s) (they already have those classes). No package = nothing excluded.
-                    IReadOnlyList<CustomApiMessage> all = ReadAllCustomApis(service);
+                    IReadOnlyList<CustomApiMessage> all = CustomApiReader.ReadAllCustomApis(service);
                     ISet<string> kept = new HashSet<string>(
-                        ExcludeAuthoredCustomApis(all.Select(m => m.UniqueName), authoredCustomApis, out int excludedCount),
+                        CustomApiReader.ExcludeAuthoredCustomApis(all.Select(m => m.UniqueName), authoredCustomApis, out int excludedCount),
                         StringComparer.OrdinalIgnoreCase);
                     customApiMessages = all.Where(m => kept.Contains(m.UniqueName)).ToArray();
                     if (excludedCount > 0)
@@ -317,13 +274,13 @@ internal static class ModelsCommand
                 else
                 {
                     // Targeted list: the user asked for these by name, so generate exactly them — never filtered.
-                    customApiMessages = customApis.Select(name => ReadCustomApi(service, name)).ToArray();
+                    customApiMessages = scope.CustomApis.Select(name => CustomApiReader.ReadCustomApi(service, name)).ToArray();
                 }
 
                 models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!, EntityTypeNames()));
             }
 
-            if (allMessages)
+            if (scope.AllMessages)
             {
                 // ALL mode: every non-private, non-Custom-API-backed message (filtered by the reader), minus any
                 // that already has an SDK request class (skipped here to avoid a duplicate/collision with the SDK
@@ -352,12 +309,12 @@ internal static class ModelsCommand
 
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames()));
             }
-            else if (messages.Length > 0)
+            else if (scope.Messages.Length > 0)
             {
                 // Targeted: the user asked for these by name, so generate exactly them — never silently skipped. If
                 // one already has an SDK request class, warn (suggest the SDK type) but still generate the wrapper.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
-                foreach (string name in messages)
+                foreach (string name in scope.Messages)
                 {
                     if (SdkMessageClassResolver.HasSdkRequestClass(name))
                     {
@@ -370,9 +327,9 @@ internal static class ModelsCommand
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames()));
             }
 
-            if (roles.Length > 0 || solutionRoles)
+            if (scope.Roles.Length > 0 || scope.SolutionRoles)
             {
-                IReadOnlyList<RoleModel> roleModels = ReadRoles(service, roles, solutionRoles ? solution : null);
+                IReadOnlyList<RoleModel> roleModels = RoleReader.ReadRoles(service, scope.Roles, scope.SolutionRoles ? scope.Solution : null);
                 if (roleModels.Count > 0)
                 {
                     models.Add(RoleGenerator.Generate(roleModels, new RoleGenOptions(ns!)));
@@ -441,13 +398,13 @@ internal static class ModelsCommand
             using ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
             IOrganizationService service = client;
 
-            List<string> logicalNames = ResolveLogicalNames(service, solution, entities);
+            List<string> logicalNames = EntityMetadataReader.ResolveLogicalNames(service, solution, entities);
             if (logicalNames.Count == 0)
             {
                 return Fail("No tables resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
             }
 
-            EntityMetadata[] metadata = logicalNames.Select(name => ReadEntity(service, name)).ToArray();
+            EntityMetadata[] metadata = logicalNames.Select(name => EntityMetadataReader.ReadEntity(service, name)).ToArray();
             IReadOnlyList<GeneratedModel> live = ModelGenerator.Generate(metadata, new ModelGenOptions(ns, dataAnnotations));
 
             List<string> liveSources = live.Select(m => m.Code).ToList();
@@ -622,7 +579,7 @@ internal static class ModelsCommand
             using ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
             IOrganizationService service = client;
 
-            List<string> logicalNames = ResolveLogicalNames(service, solution, entities);
+            List<string> logicalNames = EntityMetadataReader.ResolveLogicalNames(service, solution, entities);
             if (logicalNames.Count == 0)
             {
                 return Fail("No tables resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
@@ -647,7 +604,7 @@ internal static class ModelsCommand
 
                 try
                 {
-                    EntityMetadata read = ReadEntity(service, logicalName);
+                    EntityMetadata read = EntityMetadataReader.ReadEntity(service, logicalName);
                     metaCache[logicalName] = read;
                     return read;
                 }
@@ -813,505 +770,6 @@ internal static class ModelsCommand
                 files = models.Select(m => m.FileName).ToArray(),
             },
             new JsonSerializerOptions { WriteIndented = true });
-
-    internal static List<string> ResolveLogicalNames(IOrganizationService service, string? solution, string[] entities)
-    {
-        SortedSet<string> names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string entity in entities)
-        {
-            names.Add(entity);
-        }
-
-        if (!string.IsNullOrWhiteSpace(solution))
-        {
-            foreach (string name in EntitiesInSolution(service, solution!))
-            {
-                names.Add(name);
-            }
-        }
-
-        return names.ToList();
-    }
-
-    // Derives the table list from a solution's components (componenttype 1 = Entity), mapping the component
-    // object ids to logical names via a lightweight RetrieveAllEntities (entity filter only).
-    private static IEnumerable<string> EntitiesInSolution(IOrganizationService service, string uniqueName)
-    {
-        QueryExpression solutionQuery = new QueryExpression("solution") { ColumnSet = new ColumnSet("solutionid"), TopCount = 1 };
-        solutionQuery.Criteria.AddCondition("uniquename", ConditionOperator.Equal, uniqueName);
-        Entity? solution = service.RetrieveMultiple(solutionQuery).Entities.FirstOrDefault()
-            ?? throw new InvalidOperationException($"Solution '{uniqueName}' was not found.");
-
-        QueryExpression componentQuery = new QueryExpression("solutioncomponent") { ColumnSet = new ColumnSet("objectid") };
-        componentQuery.Criteria.AddCondition("solutionid", ConditionOperator.Equal, solution.Id);
-        componentQuery.Criteria.AddCondition("componenttype", ConditionOperator.Equal, 1);
-        HashSet<Guid> objectIds = service.RetrieveAll(componentQuery)
-            .Select(e => e.GetAttributeValue<Guid>("objectid"))
-            .ToHashSet();
-
-        if (objectIds.Count == 0)
-        {
-            return Enumerable.Empty<string>();
-        }
-
-        RetrieveAllEntitiesResponse all = (RetrieveAllEntitiesResponse)service.Execute(
-            new RetrieveAllEntitiesRequest { EntityFilters = EntityFilters.Entity, RetrieveAsIfPublished = true });
-        return all.EntityMetadata
-            .Where(m => m.MetadataId.HasValue && objectIds.Contains(m.MetadataId.Value) && !string.IsNullOrWhiteSpace(m.LogicalName))
-            .Select(m => m.LogicalName)
-            .ToList();
-    }
-
-    private static EntityMetadata ReadEntity(IOrganizationService service, string logicalName)
-    {
-        RetrieveEntityResponse response = (RetrieveEntityResponse)service.Execute(
-            new RetrieveEntityRequest { LogicalName = logicalName, EntityFilters = EntityFilters.Attributes | EntityFilters.Entity | EntityFilters.Relationships });
-        return response.EntityMetadata;
-    }
-
-    // Maps every entity's logical name to the early-bound C# type name the model generator emits for it (its
-    // SchemaName, escaped the same way as ModelGenerator.ClassName). One lightweight RetrieveAllEntities (Entity
-    // filter only). Keys are case-insensitive because sdkmessagefilter.primaryobjecttypecode /
-    // customapi.boundentitylogicalname casing is not guaranteed. Used to wire generated On<Message>() step
-    // extensions to the exact model type (e.g. new_CustomEntity, not NewCustomentity).
-    private static IReadOnlyDictionary<string, string> BuildEntityTypeNameMap(IOrganizationService service)
-    {
-        RetrieveAllEntitiesResponse all = (RetrieveAllEntitiesResponse)service.Execute(
-            new RetrieveAllEntitiesRequest { EntityFilters = EntityFilters.Entity, RetrieveAsIfPublished = true });
-
-        Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (EntityMetadata entity in all.EntityMetadata)
-        {
-            if (string.IsNullOrWhiteSpace(entity.LogicalName))
-            {
-                continue;
-            }
-
-            string typeName = !string.IsNullOrWhiteSpace(entity.SchemaName)
-                ? entity.SchemaName
-                : char.ToUpperInvariant(entity.LogicalName[0]) + entity.LogicalName.Substring(1);
-            map[entity.LogicalName] = CSharpIdentifier.EscapeKeyword(typeName);
-        }
-
-        return map;
-    }
-
-    // The unique names of every Custom API authored in the scanned package(s), from the normalized "custom-api" items.
-    // Case-insensitive so it matches the environment's uniquename regardless of casing.
-    internal static HashSet<string> AuthoredCustomApiUniqueNames(RegistrationState state)
-    {
-        HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (RegistrationItem item in state.Items)
-        {
-            if (!string.Equals(item.Kind, "custom-api", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (item.Definition.TryGetProperty("uniqueName", out JsonElement el) && el.ValueKind == JsonValueKind.String)
-            {
-                string? uniqueName = el.GetString();
-                if (!string.IsNullOrWhiteSpace(uniqueName))
-                {
-                    names.Add(uniqueName!);
-                }
-            }
-        }
-
-        return names;
-    }
-
-    // Drops the developer's own authored Custom APIs from the ALL-mode name list (they already have those classes).
-    // Returns the kept names in the original order; excludedCount reports how many were removed. Factored out so the
-    // exclusion is unit-testable without a live connection.
-    internal static IReadOnlyList<string> ExcludeAuthoredCustomApis(IEnumerable<string> allNames, ISet<string> authoredUniqueNames, out int excludedCount)
-    {
-        List<string> all = allNames.ToList();
-        List<string> kept = all.Where(n => !authoredUniqueNames.Contains(n)).ToList();
-        excludedCount = all.Count - kept.Count;
-        return kept;
-    }
-
-    // Reads every Custom API (with its request parameters and response properties) in a fixed number of paged
-    // queries - one for `customapi`, one for `customapirequestparameter`, one for `customapiresponseproperty` -
-    // joined in memory by customapiid. Replaces the one-plus-two round-trips per API that the ALL-mode loop used to
-    // do (which times out on large environments, #211).
-    internal static IReadOnlyList<CustomApiMessage> ReadAllCustomApis(IOrganizationService service)
-    {
-        Dictionary<Guid, List<CustomApiParameter>> requestParameters = GroupCustomApiParameters(service, "customapirequestparameter", isRequest: true);
-        Dictionary<Guid, List<CustomApiParameter>> responseProperties = GroupCustomApiParameters(service, "customapiresponseproperty", isRequest: false);
-
-        QueryExpression query = new QueryExpression("customapi")
-        {
-            ColumnSet = new ColumnSet("customapiid", "uniquename", "bindingtype", "boundentitylogicalname", "allowedcustomprocessingsteptype", "isprivate"),
-        };
-
-        List<CustomApiMessage> result = new List<CustomApiMessage>();
-        foreach (Entity api in service.RetrieveAll(query))
-        {
-            string? uniqueName = api.GetAttributeValue<string>("uniquename");
-            if (string.IsNullOrWhiteSpace(uniqueName))
-            {
-                continue;
-            }
-
-            int bindingType = api.GetAttributeValue<OptionSetValue>("bindingtype")?.Value ?? 0;
-            string? boundEntity = api.GetAttributeValue<string>("boundentitylogicalname");
-            result.Add(new CustomApiMessage(
-                uniqueName!,
-                IsBoundToEntity: bindingType == 1,
-                requestParameters.TryGetValue(api.Id, out List<CustomApiParameter>? rp) ? rp : new List<CustomApiParameter>(),
-                responseProperties.TryGetValue(api.Id, out List<CustomApiParameter>? sp) ? sp : new List<CustomApiParameter>(),
-                AllowedStepType: api.GetAttributeValue<OptionSetValue>("allowedcustomprocessingsteptype")?.Value ?? 2,
-                IsPrivate: api.GetAttributeValue<bool>("isprivate"),
-                BoundEntityLogicalName: string.IsNullOrWhiteSpace(boundEntity) ? null : boundEntity));
-        }
-
-        return result.OrderBy(m => m.UniqueName, StringComparer.Ordinal).ToList();
-    }
-
-    // Reads all rows of a Custom API parameter table in one paged query and groups them by their parent Custom API.
-    // Mirrors the per-API reader's column/shape choices (see ReadCustomApiParameters), including the by-name order.
-    private static Dictionary<Guid, List<CustomApiParameter>> GroupCustomApiParameters(IOrganizationService service, string entity, bool isRequest)
-    {
-        ColumnSet columns = isRequest
-            ? new ColumnSet("name", "type", "isoptional", "customapiid")
-            : new ColumnSet("name", "type", "customapiid");
-        QueryExpression query = new QueryExpression(entity) { ColumnSet = columns };
-
-        Dictionary<Guid, List<CustomApiParameter>> byApi = new Dictionary<Guid, List<CustomApiParameter>>();
-        foreach (Entity e in service.RetrieveAll(query))
-        {
-            Guid apiId = e.GetAttributeValue<EntityReference>("customapiid")?.Id ?? Guid.Empty;
-            string name = e.GetAttributeValue<string>("name") ?? string.Empty;
-            if (apiId == Guid.Empty || string.IsNullOrWhiteSpace(name))
-            {
-                continue;
-            }
-
-            CustomApiParameter parameter = new CustomApiParameter(
-                name,
-                e.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10,
-                isRequest && (e.GetAttributeValue<bool?>("isoptional") ?? false));
-
-            if (!byApi.TryGetValue(apiId, out List<CustomApiParameter>? list))
-            {
-                list = new List<CustomApiParameter>();
-                byApi[apiId] = list;
-            }
-
-            list.Add(parameter);
-        }
-
-        foreach (List<CustomApiParameter> list in byApi.Values)
-        {
-            list.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
-        }
-
-        return byApi;
-    }
-
-    private static CustomApiMessage ReadCustomApi(IOrganizationService service, string uniqueName)
-    {
-        QueryExpression query = new QueryExpression("customapi")
-        {
-            ColumnSet = new ColumnSet("customapiid", "bindingtype", "boundentitylogicalname", "allowedcustomprocessingsteptype", "isprivate"),
-            TopCount = 1,
-        };
-        query.Criteria.AddCondition("uniquename", ConditionOperator.Equal, uniqueName);
-        Entity api = service.RetrieveMultiple(query).Entities.FirstOrDefault()
-            ?? throw new InvalidOperationException($"Custom API '{uniqueName}' was not found.");
-
-        // bindingtype: 0 Global, 1 Entity, 2 EntityCollection. Only type 1 auto-adds a single-record Target input,
-        // so IsBoundToEntity (which drives that Target property) stays == 1; the extension constraint keys off
-        // boundEntity being set instead, so a collection-bound (type 2) API is still entity-constrained (Phase 3c).
-        int bindingType = api.GetAttributeValue<OptionSetValue>("bindingtype")?.Value ?? 0;
-        string? boundEntity = api.GetAttributeValue<string>("boundentitylogicalname");
-        return new CustomApiMessage(
-            uniqueName,
-            IsBoundToEntity: bindingType == 1,
-            ReadCustomApiParameters(service, "customapirequestparameter", api.Id),
-            ReadCustomApiParameters(service, "customapiresponseproperty", api.Id),
-            AllowedStepType: api.GetAttributeValue<OptionSetValue>("allowedcustomprocessingsteptype")?.Value ?? 2,
-            IsPrivate: api.GetAttributeValue<bool>("isprivate"),
-            BoundEntityLogicalName: string.IsNullOrWhiteSpace(boundEntity) ? null : boundEntity);
-    }
-
-    internal static List<CustomApiParameter> ReadCustomApiParameters(IOrganizationService service, string entity, Guid customApiId)
-    {
-        // Use the parameter's `name` (e.g. "ContactId"), NOT its `uniquename` (e.g. "zava_ContactValidate.
-        // ContactId"): the name is both the C# property identifier and the runtime Parameters/Results key.
-        // The dotted uniquename would emit `public Guid zava_ContactValidate.ContactId` (parsed as an explicit
-        // interface member, CS0538) and read the wrong Parameters key at runtime.
-        // isoptional exists on customapirequestparameter only; customapiresponseproperty has no such column
-        // (response properties are always present), so it is requested and read for request parameters alone.
-        bool isRequest = entity == "customapirequestparameter";
-        ColumnSet columns = isRequest ? new ColumnSet("name", "type", "isoptional") : new ColumnSet("name", "type");
-        QueryExpression query = new QueryExpression(entity) { ColumnSet = columns };
-        query.Criteria.AddCondition("customapiid", ConditionOperator.Equal, customApiId);
-        return service.RetrieveAll(query)
-            .Select(e => new CustomApiParameter(
-                e.GetAttributeValue<string>("name") ?? string.Empty,
-                e.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10,
-                isRequest && (e.GetAttributeValue<bool?>("isoptional") ?? false)))
-            .Where(p => !string.IsNullOrWhiteSpace(p.Name))
-            .OrderBy(p => p.Name, StringComparer.Ordinal)
-            .ToList();
-    }
-
-    private static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames, string? solution)
-    {
-        // Resolve to unique root roles (id -> name), merging explicit names and the solution's role components so a
-        // role listed both ways is generated once.
-        Dictionary<Guid, string> roots = new Dictionary<Guid, string>();
-
-        List<string> missing = new List<string>();
-        foreach (string name in roleNames)
-        {
-            Entity? root = ReadRootRole(service, name);
-            if (root == null)
-            {
-                missing.Add(name);
-                continue;
-            }
-
-            roots[root.Id] = root.GetAttributeValue<string>("name") ?? name;
-        }
-
-        // Generate whatever resolved rather than aborting the whole run on the first missing role; a typo in one
-        // name should not throw away the others. Only a completely empty result (no explicit role resolved and no
-        // solution roles) is an error.
-        if (missing.Count > 0)
-        {
-            Console.Error.WriteLine($"Warning: security role(s) not found and skipped: {string.Join(", ", missing)}.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(solution))
-        {
-            foreach (Entity role in RolesInSolution(service, solution!))
-            {
-                roots[role.Id] = role.GetAttributeValue<string>("name") ?? role.Id.ToString();
-            }
-        }
-
-        if (roots.Count == 0)
-        {
-            throw new InvalidOperationException(
-                $"None of the requested security role(s) were found in the connected environment: {string.Join(", ", roleNames)}.");
-        }
-
-        IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> privileges = BuildPrivilegeMap(service);
-        return roots
-            .OrderBy(r => r.Value, StringComparer.Ordinal)
-            .Select(r => new RoleModel(r.Value, r.Key, RolePrivilegeMapper.ToGrants(ReadRolePrivileges(service, r.Key), privileges)))
-            .ToList();
-    }
-
-    // Every security role in a solution (solutioncomponent componenttype 20). Solution components reference the
-    // root role, so the object ids are the stable root ids.
-    private static IEnumerable<Entity> RolesInSolution(IOrganizationService service, string uniqueName)
-    {
-        QueryExpression solutionQuery = new QueryExpression("solution") { ColumnSet = new ColumnSet("solutionid"), TopCount = 1 };
-        solutionQuery.Criteria.AddCondition("uniquename", ConditionOperator.Equal, uniqueName);
-        Entity solutionRecord = service.RetrieveMultiple(solutionQuery).Entities.FirstOrDefault()
-            ?? throw new InvalidOperationException($"Solution '{uniqueName}' was not found.");
-
-        QueryExpression componentQuery = new QueryExpression("solutioncomponent") { ColumnSet = new ColumnSet("objectid") };
-        componentQuery.Criteria.AddCondition("solutionid", ConditionOperator.Equal, solutionRecord.Id);
-        componentQuery.Criteria.AddCondition("componenttype", ConditionOperator.Equal, 20); // 20 = Role
-        List<Guid> roleIds = service.RetrieveAll(componentQuery)
-            .Select(e => e.GetAttributeValue<Guid>("objectid"))
-            .Distinct()
-            .ToList();
-
-        foreach (Guid roleId in roleIds)
-        {
-            yield return service.Retrieve("role", roleId, new ColumnSet("roleid", "name", "parentrootroleid"));
-        }
-    }
-
-    // The root (template) role for a name. Roles are duplicated per business unit; the root is the one whose
-    // parentrootroleid points at itself, and its id is the stable id plugin logic uses.
-    internal static Entity? ReadRootRole(IOrganizationService service, string name)
-    {
-        QueryExpression query = new QueryExpression("role") { ColumnSet = new ColumnSet("roleid", "name", "parentrootroleid") };
-        query.Criteria.AddCondition("name", ConditionOperator.Equal, name);
-        List<Entity> matches = service.RetrieveAll(query).ToList();
-
-        // Null (not found) instead of throwing: the caller collects and reports the missing names but still
-        // generates the roles that did resolve.
-        return matches.FirstOrDefault(r => r.GetAttributeValue<EntityReference>("parentrootroleid")?.Id == r.Id)
-            ?? matches.FirstOrDefault();
-    }
-
-    private static IEnumerable<(Guid PrivilegeId, int DepthMask)> ReadRolePrivileges(IOrganizationService service, Guid roleId)
-    {
-        QueryExpression query = new QueryExpression("roleprivileges") { ColumnSet = new ColumnSet("privilegeid", "privilegedepthmask") };
-        query.Criteria.AddCondition("roleid", ConditionOperator.Equal, roleId);
-        return service.RetrieveAll(query)
-            .Select(e => (e.GetAttributeValue<Guid>("privilegeid"), e.GetAttributeValue<int>("privilegedepthmask")))
-            .ToList();
-    }
-
-    // privilegeId -> (owning table, privilege type), from every table's Privileges metadata. Miscellaneous
-    // (non-table) privileges aren't in any table's collection, so they're naturally excluded from generation.
-    private static IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> BuildPrivilegeMap(IOrganizationService service)
-    {
-        RetrieveAllEntitiesResponse response = (RetrieveAllEntitiesResponse)service.Execute(
-            new RetrieveAllEntitiesRequest { EntityFilters = EntityFilters.Entity | EntityFilters.Privileges, RetrieveAsIfPublished = true });
-
-        Dictionary<Guid, (string, PrivilegeType)> map = new Dictionary<Guid, (string, PrivilegeType)>();
-        foreach (EntityMetadata entity in response.EntityMetadata)
-        {
-            if (entity.Privileges == null || string.IsNullOrWhiteSpace(entity.LogicalName))
-            {
-                continue;
-            }
-
-            foreach (SecurityPrivilegeMetadata privilege in entity.Privileges)
-            {
-                map[privilege.PrivilegeId] = (entity.LogicalName, privilege.PrivilegeType);
-            }
-        }
-
-        return map;
-    }
-
-    // Default output directory for C# models: an explicit --out wins; otherwise, when the namespace is inferred from
-    // a project (no --namespace) and a project is found, write into that project's Models/Generated folder so the
-    // files land where the inferred namespace says. Falls back to the caller's default (the current directory).
-    internal static string ResolveCSharpOutputDir(string[] args, string fallback)
-    {
-        if (!string.IsNullOrWhiteSpace(TryReadOption(args, "--out"))
-            || !string.IsNullOrWhiteSpace(TryReadOption(args, "--namespace")))
-        {
-            return fallback;
-        }
-
-        string? project = ResolveProjectFile(TryReadOption(args, "--project"));
-        return project != null
-            ? Path.Combine(Path.GetDirectoryName(project)!, "Models", "Generated")
-            : fallback;
-    }
-
-    internal static string? ResolveNamespace(string[] args)
-    {
-        string? explicitNs = TryReadOption(args, "--namespace");
-        if (!string.IsNullOrWhiteSpace(explicitNs))
-        {
-            return explicitNs;
-        }
-
-        string? projectFile = ResolveProjectFile(TryReadOption(args, "--project"));
-        if (projectFile == null)
-        {
-            return null;
-        }
-
-        string prefix = StripRoleSuffix(ReadRootNamespace(projectFile));
-        return $"{prefix}.Shared.Models.Generated";
-    }
-
-    private static string? ResolveProjectFile(string? requested)
-    {
-        if (!string.IsNullOrWhiteSpace(requested))
-        {
-            if (File.Exists(requested) && requested.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            {
-                return requested;
-            }
-
-            if (Directory.Exists(requested))
-            {
-                return FindProjectInDirectory(requested);
-            }
-
-            return null;
-        }
-
-        return FindProjectInDirectory(Directory.GetCurrentDirectory());
-    }
-
-    private static string? FindProjectInDirectory(string directory)
-    {
-        // A single top-level .csproj is the unambiguous project (running from a project folder).
-        string? single = SingleCsproj(directory, out _);
-        if (single != null)
-        {
-            return single;
-        }
-
-        // Otherwise, when run from a solution root, derive the namespace from a representative project listed
-        // in the .sln so `vela models` "just works" from the root like plan/apply do.
-        return ProjectFromSolution(directory);
-    }
-
-    // Picks a representative project from a single .sln in the directory. Any role-suffixed project yields the
-    // same base namespace via StripRoleSuffix, but prefer .Shared/.Plugins/.Integrations (and avoid the test
-    // project) so the derived shared-models namespace is the expected one.
-    private static string? ProjectFromSolution(string directory)
-    {
-        string[] solutions = Directory.GetFiles(directory, "*.sln", SearchOption.TopDirectoryOnly);
-        if (solutions.Length != 1)
-        {
-            return null;
-        }
-
-        string[] projects = ReadSolutionProjectPaths(solutions[0]);
-        if (projects.Length == 0)
-        {
-            return null;
-        }
-
-        foreach (string preferred in new[] { ".Shared.csproj", ".Plugins.csproj", ".Integrations.csproj" })
-        {
-            string? match = projects.FirstOrDefault(p => p.EndsWith(preferred, StringComparison.OrdinalIgnoreCase));
-            if (match != null)
-            {
-                return match;
-            }
-        }
-
-        return projects.FirstOrDefault(p => !p.EndsWith(".Tests.csproj", StringComparison.OrdinalIgnoreCase))
-            ?? projects[0];
-    }
-
-    // Parses the project .csproj paths out of a .sln. Project lines look like:
-    //   Project("{TypeGuid}") = "Name", "relative\Path.csproj", "{ProjectGuid}"
-    private static string[] ReadSolutionProjectPaths(string solutionFile)
-    {
-        string solutionDir = Path.GetDirectoryName(solutionFile) ?? Directory.GetCurrentDirectory();
-        List<string> paths = new List<string>();
-        foreach (string line in File.ReadLines(solutionFile))
-        {
-            if (!line.StartsWith("Project(", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            string[] parts = line.Split(',');
-            if (parts.Length < 2)
-            {
-                continue;
-            }
-
-            string rawPath = parts[1].Trim().Trim('"');
-            if (!rawPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            // .sln paths always use backslashes; normalize for non-Windows hosts.
-            string relativePath = rawPath.Replace('\\', Path.DirectorySeparatorChar);
-            string full = Path.GetFullPath(Path.Combine(solutionDir, relativePath));
-            if (File.Exists(full))
-            {
-                paths.Add(full);
-            }
-        }
-
-        return paths.ToArray();
-    }
 
     private static void PrintModelsUsage()
     {
