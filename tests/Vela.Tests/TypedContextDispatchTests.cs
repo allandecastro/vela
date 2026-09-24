@@ -143,6 +143,28 @@ namespace Vela.Tests
             Assert.Equal(message, probe.Seen);
         }
 
+        // Regression: on a real org an (Dis)Associate execution context carries no primary entity matching the
+        // step's TEntity (the message is relationship-global), so a sync step must still match. Before the fix this
+        // threw "Plugin '...' has no registered step matching message 'Associate'." A non-matching primary entity
+        // reproduces the real pipeline; the earlier Each_message test masked it by driving Associate with the
+        // step's own entity.
+        [Theory]
+        [InlineData(PluginMessages.Associate)]
+        [InlineData(PluginMessages.Disassociate)]
+        public void Relationship_message_dispatches_when_primary_entity_does_not_match_the_step_entity(string message)
+        {
+            AllMessagesProbe probe = new AllMessagesProbe();
+
+            PluginContext.For<TestAccount>()
+                .OnMessage(message)
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .WithPrimaryEntity("contact", Guid.NewGuid())   // NOT the step's TEntity (account)
+                .Execute(probe);
+
+            Assert.Equal(message, probe.Seen);
+        }
+
         // Regression: On<TRequest>() where the request's RequestName collides with a modelled message (MergeRequest
         // -> "Merge"). The handler's parameter is IMessagePreContext<MergeRequest>, which the modelled
         // MergePreContext<TEntity> does NOT implement, so dispatch must build the generic MessagePreContext<TRequest>
