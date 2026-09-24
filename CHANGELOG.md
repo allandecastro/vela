@@ -24,6 +24,38 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.26.2] - 2026-09-24 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.26.2`. Correctness and test-harness fidelity hardening from the code
+review and a live-environment test campaign.
+
+### Fixed
+
+- **Associate / Disassociate steps now match at runtime regardless of primary entity.** A synchronous step
+  registered with `OnAssociate()` / `OnDisassociate()` on an `EntityPluginBase<TEntity>` threw "no registered step
+  matching message 'Associate'" because these relationship-global messages carry no primary entity matching the
+  step's `TEntity`. The step matcher now skips the entity check for these messages. (Async steps hid this; a sync
+  step failed the operation. Found on a real org.)
+- **Brace-safe tracing and logging** (`LocalPluginContext`): `ctx.Trace(...)` / `Log(...)` of text containing
+  `{` or `}` (for example a serialized snapshot) no longer throws `FormatException`; `Log` also falls back to the
+  literal template on an argument/placeholder mismatch instead of throwing.
+- **Test-harness fidelity** (`Vela.Testing`): full transaction rollback (records + sharing + access-team grants +
+  file blobs + version); `ExecuteMultiple` preserves the fault `ErrorCode` (store and pipeline paths);
+  `Include` honours the child query's filter/order/paging; `Associate` / `Disassociate` validate record existence;
+  create-on-behalf-of is depth/BU-checked; ordered filters with a null operand yield no match instead of throwing;
+  and multi-level deep insert no longer drops grandchildren. Backed by new parity ("fidelity") test suites.
+
+## [0.15.2] - 2026-09-24 (Vela.Cli)
+
+CLI line, published as `cli-v0.15.2`. Security and correctness hardening from the code review.
+
+### Fixed
+
+- The decoded PFX signing certificate written to a temp file and the interactive MSAL token-cache file are now
+  restricted to the owner (0600) on macOS/Linux; the config directory is created 0700 on every write path.
+- `ResolveCustomApiTypeCode` uses exact `String` / `Entity` element-type matching instead of a substring check, so
+  a collection of `EntityReference` is no longer mistyped as an entity collection.
+
 ## [0.26.1] - 2026-09-23 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.26.1`. Security patch.
