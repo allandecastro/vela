@@ -46,9 +46,9 @@ namespace Demo
 }
 ";
 
-    private static DiagnosticResult Expected(string plugin) =>
+    private static DiagnosticResult At(int marker, string className, string plugin) =>
         new DiagnosticResult(Vela.Analyzers.PartialPluginForTypedImageAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
-            .WithLocation(0).WithArguments(plugin);
+            .WithLocation(marker).WithArguments(className, plugin);
 
     [Fact]
     public async Task Adds_partial_after_the_sealed_modifier()
@@ -75,7 +75,7 @@ namespace Demo
     }
 }";
 
-        await Verify.VerifyCodeFixAsync(before, Expected("Audit"), after);
+        await Verify.VerifyCodeFixAsync(before, At(0, "Audit", "Audit"), after);
     }
 
     [Fact]
@@ -103,6 +103,40 @@ namespace Demo
     }
 }";
 
-        await Verify.VerifyCodeFixAsync(before, Expected("Audit"), after);
+        await Verify.VerifyCodeFixAsync(before, At(0, "Audit", "Audit"), after);
+    }
+
+    [Fact]
+    public async Task Adds_partial_to_the_outer_class_and_the_plugin()
+    {
+        string before = Preamble + @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public class {|#0:Outer|}
+    {
+        public sealed class {|#1:Audit|} : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }
+}";
+
+        string after = Preamble + @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public partial class Outer
+    {
+        public sealed partial class Audit : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }
+}";
+
+        await Verify.VerifyCodeFixAsync(before, new[] { At(0, "Outer", "Audit"), At(1, "Audit", "Audit") }, after);
     }
 }

@@ -24,6 +24,15 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.27.1] - 2026-09-25 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.27.1`. Fixes two edge cases in the 0.27.0 typed-image/context generation found in a follow-up audit.
+
+### Fixed
+
+- **Generated typed step context no longer references a renamed projection on a handler-name collision.** When two steps in one plugin bound the same named handler with different captured columns, the projection types were hash-disambiguated but the generated context still referenced the original (now non-existent) name, producing `CS0246`. The context now references the emitted (hash-suffixed) projection name. (This shape is also a VELA016 error, so it was usually masked, but the generator runs regardless.)
+- **VELA014 now flags a non-`partial` enclosing class of a nested plugin.** The generated projection nests inside the plugin class and every type that encloses it, all emitted as `partial class`; VELA014 (and its code fix) previously checked only the plugin class, so a non-`partial` outer class still failed the build with an obscure `CS0260`. VELA014 now reports (and the fix adds `partial` to) every class in the containment chain that lacks it.
+
 ## [0.27.0] - 2026-09-25 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.27.0`. Typed image ergonomics: short nested projection names and generated
