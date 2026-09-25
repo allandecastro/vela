@@ -36,6 +36,14 @@ Framework line, published as `framework-v0.27.1`. Fixes two edge cases in the 0.
 - **`Handle(...)` validates the handler shape at registration.** A handler bound through the permissive delegate overload must be a void method taking exactly one context parameter; a wrong-arity or non-void delegate now fails at registration with a clear message instead of an `IndexOutOfRange`/`TargetParameterCount` crash mid-dispatch.
 - **Circular service dependency detection.** `SimpleServiceResolver` now detects a factory that resolves its own type (directly or via a cycle) and throws a clear `InvalidPluginExecutionException` (with the resolution chain) instead of a `StackOverflowException` that cannot be caught and would tear down the worker.
 
+## [0.16.1] - 2026-09-25 (Vela.Cli)
+
+CLI line, published as `cli-v0.16.1`. Data-safety fix from a follow-up audit.
+
+### Fixed
+
+- **`plan`/`apply` no longer risks deleting live registrations from a partial package.** When a plugin type failed to load during a package scan (a dependency missing from the package, or built for a different target framework), the scanner silently dropped it, so its existing steps/Custom APIs were diffed as `Removed` and `apply` would delete them. The scan now aborts with a clear error when any type fails to load, so nothing is deleted from a misbuilt package.
+
 ## [0.27.0] - 2026-09-25 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.27.0`. Typed image ergonomics: short nested projection names and generated
