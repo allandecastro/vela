@@ -24,7 +24,12 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Changed (Framework)
+## [0.27.0] - 2026-09-25 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.27.0`. Typed image ergonomics: short nested projection names and generated
+typed step contexts.
+
+### Changed
 
 - **Typed image projections are now nested in the plugin's `partial` class with a short name (breaking).** The
   generated projection type is emitted as a nested type inside the plugin class and named
@@ -35,7 +40,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   **Migration:** drop the `{PluginClass}_` prefix at each `PreImageAs`/`PostImageAs` read site and declare the
   plugin class `partial` (see VELA014).
 
-### Added (Framework)
+### Added
 
 - **VELA014** (analyzer + code fix, ships in `Vela.Plugins`): a plugin that captures a typed image
   (`WithPreImage`/`WithPostImage` with column selectors) must be declared `partial`, so the generated nested
@@ -51,11 +56,17 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ctx.PreImageAs<T>()` keep working. Guard rails: **VELA015** (the handler's context must match its step; with a code
   fix) and **VELA016** (a typed-context handler must bind a single step).
 
-### Changed (CLI)
+## [0.16.0] - 2026-09-25 (Vela.Cli)
 
-- Scaffolded plugins that capture typed images are now generated `partial` and read the short nested projection
-  name (`ctx.PostImageAs<OnAccountCreated_PostImage>()`). Scaffolded lightweight Custom APIs bind their handler via
-  a method group (`RegisterCustomApi("...", Handle)`) instead of `nameof(Handle)`.
+CLI line, published as `cli-v0.16.0`. Scaffold updates for the typed-image ergonomics.
+
+### Changed
+
+- Scaffolded plugins that capture typed images are now generated `partial`, read images through the generated typed
+  step context (`void OnAccountCreated(OnAccountCreatedContext ctx)` / `ctx.PostImage`), and lightweight Custom APIs
+  bind their handler via a method group (`RegisterCustomApi("...", Handle)`) instead of `nameof(Handle)`.
+- Scaffolds target framework **0.27.0** by default (offline-fallback `DefaultCoreVersion`); `vela init` still resolves
+  the latest published framework from nuget.org.
 
 ## [0.26.2] - 2026-09-24 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
