@@ -30,6 +30,8 @@ namespace Vela.Steps
     public interface IFluentStep { }
     public interface IStepConfig<TEntity> : IFluentStep
     {
+        IStepConfig<TEntity> OnCreate();
+        IStepConfig<TEntity> OnDelete();
         IStepConfig<TEntity> OnUpdate();
         IStepConfig<TEntity> OnUpdateMultiple();
         IStepConfig<TEntity> On<TRequest>();
@@ -54,6 +56,24 @@ namespace Vela.Plugin
     {
         protected IStepConfig<TEntity> RegisterStep() => null;
         protected virtual void RegisterPluginSteps() { }
+    }
+}
+
+namespace Vela.Context
+{
+    using Microsoft.Xrm.Sdk;
+    // Minimal stand-ins for the concrete step contexts a generated per-step context derives from, plus the image
+    // accessor extensions it calls. Enough for the generated context to compile in the generator tests.
+    public interface ILocalPluginContext { }
+    public class CreatePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public CreatePostContext(ILocalPluginContext inner) { } public TEntity? PostImage => default; }
+    public class UpdatePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public UpdatePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
+    public class UpdatePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public UpdatePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; }
+    public class DeletePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public DeletePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
+    public class DeletePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public DeletePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
+    public static class ImageProjectionExtensions
+    {
+        public static TImage PreImageAs<TImage>(this ILocalPluginContext context) => default!;
+        public static TImage PostImageAs<TImage>(this ILocalPluginContext context) => default!;
     }
 }
 
@@ -469,6 +489,99 @@ namespace Demo
 ");
 
         Assert.Contains(diagnostics, d => d.Id == "CS0260");
+    }
+
+    [Fact]
+    public void Emits_a_typed_step_context_for_update_post_with_pre_and_post()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithPreImage(a => a.Revenue)
+                .WithPostImage(a => a.Name, a => a.Revenue)
+                .Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.Contains("partial class AccountAudit", output);
+        Assert.Contains("class OnUpdatedContext : global::Vela.Context.UpdatePostContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnUpdated_PreImage? PreImage", output);
+        Assert.Contains("public new OnUpdated_PostImage? PostImage", output);
+    }
+
+    [Fact]
+    public void Emits_a_post_only_context_for_create_post()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountCreate : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreate().PostOperation().Sync()
+                .WithPostImage(a => a.Name)
+                .Handle(OnCreated);
+        private void OnCreated() { }
+    }
+}
+");
+
+        Assert.Contains("class OnCreatedContext : global::Vela.Context.CreatePostContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnCreated_PostImage? PostImage", output);
+        Assert.DoesNotContain("PreImage =>", output);   // no pre-image member on a create-post context
+    }
+
+    [Fact]
+    public void Emits_a_pre_only_context_for_delete_pre()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountDelete : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnDelete().PreOperation().Sync()
+                .WithPreImage(a => a.Name)
+                .Handle(OnDeleting);
+        private void OnDeleting() { }
+    }
+}
+");
+
+        Assert.Contains("class OnDeletingContext : global::Vela.Context.DeletePreContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnDeleting_PreImage? PreImage", output);
+        Assert.DoesNotContain("PostImage =>", output);   // no post-image member on a delete-pre context
+    }
+
+    [Fact]
+    public void Does_not_emit_a_context_for_a_lambda_handler()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class LambdaAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithPostImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        // The projection is still emitted, but no typed step context (a lambda has no name to key it).
+        Assert.Contains("_PostImage", output);
+        Assert.DoesNotContain("Context : global::Vela.Context", output);
     }
 
     private static ImmutableArray<Diagnostic> CompileDiagnostics(string pluginSource)

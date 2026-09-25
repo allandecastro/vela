@@ -72,6 +72,7 @@ namespace Vela.Steps
         ICreatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
         ICreatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreatePostContext<TEntity>> handler);
+        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Update step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
@@ -87,6 +88,7 @@ namespace Vela.Steps
         IUpdatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
         IUpdatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePreContext<TEntity>> handler);
+        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Update step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
@@ -104,6 +106,7 @@ namespace Vela.Steps
         IUpdatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
         IUpdatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePreContext<TEntity>> handler);
+        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Update step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
@@ -123,6 +126,11 @@ namespace Vela.Steps
         IUpdatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
         IUpdatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePostContext<TEntity>> handler);
+        // Binds a handler taking the generated per-step context (a subclass of the concrete step context exposing
+        // typed PreImage/PostImage). A method group converts to Delegate via its C# 10 natural type, so the dev writes
+        // `.Handle(OnUpdated)` with no explicit type; the runtime builds the handler's declared context. Plain handlers
+        // keep binding the specific overload above; VELA015 validates the context matches the step.
+        void Handle(Delegate handler);
     }
 
     /// <summary>Config for a CreateMultiple step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
@@ -235,6 +243,7 @@ namespace Vela.Steps
         IDeletePreValidationConfig<TEntity> WithSecureConfig(string configuration);
         IDeletePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePreContext<TEntity>> handler);
+        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Delete step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
@@ -251,6 +260,7 @@ namespace Vela.Steps
         IDeletePreOperationConfig<TEntity> WithSecureConfig(string configuration);
         IDeletePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePreContext<TEntity>> handler);
+        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Delete step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
@@ -267,6 +277,7 @@ namespace Vela.Steps
         IDeletePostOperationConfig<TEntity> WithSecureConfig(string configuration);
         IDeletePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePostContext<TEntity>> handler);
+        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Retrieve step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>

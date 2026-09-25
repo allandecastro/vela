@@ -809,6 +809,7 @@ namespace Vela.Steps
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePostOperationConfig<TEntity>.Handle(Action<ICreatePostContext<TEntity>> handler) { SetHandler(handler); }
+        void ICreatePostOperationConfig<TEntity>.Handle(Delegate handler) { SetHandler(handler); }
 
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -820,6 +821,7 @@ namespace Vela.Steps
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePreValidationConfig<TEntity>.Handle(Action<IUpdatePreContext<TEntity>> handler) { SetHandler(handler); }
+        void IUpdatePreValidationConfig<TEntity>.Handle(Delegate handler) { SetHandler(handler); }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
@@ -832,6 +834,7 @@ namespace Vela.Steps
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePreOperationConfig<TEntity>.Handle(Action<IUpdatePreContext<TEntity>> handler) { SetHandler(handler); }
+        void IUpdatePreOperationConfig<TEntity>.Handle(Delegate handler) { SetHandler(handler); }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
@@ -846,6 +849,7 @@ namespace Vela.Steps
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePostOperationConfig<TEntity>.Handle(Action<IUpdatePostContext<TEntity>> handler) { SetHandler(handler); }
+        void IUpdatePostOperationConfig<TEntity>.Handle(Delegate handler) { SetHandler(handler); }
 
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -926,6 +930,7 @@ namespace Vela.Steps
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePreValidationConfig<TEntity>.Handle(Action<IDeletePreContext<TEntity>> handler) { SetHandler(handler); }
+        void IDeletePreValidationConfig<TEntity>.Handle(Delegate handler) { SetHandler(handler); }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
@@ -937,6 +942,7 @@ namespace Vela.Steps
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePreOperationConfig<TEntity>.Handle(Action<IDeletePreContext<TEntity>> handler) { SetHandler(handler); }
+        void IDeletePreOperationConfig<TEntity>.Handle(Delegate handler) { SetHandler(handler); }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
@@ -948,6 +954,7 @@ namespace Vela.Steps
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePostOperationConfig<TEntity>.Handle(Action<IDeletePostContext<TEntity>> handler) { SetHandler(handler); }
+        void IDeletePostOperationConfig<TEntity>.Handle(Delegate handler) { SetHandler(handler); }
 
         IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }

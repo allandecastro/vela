@@ -1483,12 +1483,11 @@ namespace {{prefix}}.Plugins.Account.Plugins
         // Typed handler: because the step is PostOperation, ctx is an ICreatePostContext<Account>, so ctx.Response
         // (the CreateResponse) and ctx.Request.Target (the created Account) are strongly typed. It is still an
         // ILocalPluginContext, so images and services work as usual.
-        private void OnAccountCreated(ICreatePostContext<Account> ctx)
+        // The parameter is the generated typed step context (OnAccountCreatedContext, a subclass of
+        // ICreatePostContext<Account>): ctx.PostImage is the captured post-image, typed to the captured columns only.
+        private void OnAccountCreated(OnAccountCreatedContext ctx)
         {
-            // Typed image projection (generated from the step's WithPostImage capture): exposes only the
-            // captured column(s), so reading anything the step did not capture is a compile error, not a
-            // silent null. The projection is a nested type named {Handler}_PostImage, read here unqualified.
-            var postImage = ctx.PostImageAs<OnAccountCreated_PostImage>();
+            var postImage = ctx.PostImage;
             IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
 
             Guid taskId = followUp.CreateFollowUpTask(ctx.Response.id, postImage.Name);
@@ -1663,11 +1662,11 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         // an UpdateRequest (in a Post step, a matching Response too), each strongly typed to this message. The
         // record is available already typed as ctx.Request.Target - no cast, no type argument. The context is still an
         // ILocalPluginContext, so images, services and tracing remain available.
-        private void OnCreatePost(ICreatePostContext<Contact> ctx)
+        // Generated typed step context (OnCreatePostContext): ctx.PostImage is the captured post-image, typed to the
+        // captured columns only (reading an uncaptured column is a compile error, not a silent null).
+        private void OnCreatePost(OnCreatePostContext ctx)
         {
-            // Typed image projection generated from this step's WithPostImage capture (only the captured
-            // columns are exposed - reading an uncaptured column is a compile error, not a silent null).
-            var postImage = ctx.PostImageAs<OnCreatePost_PostImage>();
+            var postImage = ctx.PostImage;
             ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
 
             IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
@@ -1678,10 +1677,10 @@ namespace {{prefix}}.Plugins.Contact.Plugins
             }
         }
 
-        private void OnUpdatePost(IUpdatePostContext<Contact> ctx)
+        // Generated typed step context (OnUpdatePostContext): ctx.PreImage is the captured pre-image (LastName only).
+        private void OnUpdatePost(OnUpdatePostContext ctx)
         {
-            // Typed image projection generated from this step's WithPreImage capture (LastName only).
-            var preImage = ctx.PreImageAs<OnUpdatePost_PreImage>();
+            var preImage = ctx.PreImage;
             ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Request.Target.LastName);
         }
     }
@@ -2517,17 +2516,17 @@ namespace {{prefix}}.Integrations.Account.Plugins
                 .Handle(OnAccountChanged);
         }
 
-        private void OnAccountCreated(ICreatePostContext<Account> ctx)
+        // Generated typed step context (OnAccountCreatedContext): ctx.PostImage is the captured post-image (Name only).
+        private void OnAccountCreated(OnAccountCreatedContext ctx)
         {
-            // Typed image projection generated from this step's WithPostImage capture (Name only).
-            var postImage = ctx.PostImageAs<OnAccountCreated_PostImage>();
+            var postImage = ctx.PostImage;
             ctx.Trace("Sync: account created '{0}'", postImage.Name);
         }
 
-        private void OnAccountChanged(IUpdatePostContext<Account> ctx)
+        // Generated typed step context (OnAccountChangedContext): ctx.PreImage is the captured pre-image (Name + Telephone1).
+        private void OnAccountChanged(OnAccountChangedContext ctx)
         {
-            // Typed image projection generated from this step's WithPreImage capture (Name + Telephone1).
-            var preImage = ctx.PreImageAs<OnAccountChanged_PreImage>();
+            var preImage = ctx.PreImage;
             ctx.Trace("Sync: account '{0}' changed", preImage.Name);
         }
     }

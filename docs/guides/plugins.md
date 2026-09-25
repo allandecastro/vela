@@ -227,6 +227,44 @@ public sealed partial class AccountAudit : EntityPluginBase<Account>   // partia
   (`WithPreImage()`) keeps the full entity and generates nothing. If the column list is not a literal set of
   selectors, the generator skips it and you keep the untyped image.
 
+#### Typed step context (read images as `ctx.PreImage` / `ctx.PostImage`)
+
+Instead of reading the projection through `ctx.PreImageAs<T>()`, you can let the handler take a **generated typed
+step context** and read the images as **members**. Bind a named handler as usual; give the handler a parameter typed
+`{Handler}Context` (generated, nested in your plugin), and read `ctx.PreImage` / `ctx.PostImage` - already typed to
+the captured columns:
+
+```csharp
+public sealed partial class AccountAudit : EntityPluginBase<Account>
+{
+    protected override void RegisterPluginSteps() =>
+        RegisterStep().OnUpdate().PostOperation().Sync()
+            .FilterOn(a => a.Name)
+            .WithPreImage(a => a.Revenue)
+            .WithPostImage(a => a.Name, a => a.Revenue)
+            .Handle(OnUpdated);                 // no explicit type here
+
+    private void OnUpdated(OnUpdatedContext ctx)   // the one short name you write; everything else is generated
+    {
+        var before = ctx.PreImage;    // typed to { Revenue }
+        var after  = ctx.PostImage;   // typed to { Name, Revenue }
+    }
+}
+```
+
+- The generator emits `OnUpdatedContext` (a subclass of the message context, `IUpdatePostContext<Account>` here)
+  nested in your plugin `partial`, with `PreImage` / `PostImage` typed to exactly what the step captured. It is
+  emitted only for a **named** handler on a **Create / Update / Delete** step that captures at least one image; a
+  lambda handler, or a step with no captured image, keeps the plain context and `ctx.PreImageAs<T>()`.
+- `.Handle(OnUpdated)` stays clean: a method group binds the context through its natural type, so you never write the
+  context type in `.Handle`. Change what the step captures and the context regenerates in place - the signature does
+  not move; a read you no longer capture simply stops compiling.
+- Guard rails: the handler's context must match its step ([VELA015](../reference/analyzers.md#vela015), with a fix
+  that corrects the type), and a handler using a typed context must bind exactly one step
+  ([VELA016](../reference/analyzers.md#vela016)). To see what was generated, `F12` on `OnUpdatedContext`.
+- It is opt-in: `ctx.PreImageAs<T>()` on the plain context keeps working, and reusing one handler across steps (which
+  a typed context cannot do) is a reason to stay on it.
+
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:
 
