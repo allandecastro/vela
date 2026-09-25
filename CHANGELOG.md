@@ -45,7 +45,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   generator now also emits a `{Handler}Context` (a subclass of the step's message context) exposing typed
   `ctx.PreImage` / `ctx.PostImage` members. A handler can take `void OnUpdated(OnUpdatedContext ctx)` and read the
   images as members instead of `ctx.PreImageAs<T>()`; `.Handle(OnUpdated)` stays type-free (a new `Handle(Delegate)`
-  overload binds the method group via its natural type). Additive and opt-in: the plain context and
+  overload binds the method group via its natural type). Also on the typed `On<TRequest>()` path, where the context
+  derives from the generic message context (`MessagePreContext<TRequest, TEntity>` / `MessagePostContext<...>`) so
+  non-CRUD messages get the same `ctx.PreImage` / `ctx.PostImage`. Additive and opt-in: the plain context and
   `ctx.PreImageAs<T>()` keep working. Guard rails: **VELA015** (the handler's context must match its step; with a code
   fix) and **VELA016** (a typed-context handler must bind a single step).
 

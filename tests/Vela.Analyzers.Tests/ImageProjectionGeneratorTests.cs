@@ -70,6 +70,8 @@ namespace Vela.Context
     public class UpdatePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public UpdatePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; }
     public class DeletePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public DeletePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
     public class DeletePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public DeletePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
+    public class MessagePreContext<TRequest, TEntity> : ILocalPluginContext where TEntity : Entity { public MessagePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
+    public class MessagePostContext<TRequest, TEntity> : ILocalPluginContext where TEntity : Entity { public MessagePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; }
     public static class ImageProjectionExtensions
     {
         public static TImage PreImageAs<TImage>(this ILocalPluginContext context) => default!;
@@ -582,6 +584,54 @@ namespace Demo
         // The projection is still emitted, but no typed step context (a lambda has no name to key it).
         Assert.Contains("_PostImage", output);
         Assert.DoesNotContain("Context : global::Vela.Context", output);
+    }
+
+    [Fact]
+    public void Emits_a_message_context_for_the_typed_on_request_path()
+    {
+        // On<DeleteRequest>() is the typed path: the context derives from the generic message context
+        // MessagePostContext<TRequest, TEntity>, not the guided DeletePostContext.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class TypedAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<DeleteRequest>().PostOperation().Sync()
+                .WithPreImage(a => a.Name)
+                .WithPostImage(a => a.Revenue)
+                .Handle(OnDeleted);
+        private void OnDeleted() { }
+    }
+}
+");
+
+        Assert.Contains("class OnDeletedContext : global::Vela.Context.MessagePostContext<global::Demo.DeleteRequest, global::Demo.Account>", output);
+        Assert.Contains("public new OnDeleted_PreImage? PreImage", output);
+        Assert.Contains("public new OnDeleted_PostImage? PostImage", output);
+    }
+
+    [Fact]
+    public void Typed_message_context_compiles()
+    {
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class TypedAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<DeleteRequest>().PreOperation().Sync()
+                .WithPreImage(a => a.Name)
+                .Handle(OnDeleting);
+
+        private void OnDeleting() { }   // generated OnDeletingContext (MessagePreContext<DeleteRequest, Account>) is compiled with the sources
+    }
+}
+");
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 
     private static ImmutableArray<Diagnostic> CompileDiagnostics(string pluginSource)
