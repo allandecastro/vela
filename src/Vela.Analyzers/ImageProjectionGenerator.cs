@@ -471,6 +471,7 @@ namespace Vela.Analyzers
                 nameCounts[fullName] = nameCounts.TryGetValue(fullName, out int count) ? count + 1 : 1;
             }
 
+            List<ProjectionModel> finalized = new List<ProjectionModel>();
             foreach (ProjectionModel projectionModel in distinct)
             {
                 string fullName = FullName(projectionModel);
@@ -484,9 +485,12 @@ namespace Vela.Analyzers
                 }
 
                 context.AddSource(Sanitize(FullName(toEmit)) + ".g.cs", SourceText.From(Render(toEmit), Encoding.UTF8));
+                finalized.Add(toEmit);
             }
 
-            EmitContexts(context, distinct);
+            // Build contexts from the FINALIZED projection names (post collision-hash) so a generated context never
+            // references a projection type that was renamed for a collision.
+            EmitContexts(context, finalized);
         }
 
         // Emit, per step with a named handler on a modelled CRUD message, a generated context nested in the plugin

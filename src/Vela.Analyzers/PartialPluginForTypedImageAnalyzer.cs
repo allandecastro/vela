@@ -23,11 +23,11 @@ namespace Vela.Analyzers
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
             title: "Plugin with typed images must be partial",
-            messageFormat: "Plugin '{0}' captures a typed image, so its class must be declared 'partial' (the generated projection is nested inside it)",
+            messageFormat: "'{0}' must be declared 'partial' so the generated typed image projection for plugin '{1}' can nest inside it",
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "A step that captures WithPreImage/WithPostImage columns gets a compiler-generated projection type nested inside the plugin's own class, so the class needs a matching partial declaration. Declare the plugin class 'partial'.");
+            description: "A step that captures WithPreImage/WithPostImage columns gets a compiler-generated projection type nested inside the plugin's own class, so the plugin class - and every type that encloses it - needs a matching partial declaration. Declare them 'partial'.");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -51,26 +51,49 @@ namespace Vela.Analyzers
         {
             ClassDeclarationSyntax declaration = (ClassDeclarationSyntax)context.Node;
 
-            // Already partial -> the generator's nested part compiles fine, nothing to report.
+            // Already partial -> the generator's nested part compiles fine against this class, nothing to report here.
             if (declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
             {
                 return;
             }
 
-            if (context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not INamedTypeSymbol symbol ||
-                !DerivesFromEntityPluginBase(symbol))
+            // The generated projection nests inside the plugin class AND every enclosing class, so each of them must
+            // be 'partial'. Report on THIS class when it is the plugin that captures a typed image, or when it
+            // (lexically) encloses one - so every class in the chain is flagged, each on its own node (a local
+            // diagnostic, which the fix can act on). Reporting only the plugin class would leave a non-partial outer
+            // class failing the build with an obscure CS0260.
+            string? plugin = FindTypedImagePlugin(declaration, context.SemanticModel, fluent, context.CancellationToken);
+            if (plugin is null)
             {
                 return;
             }
 
-            // Only entity plugins that actually capture a typed image (a WithPreImage/WithPostImage with a column
-            // selector lambda) get a generated nested projection, so only those need to be partial.
-            if (!DeclaresTypedImageCapture(declaration, context.SemanticModel, fluent, context.CancellationToken))
+            context.ReportDiagnostic(Diagnostic.Create(Rule, declaration.Identifier.GetLocation(), declaration.Identifier.ValueText, plugin));
+        }
+
+        // The name of the plugin whose generated projection nests inside this class: the class itself when it is a
+        // typed-image plugin, otherwise the first nested (any depth) typed-image plugin it encloses. null when none,
+        // so this class does not need to be partial.
+        private static string? FindTypedImagePlugin(ClassDeclarationSyntax declaration, SemanticModel model, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
+        {
+            if (model.GetDeclaredSymbol(declaration, cancellationToken) is INamedTypeSymbol self &&
+                DerivesFromEntityPluginBase(self) &&
+                DeclaresTypedImageCapture(declaration, model, fluent, cancellationToken))
             {
-                return;
+                return self.Name;
             }
 
-            context.ReportDiagnostic(Diagnostic.Create(Rule, declaration.Identifier.GetLocation(), symbol.Name));
+            foreach (ClassDeclarationSyntax nested in declaration.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                if (model.GetDeclaredSymbol(nested, cancellationToken) is INamedTypeSymbol nestedSymbol &&
+                    DerivesFromEntityPluginBase(nestedSymbol) &&
+                    DeclaresTypedImageCapture(nested, model, fluent, cancellationToken))
+                {
+                    return nestedSymbol.Name;
+                }
+            }
+
+            return null;
         }
 
         private static bool DerivesFromEntityPluginBase(INamedTypeSymbol symbol)

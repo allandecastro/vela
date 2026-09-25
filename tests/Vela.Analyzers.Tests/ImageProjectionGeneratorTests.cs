@@ -634,6 +634,33 @@ namespace Demo
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 
+    [Fact]
+    public void Generated_context_compiles_when_a_handler_name_collides()
+    {
+        // Two steps bind the same named handler with different captured columns: the projection types are
+        // hash-disambiguated. The generated context must reference the emitted (hashed) projection name, not the
+        // original, or it fails with CS0246.
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class CollisionAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(Shared);
+            RegisterStep().OnUpdate().PreOperation().Sync().WithPostImage(a => a.Revenue).Handle(Shared);
+        }
+
+        private void Shared() { }
+    }
+}
+");
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error && d.Id == "CS0246");
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+    }
+
     private static ImmutableArray<Diagnostic> CompileDiagnostics(string pluginSource)
     {
         string source = Harness + pluginSource;

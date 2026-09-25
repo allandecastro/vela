@@ -55,10 +55,10 @@ namespace Demo
 }
 ";
 
-    private static DiagnosticResult Expected(string plugin) =>
+    private static DiagnosticResult At(int marker, string className, string plugin) =>
         new DiagnosticResult(Vela.Analyzers.PartialPluginForTypedImageAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
-            .WithLocation(0)
-            .WithArguments(plugin);
+            .WithLocation(marker)
+            .WithArguments(className, plugin);
 
     [Fact]
     public async Task Flags_a_non_partial_plugin_that_captures_a_typed_image()
@@ -70,7 +70,42 @@ namespace Demo
             => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
     }");
 
-        await Verify.VerifyAnalyzerAsync(code, Expected("Audit"));
+        await Verify.VerifyAnalyzerAsync(code, At(0, "Audit", "Audit"));
+    }
+
+    [Fact]
+    public async Task Flags_a_non_partial_outer_class_of_a_nested_plugin()
+    {
+        // Both the outer class and the plugin lack partial: the generated projection nests inside both, so both fail
+        // to compile without partial. Each is reported.
+        string code = InPlugin(@"
+    public class {|#0:Outer|}
+    {
+        public sealed class {|#1:Audit|} : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code, At(0, "Outer", "Audit"), At(1, "Audit", "Audit"));
+    }
+
+    [Fact]
+    public async Task Flags_the_outer_class_even_when_the_plugin_is_partial()
+    {
+        // The plugin being partial is not enough: a non-partial enclosing class still breaks the build (CS0260).
+        string code = InPlugin(@"
+    public class {|#0:Outer|}
+    {
+        public sealed partial class Audit : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code, At(0, "Outer", "Audit"));
     }
 
     [Fact]
