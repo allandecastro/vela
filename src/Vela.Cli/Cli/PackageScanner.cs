@@ -385,7 +385,17 @@ internal static class PackageScanner
     }
     catch (ReflectionTypeLoadException ex)
     {
-        return ex.Types.Where(x => x != null)!;
+        // Some types failed to load (typically a dependency missing from the package, or built for a different target
+        // framework). Do NOT silently continue with only the types that loaded: a plugin type that vanishes from the
+        // scanned state is diffed as 'Removed', and apply would then DELETE its live registrations. Fail the scan
+        // loudly so nothing is deleted from a partial or misbuilt package.
+        int failed = ex.Types?.Count(t => t is null) ?? 0;
+        string? reason = ex.LoaderExceptions?.FirstOrDefault(e => e != null)?.Message;
+        throw new InvalidOperationException(
+            $"Failed to load {failed} type(s) from assembly '{assembly.GetName().Name}'. This usually means a dependency " +
+            "is missing from the package or was built for a different target framework. Aborting the scan so existing " +
+            "registrations are not mistakenly deleted." + (reason is null ? string.Empty : $" First loader error: {reason}"),
+            ex);
     }
 }
 
