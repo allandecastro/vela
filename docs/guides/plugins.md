@@ -264,6 +264,10 @@ public sealed partial class AccountAudit : EntityPluginBase<Account>
   ([VELA016](../reference/analyzers.md#vela016)). To see what was generated, `F12` on `OnUpdatedContext`.
 - It is opt-in: `ctx.PreImageAs<T>()` on the plain context keeps working, and reusing one handler across steps (which
   a typed context cannot do) is a reason to stay on it.
+- Works on the typed `On<TRequest>()` path too: there the generated context derives from the generic message context
+  (`MessagePreContext<TRequest, TEntity>` / `MessagePostContext<TRequest, TEntity>`), so a handler for a non-CRUD
+  message (`On<AssignRequest>()`, ...) reads `ctx.PreImage` / `ctx.PostImage` the same way. The permissive
+  `OnMessage("...")` string path has no request type, so it keeps `ctx.PreImageAs<T>()`.
 
 **Typed request and response, split by stage** - a step handler takes the message-typed context, and the type
 depends on the stage:

@@ -2476,6 +2476,7 @@ namespace Vela.Steps
         ITypedPreOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
         ITypedPreOperationConfig<TEntity, TRequest> Disabled();
         void Handle(Action<IMessagePreContext<TRequest>> handler);
+        void Handle(Delegate handler);   // generated typed step context (see VELA015)
     }
 
     /// <summary>Config for an On&lt;TRequest&gt;() step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
@@ -2494,6 +2495,7 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
         ITypedPostOperationConfig<TEntity, TRequest> Disabled();
         void Handle(Action<IMessagePostContext<TRequest>> handler);
+        void Handle(Delegate handler);   // generated typed step context (see VELA015)
     }
 
     /// <summary>Entry point returned by RegisterStep(): pick the message the step reacts to.</summary>

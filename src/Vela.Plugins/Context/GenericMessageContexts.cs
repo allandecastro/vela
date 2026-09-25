@@ -66,7 +66,7 @@ namespace Vela.Context
     /// <summary>Runtime pre-stage context for a custom message step with early-bound typed images.</summary>
     /// <typeparam name="TRequest">The request type over the live <c>InputParameters</c>.</typeparam>
     /// <typeparam name="TEntity">The early-bound entity type for the step's images.</typeparam>
-    public sealed class MessagePreContext<TRequest, TEntity> : PreStepContext<TRequest>, IMessagePreContext<TRequest, TEntity>
+    public class MessagePreContext<TRequest, TEntity> : PreStepContext<TRequest>, IMessagePreContext<TRequest, TEntity>
         where TRequest : OrganizationRequest, new()
         where TEntity : Entity
     {
@@ -79,7 +79,7 @@ namespace Vela.Context
     /// <summary>Runtime post-stage context for a custom message step with early-bound typed images.</summary>
     /// <typeparam name="TRequest">The request type over the live <c>InputParameters</c>.</typeparam>
     /// <typeparam name="TEntity">The early-bound entity type for the step's images.</typeparam>
-    public sealed class MessagePostContext<TRequest, TEntity> : PostStepContext<TRequest, OrganizationResponse>, IMessagePostContext<TRequest, TEntity>
+    public class MessagePostContext<TRequest, TEntity> : PostStepContext<TRequest, OrganizationResponse>, IMessagePostContext<TRequest, TEntity>
         where TRequest : OrganizationRequest, new()
         where TEntity : Entity
     {

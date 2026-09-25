@@ -133,9 +133,43 @@ namespace Vela.Analyzers
             // the context, the message + stage pick its base concrete context, and the entity types its generic arg.
             bool isPost = stageLabel == "PostOp";
             string entityType = entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            // For a typed On<TRequest>() step the generated context derives from MessagePre/PostContext<TRequest,
+            // TEntity>; capture the request type so the context can name it. null for the guided / string paths.
+            string? requestType = FindTypedRequestType(member.Expression, model);
 
             return new ProjectionModel(ns, containingTypes.ToImmutableArray(), typeName, columns.ToImmutableArray(),
-                handlerName, messageLabel, isPost, isPre, entityType);
+                handlerName, messageLabel, isPost, isPre, entityType, requestType);
+        }
+
+        // The fully-qualified request type of an On<TRequest>() step in the chain, or null (guided OnCreate()...,
+        // permissive OnMessage(...)). Used to build the generic message context base for a typed step.
+        private static string? FindTypedRequestType(ExpressionSyntax? receiver, SemanticModel model)
+        {
+            for (ExpressionSyntax? current = receiver; current is not null;)
+            {
+                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
+                {
+                    if (ma.Name is GenericNameSyntax generic && generic.Identifier.ValueText == "On" &&
+                        generic.TypeArgumentList.Arguments.Count == 1)
+                    {
+                        return model.GetSymbolInfo(generic.TypeArgumentList.Arguments[0]).Symbol is INamedTypeSymbol request
+                            ? request.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                            : null;
+                    }
+
+                    current = ma.Expression;
+                }
+                else if (current is MemberAccessExpressionSyntax bare)
+                {
+                    current = bare.Expression;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return null;
         }
 
         private static INamedTypeSymbol? ResolveEntityType(INamedTypeSymbol pluginSymbol)
@@ -465,7 +499,7 @@ namespace Vela.Analyzers
             Dictionary<string, List<ProjectionModel>> groups = new Dictionary<string, List<ProjectionModel>>(System.StringComparer.Ordinal);
             foreach (ProjectionModel model in models)
             {
-                if (model.HandlerName is null || !IsContextMessage(model.Message))
+                if (model.HandlerName is null || (!IsContextMessage(model.Message) && model.RequestType is null))
                 {
                     continue;
                 }
@@ -485,10 +519,26 @@ namespace Vela.Analyzers
             foreach (List<ProjectionModel> group in groups.Values)
             {
                 ProjectionModel any = group[0];
-                string? baseContext = ResolveBaseContext(any.Message, any.IsPost, out bool baseHasPre, out bool baseHasPost);
-                if (baseContext is null)
+                string baseTypeFull;
+                bool baseHasPre;
+                bool baseHasPost;
+                if (any.RequestType is not null)
                 {
-                    continue;
+                    // Typed On<TRequest>() step -> generic message context (pre always; post only at post-stage).
+                    baseHasPre = true;
+                    baseHasPost = any.IsPost;
+                    string messageBase = any.IsPost ? "MessagePostContext" : "MessagePreContext";
+                    baseTypeFull = $"global::Vela.Context.{messageBase}<{any.RequestType}, {any.EntityType}>";
+                }
+                else
+                {
+                    string? crud = ResolveBaseContext(any.Message, any.IsPost, out baseHasPre, out baseHasPost);
+                    if (crud is null)
+                    {
+                        continue;
+                    }
+
+                    baseTypeFull = $"global::Vela.Context.{crud}<{any.EntityType}>";
                 }
 
                 string? preName = null;
@@ -522,7 +572,7 @@ namespace Vela.Analyzers
                 }
 
                 context.AddSource(Sanitize(contextFull) + ".Context.g.cs",
-                    SourceText.From(RenderContext(any, contextName, baseContext, preName, postName), Encoding.UTF8));
+                    SourceText.From(RenderContext(any, contextName, baseTypeFull, preName, postName), Encoding.UTF8));
             }
         }
 
@@ -563,7 +613,7 @@ namespace Vela.Analyzers
             }
         }
 
-        private static string RenderContext(ProjectionModel model, string contextName, string baseContext, string? preName, string? postName)
+        private static string RenderContext(ProjectionModel model, string contextName, string baseTypeFull, string? preName, string? postName)
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/> Vela typed step context. Do not edit.");
@@ -590,7 +640,7 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent)}/// Generated step context for the '{model.HandlerName}' handler: the message context plus the typed image(s)");
             sb.AppendLine($"{Pad(indent)}/// this step captured. Bind it with .Handle({model.HandlerName}) and read ctx.PreImage / ctx.PostImage (typed).");
             sb.AppendLine($"{Pad(indent)}/// </summary>");
-            sb.AppendLine($"{Pad(indent)}public sealed class {contextName} : global::Vela.Context.{baseContext}<{model.EntityType}>");
+            sb.AppendLine($"{Pad(indent)}public sealed class {contextName} : {baseTypeFull}");
             sb.AppendLine($"{Pad(indent)}{{");
             sb.AppendLine($"{Pad(indent + 1)}public {contextName}(global::Vela.Context.ILocalPluginContext inner) : base(inner) {{ }}");
             if (preName != null)
@@ -721,7 +771,7 @@ namespace Vela.Analyzers
         private readonly struct ProjectionModel : System.IEquatable<ProjectionModel>
         {
             public ProjectionModel(string @namespace, ImmutableArray<string> containingTypes, string typeName, ImmutableArray<ProjectionColumn> columns,
-                string? handlerName, string message, bool isPost, bool isPre, string entityType)
+                string? handlerName, string message, bool isPost, bool isPre, string entityType, string? requestType)
             {
                 Namespace = @namespace;
                 ContainingTypes = containingTypes;
@@ -732,6 +782,7 @@ namespace Vela.Analyzers
                 IsPost = isPost;
                 IsPre = isPre;
                 EntityType = entityType;
+                RequestType = requestType;
             }
 
             public string Namespace { get; }
@@ -744,9 +795,10 @@ namespace Vela.Analyzers
             public bool IsPost { get; }
             public bool IsPre { get; }
             public string EntityType { get; }
+            public string? RequestType { get; }
 
             public ProjectionModel WithTypeName(string typeName) =>
-                new ProjectionModel(Namespace, ContainingTypes, typeName, Columns, HandlerName, Message, IsPost, IsPre, EntityType);
+                new ProjectionModel(Namespace, ContainingTypes, typeName, Columns, HandlerName, Message, IsPost, IsPre, EntityType, RequestType);
 
             public bool Equals(ProjectionModel other) =>
                 Namespace == other.Namespace &&
@@ -757,7 +809,8 @@ namespace Vela.Analyzers
                 Message == other.Message &&
                 IsPost == other.IsPost &&
                 IsPre == other.IsPre &&
-                EntityType == other.EntityType;
+                EntityType == other.EntityType &&
+                RequestType == other.RequestType;
 
             public override bool Equals(object? obj) => obj is ProjectionModel other && Equals(other);
 
