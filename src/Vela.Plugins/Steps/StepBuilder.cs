@@ -182,6 +182,17 @@ public sealed partial class StepBuilder<TEntity>
             throw new ArgumentException("Handler delegate must reference an instance method.", nameof(handler));
         }
 
+        // The permissive Handle(Delegate) overload accepts any delegate; validate the shape here so a wrong-arity or
+        // non-void handler fails at registration with a clear message instead of an opaque IndexOutOfRange /
+        // TargetParameterCount crash mid-dispatch. Every real step handler takes exactly one context parameter.
+        System.Reflection.ParameterInfo[] parameters = handler.Method.GetParameters();
+        if (parameters.Length != 1 || handler.Method.ReturnType != typeof(void))
+        {
+            throw new ArgumentException(
+                $"Step handler '{handler.Method.Name}' must be a void method taking exactly one context parameter; found {parameters.Length} parameter(s) returning '{handler.Method.ReturnType.Name}'.",
+                nameof(handler));
+        }
+
         RuntimeHandler = handler;
         SetHandler(handler.Method.Name);
     }

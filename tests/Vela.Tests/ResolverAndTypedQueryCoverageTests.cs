@@ -57,6 +57,20 @@ public sealed class ResolverAndTypedQueryCoverageTests
     }
 
     [Fact]
+    public void GetService_circular_dependency_throws_clearly_instead_of_stack_overflow()
+    {
+        SimpleServiceResolver resolver = new SimpleServiceResolver();
+        resolver.AddTransient<ITestSvc>(r =>
+        {
+            r.GetService(typeof(ITestSvc)); // self-resolve -> cycle
+            return new TestSvc();
+        });
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => resolver.GetService(typeof(ITestSvc)));
+        Assert.Contains("Circular service dependency", ex.Message);
+    }
+
+    [Fact]
     public void A_factory_returning_null_throws_on_resolution()
     {
         SimpleServiceResolver resolver = new SimpleServiceResolver();
