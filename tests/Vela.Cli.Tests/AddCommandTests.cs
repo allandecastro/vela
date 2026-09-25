@@ -176,7 +176,7 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "RecalculateTotals.cs"));
-            Assert.Contains("RegisterCustomApi(\"dv_RecalculateTotals\", nameof(Handle))", content);
+            Assert.Contains("RegisterCustomApi(\"dv_RecalculateTotals\", Handle)", content);
             Assert.DoesNotContain("acme_RecalculateTotals", content);
         });
     }
@@ -255,7 +255,7 @@ public class AddCommandTests
             string content = File.ReadAllText(file);
             Assert.Contains("namespace Acme.Plugins.GlobalCustomApis", content);
             Assert.Contains("public sealed class RecalculateTotals(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)", content);
-            Assert.Contains("RegisterCustomApi(\"acme_RecalculateTotals\", nameof(Handle))", content);
+            Assert.Contains("RegisterCustomApi(\"acme_RecalculateTotals\", Handle)", content);
         });
     }
 
