@@ -96,8 +96,37 @@ namespace Vela.Analyzers
                 return;
             }
 
+            // Carry the fully-qualified expected message context (with the plugin's entity) so the code fix can set it.
+            ImmutableDictionary<string, string?> properties = ImmutableDictionary<string, string?>.Empty;
+            INamedTypeSymbol? entity = ResolveEntity(invocation, context.SemanticModel, context.CancellationToken);
+            if (entity is not null)
+            {
+                string expectedType = $"global::Vela.Context.{expectedInterface}<{entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>";
+                properties = properties.Add("ExpectedType", expectedType);
+            }
+
             context.ReportDiagnostic(Diagnostic.Create(
-                Rule, argument.GetLocation(), handler.Name, message + (isPost.Value ? " post-operation" : " pre-operation"), expectedInterface));
+                Rule, argument.GetLocation(), properties, handler.Name, message + (isPost.Value ? " post-operation" : " pre-operation"), expectedInterface));
+        }
+
+        // The TEntity of the enclosing EntityPluginBase<TEntity>, used to build the fully-qualified expected context.
+        private static INamedTypeSymbol? ResolveEntity(SyntaxNode node, SemanticModel model, System.Threading.CancellationToken cancellationToken)
+        {
+            ClassDeclarationSyntax? pluginClass = node.FirstAncestorOrSelf<ClassDeclarationSyntax>();
+            if (pluginClass is null || model.GetDeclaredSymbol(pluginClass, cancellationToken) is not INamedTypeSymbol pluginSymbol)
+            {
+                return null;
+            }
+
+            for (INamedTypeSymbol? t = pluginSymbol.BaseType; t is not null; t = t.BaseType)
+            {
+                if (t.Name == "EntityPluginBase" && t.TypeArguments.Length == 1 && t.TypeArguments[0] is INamedTypeSymbol entity)
+                {
+                    return entity;
+                }
+            }
+
+            return null;
         }
 
         // The parameter is valid when it is (or derives from / implements) the expected message-context interface, or
