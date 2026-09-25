@@ -297,13 +297,28 @@ namespace Vela.Plugin
         // typed projections. Returns null for interfaces and non-context types, so the existing paths take over.
         private static object? BuildDerivedStepContext(Type parameterType, ILocalPluginContext ctx)
         {
-            if (!parameterType.IsClass || parameterType.IsAbstract || !DerivesFromStepContext(parameterType))
+            if (!parameterType.IsClass || !DerivesFromStepContext(parameterType))
             {
                 return null;
             }
 
+            // The parameter is (or derives from) a Vela step context, so it is meant to be built here. If it cannot be
+            // constructed, fail with a clear message instead of returning null - returning null lets a later builder
+            // produce an incompatible base context and the handler invocation then throws an opaque cast error.
+            if (parameterType.IsAbstract)
+            {
+                throw new InvalidPluginExecutionException(
+                    $"Step handler context '{parameterType.FullName}' is abstract and cannot be constructed; use a concrete generated step context.");
+            }
+
             ConstructorInfo? ctor = parameterType.GetConstructor([typeof(ILocalPluginContext)]);
-            return ctor?.Invoke([ctx]);
+            if (ctor is null)
+            {
+                throw new InvalidPluginExecutionException(
+                    $"Step handler context '{parameterType.FullName}' derives from a Vela step context but has no public constructor taking a single ILocalPluginContext, so the pipeline cannot build it.");
+            }
+
+            return ctor.Invoke([ctx]);
         }
 
         private static bool DerivesFromStepContext(Type type)

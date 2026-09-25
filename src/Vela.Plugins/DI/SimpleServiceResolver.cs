@@ -19,6 +19,10 @@ namespace Vela.DI
         private readonly Dictionary<Type, Func<IPluginServiceResolver, object>> _factories = new Dictionary<Type, Func<IPluginServiceResolver, object>>();
         private readonly HashSet<Type> _scopedRegistrations = new HashSet<Type>();
         private readonly Dictionary<Type, object> _scopedInstances = new Dictionary<Type, object>();
+        // Types currently being resolved on this (per-execution, single-threaded) resolver, to detect a factory that
+        // resolves its own type (A -> A) or a cycle (A -> B -> A) and fail with a clear message instead of a
+        // StackOverflowException that cannot be caught and would tear down the worker.
+        private readonly HashSet<Type> _resolving = new HashSet<Type>();
 
         /// <summary>
         /// Creates default resolver registrations.
@@ -83,13 +87,26 @@ namespace Vela.DI
                 return null;
             }
 
-            object service = factory(this);
-            if (_scopedRegistrations.Contains(serviceType))
+            if (!_resolving.Add(serviceType))
             {
-                _scopedInstances[serviceType] = service;
+                throw new InvalidPluginExecutionException(
+                    "Circular service dependency detected while resolving " + serviceType.FullName + " (chain: " + string.Join(" -> ", _resolving) + ").");
             }
 
-            return service;
+            try
+            {
+                object service = factory(this);
+                if (_scopedRegistrations.Contains(serviceType))
+                {
+                    _scopedInstances[serviceType] = service;
+                }
+
+                return service;
+            }
+            finally
+            {
+                _resolving.Remove(serviceType);
+            }
         }
 
         /// <inheritdoc />
