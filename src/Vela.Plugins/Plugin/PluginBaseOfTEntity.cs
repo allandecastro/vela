@@ -190,7 +190,8 @@ namespace Vela.Plugin
             if (_handlersByDefinition != null && _handlersByDefinition.TryGetValue(matchedDefinition, out Delegate? runtimeHandler))
             {
                 Type parameterType = runtimeHandler.Method.GetParameters()[0].ParameterType;
-                object delegateArgument = BuildGenericMessageContextForType(parameterType, ctx)
+                object delegateArgument = BuildDerivedStepContext(parameterType, ctx)
+                    ?? BuildGenericMessageContextForType(parameterType, ctx)
                     ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
                     ?? ctx;
                 (ctx as LocalPluginContext)?.SetCurrentHandler(runtimeHandler.Method.Name);
@@ -288,6 +289,38 @@ namespace Vela.Plugin
             }
 
             return matches[0];
+        }
+
+        // A generated per-step context (typed step contexts) is a concrete subclass of a Vela step context
+        // (PreStepContext<>/PostStepContext<,>) with an (ILocalPluginContext) constructor, exposing typed
+        // PreImage/PostImage. Build it directly from the handler's own parameter type so the handler reads the
+        // typed projections. Returns null for interfaces and non-context types, so the existing paths take over.
+        private static object? BuildDerivedStepContext(Type parameterType, ILocalPluginContext ctx)
+        {
+            if (!parameterType.IsClass || parameterType.IsAbstract || !DerivesFromStepContext(parameterType))
+            {
+                return null;
+            }
+
+            ConstructorInfo? ctor = parameterType.GetConstructor([typeof(ILocalPluginContext)]);
+            return ctor?.Invoke([ctx]);
+        }
+
+        private static bool DerivesFromStepContext(Type type)
+        {
+            for (Type? t = type.BaseType; t != null && t != typeof(object); t = t.BaseType)
+            {
+                if (t.IsGenericType)
+                {
+                    Type definition = t.GetGenericTypeDefinition();
+                    if (definition == typeof(PreStepContext<>) || definition == typeof(PostStepContext<,>))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         // Messages Vela models with a typed context: build the per-message context so its handler receives a

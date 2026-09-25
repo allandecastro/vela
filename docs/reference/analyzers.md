@@ -25,6 +25,8 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA012](#vela012) | Vela.Usage | Warning | Throwing an exception other than `InvalidPluginExecutionException` from a plugin |
 | [VELA013](#vela013) | Vela.Performance | Warning | `new ColumnSet(true)` retrieves every column |
 | [VELA014](#vela014) | Vela.Usage | Error | A plugin that captures a typed image must be declared `partial` |
+| [VELA015](#vela015) | Vela.Usage | Error | A step handler's context does not match the step's message/stage |
+| [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
 VELA006, VELA007 and VELA012. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins` alongside the
@@ -165,6 +167,24 @@ Request only the columns you use (the explicit `SelectAll()` on a typed query st
 **Fix:** add the `partial` modifier to the plugin class (the code fix does this). A capture with no explicit
 columns (`WithPreImage()`) generates nothing and does not require `partial`.
 
+## VELA015
+
+**Step handler context must match the step.** A handler bound with `.Handle(...)` must take the step's message
+context (for example `IUpdatePostContext<T>`), its generated typed step context (a subclass of it), or the plain
+`ILocalPluginContext`. The `Handle(Delegate)` overload (which lets a method group bind the generated context via its
+natural type) is permissive at compile time, so this restores the guarantee the specific
+`Handle(Action<IXxxContext>)` overload gave: a context for a different message or stage (or an unrelated type) is
+reported. Scoped to the guided `Create` / `Update` / `Delete` path.
+
+**Fix:** give the handler the step's context (or its generated `{Handler}Context`); the code fix corrects the type.
+
+## VELA016
+
+**Typed-context handler must bind a single step.** The generated typed step context is named after the handler
+(`{Handler}Context`), so binding one handler on two image-capturing steps would need two contexts under the same
+name. Use a distinct handler per image-capturing step (or read images via `ctx.PostImageAs<T>()` on the plain
+context if you must share a handler).
+
 ## Typed image projection generator
 
 The same bundled `Vela.Analyzers` assembly also contains an incremental **source generator**
@@ -193,3 +213,8 @@ Key points:
 - **Opt-in and additive.** A capture with no explicit columns (`WithPreImage()`) keeps the full early-bound
   entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it and
   you keep the untyped image.
+- **Typed step context.** For a named handler on a Create/Update/Delete step that captures an image, the generator
+  also emits a `{Handler}Context` (a subclass of the step's message context) exposing `ctx.PreImage` / `ctx.PostImage`
+  typed to the captured columns, so the handler can read them as members instead of `ctx.PreImageAs<T>()`. See
+  [Typed step context](../guides/plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage) and the
+  VELA015 / VELA016 guard rails.

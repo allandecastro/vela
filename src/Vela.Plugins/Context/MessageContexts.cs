@@ -202,7 +202,7 @@ namespace Vela.Context
         public CreatePreContext(ILocalPluginContext inner) : base(inner) { }
     }
     /// <summary>Runtime post-stage context for Create.</summary>
-    public sealed class CreatePostContext<TEntity> : PostStepContext<Vela.Messages.CreateRequest<TEntity>, CreateResponse>, ICreatePostContext<TEntity> where TEntity : Entity
+    public class CreatePostContext<TEntity> : PostStepContext<Vela.Messages.CreateRequest<TEntity>, CreateResponse>, ICreatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public CreatePostContext(ILocalPluginContext inner) : base(inner) { }
@@ -210,7 +210,7 @@ namespace Vela.Context
         public TEntity? PostImage => this.GetPostImage<TEntity>();
     }
     /// <summary>Runtime pre-stage context for Update.</summary>
-    public sealed class UpdatePreContext<TEntity> : PreStepContext<Vela.Messages.UpdateRequest<TEntity>>, IUpdatePreContext<TEntity> where TEntity : Entity
+    public class UpdatePreContext<TEntity> : PreStepContext<Vela.Messages.UpdateRequest<TEntity>>, IUpdatePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public UpdatePreContext(ILocalPluginContext inner) : base(inner) { }
@@ -218,7 +218,7 @@ namespace Vela.Context
         public TEntity? PreImage => this.GetPreImage<TEntity>();
     }
     /// <summary>Runtime post-stage context for Update.</summary>
-    public sealed class UpdatePostContext<TEntity> : PostStepContext<Vela.Messages.UpdateRequest<TEntity>, UpdateResponse>, IUpdatePostContext<TEntity> where TEntity : Entity
+    public class UpdatePostContext<TEntity> : PostStepContext<Vela.Messages.UpdateRequest<TEntity>, UpdateResponse>, IUpdatePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public UpdatePostContext(ILocalPluginContext inner) : base(inner) { }
@@ -228,7 +228,7 @@ namespace Vela.Context
         public TEntity? PostImage => this.GetPostImage<TEntity>();
     }
     /// <summary>Runtime pre-stage context for Delete.</summary>
-    public sealed class DeletePreContext<TEntity> : PreStepContext<DeleteRequest>, IDeletePreContext<TEntity> where TEntity : Entity
+    public class DeletePreContext<TEntity> : PreStepContext<DeleteRequest>, IDeletePreContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public DeletePreContext(ILocalPluginContext inner) : base(inner) { }
@@ -236,7 +236,7 @@ namespace Vela.Context
         public TEntity? PreImage => this.GetPreImage<TEntity>();
     }
     /// <summary>Runtime post-stage context for Delete.</summary>
-    public sealed class DeletePostContext<TEntity> : PostStepContext<DeleteRequest, DeleteResponse>, IDeletePostContext<TEntity> where TEntity : Entity
+    public class DeletePostContext<TEntity> : PostStepContext<DeleteRequest, DeleteResponse>, IDeletePostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public DeletePostContext(ILocalPluginContext inner) : base(inner) { }

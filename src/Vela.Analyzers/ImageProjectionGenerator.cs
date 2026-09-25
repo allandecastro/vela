@@ -129,7 +129,13 @@ namespace Vela.Analyzers
                 ? string.Empty
                 : pluginSymbol.ContainingNamespace.ToDisplayString();
 
-            return new ProjectionModel(ns, containingTypes.ToImmutableArray(), typeName, columns.ToImmutableArray());
+            // Extra facts used to also emit a generated per-step context (typed step contexts): the handler name keys
+            // the context, the message + stage pick its base concrete context, and the entity types its generic arg.
+            bool isPost = stageLabel == "PostOp";
+            string entityType = entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            return new ProjectionModel(ns, containingTypes.ToImmutableArray(), typeName, columns.ToImmutableArray(),
+                handlerName, messageLabel, isPost, isPre, entityType);
         }
 
         private static INamedTypeSymbol? ResolveEntityType(INamedTypeSymbol pluginSymbol)
@@ -445,6 +451,172 @@ namespace Vela.Analyzers
 
                 context.AddSource(Sanitize(FullName(toEmit)) + ".g.cs", SourceText.From(Render(toEmit), Encoding.UTF8));
             }
+
+            EmitContexts(context, distinct);
+        }
+
+        // Emit, per step with a named handler on a modelled CRUD message, a generated context nested in the plugin
+        // partial: it derives from the concrete step context and shadows PreImage/PostImage with the typed projections
+        // the step captured. The handler binds it with .Handle(OnX) and reads ctx.PreImage / ctx.PostImage typed.
+        private static void EmitContexts(SourceProductionContext context, List<ProjectionModel> models)
+        {
+            // Group a step's projections by (plugin class + handler + message + stage). Only a named handler on a
+            // Create/Update/Delete message gets a context; a lambda handler (null name) does not.
+            Dictionary<string, List<ProjectionModel>> groups = new Dictionary<string, List<ProjectionModel>>(System.StringComparer.Ordinal);
+            foreach (ProjectionModel model in models)
+            {
+                if (model.HandlerName is null || !IsContextMessage(model.Message))
+                {
+                    continue;
+                }
+
+                string key = model.Namespace + "|" + string.Join(".", model.ContainingTypes) + "|" +
+                    model.HandlerName + "|" + model.Message + "|" + (model.IsPost ? "post" : "pre");
+                if (!groups.TryGetValue(key, out List<ProjectionModel>? list))
+                {
+                    list = new List<ProjectionModel>();
+                    groups[key] = list;
+                }
+
+                list.Add(model);
+            }
+
+            HashSet<string> emitted = new HashSet<string>(System.StringComparer.Ordinal);
+            foreach (List<ProjectionModel> group in groups.Values)
+            {
+                ProjectionModel any = group[0];
+                string? baseContext = ResolveBaseContext(any.Message, any.IsPost, out bool baseHasPre, out bool baseHasPost);
+                if (baseContext is null)
+                {
+                    continue;
+                }
+
+                string? preName = null;
+                string? postName = null;
+                foreach (ProjectionModel model in group)
+                {
+                    if (model.IsPre && baseHasPre)
+                    {
+                        preName ??= model.TypeName;
+                    }
+                    else if (!model.IsPre && baseHasPost)
+                    {
+                        postName ??= model.TypeName;
+                    }
+                }
+
+                if (preName is null && postName is null)
+                {
+                    continue;
+                }
+
+                string contextName = Sanitize(any.HandlerName!) + "Context";
+                string prefix = any.Namespace.Length == 0 ? string.Empty : any.Namespace + ".";
+                string contextFull = prefix + string.Join(".", any.ContainingTypes) + "." + contextName;
+
+                // A handler reused across steps would key two contexts to the same name; emit once (VELA016 reports
+                // the reuse as an error).
+                if (!emitted.Add(contextFull))
+                {
+                    continue;
+                }
+
+                context.AddSource(Sanitize(contextFull) + ".Context.g.cs",
+                    SourceText.From(RenderContext(any, contextName, baseContext, preName, postName), Encoding.UTF8));
+            }
+        }
+
+        private static bool IsContextMessage(string message) =>
+            message == "Create" || message == "Update" || message == "Delete";
+
+        // The concrete step context a generated context derives from, and which typed images it can expose, for a
+        // Create/Update/Delete message at the given stage. Returns null when the stage carries no image.
+        private static string? ResolveBaseContext(string message, bool isPost, out bool hasPre, out bool hasPost)
+        {
+            hasPre = false;
+            hasPost = false;
+            switch (message)
+            {
+                case "Create":
+                    if (!isPost)
+                    {
+                        return null; // create pre-stage has no image
+                    }
+
+                    hasPost = true;
+                    return "CreatePostContext";
+                case "Update":
+                    if (isPost)
+                    {
+                        hasPre = true;
+                        hasPost = true;
+                        return "UpdatePostContext";
+                    }
+
+                    hasPre = true;
+                    return "UpdatePreContext";
+                case "Delete":
+                    hasPre = true;
+                    return isPost ? "DeletePostContext" : "DeletePreContext";
+                default:
+                    return null;
+            }
+        }
+
+        private static string RenderContext(ProjectionModel model, string contextName, string baseContext, string? preName, string? postName)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("// <auto-generated/> Vela typed step context. Do not edit.");
+            sb.AppendLine("#nullable enable");
+            sb.AppendLine();
+
+            int indent = 0;
+            bool hasNamespace = model.Namespace.Length != 0;
+            if (hasNamespace)
+            {
+                sb.AppendLine($"namespace {model.Namespace}");
+                sb.AppendLine("{");
+                indent++;
+            }
+
+            foreach (string containingType in model.ContainingTypes)
+            {
+                sb.AppendLine($"{Pad(indent)}partial class {containingType}");
+                sb.AppendLine($"{Pad(indent)}{{");
+                indent++;
+            }
+
+            sb.AppendLine($"{Pad(indent)}/// <summary>");
+            sb.AppendLine($"{Pad(indent)}/// Generated step context for the '{model.HandlerName}' handler: the message context plus the typed image(s)");
+            sb.AppendLine($"{Pad(indent)}/// this step captured. Bind it with .Handle({model.HandlerName}) and read ctx.PreImage / ctx.PostImage (typed).");
+            sb.AppendLine($"{Pad(indent)}/// </summary>");
+            sb.AppendLine($"{Pad(indent)}public sealed class {contextName} : global::Vela.Context.{baseContext}<{model.EntityType}>");
+            sb.AppendLine($"{Pad(indent)}{{");
+            sb.AppendLine($"{Pad(indent + 1)}public {contextName}(global::Vela.Context.ILocalPluginContext inner) : base(inner) {{ }}");
+            if (preName != null)
+            {
+                sb.AppendLine($"{Pad(indent + 1)}public new {preName}? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<{preName}>(this);");
+            }
+
+            if (postName != null)
+            {
+                sb.AppendLine($"{Pad(indent + 1)}public new {postName}? PostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<{postName}>(this);");
+            }
+
+            sb.AppendLine($"{Pad(indent)}}}");
+
+            foreach (string _ in model.ContainingTypes)
+            {
+                indent--;
+                sb.AppendLine($"{Pad(indent)}}}");
+            }
+
+            if (hasNamespace)
+            {
+                sb.AppendLine("}");
+            }
+
+            return sb.ToString();
         }
 
         // The fully-qualified generated name: namespace (if any) + the containing type chain + the projection type,
@@ -548,26 +720,44 @@ namespace Vela.Analyzers
         // incremental generator caches the model between keystrokes instead of re-running every edit.
         private readonly struct ProjectionModel : System.IEquatable<ProjectionModel>
         {
-            public ProjectionModel(string @namespace, ImmutableArray<string> containingTypes, string typeName, ImmutableArray<ProjectionColumn> columns)
+            public ProjectionModel(string @namespace, ImmutableArray<string> containingTypes, string typeName, ImmutableArray<ProjectionColumn> columns,
+                string? handlerName, string message, bool isPost, bool isPre, string entityType)
             {
                 Namespace = @namespace;
                 ContainingTypes = containingTypes;
                 TypeName = typeName;
                 Columns = columns;
+                HandlerName = handlerName;
+                Message = message;
+                IsPost = isPost;
+                IsPre = isPre;
+                EntityType = entityType;
             }
 
             public string Namespace { get; }
             public ImmutableArray<string> ContainingTypes { get; }
             public string TypeName { get; }
             public ImmutableArray<ProjectionColumn> Columns { get; }
+            // Facts for the generated per-step context (null HandlerName = lambda handler, which gets no context).
+            public string? HandlerName { get; }
+            public string Message { get; }
+            public bool IsPost { get; }
+            public bool IsPre { get; }
+            public string EntityType { get; }
 
-            public ProjectionModel WithTypeName(string typeName) => new ProjectionModel(Namespace, ContainingTypes, typeName, Columns);
+            public ProjectionModel WithTypeName(string typeName) =>
+                new ProjectionModel(Namespace, ContainingTypes, typeName, Columns, HandlerName, Message, IsPost, IsPre, EntityType);
 
             public bool Equals(ProjectionModel other) =>
                 Namespace == other.Namespace &&
                 ContainingTypes.SequenceEqual(other.ContainingTypes) &&
                 TypeName == other.TypeName &&
-                Columns.SequenceEqual(other.Columns);
+                Columns.SequenceEqual(other.Columns) &&
+                HandlerName == other.HandlerName &&
+                Message == other.Message &&
+                IsPost == other.IsPost &&
+                IsPre == other.IsPre &&
+                EntityType == other.EntityType;
 
             public override bool Equals(object? obj) => obj is ProjectionModel other && Equals(other);
 

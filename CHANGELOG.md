@@ -41,6 +41,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   (`WithPreImage`/`WithPostImage` with column selectors) must be declared `partial`, so the generated nested
   projection can reopen the class. Without `partial` the build otherwise failed with an obscure `CS0260`; the code
   fix adds the modifier.
+- **Typed step contexts.** For a named handler on a Create/Update/Delete step that captures a typed image, the
+  generator now also emits a `{Handler}Context` (a subclass of the step's message context) exposing typed
+  `ctx.PreImage` / `ctx.PostImage` members. A handler can take `void OnUpdated(OnUpdatedContext ctx)` and read the
+  images as members instead of `ctx.PreImageAs<T>()`; `.Handle(OnUpdated)` stays type-free (a new `Handle(Delegate)`
+  overload binds the method group via its natural type). Additive and opt-in: the plain context and
+  `ctx.PreImageAs<T>()` keep working. Guard rails: **VELA015** (the handler's context must match its step; with a code
+  fix) and **VELA016** (a typed-context handler must bind a single step).
 
 ### Changed (CLI)
 
