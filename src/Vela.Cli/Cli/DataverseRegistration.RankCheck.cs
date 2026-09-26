@@ -64,25 +64,58 @@ internal static partial class DataverseRegistration
             return result;
         }
 
-        QueryExpression query = new QueryExpression("sdkmessageprocessingstep")
+        void AppendRows(QueryExpression q)
         {
-            ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "stage", "mode", "rank")
-        };
-        // Active only (statecode 0): a disabled step never runs, so it can never collide.
-        query.Criteria.AddCondition("statecode", ConditionOperator.Equal, 0);
+            foreach (Entity step in service.RetrieveAll(q))
+            {
+                Guid handlerId = step.GetAttributeValue<EntityReference>("eventhandler")?.Id ?? Guid.Empty;
+                if (excludePluginTypeIds.Contains(handlerId))
+                {
+                    continue;
+                }
 
-        LinkEntity messageLink = query.AddLink("sdkmessage", "sdkmessageid", "sdkmessageid", JoinOperator.Inner);
-        messageLink.EntityAlias = "msg";
-        messageLink.Columns = new ColumnSet("name");
-        messageLink.LinkCriteria.AddCondition("name", ConditionOperator.In, messageNames.Cast<object>().ToArray());
+                string message = GetAliasedString(step, "msg.name") ?? string.Empty;
+                string entity = GetAliasedString(step, "filter.primaryobjecttypecode") ?? string.Empty;
+                if (DefinitionNormalizer.IsGlobalMessage(message))
+                {
+                    // Global messages carry no primary entity; neutralize so it groups with the local side (which
+                    // does the same in DefinitionNormalizer.BuildStepShape).
+                    entity = string.Empty;
+                }
+
+                int stage = step.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 0;
+                int mode = step.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0;
+                int rank = step.GetAttributeValue<int?>("rank") ?? 1;
+                string label = step.GetAttributeValue<string>("name") ?? "(unnamed step)";
+                result.Add(new RankStep(message, entity, stage, mode, rank, label));
+            }
+        }
+
+        QueryExpression BaseQuery()
+        {
+            QueryExpression q = new QueryExpression("sdkmessageprocessingstep")
+            {
+                ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "stage", "mode", "rank")
+            };
+            // Active only (statecode 0): a disabled step never runs, so it can never collide.
+            q.Criteria.AddCondition("statecode", ConditionOperator.Equal, 0);
+            LinkEntity msg = q.AddLink("sdkmessage", "sdkmessageid", "sdkmessageid", JoinOperator.Inner);
+            msg.EntityAlias = "msg";
+            msg.Columns = new ColumnSet("name");
+            msg.LinkCriteria.AddCondition("name", ConditionOperator.In, messageNames.Cast<object>().ToArray());
+            return q;
+        }
+
+        QueryExpression query = BaseQuery();
 
         // When every touched coordinate is entity-bound, only steps on those same entities can ever land on a
         // touched (message, entity, stage, mode) coordinate, so an Inner join filtered by primaryobjecttypecode
-        // reads far fewer rows on a big org WITHOUT changing the result (BuildRankCollisionDiagnostics filters to
-        // the touched coordinates anyway). A global coordinate (entity-less message / custom API) has no
-        // primaryobjecttypecode to match, so in that case keep the unrestricted LeftOuter link for correctness.
+        // reads far fewer rows on a big org (BuildRankCollisionDiagnostics filters to the touched coordinates
+        // anyway). A global coordinate (entity-less message / custom API) has no primaryobjecttypecode to match, so
+        // in that case keep the unrestricted LeftOuter link for correctness.
+        bool scopedToEntities = !hasGlobalCoordinate && touchedEntities.Count > 0;
         LinkEntity filterLink;
-        if (!hasGlobalCoordinate && touchedEntities.Count > 0)
+        if (scopedToEntities)
         {
             filterLink = query.AddLink("sdkmessagefilter", "sdkmessagefilterid", "sdkmessagefilterid", JoinOperator.Inner);
             filterLink.LinkCriteria.AddCondition("primaryobjecttypecode", ConditionOperator.In, touchedEntities.Cast<object>().ToArray());
@@ -95,28 +128,17 @@ internal static partial class DataverseRegistration
         filterLink.EntityAlias = "filter";
         filterLink.Columns = new ColumnSet("primaryobjecttypecode");
 
-        foreach (Entity step in service.RetrieveAll(query))
+        AppendRows(query);
+
+        // The entity-scoped Inner join above drops filter-less ("global") steps - a step registered with no
+        // sdkmessagefilter fires for EVERY entity on its message, so it collides with the touched entity-bound steps
+        // even though it has no primaryobjecttypecode. Read those separately so the collision is not missed (#305).
+        // The LeftOuter path already includes them, so this supplement runs only in the entity-scoped path.
+        if (scopedToEntities)
         {
-            Guid handlerId = step.GetAttributeValue<EntityReference>("eventhandler")?.Id ?? Guid.Empty;
-            if (excludePluginTypeIds.Contains(handlerId))
-            {
-                continue;
-            }
-
-            string message = GetAliasedString(step, "msg.name") ?? string.Empty;
-            string entity = GetAliasedString(step, "filter.primaryobjecttypecode") ?? string.Empty;
-            if (DefinitionNormalizer.IsGlobalMessage(message))
-            {
-                // Global messages carry no primary entity; neutralize so it groups with the local side (which
-                // does the same in DefinitionNormalizer.BuildStepShape).
-                entity = string.Empty;
-            }
-
-            int stage = step.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 0;
-            int mode = step.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0;
-            int rank = step.GetAttributeValue<int?>("rank") ?? 1;
-            string label = step.GetAttributeValue<string>("name") ?? "(unnamed step)";
-            result.Add(new RankStep(message, entity, stage, mode, rank, label));
+            QueryExpression globalQuery = BaseQuery();
+            globalQuery.Criteria.AddCondition("sdkmessagefilterid", ConditionOperator.Null);
+            AppendRows(globalQuery);
         }
 
         return result;
@@ -158,10 +180,35 @@ internal static partial class DataverseRegistration
             .Select(s => (s.Message, s.EntityLogicalName, s.Stage, s.Mode))
             .ToHashSet();
 
-        IEnumerable<RankStep> combined = localDesiredSteps
-            .Concat(envSteps)
-            .Where(s => touched.Contains((s.Message, s.EntityLogicalName, s.Stage, s.Mode)));
+        // A filter-less "global" step (empty entity on an entity-scoped message) fires for EVERY entity on that
+        // message, so it collides with entity-bound steps sharing (message, stage, mode) even though its own
+        // coordinate differs. The detector groups by exact coordinate, so project each global step onto the touched
+        // entity coordinates it covers, so it is compared against the entity-bound steps there (#305).
+        Dictionary<(string, int, int), List<string>> touchedEntitiesByCoord = localDesiredSteps
+            .Where(s => !string.IsNullOrWhiteSpace(s.EntityLogicalName) && !DefinitionNormalizer.IsGlobalMessage(s.Message))
+            .GroupBy(s => (s.Message, s.Stage, s.Mode))
+            .ToDictionary(g => g.Key, g => g.Select(s => s.EntityLogicalName).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
 
-        return RankCollisionDetector.Detect(combined);
+        List<RankStep> forDetection = [];
+        foreach (RankStep s in localDesiredSteps.Concat(envSteps))
+        {
+            bool isGlobalStep = string.IsNullOrWhiteSpace(s.EntityLogicalName) && !DefinitionNormalizer.IsGlobalMessage(s.Message);
+            if (isGlobalStep && touchedEntitiesByCoord.TryGetValue((s.Message, s.Stage, s.Mode), out List<string>? entities))
+            {
+                foreach (string entity in entities)
+                {
+                    forDetection.Add(s with { EntityLogicalName = entity });
+                }
+            }
+
+            // Keep the step on its own coordinate when the deployment touches it (entity-bound steps, and
+            // global-vs-global collisions on an entity-less coordinate the deployment actually lands on).
+            if (touched.Contains((s.Message, s.EntityLogicalName, s.Stage, s.Mode)))
+            {
+                forDetection.Add(s);
+            }
+        }
+
+        return RankCollisionDetector.Detect(forDetection);
     }
 }

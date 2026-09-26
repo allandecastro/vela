@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.19.4] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.19.4`. Detects a rank collision between a filter-less global step and entity-bound steps.
+
+### Fixed
+
+- **`plan`/`apply` now detect an execution-order collision between a filter-less "global" step and an entity-bound step on the same message.** A step registered with no message filter fires for every entity on its message, so it collides with entity-bound steps at the same stage/mode/rank. The environment read scoped itself to the touched entities (excluding filter-less steps), and the collision detector grouped by exact coordinate (so an entity-less step and an `account` step never met), so the clash was missed. The environment read now also fetches filter-less steps, and the detector projects each global step onto the touched entity coordinates it covers, so the collision is surfaced as a warning.
+
 ## [0.19.3] - 2026-09-26 (Vela.Cli)
 
 CLI line, published as `cli-v0.19.3`. Stops a mixed-case step declaration from churning as perpetually "changed".

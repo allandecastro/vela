@@ -164,9 +164,13 @@ public sealed class RankCollisionTests
         Guid other = Guid.NewGuid();
         var service = new FakeOrgService
         {
-            OnRetrieveMultiple = _ => FakeOrgService.Collection(
-                EnvStep(ours, "Update", "account", 40, 0, 1, "OurStep"),
-                EnvStep(other, "Update", "account", 40, 0, 1, "OtherStep")),
+            // The entity-scoped read returns the account-bound steps; the filter-less supplement (sdkmessagefilterid
+            // Null) returns nothing here.
+            OnRetrieveMultiple = q => q.Criteria.Conditions.Any(c => c.AttributeName == "sdkmessagefilterid" && c.Operator == ConditionOperator.Null)
+                ? new EntityCollection()
+                : FakeOrgService.Collection(
+                    EnvStep(ours, "Update", "account", 40, 0, 1, "OurStep"),
+                    EnvStep(other, "Update", "account", 40, 0, 1, "OtherStep")),
         };
 
         List<RankStep> steps = DataverseRegistration.GetEnvironmentRankSteps(
@@ -200,15 +204,22 @@ public sealed class RankCollisionTests
         DataverseRegistration.GetEnvironmentRankSteps(
             service, ["Update", "Create"], new HashSet<Guid>(), ["account", "contact"], hasGlobalCoordinate: false);
 
-        QueryExpression query = Assert.Single(service.Queries);
-        LinkEntity filterLink = FilterLink(query);
+        // Two queries in the entity-scoped path: the entity-bound read, plus a supplement for filter-less global
+        // steps (which the Inner join drops) that also collide with the touched entity coordinates (#305).
+        Assert.Equal(2, service.Queries.Count);
 
+        QueryExpression entityScoped = service.Queries[0];
+        LinkEntity filterLink = FilterLink(entityScoped);
         Assert.Equal(JoinOperator.Inner, filterLink.JoinOperator);
         ConditionExpression condition = Assert.Single(
             filterLink.LinkCriteria.Conditions,
             c => c.AttributeName == "primaryobjecttypecode");
         Assert.Equal(ConditionOperator.In, condition.Operator);
         Assert.Equal(new object[] { "account", "contact" }, condition.Values);
+
+        // The supplement reads steps with no sdkmessagefilter (filter-less globals).
+        QueryExpression global = service.Queries[1];
+        Assert.Single(global.Criteria.Conditions, c => c.AttributeName == "sdkmessagefilterid" && c.Operator == ConditionOperator.Null);
     }
 
     [Fact]
@@ -264,6 +275,31 @@ public sealed class RankCollisionTests
     }
 
     [Fact]
+    public void BuildRankCollisionDiagnostics_warns_when_a_global_env_step_collides_with_an_entity_bound_local_step()   // #305
+    {
+        Guid other = Guid.NewGuid();
+        // A filter-less foreign step (empty entity) fires for every entity on Update, so it collides with the local
+        // account step at the same stage/mode/rank even though its coordinate is global. It is read by the filter-less
+        // supplement query and projected onto the touched account coordinate.
+        var service = new FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.Criteria.Conditions.Any(c => c.AttributeName == "sdkmessagefilterid" && c.Operator == ConditionOperator.Null)
+                ? FakeOrgService.Collection(EnvStep(other, "Update", "", 40, 0, 1, "GlobalForeignStep"))
+                : new EntityCollection(),
+        };
+
+        IReadOnlyList<string> warnings = DataverseRegistration.BuildRankCollisionDiagnostics(
+            service,
+            [Step("Update", "account", 40, 0, 1, "LocalAccountStep")],
+            new HashSet<Guid>());
+
+        string warning = Assert.Single(warnings);
+        Assert.Contains("GlobalForeignStep", warning);
+        Assert.Contains("LocalAccountStep", warning);
+        Assert.Contains("of account", warning);
+    }
+
+    [Fact]
     public void BuildRankCollisionDiagnostics_stays_silent_for_untouched_coordinates()
     {
         Guid other = Guid.NewGuid();
@@ -304,7 +340,10 @@ public sealed class RankCollisionTests
             [Step("Update", "account", 40, 0, 1, "A"), Step("Create", "contact", 20, 0, 1, "B")],
             new HashSet<Guid>());
 
-        QueryExpression query = Assert.Single(service.Queries);
+        // Entity-scoped path: the entity-bound read (Inner join to the touched entities) plus the filter-less
+        // supplement for global steps that also collide there (#305).
+        Assert.Equal(2, service.Queries.Count);
+        QueryExpression query = service.Queries[0];
         LinkEntity filterLink = FilterLink(query);
 
         Assert.Equal(JoinOperator.Inner, filterLink.JoinOperator);
@@ -313,6 +352,7 @@ public sealed class RankCollisionTests
             c => c.AttributeName == "primaryobjecttypecode");
         Assert.Equal(ConditionOperator.In, condition.Operator);
         Assert.Equal(new[] { "account", "contact" }, condition.Values.Cast<string>().OrderBy(x => x));
+        Assert.Single(service.Queries[1].Criteria.Conditions, c => c.AttributeName == "sdkmessagefilterid" && c.Operator == ConditionOperator.Null);
     }
 
     [Fact]
