@@ -182,6 +182,15 @@ internal static class SignCommand
                 }
 
                 string? password = options.PfxPassword;
+                if (!string.IsNullOrWhiteSpace(password))
+                {
+                    // The PFX password is handed to 'dotnet nuget sign' as an argv argument (the tool has no env-var or
+                    // stdin alternative), so on a shared/multi-user host it is visible to other users via 'ps'/proc for
+                    // the child process lifetime. Warn and steer to safer sources, mirroring the --client-secret warning. (#307)
+                    Console.Error.WriteLine(
+                        "Warning: --pfx-password is passed on the command line to the signing tool and can be read by other users on a shared host (ps/proc). Prefer --fingerprint (a certificate installed in the machine/user store) or --pfx-credential (Windows Credential Manager).");
+                }
+
                 if (string.IsNullOrWhiteSpace(password) && !string.IsNullOrWhiteSpace(options.PfxCredentialTarget))
                 {
                     if (!OperatingSystem.IsWindows())

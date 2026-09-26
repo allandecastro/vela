@@ -24,6 +24,19 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.19.1] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.19.1`. Generated-model correctness and a signing-secret warning from the follow-up audit.
+
+### Fixed
+
+- **Generated `[Range]` no longer throws or loses precision on `Money`/`decimal` columns.** `vela models --data-annotations` emitted `[Range(min, max)]` with `double` literals for every numeric column. On a `Money` property that throws `InvalidCastException` at validation time (RangeAttribute cannot convert `Microsoft.Xrm.Sdk.Money`), and on a `decimal` property it validates through `double` and loses precision. `Money` columns now emit no `[Range]`, `decimal` columns use the type-correct `[Range(typeof(decimal), "min", "max")]` overload, and `int`/`double` are unchanged.
+- **Bound Custom API request parameter named `Target` no longer produces `CS0102`.** A bound Custom API auto-emits a `Target` property for the bound record; a request parameter also named `Target` duplicated that member and would not compile. The duplicate parameter is now skipped (it already maps to the same `Parameters["Target"]` slot) with an explanatory comment.
+
+### Security
+
+- **`vela sign --pfx-password` now warns that the password is passed on the command line.** `dotnet nuget sign` accepts the PFX password only as an argv argument, so on a shared host it is visible to other users via `ps`/proc for the child process lifetime. The command now warns and steers to `--fingerprint` (an installed certificate) or `--pfx-credential` (Windows Credential Manager), mirroring the `--client-secret` warning.
+
 ## [0.19.0] - 2026-09-26 (Vela.Cli)
 
 CLI line, published as `cli-v0.19.0`. Makes a mid-run `apply` failure observable to scripts and always surfaces a half-applied state.
