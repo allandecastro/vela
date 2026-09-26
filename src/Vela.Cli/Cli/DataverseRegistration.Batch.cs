@@ -97,7 +97,7 @@ internal static partial class DataverseRegistration
         List<CapturedOperation> parents = capturing.Operations.Where(o => !IsChildDelete(o)).ToList();
         ExecuteBatchTier(service, children, chunkSize, report, skip);
         ExecuteBatchTier(service, parents, chunkSize, report, skip);
-        RenderBatchReport(report, verbose);
+        RenderBatchReport(report);
         ThrowIfBatchFailed(report, ref done);
         done = planned;
     }
@@ -192,7 +192,7 @@ internal static partial class DataverseRegistration
         List<CapturedOperation> tier2 = capturing.Operations.Where(o => o.SeqInOwner > 0).ToList();
         ExecuteBatchTier(service, tier1, chunkSize, report, skip);
         ExecuteBatchTier(service, tier2, chunkSize, report, skip);
-        RenderBatchReport(report, verbose);
+        RenderBatchReport(report);
         ThrowIfBatchFailed(report, ref done);
         done = planned;
     }
@@ -363,9 +363,12 @@ internal static partial class DataverseRegistration
         return new OrganizationServiceFault { Message = ex.Message };
     }
 
-    private static void RenderBatchReport(BatchApplyReport report, bool verbose)
+    private static void RenderBatchReport(BatchApplyReport report)
     {
-        if (!verbose || (report.Failed == 0 && report.Skipped == 0))
+        // A half-applied state (any owner failed, or was skipped because a prior tier failed) is always surfaced,
+        // even without --verbose: the operator must see which rows landed and which did not. A fully-successful apply
+        // (nothing failed or skipped) stays silent. (#305)
+        if (report.Failed == 0 && report.Skipped == 0)
         {
             return;
         }

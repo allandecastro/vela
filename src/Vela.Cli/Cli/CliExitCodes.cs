@@ -20,4 +20,10 @@ internal static class CliExitCodes
     public const int ExitDriftDetected = 5;
 
     public const int ExitConnectionFailure = 6;
+
+    /// <summary>A mid-run <c>apply</c> failure: Dataverse has no cross-entity transaction, so some operations may have
+    /// landed before the failure. A distinct code (7) lets a scripted/CI caller tell "the org may be half-updated,
+    /// re-run apply to reconcile" apart from a bad-args/strict failure (4) or a connection problem (6). The failure
+    /// path also emits a machine-readable result (mode <c>apply-failed</c>) for <c>--json</c>/<c>--out</c> callers.</summary>
+    public const int ExitPartialApply = 7;
 }

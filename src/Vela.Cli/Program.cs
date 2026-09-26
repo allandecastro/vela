@@ -334,7 +334,28 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
                 return ExitSuccess;
         }
 
-        ApplyDiff(service, diff, local.SourceAssemblyPayloads, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey);
+        try
+        {
+            ApplyDiff(service, diff, local.SourceAssemblyPayloads, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey);
+        }
+        catch (Exception applyEx) when (applyEx is not DataverseConnectionException)
+        {
+            // Dataverse has no cross-entity transaction, so a mid-run failure may leave the org partially updated.
+            // ApplyDiff already wrote the human-readable resume report to stderr; add a machine-readable result (for
+            // --json / --out callers) and a distinct exit code so a partial apply is not confused with a bad-args or
+            // connection failure. Already-applied writes are idempotent, so a re-run reconciles the rest.
+            PlanPreview failure = preview with
+            {
+                Mode = "apply-failed",
+                Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", applyEx.Message]
+            };
+            if (!WantsHumanOutput(options) || !string.IsNullOrWhiteSpace(options.OutPath))
+            {
+                WriteOutput(options.OutPath, JsonSerializer.Serialize(failure, jsonOptions));
+            }
+
+            return Fail($"Apply failed mid-run; Dataverse may be partially updated: {applyEx.Message}", ExitPartialApply, includeUsage: false);
+        }
 
         RegistrationState after = ConsoleStatus.Run(
             "Re-reading Dataverse state…",

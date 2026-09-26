@@ -24,6 +24,23 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.19.0] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.19.0`. Makes a mid-run `apply` failure observable to scripts and always surfaces a half-applied state.
+
+### Added
+
+- **Machine-readable result on a failed `apply`.** A mid-run failure (Dataverse has no cross-entity transaction, so some operations may have landed) now emits a JSON result with mode `apply-failed` for `--json`/`--out` callers, carrying the attempted plan summary and the failure message, so a scripted caller can detect a partial apply instead of only seeing stderr text.
+- **Distinct exit code `7` (`ExitPartialApply`) for a mid-run `apply` failure**, so CI can tell "the org may be half-updated, re-run apply to reconcile" apart from a bad-args/strict failure (`4`) or a connection problem (`6`).
+
+### Changed
+
+- **A mid-run `apply` failure now exits `7` instead of `4`.** A script that specifically matched exit code `4` on an apply failure must now also accept `7` (see above). Pre-apply failures (bad args, connection, strict) are unchanged.
+
+### Fixed
+
+- **The per-owner half-applied report is always shown on a failed `apply`, not only under `--verbose`.** When a batched write faulted, the summary of which rows landed and which did not (and which were skipped) was gated on `--verbose`, so a default-verbosity apply failure hid the partial state. It now renders whenever anything failed or was skipped; a fully-successful apply stays silent.
+
 ## [0.18.0] - 2026-09-26 (Vela.Cli)
 
 CLI line, published as `cli-v0.18.0`. Step supported-deployment fidelity and a `models` robustness fix.
