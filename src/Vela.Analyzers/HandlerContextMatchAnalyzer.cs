@@ -91,14 +91,16 @@ namespace Vela.Analyzers
 
             ITypeSymbol parameterType = handler.Parameters[0].Type;
 
-            if (SatisfiesContext(parameterType, expectedInterface))
+            // The plugin entity is needed both to validate the context's generic argument and to build the code-fix type.
+            INamedTypeSymbol? entity = ResolveEntity(invocation, context.SemanticModel, context.CancellationToken);
+
+            if (SatisfiesContext(parameterType, expectedInterface, entity))
             {
                 return;
             }
 
             // Carry the fully-qualified expected message context (with the plugin's entity) so the code fix can set it.
             ImmutableDictionary<string, string?> properties = ImmutableDictionary<string, string?>.Empty;
-            INamedTypeSymbol? entity = ResolveEntity(invocation, context.SemanticModel, context.CancellationToken);
             if (entity is not null)
             {
                 string expectedType = $"global::Vela.Context.{expectedInterface}<{entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>";
@@ -129,29 +131,71 @@ namespace Vela.Analyzers
             return null;
         }
 
-        // The parameter is valid when it is (or derives from / implements) the expected message-context interface, or
-        // is the plain ILocalPluginContext (permissive untyped handler). Name-based to keep it robust across the
-        // generated subclass and the plain interface without binding to the framework assembly.
-        private static bool SatisfiesContext(ITypeSymbol parameterType, string expectedInterface)
+        // The parameter is valid when it is (or derives from / implements) the expected message-context interface for
+        // the plugin's own entity, or is the plain ILocalPluginContext (permissive untyped handler). Name-based to keep
+        // it robust across the generated subclass and the plain interface without binding to the framework assembly.
+        private static bool SatisfiesContext(ITypeSymbol parameterType, string expectedInterface, INamedTypeSymbol? entity)
         {
             // The plain untyped handler (parameter is exactly ILocalPluginContext) is allowed. Note we do NOT accept a
             // type merely because it implements ILocalPluginContext - every message context does, so that would accept
             // a wrong context too.
-            if (parameterType.Name == "ILocalPluginContext" || parameterType.Name == expectedInterface)
+            if (parameterType.Name == "ILocalPluginContext")
             {
                 return true;
             }
 
-            foreach (INamedTypeSymbol iface in parameterType.AllInterfaces)
+            // Unresolved (error) type: stay silent to avoid piling on top of the compiler's own error.
+            if (parameterType.TypeKind == TypeKind.Error)
             {
-                if (iface.Name == expectedInterface)
+                return true;
+            }
+
+            // Look at the parameter itself and every interface it implements. The message context is the generic
+            // IXxxContext<TEntity>; a matching name for a DIFFERENT entity (for example IUpdatePostContext<Contact> on
+            // EntityPluginBase<Account>) compiles through Handle(Delegate) but fails the image cast at runtime, so it
+            // must be reported rather than accepted on the name alone.
+            foreach (INamedTypeSymbol candidate in SelfAndInterfaces(parameterType))
+            {
+                if (candidate.Name != expectedInterface)
+                {
+                    continue;
+                }
+
+                // Entity unknown: keep the pre-existing name-only behavior to avoid false positives.
+                if (entity is null || candidate.TypeArguments.Length != 1)
+                {
+                    return true;
+                }
+
+                ITypeSymbol argument = candidate.TypeArguments[0];
+
+                // Unresolved generic argument: stay silent (the compiler already reports it).
+                if (argument.TypeKind == TypeKind.Error)
+                {
+                    return true;
+                }
+
+                if (SymbolEqualityComparer.Default.Equals(argument, entity))
                 {
                     return true;
                 }
             }
 
-            // Unresolved (error) type: stay silent to avoid piling on top of the compiler's own error.
-            return parameterType.TypeKind == TypeKind.Error;
+            // The expected context shape is absent, or present but bound to the wrong entity: report.
+            return false;
+        }
+
+        private static System.Collections.Generic.IEnumerable<INamedTypeSymbol> SelfAndInterfaces(ITypeSymbol type)
+        {
+            if (type is INamedTypeSymbol named)
+            {
+                yield return named;
+            }
+
+            foreach (INamedTypeSymbol iface in type.AllInterfaces)
+            {
+                yield return iface;
+            }
         }
 
         // Minimal guided-chain resolver: the message from OnCreate/OnUpdate/OnDelete and whether the stage is
