@@ -67,6 +67,12 @@ internal static partial class DataverseRegistration
     step["name"] = BuildStepName(definition);
     step["description"] = BuildStepDescription(definition);
     step["configuration"] = definition.UnsecureConfig ?? string.Empty;
+    // Impersonation: run the step as a specific systemuser (Dataverse impersonatinguserid), or clear it when absent.
+    // The whole entity is rebuilt and re-sent on every create/update, so assigning null explicitly clears the lookup
+    // on update when a previously-set impersonation is removed.
+    step["impersonatinguserid"] = definition.ImpersonatingUserId == Guid.Empty
+        ? null
+        : new EntityReference("systemuser", definition.ImpersonatingUserId);
     if (filterId.HasValue)
     {
         step["sdkmessagefilterid"] = new EntityReference("sdkmessagefilter", filterId.Value);

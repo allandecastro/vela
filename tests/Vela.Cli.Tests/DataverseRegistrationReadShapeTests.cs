@@ -19,6 +19,7 @@ namespace Vela.Cli.Tests;
 public sealed class DataverseRegistrationReadShapeTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly Guid ImpersonatedUser = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
     private static Entity Aliased(Entity e, string alias, string entity, string attr, object value)
     {
@@ -47,6 +48,7 @@ public sealed class DataverseRegistrationReadShapeTests
             ["statecode"] = new OptionSetValue(0),          // enabled
             ["configuration"] = "unsecure-cfg",
             ["sdkmessageprocessingstepsecureconfigid"] = new EntityReference("sdkmessageprocessingstepsecureconfig", secureId),
+            ["impersonatinguserid"] = new EntityReference("systemuser", ImpersonatedUser),
         };
         Aliased(step, "msg.name", "sdkmessage", "name", "Update");
         Aliased(step, "filter.primaryobjecttypecode", "sdkmessagefilter", "primaryobjecttypecode", "account");
@@ -91,6 +93,7 @@ public sealed class DataverseRegistrationReadShapeTests
         Assert.Equal(5, d.GetProperty("executionOrder").GetInt32());
         Assert.True(d.GetProperty("enabled").GetBoolean());
         Assert.Equal("unsecure-cfg", d.GetProperty("unsecureConfig").GetString());
+        Assert.Equal(ImpersonatedUser.ToString(), d.GetProperty("impersonatingUserId").GetString());
         Assert.Equal(new[] { "accountnumber", "name" }, d.GetProperty("filteringAttributes").EnumerateArray().Select(x => x.GetString())); // normalizer sorts
         Assert.Equal(DefinitionNormalizer.HashSecret("topsecret"), d.GetProperty("secureConfig").GetString());
         Assert.Equal("PreImage", d.GetProperty("preImages").EnumerateArray().Single().GetProperty("alias").GetString());
@@ -183,7 +186,7 @@ public sealed class DataverseRegistrationReadShapeTests
 
         Assert.NotNull(captured);
         Assert.Equal(
-            new[] { "sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid" },
+            new[] { "sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid" },
             captured!.ColumnSet.Columns);
         ConditionExpression c = Assert.Single(captured.Criteria.Conditions);
         Assert.Equal("eventhandler", c.AttributeName);

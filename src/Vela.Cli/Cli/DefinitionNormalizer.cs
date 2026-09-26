@@ -39,6 +39,7 @@ internal static class DefinitionNormalizer
         bool enabled,
         string unsecureConfig,
         string secureConfig,
+        Guid? impersonatingUserId,
         JsonSerializerOptions jsonOptions)
     {
         // Global (entity-agnostic) messages such as Associate/Disassociate cannot carry a primary entity on
@@ -66,6 +67,10 @@ internal static class DefinitionNormalizer
             postImages = OrderImages(postImages),
             enabled,
             unsecureConfig,
+            // Impersonation (Dataverse impersonatinguserid): a specific systemuser, or empty when the step runs as
+            // the calling user. Normalized to a canonical lowercase Guid string (empty = none) so the live-read side
+            // and the code side compare equal and the step converges instead of showing as perpetually "changed".
+            impersonatingUserId = impersonatingUserId is { } uid && uid != Guid.Empty ? uid.ToString() : string.Empty,
             // Secure config can hold secrets (API keys, connection strings). It must never appear in the
             // plan/inspect JSON output, but the diff still has to detect when it changes — so the shape carries
             // a stable hash, not the value. Same value on both sides -> same hash -> no diff; a changed secret
@@ -151,6 +156,9 @@ internal static class DefinitionNormalizer
         bool enabled = TryGetBool(raw, "enabled", defaultValue: true);
         string unsecureConfig = TryGetString(raw, "unsecureConfig") ?? string.Empty;
         string secureConfig = TryGetString(raw, "secureConfig") ?? string.Empty;
+        // StepDefinition.ImpersonatingUserId serializes as a Guid string (or null); parse leniently so an absent or
+        // empty value normalizes to "no impersonation" (Guid.Empty) rather than churning the diff.
+        Guid? impersonatingUserId = Guid.TryParse(TryGetString(raw, "impersonatingUserId"), out Guid parsed) ? parsed : null;
 
         string lifecycle = BuildStepLifecycleLabel(stage, mode);
         string name = !string.IsNullOrWhiteSpace(stepKey)
@@ -174,6 +182,7 @@ internal static class DefinitionNormalizer
             enabled,
             unsecureConfig,
             secureConfig,
+            impersonatingUserId,
             jsonOptions);
     }
 

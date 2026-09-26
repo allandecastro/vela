@@ -21,6 +21,7 @@ namespace Vela.Cli.Tests;
 public sealed class DataverseRegistrationStepsTests
 {
     private const string Plugin = "Zava.Plugins.AccountPlugin";
+    private static readonly Guid ImpersonatedUser = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
     private static StepApplyDefinition Def(
         string message = "Update", string entity = "account", string stepKey = "", int stage = 40, int mode = 0,
@@ -489,6 +490,33 @@ public sealed class DataverseRegistrationStepsTests
     // ---- UpsertStep --------------------------------------------------------------------------------
 
     [Fact]
+    public void UpsertStep_clears_impersonation_when_absent()   // #305 impersonation
+    {
+        // A step with no impersonation must set impersonatinguserid to null on the (rebuilt, fully-resent) entity so
+        // an update clears any previously-set impersonation instead of leaving it stale.
+        var pluginTypeId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var stepId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", messageId)),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+            OnCreate = e => e.LogicalName == "sdkmessageprocessingstep" ? stepId : Guid.NewGuid(),
+        };
+
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Update", entityLogicalName = "", stepKey = "dv-key", stage = 40, mode = 0 });
+        DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false);
+
+        Entity step = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstep");
+        Assert.True(step.Contains("impersonatinguserid"));
+        Assert.Null(step.GetAttributeValue<EntityReference>("impersonatinguserid"));
+    }
+
+    [Fact]
     public void UpsertStep_creates_step_with_every_column()
     {
         var pluginTypeId = Guid.NewGuid();
@@ -521,6 +549,7 @@ public sealed class DataverseRegistrationStepsTests
             enabled = true,
             unsecureConfig = "unsec",
             secureConfig = "",
+            impersonatingUserId = ImpersonatedUser.ToString(),
         });
 
         DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false);
@@ -540,6 +569,9 @@ public sealed class DataverseRegistrationStepsTests
         Assert.Equal(7, step.GetAttributeValue<int>("rank"));
         Assert.Equal("accountnumber,name", step.GetAttributeValue<string>("filteringattributes")); // sorted
         Assert.Equal(0, step.GetAttributeValue<OptionSetValue>("supporteddeployment").Value);
+        EntityReference impersonation = step.GetAttributeValue<EntityReference>("impersonatinguserid");
+        Assert.Equal("systemuser", impersonation.LogicalName);
+        Assert.Equal(ImpersonatedUser, impersonation.Id);
         Assert.Equal("unsec", step.GetAttributeValue<string>("configuration"));
         Assert.Contains("dv-key", step.GetAttributeValue<string>("name"));
         // description = the human-readable name plus the stable step-key marker (B4).
