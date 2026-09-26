@@ -182,7 +182,30 @@ public class ModelGeneratorTests
 
         Assert.Contains("using System.ComponentModel.DataAnnotations;", code);
         Assert.Contains("[StringLength(160)]", code);
-        Assert.Contains("[Range(0, 1000000000)]", code);
+        // The account's only min/max attribute is Money (revenue): RangeAttribute cannot convert Money, so no [Range]
+        // is emitted (it would throw InvalidCastException at validation time). See DataAnnotations_Range_* below. (#308)
+        Assert.DoesNotContain("[Range(", code);
+    }
+
+    [Fact]
+    public void DataAnnotations_Range_UsesTypeCorrectOperand()   // #308
+    {
+        EntityMetadata entity = MetadataFactory.Entity("new_thing", "new_Thing")
+            .PrimaryId("new_thingid", "new_ThingId")
+            .Integer("new_count", "new_Count", min: 0, max: 100)
+            .Decimal("new_ratio", "new_Ratio", min: 0m, max: 9.99m)
+            .Money("new_price", "new_Price", min: 0m, max: 1000000m)
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { entity }, new ModelGenOptions("N", DataAnnotations: true)).Single().Code;
+
+        // int -> plain double-literal overload (validates cleanly).
+        Assert.Contains("[Range(0, 100)]", code);
+        // decimal -> typed overload so validation does not go through double and lose precision.
+        Assert.Contains("[Range(typeof(decimal), \"0\", \"9.99\")]", code);
+        // Money -> no [Range] at all (RangeAttribute cannot convert Microsoft.Xrm.Sdk.Money). Exactly the int and
+        // decimal attributes carry a [Range]; Money does not.
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(code, @"\[Range\(").Count);
     }
 
     [Fact]

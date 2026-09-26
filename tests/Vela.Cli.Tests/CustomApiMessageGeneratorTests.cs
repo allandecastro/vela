@@ -11,6 +11,24 @@ public class CustomApiMessageGeneratorTests
         CustomApiMessageGenerator.Generate(new[] { message }, "Acme.Shared.Models.Generated").Single().Code;
 
     [Fact]
+    public void Bound_RequestParameterNamedTarget_DoesNotDuplicateTheAutoTargetMember()   // #308 M3
+    {
+        // A bound API auto-emits a 'Target' EntityReference property. A request parameter also named "Target" would
+        // duplicate that member (CS0102); it must be skipped instead so the output compiles.
+        string code = Generate(new CustomApiMessage(
+            "zava_Recalc",
+            IsBoundToEntity: true,
+            RequestParameters: new[] { new CustomApiParameter("Target", 5), new CustomApiParameter("Amount", 8) },  // 5 EntityReference, 8 Money
+            ResponseProperties: Array.Empty<CustomApiParameter>()));
+
+        // Exactly one 'Target' member (the auto bound-record property); the duplicate parameter is skipped + documented.
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(code, "EntityReference Target").Count);
+        Assert.Contains("shares the 'Target' member emitted above", code);
+        // The other, non-colliding parameter is still emitted.
+        Assert.Contains("public Money Amount", code);
+    }
+
+    [Fact]
     public void Generates_TypedRequestAndResponse()
     {
         CustomApiMessage message = new CustomApiMessage(

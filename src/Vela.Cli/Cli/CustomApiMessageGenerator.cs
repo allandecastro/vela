@@ -113,6 +113,9 @@ public static class CustomApiMessageGenerator
         sb.AppendLine("        {");
         sb.AppendLine("        }");
 
+        // Track the C# member names already emitted on the request so a parameter cannot duplicate one (CS0102).
+        HashSet<string> usedRequestMembers = new HashSet<string>(StringComparer.Ordinal);
+
         if (message.IsBoundToEntity)
         {
             // The bound record is passed under the standard, unprefixed "Target" key (not "{api}.Target"),
@@ -124,10 +127,22 @@ public static class CustomApiMessageGenerator
             sb.AppendLine("            get => Parameters.Contains(\"Target\") && Parameters[\"Target\"] is EntityReference reference ? reference : null;");
             sb.AppendLine("            set => Parameters[\"Target\"] = value;");
             sb.AppendLine("        }");
+            usedRequestMembers.Add("Target");
         }
 
         foreach (CustomApiParameter parameter in message.RequestParameters)
         {
+            (string member, _) = CSharpIdentifier.Member(parameter.Name);
+            if (!usedRequestMembers.Add(member))
+            {
+                // A request parameter whose C# member name collides with an already-emitted member (most commonly a
+                // bound API's auto 'Target' property) would be CS0102. That member already exposes the same
+                // Parameters slot, so skip the duplicate rather than emit non-compiling code. (#308)
+                sb.AppendLine();
+                sb.AppendLine($"        // Request parameter '{parameter.Name}' shares the '{member}' member emitted above.");
+                continue;
+            }
+
             AppendParameter(sb, parameter, readOnly: false);
         }
 

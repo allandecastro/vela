@@ -731,15 +731,28 @@ public static class ModelGenerator
             yield return $"[StringLength({m.MaxLength.Value})]";
         }
 
-        (double? min, double? max) = NumericRange(attribute);
-        if (min.HasValue && max.HasValue)
+        // [Range] operand type must match the property so DataAnnotations validation does not throw / lose precision:
+        //  - int/double validate cleanly against the double-literal overload.
+        //  - decimal needs the typed overload [Range(typeof(decimal), "min", "max")]; the double-literal overload
+        //    validates through double and loses precision (#308).
+        //  - Money (Microsoft.Xrm.Sdk.Money) is not convertible by RangeAttribute at all, so a [Range] would throw
+        //    InvalidCastException at validation time; emit none.
+        switch (attribute)
         {
-            string lo = min.Value.ToString(CultureInfo.InvariantCulture);
-            string hi = max.Value.ToString(CultureInfo.InvariantCulture);
-            yield return $"[Range({lo}, {hi})]";
+            case IntegerAttributeMetadata i when i.MinValue.HasValue && i.MaxValue.HasValue:
+                yield return $"[Range({i.MinValue.Value}, {i.MaxValue.Value})]";
+                break;
+            case DoubleAttributeMetadata o when o.MinValue.HasValue && o.MaxValue.HasValue:
+                yield return $"[Range({o.MinValue.Value.ToString(CultureInfo.InvariantCulture)}, {o.MaxValue.Value.ToString(CultureInfo.InvariantCulture)})]";
+                break;
+            case DecimalAttributeMetadata d when d.MinValue.HasValue && d.MaxValue.HasValue:
+                yield return $"[Range(typeof(decimal), \"{d.MinValue.Value.ToString(CultureInfo.InvariantCulture)}\", \"{d.MaxValue.Value.ToString(CultureInfo.InvariantCulture)}\")]";
+                break;
         }
     }
 
+    // The numeric min/max as doubles, for the human-readable range shown in the property's XML doc comment only
+    // (the [Range] data annotation is emitted separately with a type-correct operand; see DataAnnotations).
     private static (double? min, double? max) NumericRange(AttributeMetadata a) => a switch
     {
         IntegerAttributeMetadata i => (i.MinValue, i.MaxValue),
