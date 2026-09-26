@@ -251,4 +251,74 @@ public class ApplyEngineTests
         Assert.Contains("publish plugin package(s) and resolve plugin types", stderr);
         Assert.Contains("re-run 'apply' (add --auto-approve in CI) to resume", stderr);
     }
+
+    [Fact]
+    public void ApplyDiff_capture_phase_abort_does_not_over_report_earlier_owners_as_completed()   // #305
+    {
+        const string accountPlugin = "Zava.Plugins.AccountPlugin";
+        const string contactPlugin = "Zava.Plugins.ContactPlugin";
+
+        // Two changed steps. The first (AccountPlugin/Update) captures cleanly; the second (ContactPlugin/Create)
+        // throws synchronously during capture because its message cannot be resolved. Because captured writes flush
+        // only after the loop, nothing landed - so the resume report must NOT claim the first step completed. Before
+        // the fix, done advanced during capture and the first step was falsely reported as applied.
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q =>
+            {
+                switch (q.EntityName)
+                {
+                    case "pluginassembly":
+                        return TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid()));
+                    case "plugintype":
+                        return TestSupport.FakeOrgService.Collection(
+                            new Entity("plugintype", Guid.NewGuid()) { ["typename"] = accountPlugin },
+                            new Entity("plugintype", Guid.NewGuid()) { ["typename"] = contactPlugin });
+                    case "sdkmessage":
+                        string? name = q.Criteria.Conditions
+                            .FirstOrDefault(c => c.AttributeName == "name")?.Values.FirstOrDefault() as string;
+                        return name == "Update"
+                            ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid()))
+                            : new EntityCollection(); // "Create" not found -> ResolveMessageId throws during capture
+                    default:
+                        return new EntityCollection(); // no existing steps/images/filters
+                }
+            },
+        };
+
+        JsonElement accountDef = Json(new { pluginTypeName = accountPlugin, message = "Update", stage = 40, mode = 0, stepKey = "acc-x" });
+        JsonElement contactDef = Json(new { pluginTypeName = contactPlugin, message = "Create", stage = 40, mode = 0, stepKey = "con-x" });
+        var diff = new RegistrationDiff(
+            LocalAssemblies: ["Zava.Plugins"],
+            CurrentAssemblies: ["Zava.Plugins"],
+            Added: [],
+            Removed: [],
+            Changed:
+            [
+                new RegistrationChange("step", accountPlugin, accountDef, accountDef),
+                new RegistrationChange("step", contactPlugin, contactDef, contactDef),
+            ],
+            LocalItems: [],
+            CurrentItems: []);
+
+        TextWriter originalError = Console.Error;
+        var captured = new StringWriter();
+        Console.SetError(captured);
+        try
+        {
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        string stderr = captured.ToString();
+        Assert.Contains("apply failed mid-run", stderr);
+        // The un-flushed first step must not be listed as completed (the bug: done advanced during capture).
+        Assert.DoesNotContain($"+ update step {accountPlugin}", stderr);
+        // The boundary sits at the first upsert; only the publish/resolve phase completed.
+        Assert.Contains($"failed at: update step {accountPlugin}", stderr);
+        Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
+    }
 }

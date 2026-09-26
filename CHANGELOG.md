@@ -44,6 +44,15 @@ Framework line, published as `framework-v0.27.1`. Fixes two edge cases in the 0.
 - **`Handle(...)` validates the handler shape at registration.** A handler bound through the permissive delegate overload must be a void method taking exactly one context parameter; a wrong-arity or non-void delegate now fails at registration with a clear message instead of an `IndexOutOfRange`/`TargetParameterCount` crash mid-dispatch.
 - **Circular service dependency detection.** `SimpleServiceResolver` now detects a factory that resolves its own type (directly or via a cycle) and throws a clear `InvalidPluginExecutionException` (with the resolution chain) instead of a `StackOverflowException` that cannot be caught and would tear down the worker.
 
+## [0.16.3] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.16.3`. Two `apply` data-safety fixes from the follow-up audit.
+
+### Fixed
+
+- **`apply` no longer creates a duplicate step when its step key drifts.** When a step's stored key changed (for example an `executionOrder` change reseeds the framework auto key, or a pre-marker deployment carries no key), the live-step lookup found no key match and returned nothing, so `apply` created a second step and orphaned the original even though the diff correctly classified the change as an update. The lookup now falls back to the step's trigger identity (message, entity, stage, mode) when that match is unambiguous, updating the existing step in place. An ambiguous coordinate still returns no match, so `apply` never updates the wrong step.
+- **`apply`'s resume report no longer over-reports success on a capture-phase abort.** Step and Custom API writes are captured and then flushed together at the end of each phase. If a synchronous validation error (an unresolved message, an immutable-field change, a missing filter) was thrown while capturing, the resume boundary had already advanced past earlier owners in the same batch, so the report listed them as completed even though nothing had been flushed. The boundary now advances only after a successful flush, so a mid-capture failure reports the batch as un-applied instead of misleading the operator in the dangerous direction.
+
 ## [0.16.2] - 2026-09-26 (Vela.Cli)
 
 CLI line, published as `cli-v0.16.2`. Model-generation and secret-handling fixes from the follow-up audit.

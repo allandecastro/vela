@@ -270,6 +270,9 @@ internal static partial class DataverseRegistration
     filterLink.EntityAlias = "filter";
     filterLink.Columns = new ColumnSet("primaryobjecttypecode");
 
+    Guid? triggerMatch = null;
+    int triggerMatchCount = 0;
+
     foreach (Entity row in service.RetrieveAll(query))
     {
         string message = GetAliasedString(row, "msg.name") ?? string.Empty;
@@ -279,23 +282,42 @@ internal static partial class DataverseRegistration
         string parsedStepKey = DefinitionParser.ResolveStepKey(
             row.GetAttributeValue<string>("description"), row.GetAttributeValue<string>("name"), definition.PluginTypeName);
 
+        // An exact step-key match is authoritative.
         if (!string.IsNullOrWhiteSpace(definition.StepKey) &&
             string.Equals(parsedStepKey, definition.StepKey, StringComparison.OrdinalIgnoreCase))
         {
             return row.Id;
         }
 
-        if (string.IsNullOrWhiteSpace(definition.StepKey) &&
+        bool triggerIdentityMatches =
             string.Equals(message, definition.Message, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(entity, definition.EntityLogicalName, StringComparison.OrdinalIgnoreCase) &&
             stage == definition.Stage &&
-            mode == definition.Mode)
+            mode == definition.Mode;
+
+        if (!triggerIdentityMatches)
+        {
+            continue;
+        }
+
+        // A keyless definition matches purely by trigger identity (first match wins, unchanged).
+        if (string.IsNullOrWhiteSpace(definition.StepKey))
         {
             return row.Id;
         }
+
+        // A keyed definition whose stored key drifted (an executionOrder change reseeds the framework auto key, or a
+        // pre-marker deployment carries no key at all) finds no exact key match above. Remember the trigger match so
+        // we can fall back to it - but only when it is unambiguous. Without this, FindStepId returns null and apply
+        // CREATES a duplicate live step even though the diff correctly classified the change as an update (#305).
+        triggerMatch = row.Id;
+        triggerMatchCount++;
     }
 
-    return null;
+    // No exact key match. For a keyed definition, adopt the trigger match only when it is the single candidate for the
+    // (message, entity, stage, mode) coordinate; an ambiguous coordinate stays null so apply never updates the wrong
+    // step (creating a duplicate is the pre-existing, safer outcome there).
+    return triggerMatchCount == 1 ? triggerMatch : null;
 }
 
     internal static Guid ResolveMessageId(IOrganizationService service, string messageName)
