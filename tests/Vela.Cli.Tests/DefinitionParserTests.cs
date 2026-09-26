@@ -47,6 +47,27 @@ public class DefinitionParserTests
     }
 
     [Fact]
+    public void ResolveStepKey_returns_empty_for_a_keyless_name_and_does_not_invent_a_key()   // #305 churn
+    {
+        // A keyless step's name is "{plugin} - {lifecycle}: {message} of {entity}". Without the computed keyless name
+        // the parser would treat "Update of account" as a step key (churning the diff); with it, it returns "".
+        string keyless = DefinitionNormalizer.BuildKeylessStepName("Zava.MyPlugin", 40, 0, "Update", "account");
+        Assert.Equal("Zava.MyPlugin - PostOpSync: Update of account", keyless);
+        Assert.Equal(string.Empty, DefinitionParser.ResolveStepKey(null, keyless, "Zava.MyPlugin", keyless));
+
+        // A global (entity-less) message keyless name likewise resolves to no key.
+        string keylessGlobal = DefinitionNormalizer.BuildKeylessStepName("Zava.MyPlugin", 40, 0, "Associate", "");
+        Assert.Equal(string.Empty, DefinitionParser.ResolveStepKey(null, keylessGlobal, "Zava.MyPlugin", keylessGlobal));
+
+        // A real explicit key whose name differs from the keyless name is still parsed.
+        Assert.Equal("provision", DefinitionParser.ResolveStepKey(null, "Zava.MyPlugin - PostOpSync: provision", "Zava.MyPlugin", keyless));
+
+        // The marker still wins even when a keyless name is supplied.
+        string described = "Renamed\n" + DefinitionParser.StepKeyMarker("provision");
+        Assert.Equal("provision", DefinitionParser.ResolveStepKey(described, keyless, "Zava.MyPlugin", keyless));
+    }
+
+    [Fact]
     public void StepKeyMarker_roundtrips_through_ExtractStepKeyFromMarker()
     {
         Assert.Equal("my-key", DefinitionParser.ExtractStepKeyFromMarker(DefinitionParser.StepKeyMarker("my-key")));

@@ -142,6 +142,19 @@ internal static class DefinitionNormalizer
         return $"{stageLabel}{modeLabel}";
     }
 
+    /// <summary>
+    /// The display name Vela gives a step that has no explicit step key: <c>{plugin} - {lifecycle}: {message}</c>,
+    /// with <c> of {entity}</c> appended for an entity-scoped step. Shared by the write side (BuildStepName) and the
+    /// read side (ResolveStepKey) so a keyless step's name is recognised as keyless rather than parsed into a
+    /// spurious step key that would churn the diff forever (#305).
+    /// </summary>
+    public static string BuildKeylessStepName(string pluginTypeName, int stage, int mode, string message, string entityLogicalName)
+    {
+        string lifecycle = BuildStepLifecycleLabel(stage, mode);
+        string entity = string.IsNullOrWhiteSpace(entityLogicalName) ? string.Empty : $" of {entityLogicalName}";
+        return $"{pluginTypeName} - {lifecycle}: {message}{entity}";
+    }
+
     public static JsonElement NormalizeStepDefinition(JsonElement raw, JsonSerializerOptions jsonOptions)
     {
         string pluginTypeName = TryGetString(raw, "pluginTypeName") ?? string.Empty;

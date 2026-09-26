@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.19.2] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.19.2`. Stops a keyless step from churning as perpetually "changed".
+
+### Fixed
+
+- **A step registered without an explicit step key no longer diffs as "changed" on every `plan`/`apply`.** A keyless step's display name is `{plugin} - {lifecycle}: {message} of {entity}` and carries no key marker, so the live-read step-key resolver parsed the trailing `{message} of {entity}` as if it were an explicit step key. The code side has no key, so the two never matched and the step was reported (and re-written) on every run. The resolver now recognises the computed keyless name and resolves it to no key, so a keyless step converges. Steps with an explicit key (marker or legacy name) are unaffected.
+
 ## [0.19.1] - 2026-09-26 (Vela.Cli)
 
 CLI line, published as `cli-v0.19.1`. Generated-model correctness and a signing-secret warning from the follow-up audit.
