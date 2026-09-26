@@ -39,6 +39,36 @@ public class ScaffoldTemplatesTests
         Assert.Contains("<AssemblyAttribute Include=\"Microsoft.Xrm.Sdk.Client.ProxyTypesAssemblyAttribute\" />", csproj);
     }
 
+    // Every demo plugin: the class must be `partial` when it captures a typed image (a WithPreImage/WithPostImage
+    // column-selector lambda) OR uses a generated typed step context, because the source generator (VELA014-016)
+    // emits a second `partial` half of the class. A non-partial declaration fails the build with CS0260 - the very
+    // thing that broke `vela init`.
+    public static TheoryData<string> DemoPluginTemplates() => new()
+    {
+        ScaffoldTemplates.AccountRelatedContactsPlugin("Zava"),
+        ScaffoldTemplates.AccountPostCreatePlugin("Zava"),
+        ScaffoldTemplates.AccountMessageReference("Zava"),
+        ScaffoldTemplates.ContactRouterPlugin("Zava"),
+        ScaffoldTemplates.AccountSyncRouterPlugin("Zava"),
+        ScaffoldTemplates.ContactSyncPlugin("Zava"),
+    };
+
+    [Theory]
+    [MemberData(nameof(DemoPluginTemplates))]
+    public void DemoPlugin_ThatCapturesTypedImage_IsPartial(string code)
+    {
+        bool capturesTypedImage =
+            code.Contains(".WithPreImage(") && code.Contains("=>") ||
+            code.Contains(".WithPostImage(") && code.Contains("=>");
+        if (!capturesTypedImage)
+        {
+            return;
+        }
+
+        Assert.Contains("public sealed partial class", code);
+        Assert.DoesNotContain("public sealed class", code);
+    }
+
     [Fact]
     public void SharedCsproj_ReferencesDataAnnotations_SoGeneratedModelsCompileOnNet462()
     {

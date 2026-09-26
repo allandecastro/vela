@@ -24,6 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed (CLI)
+
+- **Generated models no longer warn `CS8669` in the consuming project.** `vela models` emits nullable reference annotations (a typed N:1 nav property, a `string?`/`EntityReference?`) into auto-generated files, which the compiler requires be inside an explicit `#nullable` context. Each generated model file now opens with `#nullable enable` (after the header, before the namespace), so the models compile warning-free under both net462 and net10 consuming projects.
+- **Guard against a `vela init` scaffold regressing to `CS0260`.** Added a scaffold-template test asserting that every demo plugin which captures a typed image (a `WithPreImage`/`WithPostImage` column-selector) is declared `partial`, so the source generator's `partial` half (VELA014-016) always compiles. The demo plugins were already `partial`, so a freshly scaffolded solution builds clean on the latest framework; the test keeps it that way.
+
 ## [0.27.2] - 2026-09-26 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.27.2`. Analyzer accuracy fix from the follow-up audit.
