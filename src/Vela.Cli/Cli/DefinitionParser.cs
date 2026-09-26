@@ -137,8 +137,25 @@ internal static class DefinitionParser
     /// Resolves a live step's key from the stable description marker first (rename-proof), falling back to parsing
     /// the display name for steps written before the marker existed (graceful migration).
     /// </summary>
-    internal static string ResolveStepKey(string? description, string? stepName, string pluginTypeName) =>
-        ExtractStepKeyFromMarker(description) ?? ParseStepKey(stepName, pluginTypeName);
+    internal static string ResolveStepKey(string? description, string? stepName, string pluginTypeName, string? computedKeylessName = null)
+    {
+        string? fromMarker = ExtractStepKeyFromMarker(description);
+        if (fromMarker != null)
+        {
+            return fromMarker;
+        }
+
+        // No marker: a step Vela wrote without an explicit key has its display name equal to the computed keyless
+        // name (`{plugin} - {lifecycle}: {message} of {entity}`). Recognise that so the trailing "{message} of
+        // {entity}" is NOT mistaken for a step key - which would make the live read carry a spurious key the code
+        // side never has, churning the diff as "changed" on every plan/apply (#305).
+        if (computedKeylessName != null && string.Equals(stepName?.Trim(), computedKeylessName, StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        return ParseStepKey(stepName, pluginTypeName);
+    }
 
     internal static string ParseStepKey(string? stepName, string pluginTypeName)
     {

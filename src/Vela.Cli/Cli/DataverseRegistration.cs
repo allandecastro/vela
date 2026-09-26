@@ -290,7 +290,8 @@ internal static partial class DataverseRegistration
 
         int executionOrder = step.GetAttributeValue<int?>("rank") ?? 1;
         string? stepName = step.GetAttributeValue<string>("name");
-        string stepKey = DefinitionParser.ResolveStepKey(step.GetAttributeValue<string>("description"), stepName, pluginTypeName);
+        string keylessName = DefinitionNormalizer.BuildKeylessStepName(pluginTypeName, stage, mode, message, entityLogicalName);
+        string stepKey = DefinitionParser.ResolveStepKey(step.GetAttributeValue<string>("description"), stepName, pluginTypeName, keylessName);
         string[] filteringAttributes = SplitCsv(step.GetAttributeValue<string>("filteringattributes"));
         bool enabled = (step.GetAttributeValue<OptionSetValue>("statecode")?.Value ?? 0) == 0;
         string unsecureConfig = step.GetAttributeValue<string>("configuration") ?? string.Empty;

@@ -285,8 +285,9 @@ internal static partial class DataverseRegistration
         string entity = GetAliasedString(row, "filter.primaryobjecttypecode") ?? string.Empty;
         int stage = row.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 0;
         int mode = row.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0;
+        string keylessName = DefinitionNormalizer.BuildKeylessStepName(definition.PluginTypeName, stage, mode, message, entity);
         string parsedStepKey = DefinitionParser.ResolveStepKey(
-            row.GetAttributeValue<string>("description"), row.GetAttributeValue<string>("name"), definition.PluginTypeName);
+            row.GetAttributeValue<string>("description"), row.GetAttributeValue<string>("name"), definition.PluginTypeName, keylessName);
 
         // An exact step-key match is authoritative.
         if (!string.IsNullOrWhiteSpace(definition.StepKey) &&
@@ -522,14 +523,14 @@ internal static partial class DataverseRegistration
 
     internal static string BuildStepName(StepApplyDefinition definition)
 {
-    string lifecycle = BuildStepLifecycleLabel(definition.Stage, definition.Mode);
     if (!string.IsNullOrWhiteSpace(definition.StepKey))
     {
+        string lifecycle = BuildStepLifecycleLabel(definition.Stage, definition.Mode);
         return $"{definition.PluginTypeName} - {lifecycle}: {definition.StepKey}";
     }
 
-    string entity = string.IsNullOrWhiteSpace(definition.EntityLogicalName) ? string.Empty : $" of {definition.EntityLogicalName}";
-    return $"{definition.PluginTypeName} - {lifecycle}: {definition.Message}{entity}";
+    // Keyless: share the exact format with the read side so ResolveStepKey recognises it as keyless (#305).
+    return DefinitionNormalizer.BuildKeylessStepName(definition.PluginTypeName, definition.Stage, definition.Mode, definition.Message, definition.EntityLogicalName);
 }
 
     // The step description: the human-readable name plus a stable [vela:stepkey=...] marker (B4). The marker lets a

@@ -125,6 +125,33 @@ public sealed class DataverseRegistrationReadShapeTests
     }
 
     [Fact]
+    public void GetStepItems_reads_a_keyless_step_as_having_no_step_key()   // #305 churn
+    {
+        // A keyless step's live name is the computed keyless name and it carries no marker. The read must resolve
+        // stepKey to "" (matching the keyless code side) rather than parsing "Update of account" as a spurious key,
+        // which would make the step diff as "changed" on every plan/apply.
+        var handlerId = Guid.NewGuid();
+        var pluginTypes = new Dictionary<Guid, string> { [handlerId] = "Zava.Plugins.AccountPlugin" };
+        var step = new Entity("sdkmessageprocessingstep", Guid.NewGuid())
+        {
+            ["eventhandler"] = new EntityReference("plugintype", handlerId),
+            ["stage"] = new OptionSetValue(40),
+            ["mode"] = new OptionSetValue(0),
+            ["statecode"] = new OptionSetValue(0),
+            ["name"] = "Zava.Plugins.AccountPlugin - PostOpSync: Update of account",  // keyless name, no marker
+        };
+        Aliased(step, "msg.name", "sdkmessage", "name", "Update");
+        Aliased(step, "filter.primaryobjecttypecode", "sdkmessagefilter", "primaryobjecttypecode", "account");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(step) : new EntityCollection(),
+        };
+
+        RegistrationItem item = Assert.Single(DataverseRegistration.GetStepItems(svc, pluginTypes, Json));
+        Assert.Equal(string.Empty, item.Definition.GetProperty("stepKey").GetString());
+    }
+
+    [Fact]
     public void GetStepItems_skips_main_operation_and_unknown_handler_steps()
     {
         var handlerId = Guid.NewGuid();
