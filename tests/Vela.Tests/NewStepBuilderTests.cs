@@ -85,6 +85,57 @@ namespace Vela.Tests
             Assert.Equal(1, create.ExecutionOrder);
         }
 
+        private static readonly System.Guid ImpersonatedUser = System.Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        private sealed class ImpersonationPlugin : EntityPluginBase<TestAccount>
+        {
+            public ImpersonationPlugin() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+            {
+                RegisterStep().OnUpdate().PreOperation().Sync()
+                    .FilterOn(a => a.Name)
+                    .WithImpersonation(ImpersonatedUser)
+                    .Handle(ctx => { });
+
+                // No WithImpersonation -> runs as the calling user (ImpersonatingUserId stays null).
+                RegisterStep().OnCreate().PreOperation().Sync()
+                    .FilterOn(a => a.Name)
+                    .Handle(ctx => { });
+            }
+        }
+
+        [Fact]
+        public void WithImpersonation_sets_the_systemuser_id_and_defaults_to_null_when_omitted()
+        {
+            StepDefinition[] defs = new ImpersonationPlugin().GetStepDefinitions();
+
+            StepDefinition update = defs.Single(d => d.Message == PluginMessages.Update);
+            Assert.Equal(ImpersonatedUser, update.ImpersonatingUserId);
+
+            StepDefinition create = defs.Single(d => d.Message == PluginMessages.Create);
+            Assert.Null(create.ImpersonatingUserId);
+        }
+
+        private sealed class EmptyImpersonationPlugin : EntityPluginBase<TestAccount>
+        {
+            public EmptyImpersonationPlugin() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PreOperation().Sync()
+                    .FilterOn(a => a.Name)
+                    .WithImpersonation(System.Guid.Empty)
+                    .Handle(ctx => { });
+        }
+
+        [Fact]
+        public void WithImpersonation_rejects_an_empty_systemuser_id()
+        {
+            System.ArgumentException ex = Assert.Throws<System.ArgumentException>(
+                () => new EmptyImpersonationPlugin().GetStepDefinitions());
+            Assert.Contains("non-empty systemuser id", ex.Message);
+        }
+
         private static void StepImage_Post_Snapshot(StepDefinition update)
         {
             ImageDefinition post = Assert.Single(update.PostImages);

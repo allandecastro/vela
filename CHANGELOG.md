@@ -24,15 +24,13 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-## [0.16.4] - 2026-09-26 (Vela.Cli)
+## [0.28.0] - 2026-09-26 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
-CLI line, published as `cli-v0.16.4`. Scaffold and generated-model warning fixes from the follow-up audit.
+Framework line, published as `framework-v0.28.0`. Adds specific-user step impersonation.
 
-### Fixed
+### Added
 
-- **Generated models no longer warn `CS8669` in the consuming project.** `vela models` emits nullable reference annotations (a typed N:1 nav property, a `string?`/`EntityReference?`) into auto-generated files, which the compiler requires be inside an explicit `#nullable` context. Each generated model file now opens with `#nullable enable` (after the header, before the namespace), so the models compile warning-free under both net462 and net10 consuming projects.
-- **Guard against a `vela init` scaffold regressing to `CS0260`.** Added a scaffold-template test asserting that every demo plugin which captures a typed image (a `WithPreImage`/`WithPostImage` column-selector) is declared `partial`, so the source generator's `partial` half (VELA014-016) always compiles. The demo plugins were already `partial`, so a freshly scaffolded solution builds clean on the latest framework; the test keeps it that way.
-- **Scaffolded plugin project no longer emits `CS7035`.** The generated plugin `.csproj` uses a deliberate `1.0.*` wildcard assembly version (Dataverse caches plugin assemblies by version, so the wildcard auto-increments to bust the cache), which makes the compiler warn `CS7035` ("version string not in the recommended `major.minor.build.revision` format"). The project now suppresses `CS7035`, so a freshly scaffolded or `vela add`-ed plugin builds warning-free without losing the cache-busting behaviour.
+- **`WithImpersonation(Guid systemUserId)` on the step builder.** A step can now run in the context of a specific Dataverse systemuser (the `sdkmessageprocessingstep.impersonatinguserid`), so the plugin's `IOrganizationService` acts as that user rather than the calling user. The value is carried on `StepDefinition.ImpersonatingUserId` and surfaced end to end by the CLI (see cli 0.17.0). Omitting it keeps the calling-user default; passing `Guid.Empty` is rejected at registration. The existing `WithImpersonation(ImpersonationSource)` enum overload is unchanged.
 
 ## [0.27.2] - 2026-09-26 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
@@ -53,6 +51,24 @@ Framework line, published as `framework-v0.27.1`. Fixes two edge cases in the 0.
 - **Clear error when a step handler's declared context cannot be built.** If a handler parameter derives from a Vela step context but is abstract or lacks a public `(ILocalPluginContext)` constructor, the pipeline now throws an explicit `InvalidPluginExecutionException` naming the type, instead of silently building an incompatible base context and failing later with an opaque cast error.
 - **`Handle(...)` validates the handler shape at registration.** A handler bound through the permissive delegate overload must be a void method taking exactly one context parameter; a wrong-arity or non-void delegate now fails at registration with a clear message instead of an `IndexOutOfRange`/`TargetParameterCount` crash mid-dispatch.
 - **Circular service dependency detection.** `SimpleServiceResolver` now detects a factory that resolves its own type (directly or via a cycle) and throws a clear `InvalidPluginExecutionException` (with the resolution chain) instead of a `StackOverflowException` that cannot be caught and would tear down the worker.
+
+## [0.17.0] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.17.0`. Wires step impersonation through plan/apply.
+
+### Added
+
+- **`plan`/`apply` now read, diff and write step impersonation (`impersonatinguserid`).** Previously `.WithImpersonation(...)` was dropped end to end: the CLI never read the column, so a hand-set impersonation read as "in sync" and a code-declared one was never written. The step read path now selects `impersonatinguserid`, the diff shape carries it (normalized to a canonical Guid string, empty = none), and the upsert writes it as a `systemuser` reference (clearing it on update when removed). Requires framework 0.28.0 for `WithImpersonation(Guid)`. The scaffold `--core-version` default moves to 0.28.0.
+
+## [0.16.4] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.16.4`. Scaffold and generated-model warning fixes from the follow-up audit.
+
+### Fixed
+
+- **Generated models no longer warn `CS8669` in the consuming project.** `vela models` emits nullable reference annotations (a typed N:1 nav property, a `string?`/`EntityReference?`) into auto-generated files, which the compiler requires be inside an explicit `#nullable` context. Each generated model file now opens with `#nullable enable` (after the header, before the namespace), so the models compile warning-free under both net462 and net10 consuming projects.
+- **Guard against a `vela init` scaffold regressing to `CS0260`.** Added a scaffold-template test asserting that every demo plugin which captures a typed image (a `WithPreImage`/`WithPostImage` column-selector) is declared `partial`, so the source generator's `partial` half (VELA014-016) always compiles. The demo plugins were already `partial`, so a freshly scaffolded solution builds clean on the latest framework; the test keeps it that way.
+- **Scaffolded plugin project no longer emits `CS7035`.** The generated plugin `.csproj` uses a deliberate `1.0.*` wildcard assembly version (Dataverse caches plugin assemblies by version, so the wildcard auto-increments to bust the cache), which makes the compiler warn `CS7035` ("version string not in the recommended `major.minor.build.revision` format"). The project now suppresses `CS7035`, so a freshly scaffolded or `vela add`-ed plugin builds warning-free without losing the cache-busting behaviour.
 
 ## [0.16.3] - 2026-09-26 (Vela.Cli)
 

@@ -35,6 +35,7 @@ namespace Vela.Steps
         ICreatePreValidationConfig<TEntity> WithExecutionOrder(int order);
         ICreatePreValidationConfig<TEntity> WithStepKey(string key);
         ICreatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICreatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -50,6 +51,7 @@ namespace Vela.Steps
         ICreatePreOperationConfig<TEntity> WithExecutionOrder(int order);
         ICreatePreOperationConfig<TEntity> WithStepKey(string key);
         ICreatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICreatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -67,6 +69,7 @@ namespace Vela.Steps
         ICreatePostOperationConfig<TEntity> WithExecutionOrder(int order);
         ICreatePostOperationConfig<TEntity> WithStepKey(string key);
         ICreatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICreatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -83,6 +86,7 @@ namespace Vela.Steps
         IUpdatePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IUpdatePreValidationConfig<TEntity> WithStepKey(string key);
         IUpdatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IUpdatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -101,6 +105,7 @@ namespace Vela.Steps
         IUpdatePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IUpdatePreOperationConfig<TEntity> WithStepKey(string key);
         IUpdatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IUpdatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -121,6 +126,7 @@ namespace Vela.Steps
         IUpdatePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IUpdatePostOperationConfig<TEntity> WithStepKey(string key);
         IUpdatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IUpdatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -141,6 +147,7 @@ namespace Vela.Steps
         ICreateMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
         ICreateMultiplePreValidationConfig<TEntity> WithStepKey(string key);
         ICreateMultiplePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreateMultiplePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreateMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreateMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICreateMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -156,6 +163,7 @@ namespace Vela.Steps
         ICreateMultiplePreOperationConfig<TEntity> WithExecutionOrder(int order);
         ICreateMultiplePreOperationConfig<TEntity> WithStepKey(string key);
         ICreateMultiplePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreateMultiplePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreateMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreateMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICreateMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -173,6 +181,7 @@ namespace Vela.Steps
         ICreateMultiplePostOperationConfig<TEntity> WithExecutionOrder(int order);
         ICreateMultiplePostOperationConfig<TEntity> WithStepKey(string key);
         ICreateMultiplePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICreateMultiplePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreateMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreateMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICreateMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -188,6 +197,7 @@ namespace Vela.Steps
         IUpdateMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IUpdateMultiplePreValidationConfig<TEntity> WithStepKey(string key);
         IUpdateMultiplePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdateMultiplePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdateMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdateMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IUpdateMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -205,6 +215,7 @@ namespace Vela.Steps
         IUpdateMultiplePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IUpdateMultiplePreOperationConfig<TEntity> WithStepKey(string key);
         IUpdateMultiplePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdateMultiplePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdateMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdateMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IUpdateMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -224,6 +235,7 @@ namespace Vela.Steps
         IUpdateMultiplePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IUpdateMultiplePostOperationConfig<TEntity> WithStepKey(string key);
         IUpdateMultiplePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IUpdateMultiplePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdateMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdateMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IUpdateMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -238,6 +250,7 @@ namespace Vela.Steps
         IDeletePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IDeletePreValidationConfig<TEntity> WithStepKey(string key);
         IDeletePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeletePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeletePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeletePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeletePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -255,6 +268,7 @@ namespace Vela.Steps
         IDeletePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IDeletePreOperationConfig<TEntity> WithStepKey(string key);
         IDeletePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeletePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeletePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeletePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeletePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -272,6 +286,7 @@ namespace Vela.Steps
         IDeletePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IDeletePostOperationConfig<TEntity> WithStepKey(string key);
         IDeletePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeletePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeletePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeletePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeletePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -287,6 +302,7 @@ namespace Vela.Steps
         IRetrievePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRetrievePreValidationConfig<TEntity> WithStepKey(string key);
         IRetrievePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrievePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -301,6 +317,7 @@ namespace Vela.Steps
         IRetrievePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRetrievePreOperationConfig<TEntity> WithStepKey(string key);
         IRetrievePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrievePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -315,6 +332,7 @@ namespace Vela.Steps
         IRetrievePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRetrievePostOperationConfig<TEntity> WithStepKey(string key);
         IRetrievePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrievePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -329,6 +347,7 @@ namespace Vela.Steps
         IRetrieveMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRetrieveMultiplePreValidationConfig<TEntity> WithStepKey(string key);
         IRetrieveMultiplePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveMultiplePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrieveMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -343,6 +362,7 @@ namespace Vela.Steps
         IRetrieveMultiplePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRetrieveMultiplePreOperationConfig<TEntity> WithStepKey(string key);
         IRetrieveMultiplePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveMultiplePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrieveMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -357,6 +377,7 @@ namespace Vela.Steps
         IRetrieveMultiplePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRetrieveMultiplePostOperationConfig<TEntity> WithStepKey(string key);
         IRetrieveMultiplePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveMultiplePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrieveMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -371,6 +392,7 @@ namespace Vela.Steps
         IAssociatePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IAssociatePreValidationConfig<TEntity> WithStepKey(string key);
         IAssociatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssociatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssociatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssociatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAssociatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -385,6 +407,7 @@ namespace Vela.Steps
         IAssociatePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IAssociatePreOperationConfig<TEntity> WithStepKey(string key);
         IAssociatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssociatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssociatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssociatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAssociatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -399,6 +422,7 @@ namespace Vela.Steps
         IAssociatePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IAssociatePostOperationConfig<TEntity> WithStepKey(string key);
         IAssociatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssociatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssociatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssociatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAssociatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -413,6 +437,7 @@ namespace Vela.Steps
         IDisassociatePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IDisassociatePreValidationConfig<TEntity> WithStepKey(string key);
         IDisassociatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDisassociatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDisassociatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDisassociatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDisassociatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -427,6 +452,7 @@ namespace Vela.Steps
         IDisassociatePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IDisassociatePreOperationConfig<TEntity> WithStepKey(string key);
         IDisassociatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDisassociatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDisassociatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDisassociatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDisassociatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -441,6 +467,7 @@ namespace Vela.Steps
         IDisassociatePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IDisassociatePostOperationConfig<TEntity> WithStepKey(string key);
         IDisassociatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDisassociatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDisassociatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDisassociatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDisassociatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -455,6 +482,7 @@ namespace Vela.Steps
         IGrantAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IGrantAccessPreValidationConfig<TEntity> WithStepKey(string key);
         IGrantAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGrantAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGrantAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGrantAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGrantAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -469,6 +497,7 @@ namespace Vela.Steps
         IGrantAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IGrantAccessPreOperationConfig<TEntity> WithStepKey(string key);
         IGrantAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGrantAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGrantAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGrantAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGrantAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -483,6 +512,7 @@ namespace Vela.Steps
         IGrantAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IGrantAccessPostOperationConfig<TEntity> WithStepKey(string key);
         IGrantAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGrantAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGrantAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGrantAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGrantAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -497,6 +527,7 @@ namespace Vela.Steps
         IRevokeAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRevokeAccessPreValidationConfig<TEntity> WithStepKey(string key);
         IRevokeAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRevokeAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRevokeAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRevokeAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRevokeAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -511,6 +542,7 @@ namespace Vela.Steps
         IRevokeAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRevokeAccessPreOperationConfig<TEntity> WithStepKey(string key);
         IRevokeAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRevokeAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRevokeAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRevokeAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRevokeAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -525,6 +557,7 @@ namespace Vela.Steps
         IRevokeAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRevokeAccessPostOperationConfig<TEntity> WithStepKey(string key);
         IRevokeAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRevokeAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRevokeAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRevokeAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRevokeAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -539,6 +572,7 @@ namespace Vela.Steps
         IQualifyLeadPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IQualifyLeadPreValidationConfig<TEntity> WithStepKey(string key);
         IQualifyLeadPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IQualifyLeadPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IQualifyLeadPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IQualifyLeadPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IQualifyLeadPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -553,6 +587,7 @@ namespace Vela.Steps
         IQualifyLeadPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IQualifyLeadPreOperationConfig<TEntity> WithStepKey(string key);
         IQualifyLeadPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IQualifyLeadPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IQualifyLeadPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IQualifyLeadPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IQualifyLeadPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -567,6 +602,7 @@ namespace Vela.Steps
         IQualifyLeadPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IQualifyLeadPostOperationConfig<TEntity> WithStepKey(string key);
         IQualifyLeadPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IQualifyLeadPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IQualifyLeadPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IQualifyLeadPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IQualifyLeadPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -581,6 +617,7 @@ namespace Vela.Steps
         IWinOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IWinOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
         IWinOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IWinOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -595,6 +632,7 @@ namespace Vela.Steps
         IWinOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IWinOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
         IWinOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IWinOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -609,6 +647,7 @@ namespace Vela.Steps
         IWinOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IWinOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
         IWinOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IWinOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -623,6 +662,7 @@ namespace Vela.Steps
         ILoseOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
         ILoseOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
         ILoseOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ILoseOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ILoseOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ILoseOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         ILoseOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -637,6 +677,7 @@ namespace Vela.Steps
         ILoseOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
         ILoseOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
         ILoseOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ILoseOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ILoseOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ILoseOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ILoseOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -651,6 +692,7 @@ namespace Vela.Steps
         ILoseOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
         ILoseOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
         ILoseOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ILoseOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ILoseOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ILoseOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ILoseOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -665,6 +707,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithStepKey(string key);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -679,6 +722,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithStepKey(string key);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -693,6 +737,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithStepKey(string key);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -707,6 +752,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithStepKey(string key);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -721,6 +767,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithStepKey(string key);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -735,6 +782,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithStepKey(string key);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -749,6 +797,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -763,6 +812,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -777,6 +827,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -791,6 +842,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -805,6 +857,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -819,6 +872,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -833,6 +887,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -847,6 +902,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -861,6 +917,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -875,6 +932,7 @@ namespace Vela.Steps
         IAddToQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IAddToQueuePreValidationConfig<TEntity> WithStepKey(string key);
         IAddToQueuePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddToQueuePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddToQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddToQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddToQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -889,6 +947,7 @@ namespace Vela.Steps
         IAddToQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IAddToQueuePreOperationConfig<TEntity> WithStepKey(string key);
         IAddToQueuePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddToQueuePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddToQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddToQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddToQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -903,6 +962,7 @@ namespace Vela.Steps
         IAddToQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IAddToQueuePostOperationConfig<TEntity> WithStepKey(string key);
         IAddToQueuePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddToQueuePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddToQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddToQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddToQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -917,6 +977,7 @@ namespace Vela.Steps
         IRemoveFromQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveFromQueuePreValidationConfig<TEntity> WithStepKey(string key);
         IRemoveFromQueuePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveFromQueuePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveFromQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveFromQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveFromQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -931,6 +992,7 @@ namespace Vela.Steps
         IRemoveFromQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveFromQueuePreOperationConfig<TEntity> WithStepKey(string key);
         IRemoveFromQueuePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveFromQueuePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveFromQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveFromQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveFromQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -945,6 +1007,7 @@ namespace Vela.Steps
         IRemoveFromQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveFromQueuePostOperationConfig<TEntity> WithStepKey(string key);
         IRemoveFromQueuePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveFromQueuePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveFromQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveFromQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveFromQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -959,6 +1022,7 @@ namespace Vela.Steps
         IPickFromQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IPickFromQueuePreValidationConfig<TEntity> WithStepKey(string key);
         IPickFromQueuePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPickFromQueuePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPickFromQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPickFromQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IPickFromQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -973,6 +1037,7 @@ namespace Vela.Steps
         IPickFromQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IPickFromQueuePreOperationConfig<TEntity> WithStepKey(string key);
         IPickFromQueuePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPickFromQueuePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPickFromQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPickFromQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IPickFromQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -987,6 +1052,7 @@ namespace Vela.Steps
         IPickFromQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IPickFromQueuePostOperationConfig<TEntity> WithStepKey(string key);
         IPickFromQueuePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPickFromQueuePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPickFromQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPickFromQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IPickFromQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1001,6 +1067,7 @@ namespace Vela.Steps
         IRouteToPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRouteToPreValidationConfig<TEntity> WithStepKey(string key);
         IRouteToPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRouteToPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRouteToPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRouteToPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRouteToPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1015,6 +1082,7 @@ namespace Vela.Steps
         IRouteToPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRouteToPreOperationConfig<TEntity> WithStepKey(string key);
         IRouteToPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRouteToPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRouteToPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRouteToPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRouteToPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1029,6 +1097,7 @@ namespace Vela.Steps
         IRouteToPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRouteToPostOperationConfig<TEntity> WithStepKey(string key);
         IRouteToPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRouteToPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRouteToPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRouteToPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRouteToPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1043,6 +1112,7 @@ namespace Vela.Steps
         IReleaseToQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IReleaseToQueuePreValidationConfig<TEntity> WithStepKey(string key);
         IReleaseToQueuePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReleaseToQueuePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReleaseToQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReleaseToQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IReleaseToQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1057,6 +1127,7 @@ namespace Vela.Steps
         IReleaseToQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IReleaseToQueuePreOperationConfig<TEntity> WithStepKey(string key);
         IReleaseToQueuePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReleaseToQueuePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReleaseToQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReleaseToQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IReleaseToQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1071,6 +1142,7 @@ namespace Vela.Steps
         IReleaseToQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IReleaseToQueuePostOperationConfig<TEntity> WithStepKey(string key);
         IReleaseToQueuePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReleaseToQueuePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReleaseToQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReleaseToQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IReleaseToQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1085,6 +1157,7 @@ namespace Vela.Steps
         ISendEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
         ISendEmailPreValidationConfig<TEntity> WithStepKey(string key);
         ISendEmailPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         ISendEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1099,6 +1172,7 @@ namespace Vela.Steps
         ISendEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
         ISendEmailPreOperationConfig<TEntity> WithStepKey(string key);
         ISendEmailPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ISendEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1113,6 +1187,7 @@ namespace Vela.Steps
         ISendEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
         ISendEmailPostOperationConfig<TEntity> WithStepKey(string key);
         ISendEmailPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ISendEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1127,6 +1202,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithExecutionOrder(int order);
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithStepKey(string key);
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1141,6 +1217,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithExecutionOrder(int order);
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithStepKey(string key);
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1155,6 +1232,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithExecutionOrder(int order);
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithStepKey(string key);
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1169,6 +1247,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithStepKey(string key);
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1183,6 +1262,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithStepKey(string key);
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1197,6 +1277,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithStepKey(string key);
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1211,6 +1292,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithStepKey(string key);
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1225,6 +1307,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithStepKey(string key);
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1239,6 +1322,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithStepKey(string key);
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1253,6 +1337,7 @@ namespace Vela.Steps
         IAddMembersTeamPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IAddMembersTeamPreValidationConfig<TEntity> WithStepKey(string key);
         IAddMembersTeamPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMembersTeamPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMembersTeamPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMembersTeamPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddMembersTeamPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1267,6 +1352,7 @@ namespace Vela.Steps
         IAddMembersTeamPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IAddMembersTeamPreOperationConfig<TEntity> WithStepKey(string key);
         IAddMembersTeamPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMembersTeamPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMembersTeamPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMembersTeamPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddMembersTeamPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1281,6 +1367,7 @@ namespace Vela.Steps
         IAddMembersTeamPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IAddMembersTeamPostOperationConfig<TEntity> WithStepKey(string key);
         IAddMembersTeamPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMembersTeamPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMembersTeamPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMembersTeamPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddMembersTeamPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1295,6 +1382,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveMembersTeamPreValidationConfig<TEntity> WithStepKey(string key);
         IRemoveMembersTeamPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMembersTeamPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMembersTeamPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMembersTeamPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveMembersTeamPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1309,6 +1397,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveMembersTeamPreOperationConfig<TEntity> WithStepKey(string key);
         IRemoveMembersTeamPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMembersTeamPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMembersTeamPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMembersTeamPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveMembersTeamPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1323,6 +1412,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveMembersTeamPostOperationConfig<TEntity> WithStepKey(string key);
         IRemoveMembersTeamPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMembersTeamPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMembersTeamPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMembersTeamPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveMembersTeamPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1337,6 +1427,7 @@ namespace Vela.Steps
         IAddListMembersListPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IAddListMembersListPreValidationConfig<TEntity> WithStepKey(string key);
         IAddListMembersListPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddListMembersListPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddListMembersListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddListMembersListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddListMembersListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1351,6 +1442,7 @@ namespace Vela.Steps
         IAddListMembersListPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IAddListMembersListPreOperationConfig<TEntity> WithStepKey(string key);
         IAddListMembersListPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddListMembersListPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddListMembersListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddListMembersListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddListMembersListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1365,6 +1457,7 @@ namespace Vela.Steps
         IAddListMembersListPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IAddListMembersListPostOperationConfig<TEntity> WithStepKey(string key);
         IAddListMembersListPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddListMembersListPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddListMembersListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddListMembersListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddListMembersListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1379,6 +1472,7 @@ namespace Vela.Steps
         IAddMemberListPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IAddMemberListPreValidationConfig<TEntity> WithStepKey(string key);
         IAddMemberListPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMemberListPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMemberListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMemberListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddMemberListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1393,6 +1487,7 @@ namespace Vela.Steps
         IAddMemberListPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IAddMemberListPreOperationConfig<TEntity> WithStepKey(string key);
         IAddMemberListPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMemberListPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMemberListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMemberListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddMemberListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1407,6 +1502,7 @@ namespace Vela.Steps
         IAddMemberListPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IAddMemberListPostOperationConfig<TEntity> WithStepKey(string key);
         IAddMemberListPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAddMemberListPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMemberListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMemberListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IAddMemberListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1421,6 +1517,7 @@ namespace Vela.Steps
         IRemoveMemberListPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveMemberListPreValidationConfig<TEntity> WithStepKey(string key);
         IRemoveMemberListPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMemberListPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMemberListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMemberListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveMemberListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1435,6 +1532,7 @@ namespace Vela.Steps
         IRemoveMemberListPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveMemberListPreOperationConfig<TEntity> WithStepKey(string key);
         IRemoveMemberListPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMemberListPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMemberListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMemberListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveMemberListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1449,6 +1547,7 @@ namespace Vela.Steps
         IRemoveMemberListPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRemoveMemberListPostOperationConfig<TEntity> WithStepKey(string key);
         IRemoveMemberListPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRemoveMemberListPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMemberListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMemberListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRemoveMemberListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1463,6 +1562,7 @@ namespace Vela.Steps
         ICloseIncidentPreValidationConfig<TEntity> WithExecutionOrder(int order);
         ICloseIncidentPreValidationConfig<TEntity> WithStepKey(string key);
         ICloseIncidentPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloseIncidentPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloseIncidentPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloseIncidentPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICloseIncidentPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1477,6 +1577,7 @@ namespace Vela.Steps
         ICloseIncidentPreOperationConfig<TEntity> WithExecutionOrder(int order);
         ICloseIncidentPreOperationConfig<TEntity> WithStepKey(string key);
         ICloseIncidentPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloseIncidentPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloseIncidentPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloseIncidentPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICloseIncidentPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1491,6 +1592,7 @@ namespace Vela.Steps
         ICloseIncidentPostOperationConfig<TEntity> WithExecutionOrder(int order);
         ICloseIncidentPostOperationConfig<TEntity> WithStepKey(string key);
         ICloseIncidentPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloseIncidentPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloseIncidentPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloseIncidentPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICloseIncidentPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1505,6 +1607,7 @@ namespace Vela.Steps
         ICancelContractPreValidationConfig<TEntity> WithExecutionOrder(int order);
         ICancelContractPreValidationConfig<TEntity> WithStepKey(string key);
         ICancelContractPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICancelContractPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICancelContractPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICancelContractPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICancelContractPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1519,6 +1622,7 @@ namespace Vela.Steps
         ICancelContractPreOperationConfig<TEntity> WithExecutionOrder(int order);
         ICancelContractPreOperationConfig<TEntity> WithStepKey(string key);
         ICancelContractPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICancelContractPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICancelContractPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICancelContractPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICancelContractPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1533,6 +1637,7 @@ namespace Vela.Steps
         ICancelContractPostOperationConfig<TEntity> WithExecutionOrder(int order);
         ICancelContractPostOperationConfig<TEntity> WithStepKey(string key);
         ICancelContractPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICancelContractPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICancelContractPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICancelContractPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICancelContractPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1547,6 +1652,7 @@ namespace Vela.Steps
         ICloneContractPreValidationConfig<TEntity> WithExecutionOrder(int order);
         ICloneContractPreValidationConfig<TEntity> WithStepKey(string key);
         ICloneContractPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloneContractPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloneContractPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloneContractPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICloneContractPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1561,6 +1667,7 @@ namespace Vela.Steps
         ICloneContractPreOperationConfig<TEntity> WithExecutionOrder(int order);
         ICloneContractPreOperationConfig<TEntity> WithStepKey(string key);
         ICloneContractPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloneContractPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloneContractPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloneContractPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICloneContractPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1575,6 +1682,7 @@ namespace Vela.Steps
         ICloneContractPostOperationConfig<TEntity> WithExecutionOrder(int order);
         ICloneContractPostOperationConfig<TEntity> WithStepKey(string key);
         ICloneContractPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        ICloneContractPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloneContractPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloneContractPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         ICloneContractPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1589,6 +1697,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithStepKey(string key);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1603,6 +1712,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithStepKey(string key);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1617,6 +1727,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithStepKey(string key);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1631,6 +1742,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithStepKey(string key);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1645,6 +1757,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithStepKey(string key);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1659,6 +1772,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithStepKey(string key);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1673,6 +1787,7 @@ namespace Vela.Steps
         IWinQuotePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IWinQuotePreValidationConfig<TEntity> WithStepKey(string key);
         IWinQuotePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinQuotePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinQuotePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinQuotePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IWinQuotePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1687,6 +1802,7 @@ namespace Vela.Steps
         IWinQuotePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IWinQuotePreOperationConfig<TEntity> WithStepKey(string key);
         IWinQuotePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinQuotePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinQuotePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinQuotePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IWinQuotePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1701,6 +1817,7 @@ namespace Vela.Steps
         IWinQuotePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IWinQuotePostOperationConfig<TEntity> WithStepKey(string key);
         IWinQuotePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IWinQuotePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinQuotePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinQuotePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IWinQuotePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1715,6 +1832,7 @@ namespace Vela.Steps
         IReviseQuotePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IReviseQuotePreValidationConfig<TEntity> WithStepKey(string key);
         IReviseQuotePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReviseQuotePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReviseQuotePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReviseQuotePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IReviseQuotePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1729,6 +1847,7 @@ namespace Vela.Steps
         IReviseQuotePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IReviseQuotePreOperationConfig<TEntity> WithStepKey(string key);
         IReviseQuotePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReviseQuotePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReviseQuotePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReviseQuotePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IReviseQuotePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1743,6 +1862,7 @@ namespace Vela.Steps
         IReviseQuotePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IReviseQuotePostOperationConfig<TEntity> WithStepKey(string key);
         IReviseQuotePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IReviseQuotePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReviseQuotePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReviseQuotePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IReviseQuotePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1757,6 +1877,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IFulfillSalesOrderPreValidationConfig<TEntity> WithStepKey(string key);
         IFulfillSalesOrderPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IFulfillSalesOrderPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IFulfillSalesOrderPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IFulfillSalesOrderPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IFulfillSalesOrderPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1771,6 +1892,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IFulfillSalesOrderPreOperationConfig<TEntity> WithStepKey(string key);
         IFulfillSalesOrderPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IFulfillSalesOrderPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IFulfillSalesOrderPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IFulfillSalesOrderPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IFulfillSalesOrderPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1785,6 +1907,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IFulfillSalesOrderPostOperationConfig<TEntity> WithStepKey(string key);
         IFulfillSalesOrderPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IFulfillSalesOrderPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IFulfillSalesOrderPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IFulfillSalesOrderPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IFulfillSalesOrderPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1799,6 +1922,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1813,6 +1937,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1827,6 +1952,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1841,6 +1967,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1855,6 +1982,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1869,6 +1997,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1883,6 +2012,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1897,6 +2027,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1911,6 +2042,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1925,6 +2057,7 @@ namespace Vela.Steps
         IModifyAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IModifyAccessPreValidationConfig<TEntity> WithStepKey(string key);
         IModifyAccessPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IModifyAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IModifyAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IModifyAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IModifyAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1939,6 +2072,7 @@ namespace Vela.Steps
         IModifyAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IModifyAccessPreOperationConfig<TEntity> WithStepKey(string key);
         IModifyAccessPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IModifyAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IModifyAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IModifyAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IModifyAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1953,6 +2087,7 @@ namespace Vela.Steps
         IModifyAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IModifyAccessPostOperationConfig<TEntity> WithStepKey(string key);
         IModifyAccessPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IModifyAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IModifyAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IModifyAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IModifyAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1967,6 +2102,7 @@ namespace Vela.Steps
         IMergePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IMergePreValidationConfig<TEntity> WithStepKey(string key);
         IMergePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IMergePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IMergePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IMergePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IMergePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1981,6 +2117,7 @@ namespace Vela.Steps
         IMergePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IMergePreOperationConfig<TEntity> WithStepKey(string key);
         IMergePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IMergePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IMergePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IMergePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IMergePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -1995,6 +2132,7 @@ namespace Vela.Steps
         IMergePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IMergePostOperationConfig<TEntity> WithStepKey(string key);
         IMergePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IMergePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IMergePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IMergePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IMergePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -2385,6 +2523,7 @@ namespace Vela.Steps
         IPermissivePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IPermissivePreValidationConfig<TEntity> WithStepKey(string key);
         IPermissivePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPermissivePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPermissivePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPermissivePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
         IPermissivePreValidationConfig<TEntity> WithSecureConfig(string configuration);
@@ -2403,6 +2542,7 @@ namespace Vela.Steps
         IPermissivePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IPermissivePreOperationConfig<TEntity> WithStepKey(string key);
         IPermissivePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPermissivePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPermissivePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPermissivePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IPermissivePreOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -2423,6 +2563,7 @@ namespace Vela.Steps
         IPermissivePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IPermissivePostOperationConfig<TEntity> WithStepKey(string key);
         IPermissivePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IPermissivePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPermissivePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPermissivePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
         IPermissivePostOperationConfig<TEntity> WithSecureConfig(string configuration);
@@ -2455,6 +2596,7 @@ namespace Vela.Steps
         ITypedPreValidationConfig<TEntity, TRequest> WithExecutionOrder(int order);
         ITypedPreValidationConfig<TEntity, TRequest> WithStepKey(string key);
         ITypedPreValidationConfig<TEntity, TRequest> WithImpersonation(ImpersonationSource source);
+        ITypedPreValidationConfig<TEntity, TRequest> WithImpersonation(Guid systemUserId);
         ITypedPreValidationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
         ITypedPreValidationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
         ITypedPreValidationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
@@ -2471,6 +2613,7 @@ namespace Vela.Steps
         ITypedPreOperationConfig<TEntity, TRequest> WithExecutionOrder(int order);
         ITypedPreOperationConfig<TEntity, TRequest> WithStepKey(string key);
         ITypedPreOperationConfig<TEntity, TRequest> WithImpersonation(ImpersonationSource source);
+        ITypedPreOperationConfig<TEntity, TRequest> WithImpersonation(Guid systemUserId);
         ITypedPreOperationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
         ITypedPreOperationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
         ITypedPreOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
@@ -2490,6 +2633,7 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> WithExecutionOrder(int order);
         ITypedPostOperationConfig<TEntity, TRequest> WithStepKey(string key);
         ITypedPostOperationConfig<TEntity, TRequest> WithImpersonation(ImpersonationSource source);
+        ITypedPostOperationConfig<TEntity, TRequest> WithImpersonation(Guid systemUserId);
         ITypedPostOperationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
         ITypedPostOperationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
         ITypedPostOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);

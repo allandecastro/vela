@@ -224,6 +224,17 @@ public sealed partial class StepBuilder<TEntity>
         _definition.ImpersonationSource = source;
     }
 
+    private void SetImpersonationUser(System.Guid systemUserId)
+    {
+        MarkSetOnce(SetOnceModifier.Impersonation, "WithImpersonation");
+        if (systemUserId == System.Guid.Empty)
+        {
+            throw new System.ArgumentException("WithImpersonation requires a non-empty systemuser id.", nameof(systemUserId));
+        }
+
+        _definition.ImpersonatingUserId = systemUserId;
+    }
+
     private void SetSupportedDeployment(SupportedDeployment deployment)
     {
         MarkSetOnce(SetOnceModifier.SupportedDeployment, "WithSupportedDeployment");
