@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.27.2] - 2026-09-26 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.27.2`. Analyzer accuracy fix from the follow-up audit.
+
+### Fixed
+
+- **VELA015 now validates the context's entity, not just its shape.** A handler bound with `.Handle(...)` whose parameter was the right message-context interface but for a *different* entity (for example `IUpdatePostContext<Contact>` on a plugin for `Account`) compiled through the permissive `Handle(Delegate)` overload and then failed the image cast at runtime. VELA015 now compares the context's generic entity argument against the plugin's entity and reports the mismatch at compile time.
+
 ## [0.27.1] - 2026-09-25 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.27.1`. Fixes two edge cases in the 0.27.0 typed-image/context generation found in a follow-up audit.
@@ -35,6 +43,15 @@ Framework line, published as `framework-v0.27.1`. Fixes two edge cases in the 0.
 - **Clear error when a step handler's declared context cannot be built.** If a handler parameter derives from a Vela step context but is abstract or lacks a public `(ILocalPluginContext)` constructor, the pipeline now throws an explicit `InvalidPluginExecutionException` naming the type, instead of silently building an incompatible base context and failing later with an opaque cast error.
 - **`Handle(...)` validates the handler shape at registration.** A handler bound through the permissive delegate overload must be a void method taking exactly one context parameter; a wrong-arity or non-void delegate now fails at registration with a clear message instead of an `IndexOutOfRange`/`TargetParameterCount` crash mid-dispatch.
 - **Circular service dependency detection.** `SimpleServiceResolver` now detects a factory that resolves its own type (directly or via a cycle) and throws a clear `InvalidPluginExecutionException` (with the resolution chain) instead of a `StackOverflowException` that cannot be caught and would tear down the worker.
+
+## [0.16.2] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.16.2`. Model-generation and secret-handling fixes from the follow-up audit.
+
+### Fixed
+
+- **`models` no longer emits a non-compiling step extension for a bound message whose entity is not generated.** A bound Custom API (or an SDK message applicable to specific entities) referenced the early-bound entity type in its generated `On<Message>()` extension, even when that entity was not part of the same generation batch (for example `vela models --custom-apis` alone, or an API bound to `contact` while only `account` was generated), producing `CS0246`. The generator now degrades to the unbound generic form (`On<Message><TEntity>() where TEntity : Entity`) for a Custom API and drops the out-of-batch entity overloads for an SDK message, so the output always compiles.
+- **Client secret no longer leaks to stderr / CI logs on a connection failure.** A connection string embeds `ClientSecret=...`, and the SDK (or `client.LastError`) can echo it verbatim in an exception, which was printed as-is by the error path and, under `--verbose`, in the full exception dump. Failure output now scrubs `ClientSecret`/`Password`/`Secret` values to `***` as a defense-in-depth layer.
 
 ## [0.16.1] - 2026-09-25 (Vela.Cli)
 

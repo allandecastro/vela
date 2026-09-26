@@ -52,6 +52,7 @@ namespace Demo
     using Vela.Plugin;
 
     public sealed class Account : Entity { }
+    public sealed class Contact : Entity { }
     public sealed class GenCtx : IUpdatePostContext<Account> { }   // stands in for a generated typed context
 ";
 
@@ -64,6 +65,7 @@ namespace Demo
         }
         private void OnGood(IUpdatePostContext<Account> ctx) { }
         private void OnWrong(ICreatePostContext<Account> ctx) { }
+        private void OnWrongEntity(IUpdatePostContext<Contact> ctx) { }
         private void OnPlain(ILocalPluginContext ctx) { }
         private void OnGenerated(GenCtx ctx) { }
     }
@@ -93,4 +95,8 @@ namespace Demo
     [Fact]
     public async Task Flags_a_context_for_a_different_message()
         => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnUpdate().PostOperation().Sync().Handle({|#0:OnWrong|});"), Expected("OnWrong"));
+
+    [Fact]
+    public async Task Flags_the_right_context_shape_but_for_the_wrong_entity()
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnUpdate().PostOperation().Sync().Handle({|#0:OnWrongEntity|});"), Expected("OnWrongEntity"));
 }
