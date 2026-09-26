@@ -109,7 +109,7 @@ public sealed class RankCollisionTests
     {
         JsonElement shape = DefinitionNormalizer.BuildStepShape(
             "Zava.Plugins.AccountPlugin", message, entity, "key", name, stage, mode, order,
-            [], [], [], enabled, string.Empty, string.Empty, Json);
+            [], [], [], enabled, string.Empty, string.Empty, null, Json);
         return new RegistrationItem("step", "Zava.Plugins.AccountPlugin", shape);
     }
 

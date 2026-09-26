@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using Vela.Cli;
 using Xunit;
@@ -8,6 +9,33 @@ namespace Vela.Cli.Tests;
 public class DefinitionNormalizerTests
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+
+    [Fact]
+    public void Step_impersonation_round_trips_between_read_and_code_and_defaults_to_empty()   // #305
+    {
+        // The live read shapes impersonatingUserId as a Guid string; the code side reads the same Guid string from
+        // StepDefinition. Same user -> equal shape (idempotent); a different user -> "changed"; absent on both -> "".
+        Guid user = Guid.Parse("44444444-4444-4444-4444-444444444444");
+
+        JsonElement live = DefinitionNormalizer.BuildStepShape(
+            "P", "Update", "account", "k", "n", 40, 0, 1,
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", user, Options);
+        JsonElement code = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0, impersonatingUserId = user.ToString() }),
+            Options);
+        Assert.Equal(live.GetProperty("impersonatingUserId").GetString(), code.GetProperty("impersonatingUserId").GetString());
+        Assert.Equal(user.ToString(), code.GetProperty("impersonatingUserId").GetString());
+
+        JsonElement other = DefinitionNormalizer.BuildStepShape(
+            "P", "Update", "account", "k", "n", 40, 0, 1,
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", Guid.NewGuid(), Options);
+        Assert.NotEqual(JsonSerializer.Serialize(live), JsonSerializer.Serialize(other));
+
+        JsonElement absent = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0 }),
+            Options);
+        Assert.Equal(string.Empty, absent.GetProperty("impersonatingUserId").GetString());
+    }
 
     [Fact]
     public void Step_filtering_attributes_are_order_insensitive()
@@ -33,12 +61,12 @@ public class DefinitionNormalizerTests
             "P", "Associate", "account", stepKey: "", name: "P - PostOpSync: Associate of account",
             stage: 40, mode: 0, executionOrder: 1,
             filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
-            enabled: true, unsecureConfig: "", secureConfig: "", Options);
+            enabled: true, unsecureConfig: "", secureConfig: "", impersonatingUserId: null, Options);
         JsonElement live = DefinitionNormalizer.BuildStepShape(
             "P", "Associate", "", stepKey: "", name: "P - PostOpSync: Associate of account",
             stage: 40, mode: 0, executionOrder: 1,
             filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
-            enabled: true, unsecureConfig: "", secureConfig: "", Options);
+            enabled: true, unsecureConfig: "", secureConfig: "", impersonatingUserId: null, Options);
 
         Assert.Equal(JsonSerializer.Serialize(local), JsonSerializer.Serialize(live));
     }
@@ -49,10 +77,10 @@ public class DefinitionNormalizerTests
         // Entity-specific messages (Create/Update/...) must keep entityLogicalName in the compared shape.
         JsonElement a = DefinitionNormalizer.BuildStepShape(
             "P", "Update", "account", "", "n", 40, 0, 1,
-            new string[0], new StepImage[0], new StepImage[0], true, "", "", Options);
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", null, Options);
         JsonElement b = DefinitionNormalizer.BuildStepShape(
             "P", "Update", "", "", "n", 40, 0, 1,
-            new string[0], new StepImage[0], new StepImage[0], true, "", "", Options);
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", null, Options);
 
         Assert.NotEqual(JsonSerializer.Serialize(a), JsonSerializer.Serialize(b));
     }
