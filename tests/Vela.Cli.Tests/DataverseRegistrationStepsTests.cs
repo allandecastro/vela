@@ -116,6 +116,38 @@ public sealed class DataverseRegistrationStepsTests
         Assert.Null(DataverseRegistration.FindStepId(svc, Guid.NewGuid(), Def(message: message, entity: entity, stage: stage, mode: mode)));
     }
 
+    [Fact]
+    public void FindStepId_falls_back_to_trigger_identity_when_key_drifted()   // #305 duplicate-step
+    {
+        // The definition is keyed, but the live row's stored key drifted (e.g. an executionOrder change reseeded the
+        // auto key, or a pre-marker deployment has no key). The trigger coordinate still matches uniquely, so
+        // FindStepId must return the existing row (an update) rather than null (which would make apply CREATE a
+        // duplicate).
+        var row = StepRow(Guid.NewGuid(), "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: stale-key");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(row) : new EntityCollection(),
+        };
+
+        Guid? found = DataverseRegistration.FindStepId(svc, Guid.NewGuid(), Def(stepKey: "my-key", message: "Update", entity: "account", stage: 40, mode: 0));
+        Assert.Equal(row.Id, found);
+    }
+
+    [Fact]
+    public void FindStepId_stays_null_when_the_trigger_fallback_is_ambiguous()   // #305 duplicate-step (safety)
+    {
+        // Two live rows share the trigger coordinate and neither matches the drifted key. The fallback cannot pick
+        // safely, so FindStepId returns null (creating a duplicate is the safer outcome than updating the wrong step).
+        var a = StepRow(Guid.NewGuid(), "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: key-a");
+        var b = StepRow(Guid.NewGuid(), "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: key-b");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(a, b) : new EntityCollection(),
+        };
+
+        Assert.Null(DataverseRegistration.FindStepId(svc, Guid.NewGuid(), Def(stepKey: "my-key", message: "Update", entity: "account", stage: 40, mode: 0)));
+    }
+
     // ---- ResolveMessageId / ResolveMessageFilterId ------------------------------------------------
 
     [Fact]

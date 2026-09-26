@@ -38,10 +38,17 @@ internal static partial class DataverseRegistration
         BatchCapturingService capturing = new BatchCapturingService(service, solutionUniqueName);
         int seq = 0;
 
+        // Nothing is written to Dataverse during capture; the recorded operations flush only at ExecuteBatchTier
+        // below. So the resume boundary (done) must not advance here - a synchronous validation throw mid-capture
+        // would otherwise report already-"completed" owners that were in fact never applied (#305). Track the planned
+        // index locally and commit it to done only after a successful flush; on a batched failure ThrowIfBatchFailed
+        // sets done to the earliest failed owner instead.
+        int planned = done;
+
         foreach (RegistrationItem item in removedSteps)
         {
             string stepKey = TryGetString(item.Definition, "stepKey") ?? item.Type;
-            BatchOwner owner = new BatchOwner($"del-step:{seq}:{stepKey}", $"Plugin {item.Type}", "step", done,
+            BatchOwner owner = new BatchOwner($"del-step:{seq}:{stepKey}", $"Plugin {item.Type}", "step", planned,
                 $"skipping step delete for '{item.Type}' (managed by custom API)");
             try
             {
@@ -54,14 +61,14 @@ internal static partial class DataverseRegistration
                 Console.Error.WriteLine($"Warning: skipping step delete for '{item.Type}' (managed by custom API): {ex.Message}");
             }
 
-            done++;
+            planned++;
             seq++;
         }
 
         foreach (RegistrationItem item in removedApis)
         {
             string uniqueName = TryGetString(item.Definition, "uniqueName") ?? item.Type;
-            BatchOwner owner = new BatchOwner($"del-api:{seq}:{uniqueName}", uniqueName, "custom-api", done,
+            BatchOwner owner = new BatchOwner($"del-api:{seq}:{uniqueName}", uniqueName, "custom-api", planned,
                 $"skipping custom API delete for '{item.Type}'");
             try
             {
@@ -74,12 +81,13 @@ internal static partial class DataverseRegistration
                 Console.Error.WriteLine($"Warning: skipping custom API delete for '{item.Type}': {ex.Message}");
             }
 
-            done++;
+            planned++;
             seq++;
         }
 
         if (capturing.Operations.Count == 0)
         {
+            done = planned;
             return;
         }
 
@@ -91,6 +99,7 @@ internal static partial class DataverseRegistration
         ExecuteBatchTier(service, parents, chunkSize, report, skip);
         RenderBatchReport(report, verbose);
         ThrowIfBatchFailed(report, ref done);
+        done = planned;
     }
 
     private static bool IsChildDelete(CapturedOperation op)
@@ -115,10 +124,15 @@ internal static partial class DataverseRegistration
     {
         BatchCapturingService capturing = new BatchCapturingService(service, solutionUniqueName);
 
+        // Nothing is written during capture (see ApplyDeletesBatched): the resume boundary must not advance until a
+        // successful flush, or a synchronous validation throw mid-capture would over-report earlier owners as
+        // completed while nothing was applied (#305). Track the planned index locally; commit to done after the flush.
+        int planned = done;
+
         foreach (RegistrationItem item in addedApis)
         {
             string uniqueName = TryGetString(item.Definition, "uniqueName") ?? item.Type;
-            capturing.BeginOwner(new BatchOwner($"api-add:{done}:{uniqueName}", uniqueName, "custom-api", done,
+            capturing.BeginOwner(new BatchOwner($"api-add:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
                 $"skipping custom API upsert for '{item.Type}'"));
             try
             {
@@ -129,13 +143,13 @@ internal static partial class DataverseRegistration
                 Console.Error.WriteLine($"Warning: skipping custom API upsert for '{item.Type}': {ex.Message}");
             }
 
-            done++;
+            planned++;
         }
 
         foreach (RegistrationChange change in changedApis)
         {
             string uniqueName = TryGetString(change.After, "uniqueName") ?? change.Type;
-            capturing.BeginOwner(new BatchOwner($"api-chg:{done}:{uniqueName}", uniqueName, "custom-api", done,
+            capturing.BeginOwner(new BatchOwner($"api-chg:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
                 $"skipping custom API update for '{change.Type}'"));
             try
             {
@@ -146,25 +160,26 @@ internal static partial class DataverseRegistration
                 Console.Error.WriteLine($"Warning: skipping custom API update for '{change.Type}': {ex.Message}");
             }
 
-            done++;
+            planned++;
         }
 
         foreach (RegistrationItem item in addedSteps)
         {
-            capturing.BeginOwner(new BatchOwner($"step:{done}", $"Plugin {item.Type}", "step", done, ignorableWarning: null));
+            capturing.BeginOwner(new BatchOwner($"step:{planned}", $"Plugin {item.Type}", "step", planned, ignorableWarning: null));
             UpsertStep(capturing, pluginTypeIds, item.Definition, verbose, metadataCache, secureConfigByStepKey);
-            done++;
+            planned++;
         }
 
         foreach (RegistrationChange change in changedSteps)
         {
-            capturing.BeginOwner(new BatchOwner($"step:{done}", $"Plugin {change.Type}", "step", done, ignorableWarning: null));
+            capturing.BeginOwner(new BatchOwner($"step:{planned}", $"Plugin {change.Type}", "step", planned, ignorableWarning: null));
             UpsertStep(capturing, pluginTypeIds, change.After, verbose, metadataCache, secureConfigByStepKey);
-            done++;
+            planned++;
         }
 
         if (capturing.Operations.Count == 0)
         {
+            done = planned;
             return;
         }
 
@@ -179,6 +194,7 @@ internal static partial class DataverseRegistration
         ExecuteBatchTier(service, tier2, chunkSize, report, skip);
         RenderBatchReport(report, verbose);
         ThrowIfBatchFailed(report, ref done);
+        done = planned;
     }
 
     // ---- Executor -----------------------------------------------------------------------------------------------

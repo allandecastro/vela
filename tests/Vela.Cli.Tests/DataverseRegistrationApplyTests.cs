@@ -1038,10 +1038,13 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
-    public void ApplyDiff_midrun_failure_at_changed_step_counts_completed_creates()
+    public void ApplyDiff_midrun_capture_abort_does_not_report_unflushed_creates_as_completed()   // #305
     {
-        // Removed step + two added steps (succeed) + one changed step whose message does not resolve (fails).
-        // The completed count must include the two creates, proving each create's done++ landed.
+        // Removed step (deletes in its own batch, before publish) + two added steps + one changed step whose message
+        // does not resolve. The changed step throws during the upsert CAPTURE phase, before the batch is flushed - so
+        // the two creates never landed either. The resume report must therefore count only the delete + publish as
+        // completed (not the creates), and put the boundary at the first upsert. Before the fix, done advanced during
+        // capture and the creates were falsely reported as applied.
         const string plugin = "Zava.Plugins.AccountPlugin";
         var svc = new TestSupport.FakeOrgService
         {
@@ -1088,10 +1091,12 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         }
 
         string stderr = captured.ToString();
-        // delete + publish + two creates completed; failure is on the changed step's update.
-        Assert.Contains("completed (4):", stderr);
-        Assert.Contains($"+ create step {plugin}", stderr);
-        Assert.Contains($"failed at: update step {plugin}", stderr);
+        // Only the delete (its own batch) + publish completed; the whole upsert batch was un-flushed.
+        Assert.Contains("completed (2):", stderr);
+        Assert.Contains("+ delete step dv-old", stderr);
+        Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
+        Assert.DoesNotContain($"+ create step {plugin}", stderr);   // creates never flushed -> not completed
+        Assert.Contains($"failed at: create step {plugin}", stderr); // boundary at the first upsert owner
     }
 
     [Fact]
@@ -1200,10 +1205,11 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
-    public void ApplyDiff_resume_report_counts_custom_api_create_before_changed_failure()
+    public void ApplyDiff_capture_abort_does_not_report_unflushed_custom_api_create_as_completed()   // #305
     {
-        // removed api (delete) + added api (create succeeds) + changed api (its lookup throws). The completed
-        // count must include the created api, pinning the added-api done++ and the "update custom-api" label.
+        // removed api (deletes in its own batch) + added api + changed api whose lookup throws during the upsert
+        // capture phase. The added api's create is captured but never flushed (the batch aborts), so only the delete +
+        // publish completed and the boundary sits at the first upsert (the create), not the changed api.
         const string apiType = "Zava.Plugins.MyApi";
         var svc = new TestSupport.FakeOrgService
         {
@@ -1248,16 +1254,17 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         }
 
         string stderr = captured.ToString();
-        Assert.Contains("completed (3):", stderr);                    // delete + publish + create
-        Assert.Contains($"+ create custom-api {apiType}", stderr);
-        Assert.Contains($"failed at: update custom-api {apiType}", stderr);
+        Assert.Contains("completed (2):", stderr);                    // delete + publish only
+        Assert.DoesNotContain($"+ create custom-api {apiType}", stderr);  // captured but never flushed
+        Assert.Contains($"failed at: create custom-api {apiType}", stderr); // boundary at the first upsert owner
     }
 
     [Fact]
-    public void ApplyDiff_resume_report_counts_custom_api_update_before_step_failure()
+    public void ApplyDiff_capture_abort_does_not_report_unflushed_custom_api_update_as_completed()   // #305
     {
-        // A changed custom-api updates successfully, then an added step fails. The completed count must include
-        // the api update, pinning the changed-api done++ and the "update custom-api" completed label.
+        // A changed custom-api is captured, then an added step throws during the same upsert capture phase. Nothing in
+        // the batch flushed, so only the publish completed; the api update is captured-but-unflushed and the boundary
+        // sits at the first upsert owner (the api update), not the step.
         const string type = "Zava.Plugins.Thing";
         var svc = new TestSupport.FakeOrgService
         {
@@ -1295,9 +1302,9 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         }
 
         string stderr = captured.ToString();
-        Assert.Contains("completed (2):", stderr);                 // publish + api update
-        Assert.Contains($"+ update custom-api {type}", stderr);
-        Assert.Contains($"failed at: create step {type}", stderr);
+        Assert.Contains("completed (1):", stderr);                 // publish only
+        Assert.DoesNotContain($"+ update custom-api {type}", stderr);  // captured but never flushed
+        Assert.Contains($"failed at: update custom-api {type}", stderr); // boundary at the first upsert owner
     }
 
     [Fact]
