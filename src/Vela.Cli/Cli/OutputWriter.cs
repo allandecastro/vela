@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Spectre.Console;
 using static Vela.Cli.JsonReader;
 using static Vela.Cli.DefinitionNormalizer;
@@ -405,8 +406,20 @@ internal static class OutputWriter
         console.MarkupLine($"  [#22d3ee]{name.PadRight(9)}[/] [grey]{Markup.Escape(summary)}[/]");
     }
 
+    // Scrubs credential values out of any text before it reaches stderr / CI logs. A connection string embeds
+    // ClientSecret=... / Password=... (see CommandLineOptions.BuildClientSecretConnectionString) and the SDK / its
+    // LastError can echo it verbatim in an exception message, so redact defense-in-depth on the way out.
+    private static readonly Regex SecretPattern = new Regex(
+        @"(?i)\b(ClientSecret|Password|Secret)\s*=\s*([^;\r\n]*)",
+        RegexOptions.Compiled);
+
+    internal static string RedactSecrets(string? text) =>
+        string.IsNullOrEmpty(text) ? (text ?? string.Empty) : SecretPattern.Replace(text, "$1=***");
+
     public static int Fail(string message, int exitCode, bool includeUsage = true)
     {
+        message = RedactSecrets(message);
+
         // On a real terminal, prefix failures with a red "Error:" so they stand out; when stderr is
         // redirected (pipes, CI, tests) keep the bare message so scripted/asserted output is unchanged.
         Console.Error.WriteLine(ConsoleTheme.StderrColor
@@ -426,7 +439,7 @@ internal static class OutputWriter
     {
         if (verbose)
         {
-            Console.Error.WriteLine(ex.ToString());
+            Console.Error.WriteLine(RedactSecrets(ex.ToString()));
         }
 
         return Fail(ex.Message, exitCode, includeUsage: false);

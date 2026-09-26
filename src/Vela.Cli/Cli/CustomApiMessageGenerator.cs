@@ -51,7 +51,11 @@ public static class CustomApiMessageGenerator
     /// <param name="entityTypeNames">Optional map from an entity logical name to its early-bound C# type name (its
     /// SchemaName). Used so a bound Custom API's <c>On&lt;Message&gt;()</c> extension references the exact generated
     /// type; falls back to PascalCase when null or missing.</param>
-    public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<CustomApiMessage> messages, string ns, IReadOnlyDictionary<string, string>? entityTypeNames = null)
+    /// <param name="generatedEntityLogicalNames">Optional set of the entity logical names actually generated in this
+    /// batch. When provided, a bound Custom API whose bound entity is NOT in this set degrades to the unbound generic
+    /// extension (referencing the absent early-bound type would not compile, CS0246). When null, every bound entity is
+    /// assumed to be present (the pre-existing behavior).</param>
+    public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<CustomApiMessage> messages, string ns, IReadOnlyDictionary<string, string>? entityTypeNames = null, IReadOnlyCollection<string>? generatedEntityLogicalNames = null)
     {
         if (messages == null)
         {
@@ -62,6 +66,10 @@ public static class CustomApiMessageGenerator
         {
             throw new ArgumentException("A target namespace is required.", nameof(ns));
         }
+
+        HashSet<string>? generatedEntities = generatedEntityLogicalNames == null
+            ? null
+            : new HashSet<string>(generatedEntityLogicalNames, StringComparer.OrdinalIgnoreCase);
 
         List<CustomApiMessage> ordered = messages
             .Where(m => !string.IsNullOrWhiteSpace(m?.UniqueName))
@@ -79,11 +87,11 @@ public static class CustomApiMessageGenerator
             .ToHashSet(StringComparer.Ordinal);
 
         return ordered
-            .Select(m => new GeneratedModel($"Messages/{m.UniqueName}.cs", GenerateOne(m, ns, collidingSuffixes, entityTypeNames)))
+            .Select(m => new GeneratedModel($"Messages/{m.UniqueName}.cs", GenerateOne(m, ns, collidingSuffixes, entityTypeNames, generatedEntities)))
             .ToList();
     }
 
-    private static string GenerateOne(CustomApiMessage message, string ns, HashSet<string> collidingSuffixes, IReadOnlyDictionary<string, string>? entityTypeNames)
+    private static string GenerateOne(CustomApiMessage message, string ns, HashSet<string> collidingSuffixes, IReadOnlyDictionary<string, string>? entityTypeNames, HashSet<string>? generatedEntities)
     {
         string request = $"{message.UniqueName}Request";
         string response = $"{message.UniqueName}Response";
@@ -142,7 +150,7 @@ public static class CustomApiMessageGenerator
 
         sb.AppendLine("    }");
 
-        AppendStepExtensions(sb, message, collidingSuffixes, entityTypeNames);
+        AppendStepExtensions(sb, message, collidingSuffixes, entityTypeNames, generatedEntities);
 
         sb.AppendLine("}");
         return sb.ToString();
@@ -156,7 +164,7 @@ public static class CustomApiMessageGenerator
     // not compile - the generic On<XxxRequest>() escape hatch stays for explicit use, and Dataverse rejects an
     // invalid registration at deploy time regardless. The referenced early-bound entity type is assumed to be
     // generated into this same namespace.
-    private static void AppendStepExtensions(StringBuilder sb, CustomApiMessage message, HashSet<string> collidingSuffixes, IReadOnlyDictionary<string, string>? entityTypeNames)
+    private static void AppendStepExtensions(StringBuilder sb, CustomApiMessage message, HashSet<string> collidingSuffixes, IReadOnlyDictionary<string, string>? entityTypeNames, HashSet<string>? generatedEntities)
     {
         string request = $"{message.UniqueName}Request";
         // Short name (publisher prefix stripped) unless it would collide with another API's; then use the full,
@@ -189,12 +197,17 @@ public static class CustomApiMessageGenerator
         string method = $"On{methodBase}";
         bool bound = !string.IsNullOrWhiteSpace(message.BoundEntityLogicalName);
 
+        // A bound API whose bound entity is not part of this generation batch cannot reference the early-bound type
+        // (it is not generated -> CS0246). Fall back to the unbound generic form so the output still compiles.
+        bool boundEntityGenerated = bound
+            && (generatedEntities == null || generatedEntities.Contains(message.BoundEntityLogicalName!));
+
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>Registrability-gated <c>{method}()</c> step extension for the <c>{message.UniqueName}</c> Custom API (Phase 3c: compile-time entity applicability{(asyncOnly ? "; async-only, no .Sync()" : string.Empty)}). The referenced early-bound entity type is assumed to live in this same namespace.</summary>");
         sb.AppendLine($"    public static class {message.UniqueName}StepExtensions");
         sb.AppendLine("    {");
 
-        if (bound)
+        if (boundEntityGenerated)
         {
             string logical = message.BoundEntityLogicalName!;
             string pascal = entityTypeNames != null && entityTypeNames.TryGetValue(logical, out string? typeName) && !string.IsNullOrEmpty(typeName)
@@ -204,6 +217,13 @@ public static class CustomApiMessageGenerator
         }
         else
         {
+            if (bound)
+            {
+                // Bound entity absent from this batch: keep a usable (generic) extension instead of a dangling type
+                // reference. Regenerate the models including '{BoundEntityLogicalName}' to get the entity-constrained overload.
+                sb.AppendLine($"        // Bound entity '{message.BoundEntityLogicalName}' is not in this model batch; emitting the unbound generic form (regenerate that entity for the entity-constrained {method}() overload).");
+            }
+
             sb.AppendLine($"        public static {stageType}<TEntity, {request}> {method}<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.{entry}();");
         }
 

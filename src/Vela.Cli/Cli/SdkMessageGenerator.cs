@@ -37,7 +37,12 @@ public static class SdkMessageGenerator
     /// (its SchemaName, as the model generator emits it). Used so the entity-constrained <c>On&lt;Message&gt;()</c>
     /// extension references the exact generated type (e.g. <c>new_CustomEntity</c>), not a naive PascalCase of the
     /// logical name (<c>NewCustomentity</c>). When null or missing an entry, falls back to PascalCase.</param>
-    public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<SdkMessage> messages, string ns, IReadOnlyDictionary<string, string>? entityTypeNames = null)
+    /// <param name="generatedEntityLogicalNames">Optional set of the entity logical names actually generated in this
+    /// batch. When provided, the per-entity <c>On&lt;Message&gt;()</c> overloads are emitted only for entities in this
+    /// set (referencing an absent early-bound type would not compile, CS0246); if none of the message's entities are in
+    /// the set, the single unbound generic extension is emitted instead. When null, every entity is assumed present
+    /// (the pre-existing behavior).</param>
+    public static IReadOnlyList<GeneratedModel> Generate(IEnumerable<SdkMessage> messages, string ns, IReadOnlyDictionary<string, string>? entityTypeNames = null, IReadOnlyCollection<string>? generatedEntityLogicalNames = null)
     {
         if (messages == null)
         {
@@ -49,14 +54,18 @@ public static class SdkMessageGenerator
             throw new ArgumentException("A target namespace is required.", nameof(ns));
         }
 
+        HashSet<string>? generatedEntities = generatedEntityLogicalNames == null
+            ? null
+            : new HashSet<string>(generatedEntityLogicalNames, StringComparer.OrdinalIgnoreCase);
+
         return messages
             .Where(m => !string.IsNullOrWhiteSpace(m?.Name))
             .OrderBy(m => m.Name, StringComparer.Ordinal)
-            .Select(m => new GeneratedModel($"Messages/{m.Name}.cs", GenerateOne(m, ns, entityTypeNames)))
+            .Select(m => new GeneratedModel($"Messages/{m.Name}.cs", GenerateOne(m, ns, entityTypeNames, generatedEntities)))
             .ToList();
     }
 
-    private static string GenerateOne(SdkMessage message, string ns, IReadOnlyDictionary<string, string>? entityTypeNames)
+    private static string GenerateOne(SdkMessage message, string ns, IReadOnlyDictionary<string, string>? entityTypeNames, HashSet<string>? generatedEntities)
     {
         string request = $"{message.Name}Request";
         string response = $"{message.Name}Response";
@@ -98,7 +107,7 @@ public static class SdkMessageGenerator
 
         sb.AppendLine("    }");
 
-        AppendStepExtensions(sb, message, entityTypeNames);
+        AppendStepExtensions(sb, message, entityTypeNames, generatedEntities);
 
         sb.AppendLine("}");
         return sb.ToString();
@@ -124,7 +133,7 @@ public static class SdkMessageGenerator
     /// The early-bound entity types are referenced by PascalCase of their logical name and are ASSUMED to be
     /// generated into this same target namespace (the models namespace <c>ns</c>).
     /// </summary>
-    private static void AppendStepExtensions(StringBuilder sb, SdkMessage message, IReadOnlyDictionary<string, string>? entityTypeNames)
+    private static void AppendStepExtensions(StringBuilder sb, SdkMessage message, IReadOnlyDictionary<string, string>? entityTypeNames, HashSet<string>? generatedEntities)
     {
         // A message name that is not a valid C# identifier cannot form a usable On<Name>() method or class name.
         // Leave the (unchanged) typed Request/Response above as-is and skip the extension rather than emit code
@@ -138,6 +147,14 @@ public static class SdkMessageGenerator
 
         string request = $"{message.Name}Request";
         IReadOnlyList<string> entities = message.Entities ?? Array.Empty<string>();
+
+        // Drop any applicable entity not generated in this batch: a per-entity overload referencing an absent
+        // early-bound type would not compile (CS0246). When null, every entity is assumed present.
+        if (generatedEntities != null)
+        {
+            entities = entities.Where(generatedEntities.Contains).ToArray();
+        }
+
         bool generic = entities.Count == 0 || entities.Count > EntityFanoutThreshold;
 
         sb.AppendLine();

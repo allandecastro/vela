@@ -167,6 +167,45 @@ public class SdkMessageGeneratorTests
     }
 
     [Fact]
+    public void Entities_NotInBatch_AreDropped_SoOutputCompiles()   // #308 H1
+    {
+        string code = SdkMessageGenerator.Generate(
+            new[]
+            {
+                new SdkMessage("Merge", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+                {
+                    Entities = new[] { "account", "contact" },
+                },
+            },
+            "N",
+            entityTypeNames: null,
+            generatedEntityLogicalNames: new[] { "account" }).Single().Code;
+
+        Assert.Contains("IStepTrigger<Account>", code);       // the generated entity keeps its overload
+        Assert.DoesNotContain("IStepTrigger<Contact>", code); // the absent one is dropped (no dangling reference)
+    }
+
+    [Fact]
+    public void AllEntities_OutOfBatch_FallsBackToGenericExtension()   // #308 H1
+    {
+        string code = SdkMessageGenerator.Generate(
+            new[]
+            {
+                new SdkMessage("Merge", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+                {
+                    Entities = new[] { "account", "contact" },
+                },
+            },
+            "N",
+            entityTypeNames: null,
+            generatedEntityLogicalNames: Array.Empty<string>()).Single().Code;
+
+        Assert.Contains("OnMerge<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
+        Assert.DoesNotContain("IStepTrigger<Account>", code);
+        Assert.DoesNotContain("IStepTrigger<Contact>", code);
+    }
+
+    [Fact]
     public void NoEntities_EmitsGenericExtension()
     {
         string code = Generate(new SdkMessage(

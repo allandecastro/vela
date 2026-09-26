@@ -277,7 +277,7 @@ internal static class ModelsCommand
                     customApiMessages = scope.CustomApis.Select(name => CustomApiReader.ReadCustomApi(service, name)).ToArray();
                 }
 
-                models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!, EntityTypeNames()));
+                models.AddRange(CustomApiMessageGenerator.Generate(customApiMessages, ns!, EntityTypeNames(), logicalNames));
             }
 
             if (scope.AllMessages)
@@ -307,7 +307,7 @@ internal static class ModelsCommand
                     }
                 }
 
-                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames()));
+                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames(), logicalNames));
             }
             else if (scope.Messages.Length > 0)
             {
@@ -324,7 +324,7 @@ internal static class ModelsCommand
                     sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));
                 }
 
-                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames()));
+                models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames(), logicalNames));
             }
 
             if (scope.Roles.Length > 0 || scope.SolutionRoles)
