@@ -193,6 +193,44 @@ public class CustomApiMessageGeneratorTests
     }
 
     [Fact]
+    public void Bound_ToEntityNotInBatch_DegradesToGenericExtension_SoOutputCompiles()   // #308 H1
+    {
+        // The bound entity is not part of the generated set, so referencing its early-bound type would be CS0246.
+        string code = CustomApiMessageGenerator.Generate(
+            new[]
+            {
+                new CustomApiMessage("zava_Recalc", IsBoundToEntity: true,
+                    Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>(),
+                    AllowedStepType: 2, BoundEntityLogicalName: "contact"),
+            },
+            "N",
+            entityTypeNames: null,
+            generatedEntityLogicalNames: new[] { "account" }).Single().Code;
+
+        Assert.Contains("OnRecalc<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder)", code);
+        Assert.Contains("where TEntity : Microsoft.Xrm.Sdk.Entity", code);
+        Assert.DoesNotContain("IStepTrigger<Contact>", code);   // no dangling early-bound reference
+    }
+
+    [Fact]
+    public void Bound_ToEntityInBatch_KeepsTheEntityConstrainedExtension()   // #308 H1 (positive)
+    {
+        string code = CustomApiMessageGenerator.Generate(
+            new[]
+            {
+                new CustomApiMessage("zava_Recalc", IsBoundToEntity: true,
+                    Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>(),
+                    AllowedStepType: 2, BoundEntityLogicalName: "account"),
+            },
+            "N",
+            entityTypeNames: null,
+            generatedEntityLogicalNames: new[] { "account" }).Single().Code;
+
+        Assert.Contains("IStepTrigger<Account>", code);
+        Assert.DoesNotContain("OnRecalc<TEntity>", code);
+    }
+
+    [Fact]
     public void CrossPublisher_SameSuffix_IsDisambiguatedWithFullName()   // A18
     {
         var models = CustomApiMessageGenerator.Generate(
