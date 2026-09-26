@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.ServiceModel;
 using System.Text.Json;
 using Vela.Cli;
 using Microsoft.Crm.Sdk.Messages;
@@ -320,5 +321,45 @@ public class ApplyEngineTests
         // The boundary sits at the first upsert; only the publish/resolve phase completed.
         Assert.Contains($"failed at: update step {accountPlugin}", stderr);
         Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
+    }
+
+    [Fact]
+    public void ApplyDiff_batched_failure_surfaces_the_half_applied_report_even_without_verbose()   // #305
+    {
+        // The step row create faults inside the ExecuteMultiple batch. The per-owner half-applied report must be
+        // rendered even without --verbose so the operator sees a partially-updated org; before the fix it was gated
+        // on --verbose and stayed silent.
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType }),
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+            OnCreate = e => e.LogicalName == "sdkmessageprocessingstep"
+                ? throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault { Message = "step row rejected" }, "step row rejected")
+                : Guid.NewGuid(),
+        };
+
+        RegistrationDiff diff = DiffWithAddedSteps("dv-1");
+
+        TextWriter originalError = Console.Error;
+        var captured = new StringWriter();
+        Console.SetError(captured);
+        try
+        {
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        string stderr = captured.ToString();
+        Assert.Contains("[apply]", stderr);   // the per-owner report rendered despite verbose: false
+        Assert.Contains("FAILED", stderr);
     }
 }
