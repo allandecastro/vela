@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.19.5] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.19.5`. A new step is created disabled and activated only once fully configured.
+
+### Fixed
+
+- **A newly registered step no longer fires before (or without) its images and secure config.** `apply` writes the step row first, then its images / secure config / state in a later phase. A new step was created active, so between those phases - or if the later phase failed - it fired in production under-configured, and a `.Disabled()` step briefly fired before being deactivated. New steps are now created inactive and activated last (after their secure config and images are written); a `.Disabled()` step simply stays inactive. Existing steps are updated as before.
+
 ## [0.19.4] - 2026-09-26 (Vela.Cli)
 
 CLI line, published as `cli-v0.19.4`. Detects a rank collision between a filter-less global step and entity-bound steps.

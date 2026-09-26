@@ -88,6 +88,12 @@ internal static partial class DataverseRegistration
     }
     else
     {
+        // Create a NEW step INACTIVE, then activate it last (SyncStepState runs after secure config + images below).
+        // Dataverse has no cross-entity transaction, so a step created active in this row-write would fire in prod
+        // before - or, if a later tier fails, without - its images/secure config. Creating it disabled means it only
+        // ever becomes active once fully configured; a step declared .Disabled() simply stays inactive (#305).
+        step["statecode"] = new OptionSetValue(1);   // Disabled
+        step["statuscode"] = new OptionSetValue(2);  // Disabled
         stepId = service.Create(step);
         LogOperation("step", "create", BuildStepName(definition), verbose: verbose);
     }
@@ -109,8 +115,10 @@ internal static partial class DataverseRegistration
     }
 
     SyncStepSecureConfig(service, stepId, secureConfig);
-    SyncStepState(service, stepId, definition.Enabled);
     SyncStepImages(service, stepId, definition.Message, definition.PreImages, definition.PostImages);
+    // State LAST: a new step was created disabled above, so it is only activated here, after its secure config and
+    // images have been written. An enabled step therefore never fires under-configured; a disabled step stays off.
+    SyncStepState(service, stepId, definition.Enabled);
 }
 
     /// <summary>

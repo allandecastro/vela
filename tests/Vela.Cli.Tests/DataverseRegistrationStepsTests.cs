@@ -490,6 +490,65 @@ public sealed class DataverseRegistrationStepsTests
     // ---- UpsertStep --------------------------------------------------------------------------------
 
     [Fact]
+    public void UpsertStep_creates_a_new_enabled_step_disabled_then_activates_it()   // #305 create-disabled-first
+    {
+        // A new step is created inactive (statecode 1) and only activated via a later SetState, so it never fires
+        // before its images/secure config are written (or at all, if a later tier fails).
+        var pluginTypeId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var stepId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", messageId)),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+            OnCreate = e => e.LogicalName == "sdkmessageprocessingstep" ? stepId : Guid.NewGuid(),
+        };
+
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Update", entityLogicalName = "", stepKey = "dv-key", stage = 40, mode = 0, enabled = true });
+        DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false);
+
+        // Created disabled.
+        Entity step = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstep");
+        Assert.Equal(1, step.GetAttributeValue<OptionSetValue>("statecode").Value);
+        Assert.Equal(2, step.GetAttributeValue<OptionSetValue>("statuscode").Value);
+
+        // Then activated to Active (statecode 0) via SetState.
+        Microsoft.Crm.Sdk.Messages.SetStateRequest setState = svc.Executed.OfType<Microsoft.Crm.Sdk.Messages.SetStateRequest>().Single();
+        Assert.Equal(stepId, setState.EntityMoniker.Id);
+        Assert.Equal(0, setState.State.Value);
+    }
+
+    [Fact]
+    public void UpsertStep_creates_a_new_disabled_step_and_keeps_it_disabled()   // #305 create-disabled-first
+    {
+        var pluginTypeId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var stepId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", messageId)),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+            OnCreate = e => e.LogicalName == "sdkmessageprocessingstep" ? stepId : Guid.NewGuid(),
+        };
+
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Update", entityLogicalName = "", stepKey = "dv-key", stage = 40, mode = 0, enabled = false });
+        DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false);
+
+        Entity step = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstep");
+        Assert.Equal(1, step.GetAttributeValue<OptionSetValue>("statecode").Value);
+        Microsoft.Crm.Sdk.Messages.SetStateRequest setState = svc.Executed.OfType<Microsoft.Crm.Sdk.Messages.SetStateRequest>().Single();
+        Assert.Equal(1, setState.State.Value);  // stays Disabled
+    }
+
+    [Fact]
     public void UpsertStep_clears_impersonation_when_absent()   // #305 impersonation
     {
         // A step with no impersonation must set impersonatinguserid to null on the (rebuilt, fully-resent) entity so
