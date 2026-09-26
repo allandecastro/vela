@@ -123,7 +123,7 @@ The fluent builder enforces a specific order:
    `CreateMultiple` and `UpdateMultiple`** (at least one attribute; the first is mandatory at compile time);
    not offered on other messages. An unfiltered Create/Update step would fire on every change, so the builder
    makes you state the trigger.
-5. **Optional** - `WithDescription()`, `WithImpersonation()`, `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfig(...)`
+5. **Optional** - `WithDescription()`, `WithImpersonation(...)` (see [Impersonation](#impersonation)), `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfig(...)`
 6. **Images** - `WithPreImage(...)` and/or `WithPostImage(...)`
 7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).
 
@@ -165,6 +165,28 @@ RegisterStep().OnUpdate().PreOperation().Sync()
 > define. `vela plan` and `vela apply` warn when a step you are deploying shares its rank with another step
 > already registered in the environment (including steps owned by other assemblies), so you can give them
 > distinct ranks. Under `--strict` the warning fails the run.
+
+### Impersonation
+
+`WithImpersonation(Guid systemUserId)` registers the step to run in the context of a specific Dataverse
+**systemuser** (the `sdkmessageprocessingstep.impersonatinguserid`), so the plugin's `IOrganizationService`
+acts as that user rather than the calling user:
+
+```csharp
+// Runs this step as the integration service account, whatever user triggered the update.
+RegisterStep().OnUpdate().PostOperation().Sync()
+    .FilterOn(a => a.Name)
+    .WithImpersonation(Guid.Parse("11111111-1111-1111-1111-111111111111"))
+    .Handle(OnUpdated);
+```
+
+Omit `WithImpersonation` (the default) to run as the calling user. `vela plan` / `vela apply` read, diff and
+write `impersonatinguserid`, so setting, changing or removing the impersonated user reconciles like any other step
+field. Passing `Guid.Empty` is rejected at registration.
+
+> [!NOTE]
+> `WithImpersonation(ImpersonationSource)` (the `CallingUser` / `PluginOwner` enum overload) still exists for the
+> calling-user default; use the `Guid` overload to impersonate a specific systemuser.
 
 ### Typed images (compile-safe projections)
 

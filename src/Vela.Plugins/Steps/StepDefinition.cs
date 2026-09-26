@@ -1,3 +1,4 @@
+using System;
 using Vela.Constants;
 
 namespace Vela.Steps;
@@ -40,6 +41,13 @@ public sealed class StepDefinition
 
     /// <summary>The impersonation source.</summary>
     public ImpersonationSource ImpersonationSource { get; set; }
+
+    /// <summary>
+    /// The specific systemuser to impersonate for this step (Dataverse <c>impersonatinguserid</c>), set with
+    /// <c>.WithImpersonation(Guid)</c>. When set, the step runs in that user's context; <c>null</c> (the default)
+    /// means no specific-user impersonation (the step runs as the calling user).
+    /// </summary>
+    public Guid? ImpersonatingUserId { get; set; }
 
     /// <summary>The supported deployment type.</summary>
     public SupportedDeployment SupportedDeployment { get; set; }
