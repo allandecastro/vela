@@ -33,7 +33,8 @@ internal static class DefinitionParser
             Enabled: TryGetBool(definition, "enabled", defaultValue: true),
             UnsecureConfig: TryGetString(definition, "unsecureConfig") ?? string.Empty,
             SecureConfig: TryGetString(definition, "secureConfig") ?? string.Empty,
-            ImpersonatingUserId: Guid.TryParse(TryGetString(definition, "impersonatingUserId"), out Guid impersonatingUserId) ? impersonatingUserId : Guid.Empty);
+            ImpersonatingUserId: Guid.TryParse(TryGetString(definition, "impersonatingUserId"), out Guid impersonatingUserId) ? impersonatingUserId : Guid.Empty,
+            SupportedDeployment: TryGetInt(definition, "supportedDeployment"));
     }
 
     internal static ImageApplyDefinition[] ParseImageDefinitions(JsonElement definition, string propertyName)

@@ -24,6 +24,18 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.18.0] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.18.0`. Step supported-deployment fidelity and a `models` robustness fix.
+
+### Added
+
+- **`plan`/`apply` now honour `.WithSupportedDeployment(...)`.** The step's `supporteddeployment` was hardcoded to `0` (ServerOnly) on write and never read, so the modifier was a silent no-op and drift went undetected. The read path now selects `supporteddeployment`, the diff shape carries it, and the upsert writes the declared value (0 ServerOnly, 1 OfflineOnly, 2 Both). A step that does not set it stays at 0, so nothing churns.
+
+### Fixed
+
+- **`vela models` no longer discards every model when one entity name is bad.** Entity metadata was read with a single `Select(...).ToArray()`, so one unreadable/typo'd `--entities` name (or an inaccessible table) threw and aborted the whole generation. Each entity is now read independently and a failure is skipped with a warning, matching the TypeScript table path and the message path.
+
 ## [0.28.0] - 2026-09-26 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.28.0`. Adds specific-user step impersonation.

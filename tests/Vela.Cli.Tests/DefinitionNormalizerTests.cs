@@ -19,7 +19,7 @@ public class DefinitionNormalizerTests
 
         JsonElement live = DefinitionNormalizer.BuildStepShape(
             "P", "Update", "account", "k", "n", 40, 0, 1,
-            new string[0], new StepImage[0], new StepImage[0], true, "", "", user, Options);
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", user, 0, Options);
         JsonElement code = DefinitionNormalizer.NormalizeStepDefinition(
             Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0, impersonatingUserId = user.ToString() }),
             Options);
@@ -28,13 +28,30 @@ public class DefinitionNormalizerTests
 
         JsonElement other = DefinitionNormalizer.BuildStepShape(
             "P", "Update", "account", "k", "n", 40, 0, 1,
-            new string[0], new StepImage[0], new StepImage[0], true, "", "", Guid.NewGuid(), Options);
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", Guid.NewGuid(), 0, Options);
         Assert.NotEqual(JsonSerializer.Serialize(live), JsonSerializer.Serialize(other));
 
         JsonElement absent = DefinitionNormalizer.NormalizeStepDefinition(
             Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0 }),
             Options);
         Assert.Equal(string.Empty, absent.GetProperty("impersonatingUserId").GetString());
+    }
+
+    [Fact]
+    public void Step_supported_deployment_is_carried_and_defaults_to_server_only()   // #305
+    {
+        // .WithSupportedDeployment(...) must be honoured: the value round-trips and defaults to 0 (ServerOnly) so a
+        // step that never sets it does not churn against the live read.
+        JsonElement both = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new { pluginTypeName = "P", message = "Update", stage = 40, mode = 0, supportedDeployment = 2 }),
+            Options);
+        Assert.Equal(2, both.GetProperty("supportedDeployment").GetInt32());
+
+        JsonElement absent = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new { pluginTypeName = "P", message = "Update", stage = 40, mode = 0 }),
+            Options);
+        Assert.Equal(0, absent.GetProperty("supportedDeployment").GetInt32());
+        Assert.NotEqual(JsonSerializer.Serialize(both), JsonSerializer.Serialize(absent));
     }
 
     [Fact]
@@ -61,12 +78,12 @@ public class DefinitionNormalizerTests
             "P", "Associate", "account", stepKey: "", name: "P - PostOpSync: Associate of account",
             stage: 40, mode: 0, executionOrder: 1,
             filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
-            enabled: true, unsecureConfig: "", secureConfig: "", impersonatingUserId: null, Options);
+            enabled: true, unsecureConfig: "", secureConfig: "", impersonatingUserId: null, supportedDeployment: 0, Options);
         JsonElement live = DefinitionNormalizer.BuildStepShape(
             "P", "Associate", "", stepKey: "", name: "P - PostOpSync: Associate of account",
             stage: 40, mode: 0, executionOrder: 1,
             filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
-            enabled: true, unsecureConfig: "", secureConfig: "", impersonatingUserId: null, Options);
+            enabled: true, unsecureConfig: "", secureConfig: "", impersonatingUserId: null, supportedDeployment: 0, Options);
 
         Assert.Equal(JsonSerializer.Serialize(local), JsonSerializer.Serialize(live));
     }
@@ -77,10 +94,10 @@ public class DefinitionNormalizerTests
         // Entity-specific messages (Create/Update/...) must keep entityLogicalName in the compared shape.
         JsonElement a = DefinitionNormalizer.BuildStepShape(
             "P", "Update", "account", "", "n", 40, 0, 1,
-            new string[0], new StepImage[0], new StepImage[0], true, "", "", null, Options);
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", null, 0, Options);
         JsonElement b = DefinitionNormalizer.BuildStepShape(
             "P", "Update", "", "", "n", 40, 0, 1,
-            new string[0], new StepImage[0], new StepImage[0], true, "", "", null, Options);
+            new string[0], new StepImage[0], new StepImage[0], true, "", "", null, 0, Options);
 
         Assert.NotEqual(JsonSerializer.Serialize(a), JsonSerializer.Serialize(b));
     }
