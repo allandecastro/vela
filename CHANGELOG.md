@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.19.3] - 2026-09-26 (Vela.Cli)
+
+CLI line, published as `cli-v0.19.3`. Stops a mixed-case step declaration from churning as perpetually "changed".
+
+### Fixed
+
+- **A step whose entity or filtering/image attributes are declared in mixed case no longer diffs as "changed" on every `plan`/`apply`.** Dataverse stores entity and attribute logical names in lower case, so the live read is always lower case; a code declaration such as `"Account"` or `"Name"` diverged from it and never converged. The local normalization now canonicalizes the step's entity logical name, filtering attributes and image attributes to lower case (and the derived step name uses the lower-cased entity), matching the live read. Message-name casing and Custom API `uniqueName` casing are unchanged (their canonical form is not simply lower case).
+
 ## [0.19.2] - 2026-09-26 (Vela.Cli)
 
 CLI line, published as `cli-v0.19.2`. Stops a keyless step from churning as perpetually "changed".

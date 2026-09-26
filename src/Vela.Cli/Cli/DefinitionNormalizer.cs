@@ -148,6 +148,14 @@ internal static class DefinitionNormalizer
     /// read side (ResolveStepKey) so a keyless step's name is recognised as keyless rather than parsed into a
     /// spurious step key that would churn the diff forever (#305).
     /// </summary>
+    // Attribute logical names are lower case in Dataverse; canonicalize a code-declared set to lower case and re-sort
+    // (Ordinal is case-sensitive) so it matches the live read and does not churn the diff (#305).
+    private static string[] LowerSorted(string[] values) =>
+        values.Select(v => v.ToLowerInvariant()).OrderBy(v => v, StringComparer.Ordinal).ToArray();
+
+    private static StepImage[] LowerImageAttributes(StepImage[] images) =>
+        images.Select(i => new StepImage(i.Alias, LowerSorted(i.Attributes))).ToArray();
+
     public static string BuildKeylessStepName(string pluginTypeName, int stage, int mode, string message, string entityLogicalName)
     {
         string lifecycle = BuildStepLifecycleLabel(stage, mode);
@@ -159,7 +167,10 @@ internal static class DefinitionNormalizer
     {
         string pluginTypeName = TryGetString(raw, "pluginTypeName") ?? string.Empty;
         string message = TryGetString(raw, "message") ?? string.Empty;
-        string entityLogicalName = TryGetString(raw, "entityLogicalName") ?? string.Empty;
+        // Dataverse stores entity and attribute logical names in lower case, so the live read is always lower case.
+        // Canonicalize the code-declared side to match, or a mixed-case declaration (e.g. "Account", "Name") would
+        // diverge from the live read and churn the diff as "changed" on every plan/apply (#305).
+        string entityLogicalName = (TryGetString(raw, "entityLogicalName") ?? string.Empty).ToLowerInvariant();
         string stepKey = TryGetString(raw, "stepKey") ?? string.Empty;
         int mode = TryGetInt(raw, "mode");
         // Apply the same platform coercions the apply engine performs at write time (async -> PostOperation,
@@ -167,9 +178,9 @@ internal static class DefinitionNormalizer
         // plan/apply stay idempotent.
         int stage = DataverseRegistration.NormalizeRegistrationStage(TryGetInt(raw, "stage"), mode);
         int executionOrder = DataverseRegistration.NormalizeRegistrationRank(TryGetInt(raw, "executionOrder", defaultValue: 1));
-        string[] filteringAttributes = TryGetStringArray(raw, "filteringAttributes");
-        StepImage[] preImages = TryGetStepImages(raw, "preImages");
-        StepImage[] postImages = TryGetStepImages(raw, "postImages");
+        string[] filteringAttributes = LowerSorted(TryGetStringArray(raw, "filteringAttributes"));
+        StepImage[] preImages = LowerImageAttributes(TryGetStepImages(raw, "preImages"));
+        StepImage[] postImages = LowerImageAttributes(TryGetStepImages(raw, "postImages"));
         bool enabled = TryGetBool(raw, "enabled", defaultValue: true);
         string unsecureConfig = TryGetString(raw, "unsecureConfig") ?? string.Empty;
         string secureConfig = TryGetString(raw, "secureConfig") ?? string.Empty;
@@ -178,12 +189,9 @@ internal static class DefinitionNormalizer
         Guid? impersonatingUserId = Guid.TryParse(TryGetString(raw, "impersonatingUserId"), out Guid parsed) ? parsed : null;
         int supportedDeployment = TryGetInt(raw, "supportedDeployment");
 
-        string lifecycle = BuildStepLifecycleLabel(stage, mode);
         string name = !string.IsNullOrWhiteSpace(stepKey)
-            ? $"{pluginTypeName} - {lifecycle}: {stepKey}"
-            : string.IsNullOrWhiteSpace(entityLogicalName)
-                ? $"{pluginTypeName} - {lifecycle}: {message}"
-                : $"{pluginTypeName} - {lifecycle}: {message} of {entityLogicalName}";
+            ? $"{pluginTypeName} - {BuildStepLifecycleLabel(stage, mode)}: {stepKey}"
+            : BuildKeylessStepName(pluginTypeName, stage, mode, message, entityLogicalName);
 
         return BuildStepShape(
             pluginTypeName,

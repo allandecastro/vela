@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text.Json;
 using Vela.Cli;
 using Xunit;
@@ -35,6 +36,36 @@ public class DefinitionNormalizerTests
             Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0 }),
             Options);
         Assert.Equal(string.Empty, absent.GetProperty("impersonatingUserId").GetString());
+    }
+
+    [Fact]
+    public void Step_entity_and_attribute_casing_is_canonicalized_to_lowercase()   // #305 churn
+    {
+        // Dataverse stores entity/attribute logical names lower case (so the live read is always lower case). A
+        // mixed-case code declaration must normalize to the same lower case, or it churns as "changed" forever.
+        JsonElement mixed = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "Account", stage = 40, mode = 0, filteringAttributes = new[] { "Name", "AccountNumber" } }),
+            Options);
+        JsonElement lower = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "account", stage = 40, mode = 0, filteringAttributes = new[] { "accountnumber", "name" } }),
+            Options);
+
+        Assert.Equal(JsonSerializer.Serialize(lower), JsonSerializer.Serialize(mixed));
+        Assert.Equal("account", mixed.GetProperty("entityLogicalName").GetString());
+        Assert.Equal(new[] { "accountnumber", "name" }, mixed.GetProperty("filteringAttributes").EnumerateArray().Select(x => x.GetString()));
+        // The derived step name uses the lower-cased entity too, so it matches the live read.
+        Assert.Equal("P - PostOpSync: Update of account", mixed.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void Step_image_attribute_casing_is_canonicalized_to_lowercase()   // #305 churn
+    {
+        JsonElement mixed = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new { pluginTypeName = "P", message = "Update", stage = 40, mode = 0, preImages = new object[] { new { alias = "Pre", attributes = new[] { "Name", "AccountNumber" } } } }),
+            Options);
+
+        string[] attrs = mixed.GetProperty("preImages").EnumerateArray().Single().GetProperty("attributes").EnumerateArray().Select(x => x.GetString()!).ToArray();
+        Assert.Equal(new[] { "accountnumber", "name" }, attrs);
     }
 
     [Fact]
