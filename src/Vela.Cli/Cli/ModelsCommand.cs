@@ -248,8 +248,26 @@ internal static class ModelsCommand
             List<string> logicalNames = EntityMetadataReader.ResolveLogicalNames(service, scope.Solution, scope.Entities);
             if (logicalNames.Count > 0)
             {
-                EntityMetadata[] metadata = logicalNames.Select(name => EntityMetadataReader.ReadEntity(service, name)).ToArray();
-                models.AddRange(ModelGenerator.Generate(metadata, new ModelGenOptions(ns!, dataAnnotations)));
+                // Read each entity's metadata independently: a single bad/unreadable name (a typo, a table the caller
+                // cannot access) must not discard every other valid model. Skip it with a warning, matching the TS
+                // table path and the message path below. (#305)
+                List<EntityMetadata> metadata = new List<EntityMetadata>();
+                foreach (string name in logicalNames)
+                {
+                    try
+                    {
+                        metadata.Add(EntityMetadataReader.ReadEntity(service, name));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Warning: skipping entity '{name}' (could not read its metadata): {ex.Message}");
+                    }
+                }
+
+                if (metadata.Count > 0)
+                {
+                    models.AddRange(ModelGenerator.Generate(metadata.ToArray(), new ModelGenOptions(ns!, dataAnnotations)));
+                }
             }
 
             if (scope.CustomApis.Length > 0 || scope.AllCustomApis)

@@ -49,6 +49,7 @@ public sealed class DataverseRegistrationReadShapeTests
             ["configuration"] = "unsecure-cfg",
             ["sdkmessageprocessingstepsecureconfigid"] = new EntityReference("sdkmessageprocessingstepsecureconfig", secureId),
             ["impersonatinguserid"] = new EntityReference("systemuser", ImpersonatedUser),
+            ["supporteddeployment"] = new OptionSetValue(2),   // Both
         };
         Aliased(step, "msg.name", "sdkmessage", "name", "Update");
         Aliased(step, "filter.primaryobjecttypecode", "sdkmessagefilter", "primaryobjecttypecode", "account");
@@ -94,6 +95,7 @@ public sealed class DataverseRegistrationReadShapeTests
         Assert.True(d.GetProperty("enabled").GetBoolean());
         Assert.Equal("unsecure-cfg", d.GetProperty("unsecureConfig").GetString());
         Assert.Equal(ImpersonatedUser.ToString(), d.GetProperty("impersonatingUserId").GetString());
+        Assert.Equal(2, d.GetProperty("supportedDeployment").GetInt32());
         Assert.Equal(new[] { "accountnumber", "name" }, d.GetProperty("filteringAttributes").EnumerateArray().Select(x => x.GetString())); // normalizer sorts
         Assert.Equal(DefinitionNormalizer.HashSecret("topsecret"), d.GetProperty("secureConfig").GetString());
         Assert.Equal("PreImage", d.GetProperty("preImages").EnumerateArray().Single().GetProperty("alias").GetString());
@@ -186,7 +188,7 @@ public sealed class DataverseRegistrationReadShapeTests
 
         Assert.NotNull(captured);
         Assert.Equal(
-            new[] { "sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid" },
+            new[] { "sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment" },
             captured!.ColumnSet.Columns);
         ConditionExpression c = Assert.Single(captured.Criteria.Conditions);
         Assert.Equal("eventhandler", c.AttributeName);

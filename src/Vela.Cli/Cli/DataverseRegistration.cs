@@ -242,7 +242,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression stepsQuery = new QueryExpression("sdkmessageprocessingstep")
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid")
+        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment")
     };
     stepsQuery.Criteria.AddCondition("eventhandler", ConditionOperator.In, pluginTypeIds.Cast<object>().ToArray());
 
@@ -299,6 +299,7 @@ internal static partial class DataverseRegistration
             ? secureValue
             : string.Empty;
         Guid? impersonatingUserId = step.GetAttributeValue<EntityReference>("impersonatinguserid")?.Id;
+        int supportedDeployment = step.GetAttributeValue<OptionSetValue>("supporteddeployment")?.Value ?? 0;
 
         Entity[] images = imagesByStep.TryGetValue(step.Id, out Entity[]? found) ? found : [];
         StepImage[] preImages = images
@@ -329,6 +330,7 @@ internal static partial class DataverseRegistration
             unsecureConfig,
             secureConfig,
             impersonatingUserId,
+            supportedDeployment,
             jsonOptions);
 
         items.Add(new RegistrationItem("step", pluginTypeName, shape));

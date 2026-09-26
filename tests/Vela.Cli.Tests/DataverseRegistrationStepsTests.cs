@@ -550,6 +550,7 @@ public sealed class DataverseRegistrationStepsTests
             unsecureConfig = "unsec",
             secureConfig = "",
             impersonatingUserId = ImpersonatedUser.ToString(),
+            supportedDeployment = 2,
         });
 
         DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false);
@@ -568,7 +569,7 @@ public sealed class DataverseRegistrationStepsTests
         Assert.Equal(0, step.GetAttributeValue<OptionSetValue>("mode").Value);
         Assert.Equal(7, step.GetAttributeValue<int>("rank"));
         Assert.Equal("accountnumber,name", step.GetAttributeValue<string>("filteringattributes")); // sorted
-        Assert.Equal(0, step.GetAttributeValue<OptionSetValue>("supporteddeployment").Value);
+        Assert.Equal(2, step.GetAttributeValue<OptionSetValue>("supporteddeployment").Value);
         EntityReference impersonation = step.GetAttributeValue<EntityReference>("impersonatinguserid");
         Assert.Equal("systemuser", impersonation.LogicalName);
         Assert.Equal(ImpersonatedUser, impersonation.Id);

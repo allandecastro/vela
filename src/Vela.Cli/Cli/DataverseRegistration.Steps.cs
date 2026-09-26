@@ -63,7 +63,7 @@ internal static partial class DataverseRegistration
     step["mode"] = new OptionSetValue(normalizedMode);
     step["rank"] = NormalizeRegistrationRank(definition.ExecutionOrder);
     step["filteringattributes"] = filteringAttributes;
-    step["supporteddeployment"] = new OptionSetValue(0);
+    step["supporteddeployment"] = new OptionSetValue(definition.SupportedDeployment);
     step["name"] = BuildStepName(definition);
     step["description"] = BuildStepDescription(definition);
     step["configuration"] = definition.UnsecureConfig ?? string.Empty;
