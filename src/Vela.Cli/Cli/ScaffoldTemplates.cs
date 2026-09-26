@@ -1257,6 +1257,9 @@ $$"""
          non-deterministic build. (vela apply also fails fast if you add a new plugin type without bumping this.) -->
     <Deterministic>false</Deterministic>
     <AssemblyVersion>1.0.*</AssemblyVersion>
+    <!-- The 1.0.* wildcard is deliberate (see above), so silence CS7035 ("version string not in the recommended
+         major.minor.build.revision format") - the compiler's nag about the wildcard form, not a real problem. -->
+    <NoWarn>$(NoWarn);CS7035</NoWarn>
     <!-- The Power Platform plugin SDK bundles the assembly plus its dependent assemblies into a plugin-package
          .nupkg. That bundling runs on BUILD (it packs the publish output), so `dotnet build -c Release` produces
          the deployable package, NOT `dotnet pack` (run cold it skips the publish and emits an assembly-less

@@ -28,6 +28,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 - **Generated models no longer warn `CS8669` in the consuming project.** `vela models` emits nullable reference annotations (a typed N:1 nav property, a `string?`/`EntityReference?`) into auto-generated files, which the compiler requires be inside an explicit `#nullable` context. Each generated model file now opens with `#nullable enable` (after the header, before the namespace), so the models compile warning-free under both net462 and net10 consuming projects.
 - **Guard against a `vela init` scaffold regressing to `CS0260`.** Added a scaffold-template test asserting that every demo plugin which captures a typed image (a `WithPreImage`/`WithPostImage` column-selector) is declared `partial`, so the source generator's `partial` half (VELA014-016) always compiles. The demo plugins were already `partial`, so a freshly scaffolded solution builds clean on the latest framework; the test keeps it that way.
+- **Scaffolded plugin project no longer emits `CS7035`.** The generated plugin `.csproj` uses a deliberate `1.0.*` wildcard assembly version (Dataverse caches plugin assemblies by version, so the wildcard auto-increments to bust the cache), which makes the compiler warn `CS7035` ("version string not in the recommended `major.minor.build.revision` format"). The project now suppresses `CS7035`, so a freshly scaffolded or `vela add`-ed plugin builds warning-free without losing the cache-busting behaviour.
 
 ## [0.27.2] - 2026-09-26 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
