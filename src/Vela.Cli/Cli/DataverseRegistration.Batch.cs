@@ -397,6 +397,11 @@ internal static partial class DataverseRegistration
                 {
                     parts.Add($"{counts[2]} {category} skipped");
                 }
+
+                if (counts[3] > 0)
+                {
+                    parts.Add($"{counts[3]} {category} ignored");
+                }
             }
 
             Console.Error.WriteLine($"[apply] {group}: {string.Join(", ", parts)}");
@@ -513,6 +518,7 @@ internal sealed class BatchApplyReport
     public void RecordIgnored(CapturedOperation op)
     {
         Ignored++;
+        Bump(op, 3);
     }
 
     private void Bump(CapturedOperation op, int slot)
@@ -525,7 +531,7 @@ internal sealed class BatchApplyReport
 
         if (!categories.TryGetValue(op.Category, out int[]? counts))
         {
-            counts = new int[3];
+            counts = new int[4]; // [ok, failed, skipped, ignored]
             categories[op.Category] = counts;
         }
 

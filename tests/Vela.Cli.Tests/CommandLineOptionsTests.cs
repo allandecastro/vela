@@ -420,6 +420,66 @@ public class CommandLineOptionsTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // ---- --batch-size (ExecuteMultiple chunk size) ------------------------------------------------
+
+    [Fact]
+    public void TryReadBatchChunkSize_absent_leaves_null_and_succeeds()
+    {
+        bool ok = CommandLineOptions.TryReadBatchChunkSize(["--url", "https://x.crm.dynamics.com"], out int? size, out int exit);
+
+        Assert.True(ok);
+        Assert.Equal(ExitSuccess, exit);
+        Assert.Null(size);
+    }
+
+    [Fact]
+    public void TryReadBatchChunkSize_parses_a_valid_value()
+    {
+        bool ok = CommandLineOptions.TryReadBatchChunkSize(["--batch-size", "250"], out int? size, out int exit);
+
+        Assert.True(ok);
+        Assert.Equal(ExitSuccess, exit);
+        Assert.Equal(250, size);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("1001")]
+    [InlineData("abc")]
+    public void TryReadBatchChunkSize_rejects_out_of_range_or_non_numeric_values(string value)
+    {
+        bool ok = CommandLineOptions.TryReadBatchChunkSize(["--batch-size", value], out int? size, out int exit);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exit);
+        Assert.Null(size);
+    }
+
+    [Fact]
+    public void TryParseSharedOptions_wires_batch_size_onto_shared_options()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"vela-batch-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, "Sample.Plugins.1.0.0.nupkg"), [0x50, 0x4b]);
+        try
+        {
+            string[] args =
+            [
+                "--packages-dir", dir, "--batch-size", "50",
+                "--connection-string", "AuthType=OAuth;Url=https://x.crm.dynamics.com"
+            ];
+            bool ok = CommandLineOptions.TryParseSharedOptions(args, out SharedOptions options, out int exit);
+
+            Assert.True(ok);
+            Assert.Equal(ExitSuccess, exit);
+            Assert.Equal(50, options.BatchChunkSize);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }
 
 /// <summary>

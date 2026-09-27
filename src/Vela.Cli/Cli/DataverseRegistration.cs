@@ -288,7 +288,9 @@ internal static partial class DataverseRegistration
             continue;
         }
 
-        int executionOrder = step.GetAttributeValue<int?>("rank") ?? 1;
+        // Normalize the live rank the same way the local/diff side does (DefinitionNormalizer), so an externally
+        // set rank of 0/negative reads back clamped to 1 and does not diff as a spurious "changed".
+        int executionOrder = NormalizeRegistrationRank(step.GetAttributeValue<int?>("rank") ?? 1);
         string? stepName = step.GetAttributeValue<string>("name");
         string keylessName = DefinitionNormalizer.BuildKeylessStepName(pluginTypeName, stage, mode, message, entityLogicalName);
         string stepKey = DefinitionParser.ResolveStepKey(step.GetAttributeValue<string>("description"), stepName, pluginTypeName, keylessName);

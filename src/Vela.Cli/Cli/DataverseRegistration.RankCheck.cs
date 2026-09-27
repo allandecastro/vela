@@ -85,7 +85,7 @@ internal static partial class DataverseRegistration
 
                 int stage = step.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 0;
                 int mode = step.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0;
-                int rank = step.GetAttributeValue<int?>("rank") ?? 1;
+                int rank = NormalizeRegistrationRank(step.GetAttributeValue<int?>("rank") ?? 1);
                 string label = step.GetAttributeValue<string>("name") ?? "(unnamed step)";
                 result.Add(new RankStep(message, entity, stage, mode, rank, label));
             }
