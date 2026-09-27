@@ -42,6 +42,26 @@ public class UserConfigTests
     }
 
     [Fact]
+    public void Write_CreatesTheConfigDirWith0700OnUnix()   // #307 L4
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Unix file modes only.
+        }
+
+        InTempConfigDir(dir =>
+        {
+            // Write goes through EnsureConfigDir, so even when it is the first thing to create ~/.vela the dir is
+            // owner-only (0700), not world-traversable under a default umask.
+            UserConfig.SetLastDataverseUrl("https://zava.crm.dynamics.com/");
+
+            UnixFileMode mode = File.GetUnixFileMode(dir) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+            Assert.Equal(UnixFileMode.None, mode); // no group/other bits
+        });
+    }
+
+    [Fact]
     public void Clear_RemovesTheRememberedUrl()
     {
         InTempConfigDir(_ =>

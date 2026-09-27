@@ -464,4 +464,40 @@ public class CommandLineOptionsInteractivePromptTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // ---- ValidateClientSecretConnectionInputs (#307 L3) ----
+
+    [Fact]
+    public void ValidateClientSecretConnectionInputs_AcceptsAValidHttpsUrlAndBase64Secret()
+    {
+        // '=' in the secret (base64 padding) is fine - a connection-string value is everything after the first '='.
+        Assert.Null(CommandLineOptions.ValidateClientSecretConnectionInputs(
+            "https://org.crm.dynamics.com", "tenant", "client", "abc123=="));
+    }
+
+    [Theory]
+    [InlineData("http://org.crm.dynamics.com")]  // not https
+    [InlineData("org.crm.dynamics.com")]         // not absolute
+    [InlineData("")]                             // empty
+    [InlineData("not a url")]
+    public void ValidateClientSecretConnectionInputs_RejectsANonHttpsOrRelativeUrl(string url)
+    {
+        string? error = CommandLineOptions.ValidateClientSecretConnectionInputs(url, "tenant", "client", "secret");
+        Assert.NotNull(error);
+        Assert.Contains("--url", error);
+    }
+
+    [Theory]
+    [InlineData("https://x;AuthType=Foo", "tenant", "client", "secret", "--url")]
+    [InlineData("https://x", "ten;ant", "client", "secret", "--tenant-id")]
+    [InlineData("https://x", "tenant", "cli;ent", "secret", "--client-id")]
+    [InlineData("https://x", "tenant", "client", "sec;ret", "--client-secret")]
+    public void ValidateClientSecretConnectionInputs_RejectsSemicolonInAnyValue(string url, string tenant, string client, string secret, string expectedOption)
+    {
+        string? error = CommandLineOptions.ValidateClientSecretConnectionInputs(url, tenant, client, secret);
+        Assert.NotNull(error);
+        Assert.Contains(expectedOption, error);
+        Assert.Contains(";", error);
+        Assert.DoesNotContain("sec;ret", error);  // the secret value is never echoed
+    }
 }
