@@ -262,6 +262,72 @@ public sealed class PluginCacheServiceTests
         Assert.Same(first, second);
     }
 
+    [Fact]
+    public void Constructor_RejectsNonPositiveCapacity()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PluginCacheService(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PluginCacheService(-1));
+    }
+
+    [Fact]
+    public void GetOrCreate_BoundsEntryCount_EvictingOldestInsertedEntries()
+    {
+        // A small cap makes the bound observable: inserting distinct keys past the cap evicts the oldest-inserted
+        // ones, so the live count never exceeds the cap and the earliest keys have to be rebuilt on next access.
+        PluginCacheService cache = new PluginCacheService(maxEntries: 3);
+        TimeSpan ttl = TimeSpan.FromMinutes(5);
+
+        for (int i = 0; i < 10; i++)
+        {
+            int captured = i;
+            cache.GetOrCreate("key:" + captured, ttl, () => captured);
+        }
+
+        // The three most recently inserted keys are still cached (factory not re-run).
+        int rebuilds = 0;
+        for (int i = 7; i < 10; i++)
+        {
+            int captured = i;
+            int value = cache.GetOrCreate("key:" + captured, ttl, () => { rebuilds++; return -1; });
+            Assert.Equal(captured, value);
+        }
+
+        Assert.Equal(0, rebuilds);
+
+        // The oldest key was evicted, so its factory runs again.
+        int oldRebuilds = 0;
+        cache.GetOrCreate("key:0", ttl, () => { oldRebuilds++; return 0; });
+        Assert.Equal(1, oldRebuilds);
+    }
+
+    [Fact]
+    public void GetOrCreate_SweepsExpiredEntries_BeforeEvictingLiveOnes()
+    {
+        // With expired entries present, the over-cap sweep drops those first, so the live entries survive.
+        PluginCacheService cache = new PluginCacheService(maxEntries: 3);
+
+        cache.GetOrCreate("live:a", TimeSpan.FromMinutes(5), () => 1);
+        cache.GetOrCreate("live:b", TimeSpan.FromMinutes(5), () => 2);
+        cache.GetOrCreate("stale:a", TimeSpan.FromMilliseconds(20), () => 3);
+        Thread.Sleep(50); // stale:a is now expired but still resident (lazy expiry)
+
+        // This insert pushes count over the cap; the sweep should drop the expired stale:a, sparing the live ones.
+        cache.GetOrCreate("live:c", TimeSpan.FromMinutes(5), () => 4);
+
+        int rebuilds = 0;
+        Assert.Equal(1, cache.GetOrCreate("live:a", TimeSpan.FromMinutes(5), () => { rebuilds++; return -1; }));
+        Assert.Equal(2, cache.GetOrCreate("live:b", TimeSpan.FromMinutes(5), () => { rebuilds++; return -1; }));
+        Assert.Equal(4, cache.GetOrCreate("live:c", TimeSpan.FromMinutes(5), () => { rebuilds++; return -1; }));
+        Assert.Equal(0, rebuilds);
+    }
+
+    [Fact]
+    public void MaxEntries_DefaultsToTheDocumentedConstant()
+    {
+        Assert.Equal(PluginCacheService.DefaultMaxEntries, new PluginCacheService().MaxEntries);
+        Assert.Equal(7, new PluginCacheService(7).MaxEntries);
+    }
+
     private static ILocalPluginContext CreateContext()
     {
         Mock<ILocalPluginContext> context = new Mock<ILocalPluginContext>();

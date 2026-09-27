@@ -61,10 +61,11 @@ public sealed class SmallClassesCoverageTests
     public void Retry_exhausts_attempts_on_a_persistent_transient_fault()
     {
         int calls = 0;
-        Assert.Throws<TimeoutException>(() => RetryPolicy.Execute<int>(() =>
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() => RetryPolicy.Execute<int>(() =>
         {
             calls++;
-            throw new TimeoutException("slow"); // transient, but never recovers
+            throw new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { Message = "request was throttled" }); // transient, never recovers
         }, maxAttempts: 2, initialDelayMs: 1));
         Assert.Equal(2, calls);
     }
