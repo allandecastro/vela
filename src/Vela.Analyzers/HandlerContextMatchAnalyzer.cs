@@ -14,7 +14,13 @@ namespace Vela.Analyzers
     /// <c>Handle(Action&lt;IXxxContext&gt;)</c> overload used to give: the handler must take the step's message context
     /// (for example <c>IUpdatePostContext&lt;T&gt;</c>), its generated typed context (a subclass of it), or the plain
     /// <c>ILocalPluginContext</c>. A context for a different message or stage (or an unrelated type) is reported.
-    /// Scoped to the guided Create/Update/Delete path; the typed/permissive paths are left alone.
+    ///
+    /// Scope (known limitation, #309 M1): only the guided single Create/Update/Delete path is validated. The typed
+    /// <c>On&lt;TRequest&gt;()</c> and permissive <c>OnMessage(...)</c> paths, and the CreateMultiple/UpdateMultiple
+    /// variants, are intentionally left alone - their expected context is the generated per-step context
+    /// (<c>MessagePre/PostContext&lt;TRequest,TEntity&gt;</c>), which is not derivable from the guided message/stage
+    /// resolution used here. A wrong context on those paths compiles through <c>Handle(Delegate)</c> and is caught at
+    /// runtime by the image/context cast rather than at compile time. Extending coverage there is tracked separately.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class HandlerContextMatchAnalyzer : DiagnosticAnalyzer

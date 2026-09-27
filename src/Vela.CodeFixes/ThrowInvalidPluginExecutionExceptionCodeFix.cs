@@ -75,7 +75,7 @@ namespace Vela.CodeFixes
                 new[] { messageArg, innerArg }.Where(a => a != null).Select(a => a!)));
 
             ObjectCreationExpressionSyntax replacement = creation
-                .WithType(SyntaxFactory.ParseTypeName("Microsoft.Xrm.Sdk.InvalidPluginExecutionException").WithTriviaFrom(creation.Type))
+                .WithType(SyntaxFactory.ParseTypeName("global::Microsoft.Xrm.Sdk.InvalidPluginExecutionException").WithTriviaFrom(creation.Type))
                 .WithArgumentList(argumentList)
                 .WithInitializer(null);
 

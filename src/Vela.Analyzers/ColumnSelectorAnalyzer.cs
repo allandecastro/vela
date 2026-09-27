@@ -55,6 +55,22 @@ namespace Vela.Analyzers
         {
             LambdaExpressionSyntax lambda = (LambdaExpressionSyntax)context.Node;
 
+            // Cheap syntactic gate FIRST, before any semantic-model call: the lambda body must resolve to a member
+            // access on the parameter, seeing through a leading cast (`(object)a.X`), an `as` (`a.X as object`) and
+            // nested/double casts - matching ImageProjectionGenerator so a cast selector is analysed, not dropped
+            // (#309 L1). Running this before GetTypeInfo avoids the expensive conversion lookup on non-selector
+            // lambdas (a plain LINQ Func<...> body) (#309 P1).
+            if (lambda.Body is not ExpressionSyntax lambdaBody)
+            {
+                return;
+            }
+
+            ExpressionSyntax body = UnwrapConversions(lambdaBody);
+            if (body is not MemberAccessExpressionSyntax memberAccess)
+            {
+                return;
+            }
+
             // Only Vela column selectors: the lambda is converted to Expression<Func<TEntity, object>>, TEntity : Entity.
             // A plain LINQ Func<...> lambda (not an expression tree) is not a column selector and is left alone.
             if (context.SemanticModel.GetTypeInfo(lambda, context.CancellationToken).ConvertedType is not INamedTypeSymbol converted
@@ -65,22 +81,6 @@ namespace Vela.Analyzers
                 || func.TypeArguments.Length != 2
                 || func.TypeArguments[0] is not INamedTypeSymbol entityArg
                 || !InheritsFrom(entityArg, entityType))
-            {
-                return;
-            }
-
-            // Body must be a member access on the parameter, allowing an explicit cast to object.
-            if (lambda.Body is not ExpressionSyntax body)
-            {
-                return;
-            }
-
-            if (body is CastExpressionSyntax cast)
-            {
-                body = cast.Expression;
-            }
-
-            if (body is not MemberAccessExpressionSyntax memberAccess)
             {
                 return;
             }
@@ -96,6 +96,27 @@ namespace Vela.Analyzers
             if (SymbolEqualityComparer.Default.Equals(symbol.ContainingType.OriginalDefinition, entityType))
             {
                 context.ReportDiagnostic(Diagnostic.Create(Rule, memberAccess.Name.GetLocation(), symbol.Name));
+            }
+        }
+
+        // Sees through leading conversions on a column-selector body: an explicit cast ((object)a.X), an `as`
+        // (a.X as object), and nesting of the two (double cast). Mirrors ImageProjectionGenerator so the analyzer and
+        // the source generator agree on which bodies are column selectors.
+        private static ExpressionSyntax UnwrapConversions(ExpressionSyntax body)
+        {
+            while (true)
+            {
+                switch (body)
+                {
+                    case CastExpressionSyntax cast:
+                        body = cast.Expression;
+                        continue;
+                    case BinaryExpressionSyntax asExpr when asExpr.IsKind(SyntaxKind.AsExpression):
+                        body = asExpr.Left;
+                        continue;
+                }
+
+                return body;
             }
         }
 

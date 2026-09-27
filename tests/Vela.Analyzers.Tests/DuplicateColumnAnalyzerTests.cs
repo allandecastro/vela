@@ -32,6 +32,7 @@ namespace Acme
     {
         public string Name { get; set; }
         public string City { get; set; }
+        public Account Parent { get; set; }
     }
 }
 
@@ -78,6 +79,15 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Does_not_flag_a_nested_path_as_a_duplicate_of_a_direct_column()   // #309 L2
+    {
+        // a.Name is a column; a.Parent.Name reads the Name of a RELATED entity. They share the leaf name but are
+        // different columns - comparing by simple name alone wrongly flagged them as duplicates.
+        string code = InMethod("RegisterStep().FilterOn(a => a.Name, a => a.Parent.Name).Handle();");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
     public async Task Ignores_a_leading_alias_string()
     {
         string code = InMethod("RegisterStep().WithPreImage(\"pre\", a => a.Name, a => a.City).Handle();");
@@ -116,6 +126,7 @@ namespace Acme
     {
         public string Name { get; set; }
         public string City { get; set; }
+        public Account Parent { get; set; }
     }
 }
 

@@ -32,7 +32,7 @@ namespace Demo
     public async Task Replaces_the_thrown_exception_type()
     {
         string before = Harness.Replace("BODY", "throw new {|#0:InvalidOperationException|}(\"bad\");");
-        string after = Harness.Replace("BODY", "throw new Microsoft.Xrm.Sdk.InvalidPluginExecutionException(\"bad\");");
+        string after = Harness.Replace("BODY", "throw new global::Microsoft.Xrm.Sdk.InvalidPluginExecutionException(\"bad\");");
         DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.PluginExceptionTypeAnalyzer.DiagnosticId, DiagnosticSeverity.Warning)
             .WithLocation(0).WithArguments("InvalidOperationException");
         await Verify.VerifyCodeFixAsync(before, expected, after);
@@ -44,7 +44,7 @@ namespace Demo
         // ArgumentException(message, paramName) has no InvalidPluginExecutionException(string, string) ctor, so the
         // fix keeps only the message and still compiles.
         string before = Harness.Replace("BODY", "throw new {|#0:ArgumentException|}(\"bad\", \"param\");");
-        string after = Harness.Replace("BODY", "throw new Microsoft.Xrm.Sdk.InvalidPluginExecutionException(\"bad\");");
+        string after = Harness.Replace("BODY", "throw new global::Microsoft.Xrm.Sdk.InvalidPluginExecutionException(\"bad\");");
         DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.PluginExceptionTypeAnalyzer.DiagnosticId, DiagnosticSeverity.Warning)
             .WithLocation(0).WithArguments("ArgumentException");
         await Verify.VerifyCodeFixAsync(before, expected, after);
@@ -54,7 +54,7 @@ namespace Demo
     public async Task Preserves_message_and_inner_exception()
     {
         string before = Harness.Replace("BODY", "var e = new System.Exception(\"inner\"); throw new {|#0:InvalidOperationException|}(\"bad\", e);");
-        string after = Harness.Replace("BODY", "var e = new System.Exception(\"inner\"); throw new Microsoft.Xrm.Sdk.InvalidPluginExecutionException(\"bad\", e);");
+        string after = Harness.Replace("BODY", "var e = new System.Exception(\"inner\"); throw new global::Microsoft.Xrm.Sdk.InvalidPluginExecutionException(\"bad\", e);");
         DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.PluginExceptionTypeAnalyzer.DiagnosticId, DiagnosticSeverity.Warning)
             .WithLocation(0).WithArguments("InvalidOperationException");
         await Verify.VerifyCodeFixAsync(before, expected, after);

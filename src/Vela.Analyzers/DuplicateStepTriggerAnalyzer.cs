@@ -162,6 +162,12 @@ namespace Vela.Analyzers
                 }
             }
 
+            // A trigger is only compared when BOTH its message and stage are resolvable from the chain. The fluent API
+            // ALWAYS requires an explicit stage (every On*/OnMessage path goes through PreValidation/PreOperation/
+            // PostOperation), so an empty stage here means the chain shape could not be parsed, not that a "default
+            // stage" applies - and comparing an unparsed trigger would risk a false positive. Such a step is skipped;
+            // a genuine duplicate is still rejected at registration by the framework (#309 M4: documented, not a
+            // resolvable static default).
             if (message.Length == 0 || stage.Length == 0)
             {
                 return false;
