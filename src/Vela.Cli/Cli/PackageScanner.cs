@@ -406,15 +406,23 @@ internal static class PackageScanner
         return false;
     }
 
-    Type? current = type.BaseType;
-    while (current != null)
+    for (Type? current = type.BaseType; current != null; current = current.BaseType)
     {
-        if (current.Name.StartsWith(baseTypeName, StringComparison.Ordinal))
+        // Match the base type's simple name EXACTLY (ignoring generic arity, so EntityPluginBase`1 / CustomApiBase`2
+        // match), not by prefix. A prefix match treated any type whose base name merely STARTED with the marker - e.g.
+        // a user's own "EntityPluginBaseHelper" - as a Vela plugin, a false positive the scanner would then try to
+        // instantiate (#305/#303).
+        string simpleName = current.Name;
+        int arity = simpleName.IndexOf('`');
+        if (arity >= 0)
+        {
+            simpleName = simpleName.Substring(0, arity);
+        }
+
+        if (string.Equals(simpleName, baseTypeName, StringComparison.Ordinal))
         {
             return true;
         }
-
-        current = current.BaseType;
     }
 
     return false;

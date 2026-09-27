@@ -19,15 +19,15 @@ public sealed class PackageScannerMutationTests
 {
     // ---- definition method returns null (distinct from the empty-array branch already covered) ----
 
-    public abstract class EntityPluginBaseStub
+    public abstract class EntityPluginBase
     {
     }
 
-    public abstract class CustomApiBaseStub
+    public abstract class CustomApiBase
     {
     }
 
-    public sealed class NullStepsPlugin : EntityPluginBaseStub
+    public sealed class NullStepsPlugin : EntityPluginBase
     {
         public NullStepsPlugin(string a, string b)
         {
@@ -38,7 +38,7 @@ public sealed class PackageScannerMutationTests
         public object[]? GetStepDefinitions() => null;
     }
 
-    public sealed class NullCustomApi : CustomApiBaseStub
+    public sealed class NullCustomApi : CustomApiBase
     {
         public NullCustomApi(string a, string b)
         {

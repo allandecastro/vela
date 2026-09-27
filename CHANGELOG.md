@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.19.5] - 2026-09-27 (Vela.Cli)
+
+CLI line, published as `cli-v0.19.5`. Tightens plugin-type detection in the package scanner.
+
+### Fixed
+
+- **The package scanner no longer mistakes a type whose base name merely starts with the marker for a Vela plugin.** Plugin / Custom API discovery matched any type whose base type name *started with* `EntityPluginBase` / `CustomApiBase`, so a user's own `EntityPluginBaseHelper` (or similar) was treated as a plugin and instantiated during the scan. Detection now matches the base type's simple name exactly (ignoring generic arity, so `EntityPluginBase<T>` / `CustomApiBase<TReq,TResp>` still match).
+
 ## [0.19.4] - 2026-09-26 (Vela.Cli)
 
 CLI line, published as `cli-v0.19.4`. Detects a rank collision between a filter-less global step and entity-bound steps.
