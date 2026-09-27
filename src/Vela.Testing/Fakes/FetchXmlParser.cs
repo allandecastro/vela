@@ -236,6 +236,21 @@ namespace Vela.Testing
                 case "not-begin-with": return ConditionOperator.DoesNotBeginWith;
                 case "ends-with": return ConditionOperator.EndsWith;
                 case "not-end-with": return ConditionOperator.DoesNotEndWith;
+                case "between": return ConditionOperator.Between;
+                case "not-between": return ConditionOperator.NotBetween;
+                case "on": return ConditionOperator.On;
+                case "on-or-before": return ConditionOperator.OnOrBefore;
+                case "on-or-after": return ConditionOperator.OnOrAfter;
+                case "today": return ConditionOperator.Today;
+                case "yesterday": return ConditionOperator.Yesterday;
+                case "tomorrow": return ConditionOperator.Tomorrow;
+                case "this-month": return ConditionOperator.ThisMonth;
+                case "this-year": return ConditionOperator.ThisYear;
+                case "last-x-days": return ConditionOperator.LastXDays;
+                case "next-x-days": return ConditionOperator.NextXDays;
+                case "olderthan-x-days": return ConditionOperator.OlderThanXDays;
+                case "eq-userid": return ConditionOperator.EqualUserId;
+                case "ne-userid": return ConditionOperator.NotEqualUserId;
                 default:
                     throw new NotSupportedException($"FetchXML operator '{fetchOperator}' is not supported yet.");
             }

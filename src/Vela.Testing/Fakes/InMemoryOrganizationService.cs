@@ -629,26 +629,14 @@ namespace Vela.Testing
             return response;
         }
 
-        // Compares an alternate-key value to a stored attribute value, unwrapping the reference types Dataverse
-        // uses for key columns so equality is by identity/value, not object reference.
+        // Compares an alternate-key value to a stored attribute value through the shared value comparer, so key
+        // RESOLUTION matches key UNIQUENESS (AlternateKeyValidator uses the same comparer). This unwraps the
+        // reference types Dataverse uses for key columns and, crucially, compares strings case-insensitively -
+        // Dataverse alternate keys are case-insensitive, so upserting "abc" must update a stored "ABC" rather than
+        // fault as a missing key.
         private static bool KeyValueEquals(object? stored, object? key)
         {
-            if (stored is EntityReference storedRef && key is EntityReference keyRef)
-            {
-                return storedRef.Id == keyRef.Id;
-            }
-
-            if (stored is OptionSetValue storedOption && key is OptionSetValue keyOption)
-            {
-                return storedOption.Value == keyOption.Value;
-            }
-
-            if (stored is Money storedMoney && key is Money keyMoney)
-            {
-                return storedMoney.Value == keyMoney.Value;
-            }
-
-            return Equals(stored, key);
+            return EntityValues.AreEqual(stored, key);
         }
 
         // Include support: fills a retrieved record's RelatedEntities from a RelationshipQueryCollection (1:N
