@@ -181,6 +181,41 @@ public class ApplyEngineTests
     }
 
     [Fact]
+    public void ApplyDiff_falls_back_to_one_by_one_when_ExecuteMultiple_is_unsupported()   // #305 batched-fault gap
+    {
+        // A whole ExecuteMultiple batch throws (as an org without the ExecuteMultiple privilege would): the apply
+        // must fall back to issuing each write individually, so the step still lands.
+        var svc = new TestSupport.FakeOrgService
+        {
+            FailWholeBatch = true,
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType }),
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+        };
+
+        JsonElement def = Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x" });
+        var diff = new RegistrationDiff(
+            LocalAssemblies: ["Zava.Plugins"],
+            CurrentAssemblies: ["Zava.Plugins"],
+            Added: [new RegistrationItem("step", PluginType, def)],
+            Removed: [],
+            Changed: [],
+            LocalItems: [],
+            CurrentItems: []);
+
+        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
+
+        // The batch was attempted (and threw), then the step was created through the one-by-one fallback.
+        Assert.NotEmpty(svc.Batches);
+        Assert.Contains(svc.Created, e => e.LogicalName == "sdkmessageprocessingstep");
+    }
+
+    [Fact]
     public void ApplyDiff_deletes_removed_step_through_the_service_seam()
     {
         // Demonstrates the apply orchestration is fully drivable through the IOrganizationService seam

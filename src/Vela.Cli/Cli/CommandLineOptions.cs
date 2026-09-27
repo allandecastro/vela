@@ -36,7 +36,7 @@ internal static class CommandLineOptions
     private static readonly HashSet<string> SharedValueOptions = new(ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--webresources", "--package", "-p", "--packages-dir", "--solution", "--solution-unique-name",
-        "--package-assembly", "--environment", "--out",
+        "--package-assembly", "--environment", "--out", "--batch-size",
     };
 
     private static readonly HashSet<string> SharedFlagOptions = new(ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
@@ -302,6 +302,11 @@ internal static class CommandLineOptions
             return false;
         }
 
+        if (!TryReadBatchChunkSize(args, out int? batchChunkSize, out exitCode))
+        {
+            return false;
+        }
+
         if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out exitCode))
         {
             return false;
@@ -326,7 +331,8 @@ internal static class CommandLineOptions
             Verbose: args.Any(x => string.Equals(x, "--verbose", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-v", StringComparison.OrdinalIgnoreCase)),
             WebResourcesRoot: webResourcesRoot,
             Json: args.Any(x => string.Equals(x, "--json", StringComparison.OrdinalIgnoreCase)),
-            TimeoutMinutes: timeoutMinutes);
+            TimeoutMinutes: timeoutMinutes,
+            BatchChunkSize: batchChunkSize);
         return true;
     }
 
@@ -413,6 +419,32 @@ internal static class CommandLineOptions
         }
 
         timeoutMinutes = minutes;
+        return true;
+    }
+
+    /// <summary>
+    /// Reads the optional <c>--batch-size</c> apply option: the ExecuteMultiple chunk size. Defaults to
+    /// <see cref="DataverseRegistration.DefaultBatchChunkSize"/> when absent; must be 1..1000 (Dataverse caps
+    /// ExecuteMultiple at 1000 requests per batch).
+    /// </summary>
+    public static bool TryReadBatchChunkSize(string[] args, out int? batchChunkSize, out int exitCode)
+    {
+        batchChunkSize = null;
+        exitCode = ExitSuccess;
+
+        string? raw = TryReadOption(args, "--batch-size");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int size) || size < 1 || size > 1000)
+        {
+            exitCode = Fail("--batch-size must be a whole number between 1 and 1000.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
+        batchChunkSize = size;
         return true;
     }
 

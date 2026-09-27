@@ -6,6 +6,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Xrm.Sdk;
 using static Vela.Cli.JsonReader;
@@ -43,7 +45,8 @@ internal static class PackageScanner
     // for the process lifetime, leaking the temp directory and failing its cleanup. Framework/SDK assemblies
     // not present in the temp folders fall back to the default context.
     PluginLoadContext loadContext = new(tempDirectories);
-
+    try
+    {
     foreach (string packagePath in options.PackagePaths)
     {
         packagePayloads.Add(ReadPluginPackagePayload(packagePath));
@@ -135,6 +138,14 @@ internal static class PackageScanner
         Items: items.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
         Diagnostics: [],
         SecureConfigByStepKey: secureConfigByStepKey);
+    }
+    finally
+    {
+        // The load context is collectible and the scanned definitions are already serialized to JSON (no live Type
+        // references are retained), so request unload to release the package assemblies rather than pinning them for
+        // the process lifetime. Unload is a request; collection happens once the runtime drops the last reference.
+        loadContext.Unload();
+    }
 }
 
     // Best-effort cleanup of the temp directories created while extracting/transforming packages (see
@@ -166,7 +177,7 @@ internal static class PackageScanner
     // keeps the package's own dependencies (e.g. the net462 Microsoft.Xrm.Sdk shipped in the package) resolving
     // from the temp folders, matching the previous LoadFrom directory-probing; anything not found there falls
     // back to the default context (framework / SDK assemblies the CLI already has).
-    private sealed class PluginLoadContext(IReadOnlyList<string> probeDirectories) : AssemblyLoadContext
+    private sealed class PluginLoadContext(IReadOnlyList<string> probeDirectories) : AssemblyLoadContext(isCollectible: true)
     {
         public Assembly LoadFromAssemblyPathByBytes(string assemblyPath)
         {
@@ -447,41 +458,30 @@ internal static class PackageScanner
         return false;
     }
 
-    try
+    if (!TryInvokeWithinTimeout(() => method.Invoke(ctor.Invoke([null, null]), null), methodName, out object? result, out error))
     {
-        object? instance = ctor.Invoke([null, null]);
-        object? result = method.Invoke(instance, null);
-        if (result == null)
+        return false;
+    }
+
+    if (result == null)
+    {
+        error = $"Method '{methodName}' returned null.";
+        return false;
+    }
+
+    if (result is System.Array arr)
+    {
+        definitions = arr.Cast<object>().ToArray();
+        if (definitions.Length == 0)
         {
-            error = $"Method '{methodName}' returned null.";
+            error = $"Method '{methodName}' returned an empty array.";
             return false;
         }
-
-        if (result is System.Array arr)
-        {
-            definitions = arr.Cast<object>().ToArray();
-            if (definitions.Length == 0)
-            {
-                error = $"Method '{methodName}' returned an empty array.";
-                return false;
-            }
-            return true;
-        }
-
-        definitions = [result];
         return true;
     }
-    catch (TargetInvocationException ex)
-    {
-        Exception source = ex.InnerException ?? ex;
-        error = $"{source.GetType().Name}: {source.Message}";
-        return false;
-    }
-    catch (Exception ex)
-    {
-        error = $"{ex.GetType().Name}: {ex.Message}";
-        return false;
-    }
+
+    definitions = [result];
+    return true;
 }
 
     internal static bool TryGetDefinition(Type type, string methodName, out object? definition, out string? error)
@@ -503,28 +503,68 @@ internal static class PackageScanner
         return false;
     }
 
-    try
+    if (!TryInvokeWithinTimeout(() => method.Invoke(ctor.Invoke([null, null]), null), methodName, out object? result, out error))
     {
-        object? instance = ctor.Invoke([null, null]);
-        definition = method.Invoke(instance, null);
-        if (definition == null)
+        return false;
+    }
+
+    if (result == null)
+    {
+        error = $"Method '{methodName}' returned null.";
+        return false;
+    }
+
+    definition = result;
+    return true;
+}
+
+    // The scanner instantiates and invokes code from the package (see the SECURITY note on the class). Run that
+    // invocation under a timeout so an infinite loop or a blocking call in a type's constructor/definition method
+    // cannot hang the CLI forever (including `vela models --package`); it fails the scan with a clear message
+    // instead. A runaway invocation continues on a background thread-pool thread, which does not block process exit.
+    private const int PackageCodeTimeoutSeconds = 30;
+
+    private static bool TryInvokeWithinTimeout(Func<object?> invoke, string methodName, out object? result, out string? error)
+    {
+        result = null;
+        error = null;
+
+        Task<object?> task = Task.Run(invoke);
+
+        bool completed;
+        try
         {
-            error = $"Method '{methodName}' returned null.";
+            // Wait throws AggregateException if the task faulted within the timeout; that means it completed (with an
+            // exception), so treat it as completed and let GetResult below rethrow the real, unwrapped exception.
+            completed = task.Wait(TimeSpan.FromSeconds(PackageCodeTimeoutSeconds));
+        }
+        catch (AggregateException)
+        {
+            completed = true;
+        }
+
+        if (!completed)
+        {
+            error = $"Method '{methodName}' did not complete within {PackageCodeTimeoutSeconds}s " +
+                "(possible infinite loop or blocking call in the package); scan aborted for safety.";
             return false;
         }
 
-        return true;
+        try
+        {
+            result = task.GetAwaiter().GetResult();
+            return true;
+        }
+        catch (TargetInvocationException ex)
+        {
+            Exception source = ex.InnerException ?? ex;
+            error = $"{source.GetType().Name}: {source.Message}";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            error = $"{ex.GetType().Name}: {ex.Message}";
+            return false;
+        }
     }
-    catch (TargetInvocationException ex)
-    {
-        Exception source = ex.InnerException ?? ex;
-        error = $"{source.GetType().Name}: {source.Message}";
-        return false;
-    }
-    catch (Exception ex)
-    {
-        error = $"{ex.GetType().Name}: {ex.Message}";
-        return false;
-    }
-}
 }

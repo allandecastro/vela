@@ -152,21 +152,40 @@ internal static partial class DataverseRegistration
         }
 
         List<Guid> webResourcesToPublish = [];
-        foreach (RegistrationItem item in addedWebResources)
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? upsertError = null;
+        try
         {
-            webResourcesToPublish.Add(UpsertWebResource(svc, item.Definition, verbose));
-            done++;
+            foreach (RegistrationItem item in addedWebResources)
+            {
+                webResourcesToPublish.Add(UpsertWebResource(svc, item.Definition, verbose));
+                done++;
+            }
+
+            foreach (RegistrationChange change in changedWebResources)
+            {
+                webResourcesToPublish.Add(UpsertWebResource(svc, change.After, verbose));
+                done++;
+            }
+        }
+        catch (Exception upsertEx)
+        {
+            // Capture, but still publish what was already committed below: a created/updated web resource left
+            // unpublished is invisible/stale, so publishing the committed writes is the safer half-applied state.
+            upsertError = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(upsertEx);
         }
 
-        foreach (RegistrationChange change in changedWebResources)
+        if (webResourcesToPublish.Count > 0)
         {
-            webResourcesToPublish.Add(UpsertWebResource(svc, change.After, verbose));
-            done++;
+            PublishWebResources(service, webResourcesToPublish);
+        }
+
+        if (upsertError != null)
+        {
+            upsertError.Throw();
         }
 
         if (hasWebResourceWrites)
         {
-            PublishWebResources(service, webResourcesToPublish);
             done++;
         }
     }

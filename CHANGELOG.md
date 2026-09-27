@@ -24,6 +24,25 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.21.0] - 2026-09-28 (Vela.Cli)
+
+CLI line, published as `cli-v0.21.0`. plan/apply fidelity & safety audit (#305): scanner hardening,
+web-resource publish safety, and apply/report accuracy.
+
+### Added
+
+- **`--batch-size` apply option** to set the ExecuteMultiple chunk size (1..1000, default 100), for tuning against org throughput or working around ExecuteMultiple limits.
+
+### Changed
+
+- **The package scanner runs each package type's construction and definition method under a timeout** (30s), so an infinite loop or blocking call in a scanned assembly aborts the scan with a clear message instead of hanging the CLI (including `vela models --package`). The scanner's assembly load context is now collectible and unloaded after the scan.
+- **Web-resource writes publish what was already committed even if a later upsert fails.** A mid-loop failure previously left earlier created/updated web resources unpublished (invisible/stale); the committed writes are now published before the failure is surfaced.
+
+### Fixed
+
+- **The live registration read normalizes step rank** the same way the local/diff side does, so an externally set rank of 0 or negative no longer diffs as a spurious "changed".
+- **The apply resume report's per-group counters include "ignored" operations.** `RecordIgnored` now bumps the per-group tally (previously only the aggregate), so the half-applied summary is accurate.
+
 ## [0.20.0] - 2026-09-27 (Vela.Cli)
 
 CLI line, published as `cli-v0.20.0`. Model-generation fidelity audit (#308): deterministic TypeScript table
