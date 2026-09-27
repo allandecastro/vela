@@ -24,6 +24,20 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.28.2] - 2026-09-27 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.28.2`. Second pass of the analyzer/generator audit (#309).
+
+### Fixed
+
+- **Code fixes for VELA002 (remove `static`) and VELA015 (use the step context type) now edit the file that owns the handler.** When the handler method was declared in a different file from the `.Handle(...)` call (a partial class, or a handler defined elsewhere), the fix operated on the wrong document and threw "node not in tree". Both are now Solution-based and edit the handler's own document.
+- **A generated image projection on a value-type column is nullable.** A non-nullable value-type column (for example an authored `int` model property) was projected as a non-nullable field, so an absent image column read its default (`0`) - indistinguishable from a real value. Value-type projected members are now `T?` (early-bound models are already nullable, so this only changes an authored non-nullable value-type selector).
+- **On a projection-name collision, the first shape keeps the plain name.** When two steps produced the same projection name with different captured columns, every shape got a hash suffix, making a lambda-handler projection unnameable. The first shape (ordered deterministically) now keeps the plain, guessable name; only later colliding shapes are hash-suffixed.
+
+### Notes
+
+- VELA015 typed `On<TRequest>()` / permissive `OnMessage(...)` coverage (M1) remains a documented known limitation, not an extension.
+
 ## [0.28.1] - 2026-09-27 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.28.1`. Analyzer accuracy and performance (first pass of the analyzer audit, #309).
