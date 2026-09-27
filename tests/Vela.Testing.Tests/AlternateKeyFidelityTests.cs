@@ -63,6 +63,21 @@ namespace Vela.Testing.Tests
             Assert.Equal("New", svc.Retrieve("account", id, new ColumnSet("name")).GetAttributeValue<string>("name"));
         }
 
+        // #303: Dataverse alternate keys are case-insensitive, and resolution must match uniqueness. Addressing a
+        // record stored as "ABC" by the key value "abc" must resolve and update it, not fault as a missing key.
+        [Fact]
+        public void Update_addressed_by_a_key_with_different_casing_resolves_case_insensitively()
+        {
+            InMemoryOrganizationService svc = AccountNumberService();
+            Guid id = svc.Create(new Entity("account") { ["accountnumber"] = "ABC", ["name"] = "Old" });
+
+            Entity target = new Entity("account") { ["name"] = "New" };
+            target.KeyAttributes.Add("accountnumber", "abc");
+            svc.Execute(new UpdateRequest { Target = target });
+
+            Assert.Equal("New", svc.Retrieve("account", id, new ColumnSet("name")).GetAttributeValue<string>("name"));
+        }
+
         // --- Delete by alternate key --------------------------------------------------------------------
 
         [Fact]

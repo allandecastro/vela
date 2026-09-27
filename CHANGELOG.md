@@ -24,6 +24,15 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.1] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.1`. Test-harness fidelity audit (#303): query and alternate-key fixes.
+
+### Fixed
+
+- **The FetchXML parser now maps every operator the query engine already evaluates.** `between` / `not-between`, the date operators (`on`, `on-or-before`, `on-or-after`, `today`, `yesterday`, `tomorrow`, `this-month`, `this-year`, `last-x-days`, `next-x-days`, `olderthan-x-days`) and the user operators (`eq-userid`, `ne-userid`) previously threw "not supported" from the parser even though the engine supported them, so a `ToFetchXml()` round-trip through the harness broke. A parity test guards the two sides against future drift.
+- **Alternate-key resolution is now case-insensitive, matching Dataverse and the harness's own uniqueness check.** Resolution compared strings case-sensitively while uniqueness did not, so upserting `"abc"` against a stored `"ABC"` faulted as a missing key instead of updating the record. Resolution now uses the shared value comparer.
+
 ## [0.21.0] - 2026-09-28 (Vela.Cli)
 
 CLI line, published as `cli-v0.21.0`. plan/apply fidelity & safety audit (#305): scanner hardening,

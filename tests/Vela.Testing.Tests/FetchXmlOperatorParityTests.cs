@@ -28,6 +28,21 @@ namespace Vela.Testing.Tests
         [InlineData("<condition attribute='name' operator='not-begin-with' value='Zz' />")]
         [InlineData("<condition attribute='name' operator='ends-with' value='me' />")]
         [InlineData("<condition attribute='name' operator='not-end-with' value='zz' />")]
+        [InlineData("<condition attribute='numberofemployees' operator='between'><value>1</value><value>99</value></condition>")]
+        [InlineData("<condition attribute='numberofemployees' operator='not-between'><value>1</value><value>99</value></condition>")]
+        [InlineData("<condition attribute='createdon' operator='on' value='2026-01-01' />")]
+        [InlineData("<condition attribute='createdon' operator='on-or-before' value='2026-01-01' />")]
+        [InlineData("<condition attribute='createdon' operator='on-or-after' value='2026-01-01' />")]
+        [InlineData("<condition attribute='createdon' operator='today' />")]
+        [InlineData("<condition attribute='createdon' operator='yesterday' />")]
+        [InlineData("<condition attribute='createdon' operator='tomorrow' />")]
+        [InlineData("<condition attribute='createdon' operator='this-month' />")]
+        [InlineData("<condition attribute='createdon' operator='this-year' />")]
+        [InlineData("<condition attribute='createdon' operator='last-x-days' value='7' />")]
+        [InlineData("<condition attribute='createdon' operator='next-x-days' value='7' />")]
+        [InlineData("<condition attribute='createdon' operator='olderthan-x-days' value='7' />")]
+        [InlineData("<condition attribute='ownerid' operator='eq-userid' />")]
+        [InlineData("<condition attribute='ownerid' operator='ne-userid' />")]
         public void Every_parser_supported_operator_executes_without_a_not_supported_error(string condition)
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
