@@ -117,20 +117,44 @@ namespace Vela.Analyzers
         {
             column = string.Empty;
 
-            ExpressionSyntax? body = expression switch
+            string parameterName;
+            ExpressionSyntax? body;
+            switch (expression)
             {
-                SimpleLambdaExpressionSyntax simple => simple.Body as ExpressionSyntax,
-                ParenthesizedLambdaExpressionSyntax paren => paren.Body as ExpressionSyntax,
-                _ => null,
-            };
-
-            // Unwrap a cast/conversion such as a => (object)a.Name.
-            while (body is CastExpressionSyntax cast)
-            {
-                body = cast.Expression;
+                case SimpleLambdaExpressionSyntax simple:
+                    parameterName = simple.Parameter.Identifier.ValueText;
+                    body = simple.Body as ExpressionSyntax;
+                    break;
+                case ParenthesizedLambdaExpressionSyntax paren when paren.ParameterList.Parameters.Count == 1:
+                    parameterName = paren.ParameterList.Parameters[0].Identifier.ValueText;
+                    body = paren.Body as ExpressionSyntax;
+                    break;
+                default:
+                    return false;
             }
 
-            if (body is MemberAccessExpressionSyntax memberAccess)
+            // Unwrap a leading cast / `as` (a => (object)a.Name, a => a.Name as object).
+            while (true)
+            {
+                switch (body)
+                {
+                    case CastExpressionSyntax cast:
+                        body = cast.Expression;
+                        continue;
+                    case BinaryExpressionSyntax asExpr when asExpr.IsKind(SyntaxKind.AsExpression):
+                        body = asExpr.Left;
+                        continue;
+                }
+
+                break;
+            }
+
+            // A column selector is a member access DIRECTLY on the lambda parameter (a => a.Name). A nested path
+            // (a => a.Parent.Name) reads a member of a RELATED entity, not a column on this one - comparing by the
+            // leaf name alone would wrongly flag a.Name and a.Parent.Name as the same column (#309 L2).
+            if (body is MemberAccessExpressionSyntax memberAccess
+                && memberAccess.Expression is IdentifierNameSyntax id
+                && id.Identifier.ValueText == parameterName)
             {
                 column = memberAccess.Name.Identifier.ValueText;
                 return true;

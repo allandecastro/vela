@@ -75,6 +75,30 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_a_base_member_through_an_explicit_cast()   // #309 L1
+    {
+        // (object)x.LogicalName - the leading cast must not hide the base-Entity member from the analyzer.
+        string code = InMethod("Steps.Filtering<Account>(x => (object)x.{|#0:LogicalName|});");
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+                .WithLocation(0)
+                .WithArguments("LogicalName"));
+    }
+
+    [Fact]
+    public async Task Flags_a_base_member_through_an_as_expression()   // #309 L1
+    {
+        // x.LogicalName as object - the `as` conversion must not hide the base-Entity member.
+        string code = InMethod("Steps.Filtering<Account>(x => x.{|#0:LogicalName|} as object);");
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+                .WithLocation(0)
+                .WithArguments("LogicalName"));
+    }
+
+    [Fact]
     public async Task Does_not_flag_a_real_column_property()
     {
         // 'Name' is declared on the derived model -> allowed, no diagnostics.

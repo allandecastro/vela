@@ -1,5 +1,8 @@
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -44,11 +47,15 @@ namespace Vela.Analyzers
                     return;
                 }
 
-                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeInvocation(nodeContext, contextType, fluent), SyntaxKind.InvocationExpression);
+                // Per-type cache of the Handle-chain scan: without it, a type with N HasChanged calls re-scans all its
+                // Handle chains N times (quadratic). Computed once per owning type; the value factory is pure so a
+                // concurrent double-compute is harmless. (#309 P2)
+                var perTypeBindings = new ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage)>>();
+                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeInvocation(nodeContext, contextType, fluent, perTypeBindings), SyntaxKind.InvocationExpression);
             });
         }
 
-        private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context, INamedTypeSymbol contextType, INamedTypeSymbol fluent)
+        private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context, INamedTypeSymbol contextType, INamedTypeSymbol fluent, ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage)>> perTypeBindings)
         {
             var invocation = (InvocationExpressionSyntax)context.Node;
             if (invocation.Expression is not MemberAccessExpressionSyntax member)
@@ -91,9 +98,24 @@ namespace Vela.Analyzers
             }
 
             // Find every RegisterStep()...Handle(handler) chain in the same type that binds THIS handler by method
-            // group. Only act when exactly one chain owns it (unambiguous) and that chain has no WithPreImage.
-            int owningChains = 0;
-            bool anyChainHasPreImage = false;
+            // group. Only act when exactly one chain owns it (unambiguous) and that chain has no WithPreImage. The
+            // scan is cached per owning type (see perTypeBindings) so it runs once, not once per HasChanged call.
+            IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage)> bindings = perTypeBindings.GetOrAdd(
+                owningType, ot => BuildHandlerBindings(ot, context.SemanticModel, fluent, context.CancellationToken));
+
+            if (bindings.TryGetValue(handlerSymbol, out (int Chains, bool HasPreImage) binding)
+                && binding.Chains == 1 && !binding.HasPreImage)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), name));
+            }
+        }
+
+        // Scans a type once, mapping each method-group handler bound by a RegisterStep()...Handle(handler) chain to the
+        // number of chains that own it and whether any of those chains declares a WithPreImage.
+        private static IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage)> BuildHandlerBindings(
+            TypeDeclarationSyntax owningType, SemanticModel model, INamedTypeSymbol fluent, CancellationToken cancellationToken)
+        {
+            var result = new Dictionary<ISymbol, (int Chains, bool HasPreImage)>(SymbolEqualityComparer.Default);
             foreach (InvocationExpressionSyntax handleCall in owningType.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 if (handleCall.Expression is not MemberAccessExpressionSyntax handleMember || handleMember.Name.Identifier.ValueText != "Handle")
@@ -107,28 +129,18 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                if (context.SemanticModel.GetSymbolInfo(handlerArg.Expression, context.CancellationToken).Symbol is not IMethodSymbol bound
-                    || !SymbolEqualityComparer.Default.Equals(bound, handlerSymbol))
+                if (model.GetSymbolInfo(handlerArg.Expression, cancellationToken).Symbol is not IMethodSymbol bound
+                    || !FluentStep.IsFluentMethod(model, handleCall, fluent, cancellationToken))
                 {
                     continue;
                 }
 
-                if (!FluentStep.IsFluentMethod(context.SemanticModel, handleCall, fluent, context.CancellationToken))
-                {
-                    continue;
-                }
-
-                owningChains++;
-                if (SpineHasCall(handleMember.Expression, "WithPreImage"))
-                {
-                    anyChainHasPreImage = true;
-                }
+                bool hasPreImage = SpineHasCall(handleMember.Expression, "WithPreImage");
+                (int Chains, bool HasPreImage) existing = result.TryGetValue(bound, out (int Chains, bool HasPreImage) e) ? e : (0, false);
+                result[bound] = (existing.Chains + 1, existing.HasPreImage || hasPreImage);
             }
 
-            if (owningChains == 1 && !anyChainHasPreImage)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), name));
-            }
+            return result;
         }
 
         private static bool IsContextChangeCheck(IMethodSymbol method, INamedTypeSymbol contextType)

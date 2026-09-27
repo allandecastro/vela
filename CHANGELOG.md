@@ -24,6 +24,25 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.28.1] - 2026-09-27 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.28.1`. Analyzer accuracy and performance (first pass of the analyzer audit, #309).
+
+### Fixed
+
+- **VELA001 sees through `as` and double casts.** A base-`Entity` member selected via `x.LogicalName as object` or a nested/double cast was not flagged; the analyzer now unwraps `as`/cast conversions the same way the source generator does, so a mistaken base-member selector is caught regardless of the conversion syntax.
+- **VELA005 no longer flags a nested path as a duplicate column.** It compared columns by the leaf member name, so `a => a.Name` and `a => a.Parent.Name` (a member of a related entity) were wrongly reported as duplicates. It now only treats a member access directly on the lambda parameter as a column.
+- **VELA012 code fix qualifies the exception type with `global::`.** The fix inserted `Microsoft.Xrm.Sdk.InvalidPluginExecutionException`; it now uses the `global::`-qualified name so it cannot bind to a shadowing `Microsoft` namespace in user code.
+
+### Performance
+
+- **VELA001 runs its cheap syntactic gate before the semantic-model lookup**, skipping the conversion query on lambdas that are not column selectors.
+- **VELA009 caches its per-type Handle-chain scan**, so a type with many `HasChanged` calls no longer re-scans all its step chains once per call (was quadratic per class).
+
+### Notes
+
+- VELA008 (duplicate-trigger) implicit-stage and VELA015 (handler-context) typed `On<TRequest>()` / permissive `OnMessage(...)` coverage are documented as known limitations in code; extending them is a follow-up (still open on #309).
+
 ## [0.19.6] - 2026-09-27 (Vela.Cli)
 
 CLI line, published as `cli-v0.19.6`. Connection-string input validation and config-dir hardening (closes the CLI security audit, #307).
