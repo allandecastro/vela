@@ -38,7 +38,6 @@ internal static class OptionSetsTs
     /// </summary>
     public sealed class Registry
     {
-        private readonly HashSet<string> _globalNames = new HashSet<string>(StringComparer.Ordinal);
         private readonly List<(string Name, OptionSetMetadata Set)> _globals = new List<(string, OptionSetMetadata)>();
 
         private readonly List<string> _entityOrder = new List<string>();
@@ -57,7 +56,9 @@ internal static class OptionSetsTs
         {
             if (set.IsGlobal == true)
             {
-                if (_globalNames.Add(name))
+                // Dedup by set identity, not by display name: the same global referenced from many tables emits one
+                // enum. EnumName keeps distinct sets on distinct names, so identity dedup never drops a real set.
+                if (!_globals.Any(g => SameOptionSet(g.Set, set)))
                 {
                     _globals.Add((name, set));
                 }
@@ -87,10 +88,51 @@ internal static class OptionSetsTs
     {
         if (optionSet.IsGlobal == true && !string.IsNullOrWhiteSpace(optionSet.Name))
         {
-            return SanitizeIdentifier(optionSet.Name!);
+            string sanitized = SanitizeIdentifier(optionSet.Name!);
+
+            // A well-formed Dataverse option-set name is already a valid, unique identifier, so sanitizing is a
+            // no-op and the emitted name is unchanged (no fixture churn). Only a name carrying characters the
+            // sanitizer strips could collide with a different set's; append a short stable suffix derived from the
+            // original name in that case, so two distinct global sets never share one enum.
+            if (!string.Equals(sanitized, optionSet.Name, StringComparison.Ordinal))
+            {
+                sanitized = sanitized + "_" + StableSuffix(optionSet.Name!);
+            }
+
+            return sanitized;
         }
 
         return SanitizeIdentifier($"{entity}_{attribute.LogicalName}");
+    }
+
+    // Two option-set references denote the same global set when they carry the same MetadataId (or, absent an id,
+    // the same name); otherwise they are distinct sets that must not share an enum.
+    private static bool SameOptionSet(OptionSetMetadata a, OptionSetMetadata b)
+    {
+        if (ReferenceEquals(a, b))
+        {
+            return true;
+        }
+
+        if (a.MetadataId.HasValue && b.MetadataId.HasValue)
+        {
+            return a.MetadataId.Value == b.MetadataId.Value;
+        }
+
+        return !string.IsNullOrEmpty(a.Name) && string.Equals(a.Name, b.Name, StringComparison.Ordinal);
+    }
+
+    // A short, deterministic hex suffix (FNV-1a) used only to keep two distinct global sets apart when their names
+    // sanitize to the same identifier - a case unreachable for well-formed Dataverse metadata.
+    private static string StableSuffix(string value)
+    {
+        uint hash = 2166136261;
+        foreach (char c in value)
+        {
+            hash = (hash ^ c) * 16777619;
+        }
+
+        return hash.ToString("x8", CultureInfo.InvariantCulture);
     }
 
     // Emits every option-set file: global.ts first (when any global is referenced), then one <entity>.ts per entity

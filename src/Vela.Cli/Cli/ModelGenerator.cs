@@ -173,7 +173,7 @@ public static class ModelGenerator
         // Dataverse stores a collection of option values, not a bitmask).
         if (attribute is MultiSelectPicklistAttributeMetadata multi && multi.OptionSet?.Options is { Count: > 0 })
         {
-            string msEnum = RegisterEnum(multi.OptionSet, name, localEnums, globals);
+            string msEnum = RegisterEnum(multi.OptionSet, name, usedNames, localEnums, globals);
             sb.AppendLine();
             sb.AppendLine($"        /// <summary>{XmlEscape(AttributeDoc(attribute))}</summary>");
             sb.AppendLine($"        [AttributeLogicalName(\"{logical}\")]");
@@ -199,7 +199,7 @@ public static class ModelGenerator
             return;
         }
 
-        string? enumType = ResolveEnum(attribute, name, localEnums, globals);
+        string? enumType = ResolveEnum(attribute, name, usedNames, localEnums, globals);
         string type = enumType != null ? enumType + "?" : MapType(attribute);
 
         sb.AppendLine();
@@ -463,7 +463,7 @@ public static class ModelGenerator
     // Choice attributes (Picklist/State/Status) with an option set become strongly-typed enums: local sets are
     // nested in the table class, global sets are shared standalone enums. Returns the enum type name, or null to
     // fall back to OptionSetValue.
-    private static string? ResolveEnum(AttributeMetadata attribute, string propertyName, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals)
+    private static string? ResolveEnum(AttributeMetadata attribute, string propertyName, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals)
     {
         if (attribute.AttributeType is not (AttributeTypeCode.Picklist or AttributeTypeCode.State or AttributeTypeCode.Status))
         {
@@ -475,27 +475,63 @@ public static class ModelGenerator
             return null;
         }
 
-        return RegisterEnum(em.OptionSet, propertyName, localEnums, globals);
+        return RegisterEnum(em.OptionSet, propertyName, usedNames, localEnums, globals);
     }
 
     // Registers an option set as an enum (global → shared/deduped, local → nested) and returns the enum type name.
     // Shared by single choices and multi-select.
-    private static string RegisterEnum(OptionSetMetadata optionSet, string propertyName, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals)
+    private static string RegisterEnum(OptionSetMetadata optionSet, string propertyName, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals)
     {
         if (optionSet.IsGlobal == true)
         {
-            string globalName = CSharpIdentifier.EscapeKeyword(Pascalize(optionSet.Name ?? propertyName.TrimStart('@')));
-            if (!globals.ContainsKey(globalName))
+            // Dedup by set identity (MetadataId, else name), not by display name: the same global referenced by
+            // several tables emits one shared enum file. Reuse the name already assigned to this set.
+            foreach (KeyValuePair<string, OptionSetMetadata> existing in globals)
             {
-                globals[globalName] = optionSet;
+                if (SameOptionSet(existing.Value, optionSet))
+                {
+                    return existing.Key;
+                }
             }
 
+            // A new set: two distinct sets whose names Pascalize to the same identifier are disambiguated with a
+            // numeric suffix, so neither is silently dropped nor typed to the other's enum.
+            string baseName = CSharpIdentifier.EscapeKeyword(Pascalize(optionSet.Name ?? propertyName.TrimStart('@')));
+            string globalName = baseName;
+            int suffix = 2;
+            while (globals.ContainsKey(globalName))
+            {
+                globalName = baseName + suffix.ToString(CultureInfo.InvariantCulture);
+                suffix++;
+            }
+
+            globals[globalName] = optionSet;
             return globalName;
         }
 
-        string localName = propertyName.TrimStart('@') + "OptionSet";
+        // Local (nested) enums share the table's declaration space with its properties and methods, so the name
+        // must be uniquified against those members (a sibling column named e.g. StatusOptionSet would otherwise
+        // collide with the enum → CS0102).
+        string localName = UniqueName(propertyName.TrimStart('@') + "OptionSet", usedNames);
         localEnums.Add((localName, optionSet));
         return localName;
+    }
+
+    // Two option-set references denote the same global set when they carry the same MetadataId (or, absent an id,
+    // the same name); otherwise they are distinct sets that must not share an enum.
+    private static bool SameOptionSet(OptionSetMetadata a, OptionSetMetadata b)
+    {
+        if (ReferenceEquals(a, b))
+        {
+            return true;
+        }
+
+        if (a.MetadataId.HasValue && b.MetadataId.HasValue)
+        {
+            return a.MetadataId.Value == b.MetadataId.Value;
+        }
+
+        return !string.IsNullOrEmpty(a.Name) && string.Equals(a.Name, b.Name, StringComparison.Ordinal);
     }
 
     private static string GenerateGlobalEnumFile(string name, OptionSetMetadata optionSet, string ns)

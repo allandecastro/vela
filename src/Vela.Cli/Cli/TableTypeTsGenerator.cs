@@ -74,20 +74,18 @@ public static class TableTypeTsGenerator
         string primaryId = entity.PrimaryIdAttribute ?? string.Empty;
 
         // Resolve every storable column (skip companion "<name>name" pseudo-columns, like ModelGenerator) to a
-        // record member, in metadata order, dropping the primary key (emitted first, as a required GUID).
+        // record member, dropping the primary key (emitted first, as a required GUID). Columns are ordered by logical
+        // name, matching ModelGenerator's determinism guarantee: raw SDK metadata order is undocumented and unstable
+        // across environments and edits, so emitting it verbatim reshuffles members (and the shared option-sets files)
+        // on regeneration.
         List<Member> members = new List<Member>();
-        foreach (AttributeMetadata attribute in entity.Attributes ?? Array.Empty<AttributeMetadata>())
+        AttributeMetadata[] columns = (entity.Attributes ?? Array.Empty<AttributeMetadata>())
+            .Where(a => a?.LogicalName is { Length: > 0 } && a.AttributeType.HasValue)
+            .Where(a => string.IsNullOrEmpty(a.AttributeOf) && !string.Equals(a.LogicalName, primaryId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(a => a.LogicalName, StringComparer.Ordinal)
+            .ToArray();
+        foreach (AttributeMetadata attribute in columns)
         {
-            if (attribute?.LogicalName is not { Length: > 0 } || !attribute.AttributeType.HasValue)
-            {
-                continue;
-            }
-
-            if (!string.IsNullOrEmpty(attribute.AttributeOf) || string.Equals(attribute.LogicalName, primaryId, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             members.AddRange(MapMembers(logical, attribute));
         }
 
@@ -262,6 +260,19 @@ public static class TableTypeTsGenerator
         List<Member> members = new List<Member> { new Member($"_{logical}_value", "string", null, null) };
 
         string[] targets = (attribute as LookupAttributeMetadata)?.Targets ?? Array.Empty<string>();
+
+        // Customer and Owner are polymorphic by definition; some metadata payloads return them with an empty Targets
+        // list (the pair is implicit). Fall back to the known pair so the record keeps its typed logical-name union.
+        if (targets.Length == 0)
+        {
+            targets = attribute.AttributeType switch
+            {
+                AttributeTypeCode.Customer => new[] { "account", "contact" },
+                AttributeTypeCode.Owner => new[] { "systemuser", "team" },
+                _ => targets,
+            };
+        }
+
         if (targets.Length > 1)
         {
             string union = string.Join(" | ", targets.Select(t => $"'{t}'"));
