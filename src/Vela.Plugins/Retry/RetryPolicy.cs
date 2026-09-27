@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Net;
 using System.ServiceModel;
 using System.Threading;
@@ -23,8 +21,7 @@ namespace Vela.Retry
     /// </para>
     /// <para>
     /// Backoff is exponential with full jitter (<c>initialDelayMs * 2^(attempt-1)</c>, then a random point in
-    /// <c>[0, that]</c>) to avoid a synchronized retry storm, capped so a sandbox thread never sleeps too long. When
-    /// a throttling fault carries a server <c>Retry-After</c> hint it is honored instead of the computed backoff.
+    /// <c>[0, that]</c>) to avoid a synchronized retry storm, capped so a sandbox thread never sleeps too long.
     /// </para>
     /// </remarks>
     public static class RetryPolicy
@@ -91,7 +88,7 @@ namespace Vela.Retry
                 catch (Exception ex) when (attempt < maxAttempts && ShouldRetry(ex, retryOnTimeout))
                 {
                     lastException = ex;
-                    Thread.Sleep(ComputeDelay(ex, attempt, initialDelayMs));
+                    Thread.Sleep(ComputeDelay(attempt, initialDelayMs));
                 }
             }
 
@@ -142,49 +139,14 @@ namespace Vela.Retry
             return false;
         }
 
-        private static TimeSpan ComputeDelay(Exception exception, int attempt, int initialDelayMs)
+        private static TimeSpan ComputeDelay(int attempt, int initialDelayMs)
         {
-            TimeSpan? retryAfter = GetRetryAfter(exception);
-            if (retryAfter.HasValue && retryAfter.Value > TimeSpan.Zero)
-            {
-                return retryAfter.Value < TimeSpan.FromMilliseconds(MaxBackoffMs)
-                    ? retryAfter.Value
-                    : TimeSpan.FromMilliseconds(MaxBackoffMs);
-            }
-
-            // Exponential base with full jitter: sleep a random point in [0, initialDelay * 2^(attempt-1)], capped.
+            // Exponential base with full jitter: sleep a random point in [0, initialDelay * 2^(attempt-1)], capped so
+            // a sandbox thread never sleeps too long.
             double exponential = initialDelayMs * Math.Pow(2, attempt - 1);
             int ceiling = (int)Math.Min(exponential, MaxBackoffMs);
             int delay = ceiling <= 0 ? 0 : Rng.Next(0, ceiling + 1);
             return TimeSpan.FromMilliseconds(delay);
-        }
-
-        private static TimeSpan? GetRetryAfter(Exception exception)
-        {
-            if (exception is not FaultException<OrganizationServiceFault> fault || fault.Detail == null)
-            {
-                return null;
-            }
-
-            ErrorDetailCollection details = fault.Detail.ErrorDetails;
-            if (details == null || !details.TryGetValue("Retry-After", out object value) || value == null)
-            {
-                return null;
-            }
-
-            switch (value)
-            {
-                case TimeSpan timeSpan:
-                    return timeSpan;
-                case int seconds:
-                    return TimeSpan.FromSeconds(seconds);
-                case double secondsDouble:
-                    return TimeSpan.FromSeconds(secondsDouble);
-                case string text when double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out double parsed):
-                    return TimeSpan.FromSeconds(parsed);
-                default:
-                    return null;
-            }
         }
     }
 }

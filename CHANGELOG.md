@@ -49,7 +49,7 @@ cache, a Custom API concurrency fix, and dependency-injection lifetime hygiene.
 
 ### Changed
 
-- **`RetryPolicy` (and `PluginBase.ExecuteWithRetry`) no longer retry timeouts by default.** A write that times out client-side may already have committed on the server, so a blind retry could create a duplicate. Retries now apply only to safe-to-replay throttling / service-protection faults (by error code or message). Timeouts (`TimeoutException`, `WebException`, or a fault whose message mentions "timeout") are retried only when the caller opts in for an idempotent operation via the new `retryOnTimeout` parameter or `ExecuteIdempotentWithRetry`. Backoff is now exponential with full jitter (was linear) and honors a server `Retry-After` hint when present; `maxAttempts < 1` and a negative delay are now rejected instead of silently skipping the operation.
+- **`RetryPolicy` (and `PluginBase.ExecuteWithRetry`) no longer retry timeouts by default.** A write that times out client-side may already have committed on the server, so a blind retry could create a duplicate. Retries now apply only to safe-to-replay throttling / service-protection faults (by error code or message). Timeouts (`TimeoutException`, `WebException`, or a fault whose message mentions "timeout") are retried only when the caller opts in for an idempotent operation via the new `retryOnTimeout` parameter or `ExecuteIdempotentWithRetry`. Backoff is now exponential with full jitter (was linear); `maxAttempts < 1` and a negative delay are now rejected instead of silently skipping the operation.
 
 ### Added
 

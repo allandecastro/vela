@@ -142,6 +142,21 @@ public sealed class RetryPolicyTests
     }
 
     [Fact]
+    public void Execute_RetriesThrottling_WithZeroInitialDelay()
+    {
+        // initialDelayMs 0 exercises the zero-backoff path; the throttling fault is still retried to exhaustion.
+        int calls = 0;
+
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+            RetryPolicy.Execute<int>(
+                () => { calls++; throw Fault("throttled"); },
+                maxAttempts: 3,
+                initialDelayMs: 0));
+
+        Assert.Equal(3, calls);
+    }
+
+    [Fact]
     public void Execute_Throws_OnNonPositiveMaxAttempts()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
