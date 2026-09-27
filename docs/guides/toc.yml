@@ -38,6 +38,8 @@
   href: signing.md
 - name: End-to-end example
   href: end-to-end.md
+- name: Migrating an existing project
+  href: migrating.md
 - name: Cookbook
   href: cookbook.md
 - name: Troubleshooting
