@@ -3,23 +3,23 @@ namespace SamplePluginFixture
     // Base types whose NAMES start with "EntityPluginBase" / "CustomApiBase". PackageScanner.IsPluginType walks the
     // base chain and matches by name prefix, so a concrete type below is discovered without deriving from the real
     // Vela.Plugins base classes (which would drag in Microsoft.Xrm.Sdk). Abstract, so they are skipped themselves.
-    public abstract class EntityPluginBaseSample
+    public abstract class EntityPluginBase
     {
-        protected EntityPluginBaseSample(string unsecureConfig, string secureConfig)
+        protected EntityPluginBase(string unsecureConfig, string secureConfig)
         {
         }
     }
 
-    public abstract class CustomApiBaseSample
+    public abstract class CustomApiBase
     {
-        protected CustomApiBaseSample(string unsecureConfig, string secureConfig)
+        protected CustomApiBase(string unsecureConfig, string secureConfig)
         {
         }
     }
 
     // A concrete plugin: a public (string, string) constructor and a public GetStepDefinitions() returning a
     // non-empty array. The returned objects serialize (camelCase) to the shape DefinitionNormalizer reads.
-    public sealed class SampleAccountPlugin : EntityPluginBaseSample
+    public sealed class SampleAccountPlugin : EntityPluginBase
     {
         public SampleAccountPlugin(string unsecureConfig, string secureConfig)
             : base(unsecureConfig, secureConfig)
@@ -45,7 +45,7 @@ namespace SamplePluginFixture
     }
 
     // A concrete Custom API: same constructor shape, a public GetCustomApiDefinition() returning one object.
-    public sealed class SampleCustomApi : CustomApiBaseSample
+    public sealed class SampleCustomApi : CustomApiBase
     {
         public SampleCustomApi(string unsecureConfig, string secureConfig)
             : base(unsecureConfig, secureConfig)

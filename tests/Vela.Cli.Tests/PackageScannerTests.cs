@@ -8,21 +8,38 @@ using Xunit;
 
 namespace Vela.Cli.Tests;
 
-// PackageScanner discovers plugin/custom-api types by NAME and SHAPE (a base type whose name starts
-// with "EntityPluginBase"/"CustomApiBase", a (string,string) ctor, and a definition method), not by
-// the real Core types. These stand-ins reproduce that shape so the reflection logic can be tested
-// without a built .nupkg or a Core reference.
+// PackageScanner discovers plugin/custom-api types by NAME and SHAPE (a base type whose simple name is exactly
+// "EntityPluginBase"/"CustomApiBase", a (string,string) ctor, and a definition method), not by the real Core
+// types. These stand-ins reproduce that shape so the reflection logic can be tested without a built .nupkg or a
+// Core reference.
 public class PackageScannerTests
 {
-    public abstract class EntityPluginBaseStub
+    public abstract class EntityPluginBase
     {
     }
 
-    public abstract class CustomApiBaseStub
+    public abstract class CustomApiBase
     {
     }
 
-    public sealed class GoodStepPlugin : EntityPluginBaseStub
+    // A decoy whose base-type name only STARTS WITH the marker: it must NOT be mistaken for a plugin (the old
+    // prefix match wrongly accepted it, #305/#303).
+    public abstract class EntityPluginBaseHelper
+    {
+    }
+
+    public sealed class NotAPluginDespiteName : EntityPluginBaseHelper
+    {
+        public NotAPluginDespiteName(string unsecure, string secure)
+        {
+            _ = unsecure;
+            _ = secure;
+        }
+
+        public object[] GetStepDefinitions() => [new { message = "Update" }];
+    }
+
+    public sealed class GoodStepPlugin : EntityPluginBase
     {
         public GoodStepPlugin(string unsecure, string secure)
         {
@@ -33,7 +50,7 @@ public class PackageScannerTests
         public object[] GetStepDefinitions() => [new { message = "Update", stage = 40 }];
     }
 
-    public sealed class GoodCustomApi : CustomApiBaseStub
+    public sealed class GoodCustomApi : CustomApiBase
     {
         public GoodCustomApi(string unsecure, string secure)
         {
@@ -44,12 +61,12 @@ public class PackageScannerTests
         public object GetCustomApiDefinition() => new { uniqueName = "zava_Api" };
     }
 
-    public sealed class MissingCtorPlugin : EntityPluginBaseStub
+    public sealed class MissingCtorPlugin : EntityPluginBase
     {
         public object[] GetStepDefinitions() => [new { message = "Update" }];
     }
 
-    public sealed class EmptyDefinitionsPlugin : EntityPluginBaseStub
+    public sealed class EmptyDefinitionsPlugin : EntityPluginBase
     {
         public EmptyDefinitionsPlugin(string a, string b)
         {
@@ -60,7 +77,7 @@ public class PackageScannerTests
         public object[] GetStepDefinitions() => [];
     }
 
-    public sealed class ThrowingPlugin : EntityPluginBaseStub
+    public sealed class ThrowingPlugin : EntityPluginBase
     {
         public ThrowingPlugin(string a, string b)
         {
@@ -109,9 +126,17 @@ public class PackageScannerTests
     [Fact]
     public void IsPluginType_RejectsAbstractAndUnrelatedTypes()
     {
-        Assert.False(PackageScanner.IsPluginType(typeof(EntityPluginBaseStub), "EntityPluginBase")); // abstract base itself
+        Assert.False(PackageScanner.IsPluginType(typeof(EntityPluginBase), "EntityPluginBase")); // abstract base itself
         Assert.False(PackageScanner.IsPluginType(typeof(NotAPlugin), "EntityPluginBase"));
         Assert.False(PackageScanner.IsPluginType(typeof(GoodStepPlugin), "CustomApiBase")); // wrong base
+    }
+
+    [Fact]
+    public void IsPluginType_RejectsATypeWhoseBaseNameMerelyStartsWithTheMarker()   // #305/#303
+    {
+        // The base is "EntityPluginBaseHelper" - a prefix of the marker, not an exact match. It must not be treated
+        // as a plugin (which the scanner would then instantiate).
+        Assert.False(PackageScanner.IsPluginType(typeof(NotAPluginDespiteName), "EntityPluginBase"));
     }
 
     [Fact]

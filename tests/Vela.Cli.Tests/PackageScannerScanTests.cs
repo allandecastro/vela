@@ -263,18 +263,18 @@ public sealed class PackageScannerScanTests : IDisposable
 
     // ---- TryGetDefinition error branches ---------------------------------------------------------
 
-    public sealed class CustomApiMissingCtor : PackageScannerTests.CustomApiBaseStub
+    public sealed class CustomApiMissingCtor : PackageScannerTests.CustomApiBase
     {
         public object GetCustomApiDefinition() => new { uniqueName = "x" };
     }
 
-    public sealed class CustomApiNullDefinition : PackageScannerTests.CustomApiBaseStub
+    public sealed class CustomApiNullDefinition : PackageScannerTests.CustomApiBase
     {
         public CustomApiNullDefinition(string a, string b) { _ = a; _ = b; }
         public object? GetCustomApiDefinition() => null;
     }
 
-    public sealed class CustomApiThrows : PackageScannerTests.CustomApiBaseStub
+    public sealed class CustomApiThrows : PackageScannerTests.CustomApiBase
     {
         public CustomApiThrows(string a, string b) { _ = a; _ = b; }
         public object GetCustomApiDefinition() => throw new InvalidOperationException("api-boom");
@@ -315,7 +315,7 @@ public sealed class PackageScannerScanTests : IDisposable
     }
 
     // A plugin whose definition method returns a single (non-array) object → wrapped into a one-element set.
-    public sealed class SingleDefinitionPlugin : PackageScannerTests.EntityPluginBaseStub
+    public sealed class SingleDefinitionPlugin : PackageScannerTests.EntityPluginBase
     {
         public SingleDefinitionPlugin(string a, string b) { _ = a; _ = b; }
         public object GetStepDefinitions() => new { message = "Update" };
@@ -331,7 +331,7 @@ public sealed class PackageScannerScanTests : IDisposable
     }
 
     // An abstract subclass of a matching base is still not an instantiable plugin type.
-    public abstract class AbstractStepPlugin : PackageScannerTests.EntityPluginBaseStub
+    public abstract class AbstractStepPlugin : PackageScannerTests.EntityPluginBase
     {
     }
 
