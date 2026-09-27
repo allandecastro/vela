@@ -333,6 +333,73 @@ public class ModelGeneratorTests
     }
 
     [Fact]
+    public void TwoDistinctGlobalOptionSets_CollidingOnName_AreDisambiguated()
+    {
+        // Two distinct global sets whose names Pascalize to the same identifier ("cdf_status"/"Cdf_status" -> both
+        // "Cdf_status"). Neither may be silently dropped nor typed to the other's enum: the second gets a suffix.
+        System.Collections.Generic.IReadOnlyList<GeneratedModel> models = ModelGenerator.Generate(
+            new[]
+            {
+                MetadataFactory.Entity("account", "Account")
+                    .PrimaryId("accountid", "AccountId")
+                    .Choice("aa_first", "AaFirst", global: true, "cdf_status", (1, "Open"))
+                    .Choice("bb_second", "BbSecond", global: true, "Cdf_status", (9, "Closed"))
+                    .Build(),
+            },
+            new ModelGenOptions("Acme.Shared.Models.Generated"));
+
+        string account = models.Single(m => m.FileName == "Account.cs").Code;
+
+        // Each property keeps its own enum, and the two sets emit two standalone files.
+        Assert.Contains("public Cdf_status? AaFirst", account);
+        Assert.Contains("public Cdf_status2? BbSecond", account);
+        Assert.Contains(models, m => m.FileName == "Cdf_status.cs");
+        Assert.Contains(models, m => m.FileName == "Cdf_status2.cs");
+    }
+
+    [Fact]
+    public void SameGlobalOptionSet_ReferencedTwice_EmitsOneSharedEnum()
+    {
+        // The same global set referenced by two columns must dedup to one file (by identity), not two.
+        System.Collections.Generic.IReadOnlyList<GeneratedModel> models = ModelGenerator.Generate(
+            new[]
+            {
+                MetadataFactory.Entity("account", "Account")
+                    .PrimaryId("accountid", "AccountId")
+                    .Choice("new_a", "A", global: true, "new_shared", (1, "One"))
+                    .Choice("new_b", "B", global: true, "new_shared", (1, "One"))
+                    .Build(),
+            },
+            new ModelGenOptions("Acme.Shared.Models.Generated"));
+
+        Assert.Single(models, m => m.FileName == "New_shared.cs");
+        string account = models.Single(m => m.FileName == "Account.cs").Code;
+        Assert.Contains("public New_shared? A", account);
+        Assert.Contains("public New_shared? B", account);
+    }
+
+    [Fact]
+    public void LocalNestedEnumName_CollidingWithSiblingMember_IsUniquified()
+    {
+        // A sibling column whose property name is "StatusOptionSet" (schema name) collides with the nested enum a
+        // local choice would name "StatusOptionSet". The enum name is routed through the member used-set, so the
+        // enum is renamed instead of producing two "StatusOptionSet" declarations (CS0102).
+        EntityMetadata md = MetadataFactory.Entity("account", "Account")
+            .PrimaryId("accountid", "AccountId")
+            .String("aa_statusoptionset", "StatusOptionSet")
+            .Choice("bb_status", "Status", global: false, null, (1, "Active"))
+            .Build();
+
+        string code = ModelGenerator.Generate(new[] { md }, new ModelGenOptions("Acme.Shared.Models.Generated")).Single().Code;
+
+        // The sibling keeps the plain name (declared first); the enum is disambiguated.
+        Assert.Contains("public string StatusOptionSet", code);
+        Assert.Contains("public enum StatusOptionSet1", code);
+        Assert.Contains("public StatusOptionSet1? Status", code);
+        Assert.DoesNotContain("public enum StatusOptionSet\n", code.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
     public void RequiredLevel_EmittedWithFullLevel_AndSupportFile()
     {
         // The full four-value level is preserved (not a lossy boolean), and the self-contained attribute is emitted.

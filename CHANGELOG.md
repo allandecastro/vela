@@ -24,6 +24,21 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.20.0] - 2026-09-27 (Vela.Cli)
+
+CLI line, published as `cli-v0.20.0`. Model-generation fidelity audit (#308): deterministic TypeScript table
+output plus option-set and lookup correctness fixes.
+
+### Changed
+
+- **TypeScript table columns are emitted in deterministic logical-name order (primary key first).** They previously followed raw SDK metadata order, which is undocumented and unstable across environments and edits, so the C# generator sorted while the TS path did not - regeneration reshuffled members and the shared `option-sets/*.ts` reference order, producing spurious diffs. TS tables now match the C# generator's determinism guarantee. Regenerating existing TypeScript models produces a one-time reordering diff.
+
+### Fixed
+
+- **Two distinct global option sets whose names map to the same identifier no longer collide.** When two different global sets sanitized (TS) or Pascalized (C#) to the same enum name, only the first was kept and attributes referencing the second were silently typed to the wrong enum. The global registry now dedups by set identity (MetadataId, else name) and disambiguates a true name collision, so neither set is dropped nor mis-typed.
+- **A C# local (nested) choice enum name is uniquified against the table's other members.** The nested `{prop}OptionSet` enum shared the table's declaration space with its properties and methods, so a sibling column named for example `StatusOptionSet` collided with the generated enum (CS0102). The enum name now goes through the same used-name set as the members.
+- **Owner/Customer lookups returned with an empty `Targets` list keep their polymorphic logical-name union in TypeScript.** Some metadata payloads omit the (implicit) target pair; the generated record dropped the `_x_value@...lookuplogicalname` union in that case. Owner now defaults to `'systemuser' | 'team'` and Customer to `'account' | 'contact'`.
+
 ## [0.28.2] - 2026-09-27 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.28.2`. Second pass of the analyzer/generator audit (#309).
