@@ -75,10 +75,12 @@ namespace Vela.CustomApi
         }
 
         /// <summary>
-        /// Gets the Custom API metadata definition including input and output parameters.
+        /// Builds the typed Custom API definition (input and output parameters). Runs under the initialization
+        /// lock held by <see cref="CustomApiBase.GetCustomApiDefinition"/> and is memoized, so the shared
+        /// <see cref="_activeBuilder"/> is mutated safely without a race on the reused sandbox instance.
         /// </summary>
         /// <returns>The Custom API definition.</returns>
-        public sealed override CustomApiDefinition GetCustomApiDefinition()
+        protected sealed override CustomApiDefinition BuildDefinitionCore()
         {
             var builder = Vela.Register.RegisterCustomApi<TRequest, TResponse>();
             _activeBuilder = builder;

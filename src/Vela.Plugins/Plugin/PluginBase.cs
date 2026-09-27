@@ -82,6 +82,12 @@ namespace Vela.Plugin
                 throw new InvalidPluginExecutionException(
                     $"Unhandled exception in plugin '{GetType().FullName}': {ex.GetType().Name}: {ex.Message}", ex);
             }
+            finally
+            {
+                // Dispose the transient IDisposable services the resolver created for this execution (scoped and
+                // platform-owned services are left untouched). Runs on both the success and failure paths.
+                localContext.Resolver.Dispose();
+            }
         }
 
         /// <summary>
@@ -94,7 +100,9 @@ namespace Vela.Plugin
         }
 
         /// <summary>
-        /// Optional sandbox-safe retry wrapper for organization service operations.
+        /// Optional sandbox-safe retry wrapper for organization service operations. Retries only safe-to-replay
+        /// throttling faults; timeouts are not retried (a timed-out write may already have committed). See
+        /// <see cref="RetryPolicy"/> for the idempotency contract.
         /// </summary>
         /// <typeparam name="T">Result type.</typeparam>
         /// <param name="operation">Operation to execute.</param>
@@ -102,6 +110,18 @@ namespace Vela.Plugin
         protected static T ExecuteWithRetry<T>(Func<T> operation)
         {
             return RetryPolicy.Execute(operation);
+        }
+
+        /// <summary>
+        /// Retry wrapper that also retries timeouts. Use only for an idempotent operation (a read, or a write that
+        /// is safe to replay); a non-idempotent write may already have committed before a timeout surfaced.
+        /// </summary>
+        /// <typeparam name="T">Result type.</typeparam>
+        /// <param name="operation">Idempotent operation to execute.</param>
+        /// <returns>Operation result.</returns>
+        protected static T ExecuteIdempotentWithRetry<T>(Func<T> operation)
+        {
+            return RetryPolicy.Execute(operation, retryOnTimeout: true);
         }
 
         /// <summary>

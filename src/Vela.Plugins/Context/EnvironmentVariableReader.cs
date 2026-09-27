@@ -116,8 +116,12 @@ namespace Vela.Context
 
             if (cacheFor.HasValue)
             {
-                // Opt-in cross-execution cache (hot paths): reuse the resolved value across plugin invocations.
-                return _cache.GetOrCreate(CacheKeyPrefix + schemaName, cacheFor.Value, () => Query(schemaName));
+                // Opt-in cross-execution cache (hot paths): reuse the resolved value across plugin invocations. The
+                // cache is a process-wide singleton, so scope the key by organization id - environment variables are
+                // environment-scoped, and this prevents a value bleeding across orgs should a worker be shared.
+                string cacheKey = CacheKeyPrefix +
+                    _context.PluginExecutionContext.OrganizationId.ToString("N") + ":" + schemaName;
+                return _cache.GetOrCreate(cacheKey, cacheFor.Value, () => Query(schemaName));
             }
 
             // Default: fresh per execution, but memoized so repeated reads in one run hit Dataverse once.

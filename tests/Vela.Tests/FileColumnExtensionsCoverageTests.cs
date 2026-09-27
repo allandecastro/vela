@@ -87,4 +87,20 @@ public sealed class FileColumnExtensionsCoverageTests
         crm.DeleteFile(target, "new_file");          // file present -> deleted
         crm.DeleteFile(target, "new_file");          // now empty -> no-op (does not throw)
     }
+
+    [Fact]
+    public void DeleteFile_by_column_throws_when_the_column_does_not_read_back_as_a_file_id()
+    {
+        // A column that reads back as a non-null, non-Guid value (wrong column name, or not a File column) must fail
+        // loudly rather than silently no-op, so the caller learns the delete did not happen.
+        Guid id = Guid.NewGuid();
+        Moq.Mock<IOrganizationService> service = new Moq.Mock<IOrganizationService>();
+        service
+            .Setup(s => s.Retrieve("account", id, Moq.It.IsAny<Microsoft.Xrm.Sdk.Query.ColumnSet>()))
+            .Returns(new Entity("account", id) { ["name"] = "not-a-guid" });
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
+            () => service.Object.DeleteFile(new EntityReference("account", id), "name"));
+        Assert.Contains("did not read back as a file id", ex.Message);
+    }
 }

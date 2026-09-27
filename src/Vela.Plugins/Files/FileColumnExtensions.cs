@@ -164,10 +164,28 @@ namespace Vela.Files
             }
 
             Entity record = service.Retrieve(target.LogicalName, target.Id, new ColumnSet(fileAttributeName));
-            if (record.TryGetAttributeValue(fileAttributeName, out Guid fileId) && fileId != Guid.Empty)
+            if (!record.Contains(fileAttributeName) || record[fileAttributeName] == null)
             {
-                service.DeleteFile(fileId);
+                // No file on the column: nothing to delete.
+                return;
             }
+
+            object raw = record[fileAttributeName];
+            if (raw is Guid fileId)
+            {
+                if (fileId != Guid.Empty)
+                {
+                    service.DeleteFile(fileId);
+                }
+
+                return;
+            }
+
+            // The column read back as a non-null, non-Guid value (e.g. the wrong column name was passed, or it is not
+            // a File column). Fail loudly instead of silently no-opping so the caller learns the delete did not happen.
+            throw new InvalidPluginExecutionException(
+                $"Column '{fileAttributeName}' on '{target.LogicalName}' did not read back as a file id " +
+                $"(got '{raw.GetType().FullName}'); it may not be a File column. No file was deleted.");
         }
     }
 }

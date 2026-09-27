@@ -42,6 +42,32 @@ web-resource publish safety, and apply/report accuracy.
 
 - **The live registration read normalizes step rank** the same way the local/diff side does, so an externally set rank of 0 or negative no longer diffs as a spurious "changed".
 - **The apply resume report's per-group counters include "ignored" operations.** `RecordIgnored` now bumps the per-group tally (previously only the aggregate), so the half-applied summary is accurate.
+## [0.29.0] - 2026-09-27 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.0`. Runtime robustness audit (#306): retry idempotency, a bounded
+cache, a Custom API concurrency fix, and dependency-injection lifetime hygiene.
+
+### Changed
+
+- **`RetryPolicy` (and `PluginBase.ExecuteWithRetry`) no longer retry timeouts by default.** A write that times out client-side may already have committed on the server, so a blind retry could create a duplicate. Retries now apply only to safe-to-replay throttling / service-protection faults (by error code or message). Timeouts (`TimeoutException`, `WebException`, or a fault whose message mentions "timeout") are retried only when the caller opts in for an idempotent operation via the new `retryOnTimeout` parameter or `ExecuteIdempotentWithRetry`. Backoff is now exponential with full jitter (was linear) and honors a server `Retry-After` hint when present; `maxAttempts < 1` and a negative delay are now rejected instead of silently skipping the operation.
+
+### Added
+
+- **`PluginBase.ExecuteIdempotentWithRetry<T>(...)`** and a `retryOnTimeout` overload on `RetryPolicy.Execute` for operations that are safe to replay on a timeout.
+- **`PluginCacheService` now accepts a maximum entry count** (`new PluginCacheService(maxEntries)`, default `PluginCacheService.DefaultMaxEntries`) exposed via the `MaxEntries` property.
+
+### Fixed
+
+- **The typed `CustomApiBase<TRequest, TResponse>` definition build is now thread-safe.** Its `GetCustomApiDefinition` override bypassed the base class's lock and memoization, so concurrent first executions on the sandbox-reused instance could null the shared builder mid-build (a spurious "can only call inside RegisterCustomApi") or cross-wire two builders. The lock and one-time memoization now live in a single sealed `GetCustomApiDefinition`, and subclasses customize the build through a protected `BuildDefinitionCore()` that runs under that lock.
+- **The global plugin cache is bounded.** Expiry was lazy (an entry dropped only when its own key was fetched again), so the static process-wide cache accumulated distinct short-lived keys for the worker's lifetime. When an insert pushes the count over the cap, a sweep first drops already-materialized expired entries, then evicts the oldest-inserted entries until the count is back at the cap.
+- **The dependency resolver disposes the transient `IDisposable` services it created** at the end of each execution. Scoped and platform-owned services (context, organization service, tracing) are left untouched.
+- **Re-registering a service with a different lifetime no longer leaks the previous one.** Re-registering a scoped type as transient now drops the cached scoped instance and stops caching, instead of continuing to hand out the stale instance.
+- **The opt-in cross-execution environment-variable cache key is scoped by organization id**, so a value cannot bleed across organizations should a worker be shared.
+- **`IOrganizationService.DeleteFile(target, fileAttributeName)` fails loudly when the column does not read back as a file id** (wrong column name, or not a File column) instead of silently doing nothing; a genuinely empty column is still a no-op.
+
+### Performance
+
+- **The per-execution step-context construction reflection is cached per handler parameter type** (the derive check and the `(ILocalPluginContext)` constructor lookup), leaving only the constructor invocation on the hot dispatch path.
 
 ## [0.20.0] - 2026-09-27 (Vela.Cli)
 

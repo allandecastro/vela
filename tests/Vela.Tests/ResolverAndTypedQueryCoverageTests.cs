@@ -18,6 +18,13 @@ public sealed class ResolverAndTypedQueryCoverageTests
 
     private sealed class TestSvc : ITestSvc { }
 
+    private sealed class DisposableSvc : ITestSvc, IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public void Dispose() => DisposeCount++;
+    }
+
     // ---- SimpleServiceResolver -----------------------------------------------------------------------
 
     [Fact]
@@ -87,6 +94,69 @@ public sealed class ResolverAndTypedQueryCoverageTests
         // Without unwrapping, DynamicInvoke would surface a TargetInvocationException.
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => resolver.GetService(typeof(ITestSvc)));
         Assert.Equal("boom", ex.Message);
+    }
+
+    [Fact]
+    public void Disposing_the_resolver_disposes_each_transient_disposable_it_created()
+    {
+        SimpleServiceResolver resolver = new SimpleServiceResolver();
+        resolver.AddTransient<ITestSvc>(_ => new DisposableSvc());
+
+        DisposableSvc first = (DisposableSvc)resolver.GetService(typeof(ITestSvc))!;
+        DisposableSvc second = (DisposableSvc)resolver.GetService(typeof(ITestSvc))!;
+        Assert.NotSame(first, second);
+        Assert.Equal(0, first.DisposeCount);
+
+        resolver.Dispose();
+
+        Assert.Equal(1, first.DisposeCount);
+        Assert.Equal(1, second.DisposeCount);
+    }
+
+    [Fact]
+    public void Disposing_the_resolver_leaves_scoped_services_untouched()
+    {
+        // Scoped registrations are platform/caller-owned (the default context/service/tracing registrations are
+        // scoped), so the resolver must not dispose them.
+        SimpleServiceResolver resolver = new SimpleServiceResolver();
+        resolver.AddScoped<ITestSvc>(_ => new DisposableSvc());
+        DisposableSvc scoped = (DisposableSvc)resolver.GetService(typeof(ITestSvc))!;
+
+        resolver.Dispose();
+
+        Assert.Equal(0, scoped.DisposeCount);
+    }
+
+    [Fact]
+    public void A_faulty_dispose_does_not_surface_from_the_resolver()
+    {
+        SimpleServiceResolver resolver = new SimpleServiceResolver();
+        resolver.AddTransient<ITestSvc>(_ => new ThrowingDisposable());
+        resolver.GetService(typeof(ITestSvc));
+
+        resolver.Dispose(); // must not throw
+    }
+
+    [Fact]
+    public void Reregistering_a_scoped_service_as_transient_stops_caching_the_stale_instance()
+    {
+        SimpleServiceResolver resolver = new SimpleServiceResolver();
+        resolver.AddScoped<ITestSvc>(_ => new TestSvc());
+        object scopedInstance = resolver.GetService(typeof(ITestSvc))!;
+
+        // Re-register the same type as transient: the previously cached scoped instance must not be handed out, and
+        // successive resolutions must now return fresh instances.
+        resolver.AddTransient<ITestSvc>(_ => new TestSvc());
+        object afterFirst = resolver.GetService(typeof(ITestSvc))!;
+        object afterSecond = resolver.GetService(typeof(ITestSvc))!;
+
+        Assert.NotSame(scopedInstance, afterFirst);
+        Assert.NotSame(afterFirst, afterSecond);
+    }
+
+    private sealed class ThrowingDisposable : ITestSvc, IDisposable
+    {
+        public void Dispose() => throw new InvalidOperationException("dispose blew up");
     }
 
     // ---- TypedQuery / TypedLink ----------------------------------------------------------------------

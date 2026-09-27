@@ -35,7 +35,14 @@ namespace Vela.CustomApi
         /// <summary>
         /// Gets the Custom API metadata definition for registration and synchronization.
         /// </summary>
-        public virtual CustomApiDefinition GetCustomApiDefinition()
+        /// <remarks>
+        /// This is the single memoized, lock-guarded entry point. The Dataverse sandbox caches and concurrently
+        /// reuses one plugin instance, so the one-time build - which mutates shared builder state - must be
+        /// serialized. Subclasses customize the build by overriding <see cref="BuildDefinitionCore"/> (which runs
+        /// under this lock), never by overriding this method, so the thread-safety cannot be bypassed. This mirrors
+        /// the _stepInitLock guard on EntityPluginBase.GetStepDefinitions().
+        /// </remarks>
+        public CustomApiDefinition GetCustomApiDefinition()
         {
             CustomApiDefinition? snapshot = _customApiDefinition;
             if (snapshot != null)
@@ -43,14 +50,9 @@ namespace Vela.CustomApi
                 return snapshot;
             }
 
-            // The Dataverse sandbox caches and concurrently reuses a single plugin instance, so the one-time
-            // build below — which mutates the shared _activeBuilder field — must be serialized. Otherwise two
-            // concurrent first executions race: one can null _activeBuilder while the other is still inside
-            // RegisterCustomApi(...), throwing spuriously or cross-wiring the two builders. This mirrors the
-            // _stepInitLock guard on EntityPluginBase.GetStepDefinitions().
             lock (_initLock)
             {
-                return _customApiDefinition ??= BuildDefinition();
+                return _customApiDefinition ??= BuildDefinitionCore();
             }
         }
 
@@ -129,7 +131,13 @@ namespace Vela.CustomApi
             ExecuteRegisteredHandler(ctx);
         }
 
-        private CustomApiDefinition BuildDefinition()
+        /// <summary>
+        /// Builds the Custom API definition once. Runs under the initialization lock held by
+        /// <see cref="GetCustomApiDefinition"/> and its result is memoized, so overrides may safely mutate
+        /// per-build state (e.g. the active builder) without their own synchronization.
+        /// </summary>
+        /// <returns>The built Custom API definition.</returns>
+        protected virtual CustomApiDefinition BuildDefinitionCore()
         {
             ICustomApiBuilder builder = Vela.Register.RegisterCustomApi();
             _activeBuilder = builder;

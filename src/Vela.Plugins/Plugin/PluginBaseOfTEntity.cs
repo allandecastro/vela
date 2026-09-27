@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -12,6 +13,79 @@ using Vela.Constants;
 
 namespace Vela.Plugin
 {
+    /// <summary>How a handler parameter type resolves as a derived (generated) step context.</summary>
+    internal enum StepContextKind
+    {
+        /// <summary>Not a class deriving from a Vela step context; another builder should handle it.</summary>
+        NotApplicable,
+
+        /// <summary>Derives from a step context and can be constructed via its (ILocalPluginContext) ctor.</summary>
+        Constructable,
+
+        /// <summary>Derives from a step context but is abstract, so it cannot be constructed.</summary>
+        Abstract,
+
+        /// <summary>Derives from a step context but lacks a public (ILocalPluginContext) constructor.</summary>
+        NoConstructor,
+    }
+
+    /// <summary>A cached resolution of a handler parameter type to its step-context construction strategy.</summary>
+    internal readonly struct StepContextResolution(StepContextKind kind, ConstructorInfo? constructor)
+    {
+        public StepContextKind Kind { get; } = kind;
+
+        public ConstructorInfo? Constructor { get; } = constructor;
+    }
+
+    /// <summary>
+    /// Resolves and caches, per handler parameter type, whether it is a generated step context and how to build it.
+    /// Non-generic so the cache is shared across every <see cref="EntityPluginBase{TEntity}"/> closure. The cache is
+    /// keyed by <see cref="Type"/> (bounded by the loaded types), matching the framework's other reflection caches.
+    /// </summary>
+    internal static class StepContextFactory
+    {
+        private static readonly ConcurrentDictionary<Type, StepContextResolution> Cache =
+            new ConcurrentDictionary<Type, StepContextResolution>();
+
+        public static StepContextResolution Resolve(Type parameterType) =>
+            Cache.GetOrAdd(parameterType, ResolveCore);
+
+        private static StepContextResolution ResolveCore(Type parameterType)
+        {
+            if (!parameterType.IsClass || !DerivesFromStepContext(parameterType))
+            {
+                return new StepContextResolution(StepContextKind.NotApplicable, null);
+            }
+
+            if (parameterType.IsAbstract)
+            {
+                return new StepContextResolution(StepContextKind.Abstract, null);
+            }
+
+            ConstructorInfo? ctor = parameterType.GetConstructor([typeof(ILocalPluginContext)]);
+            return ctor is null
+                ? new StepContextResolution(StepContextKind.NoConstructor, null)
+                : new StepContextResolution(StepContextKind.Constructable, ctor);
+        }
+
+        private static bool DerivesFromStepContext(Type type)
+        {
+            for (Type? t = type.BaseType; t != null && t != typeof(object); t = t.BaseType)
+            {
+                if (t.IsGenericType)
+                {
+                    Type definition = t.GetGenericTypeDefinition();
+                    if (definition == typeof(PreStepContext<>) || definition == typeof(PostStepContext<,>))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+    }
+
     /// <summary>
     /// Generic plugin base class with fluent step configuration and strongly-typed entity access.
     /// </summary>
@@ -297,45 +371,26 @@ namespace Vela.Plugin
         // typed projections. Returns null for interfaces and non-context types, so the existing paths take over.
         private static object? BuildDerivedStepContext(Type parameterType, ILocalPluginContext ctx)
         {
-            if (!parameterType.IsClass || !DerivesFromStepContext(parameterType))
+            // The derive-check and constructor lookup are the same for a given parameter type on every execution, so
+            // resolve them once and cache per type (bounded by the loaded step-context types). Only the ctor.Invoke
+            // runs per execution - the sandbox's partial trust rules out compiling a delegate via Reflection.Emit.
+            StepContextResolution resolution = StepContextFactory.Resolve(parameterType);
+            switch (resolution.Kind)
             {
-                return null;
+                case StepContextKind.NotApplicable:
+                    // Not a class deriving from a Vela step context: let the existing builders take over.
+                    return null;
+                case StepContextKind.Abstract:
+                    throw new InvalidPluginExecutionException(
+                        $"Step handler context '{parameterType.FullName}' is abstract and cannot be constructed; use a concrete generated step context.");
+                case StepContextKind.NoConstructor:
+                    throw new InvalidPluginExecutionException(
+                        $"Step handler context '{parameterType.FullName}' derives from a Vela step context but has no public constructor taking a single ILocalPluginContext, so the pipeline cannot build it.");
+                default:
+                    // The parameter is (or derives from) a Vela step context, so it is meant to be built here rather
+                    // than left to a later builder that would produce an incompatible base context.
+                    return resolution.Constructor!.Invoke([ctx]);
             }
-
-            // The parameter is (or derives from) a Vela step context, so it is meant to be built here. If it cannot be
-            // constructed, fail with a clear message instead of returning null - returning null lets a later builder
-            // produce an incompatible base context and the handler invocation then throws an opaque cast error.
-            if (parameterType.IsAbstract)
-            {
-                throw new InvalidPluginExecutionException(
-                    $"Step handler context '{parameterType.FullName}' is abstract and cannot be constructed; use a concrete generated step context.");
-            }
-
-            ConstructorInfo? ctor = parameterType.GetConstructor([typeof(ILocalPluginContext)]);
-            if (ctor is null)
-            {
-                throw new InvalidPluginExecutionException(
-                    $"Step handler context '{parameterType.FullName}' derives from a Vela step context but has no public constructor taking a single ILocalPluginContext, so the pipeline cannot build it.");
-            }
-
-            return ctor.Invoke([ctx]);
-        }
-
-        private static bool DerivesFromStepContext(Type type)
-        {
-            for (Type? t = type.BaseType; t != null && t != typeof(object); t = t.BaseType)
-            {
-                if (t.IsGenericType)
-                {
-                    Type definition = t.GetGenericTypeDefinition();
-                    if (definition == typeof(PreStepContext<>) || definition == typeof(PostStepContext<,>))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         // Messages Vela models with a typed context: build the per-message context so its handler receives a
