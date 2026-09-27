@@ -89,6 +89,7 @@ namespace Demo
         [AttributeLogicalName(""name"")] public string Name { get; set; }
         [AttributeLogicalName(""revenue"")] public decimal? Revenue { get; set; }
         [AttributeLogicalName(""telephone1"")] public string Telephone1 { get; set; }
+        [AttributeLogicalName(""numberofemployees"")] public int NumberOfEmployees { get; set; }
     }
 
     public sealed class DeleteRequest { }
@@ -149,6 +150,51 @@ namespace Demo
         Assert.Contains("Revenue", output);
         // A column that was NOT captured must not appear on the projection.
         Assert.DoesNotContain("telephone1", output);
+    }
+
+    [Fact]
+    public void Value_type_columns_are_projected_as_nullable()   // #309 L4
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class ValueTypeAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .WithPostImage(a => a.NumberOfEmployees)
+                .Handle(() => { });
+    }
+}
+");
+        // A non-nullable value-type column becomes T? so an ABSENT image column reads null, not its default (0).
+        Assert.Contains("int? NumberOfEmployees", output);
+        Assert.DoesNotContain("int NumberOfEmployees", output); // never the non-nullable form
+    }
+
+    [Fact]
+    public void Colliding_lambda_projections_keep_the_first_name_plain_and_suffix_the_rest()   // #309 L3
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class CollisionLambda : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Revenue).Handle(() => { });
+        }
+    }
+}
+");
+        // Two lambda steps on the same message/stage with different columns collide on the projection name. The FIRST
+        // keeps the plain, guessable name; only the later one gets a stable hash suffix.
+        Assert.Matches(@"class UpdatePostOp_PostImage(?![_0-9A-Za-z])", output); // plain name kept
+        Assert.Contains("class UpdatePostOp_PostImage_", output);               // the other is suffixed
     }
 
     [Fact]

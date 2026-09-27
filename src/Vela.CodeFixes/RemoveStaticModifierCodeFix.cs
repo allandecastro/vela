@@ -66,10 +66,24 @@ namespace Vela.CodeFixes
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         "Make the handler an instance method",
-                        _ => Task.FromResult(context.Document.WithSyntaxRoot(root.ReplaceNode(target, RemoveStatic(target)))),
+                        ct => ApplyAsync(context.Document.Project.Solution, target, ct),
                         equivalenceKey: "RemoveStaticModifier"),
                     diagnostic);
             }
+        }
+
+        // Solution-based: the handler method may be declared in a DIFFERENT file from the .Handle(...) diagnostic, so
+        // edit the document that owns it rather than the context document (else ReplaceNode throws "node not in tree", #309 M3).
+        private static async Task<Solution> ApplyAsync(Solution solution, MethodDeclarationSyntax method, CancellationToken cancellationToken)
+        {
+            DocumentId? documentId = solution.GetDocumentId(method.SyntaxTree);
+            if (documentId == null)
+            {
+                return solution;
+            }
+
+            SyntaxNode oldRoot = await method.SyntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
+            return solution.WithDocumentSyntaxRoot(documentId, oldRoot.ReplaceNode(method, RemoveStatic(method)));
         }
 
         private static MethodDeclarationSyntax RemoveStatic(MethodDeclarationSyntax declaration)

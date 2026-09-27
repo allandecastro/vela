@@ -64,23 +64,27 @@ namespace Vela.CodeFixes
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         "Use the step's context type",
-                        ct => ApplyAsync(context.Document, target, typeText, ct),
+                        ct => ApplyAsync(context.Document.Project.Solution, target, typeText, ct),
                         equivalenceKey: "UseStepContextType"),
                     diagnostic);
             }
         }
 
-        private static async Task<Document> ApplyAsync(Document document, MethodDeclarationSyntax method, string expectedType, CancellationToken cancellationToken)
+        // Solution-based: the handler method can live in a DIFFERENT file from the .Handle(...) diagnostic (a partial
+        // class, or the handler declared elsewhere), so edit the document that OWNS the method rather than the
+        // context document - otherwise ReplaceNode throws "node not in tree" (#309 M3).
+        private static async Task<Solution> ApplyAsync(Solution solution, MethodDeclarationSyntax method, string expectedType, CancellationToken cancellationToken)
         {
-            SyntaxNode? root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            if (root == null)
+            DocumentId? documentId = solution.GetDocumentId(method.SyntaxTree);
+            if (documentId == null)
             {
-                return document;
+                return solution;
             }
 
+            SyntaxNode oldRoot = await method.SyntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
             ParameterSyntax parameter = method.ParameterList.Parameters[0];
             TypeSyntax newType = SyntaxFactory.ParseTypeName(expectedType).WithTriviaFrom(parameter.Type!);
-            return document.WithSyntaxRoot(root.ReplaceNode(parameter.Type!, newType));
+            return solution.WithDocumentSyntaxRoot(documentId, oldRoot.ReplaceNode(parameter.Type!, newType));
         }
     }
 }

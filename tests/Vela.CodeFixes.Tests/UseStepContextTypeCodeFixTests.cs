@@ -5,6 +5,10 @@ using Xunit;
 using Verify = Microsoft.CodeAnalysis.CSharp.Testing.XUnit.CodeFixVerifier<
     Vela.Analyzers.HandlerContextMatchAnalyzer,
     Vela.CodeFixes.UseStepContextTypeCodeFix>;
+using FixTest = Microsoft.CodeAnalysis.CSharp.Testing.CSharpCodeFixTest<
+    Vela.Analyzers.HandlerContextMatchAnalyzer,
+    Vela.CodeFixes.UseStepContextTypeCodeFix,
+    Microsoft.CodeAnalysis.Testing.Verifiers.XUnitVerifier>;
 
 namespace Vela.CodeFixes.Tests;
 
@@ -81,5 +85,64 @@ namespace Demo
         DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.HandlerContextMatchAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
             .WithLocation(0).WithArguments("OnWrong", "Update post-operation", "IUpdatePostContext");
         await Verify.VerifyCodeFixAsync(before, expected, after);
+    }
+
+    [Fact]
+    public async Task Fixes_a_handler_declared_in_a_different_file()   // #309 M3
+    {
+        // The handler is a partial-class member in a SECOND file. The fix must edit that file's document (Solution-
+        // based), not the file with the .Handle(...) diagnostic - otherwise ReplaceNode throws "node not in tree".
+        string file1 = Harness + @"
+    public sealed partial class P : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().Handle({|#0:OnWrong|});
+    }
+}
+";
+        const string file2 = @"
+namespace Demo
+{
+    using Vela.Context;
+    public sealed partial class P
+    {
+        private void OnWrong(ICreatePostContext<Account> ctx) { }
+    }
+}
+";
+        string file1Fixed = Harness + @"
+    public sealed partial class P : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnWrong);
+    }
+}
+";
+        const string file2Fixed = @"
+namespace Demo
+{
+    using Vela.Context;
+    public sealed partial class P
+    {
+        private void OnWrong(global::Vela.Context.IUpdatePostContext<global::Demo.Account> ctx) { }
+    }
+}
+";
+
+        var test = new FixTest
+        {
+            TestState =
+            {
+                Sources = { file1, file2 },
+                ExpectedDiagnostics =
+                {
+                    new DiagnosticResult(Vela.Analyzers.HandlerContextMatchAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+                        .WithLocation(0).WithArguments("OnWrong", "Update post-operation", "IUpdatePostContext"),
+                },
+            },
+            FixedState = { Sources = { file1Fixed, file2Fixed } },
+        };
+
+        await test.RunAsync();
     }
 }

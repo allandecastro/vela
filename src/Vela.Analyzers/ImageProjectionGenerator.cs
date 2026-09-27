@@ -377,9 +377,13 @@ namespace Vela.Analyzers
             }
 
             string typeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            // A captured image column can be absent/null, and the generated file is `#nullable enable`, so a
-            // reference-type property must be nullable or it warns CS8618 (non-nullable never initialized).
-            if (property.Type.IsReferenceType && !typeName.EndsWith("?", System.StringComparison.Ordinal))
+            // A captured image column can be absent. Make the projected member nullable so "absent" reads as null:
+            //  - a reference type must be nullable anyway (#nullable enable would otherwise warn CS8618);
+            //  - a non-nullable value type would otherwise read its default (e.g. 0 / false) for an absent column,
+            //    indistinguishable from a real value - so make it T? too (early-bound models are already T?; this
+            //    only changes an authored non-nullable value-type selector) (#309 L4).
+            bool alreadyNullable = typeName.EndsWith("?", System.StringComparison.Ordinal);
+            if (!alreadyNullable && (property.Type.IsReferenceType || property.Type.IsValueType))
             {
                 typeName += "?";
             }
@@ -471,16 +475,25 @@ namespace Vela.Analyzers
                 nameCounts[fullName] = nameCounts.TryGetValue(fullName, out int count) ? count + 1 : 1;
             }
 
+            // Order deterministically by name then column signature so that, on a collision, the SAME shape always
+            // keeps the plain (un-suffixed) name across builds regardless of source order.
+            List<ProjectionModel> ordered = distinct
+                .OrderBy(m => FullName(m), System.StringComparer.Ordinal)
+                .ThenBy(m => ColumnSignature(m), System.StringComparer.Ordinal)
+                .ToList();
+
             List<ProjectionModel> finalized = new List<ProjectionModel>();
-            foreach (ProjectionModel projectionModel in distinct)
+            HashSet<string> plainNameClaimed = new HashSet<string>(System.StringComparer.Ordinal);
+            foreach (ProjectionModel projectionModel in ordered)
             {
                 string fullName = FullName(projectionModel);
                 ProjectionModel toEmit = projectionModel;
-                if (nameCounts[fullName] > 1)
+                if (nameCounts[fullName] > 1 && !plainNameClaimed.Add(fullName))
                 {
                     // Name collision across distinct column shapes (same plugin class, same handler name, different
-                    // captured columns): append a stable hash of the shape so both projections are emitted with
-                    // unique, legal type names instead of one winning.
+                    // captured columns): the FIRST shape keeps the plain, guessable type name; only later colliding
+                    // shapes get a stable hash suffix. This keeps a lambda-handler projection nameable in the common
+                    // single-shape case rather than every shape becoming an unguessable hashed name (#309 L3).
                     toEmit = projectionModel.WithTypeName(projectionModel.TypeName + "_" + StableHash(ColumnSignature(projectionModel)));
                 }
 
