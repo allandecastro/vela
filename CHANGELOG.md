@@ -24,6 +24,19 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.19.6] - 2026-09-27 (Vela.Cli)
+
+CLI line, published as `cli-v0.19.6`. Connection-string input validation and config-dir hardening (closes the CLI security audit, #307).
+
+### Fixed
+
+- **Client-secret connection inputs are validated before use.** `--url` must be an absolute `https` URL, and no value (`--url`/`--tenant-id`/`--client-id`/`--client-secret`) may contain `;`, which would inject or corrupt the `;`-delimited Dataverse connection string. (`=` is allowed, so base64 secret padding still works.) A bad input fails with a clear message that never echoes the secret.
+- **`~/.vela` is created with owner-only (0700) permissions on every write.** `UserConfig.Write` (called after each command by the update-check) now goes through the same `EnsureConfigDir` hardening as the token cache, so the config directory can never be left world-traversable before a secret-bearing write.
+
+### Docs
+
+- The plugins guide now states explicitly that secrets belong in `WithSecureConfig` (redacted in output), never in `WithUnsecureConfig` (stored unencrypted and printed verbatim in `plan`/`inspect`).
+
 ## [0.19.5] - 2026-09-27 (Vela.Cli)
 
 CLI line, published as `cli-v0.19.5`. Tightens plugin-type detection in the package scanner.

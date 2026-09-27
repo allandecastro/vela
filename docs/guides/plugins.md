@@ -414,7 +414,9 @@ is just removing the `Disabled()` marker.
 plugin constructor `(string unsecureConfig, string secureConfig)`. Both are reconciled by `apply` (the secure value is
 stored on the linked `sdkmessageprocessingstepsecureconfig` row). Unsecure config appears verbatim in the `vela plan`
 JSON (it is non-sensitive by design); the **secure** value is **redacted to a hash** in plan/inspect output (and any
-`-o` plan file), so a changed secret is still detected without the value ever leaving Dataverse.
+`-o` plan file), so a changed secret is still detected without the value ever leaving Dataverse. **Put any secret
+(API key, connection string, token) in `WithSecureConfig`, never in `WithUnsecureConfig`** - unsecure config is
+stored unencrypted by Dataverse and printed verbatim in `plan`/`inspect` output.
 
 `MainOperation` is reserved for Custom API main handlers; it is not one of the typed stage methods, so a
 regular plugin step cannot register there.

@@ -463,6 +463,13 @@ internal static class CommandLineOptions
             }
             else
             {
+                string? inputError = ValidateClientSecretConnectionInputs(url, tenantId, clientId, clientSecret);
+                if (inputError != null)
+                {
+                    exitCode = Fail(inputError, ExitInvalidArguments);
+                    return false;
+                }
+
                 connectionString = BuildClientSecretConnectionString(url, tenantId!, clientId!, clientSecret!);
             }
         }
@@ -521,6 +528,13 @@ internal static class CommandLineOptions
             }
             else
             {
+                string? inputError = ValidateClientSecretConnectionInputs(url, tenantId, clientId, clientSecret);
+                if (inputError != null)
+                {
+                    exitCode = Fail(inputError, ExitInvalidArguments);
+                    return false;
+                }
+
                 connectionString = BuildClientSecretConnectionString(url, tenantId, clientId, clientSecret);
             }
         }
@@ -531,6 +545,29 @@ internal static class CommandLineOptions
     public static string BuildClientSecretConnectionString(string url, string tenantId, string clientId, string clientSecret)
     {
         return $"AuthType=ClientSecret;Url={url};TenantId={tenantId};ClientId={clientId};ClientSecret={clientSecret};RequireNewInstance=true";
+    }
+
+    // Guards the values interpolated into the client-secret connection string. The URL must be an absolute https
+    // endpoint, and no value may contain ';' - the connection string is ';'-delimited, so an embedded ';' would
+    // inject or corrupt parameters. '=' is intentionally NOT rejected: a value is everything after the first '=' in
+    // its segment, so an '=' inside a value (e.g. base64 secret padding) is harmless. Returns an error message, or
+    // null when the inputs are safe. The message never echoes a secret value. (#307)
+    public static string? ValidateClientSecretConnectionInputs(string? url, string? tenantId, string? clientId, string? clientSecret)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return $"--url must be an absolute https URL (for example https://org.crm.dynamics.com); got '{url}'.";
+        }
+
+        foreach ((string name, string? value) in new[] { ("--url", url), ("--tenant-id", tenantId), ("--client-id", clientId), ("--client-secret", clientSecret) })
+        {
+            if (value != null && value.Contains(';'))
+            {
+                return $"The {name} value must not contain ';' - it would corrupt the Dataverse connection string.";
+            }
+        }
+
+        return null;
     }
 
     // The Microsoft-provided sample public client for Dataverse interactive OAuth flows, documented for

@@ -151,7 +151,11 @@ internal static class UserConfig
     {
         try
         {
-            Directory.CreateDirectory(ConfigDir);
+            // Create the config dir through EnsureConfigDir (not a bare CreateDirectory) so it gets the same 0700
+            // hardening as the token cache. UpdateNotifier calls Write after every command, so this path can be the
+            // first to create ~/.vela; without the 0700 mode it could be left world-traversable for a later
+            // secret-bearing write. (#307)
+            EnsureConfigDir();
             File.WriteAllText(ConfigPath, JsonSerializer.Serialize(data, JsonOptions));
         }
         catch
