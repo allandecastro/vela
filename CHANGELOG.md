@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.6] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.6`. Test-harness fidelity audit (#303): aggregate over no rows.
+
+### Fixed
+
+- **A `sum` aggregate over no (non-null) values now returns null, not 0**, in the in-memory query engine - matching Dataverse (and how `avg`/`min`/`max` already behave), so an empty sum is distinguishable from a real 0.
+
 ## [0.29.5] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.5`. Test-harness fidelity audit (#303): transaction atomicity.

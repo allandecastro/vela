@@ -275,7 +275,10 @@ namespace Vela.Testing
                 case "countcolumn":
                     return group.Count(entity => EntityValues.GetValue(entity, attribute) != null);
                 case "sum":
-                    return group.Select(entity => ToDecimal(EntityValues.GetValue(entity, attribute))).Where(value => value.HasValue).Sum(value => value!.Value);
+                    List<decimal> sumValues = group.Select(entity => ToDecimal(EntityValues.GetValue(entity, attribute))).Where(value => value.HasValue).Select(value => value!.Value).ToList();
+                    // No values to sum -> null, as Dataverse returns for an aggregate over no (non-null) rows
+                    // (consistent with avg/min/max below), rather than 0 which would be indistinguishable from a real 0.
+                    return sumValues.Count == 0 ? (object?)null : sumValues.Sum();
                 case "avg":
                     List<decimal> values = group.Select(entity => ToDecimal(EntityValues.GetValue(entity, attribute))).Where(value => value.HasValue).Select(value => value!.Value).ToList();
                     // No values to average -> null, as Dataverse returns (and consistent with min/max above).
