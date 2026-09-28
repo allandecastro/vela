@@ -445,8 +445,13 @@ namespace Vela.Testing
                 Guid[] ids = new Guid[entities.Length];
                 for (int i = 0; i < entities.Length; i++)
                 {
-                    ids[i] = _store.Create(entities[i]);
+                    // Persist just this record (no deep-insert recursion in the store), then drive the deep insert's
+                    // children back through the pipeline so each child fires its own Create steps + images (and, via
+                    // the same callback, its grandchildren) - instead of the store persisting descendants with no
+                    // plugins. CreateRecordDirect avoids double-persisting the descendants the recursion creates.
+                    ids[i] = _store.CreateRecordDirect(entities[i]);
                     entities[i].Id = ids[i]; // the post-operation Target carries the created id
+                    _store.CreateRelatedEntities(entities[i], entities[i].LogicalName, ids[i], child => ExecuteCreate(child));
                     _store.TryGet(entities[i].LogicalName, ids[i], out Entity? post);
                     items[i].PostState = post;
                 }
