@@ -409,6 +409,30 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Sum_over_no_values_returns_null_not_zero()   // #303 Tier-2
+        {
+            // Every row's summed column is null, so there are no values to sum. Dataverse returns null for such an
+            // aggregate (distinguishable from a real 0), not 0 - matching how avg/min/max already behave.
+            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
+                new Entity("opportunity") { Id = Guid.NewGuid() },
+                new Entity("opportunity") { Id = Guid.NewGuid() });
+
+            QueryExpression query = new QueryExpression("opportunity")
+            {
+                ColumnSet = new ColumnSet
+                {
+                    AttributeExpressions =
+                    {
+                        new XrmAttributeExpression { AttributeName = "estimatedvalue", Alias = "total", AggregateType = XrmAggregateType.Sum },
+                    },
+                },
+            };
+
+            var rows = crm.RetrieveMultiple(query).Entities;
+            Assert.Null(rows[0].GetAttributeValue<AliasedValue>("total").Value);
+        }
+
+        [Fact]
         public void ColumnAlias_NonAggregate_ReturnsAliasedValue()
         {
             InMemoryOrganizationService crm = SeededAccounts("Zava");
