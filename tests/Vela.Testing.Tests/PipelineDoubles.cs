@@ -88,6 +88,20 @@ namespace Vela.Testing.Tests
     }
 
     // Fires only when 'name' changes (filtering attributes).
+    // Throws on the owner (ownerid) Update pass only. Because the pipeline splits an owner+standard Update into two
+    // passes (standard, then owner/state), filtering on OwnerId makes this fire only on the second pass - used to
+    // prove the two passes are one atomic scope (a second-pass failure rolls the first pass back).
+    public sealed class ThrowOnOwnerUpdate : EntityPluginBase<FakeOwnable>
+    {
+        public ThrowOnOwnerUpdate(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(o => o.OwnerId).Handle(OnUpdated);
+
+        private void OnUpdated(IUpdatePostContext<FakeOwnable> ctx)
+            => throw new InvalidPluginExecutionException("Owner change rejected.");
+    }
+
     public sealed class OnNameChange : EntityPluginBase<FakeAccount>
     {
         public OnNameChange(string unsecure, string secure) : base(unsecure, secure) { }

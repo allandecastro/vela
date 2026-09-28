@@ -109,6 +109,22 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Owner_and_standard_update_passes_share_one_atomic_scope()   // #303
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<ThrowOnOwnerUpdate>()
+                .Seed(new FakeOwnable { Id = id, Name = "original" });
+
+            FakeOwnable update = new FakeOwnable { Id = id, Name = "changed" };
+            update["ownerid"] = new EntityReference("systemuser", Guid.NewGuid());
+
+            // The owner (special) pass throws; because both passes share one snapshot scope, the standard name change
+            // rolls back too - the record is left untouched rather than half-updated.
+            Assert.ThrowsAny<Exception>(() => pipeline.Service.Update(update));
+            Assert.Equal("original", pipeline.GetAll("vela_ownable").Single().GetAttributeValue<string>("name"));
+        }
+
+        [Fact]
         public void CreatePostStep_SeesTheCreatedIdViaCtxResponse()
         {
             PluginPipeline pipeline = PluginPipeline.Empty()

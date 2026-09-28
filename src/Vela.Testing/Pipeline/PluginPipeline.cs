@@ -378,8 +378,16 @@ namespace Vela.Testing
 
             if (standard != null && special != null)
             {
-                ExecuteUpdateMultiple(new[] { standard }, sharedVariables);
-                ExecuteUpdateMultiple(new[] { special }, sharedVariables);
+                // The two step-firings are one logical Update: run them in a single snapshot scope so a failure in the
+                // second (owner/state) pass rolls back the first (standard) pass too, instead of leaving the record
+                // half-updated. Each ExecuteUpdateMultiple still snapshots internally; this outer scope makes the pair
+                // atomic across passes.
+                _store.RunAtomically(() =>
+                {
+                    ExecuteUpdateMultiple(new[] { standard }, sharedVariables);
+                    ExecuteUpdateMultiple(new[] { special }, sharedVariables);
+                    return true;
+                });
             }
             else
             {

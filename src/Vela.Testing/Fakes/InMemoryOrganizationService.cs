@@ -430,6 +430,19 @@ namespace Vela.Testing
 
         public Guid Create(Entity entity)
         {
+            // A deep insert (target carries RelatedEntities) is one transaction: if a child/grandchild fails, the
+            // parent and earlier descendants roll back too, instead of leaving partial rows. A plain create needs no
+            // snapshot. CreateRecordDirect throws ArgumentNullException for a null entity, preserving that guard.
+            if (entity != null && entity.RelatedEntities.Count > 0)
+            {
+                return RunAtomically(() => CreateGraph(entity));
+            }
+
+            return CreateGraph(entity);
+        }
+
+        private Guid CreateGraph(Entity entity)
+        {
             Guid id = CreateRecordDirect(entity);
 
             // Deep insert: create the related records held in the target's RelatedEntities (1:N children), linking
@@ -1036,7 +1049,9 @@ namespace Vela.Testing
 
                 case CreateMultipleRequest createMultiple:
                 {
-                    Guid[] ids = createMultiple.Targets.Entities.Select(Create).ToArray();
+                    // The whole batch is one transaction: a fault partway through rolls back the rows already written,
+                    // so a bulk create is all-or-nothing (matching Dataverse) instead of leaving partial rows.
+                    Guid[] ids = RunAtomically(() => createMultiple.Targets.Entities.Select(Create).ToArray());
                     CreateMultipleResponse response = new CreateMultipleResponse();
                     response.Results["Ids"] = ids;
                     return response;
@@ -1044,10 +1059,15 @@ namespace Vela.Testing
 
                 case UpdateMultipleRequest updateMultiple:
                 {
-                    foreach (Entity entity in updateMultiple.Targets.Entities)
+                    RunAtomically(() =>
                     {
-                        Update(entity);
-                    }
+                        foreach (Entity entity in updateMultiple.Targets.Entities)
+                        {
+                            Update(entity);
+                        }
+
+                        return true;
+                    });
 
                     return new UpdateMultipleResponse();
                 }
@@ -1276,6 +1296,22 @@ namespace Vela.Testing
             }
 
             return new OrganizationServiceFault { Message = exception.Message };
+        }
+
+        // Runs an operation all-or-nothing: snapshot the store, run it, and roll the whole store back if it throws, so
+        // a multi-row/multi-record write (bulk create/update, deep insert) leaves no partial rows on a mid-way fault.
+        internal T RunAtomically<T>(Func<T> operation)
+        {
+            StoreSnapshot snapshot = Snapshot();
+            try
+            {
+                return operation();
+            }
+            catch
+            {
+                RestoreTo(snapshot);
+                throw;
+            }
         }
 
         // All-or-nothing: snapshot the store, run every child request, and roll back the whole batch if any throws.
