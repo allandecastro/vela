@@ -412,6 +412,22 @@ namespace Vela.Testing
 
         public Guid Create(Entity entity)
         {
+            Guid id = CreateRecordDirect(entity);
+
+            // Deep insert: create the related records held in the target's RelatedEntities (1:N children), linking
+            // each child back to the just-created parent. Direct callers create each child through Create (no plugin
+            // pipeline); the plugin pipeline supplies its own callback so descendants re-enter the pipeline.
+            CreateRelatedEntities(entity, entity.LogicalName, id, Create);
+            return id;
+        }
+
+        // The single-record create primitive: validate + persist exactly ONE record, without recursing into a
+        // deep-insert's RelatedEntities. Shared by the direct path (Create, above) and the plugin pipeline
+        // (PluginPipeline.ExecuteCreateMultiple), so a deep insert driven through the pipeline can persist each
+        // record here while the pipeline itself drives the child recursion - firing every child's Create steps -
+        // instead of the store silently persisting descendants with no plugins. Mirrors RemoveRecordDirect for Delete.
+        internal Guid CreateRecordDirect(Entity entity)
+        {
             if (entity == null)
             {
                 throw new ArgumentNullException(nameof(entity));
@@ -438,10 +454,6 @@ namespace Vela.Testing
             RealignOwningBusinessUnit(stored);
             _alternateKeys.Enforce(stored, Table(stored.LogicalName).Values);
             Table(stored.LogicalName)[stored.Id] = stored;
-
-            // Deep insert: create the related records held in the target's RelatedEntities (1:N children), linking
-            // each child back to the just-created parent. Recurses through Create for multi-level graphs.
-            CreateRelatedEntities(entity, stored.LogicalName, stored.Id);
             return stored.Id;
         }
 
@@ -449,7 +461,7 @@ namespace Vela.Testing
         // set from the relationship's ReferencingAttribute, so the relationship must be declared (WithRelationship /
         // WithParentalRelationship / WithReferentialRelationship) - the generated nav property carries only the
         // schema name, not the child foreign-key column. N:N deep associate is not handled here.
-        private void CreateRelatedEntities(Entity parent, string parentEntity, Guid parentId)
+        internal void CreateRelatedEntities(Entity parent, string parentEntity, Guid parentId, Func<Entity, Guid> create)
         {
             foreach (KeyValuePair<Relationship, EntityCollection> pair in parent.RelatedEntities)
             {
@@ -477,7 +489,9 @@ namespace Vela.Testing
                         toCreate.RelatedEntities[nested.Key] = nested.Value;
                     }
 
-                    Create(toCreate);
+                    // The child carries its own RelatedEntities (grandchildren); the callback recurses into them the
+                    // same way, so a multi-level deep insert stays intact whether driven directly or via the pipeline.
+                    create(toCreate);
                 }
             }
         }

@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.3] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.3`. Test-harness fidelity audit (#303): deep-insert plugin pipeline.
+
+### Fixed
+
+- **Deep-insert children (and grandchildren) now re-enter the plugin pipeline in the in-memory harness.** A `Create` whose target carried `RelatedEntities` persisted the descendants directly through the store, so their own Create pre/post steps and images never fired - a plugin broken on a deep-inserted child would still pass in the harness. The pipeline now persists each record through a non-recursing store primitive and drives the child recursion itself, so every descendant fires its Create steps, mirroring how cascade delete already routes each record through the pipeline. Persistence is unchanged for direct (non-pipeline) `Create` callers, and each record is still persisted exactly once (no double-write).
+
 ## [0.29.2] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.2`. Test-harness fidelity audit (#303): file-download access control.

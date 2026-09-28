@@ -88,6 +88,27 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Deep_insert_children_re_enter_the_pipeline_and_fire_their_create_plugins()   // #303
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .WithReferentialRelationship("account", "task", "regardingobjectid")
+                .Register<CreateNoteOnTaskCreate>();
+
+            FakeAccount account = new FakeAccount { Name = "Zava" };
+            EntityCollection tasks = new EntityCollection();
+            tasks.Entities.Add(new FakeTask { Subject = "Child task" });
+            account.RelatedEntities[new Relationship("account_tasks")] = tasks;
+
+            pipeline.Service.Create(account);
+
+            // The deep-inserted task re-entered the pipeline: its Create plugin fired and created the note...
+            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("CreateNoteOnTaskCreate"));
+            Assert.Single(pipeline.GetAll("annotation"));
+            // ...and the task was persisted exactly once (the non-recursing store primitive avoids a double-persist).
+            Assert.Single(pipeline.GetAll("task"));
+        }
+
+        [Fact]
         public void CreatePostStep_SeesTheCreatedIdViaCtxResponse()
         {
             PluginPipeline pipeline = PluginPipeline.Empty()
