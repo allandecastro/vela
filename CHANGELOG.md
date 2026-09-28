@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.21.1] - 2026-09-28 (Vela.Cli)
+
+CLI line, published as `cli-v0.21.1`. plan/apply fidelity audit (#305): casing convergence.
+
+### Fixed
+
+- **A step or Custom API is no longer reported as "changed" when only the casing of its message name or unique name differs.** Dataverse compares a step message, a Custom API unique name and the derived display name case-insensitively, so a mixed-case code declaration diffed as a perpetual "changed" against the live read and `apply`'s update silently no-op'd it. The diff now folds only those top-level fields to lower case for comparison, while `apply` still writes the authored casing; case-significant configuration and nested parameter unique names (the dotted-name self-heal) still compare exactly.
+
 ## [0.29.1] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.1`. Test-harness fidelity audit (#303): query and alternate-key fixes.

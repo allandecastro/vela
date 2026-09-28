@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using static Vela.Cli.JsonReader;
 
 namespace Vela.Cli;
@@ -104,6 +105,41 @@ internal static class DiffEngine
         return $"{pluginTypeName}:{message}:{stage}:{mode}:{entity}";
     }
 
+    // Top-level string fields whose CASING must not, on its own, mark an item as "changed": Dataverse compares a
+    // step message, a Custom API unique name and the derived display name case-insensitively, and apply still writes
+    // the authored casing. Folding only these top-level fields keeps case-significant config (e.g. unsecureConfig)
+    // and nested parameter unique names (the dotted-name self-heal) comparing exactly. (#305)
+    private static readonly string[] CaseFoldedFields = ["message", "name", "uniqueName"];
+
+    // A comparison-only serialization of a normalized definition: identical to the stored shape except the
+    // case-folded fields are lower-cased, so a case-only drift compares equal. The stored Definition is untouched,
+    // so apply still writes the authored casing.
+    private static string ComparisonKey(JsonElement definition)
+    {
+        if (definition.ValueKind != JsonValueKind.Object)
+        {
+            return JsonSerializer.Serialize(definition);
+        }
+
+        if (JsonNode.Parse(definition.GetRawText()) is not JsonObject obj)
+        {
+            return JsonSerializer.Serialize(definition);
+        }
+
+        foreach (string field in CaseFoldedFields)
+        {
+            if (obj.TryGetPropertyValue(field, out JsonNode? value)
+                && value is JsonValue jsonValue
+                && jsonValue.TryGetValue(out string? text)
+                && text != null)
+            {
+                obj[field] = text.ToLowerInvariant();
+            }
+        }
+
+        return obj.ToJsonString();
+    }
+
     public static RegistrationDiff BuildDiff(RegistrationState local, RegistrationState current)
     {
         List<RegistrationItem> added = [];
@@ -123,8 +159,8 @@ internal static class DiffEngine
                 continue;
             }
 
-            string beforeJson = JsonSerializer.Serialize(before.Definition);
-            string afterJson = JsonSerializer.Serialize(pair.Value.Definition);
+            string beforeJson = ComparisonKey(before.Definition);
+            string afterJson = ComparisonKey(pair.Value.Definition);
             if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
             {
                 changed.Add(new RegistrationChange(pair.Value.Kind, pair.Value.Type, before.Definition, pair.Value.Definition));
@@ -188,8 +224,8 @@ internal static class DiffEngine
 
             currentStepMatched[currentIndex] = true;
             RegistrationItem currentStep = currentSteps[currentIndex];
-            string beforeJson = JsonSerializer.Serialize(currentStep.Definition);
-            string afterJson = JsonSerializer.Serialize(localStep.Definition);
+            string beforeJson = ComparisonKey(currentStep.Definition);
+            string afterJson = ComparisonKey(localStep.Definition);
             if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
             {
                 changed.Add(new RegistrationChange(localStep.Kind, localStep.Type, currentStep.Definition, localStep.Definition));
@@ -232,8 +268,8 @@ internal static class DiffEngine
             int currentIndex = queue.Dequeue();
             currentStepMatched[currentIndex] = true;
             RegistrationItem currentStep = currentSteps[currentIndex];
-            string beforeJson = JsonSerializer.Serialize(currentStep.Definition);
-            string afterJson = JsonSerializer.Serialize(localStep.Definition);
+            string beforeJson = ComparisonKey(currentStep.Definition);
+            string afterJson = ComparisonKey(localStep.Definition);
             if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
             {
                 changed.Add(new RegistrationChange(localStep.Kind, localStep.Type, currentStep.Definition, localStep.Definition));
