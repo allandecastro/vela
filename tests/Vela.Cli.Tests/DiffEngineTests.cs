@@ -261,6 +261,62 @@ public class DiffEngineTests
         Assert.Equal(0, diff.Summary.Removed);
         Assert.Equal(0, diff.Summary.Changed);
     }
+
+    // ---- #305: casing must not churn (diff folds message / uniqueName / name; apply keeps authored casing) ----
+
+    private static RegistrationItem NormalizedCustomApi(object manifest, string type = "Zava.Plugins.MyApi") =>
+        new RegistrationItem("custom-api", type,
+            DefinitionNormalizer.NormalizeCustomApiDefinition(Json(manifest), Web));
+
+    [Fact]
+    public void BuildDiff_does_not_report_a_step_changed_on_message_casing_drift_only()
+    {
+        RegistrationItem local = NormalizedStep(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "Create", stage = 40, mode = 0, entityLogicalName = "account" });
+        RegistrationItem live = NormalizedStep(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "create", stage = 40, mode = 0, entityLogicalName = "account" });
+
+        RegistrationDiff diff = DiffEngine.BuildDiff(State(local), State(live));
+
+        Assert.Empty(diff.Added);
+        Assert.Empty(diff.Removed);
+        Assert.Empty(diff.Changed);
+    }
+
+    [Fact]
+    public void BuildDiff_still_reports_a_step_changed_on_a_non_casing_difference()
+    {
+        RegistrationItem local = NormalizedStep(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "Create", stage = 40, mode = 0, entityLogicalName = "account", stepKey = "k1", executionOrder = 5 });
+        RegistrationItem live = NormalizedStep(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "Create", stage = 40, mode = 0, entityLogicalName = "account", stepKey = "k1", executionOrder = 9 });
+
+        RegistrationDiff diff = DiffEngine.BuildDiff(State(local), State(live));
+
+        Assert.Single(diff.Changed);
+    }
+
+    [Fact]
+    public void BuildDiff_does_not_report_a_custom_api_changed_on_unique_name_casing_drift_only()
+    {
+        RegistrationItem local = NormalizedCustomApi(new { uniqueName = "zava_DoThing", isFunction = false });
+        RegistrationItem live = NormalizedCustomApi(new { uniqueName = "zava_dothing", isFunction = false });
+
+        RegistrationDiff diff = DiffEngine.BuildDiff(State(local), State(live));
+
+        Assert.Empty(diff.Added);
+        Assert.Empty(diff.Removed);
+        Assert.Empty(diff.Changed);
+    }
+
+    [Fact]
+    public void A_real_custom_api_change_keeps_the_authored_unique_name_casing_for_apply_to_write()
+    {
+        RegistrationItem local = NormalizedCustomApi(new { uniqueName = "zava_DoThing", isFunction = true });
+        RegistrationItem live = NormalizedCustomApi(new { uniqueName = "zava_dothing", isFunction = false });
+
+        RegistrationDiff diff = DiffEngine.BuildDiff(State(local), State(live));
+
+        RegistrationChange change = Assert.Single(diff.Changed);
+        // The stored payload apply writes keeps the authored casing (only the comparison folded case).
+        Assert.Equal("zava_DoThing", JsonReaderTestHelper.UniqueName(change));
+    }
 }
 
 internal static class JsonReaderTestHelper
