@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.2] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.2`. Test-harness fidelity audit (#303): file-download access control.
+
+### Fixed
+
+- **A File-column download in the in-memory harness now enforces the same access control as `Retrieve`.** `InitializeFileBlocksDownload` streamed a File column's content with no record-level Read demand and no field-level-security check, while `Retrieve`/`RetrieveMultiple` masked the same column - so an access-control test could pass in the harness while the identical read would be blocked on a real org (a false green). The download now applies a Read demand on the record and, for a field-secured column, requires field read.
+
 ## [0.21.1] - 2026-09-28 (Vela.Cli)
 
 CLI line, published as `cli-v0.21.1`. plan/apply fidelity audit (#305): casing convergence.

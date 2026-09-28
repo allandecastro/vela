@@ -1553,7 +1553,23 @@ namespace Vela.Testing
             EntityReference target = GetParam<EntityReference>(request, "Target");
             string attribute = GetParam<string>(request, "FileAttributeName");
 
-            if (!Table(target.LogicalName).TryGetValue(target.Id, out Entity? record) || !record.Contains(attribute) || record[attribute] == null)
+            if (!Table(target.LogicalName).TryGetValue(target.Id, out Entity? record))
+            {
+                throw new InvalidOperationException(
+                    $"No file/image is set on '{target.LogicalName}.{attribute}' for record {target.Id}.");
+            }
+
+            // A file download must respect the same access control as Retrieve: a record-level Read demand and
+            // field-level security on the File column. Without this a caller with no Read (or no access to a secured
+            // File column) could stream content that Retrieve/RetrieveMultiple would have masked - a false green.
+            if (!SecurityInfraTables.Contains(target.LogicalName))
+            {
+                DemandAccess(target.LogicalName, Privilege.Read, record);
+            }
+
+            DemandSecuredColumnRead(target.LogicalName, attribute);
+
+            if (!record.Contains(attribute) || record[attribute] == null)
             {
                 throw new InvalidOperationException(
                     $"No file/image is set on '{target.LogicalName}.{attribute}' for record {target.Id}.");
