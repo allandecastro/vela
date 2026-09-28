@@ -24,11 +24,16 @@ namespace Vela.Testing
         // security filtering.
         private readonly Func<Entity, bool>? _canRead;
 
-        public InMemoryQueryEngine(Func<string, IEnumerable<Entity>> tableAccessor, Guid currentUserId, Func<Entity, bool>? canRead = null)
+        // "Today" for the relative date operators (Today/Yesterday/LastXDays/…), taken from the service's injected
+        // clock so those operators are deterministic and controllable in tests, not tied to the host's local date.
+        private readonly DateTime _today;
+
+        public InMemoryQueryEngine(Func<string, IEnumerable<Entity>> tableAccessor, Guid currentUserId, Func<Entity, bool>? canRead = null, DateTime? now = null)
         {
             _table = tableAccessor;
             _currentUserId = currentUserId;
             _canRead = canRead;
+            _today = (now ?? DateTime.UtcNow).Date;
         }
 
         // The primary rows of a table the caller may read (all of them when no security filter is set).
@@ -703,21 +708,21 @@ namespace Vela.Testing
                 case ConditionOperator.OnOrAfter:
                     return DatePart(actual) is DateTime oa && DatePart(Operand(0)) is DateTime oav && oa >= oav;
                 case ConditionOperator.Today:
-                    return DatePart(actual) == DateTime.Today;
+                    return DatePart(actual) == _today;
                 case ConditionOperator.Yesterday:
-                    return DatePart(actual) == DateTime.Today.AddDays(-1);
+                    return DatePart(actual) == _today.AddDays(-1);
                 case ConditionOperator.Tomorrow:
-                    return DatePart(actual) == DateTime.Today.AddDays(1);
+                    return DatePart(actual) == _today.AddDays(1);
                 case ConditionOperator.ThisMonth:
-                    return DatePart(actual) is DateTime tm && tm.Year == DateTime.Today.Year && tm.Month == DateTime.Today.Month;
+                    return DatePart(actual) is DateTime tm && tm.Year == _today.Year && tm.Month == _today.Month;
                 case ConditionOperator.ThisYear:
-                    return DatePart(actual) is DateTime ty && ty.Year == DateTime.Today.Year;
+                    return DatePart(actual) is DateTime ty && ty.Year == _today.Year;
                 case ConditionOperator.LastXDays:
                     return InDayRange(actual, -ToInt(Operand(0)), 0);
                 case ConditionOperator.NextXDays:
                     return InDayRange(actual, 0, ToInt(Operand(0)));
                 case ConditionOperator.OlderThanXDays:
-                    return DatePart(actual) is DateTime ox && ox < DateTime.Today.AddDays(-ToInt(Operand(0)));
+                    return DatePart(actual) is DateTime ox && ox < _today.AddDays(-ToInt(Operand(0)));
                 default:
                     throw new NotSupportedException(
                         $"InMemoryOrganizationService does not support the '{condition.Operator}' operator yet.");
@@ -775,7 +780,7 @@ namespace Vela.Testing
             return null;
         }
 
-        private static bool InDayRange(object? value, int fromDays, int toDays)
+        private bool InDayRange(object? value, int fromDays, int toDays)
         {
             DateTime? date = DatePart(value);
             if (date == null)
@@ -783,8 +788,7 @@ namespace Vela.Testing
                 return false;
             }
 
-            DateTime today = DateTime.Today;
-            return date.Value >= today.AddDays(fromDays) && date.Value <= today.AddDays(toDays);
+            return date.Value >= _today.AddDays(fromDays) && date.Value <= _today.AddDays(toDays);
         }
 
         private static int ToInt(object? value)

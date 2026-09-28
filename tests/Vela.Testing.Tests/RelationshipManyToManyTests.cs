@@ -78,5 +78,21 @@ namespace Vela.Testing.Tests
             int contactCount = service.RetrieveMultiple(new QueryExpression("contact") { ColumnSet = new ColumnSet(false) }).Entities.Count;
             Assert.Equal(1, contactCount);
         }
+
+        [Fact]
+        public void Deleting_a_record_removes_its_dangling_N_N_intersect_rows()   // #303 Tier-2
+        {
+            InMemoryOrganizationService service = NewService();
+            Guid accountId = service.Create(new Entity("account") { ["name"] = "Contoso" });
+            Guid contactId = service.Create(new Entity("contact") { ["firstname"] = "Ada" });
+            service.Associate("account", accountId, new Relationship("account_contacts_nn"),
+                new EntityReferenceCollection { new EntityReference("contact", contactId) });
+            Assert.Single(service.RetrieveMultiple(new QueryExpression("accountcontact")).Entities);
+
+            service.Delete("account", accountId);
+
+            // The intersect row is removed, not left dangling and pointing at a deleted account.
+            Assert.Empty(service.RetrieveMultiple(new QueryExpression("accountcontact")).Entities);
+        }
     }
 }

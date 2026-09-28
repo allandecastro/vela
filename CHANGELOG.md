@@ -24,6 +24,15 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.7] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.7`. Test-harness fidelity audit (#303): N:N cleanup on delete and deterministic date operators.
+
+### Fixed
+
+- **Deleting a record removes its N:N intersect rows.** A many-to-many intersect row was left dangling, pointing at a record that no longer existed, after that record was deleted. Delete (and cascade delete) now removes the intersect rows of every declared or metadata-declared N:N relationship on either side of the deleted record.
+- **Relative date operators are deterministic.** `Today`/`Yesterday`/`Tomorrow`/`ThisMonth`/`ThisYear`/`LastXDays`/`NextXDays`/`OlderThanXDays` used the host's local `DateTime.Today`, making a query's result depend on when and where the suite ran. They now resolve "today" from the service's injected clock (`WithClock(...)`, UTC by default), so date-based query tests are reproducible.
+
 ## [0.29.6] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.6`. Test-harness fidelity audit (#303): aggregate over no rows.
