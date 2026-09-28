@@ -24,6 +24,13 @@ namespace Vela.Testing
         public IEnumerable<OneToMany> ParentRelationshipsOf(string referencingEntity) =>
             _relationships.Where(r => string.Equals(r.ReferencingEntity, referencingEntity, StringComparison.OrdinalIgnoreCase));
 
+        /// <summary>Resolves a declared 1:N relationship by its schema name (used by Associate/Disassociate over 1:N).</summary>
+        public bool TryResolveBySchema(string schemaName, out OneToMany relationship)
+        {
+            relationship = _relationships.FirstOrDefault(r => string.Equals(r.SchemaName, schemaName, StringComparison.OrdinalIgnoreCase))!;
+            return relationship != null;
+        }
+
         /// <summary>A 1:N relationship: a lookup (<see cref="ReferencingAttribute"/>) on the child pointing at the parent.</summary>
         internal sealed class OneToMany
         {

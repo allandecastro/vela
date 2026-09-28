@@ -24,6 +24,20 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.4] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.4`. Test-harness fidelity audit (#303): security opt-in guard, 1:N association, and alternate-key lookups.
+
+### Added
+
+- **`InMemoryOrganizationService.WithStrictSecurity()`** opts into strict security: a security-relevant operation run without a configured security model throws instead of silently granting full access. This closes the default-off footgun where an access-control test that forgot `WithSecurity(...)` passes green because everything is allowed.
+
+### Fixed
+
+- **`Associate`/`Disassociate` now support 1:N relationships**, not only N:N. A 1:N schema name sets (Associate) or clears (Disassociate) the child's lookup - from either side of the relationship - instead of throwing "not a declared many-to-many".
+- **`Associate` on an already-associated N:N pair now faults** (like Dataverse) instead of silently no-op'ing, so a plugin that catches that duplicate-association fault can be tested.
+- **A lookup supplied as an alternate-key `EntityReference`** (KeyAttributes set, Id empty) is now resolved to a concrete id at write time on Create/Update, so the persisted lookup points at a real record and later joins/reads find it. A key that matches no record faults, like relating to a missing record.
+
 ## [0.29.3] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.3`. Test-harness fidelity audit (#303): deep-insert plugin pipeline.
