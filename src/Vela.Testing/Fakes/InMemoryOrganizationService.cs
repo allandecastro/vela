@@ -1092,6 +1092,12 @@ namespace Vela.Testing
                     return new DisassociateResponse();
                 }
 
+                case MergeRequest merge:
+                {
+                    Merge(merge);
+                    return new MergeResponse();
+                }
+
                 case RetrieveEntityRequest retrieveEntity:
                 {
                     EntityMetadata metadata = ResolveMetadata(retrieveEntity.LogicalName, retrieveEntity.MetadataId);
@@ -1560,6 +1566,97 @@ namespace Vela.Testing
                 intersect.Remove(id);
             }
         }
+
+        // The only tables Dataverse supports Merge on.
+        private static readonly HashSet<string> MergeableEntities =
+            new HashSet<string>(new[] { "account", "contact", "lead", "incident" }, StringComparer.OrdinalIgnoreCase);
+
+        // Merge (account/contact/lead/incident): moves the subordinate's non-conflicting data onto the target without
+        // overwriting the target's own values, applies UpdateContent to the target (ignored for incident), reparents
+        // the subordinate's 1:N children to the target, then deactivates the subordinate. All-or-nothing.
+        private void Merge(MergeRequest request)
+        {
+            EntityReference target = request.Target ?? throw new ArgumentNullException(nameof(request), "Merge Target is required.");
+            string entity = target.LogicalName;
+            Guid subordinateId = request.SubordinateId;
+
+            if (!MergeableEntities.Contains(entity))
+            {
+                throw new InvalidPluginExecutionException(
+                    $"Merge is not supported for '{entity}'. Dataverse supports Merge only for account, contact, lead and incident.");
+            }
+
+            if (!Table(entity).TryGetValue(target.Id, out Entity? targetRecord))
+            {
+                throw RecordDoesNotExist(entity, target.Id);
+            }
+
+            if (!Table(entity).TryGetValue(subordinateId, out Entity? subordinate))
+            {
+                throw RecordDoesNotExist(entity, subordinateId);
+            }
+
+            bool isIncident = string.Equals(entity, "incident", StringComparison.OrdinalIgnoreCase);
+
+            RunAtomically<object?>(() =>
+            {
+                // 1. Fill only the target's missing/null columns from the subordinate - the target's own data is never
+                //    overwritten (per the Merge contract).
+                Entity merged = new Entity(entity, target.Id);
+                foreach (KeyValuePair<string, object> attribute in subordinate.Attributes)
+                {
+                    if (IsMergeSkippedColumn(entity, attribute.Key)
+                        || (targetRecord.Contains(attribute.Key) && targetRecord[attribute.Key] != null))
+                    {
+                        continue;
+                    }
+
+                    merged[attribute.Key] = EntityValues.CloneValue(attribute.Value);
+                }
+
+                // 2. UpdateContent sets/overrides values on the target (ignored when merging incidents).
+                if (request.UpdateContent != null && !isIncident)
+                {
+                    foreach (KeyValuePair<string, object> attribute in request.UpdateContent.Attributes)
+                    {
+                        if (!IsMergeSkippedColumn(entity, attribute.Key))
+                        {
+                            merged[attribute.Key] = EntityValues.CloneValue(attribute.Value);
+                        }
+                    }
+                }
+
+                if (merged.Attributes.Count > 0)
+                {
+                    Update(merged);
+                }
+
+                // 3. Reparent the subordinate's 1:N children to the target.
+                foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entity).ToList())
+                {
+                    foreach (Entity child in Children(relationship, subordinateId).ToList())
+                    {
+                        Update(new Entity(child.LogicalName, child.Id)
+                        {
+                            [relationship.ReferencingAttribute] = new EntityReference(entity, target.Id),
+                        });
+                    }
+                }
+
+                // 4. Deactivate the subordinate (Inactive = statecode 1 / statuscode 2).
+                Update(new Entity(entity, subordinateId)
+                {
+                    ["statecode"] = new OptionSetValue(1),
+                    ["statuscode"] = new OptionSetValue(2),
+                });
+                return null;
+            });
+        }
+
+        private static bool IsMergeSkippedColumn(string entity, string column) =>
+            string.Equals(column, entity + "id", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(column, "statecode", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(column, "statuscode", StringComparison.OrdinalIgnoreCase);
 
         // --- Internal helpers used by the pipeline simulator (same assembly) ---
 
