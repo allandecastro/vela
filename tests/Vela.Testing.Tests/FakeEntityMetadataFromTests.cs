@@ -173,10 +173,37 @@ namespace Vela.Testing.Tests
         [InlineData("vela_due", AttributeTypeCode.DateTime)]
         [InlineData("vela_customerid", AttributeTypeCode.Lookup)]
         [InlineData("statuscode", AttributeTypeCode.Picklist)]
-        [InlineData("ownerid", AttributeTypeCode.Lookup)]
+        [InlineData("ownerid", AttributeTypeCode.Owner)]   // #303: ownerid is an Owner attribute, not a plain Lookup
         public void Maps_clr_types_to_attribute_type_codes(string logicalName, AttributeTypeCode expected)
         {
             Assert.Equal(expected, Attr(Derived(), logicalName).AttributeType);
+        }
+
+        [Fact]
+        public void Standard_customerid_column_maps_to_a_Customer_attribute()   // #303
+        {
+            EntityMetadata meta = FakeEntityMetadata.From<SampleCustomerOwned>().Build();
+            Assert.Equal(AttributeTypeCode.Customer, Attr(meta, "customerid").AttributeType);
+        }
+
+        [EntityLogicalName("vela_ticket")]
+        private sealed class SampleCustomerOwned : Entity
+        {
+            public SampleCustomerOwned() : base("vela_ticket") { }
+
+            [AttributeLogicalName("vela_ticketid")]
+            public Guid? TicketId
+            {
+                get => GetAttributeValue<Guid?>("vela_ticketid");
+                set => SetAttributeValue("vela_ticketid", value);
+            }
+
+            [AttributeLogicalName("customerid")]
+            public EntityReference CustomerId
+            {
+                get => GetAttributeValue<EntityReference>("customerid");
+                set => SetAttributeValue("customerid", value);
+            }
         }
 
         [Fact]

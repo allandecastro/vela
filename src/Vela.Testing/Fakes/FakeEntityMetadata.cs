@@ -81,6 +81,17 @@ namespace Vela.Testing
                     {
                         meta.Picklist(logical, EnumOptions(clr));
                     }
+                    else if (string.Equals(logical, "ownerid", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // ownerid is an Owner attribute (systemuser/team), not a plain Lookup - map it faithfully so a
+                        // test inspecting the metadata sees AttributeTypeCode.Owner.
+                        meta.Attribute(logical, AttributeTypeCode.Owner);
+                    }
+                    else if (string.Equals(logical, "customerid", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // customerid is a Customer attribute (account/contact), not a plain Lookup.
+                        meta.Attribute(logical, AttributeTypeCode.Customer);
+                    }
                     else
                     {
                         AttributeTypeCode? typeCode = MapClrType(clr);

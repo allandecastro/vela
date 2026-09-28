@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.8] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.8`. Test-harness fidelity audit (#303): standard ownership/customer metadata types.
+
+### Fixed
+
+- **`FakeEntityMetadata.From<T>()` maps the standard `ownerid` and `customerid` columns to their true attribute types** - `Owner` and `Customer` respectively - instead of a plain `Lookup`, so metadata built from a generated early-bound type reflects Dataverse's ownership/customer semantics. Custom (prefixed) lookups are unchanged.
+
 ## [0.29.7] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.7`. Test-harness fidelity audit (#303): N:N cleanup on delete and deterministic date operators.
