@@ -62,7 +62,11 @@ vela add --interactive
   method, e.g. `OnUpdate()`, or `OnMessage("...")` for an unmodelled message, not the generic `On<TRequest>()`
   overload) and a matching handler method
   (`--message`, optional `--handler <Method>`). It refuses a plugin that has no handler-bound step yet (add a
-  step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source.
+  step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source. For a
+  `Create`/`Update` (or `*Multiple`) step it does not guess a filter: it leaves a
+  `// TODO: add .FilterOn(e => e.Column)` comment (it cannot know the entity's columns from the file alone), so
+  the step compiles as-is and you add the filtering attributes yourself. The handler body's TODO points at the
+  typed access for the message (`ctx.Request.Target`, or `ctx.Request.Targets` for a `*Multiple` step).
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +
   a co-located `main.test.ts`) in the [web-resources project](client-side.md) and registers its entry in
   `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it
