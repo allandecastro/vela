@@ -24,6 +24,15 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.5] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.5`. Test-harness fidelity audit (#303): transaction atomicity.
+
+### Fixed
+
+- **Bulk writes and deep inserts are now all-or-nothing in the harness.** `CreateMultiple`/`UpdateMultiple` and a single `Create` carrying `RelatedEntities` (a deep insert) committed rows one by one, so a fault partway through left partial rows - contradicting Dataverse's "the whole batch is one transaction". They now run inside a store snapshot and roll the whole write back on any fault.
+- **An owner/state Update runs as one atomic operation.** An Update carrying owner (`ownerid`) or state (`statecode`/`statuscode`) fields alongside standard fields fires two step passes; a failure in the second (owner/state) pass previously left the first (standard) pass committed. Both passes now share one snapshot scope, so a second-pass failure rolls the first pass back.
+
 ## [0.29.4] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.4`. Test-harness fidelity audit (#303): security opt-in guard, 1:N association, and alternate-key lookups.
