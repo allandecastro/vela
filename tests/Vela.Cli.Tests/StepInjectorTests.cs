@@ -113,4 +113,27 @@ namespace Acme.Plugins.Account.Plugins
         Assert.False(ok);
         Assert.Contains("RegisterPluginSteps", error);
     }
+
+    [Fact]
+    public void TryInject_DoesNotEmitNonCompilingIdFilter()
+    {
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", out string result, out string error);
+
+        Assert.True(ok, error);
+        // e => e.Id is a VELA001 error (Id is not a Dataverse column), so it must never be emitted.
+        Assert.DoesNotContain("e.Id", result);
+        // No executable selector is generated; the author gets a TODO (a comment) to add the real filter.
+        Assert.Contains("// TODO: add .FilterOn(", result);
+    }
+
+    [Fact]
+    public void TryInject_HandlerTodoUsesTypedRequestNotGetTarget()
+    {
+        StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", out string single, out _);
+        Assert.DoesNotContain("GetTarget<", single);
+        Assert.Contains("ctx.Request.Target", single);
+
+        StepInjector.TryInject(HandlerBased, "Account", "UpdateMultiple", "OnUpdateMultiple()", "HandleUpdateMultiple", out string bulk, out _);
+        Assert.Contains("ctx.Request.Targets", bulk);
+    }
 }

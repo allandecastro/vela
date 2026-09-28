@@ -61,14 +61,16 @@ internal static class StepInjector
             return false;
         }
 
-        // Create/Update steps require filtering attributes at compile time; we don't know the entity's
-        // columns here, so emit a TODO placeholder on Id (present on every early-bound type) so it compiles.
+        // FilterOn is optional, and we cannot know the entity's columns here. Do NOT emit a selector: a
+        // placeholder such as e => e.Id is a VELA001 error (Id is declared on Entity, not a Dataverse column),
+        // so the generated file would not compile. Leave a TODO comment instead - the step compiles as-is and
+        // the author adds the real filter. Only Create/Update (and their bulk variants) get the hint.
         bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
             || string.Equals(message, "Update", StringComparison.Ordinal)
             || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
             || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
         string filtering = needsFiltering
-            ? "                .FilterOn(e => e.Id /* TODO: choose the attributes that should trigger this step */)\n"
+            ? "                // TODO: add .FilterOn(e => e.Column) to scope this step to the attribute changes it needs.\n"
             : string.Empty;
 
         string registration =
@@ -83,10 +85,20 @@ internal static class StepInjector
             ? "ILocalPluginContext"
             : $"I{message}PostContext<{entityType}>";
 
+        // Point the author at the idiomatic, typed access for this message rather than the low-level
+        // ctx.GetTarget<T>(): a single record is ctx.Request.Target, a bulk message is ctx.Request.Targets,
+        // and a custom message reads its own input parameters.
+        bool isMultiple = message.EndsWith("Multiple", StringComparison.Ordinal);
+        string accessHint = registrationCall.StartsWith("OnMessage(", StringComparison.Ordinal)
+            ? "read the message inputs via ctx.PluginExecutionContext.InputParameters"
+            : isMultiple
+                ? "read the records via ctx.Request.Targets"
+                : "read the record via ctx.Request.Target";
+
         string handler =
             $"\n\n        private void {handlerName}({handlerContextType} ctx)\n" +
             "        {\n" +
-            $"            // TODO: implement the {message} step. Access the typed message via ctx (for example ctx.GetTarget<{entityType}>()).\n" +
+            $"            // TODO: implement the {message} step ({accessHint}).\n" +
             "        }";
 
         result = source.Substring(0, lineStart)
