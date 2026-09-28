@@ -636,7 +636,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Associate_IsIdempotent()
+        public void Associate_on_an_existing_pair_faults()   // #303: real Dataverse rejects a duplicate association
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService()
                 .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid");
@@ -647,8 +647,10 @@ namespace Vela.Testing.Tests
             EntityReferenceCollection related = new EntityReferenceCollection { new EntityReference("contact", contactId) };
 
             crm.Associate("account", accountId, rel, related);
-            crm.Associate("account", accountId, rel, related);
 
+            // Re-associating the same pair faults (was a silent no-op), so a plugin catching that fault can be tested.
+            Assert.Throws<System.ServiceModel.FaultException<OrganizationServiceFault>>(
+                () => crm.Associate("account", accountId, rel, related));
             Assert.Single(crm.GetAll("account_contact"));
         }
 

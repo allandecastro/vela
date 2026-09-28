@@ -200,12 +200,31 @@ namespace Vela.Testing
         // parental parent record — so a user who can act on the parent can act on the child.
         private void DemandAccess(string entityName, Privilege privilege, Entity? record)
         {
-            if (_security == null || CanAccess(entityName, privilege, record))
+            if (_security == null)
+            {
+                DemandStrictSecurityConfigured();
+                return;
+            }
+
+            if (CanAccess(entityName, privilege, record))
             {
                 return;
             }
 
             throw _security.PrivilegeDenied(_currentUserId, privilege, entityName);
+        }
+
+        // WithStrictSecurity guard: a security-relevant operation run with no configured security model fails loudly
+        // instead of silently allowing everything, so an access-control test that forgot WithSecurity(...) cannot pass
+        // green. No-op unless strict mode was opted into and no security model is set.
+        private void DemandStrictSecurityConfigured()
+        {
+            if (_strictSecurity && _security == null)
+            {
+                throw new InvalidOperationException(
+                    "Strict security is enabled (WithStrictSecurity) but no security model is configured. Call " +
+                    "WithSecurity(...) to define roles/privileges for this scenario, or remove WithStrictSecurity.");
+            }
         }
 
         // The full access decision for the current user: role + shared access, or access inherited from the record's
@@ -256,6 +275,7 @@ namespace Vela.Testing
         {
             if (_security == null)
             {
+                DemandStrictSecurityConfigured();
                 return;
             }
 

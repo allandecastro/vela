@@ -159,7 +159,7 @@ namespace Vela.Testing.Tests
         // ---- N:N resolved from registered metadata -----------------------------------------------------
 
         [Fact]
-        public void Associate_resolves_the_intersect_from_registered_metadata_and_is_idempotent()
+        public void Associate_resolves_the_intersect_from_registered_metadata_and_rejects_a_duplicate()
         {
             Guid accountId = Guid.NewGuid();
             Guid tagId = Guid.NewGuid();
@@ -175,7 +175,9 @@ namespace Vela.Testing.Tests
             EntityReferenceCollection related = new EntityReferenceCollection { new EntityReference("tag", tagId) };
 
             crm.Associate("account", accountId, rel, related);
-            crm.Associate("account", accountId, rel, related); // idempotent: no duplicate intersect row
+            // #303: re-associating the same pair faults (real Dataverse rejects a duplicate), not a silent no-op.
+            Assert.Throws<System.ServiceModel.FaultException<OrganizationServiceFault>>(
+                () => crm.Associate("account", accountId, rel, related));
             Assert.Single(crm.GetAll("account_tag"));
 
             crm.Disassociate("account", accountId, rel, related);

@@ -67,6 +67,11 @@ namespace Vela.Testing
         // behave exactly as before (full access). Set via WithSecurity.
         private SecurityModel? _security;
 
+        // Strict-security guard (opt-in via WithStrictSecurity). When set, a security-relevant operation run without a
+        // configured security model fails loudly instead of silently granting full access - so an access-control test
+        // that forgot WithSecurity(...) cannot pass green. No effect once WithSecurity is configured.
+        private bool _strictSecurity;
+
         // Record-level shares (PoA). Always present so Grant/RetrievePrincipalAccess work with or without a
         // security model; only consulted for enforcement when _security is set.
         private readonly SharingTable _sharing = new SharingTable();
@@ -134,6 +139,19 @@ namespace Vela.Testing
             configure(configuration);
             _security = configuration.Build(_sharing, _accessTeams);
             MaterializeSecurityTables();
+            return this;
+        }
+
+        /// <summary>
+        /// Opts into strict security: a security-relevant operation (Create/Retrieve/Update/Delete/Associate/… and
+        /// RetrieveMultiple) run without a configured security model throws instead of silently granting full access.
+        /// This closes the default-off footgun where an access-control test that forgot <see cref="WithSecurity"/>
+        /// passes green because everything is allowed. Call it alongside <see cref="WithSecurity"/> to assert that
+        /// enforcement was intended; on its own it makes a missing security model fail loudly on the first operation.
+        /// </summary>
+        public InMemoryOrganizationService WithStrictSecurity()
+        {
+            _strictSecurity = true;
             return this;
         }
 
@@ -449,6 +467,7 @@ namespace Vela.Testing
                 throw RecordAlreadyExists(stored.LogicalName, stored.Id);
             }
 
+            ResolveLookupKeyReferences(stored);
             _autoNumbers.Apply(stored);
             _systemFields.ApplyOnCreate(entity, stored, Actor(), _clock(), NextVersion());
             RealignOwningBusinessUnit(stored);
@@ -548,6 +567,32 @@ namespace Vela.Testing
             return new FaultException<OrganizationServiceFault>(
                 new OrganizationServiceFault { ErrorCode = DuplicateRecord, Message = message },
                 new FaultReason(message));
+        }
+
+        private static FaultException<OrganizationServiceFault> AssociationAlreadyExists(string entityName, Guid entityId, EntityReference related)
+        {
+            string message = $"Cannot associate {entityName} {entityId:D} with {related.LogicalName} {related.Id:D}: the records are already associated.";
+            return new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { ErrorCode = DuplicateRecord, Message = message },
+                new FaultReason(message));
+        }
+
+        // Resolves any lookup value supplied as an alternate-key EntityReference (KeyAttributes set, Id empty) to a
+        // concrete-id EntityReference at write time, so the persisted lookup points at a real record and later
+        // joins/reads find it - matching Dataverse, which resolves a key-addressed lookup on write. A key that
+        // matches no record throws the platform not-found fault (ResolveReference), like relating to a missing record.
+        private void ResolveLookupKeyReferences(Entity entity)
+        {
+            foreach (string attribute in entity.Attributes.Keys.ToArray())
+            {
+                if (entity[attribute] is EntityReference reference
+                    && reference.Id == Guid.Empty
+                    && reference.KeyAttributes != null
+                    && reference.KeyAttributes.Count > 0)
+                {
+                    entity[attribute] = new EntityReference(reference.LogicalName, ResolveReference(reference));
+                }
+            }
         }
 
         // Resolves an EntityReference to a record id: a direct id when set, otherwise an alternate-key lookup
@@ -839,6 +884,7 @@ namespace Vela.Testing
                 stored[attribute.Key] = EntityValues.CloneValue(attribute.Value);
             }
 
+            ResolveLookupKeyReferences(stored);
             _systemFields.ApplyOnUpdate(entity, stored, Actor(), _clock(), NextVersion());
             if (changesOwner)
             {
@@ -892,6 +938,10 @@ namespace Vela.Testing
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
+            // Strict security: a read run with no configured security model fails loudly instead of returning
+            // everything, so an access-control read test that forgot WithSecurity(...) cannot pass green.
+            DemandStrictSecurityConfigured();
+
             // Field-level security: an aggregate/group-by over a field-secured column the caller can't read would
             // otherwise leak it through the aggregate value, so reject the query up front.
             DemandAggregateColumnReads(query);
@@ -1345,8 +1395,24 @@ namespace Vela.Testing
 
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
+            DemandStrictSecurityConfigured();
             DemandAssociationAccess(entityName, entityId, relatedEntities);
-            RelationshipRegistry.ManyToMany rel = ResolveManyToMany(relationship.SchemaName);
+
+            // A 1:N "association" is not an intersect row - it sets the child's lookup to the parent (an Update). Only
+            // an N:N relationship uses an intersect table. Try N:N first, then 1:N, matching the real Associate; an
+            // undeclared relationship throws the standard guidance (before the target-existence check, as before).
+            if (!TryResolveManyToMany(relationship.SchemaName, out RelationshipRegistry.ManyToMany rel))
+            {
+                if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
+                {
+                    DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
+                    SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: true);
+                    return;
+                }
+
+                _relationships.Resolve(relationship.SchemaName); // not N:N or 1:N -> throws the standard guidance
+            }
+
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
@@ -1359,7 +1425,9 @@ namespace Vela.Testing
                     EntityValues.AreEqual(EntityValues.GetValue(row, relatedAttribute), related.Id));
                 if (exists)
                 {
-                    continue;
+                    // Real Dataverse rejects re-associating an existing N:N pair (a plugin may catch that fault), so
+                    // fault here rather than silently no-op'ing - the latter would let an access/dup test pass green.
+                    throw AssociationAlreadyExists(entityName, entityId, related);
                 }
 
                 Entity row = new Entity(rel.IntersectEntity, _idSequence())
@@ -1371,14 +1439,45 @@ namespace Vela.Testing
             }
         }
 
+        // Sets (Associate) or clears (Disassociate) a 1:N lookup: the child's ReferencingAttribute points at the
+        // parent. Works from either side - entityName may be the parent (referenced) side, with relatedEntities the
+        // children, or the child (referencing) side, with the single related record the parent.
+        private void SetOneToManyLink(string entityName, Guid entityId, OneToManyRegistry.OneToMany relationship, EntityReferenceCollection relatedEntities, bool set)
+        {
+            bool callerIsParent = string.Equals(entityName, relationship.ReferencedEntity, StringComparison.OrdinalIgnoreCase);
+            foreach (EntityReference related in relatedEntities)
+            {
+                (string childEntity, Guid childId, EntityReference? parentRef) = callerIsParent
+                    ? (related.LogicalName, related.Id, set ? new EntityReference(entityName, entityId) : null)
+                    : (entityName, entityId, set ? related : null);
+
+                Update(new Entity(childEntity, childId) { [relationship.ReferencingAttribute] = parentRef });
+            }
+        }
+
         /// <summary>
         /// Disassociates records over a many-to-many relationship by deleting its matching intersect rows. The
         /// relationship must be declared with <see cref="WithManyToMany"/>.
         /// </summary>
         public void Disassociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
+            DemandStrictSecurityConfigured();
             DemandAssociationAccess(entityName, entityId, relatedEntities);
-            RelationshipRegistry.ManyToMany rel = ResolveManyToMany(relationship.SchemaName);
+
+            // 1:N disassociate clears the child's lookup (an Update); only N:N removes intersect rows. Resolve first so
+            // an undeclared relationship throws the standard guidance before the target-existence check.
+            if (!TryResolveManyToMany(relationship.SchemaName, out RelationshipRegistry.ManyToMany rel))
+            {
+                if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
+                {
+                    DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
+                    SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: false);
+                    return;
+                }
+
+                _relationships.Resolve(relationship.SchemaName); // not N:N or 1:N -> throws the standard guidance
+            }
+
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
