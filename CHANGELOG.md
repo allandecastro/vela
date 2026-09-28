@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.9] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.9`. Test-harness fidelity audit (#303): the Merge message.
+
+### Added
+
+- **`MergeRequest` is now supported by the in-memory harness** (previously threw "not supported"). Merge moves the subordinate's non-conflicting data onto the target without overwriting the target's own values, applies `UpdateContent` to the target (ignored for `incident`, per the platform), reparents the subordinate's 1:N children to the target, then deactivates the subordinate - the whole operation is atomic. Restricted to the tables Dataverse supports (account, contact, lead, incident); other tables fault.
+
 ## [0.29.8] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.8`. Test-harness fidelity audit (#303): standard ownership/customer metadata types.
