@@ -9,7 +9,7 @@ namespace Vela.Testing.Tests
     // Covers the date-relative condition operators (On/OnOrBefore/OnOrAfter, Today/Yesterday/Tomorrow,
     // ThisMonth/ThisYear, LastXDays/NextXDays/OlderThanXDays) plus the user-id and Not-range operators and
     // the join/ordering edge cases the other suites don't reach. Dates are seeded relative to
-    // DateTime.Today so the assertions stay deterministic regardless of when the suite runs.
+    // DateTime.UtcNow.Date so the assertions stay deterministic regardless of when the suite runs.
     public sealed class InMemoryQueryEngineDateOperatorTests
     {
         private const string Attr = "duedate";
@@ -17,7 +17,7 @@ namespace Vela.Testing.Tests
         // past (-10), yesterday (-1), today (0), tomorrow (+1), future (+10), and a row with no date.
         private static InMemoryOrganizationService Dated()
         {
-            DateTime today = DateTime.Today;
+            DateTime today = DateTime.UtcNow.Date;
             return new InMemoryOrganizationService().Seed(
                 new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "past", [Attr] = today.AddDays(-10) },
                 new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "yesterday", [Attr] = today.AddDays(-1) },
@@ -40,19 +40,19 @@ namespace Vela.Testing.Tests
         [Fact]
         public void On_matches_only_the_same_day_and_skips_the_undated_row()
         {
-            Assert.Equal(new[] { "today" }, Run(Dated(), new ConditionExpression(Attr, ConditionOperator.On, DateTime.Today)));
+            Assert.Equal(new[] { "today" }, Run(Dated(), new ConditionExpression(Attr, ConditionOperator.On, DateTime.UtcNow.Date)));
         }
 
         [Fact]
         public void OnOrBefore_includes_the_boundary_day()
         {
-            Assert.Equal(new[] { "past", "today", "yesterday" }, Run(Dated(), new ConditionExpression(Attr, ConditionOperator.OnOrBefore, DateTime.Today)));
+            Assert.Equal(new[] { "past", "today", "yesterday" }, Run(Dated(), new ConditionExpression(Attr, ConditionOperator.OnOrBefore, DateTime.UtcNow.Date)));
         }
 
         [Fact]
         public void OnOrAfter_includes_the_boundary_day()
         {
-            Assert.Equal(new[] { "future", "today", "tomorrow" }, Run(Dated(), new ConditionExpression(Attr, ConditionOperator.OnOrAfter, DateTime.Today)));
+            Assert.Equal(new[] { "future", "today", "tomorrow" }, Run(Dated(), new ConditionExpression(Attr, ConditionOperator.OnOrAfter, DateTime.UtcNow.Date)));
         }
 
         [Fact]
@@ -77,7 +77,7 @@ namespace Vela.Testing.Tests
         [Fact]
         public void ThisMonth_and_ThisYear_match_only_current_period_rows()
         {
-            DateTime today = DateTime.Today;
+            DateTime today = DateTime.UtcNow.Date;
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
                 new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "now", [Attr] = today },
                 new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "lastyear", [Attr] = today.AddYears(-1) },
@@ -95,7 +95,7 @@ namespace Vela.Testing.Tests
         {
             // DatePart accepts an ISO string and compares on the date component (covers the string-parse branch).
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
-                new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "stringdate", [Attr] = DateTime.Today.ToString("yyyy-MM-dd") });
+                new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "stringdate", [Attr] = DateTime.UtcNow.Date.ToString("yyyy-MM-dd") });
 
             Assert.Equal(new[] { "stringdate" }, Run(crm, new ConditionExpression(Attr, ConditionOperator.Today)));
         }
@@ -302,7 +302,7 @@ namespace Vela.Testing.Tests
         public void LastXDays_with_a_non_numeric_bound_collapses_to_today()
         {
             // A non-numeric operand parses to 0, so the window degenerates to [Today .. Today].
-            DateTime today = DateTime.Today;
+            DateTime today = DateTime.UtcNow.Date;
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
                 new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "today", [Attr] = today },
                 new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "past", [Attr] = today.AddDays(-3) });
@@ -324,6 +324,21 @@ namespace Vela.Testing.Tests
             query.AddOrder("mixed", OrderType.Ascending);
 
             Assert.Equal(3, crm.RetrieveMultiple(query).Entities.Count); // ordering completes without throwing
+        }
+
+        [Fact]
+        public void Today_follows_the_injected_clock_not_the_host_date()   // #303 Tier-2 determinism
+        {
+            DateTime fixedNow = new DateTime(2020, 6, 15, 9, 0, 0, DateTimeKind.Utc);
+            InMemoryOrganizationService crm = new InMemoryOrganizationService().WithClock(() => fixedNow);
+            Guid onClockDay = crm.Create(new Entity("task") { [Attr] = fixedNow.Date });
+            crm.Create(new Entity("task") { [Attr] = fixedNow.Date.AddDays(3) }); // not "today" per the injected clock
+
+            QueryExpression query = new QueryExpression("task") { ColumnSet = new ColumnSet(false) };
+            query.Criteria.AddCondition(Attr, ConditionOperator.Today);
+
+            // "Today" resolves to the injected clock's date (2020-06-15), independent of the host's local date.
+            Assert.Equal(onClockDay, Assert.Single(crm.RetrieveMultiple(query).Entities).Id);
         }
     }
 }

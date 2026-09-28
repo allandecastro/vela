@@ -66,6 +66,9 @@ namespace Vela.Testing
         public bool TryResolve(string schemaName, out ManyToMany relationship) =>
             _relationships.TryGetValue(schemaName, out relationship);
 
+        /// <summary>Every declared N:N relationship (used to clean up dangling intersect rows on delete).</summary>
+        public IEnumerable<ManyToMany> All => _relationships.Values;
+
         /// <summary>
         /// A declared N:N relationship: the intersect entity and the two lookup columns, each tied to a table.
         /// </summary>

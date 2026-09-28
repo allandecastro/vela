@@ -423,7 +423,37 @@ namespace Vela.Testing
                 }
             }
 
+            // Clean up the record's N:N intersect rows so deleting one side of a many-to-many does not leave dangling
+            // intersect rows pointing at a record that no longer exists (Dataverse removes them on delete).
+            RemoveDanglingIntersectRows(entityName, id);
+
             removeRecord(entityName, id);
+        }
+
+        // Removes intersect rows of any declared or metadata-declared N:N relationship that reference the record being
+        // deleted (on either side), so no intersect row is left pointing at a deleted record.
+        private void RemoveDanglingIntersectRows(string entityName, Guid id)
+        {
+            foreach (RelationshipRegistry.ManyToMany m2m in AllManyToManyRelationships())
+            {
+                bool isFirst = string.Equals(m2m.FirstEntity, entityName, StringComparison.OrdinalIgnoreCase);
+                bool isSecond = string.Equals(m2m.SecondEntity, entityName, StringComparison.OrdinalIgnoreCase);
+                if (!isFirst && !isSecond)
+                {
+                    continue;
+                }
+
+                string attribute = isFirst ? m2m.FirstAttribute : m2m.SecondAttribute;
+                Dictionary<Guid, Entity> intersect = Table(m2m.IntersectEntity);
+                List<Guid> toRemove = intersect.Values
+                    .Where(row => EntityValues.AreEqual(EntityValues.GetValue(row, attribute), id))
+                    .Select(row => row.Id)
+                    .ToList();
+                foreach (Guid rowId in toRemove)
+                {
+                    intersect.Remove(rowId);
+                }
+            }
         }
 
         // The child records whose lookup points at the given parent id.

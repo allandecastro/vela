@@ -961,7 +961,7 @@ namespace Vela.Testing
 
             // With security on, the read filter is applied inside the engine to the primary rows BEFORE paging, so
             // pages are drawn from the readable set (not trimmed afterwards).
-            InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId, ReadFilter());
+            InMemoryQueryEngine engine = new InMemoryQueryEngine(name => Table(name).Values, _currentUserId, ReadFilter(), _clock());
             EntityCollection result;
             switch (query)
             {
@@ -1408,6 +1408,35 @@ namespace Vela.Testing
 
             relationship = default;
             return false;
+        }
+
+        // Every N:N relationship the store knows about - declared via WithManyToMany and derived from registered
+        // EntityMetadata - so a delete can clean up intersect rows on either side. Duplicates (a metadata N:N listed
+        // on both entities) are harmless since intersect-row removal is idempotent.
+        private IEnumerable<RelationshipRegistry.ManyToMany> AllManyToManyRelationships()
+        {
+            foreach (RelationshipRegistry.ManyToMany declared in _relationships.All)
+            {
+                yield return declared;
+            }
+
+            foreach (EntityMetadata meta in _metadata.Values)
+            {
+                if (meta.ManyToManyRelationships == null)
+                {
+                    continue;
+                }
+
+                foreach (ManyToManyRelationshipMetadata m2m in meta.ManyToManyRelationships)
+                {
+                    yield return new RelationshipRegistry.ManyToMany(
+                        m2m.IntersectEntityName,
+                        m2m.Entity1LogicalName,
+                        m2m.Entity1IntersectAttribute,
+                        m2m.Entity2LogicalName,
+                        m2m.Entity2IntersectAttribute);
+                }
+            }
         }
 
         // Verifies the calling record and every related record exist before an Associate/Disassociate touches the
