@@ -162,6 +162,22 @@ namespace Vela.Testing
             }
         }
 
+        // Field-level security for a single-column read: the file-download messages stream a File column's content, so
+        // they must honour the same secured-column read check that Retrieve applies via MaskSecuredColumns. Throws
+        // when the column is field-secured and the current user cannot read it.
+        private void DemandSecuredColumnRead(string entity, string column)
+        {
+            if (_security == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(column) && _security.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
+            {
+                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
+            }
+        }
+
         // Field-level security: reject a Create/Update that sets a field-secured column the caller can't write.
         private void DemandSecuredColumnWrites(Entity entity)
         {
