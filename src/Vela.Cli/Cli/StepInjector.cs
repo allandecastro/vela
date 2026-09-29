@@ -12,11 +12,13 @@ namespace Vela.Cli;
 /// </summary>
 internal static class StepInjector
 {
-    // Convenience overload: default to a PostOperation + Sync step (the historical behaviour).
+    // Convenience overload: default to a PostOperation + Sync step (the historical behaviour), no explicit filter.
     public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, out string result, out string error)
-        => TryInject(source, entityType, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", true, out result, out error);
+        => TryInject(source, entityType, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", true, null, out result, out error);
 
-    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, out string result, out string error)
+    // <paramref name="explicitFilterAttributes"/>: when non-null, the resolved property name(s) to emit as a
+    // FilterOn selector; when null, a Create/Update step gets a TODO comment instead (columns are unknown here).
+    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, string[]? explicitFilterAttributes, out string result, out string error)
     {
         result = source;
         error = string.Empty;
@@ -65,17 +67,26 @@ internal static class StepInjector
             return false;
         }
 
-        // FilterOn is optional, and we cannot know the entity's columns here. Do NOT emit a selector: a
-        // placeholder such as e => e.Id is a VELA001 error (Id is declared on Entity, not a Dataverse column),
-        // so the generated file would not compile. Leave a TODO comment instead - the step compiles as-is and
-        // the author adds the real filter. Only Create/Update (and their bulk variants) get the hint.
+        // When the caller resolved explicit --filtering-attributes, emit the FilterOn selector. Otherwise FilterOn
+        // is optional and we cannot know the entity's columns here: do NOT emit a placeholder such as e => e.Id
+        // (that is a VELA001 error, so the file would not compile). Leave a TODO comment for Create/Update (and
+        // their bulk variants) instead - the step compiles as-is and the author adds the real filter.
         bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
             || string.Equals(message, "Update", StringComparison.Ordinal)
             || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
             || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
-        string filtering = needsFiltering
-            ? "                // TODO: add .FilterOn(e => e.Column) to scope this step to the attribute changes it needs.\n"
-            : string.Empty;
+        string filtering;
+        if (explicitFilterAttributes is { Length: > 0 })
+        {
+            string lambdas = string.Join(", ", System.Array.ConvertAll(explicitFilterAttributes, a => $"e => e.{a}"));
+            filtering = $"                .FilterOn({lambdas})\n";
+        }
+        else
+        {
+            filtering = needsFiltering
+                ? "                // TODO: add .FilterOn(e => e.Column) to scope this step to the attribute changes it needs.\n"
+                : string.Empty;
+        }
 
         string registration =
             $"\n\n            RegisterStep().{registrationCall}\n" +

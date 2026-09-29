@@ -49,8 +49,9 @@ vela add --interactive
   `auto-selected` comment so you can adjust it. The generated file always compiles and applies; if no column can
   be inferred (no generated model found), `add` fails with a clear message asking for `--filtering-attributes`
   rather than emitting code that would not compile. Property names are **case-sensitive** (`Name`, not `name`):
-  when the model is available, `add` warns and suggests the correct casing if a value does not match a real
-  column, so a typo surfaces at generation time instead of as a later build error.
+  when the model is available and a value differs only in case (for example `name` for `Name`), `add` corrects
+  it to the real property and prints a note, so the emitted `FilterOn` compiles; a name that matches no property
+  is left as-is with a warning.
 - **Stage and mode** (`add plugin` and `add step`): `--stage <PreValidation|PreOperation|PostOperation>` and
   `--mode <Sync|Async>` set the step's stage and execution mode. Both are optional and default to
   `PostOperation` + `Sync`. A pre-stage handler gets the pre-stage typed context (`I<Message>PreContext<T>`); a
@@ -67,11 +68,14 @@ vela add --interactive
   method, e.g. `OnUpdate()`, or `OnMessage("...")` for an unmodelled message, not the generic `On<TRequest>()`
   overload) and a matching handler method
   (`--message`, optional `--handler <Method>`). It refuses a plugin that has no handler-bound step yet (add a
-  step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source. For a
-  `Create`/`Update` (or `*Multiple`) step it does not guess a filter: it leaves a
-  `// TODO: add .FilterOn(e => e.Column)` comment (it cannot know the entity's columns from the file alone), so
-  the step compiles as-is and you add the filtering attributes yourself. The handler body's TODO points at the
-  typed access for the message (`ctx.Request.Target`, or `ctx.Request.Targets` for a `*Multiple` step).
+  step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source. It
+  accepts the same `--stage`/`--mode` and `--filtering-attributes` options as `add plugin`: pass
+  `--filtering-attributes <Col1,Col2>` to emit `FilterOn(e => e.Col1, e => e.Col2)` (identifiers validated and
+  wrong casing corrected against the model, as above). If you omit it on a `Create`/`Update` (or `*Multiple`)
+  step, `add step` leaves a `// TODO: add .FilterOn(e => e.Column)` comment (it cannot know the entity's columns
+  from the file alone), so the step compiles as-is and you add the filter yourself. The handler body's TODO
+  points at the typed access for the message (`ctx.Request.Target`, or `ctx.Request.Targets` for a `*Multiple`
+  step).
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +
   a co-located `main.test.ts`) in the [web-resources project](client-side.md) and registers its entry in
   `web-resources.entries.ts`. Run it inside the `{prefix}.WebResources` folder (or pass `--project <dir>`); it

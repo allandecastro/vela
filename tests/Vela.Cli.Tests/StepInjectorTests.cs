@@ -140,7 +140,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_PreStage_EmitsPreStageCallAndPreContext()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PreOperation()", ".Sync()", postStage: false, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PreOperation()", ".Sync()", postStage: false, explicitFilterAttributes: null, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains(".PreOperation()", result);
@@ -151,10 +151,20 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_AsyncMode_EmitsAsyncCall()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Async()", postStage: true, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Async()", postStage: true, explicitFilterAttributes: null, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains(".Async()", result);
         Assert.Contains("IUpdatePostContext<Account>", result);
+    }
+
+    [Fact]
+    public void TryInject_ExplicitFilterAttributes_EmitsFilterOnAndNoTodo()
+    {
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Sync()", postStage: true, new[] { "Name", "Telephone1" }, out string result, out string error);
+
+        Assert.True(ok, error);
+        Assert.Contains(".FilterOn(e => e.Name, e => e.Telephone1)", result);
+        Assert.DoesNotContain("// TODO: add .FilterOn", result);
     }
 }

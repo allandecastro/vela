@@ -359,6 +359,20 @@ internal static class AddCommand
             return Fail(stageError, ExitInvalidArguments, includeUsage: false);
         }
 
+        // Optional --filtering-attributes: when provided, emit a FilterOn selector (with the same identifier
+        // validation + wrong-case correction as add plugin). When omitted, add step leaves a TODO comment.
+        string[] explicitAttributes = SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter"));
+        string[]? filterAttributes = null;
+        if (explicitAttributes.Length > 0)
+        {
+            if (!TryResolveFilteringAttributes(explicitAttributes, projectDir, entity!, out string[] resolved, out string? filteringError))
+            {
+                return Fail(filteringError!, ExitInvalidArguments, includeUsage: false);
+            }
+
+            filterAttributes = resolved;
+        }
+
         string filePath = Path.Combine(projectDir, entity!, "Plugins", $"{name}.cs");
         if (!File.Exists(filePath))
         {
@@ -371,7 +385,7 @@ internal static class AddCommand
             return Fail($"{filePath} does not look like an EntityPluginBase<{entity}> plugin.", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, stageCall, modeCall, postStage, out string updated, out string error))
+        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, stageCall, modeCall, postStage, filterAttributes, out string updated, out string error))
         {
             return Fail(error, ExitInvalidArguments, includeUsage: false);
         }
@@ -484,36 +498,12 @@ internal static class AddCommand
             string[] attributes;
             if (explicitAttributes.Length > 0)
             {
-                foreach (string attribute in explicitAttributes)
+                // Validate the identifiers and, when the model is available, correct wrong casing to the real
+                // property (e.g. 'name' -> 'Name') so the emitted FilterOn compiles.
+                if (!TryResolveFilteringAttributes(explicitAttributes, projectDir, entity!, out attributes, out string? filteringError))
                 {
-                    if (!IdentifierPattern.IsMatch(attribute))
-                    {
-                        return Fail($"Invalid --filtering-attributes value '{attribute}'. Use the early-bound property name(s), e.g. --filtering-attributes Name.", ExitInvalidArguments, includeUsage: false);
-                    }
+                    return Fail(filteringError!, ExitInvalidArguments, includeUsage: false);
                 }
-
-                // A valid C# identifier still may not be a real column on the early-bound model (e.g. a wrong-case
-                // 'name' instead of 'Name', which compiles against the base Entity but not the generated property).
-                // When the model is available, warn on names that do not match a generated property and suggest the
-                // correct casing, so the mistake surfaces here instead of as a later compile error.
-                if (TryReadModelPropertyNames(projectDir, entity!, out var modelProperties))
-                {
-                    foreach (string attribute in explicitAttributes)
-                    {
-                        if (modelProperties.Contains(attribute))
-                        {
-                            continue;
-                        }
-
-                        string? suggestion = modelProperties.FirstOrDefault(p => string.Equals(p, attribute, StringComparison.OrdinalIgnoreCase));
-                        string hint = suggestion is null
-                            ? $" It is not a property on the early-bound '{entity}' model; check the name or regenerate the model with 'vela models'."
-                            : $" Did you mean '{suggestion}'? Property names are case-sensitive.";
-                        Console.Error.WriteLine($"Warning: filtering attribute '{attribute}' may not compile.{hint}");
-                    }
-                }
-
-                attributes = explicitAttributes;
             }
             else if (TryPickDefaultFilteringAttribute(projectDir, entity!, out string picked))
             {
@@ -774,6 +764,55 @@ internal static class AddCommand
         return true;
     }
 
+    // Validates explicit --filtering-attributes identifiers and, when the generated model is available,
+    // corrects a wrong-case value to the real property (e.g. 'name' -> 'Name', which compiles) or warns when
+    // the name is unknown. Returns the (possibly corrected) attributes; false only on an invalid C# identifier.
+    private static bool TryResolveFilteringAttributes(string[] explicitAttributes, string projectDir, string entity, out string[] attributes, out string? error)
+    {
+        attributes = explicitAttributes;
+        error = null;
+
+        foreach (string attribute in explicitAttributes)
+        {
+            if (!IdentifierPattern.IsMatch(attribute))
+            {
+                error = $"Invalid --filtering-attributes value '{attribute}'. Use the early-bound property name(s), e.g. --filtering-attributes Name.";
+                return false;
+            }
+        }
+
+        if (explicitAttributes.Length == 0 || !TryReadModelPropertyNames(projectDir, entity, out var modelProperties))
+        {
+            return true;
+        }
+
+        string[] corrected = new string[explicitAttributes.Length];
+        for (int i = 0; i < explicitAttributes.Length; i++)
+        {
+            string attribute = explicitAttributes[i];
+            if (modelProperties.Contains(attribute))
+            {
+                corrected[i] = attribute;
+                continue;
+            }
+
+            string? suggestion = modelProperties.FirstOrDefault(p => string.Equals(p, attribute, StringComparison.OrdinalIgnoreCase));
+            if (suggestion is not null)
+            {
+                Console.Error.WriteLine($"Note: filtering attribute '{attribute}' corrected to '{suggestion}' (property names are case-sensitive).");
+                corrected[i] = suggestion;
+            }
+            else
+            {
+                Console.Error.WriteLine($"Warning: filtering attribute '{attribute}' is not a property on the early-bound '{entity}' model; check the name or regenerate the model with 'vela models'.");
+                corrected[i] = attribute;
+            }
+        }
+
+        attributes = corrected;
+        return true;
+    }
+
     // Splits a comma-separated option value into trimmed, non-empty tokens.
     private static string[] SplitList(string? value) =>
         string.IsNullOrWhiteSpace(value)
@@ -957,7 +996,7 @@ internal static class AddCommand
         Console.WriteLine("  vela add service <Name> --entity <ModelType> [--project <csproj>] [--force]");
         Console.WriteLine("  vela add customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--project <csproj>] [--force]");
-        Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--project <csproj>]");
+        Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--filtering-attributes <Col1,Col2>] [--project <csproj>]");
         Console.WriteLine("  vela add form-script <entity> [--project <web-resources dir>] [--force]   (preview)");
         Console.WriteLine("  vela add ribbon-script <entity> [--project <web-resources dir>] [--force] (preview, ribbon commands)");
         Console.WriteLine("  vela add --interactive            # guided wizard");
