@@ -205,5 +205,189 @@ public sealed class MessageServiceTests
         Assert.Equal("value", found);
         Assert.False(source.TryGetTemplate("KEY", 1036, out _));
         Assert.False(source.TryGetTemplate("OTHER", 1033, out _));
+        Assert.False(source.TryGetTemplate("", 1033, out _));
+    }
+
+    [Fact]
+    public void DictionaryMessageSource_rejects_a_null_template()
+    {
+        Assert.Throws<ArgumentNullException>(() => new DictionaryMessageSource().Add(1033, "KEY", null!));
+    }
+
+    [Fact]
+    public void DictionaryMessageSource_adds_a_whole_map_for_a_language()
+    {
+        var source = new DictionaryMessageSource().Add(1036, new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["A"] = "Un",
+            ["B"] = "Deux",
+        });
+
+        Assert.True(source.TryGetTemplate("A", 1036, out string? a));
+        Assert.Equal("Un", a);
+        Assert.True(source.TryGetTemplate("B", 1036, out string? b));
+        Assert.Equal("Deux", b);
+    }
+
+    [Fact]
+    public void AddSource_rejects_null()
+    {
+        ILocalPluginContext ctx = Context();
+        Assert.Throws<ArgumentNullException>(() => Service(ctx).AddSource(null!));
+    }
+
+    // ---- Language column shapes on the labels table -----------------------------------------------
+
+    [Theory]
+    [InlineData("optionset")]
+    [InlineData("long")]
+    [InlineData("string")]
+    public void Labels_table_reads_the_language_column_as_number_choice_long_or_text(string shape)
+    {
+        object lcid = shape switch
+        {
+            "optionset" => new OptionSetValue(1036),
+            "long" => 1036L,
+            "string" => "1036",
+            _ => 1036,
+        };
+        var label = new Entity("vela_label", Guid.NewGuid())
+        {
+            ["vela_key"] = "GREETING",
+            ["vela_lcid"] = lcid,
+            ["vela_value"] = "Bonjour",
+        };
+        ILocalPluginContext ctx = Context(UserSettings(1036), label);
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DataverseTableMessageSource(ctx, new PluginCacheService(), "vela_label", "vela_key", "vela_lcid", "vela_value"));
+
+        Assert.Equal("Bonjour", svc.GetMessage("GREETING"));
+    }
+
+    [Fact]
+    public void Labels_table_skips_rows_missing_a_key_or_value()
+    {
+        var noKey = new Entity("vela_label", Guid.NewGuid()) { ["vela_lcid"] = 1033, ["vela_value"] = "orphan" };
+        var noValue = new Entity("vela_label", Guid.NewGuid()) { ["vela_key"] = "K", ["vela_lcid"] = 1033 };
+        var good = new Entity("vela_label", Guid.NewGuid()) { ["vela_key"] = "K", ["vela_lcid"] = 1033, ["vela_value"] = "kept" };
+        ILocalPluginContext ctx = Context(UserSettings(1033), noKey, noValue, good);
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DataverseTableMessageSource(ctx, new PluginCacheService(), "vela_label", "vela_key", "vela_lcid", "vela_value"));
+
+        Assert.Equal("kept", svc.GetMessage("K"));
+    }
+
+    [Fact]
+    public void DataverseTableMessageSource_rejects_missing_configuration()
+    {
+        ILocalPluginContext ctx = Context();
+        var cache = new PluginCacheService();
+        Assert.Throws<ArgumentException>(() => new DataverseTableMessageSource(ctx, cache, "", "k", "l", "v"));
+        Assert.Throws<ArgumentException>(() => new DataverseTableMessageSource(ctx, cache, "t", "", "l", "v"));
+        Assert.Throws<ArgumentException>(() => new DataverseTableMessageSource(ctx, cache, "t", "k", "", "v"));
+        Assert.Throws<ArgumentException>(() => new DataverseTableMessageSource(ctx, cache, "t", "k", "l", ""));
+        Assert.Throws<ArgumentNullException>(() => new DataverseTableMessageSource(null!, cache, "t", "k", "l", "v"));
+        Assert.Throws<ArgumentNullException>(() => new DataverseTableMessageSource(ctx, null!, "t", "k", "l", "v"));
+    }
+
+    [Fact]
+    public void DataverseTableMessageSource_TryGetTemplate_rejects_an_empty_key()
+    {
+        ILocalPluginContext ctx = Context();
+        var source = new DataverseTableMessageSource(ctx, new PluginCacheService(), "vela_label", "vela_key", "vela_lcid", "vela_value");
+        Assert.False(source.TryGetTemplate("", 1033, out string? template));
+        Assert.Null(template);
+    }
+
+    [Fact]
+    public void DictionaryMessageSource_Add_map_rejects_null()
+    {
+        Assert.Throws<ArgumentNullException>(() => new DictionaryMessageSource().Add(1033, null!));
+    }
+
+    [Fact]
+    public void Labels_table_treats_a_row_without_a_language_as_language_zero()
+    {
+        var row = new Entity("vela_label", Guid.NewGuid()) { ["vela_key"] = "K", ["vela_value"] = "neutral" }; // no vela_lcid
+        ILocalPluginContext ctx = Context(row);
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DataverseTableMessageSource(ctx, new PluginCacheService(), "vela_label", "vela_key", "vela_lcid", "vela_value"));
+
+        Assert.Equal("neutral", svc.GetMessageIn(0, "K"));
+    }
+
+    [Fact]
+    public void A_zero_ui_language_setting_falls_back_to_the_default()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(0));
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DictionaryMessageSource().Add(1033, "K", "default"));
+
+        Assert.Equal(1033, svc.ResolveUserLanguageCode());
+        Assert.Equal("default", svc.GetMessage("K"));
+    }
+
+    // ---- Caching ----------------------------------------------------------------------------------
+
+    [Fact]
+    public void Labels_table_can_cache_across_executions()
+    {
+        var label = new Entity("vela_label", Guid.NewGuid()) { ["vela_key"] = "K", ["vela_lcid"] = 1033, ["vela_value"] = "cached" };
+        ILocalPluginContext ctx = Context(UserSettings(1033), label);
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DataverseTableMessageSource(ctx, new PluginCacheService(), "vela_label", "vela_key", "vela_lcid", "vela_value", cacheFor: TimeSpan.FromMinutes(5)));
+
+        Assert.Equal("cached", svc.GetMessage("K"));
+        Assert.Equal("cached", svc.GetMessage("K")); // second read hits the cache
+    }
+
+    [Fact]
+    public void ResolveUserLanguageCode_can_cache_across_executions()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1036));
+        MessageService svc = Service(ctx);
+
+        Assert.Equal(1036, svc.ResolveUserLanguageCode(TimeSpan.FromMinutes(5)));
+        Assert.Equal(1036, svc.ResolveUserLanguageCode(TimeSpan.FromMinutes(5)));
+    }
+
+    // ---- Formatting culture edge cases ------------------------------------------------------------
+
+    [Fact]
+    public void Formats_with_the_invariant_culture_for_language_zero()
+    {
+        ILocalPluginContext ctx = Context();
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DictionaryMessageSource().Add(0, "N", "Value {0}"));
+
+        Assert.Equal("Value 5", svc.GetMessageIn(0, "N", 5));
+    }
+
+    [Fact]
+    public void Falls_back_to_invariant_culture_for_an_unknown_lcid()
+    {
+        ILocalPluginContext ctx = Context();
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DictionaryMessageSource().Add(1033, "N", "Value {0}"));
+
+        // 999999 has no template (falls back to 1033) and is not a real culture (formats invariant, no throw).
+        Assert.Equal("Value 5", svc.GetMessageIn(999999, "N", 5));
+    }
+
+    // ---- Empty-key guards -------------------------------------------------------------------------
+
+    [Fact]
+    public void GetMessageIn_rejects_an_empty_key()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1033));
+        Assert.Throws<ArgumentException>(() => Service(ctx).GetMessageIn(1033, ""));
+    }
+
+    [Fact]
+    public void TryGetMessage_returns_false_for_an_empty_key()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1033));
+        Assert.False(Service(ctx).TryGetMessage("", out string? message));
+        Assert.Null(message);
     }
 }
