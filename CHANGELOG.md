@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.21.2] - 2026-09-29 (Vela.Cli)
+
+CLI line, published as `cli-v0.21.2`.
+
+### Fixed
+
+- **A scaffolded solution now builds even inside a repository that uses Central Package Management (#315).** `vela init` pins package versions inline, which is invalid once a parent `Directory.Packages.props` (`ManagePackageVersionsCentrally=true`) is inherited from an enclosing repo, producing NU1008 on every project. The scaffold now emits a solution-root `Directory.Packages.props` that turns CPM off; being the nearest such file, it shadows any inherited parent and keeps the inline versions valid.
+
 ## [0.29.9] - 2026-09-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.9`. Test-harness fidelity audit (#303): the Merge message.

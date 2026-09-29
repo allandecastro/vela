@@ -37,6 +37,7 @@ public class ProjectScaffolderTests
             Assert.False(Directory.Exists(Path.Combine(root, "local-packages")), "scaffold should not emit a local-packages feed");
             AssertFileExists(root, "ZavaSales.sln");
             AssertFileExists(root, "Directory.Build.props");
+            AssertFileExists(root, "Directory.Packages.props");
 
             AssertFileExists(root, "src", "Zava.Shared", "Zava.Shared.csproj");
             AssertFileExists(root, "src", "Zava.Shared", "Models", "Generated", "Account.cs");
@@ -76,6 +77,20 @@ public class ProjectScaffolderTests
 
             AssertFileExists(root, "src", "Zava.ConsoleApp", "Zava.ConsoleApp.csproj");
             AssertFileExists(root, "src", "Zava.ConsoleApp", "Program.cs");
+        });
+    }
+
+    [Fact]
+    public void Generate_EmitsDirectoryPackagesProps_DisablingCentralPackageManagement()   // #315
+    {
+        RunInTempDir(temp =>
+        {
+            ProjectScaffolder.Generate(Options(temp));
+            string props = File.ReadAllText(Path.Combine(temp, "ZavaSales", "Directory.Packages.props"));
+
+            // The solution-root Directory.Packages.props shadows any parent inherited from an enclosing repo and turns
+            // CPM off, so the scaffold's inline PackageReference versions stay valid (no NU1008).
+            Assert.Contains("<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>", props);
         });
     }
 

@@ -205,6 +205,11 @@ internal static class ProjectScaffolder
 
         // ---- Solution-wide files ----
         WriteIfAbsent("Directory.Build.props", DirectoryBuildProps());
+        // The scaffolded projects pin package versions inline. A parent Directory.Packages.props with
+        // ManagePackageVersionsCentrally=true (Central Package Management) inherited from an enclosing repo would turn
+        // those inline versions into NU1008 errors. Emit a solution-root Directory.Packages.props that disables CPM so
+        // the nearest file (this one) shadows any inherited parent and the solution builds standalone. (#315)
+        WriteIfAbsent("Directory.Packages.props", DirectoryPackagesProps());
         Write($"{options.SolutionName}.sln", Solution(projects));
         WriteIfAbsent(".gitignore", Gitignore());
         // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
