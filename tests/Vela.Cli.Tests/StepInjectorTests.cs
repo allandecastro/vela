@@ -136,4 +136,25 @@ namespace Acme.Plugins.Account.Plugins
         StepInjector.TryInject(HandlerBased, "Account", "UpdateMultiple", "OnUpdateMultiple()", "HandleUpdateMultiple", out string bulk, out _);
         Assert.Contains("ctx.Request.Targets", bulk);
     }
+
+    [Fact]
+    public void TryInject_PreStage_EmitsPreStageCallAndPreContext()
+    {
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PreOperation()", ".Sync()", postStage: false, out string result, out string error);
+
+        Assert.True(ok, error);
+        Assert.Contains(".PreOperation()", result);
+        Assert.DoesNotContain(".PostOperation()", result[result.IndexOf("HandleUpdate", System.StringComparison.Ordinal)..]);
+        Assert.Contains("private void HandleUpdate(IUpdatePreContext<Account> ctx)", result);
+    }
+
+    [Fact]
+    public void TryInject_AsyncMode_EmitsAsyncCall()
+    {
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Async()", postStage: true, out string result, out string error);
+
+        Assert.True(ok, error);
+        Assert.Contains(".Async()", result);
+        Assert.Contains("IUpdatePostContext<Account>", result);
+    }
 }

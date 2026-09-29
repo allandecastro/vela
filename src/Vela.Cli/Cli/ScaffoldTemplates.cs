@@ -2201,7 +2201,7 @@ namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
     // These differ from the example templates above: they emit ONE file with a user-supplied name into an
     // existing project, following the same by-table conventions vela init uses.
 
-    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string filteringCall = "", string handlerContextType = "ILocalPluginContext") =>
+    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string stageCall = ".PostOperation()", string modeCall = ".Sync()", string filteringCall = "", string handlerContextType = "ILocalPluginContext") =>
 $$"""
 namespace {{ns}}
 {
@@ -2216,8 +2216,8 @@ namespace {{ns}}
         protected override void RegisterPluginSteps()
         {
             RegisterStep().{{registrationCall}}
-                .PostOperation()
-                .Sync(){{filteringCall}}
+                {{stageCall}}
+                {{modeCall}}{{filteringCall}}
                 .WithDescription("{{message}} {{entityType}} handler.")
                 .Handle(OnExecute);
         }

@@ -81,6 +81,53 @@ public class AddCommandTests
         });
     }
 
+    [Fact]
+    public void Add_Plugin_PreOperationStage_RendersPreStageAndPreContext()
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountPre", "--entity", "Account", "--message", "Delete", "--stage", "PreOperation", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountPre.cs"));
+            Assert.Contains(".PreOperation()", content);
+            Assert.Contains("IDeletePreContext<Account>", content);
+        });
+    }
+
+    [Fact]
+    public void Add_Plugin_AsyncMode_RendersAsyncCall()
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountAsync", "--entity", "Account", "--message", "Delete", "--mode", "Async", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountAsync.cs"));
+            Assert.Contains(".Async()", content);
+        });
+    }
+
+    [Fact]
+    public void Add_Plugin_AsyncPreStage_FailsClearly()
+    {
+        RunInProject("Acme.Plugins", (project, _) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountBad", "--entity", "Account", "--message", "Delete", "--stage", "PreOperation", "--mode", "Async", "--project", project]);
+            Assert.Equal(ExitInvalidArguments, exit);
+        });
+    }
+
+    [Fact]
+    public void Add_Plugin_InvalidStage_FailsClearly()
+    {
+        RunInProject("Acme.Plugins", (project, _) =>
+        {
+            int exit = AddCommand.Run(["plugin", "AccountBadStage", "--entity", "Account", "--message", "Delete", "--stage", "whenever", "--project", project]);
+            Assert.Equal(ExitInvalidArguments, exit);
+        });
+    }
+
     // CreateMultiple/UpdateMultiple map to the typed OnCreateMultiple()/OnUpdateMultiple() builder methods,
     // which require a filtering attribute at compile time - so the generator must also emit the filtering call,
     // otherwise the scaffolded plugin would not compile.

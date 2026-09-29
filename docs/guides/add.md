@@ -51,6 +51,11 @@ vela add --interactive
   rather than emitting code that would not compile. Property names are **case-sensitive** (`Name`, not `name`):
   when the model is available, `add` warns and suggests the correct casing if a value does not match a real
   column, so a typo surfaces at generation time instead of as a later build error.
+- **Stage and mode** (`add plugin` and `add step`): `--stage <PreValidation|PreOperation|PostOperation>` and
+  `--mode <Sync|Async>` set the step's stage and execution mode. Both are optional and default to
+  `PostOperation` + `Sync`. A pre-stage handler gets the pre-stage typed context (`I<Message>PreContext<T>`); a
+  post-stage handler gets `I<Message>PostContext<T>`. Dataverse only allows asynchronous steps at
+  `PostOperation`, so `--mode Async` with a pre-stage is rejected with a clear message.
 - `vela add service` scaffolds a table-scoped `I<Name>` interface + sealed implementation (injecting
   `IOrganizationService`) under `<Table>/Services/`, and prints the `services.AddScoped<...>(...)` line to drop
   into your plugin's `ConfigureServices(...)`.
