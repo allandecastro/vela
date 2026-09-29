@@ -354,6 +354,11 @@ internal static class AddCommand
             return Fail($"Invalid --handler '{handler}'. Use a valid C# method name.", ExitInvalidArguments, includeUsage: false);
         }
 
+        if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out bool postStage, out string stageError))
+        {
+            return Fail(stageError, ExitInvalidArguments, includeUsage: false);
+        }
+
         string filePath = Path.Combine(projectDir, entity!, "Plugins", $"{name}.cs");
         if (!File.Exists(filePath))
         {
@@ -366,7 +371,7 @@ internal static class AddCommand
             return Fail($"{filePath} does not look like an EntityPluginBase<{entity}> plugin.", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, out string updated, out string error))
+        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, stageCall, modeCall, postStage, out string updated, out string error))
         {
             return Fail(error, ExitInvalidArguments, includeUsage: false);
         }
@@ -457,6 +462,11 @@ internal static class AddCommand
         string message = known ?? rawMessage;
         string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
 
+        if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out bool postStage, out string stageError))
+        {
+            return Fail(stageError, ExitInvalidArguments, includeUsage: false);
+        }
+
         // Create/Update (and their bulk variants) require at least one filtering attribute, and the builder's
         // first argument is mandatory at compile time. Prefer an explicit --filtering-attributes; otherwise
         // auto-detect a sensible default column from the entity's generated early-bound model so the emitted file
@@ -523,11 +533,11 @@ internal static class AddCommand
         // The redesigned builder ends the chain with .Handle(...), bound to a named instance handler. A modelled
         // message gets the strongly-typed post-stage context (I{Message}PostContext<TEntity>); a custom OnMessage
         // step has no typed context, so its handler takes the plain ILocalPluginContext.
-        string handlerContextType = known is null ? "ILocalPluginContext" : $"I{message}PostContext<{entity}>";
+        string handlerContextType = known is null ? "ILocalPluginContext" : $"I{message}{(postStage ? "Post" : "Pre")}Context<{entity}>";
 
         string ns = $"{rootNamespace}.{entity}.Plugins";
         string relativePath = Path.Combine(entity!, "Plugins", $"{name}.cs");
-        string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, filteringCall, handlerContextType);
+        string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, stageCall, modeCall, filteringCall, handlerContextType);
         return WriteFile(projectDir, relativePath, content, force, $"plugin {name} ({message} {entity})", HasFlag(args, "--json"));
     }
 
@@ -718,6 +728,52 @@ internal static class AddCommand
     private static bool IsHelp(string arg) =>
         arg is "--help" or "-h" or "-?" or "/?" or "help";
 
+    // Resolves --stage / --mode into the fluent builder calls and whether the step runs at a post stage
+    // (which selects the pre- vs post- typed handler context). Defaults: PostOperation + Sync (the prior
+    // hard-coded behaviour). Dataverse only allows asynchronous steps at PostOperation.
+    private static bool TryResolveStageMode(string[] args, out string stageCall, out string modeCall, out bool postStage, out string error)
+    {
+        stageCall = ".PostOperation()";
+        modeCall = ".Sync()";
+        postStage = true;
+        error = string.Empty;
+
+        string? rawStage = TryReadOption(args, "--stage");
+        if (!string.IsNullOrWhiteSpace(rawStage))
+        {
+            switch (rawStage.Trim().ToLowerInvariant())
+            {
+                case "prevalidation": stageCall = ".PreValidation()"; postStage = false; break;
+                case "preoperation" or "pre": stageCall = ".PreOperation()"; postStage = false; break;
+                case "postoperation" or "post": stageCall = ".PostOperation()"; postStage = true; break;
+                default:
+                    error = $"Invalid --stage '{rawStage}'. Use PreValidation, PreOperation or PostOperation.";
+                    return false;
+            }
+        }
+
+        string? rawMode = TryReadOption(args, "--mode");
+        if (!string.IsNullOrWhiteSpace(rawMode))
+        {
+            switch (rawMode.Trim().ToLowerInvariant())
+            {
+                case "sync" or "synchronous": modeCall = ".Sync()"; break;
+                case "async" or "asynchronous": modeCall = ".Async()"; break;
+                default:
+                    error = $"Invalid --mode '{rawMode}'. Use Sync or Async.";
+                    return false;
+            }
+        }
+
+        if (modeCall == ".Async()" && !postStage)
+        {
+            error = "An asynchronous step must run at PostOperation. Use --mode Sync for a pre-stage, or --stage PostOperation.";
+            return false;
+        }
+
+        return true;
+    }
+
     // Splits a comma-separated option value into trimmed, non-empty tokens.
     private static string[] SplitList(string? value) =>
         string.IsNullOrWhiteSpace(value)
@@ -886,7 +942,7 @@ internal static class AddCommand
     // Options that consume the next token as their value; everything else may be a positional. Also the
     // value-option half of the unknown-option allowlist (union over all add kinds). Keep in sync with the kinds.
     internal static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
-        { "--entity", "-e", "--project", "-p", "--message", "--kind", "--handler", "--filtering-attributes", "--filter", "--prefix" };
+        { "--entity", "-e", "--project", "-p", "--message", "--kind", "--handler", "--filtering-attributes", "--filter", "--prefix", "--stage", "--mode" };
 
     // Boolean flags across all add kinds (customapi binding/operation, --force/--json, interactive, help).
     internal static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
@@ -897,11 +953,11 @@ internal static class AddCommand
     private static void PrintAddUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  vela add plugin <Name> --entity <ModelType> [--message <Message>] [--filtering-attributes <Col1,Col2>] [--project <csproj>] [--force]");
+        Console.WriteLine("  vela add plugin <Name> --entity <ModelType> [--message <Message>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--filtering-attributes <Col1,Col2>] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add service <Name> --entity <ModelType> [--project <csproj>] [--force]");
         Console.WriteLine("  vela add customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--project <csproj>] [--force]");
-        Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--project <csproj>]");
+        Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--project <csproj>]");
         Console.WriteLine("  vela add form-script <entity> [--project <web-resources dir>] [--force]   (preview)");
         Console.WriteLine("  vela add ribbon-script <entity> [--project <web-resources dir>] [--force] (preview, ribbon commands)");
         Console.WriteLine("  vela add --interactive            # guided wizard");

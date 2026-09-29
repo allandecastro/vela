@@ -12,7 +12,11 @@ namespace Vela.Cli;
 /// </summary>
 internal static class StepInjector
 {
+    // Convenience overload: default to a PostOperation + Sync step (the historical behaviour).
     public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, out string result, out string error)
+        => TryInject(source, entityType, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", true, out result, out error);
+
+    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, out string result, out string error)
     {
         result = source;
         error = string.Empty;
@@ -75,15 +79,16 @@ internal static class StepInjector
 
         string registration =
             $"\n\n            RegisterStep().{registrationCall}\n" +
-            "                .PostOperation()\n" +
-            "                .Sync()\n" +
+            $"                {stageCall}\n" +
+            $"                {modeCall}\n" +
             filtering +
             $"                .Handle({handlerName});";
 
-        // A modelled message binds the strongly-typed post-stage context; a custom OnMessage step is untyped.
+        // A modelled message binds the strongly-typed stage context (pre or post to match the step's stage);
+        // a custom OnMessage step is untyped.
         string handlerContextType = registrationCall.StartsWith("OnMessage(", StringComparison.Ordinal)
             ? "ILocalPluginContext"
-            : $"I{message}PostContext<{entityType}>";
+            : $"I{message}{(postStage ? "Post" : "Pre")}Context<{entityType}>";
 
         // Point the author at the idiomatic, typed access for this message rather than the low-level
         // ctx.GetTarget<T>(): a single record is ctx.Request.Target, a bulk message is ctx.Request.Targets,
