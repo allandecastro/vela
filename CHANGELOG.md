@@ -32,6 +32,14 @@ Framework line, published as `framework-v0.29.11`.
 
 - **Message localization service (i18n) for plugins (#312).** A new `IMessageService` resolves messages by key in the current (initiating) user's UI language (`usersettings.uilanguageid`), falls back to a configurable default language, and formats templates with `string.Format`. Pluggable sources ship in the box: an in-code `DictionaryMessageSource` and a `DataverseTableMessageSource` (configurable labels table, read once through the elevated system service and cached like environment variables). Reach it from a handler via `ctx.GetMessage("KEY", args)` / `ctx.TryGetMessage(...)`, throw a localized business error with `throw ctx.BusinessError("KEY", args)`, and register sources in a plugin's `ConfigureServices` override. Registered by default in the execution resolver.
 
+## [0.21.4] - 2026-09-29 (Vela.Cli)
+
+CLI line, published as `cli-v0.21.4`.
+
+### Added
+
+- **`vela models --from-solution <zip>` generates C# early-bound models offline (#313).** Reads table metadata from the `customizations.xml` inside an exported (unmanaged) solution zip and generates the same early-bound classes and option-set enums as the online path, with no Dataverse connection - useful for migrations/onboarding or as a fallback when a connection is unavailable. Scope defaults to the zip's custom tables (narrow with `--entities`). Degrades gracefully on what an export does not carry: an unmapped column type is skipped, a lookup keeps no typed targets (the export stores numeric type codes, not logical names), a global option set absent from the file falls back to a raw option-set value, and relationships are not emitted in this first version. Offline output is C# only.
+
 ## [0.29.10] - 2026-09-29 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.10`.
