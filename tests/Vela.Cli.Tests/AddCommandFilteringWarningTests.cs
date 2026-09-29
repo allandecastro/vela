@@ -38,14 +38,15 @@ public class AddCommandFilteringWarningTests
             int exit = AddCommand.Run(["plugin", "AccountWarn", "--entity", "Account", "--message", "Update", "--filtering-attributes", "name", "--project", project]);
             Console.SetError(original);
 
-            // The file is still generated (the value is emitted as given); only a warning is surfaced.
+            // When the model is available, a wrong-case value is corrected to the real property so the emitted
+            // FilterOn compiles; a note explains the correction.
             Assert.Equal(ExitSuccess, exit);
-            string warning = capture.ToString();
-            Assert.Contains("filtering attribute 'name'", warning);
-            Assert.Contains("Did you mean 'Name'", warning);
+            string note = capture.ToString();
+            Assert.Contains("filtering attribute 'name'", note);
+            Assert.Contains("corrected to 'Name'", note);
 
             string content = File.ReadAllText(Path.Combine(pluginsDir, "Account", "Plugins", "AccountWarn.cs"));
-            Assert.Contains(".FilterOn(e => e.name)", content);
+            Assert.Contains(".FilterOn(e => e.Name)", content);
         }
         finally
         {

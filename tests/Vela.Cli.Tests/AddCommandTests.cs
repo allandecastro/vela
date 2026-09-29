@@ -128,6 +128,36 @@ public class AddCommandTests
         });
     }
 
+    [Fact]
+    public void Add_Step_ExplicitFilteringAttributes_RendersFilterOn()
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountRouter", "--entity", "Account", "--message", "Delete", "--project", project]));
+            int exit = AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--message", "Update", "--filtering-attributes", "Name", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountRouter.cs"));
+            Assert.Contains(".FilterOn(e => e.Name)", content);
+            Assert.DoesNotContain("// TODO: add .FilterOn", content);
+        });
+    }
+
+    [Fact]
+    public void Add_Step_NoFilteringAttributes_LeavesTodoComment()
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountRouter2", "--entity", "Account", "--message", "Delete", "--project", project]));
+            int exit = AddCommand.Run(["step", "AccountRouter2", "--entity", "Account", "--message", "Update", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountRouter2.cs"));
+            Assert.Contains("// TODO: add .FilterOn", content);
+            Assert.DoesNotContain("e.Id", content);
+        });
+    }
+
     // CreateMultiple/UpdateMultiple map to the typed OnCreateMultiple()/OnUpdateMultiple() builder methods,
     // which require a filtering attribute at compile time - so the generator must also emit the filtering call,
     // otherwise the scaffolded plugin would not compile.
