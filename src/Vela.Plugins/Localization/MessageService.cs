@@ -1,0 +1,170 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using Vela.Caching;
+using Vela.Context;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
+
+namespace Vela.Localization
+{
+    /// <summary>
+    /// Default <see cref="IMessageService"/>: composes an ordered list of <see cref="IMessageSource"/> providers,
+    /// resolves the current user's UI language from <c>usersettings.uilanguageid</c> (with a configurable default),
+    /// and formats templates with <c>string.Format</c> in the resolved culture.
+    /// </summary>
+    public sealed class MessageService : IMessageService
+    {
+        private const string CacheKeyPrefix = "vela:userlang:";
+
+        private readonly ILocalPluginContext _context;
+        private readonly IPluginCacheService _cache;
+        private readonly List<IMessageSource> _sources = new List<IMessageSource>();
+        private int? _userLanguagePerExecution;
+
+        /// <summary>Creates the service over a plugin context and the shared cache.</summary>
+        public MessageService(ILocalPluginContext context, IPluginCacheService cache)
+        {
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        }
+
+        /// <inheritdoc />
+        public int DefaultLanguageCode { get; set; } = 1033;
+
+        /// <inheritdoc />
+        public IMessageService AddSource(IMessageSource source)
+        {
+            _sources.Add(source ?? throw new ArgumentNullException(nameof(source)));
+            return this;
+        }
+
+        /// <inheritdoc />
+        public string GetMessage(string key, params object[] args) =>
+            GetMessageIn(ResolveUserLanguageCode(), key, args);
+
+        /// <inheritdoc />
+        public string GetMessageIn(int languageCode, string key, params object[] args)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new ArgumentException("A message key is required.", nameof(key));
+            }
+
+            if (TryResolveTemplate(key, languageCode, out string? template))
+            {
+                return Format(template!, languageCode, args);
+            }
+
+            throw new InvalidPluginExecutionException(
+                $"No message found for key '{key}' in language {languageCode} (or default {DefaultLanguageCode}).");
+        }
+
+        /// <inheritdoc />
+        public bool TryGetMessage(string key, out string? message, params object[] args)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                message = null;
+                return false;
+            }
+
+            int languageCode = ResolveUserLanguageCode();
+            if (TryResolveTemplate(key, languageCode, out string? template))
+            {
+                message = Format(template!, languageCode, args);
+                return true;
+            }
+
+            message = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public int ResolveUserLanguageCode(TimeSpan? cacheFor = null)
+        {
+            if (cacheFor.HasValue)
+            {
+                // Opt-in cross-execution cache, scoped by organization + user (a user's UI language is per user).
+                string cacheKey = CacheKeyPrefix + _context.OrganizationId.ToString("N") + ":" +
+                    _context.InitiatingUserId.ToString("N");
+                return _cache.GetOrCreate(cacheKey, cacheFor.Value, QueryUserLanguage);
+            }
+
+            return _userLanguagePerExecution ??= QueryUserLanguage();
+        }
+
+        // Reads the initiating user's UI language through the elevated system service; the initiating user is the
+        // person who triggered the operation, so a business message is shown in their language even when the plugin
+        // runs as another user. Falls back to the default when there is no setting.
+        private int QueryUserLanguage()
+        {
+            QueryExpression query = new QueryExpression("usersettings")
+            {
+                ColumnSet = new ColumnSet("uilanguageid"),
+                TopCount = 1,
+            };
+            query.Criteria.AddCondition("systemuserid", ConditionOperator.Equal, _context.InitiatingUserId);
+
+            Entity? settings = _context.AsSystem().RetrieveMultiple(query).Entities.FirstOrDefault();
+            int uiLanguage = settings?.GetAttributeValue<int>("uilanguageid") ?? 0;
+            return uiLanguage > 0 ? uiLanguage : DefaultLanguageCode;
+        }
+
+        // First source with a template for the requested language wins; otherwise fall back to the default language.
+        private bool TryResolveTemplate(string key, int languageCode, out string? template)
+        {
+            foreach (IMessageSource source in _sources)
+            {
+                if (source.TryGetTemplate(key, languageCode, out template) && template != null)
+                {
+                    return true;
+                }
+            }
+
+            if (languageCode != DefaultLanguageCode)
+            {
+                foreach (IMessageSource source in _sources)
+                {
+                    if (source.TryGetTemplate(key, DefaultLanguageCode, out template) && template != null)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            template = null;
+            return false;
+        }
+
+        private static string Format(string template, int languageCode, object[]? args)
+        {
+            if (args == null || args.Length == 0)
+            {
+                return template;
+            }
+
+            return string.Format(ResolveCulture(languageCode), template, args);
+        }
+
+        // The culture for {0} formatting (numbers/dates). Falls back to the invariant culture for an unknown LCID
+        // rather than throwing, so a custom or missing language never breaks message resolution.
+        private static CultureInfo ResolveCulture(int languageCode)
+        {
+            if (languageCode <= 0)
+            {
+                return CultureInfo.InvariantCulture;
+            }
+
+            try
+            {
+                return CultureInfo.GetCultureInfo(languageCode);
+            }
+            catch (CultureNotFoundException)
+            {
+                return CultureInfo.InvariantCulture;
+            }
+        }
+    }
+}

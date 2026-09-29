@@ -20,6 +20,8 @@
       href: caching.md
     - name: Environment variables
       href: environment-variables.md
+    - name: Localized messages (i18n)
+      href: localization.md
     - name: Managed identity
       href: managed-identity.md
     - name: Telemetry & Application Insights
