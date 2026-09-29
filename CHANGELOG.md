@@ -32,6 +32,14 @@ Framework line, published as `framework-v0.29.10`.
 
 - **`IOrganizationService.RetrieveAll(TypedQuery<T>)` and `TypedQuery<T>.ToList(service)` auto-paging execution helpers (#314).** They run a typed query to completion, following `MoreRecords`/`PagingCookie` page by page, and return a typed `List<T>` - removing the hand-rolled paging loop. A query with a `Top` is honored with a single retrieve (Top and paging are mutually exclusive in Dataverse). Page size defaults to 5000 (the Dataverse maximum) and is configurable.
 
+## [0.21.3] - 2026-09-29 (Vela.Cli)
+
+CLI line, published as `cli-v0.21.3`.
+
+### Added
+
+- **`vela solution show <uniquename>`** - a read-only command that connects to Dataverse and prints a solution's publisher customization prefix (#321). Use it to align a scaffold's `--prefix` with the target solution up front (`vela init MySolution --prefix "$(vela solution show mysolution -i)"`) instead of discovering a prefix mismatch only at `apply`. Supports `--json` (`{"solution":"...","publisherPrefix":"..."}`) and the standard connection flags.
+
 ## [0.21.2] - 2026-09-29 (Vela.Cli)
 
 CLI line, published as `cli-v0.21.2`.
