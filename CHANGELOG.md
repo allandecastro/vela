@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.10] - 2026-09-29 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.10`.
+
+### Added
+
+- **`IOrganizationService.RetrieveAll(TypedQuery<T>)` and `TypedQuery<T>.ToList(service)` auto-paging execution helpers (#314).** They run a typed query to completion, following `MoreRecords`/`PagingCookie` page by page, and return a typed `List<T>` - removing the hand-rolled paging loop. A query with a `Top` is honored with a single retrieve (Top and paging are mutually exclusive in Dataverse). Page size defaults to 5000 (the Dataverse maximum) and is configurable.
+
 ## [0.21.2] - 2026-09-29 (Vela.Cli)
 
 CLI line, published as `cli-v0.21.2`.
