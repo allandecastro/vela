@@ -73,6 +73,7 @@ int exitCode = command switch
     "init" or "new" => RunNew(commandArgs),
     "add" => AddCommand.Run(commandArgs),
     "models" => ModelsCommand.Run(commandArgs),
+    "solution" => SolutionCommand.Run(commandArgs),
     "sign" => SignCommand.Run(commandArgs),
     "logout" => LogoutCommand.Run(commandArgs),
     "update" => UpdateCommand.Run(commandArgs),
