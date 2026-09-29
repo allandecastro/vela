@@ -24,6 +24,14 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.29.11] - 2026-09-29 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.29.11`.
+
+### Added
+
+- **Message localization service (i18n) for plugins (#312).** A new `IMessageService` resolves messages by key in the current (initiating) user's UI language (`usersettings.uilanguageid`), falls back to a configurable default language, and formats templates with `string.Format`. Pluggable sources ship in the box: an in-code `DictionaryMessageSource` and a `DataverseTableMessageSource` (configurable labels table, read once through the elevated system service and cached like environment variables). Reach it from a handler via `ctx.GetMessage("KEY", args)` / `ctx.TryGetMessage(...)`, throw a localized business error with `throw ctx.BusinessError("KEY", args)`, and register sources in a plugin's `ConfigureServices` override. Registered by default in the execution resolver.
+
 ## [0.29.10] - 2026-09-29 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.10`.

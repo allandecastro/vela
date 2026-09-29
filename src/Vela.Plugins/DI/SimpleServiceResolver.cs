@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Vela.Caching;
 using Vela.Context;
+using Vela.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
@@ -56,6 +57,7 @@ namespace Vela.DI
             resolver.AddScoped<Func<Guid?, IOrganizationService>>(_ => userId => context.CreateOrganizationService(userId));
             resolver.AddScoped<IPluginCacheService>(_ => GlobalCacheService);
             resolver.AddScoped<IEnvironmentVariableReader>(_ => new EnvironmentVariableReader(context, GlobalCacheService));
+            resolver.AddScoped<IMessageService>(_ => new MessageService(context, GlobalCacheService));
             if (context.ManagedIdentityService != null)
             {
                 resolver.AddScoped<IManagedIdentityService>(_ => context.ManagedIdentityService);
