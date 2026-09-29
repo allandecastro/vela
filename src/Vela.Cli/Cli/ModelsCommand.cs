@@ -27,7 +27,7 @@ internal static class ModelsCommand
     private static readonly HashSet<string> ValueOptions = new(CommandLineOptions.ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--solution", "--entities", "--custom-apis", "--messages", "--roles", "--out", "--lang",
-        "--namespace", "--project",
+        "--namespace", "--project", "--from-solution",
         // Optional plugin package inputs (same shape as plan/apply): when provided, ALL-mode --custom-apis excludes
         // the Custom APIs authored in these package(s) so the developer's own classes are not regenerated. `-p` is
         // the shared short alias for --package (as in plan/apply), NOT --project.
@@ -60,6 +60,14 @@ internal static class ModelsCommand
         if (!CommandLineOptions.TryTokenize(args, ValueOptions, FlagOptions, OptionalValueOptions, out args, out int optExit))
         {
             return optExit;
+        }
+
+        // Offline mode: generate C# early-bound models + option-set enums from an exported solution zip, with no
+        // Dataverse connection. Branch before scope/connection handling since the source of truth is the file.
+        string? fromSolution = TryReadOption(args, "--from-solution");
+        if (!string.IsNullOrWhiteSpace(fromSolution))
+        {
+            return RunFromSolution(args, fromSolution!);
         }
 
         ModelsScope scope = ModelsScope.Parse(args);
@@ -712,6 +720,67 @@ internal static class ModelsCommand
         }
     }
 
+    // Offline C# early-bound generation from an exported (unmanaged) solution zip: no Dataverse connection. Reads
+    // table metadata from the zip's customizations.xml and feeds it to the same ModelGenerator the online path uses.
+    // Scope is the zip's content, optionally narrowed by --entities. TypeScript, custom-apis/messages/roles and
+    // --verify need live metadata and are rejected here.
+    private static int RunFromSolution(string[] args, string zipPath)
+    {
+        if (HasFlag(args, "--forms") || HasFlag(args, "--tables"))
+        {
+            return Fail("--from-solution generates C# early-bound models only; it cannot be combined with --forms / --tables.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (HasFlag(args, "--verify"))
+        {
+            return Fail("--verify needs live metadata to compare against; it cannot be combined with --from-solution.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        string lang = (TryReadOption(args, "--lang") ?? "csharp").Trim().ToLowerInvariant();
+        if (lang != "csharp")
+        {
+            return Fail("--from-solution supports C# output only.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        string? ns = ProjectNamespaceResolver.ResolveNamespace(args);
+        if (string.IsNullOrWhiteSpace(ns))
+        {
+            return Fail("Could not infer a namespace. Pass --namespace <ns> (or run inside a project so it can be derived).", ExitInvalidArguments, includeUsage: false);
+        }
+
+        string outDir = ProjectNamespaceResolver.ResolveCSharpOutputDir(args, Path.GetFullPath(TryReadOption(args, "--out") ?? "."));
+        bool overwrite = HasFlag(args, "--overwrite");
+        bool dataAnnotations = !HasFlag(args, "--no-annotations");
+        bool json = HasFlag(args, "--json");
+
+        string fullPath = Path.GetFullPath(zipPath);
+        if (!File.Exists(fullPath))
+        {
+            return Fail($"Solution file not found: {fullPath}", ExitInvalidArguments, includeUsage: false);
+        }
+
+        // Reuse --entities parsing to optionally narrow the tables generated from the zip.
+        string[] entityFilter = ModelsScope.Parse(args).Entities;
+
+        IReadOnlyList<EntityMetadata> entities;
+        try
+        {
+            entities = SolutionMetadataReader.ReadFromSolutionZip(fullPath, entityFilter.Length > 0 ? entityFilter : null);
+        }
+        catch (Exception ex)
+        {
+            return Fail($"Could not read models from solution '{fullPath}': {ex.Message}", ExitError, includeUsage: false);
+        }
+
+        if (entities.Count == 0)
+        {
+            return Fail("No table metadata with columns was found in the solution. An exported solution only carries full metadata for the custom tables and columns it contains, so add them to the solution (or check --entities).", ExitError, includeUsage: false);
+        }
+
+        List<GeneratedModel> models = ModelGenerator.Generate(entities, new ModelGenOptions(ns!, dataAnnotations)).ToList();
+        return WriteModels(models, outDir, overwrite, json, $" (namespace {ns}, offline from {Path.GetFileName(fullPath)})");
+    }
+
     // Writes generated files all-or-nothing: fails up front on any pre-existing file (unless --overwrite) so a
     // partial write can never leave a half-generated output directory. On success prints a human summary, or a
     // machine-readable JSON report when --json is set (for scripts and agents).
@@ -803,8 +872,10 @@ internal static class ModelsCommand
         Console.WriteLine("  vela models --forms --entities account,contact [connection options]   (preview)");
         Console.WriteLine("  vela models --tables --entities account,contact [connection options]  (preview)");
         Console.WriteLine("  vela models --forms --tables --entities account,contact [connection options]  (preview, both + one barrel)");
+        Console.WriteLine("  vela models --from-solution ./MySolution.zip --namespace Acme.Shared.Models   (offline, no connection)");
         Console.WriteLine();
         Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
+        Console.WriteLine("  --from-solution <zip>     offline: generate C# entity models + option-set enums from an exported (unmanaged) solution zip, with no connection");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
         Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response classes (into Messages/)");

@@ -145,6 +145,34 @@ table it reports:
 drops straight into CI to fail a build on a stale model. Add `--json` for a machine-readable report. It checks
 the C# early-bound entity model only; `--custom-apis` / `--messages` / `--roles` scopes are ignored.
 
+## Offline generation from an exported solution (`--from-solution`)
+
+Generate the early-bound classes and option-set enums with no Dataverse connection, from the `customizations.xml`
+inside an exported (unmanaged) solution zip. Useful for migrations/onboarding where a connection is not yet
+available, or as a fallback when the org is unreachable.
+
+```bash
+# Export the solution once (any tool), then generate offline.
+vela models --from-solution ./MySolution.zip --namespace Acme.Shared.Models --out src/Shared/Models/Generated
+
+# Narrow to specific tables from the zip.
+vela models --from-solution ./MySolution.zip --entities adc_widget,adc_part --namespace Acme.Shared.Models
+```
+
+The offline path produces the same C# entity classes and enums as the online path (it feeds the same generator).
+It scopes to the custom tables the solution carries; system tables are exported as shells with no columns and are
+skipped. Because an exported solution does not carry everything live metadata does, some cases degrade gracefully
+rather than fail:
+
+- a column of a type the generator does not map is skipped;
+- a lookup keeps no typed `[LookupTargets]` (the export stores numeric type codes, not logical names) - it stays a
+  plain `EntityReference`;
+- a global option set not present in the file falls back to a raw `OptionSetValue`;
+- relationship navigation properties are not emitted in this first version.
+
+Offline output is C# only (`--forms` / `--tables` and `--verify` need live metadata). When the org is reachable,
+prefer the connected path - it carries the full metadata (typed lookup targets, relationships).
+
 ## Custom API message classes (`--custom-apis`)
 
 `--custom-apis` generates typed `OrganizationRequest`/`OrganizationResponse` classes into a `Messages/` subfolder:
