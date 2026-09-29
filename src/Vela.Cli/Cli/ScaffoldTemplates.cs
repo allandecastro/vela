@@ -517,6 +517,20 @@ $$"""
 </Project>
 """;
 
+    // A solution-root Directory.Packages.props. MSBuild imports the NEAREST Directory.Packages.props walking up the
+    // folder tree, and the mere presence of one with ManagePackageVersionsCentrally=true switches on Central Package
+    // Management. Emitting this file makes the scaffold's own the nearest one, shadowing any parent inherited from an
+    // enclosing repository and keeping CPM off - so the inline PackageReference versions stay valid (no NU1008). To
+    // adopt CPM, set this to true and move each version to a <PackageVersion> item here. (#315)
+    public static string DirectoryPackagesProps() =>
+"""
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>
+""";
+
     public static string Solution(IReadOnlyList<ProjectEntry> projects)
     {
         StringBuilder sb = new();
