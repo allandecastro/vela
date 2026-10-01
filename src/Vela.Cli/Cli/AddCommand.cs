@@ -303,7 +303,7 @@ internal static class AddCommand
     private static void WriteScaffoldFile(string fullPath, string content, System.Collections.Generic.List<string> created)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        File.WriteAllText(fullPath, content);
+        File.WriteAllText(fullPath, NormalizeNewlines(content));
         created.Add(fullPath);
     }
 
@@ -390,7 +390,7 @@ internal static class AddCommand
             return Fail(error, ExitInvalidArguments, includeUsage: false);
         }
 
-        File.WriteAllText(filePath, updated);
+        File.WriteAllText(filePath, NormalizeNewlines(updated));
         if (HasFlag(args, "--json"))
         {
             Console.WriteLine(BuildAddReport($"step {message} ({handler}) on {name}", [filePath]));
@@ -649,7 +649,7 @@ internal static class AddCommand
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        File.WriteAllText(fullPath, content);
+        File.WriteAllText(fullPath, NormalizeNewlines(content));
         if (json)
         {
             Console.WriteLine(BuildAddReport(description, [fullPath]));

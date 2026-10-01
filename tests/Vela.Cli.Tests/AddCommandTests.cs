@@ -435,6 +435,22 @@ public class AddCommandTests
     }
 
     [Fact]
+    public void Add_Plugin_And_Step_GenerateLfOnlyFiles()
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountEol", "--entity", "Account", "--message", "Delete", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountEol", "--entity", "Account", "--message", "Update", "--project", project]));
+
+            // Generated files must use a single line ending (LF). On a CRLF checkout the raw-string templates
+            // and the injected ("\n") step would otherwise mix endings.
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountEol.cs"));
+            Assert.DoesNotContain("\r\n", content);
+            Assert.DoesNotContain("\r", content);
+        });
+    }
+
+    [Fact]
     public void Add_PluginTest_GeneratesTestTargetingThePlugin()
     {
         RunInProject("Acme.Plugins.Tests", (project, dir) =>
