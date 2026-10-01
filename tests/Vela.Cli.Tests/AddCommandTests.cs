@@ -194,19 +194,24 @@ public class AddCommandTests
     // E2: a filtering-required message with no explicit attributes and no discoverable model fails with a clear
     // error instead of emitting a non-compiling placeholder.
     [Fact]
-    public void Add_Plugin_Update_NoFilteringAndNoModel_FailsClearly()
+    public void Add_Plugin_Update_NoFiltering_LeavesTodoAndSucceeds()
     {
-        RunInProject("Acme.Plugins", (project, _) =>
+        RunInProject("Acme.Plugins", (project, dir) =>
         {
             int exit = AddCommand.Run(["plugin", "AccountNoFilter", "--entity", "Account", "--message", "Update", "--project", project]);
-            Assert.Equal(ExitInvalidArguments, exit);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountNoFilter.cs"));
+            Assert.Contains("// TODO: add .FilterOn(", content);
+            // Only the TODO comment mentions FilterOn; no executable selector is emitted.
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(content, @"\.FilterOn\(").Count);
         });
     }
 
-    // E2 (Option B): with no explicit attributes, the filtering column is auto-detected from the entity's
-    // generated early-bound model (the conventional primary-name column) so the file compiles and applies.
+    // With no explicit attributes, the generator does NOT guess a column from the model (a deliberate
+    // restraint, matching 'add step'): it leaves a TODO instead, even when a model is present.
     [Fact]
-    public void Add_Plugin_Update_AutoDetectsFilteringAttributeFromModel()
+    public void Add_Plugin_Update_NoFiltering_DoesNotGuessFromModel()
     {
         string root = Path.Combine(Path.GetTempPath(), "vela-add-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -227,7 +232,9 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(pluginsDir, "Account", "Plugins", "AccountAuto.cs"));
-            Assert.Contains(".FilterOn(e => e.Name)", content);
+            Assert.Contains("// TODO: add .FilterOn(", content);
+            // Despite a model with a Name column, no column is auto-selected into a FilterOn.
+            Assert.DoesNotContain(".FilterOn(e => e.Name)", content);
         }
         finally
         {

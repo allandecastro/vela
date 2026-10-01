@@ -41,17 +41,14 @@ vela add --interactive
   and `Assign` messages have no typed method (update `statecode`/`statuscode` or `ownerid` with `Update`
   instead), so they too render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
   current directory), `--force` (overwrite an existing file).
-- **Filtering attributes on a `Create`/`Update` plugin** (also `CreateMultiple`/`UpdateMultiple`): these
-  messages require at least one filtering attribute. Pass `--filtering-attributes <Col1,Col2>` with the
-  early-bound property name(s) that should trigger the step (for example `--filtering-attributes Name,Telephone1`
-  renders `FilterOn(e => e.Name, e => e.Telephone1)`). If you omit it, `add` auto-selects a sensible
-  default column from the entity's generated early-bound model (its primary-name column) and marks it with an
-  `auto-selected` comment so you can adjust it. The generated file always compiles and applies; if no column can
-  be inferred (no generated model found), `add` fails with a clear message asking for `--filtering-attributes`
-  rather than emitting code that would not compile. Property names are **case-sensitive** (`Name`, not `name`):
-  when the model is available and a value differs only in case (for example `name` for `Name`), `add` corrects
-  it to the real property and prints a note, so the emitted `FilterOn` compiles; a name that matches no property
-  is left as-is with a warning.
+- **Filtering attributes on a `Create`/`Update` plugin** (also `CreateMultiple`/`UpdateMultiple`): a `FilterOn`
+  scopes these steps to the attribute changes they care about. Pass `--filtering-attributes <Col1,Col2>` with the
+  early-bound property name(s) (for example `--filtering-attributes Name,Telephone1` renders
+  `FilterOn(e => e.Name, e => e.Telephone1)`). If you omit it, `add` does not guess a column from the model: it
+  leaves a `// TODO: add .FilterOn(e => e.Column)` comment, so the file compiles and you pick the real filter.
+  Property names are **case-sensitive** (`Name`, not `name`): when the model is available and a value differs
+  only in case (for example `name` for `Name`), `add` corrects it to the real property and prints a note, so the
+  emitted `FilterOn` compiles; a name that matches no property is left as-is with a warning.
 - **Stage and mode** (`add plugin` and `add step`): `--stage <PreValidation|PreOperation|PostOperation>` and
   `--mode <Sync|Async>` set the step's stage and execution mode. Both are optional and default to
   `PostOperation` + `Sync`. A pre-stage handler gets the pre-stage typed context (`I<Message>PreContext<T>`); a
