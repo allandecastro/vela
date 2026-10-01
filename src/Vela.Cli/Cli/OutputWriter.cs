@@ -16,6 +16,12 @@ namespace Vela.Cli;
 /// </summary>
 internal static class OutputWriter
 {
+    // Generated source is assembled from raw-string templates (whose newlines follow the checked-out EOL, which
+    // is CRLF on a Windows checkout) and from code that concatenates explicit "\n", so a file can end up with
+    // mixed line endings. Normalize generated files to LF - consistent, and what `vela models` already emits.
+    public static string NormalizeNewlines(string content)
+        => string.IsNullOrEmpty(content) ? content : content.Replace("\r\n", "\n").Replace("\r", "\n");
+
     public static void WriteOutput(string? outPath, string output)
     {
         if (string.IsNullOrWhiteSpace(outPath))

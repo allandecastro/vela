@@ -75,7 +75,7 @@ internal static class ProjectScaffolder
         {
             string fullPath = Path.Combine(root, relativeToRoot);
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-            File.WriteAllText(fullPath, content);
+            File.WriteAllText(fullPath, OutputWriter.NormalizeNewlines(content));
             fileCount++;
         }
 

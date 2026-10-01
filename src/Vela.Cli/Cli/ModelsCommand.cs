@@ -832,7 +832,7 @@ internal static class ModelsCommand
             // A model's file name can carry a subfolder (e.g. tables/account.ts), so ensure its directory exists.
             string target = Path.Combine(outDir, model.FileName);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            File.WriteAllText(target, model.Code);
+            File.WriteAllText(target, OutputWriter.NormalizeNewlines(model.Code));
             written++;
         }
 
