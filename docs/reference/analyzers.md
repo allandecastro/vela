@@ -27,6 +27,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA014](#vela014) | Vela.Usage | Error | A plugin that captures a typed image must be declared `partial` |
 | [VELA015](#vela015) | Vela.Usage | Error | A step handler's context does not match the step's message/stage |
 | [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
+| [VELA017](#vela017) | Vela.Usage | Error | A handler reads `ctx.PreImage`/`ctx.PostImage` its step did not capture |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
 VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
@@ -184,6 +185,14 @@ reported. Scoped to the guided `Create` / `Update` / `Delete` path.
 (`{Handler}Context`), so binding one handler on two image-capturing steps would need two contexts under the same
 name. Use a distinct handler per image-capturing step (or read images via `ctx.PostImageAs<T>()` on the plain
 context if you must share a handler).
+
+## VELA017
+
+**Image read but not captured by the step.** A post-operation context exposes both `PreImage` and `PostImage`
+(a pre context exposes `PreImage`), so reading an image the step did not capture compiles but returns `null` at
+runtime - a silent footgun. The rule fires only in the unambiguous case: the handler is an instance method bound
+by exactly one `RegisterStep()` chain in the same class, and that chain has no matching `WithPreImage(...)` /
+`WithPostImage(...)`. Add the capture to the step, or read the image it does capture.
 
 ## Typed image projection generator
 
