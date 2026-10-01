@@ -2279,7 +2279,16 @@ namespace {{ns}}
 }
 """;
 
-    public static string AddPluginTestFile(string ns, string pluginNamespace, string modelsNamespace, string testClass, string pluginType, string entityType) =>
+    public static string AddPluginTestFile(string ns, string pluginNamespace, string modelsNamespace, string testClass, string pluginType, string entityType, bool multiple = false)
+    {
+        // A *Multiple plugin reads ctx.Request.Targets (an EntityCollection), so the test must seed Targets via
+        // WithTargets(...); a single-record plugin uses WithTarget(...). Emitting the wrong one leaves
+        // ctx.Request.Targets null and the handler throws.
+        string targetMethod = multiple ? "WithTargets" : "WithTarget";
+        string targetComment = multiple
+            ? "a *Multiple plugin reads ctx.Request.Targets; seed it with WithTargets(...)."
+            : "a single-step plugin auto-derives its trigger (message/stage/mode) from its own";
+        return
 $$"""
 namespace {{ns}}
 {
@@ -2304,10 +2313,10 @@ namespace {{ns}}
             InMemoryOrganizationService crm = new InMemoryOrganizationService();
             {{entityType}} target = new {{entityType}} { Id = Guid.NewGuid() };
 
-            // Act: a single-step plugin auto-derives its trigger (message/stage/mode) from its own
-            // registration. For a multi-step plugin, state it: .OnUpdate().Stage(...).Mode(...).
+            // Act: {{targetComment}}
+            // For a multi-step plugin, state the trigger: .OnUpdate().Stage(...).Mode(...).
             PluginContext.For<{{entityType}}>()
-                .WithTarget(target)
+                .{{targetMethod}}(target)
                 .WithOrganizationService(crm)
                 .Execute(new {{pluginType}}(string.Empty, string.Empty));
 
@@ -2319,6 +2328,7 @@ namespace {{ns}}
     }
 }
 """;
+    }
 
     public static string AddCustomApiTestFile(string ns, string apiNamespace, string testClass, string apiType, string uniqueName) =>
 $$"""

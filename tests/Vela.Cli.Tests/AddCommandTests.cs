@@ -392,6 +392,49 @@ public class AddCommandTests
     }
 
     [Fact]
+    public void Add_PluginTest_SingleMessage_SeedsTargetNotTargets()
+    {
+        RunInProject("Acme.Plugins.Tests", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["test", "AccountPlugin", "--entity", "Account", "--message", "Update", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountPluginTests.cs"));
+            Assert.Contains(".WithTarget(target)", content);
+            Assert.DoesNotContain(".WithTargets(target)", content);
+        });
+    }
+
+    [Fact]
+    public void Add_PluginTest_MultipleMessage_SeedsTargetsCollection()
+    {
+        RunInProject("Acme.Plugins.Tests", (project, dir) =>
+        {
+            int exit = AddCommand.Run(["test", "AccountBulkPlugin", "--entity", "Account", "--message", "CreateMultiple", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            // A *Multiple plugin reads ctx.Request.Targets, so the generated test must seed Targets.
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountBulkPluginTests.cs"));
+            Assert.Contains(".WithTargets(target)", content);
+        });
+    }
+
+    [Fact]
+    public void Add_PluginTest_RetrieveMultiple_SeedsTargetNotTargets()
+    {
+        RunInProject("Acme.Plugins.Tests", (project, dir) =>
+        {
+            // RetrieveMultiple ends with "Multiple" but is query-based (no Targets); it must keep WithTarget.
+            int exit = AddCommand.Run(["test", "AccountSearchPlugin", "--entity", "Account", "--message", "RetrieveMultiple", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountSearchPluginTests.cs"));
+            Assert.Contains(".WithTarget(target)", content);
+            Assert.DoesNotContain(".WithTargets(target)", content);
+        });
+    }
+
+    [Fact]
     public void Add_PluginTest_GeneratesTestTargetingThePlugin()
     {
         RunInProject("Acme.Plugins.Tests", (project, dir) =>
