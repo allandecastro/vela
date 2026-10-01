@@ -94,6 +94,15 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_PreImage_through_a_null_conditional_access()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(\"name\").Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { var x = ctx?.{|#0:PreImage|}; }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("pre-image", "PreImage", "WithPreImage"));
+    }
+
+    [Fact]
     public async Task Does_not_flag_when_no_owning_chain_binds_the_handler()
     {
         string code = InClass(

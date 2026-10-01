@@ -49,14 +49,34 @@ namespace Vela.Analyzers
                 }
 
                 var perTypeBindings = new ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage, bool HasPostImage)>>();
-                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeAccess(nodeContext, contextType, fluent, perTypeBindings), SyntaxKind.SimpleMemberAccessExpression);
+                // SimpleMemberAccess covers ctx.PreImage; MemberBinding covers the null-conditional ctx?.PreImage
+                // (the name sits in a member-binding node whose receiver is the enclosing conditional access).
+                start.RegisterSyntaxNodeAction(
+                    nodeContext => AnalyzeAccess(nodeContext, contextType, fluent, perTypeBindings),
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxKind.MemberBindingExpression);
             });
         }
 
         private static void AnalyzeAccess(SyntaxNodeAnalysisContext context, INamedTypeSymbol contextType, INamedTypeSymbol fluent, ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage, bool HasPostImage)>> perTypeBindings)
         {
-            var member = (MemberAccessExpressionSyntax)context.Node;
-            string name = member.Name.Identifier.ValueText;
+            SimpleNameSyntax nameSyntax;
+            ExpressionSyntax receiver;
+            switch (context.Node)
+            {
+                case MemberAccessExpressionSyntax ma:
+                    nameSyntax = ma.Name;
+                    receiver = ma.Expression;
+                    break;
+                case MemberBindingExpressionSyntax mb when mb.Parent?.FirstAncestorOrSelf<ConditionalAccessExpressionSyntax>() is ConditionalAccessExpressionSyntax conditional:
+                    nameSyntax = mb.Name;
+                    receiver = conditional.Expression;
+                    break;
+                default:
+                    return;
+            }
+
+            string name = nameSyntax.Identifier.ValueText;
             bool isPre = name == "PreImage";
             bool isPost = name == "PostImage";
             if (!isPre && !isPost)
@@ -65,18 +85,18 @@ namespace Vela.Analyzers
             }
 
             // Only a property access on a Vela context (not ctx.PreImageAs<T>(), not an unrelated PreImage).
-            if (context.SemanticModel.GetSymbolInfo(member, context.CancellationToken).Symbol is not IPropertySymbol)
+            if (context.SemanticModel.GetSymbolInfo(context.Node, context.CancellationToken).Symbol is not IPropertySymbol)
             {
                 return;
             }
 
-            ITypeSymbol? receiverType = context.SemanticModel.GetTypeInfo(member.Expression, context.CancellationToken).Type;
+            ITypeSymbol? receiverType = context.SemanticModel.GetTypeInfo(receiver, context.CancellationToken).Type;
             if (receiverType is null || !ImplementsContext(receiverType, contextType))
             {
                 return;
             }
 
-            MethodDeclarationSyntax? handler = member.FirstAncestorOrSelf<MethodDeclarationSyntax>();
+            MethodDeclarationSyntax? handler = context.Node.FirstAncestorOrSelf<MethodDeclarationSyntax>();
             TypeDeclarationSyntax? owningType = handler?.FirstAncestorOrSelf<TypeDeclarationSyntax>();
             if (handler is null || owningType is null)
             {
@@ -98,11 +118,11 @@ namespace Vela.Analyzers
 
             if (isPre && !binding.HasPreImage)
             {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), "pre-image", "PreImage", "WithPreImage"));
+                context.ReportDiagnostic(Diagnostic.Create(Rule, nameSyntax.GetLocation(), "pre-image", "PreImage", "WithPreImage"));
             }
             else if (isPost && !binding.HasPostImage)
             {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), "post-image", "PostImage", "WithPostImage"));
+                context.ReportDiagnostic(Diagnostic.Create(Rule, nameSyntax.GetLocation(), "post-image", "PostImage", "WithPostImage"));
             }
         }
 
