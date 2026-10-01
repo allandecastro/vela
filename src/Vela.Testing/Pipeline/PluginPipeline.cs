@@ -603,8 +603,23 @@ namespace Vela.Testing
                         context.InputParameters[parameter.Key] = parameter.Value;
                     }
 
-                    _log.Add(new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, request.RequestName, PluginStages.MainOperation, ExecutionMode.Synchronous, string.Empty, _depth));
                     IPlugin plugin = Instantiate(pluginType);
+
+                    // The platform rejects a call that omits a required (non-optional) input parameter before the
+                    // Custom API runs; enforce the same so a test cannot pass while omitting a required input.
+                    if (plugin is CustomApiBase customApi && customApi.GetCustomApiDefinition() is CustomApiDefinition definition)
+                    {
+                        foreach (CustomApiParameterDefinition parameter in definition.InputParameters)
+                        {
+                            if (!parameter.IsOptional && !request.Parameters.Contains(parameter.Name))
+                            {
+                                throw new InvalidPluginExecutionException(
+                                    $"Custom API '{request.RequestName}' requires the input parameter '{parameter.Name}', which was not supplied.");
+                            }
+                        }
+                    }
+
+                    _log.Add(new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, request.RequestName, PluginStages.MainOperation, ExecutionMode.Synchronous, string.Empty, _depth));
                     ExecuteWithContext(context, plugin);
 
                     OrganizationResponse response = new OrganizationResponse();
