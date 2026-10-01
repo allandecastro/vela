@@ -481,10 +481,10 @@ internal static class AddCommand
             return Fail(stageError, ExitInvalidArguments, includeUsage: false);
         }
 
-        // Create/Update (and their bulk variants) require at least one filtering attribute, and the builder's
-        // first argument is mandatory at compile time. Prefer an explicit --filtering-attributes; otherwise
-        // auto-detect a sensible default column from the entity's generated early-bound model so the emitted file
-        // both compiles AND applies. Fall back to a clear error rather than ever emitting non-compiling code.
+        // Create/Update (and their bulk variants) are the messages a FilterOn scopes. When the caller passes
+        // explicit --filtering-attributes we emit the selector (validated + case-corrected). Otherwise we do NOT
+        // guess a column from the model: we leave a TODO comment (same restraint as 'add step'), so the file
+        // compiles and the author picks the real filter.
         bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
             || string.Equals(message, "Update", StringComparison.Ordinal)
             || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
@@ -494,30 +494,22 @@ internal static class AddCommand
         if (needsFiltering)
         {
             string[] explicitAttributes = SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter"));
-            bool autoSelected = false;
-            string[] attributes;
             if (explicitAttributes.Length > 0)
             {
                 // Validate the identifiers and, when the model is available, correct wrong casing to the real
                 // property (e.g. 'name' -> 'Name') so the emitted FilterOn compiles.
-                if (!TryResolveFilteringAttributes(explicitAttributes, projectDir, entity!, out attributes, out string? filteringError))
+                if (!TryResolveFilteringAttributes(explicitAttributes, projectDir, entity!, out string[] attributes, out string? filteringError))
                 {
                     return Fail(filteringError!, ExitInvalidArguments, includeUsage: false);
                 }
-            }
-            else if (TryPickDefaultFilteringAttribute(projectDir, entity!, out string picked))
-            {
-                attributes = [picked];
-                autoSelected = true;
+
+                string lambdas = string.Join(", ", attributes.Select(a => $"e => e.{a}"));
+                filteringCall = $"\n                .FilterOn({lambdas})";
             }
             else
             {
-                return Fail($"'{message}' steps require at least one filtering attribute and none could be inferred for '{entity}'. Pass --filtering-attributes <PropertyName[,PropertyName...]> (the early-bound column(s) whose change should trigger the step, e.g. --filtering-attributes Name).", ExitInvalidArguments, includeUsage: false);
+                filteringCall = "\n                // TODO: add .FilterOn(e => e.Column) to scope this step to the attribute changes it needs.";
             }
-
-            string lambdas = string.Join(", ", attributes.Select(a => $"e => e.{a}"));
-            string note = autoSelected ? " /* auto-selected; change to the column(s) that should trigger this step */" : string.Empty;
-            filteringCall = $"\n                .FilterOn({lambdas}){note}";
         }
 
         // The redesigned builder ends the chain with .Handle(...), bound to a named instance handler. A modelled
@@ -857,73 +849,6 @@ internal static class AddCommand
         }
 
         return properties.Count > 0;
-    }
-
-    // Auto-selects a default filtering attribute for a Create/Update step by reading the entity's generated
-    // early-bound model. Prefers the conventional primary-name column ("name", else a string column whose logical
-    // name ends with "name"), else the first non-Id string column, else the first non-Id column. Returns the C#
-    // property name (what the FilteringAttributes lambda references). False when no model / no candidate is found.
-    private static bool TryPickDefaultFilteringAttribute(string projectDir, string entity, out string property)
-    {
-        property = string.Empty;
-        if (!TryFindEntityModelFile(projectDir, entity, out string modelPath))
-        {
-            return false;
-        }
-
-        var candidates = new List<(string Property, string Logical, bool IsString)>();
-        string? pendingLogical = null;
-        foreach (string line in File.ReadLines(modelPath))
-        {
-            Match logicalMatch = LogicalNameAttr.Match(line);
-            if (logicalMatch.Success)
-            {
-                pendingLogical = logicalMatch.Groups["logical"].Value;
-                continue;
-            }
-
-            if (pendingLogical == null)
-            {
-                continue;
-            }
-
-            Match propertyMatch = PropertyDecl.Match(line);
-            if (propertyMatch.Success)
-            {
-                string prop = propertyMatch.Groups["name"].Value;
-                string type = propertyMatch.Groups["type"].Value;
-                if (!string.Equals(prop, "Id", StringComparison.Ordinal))
-                {
-                    candidates.Add((prop, pendingLogical.ToLowerInvariant(), type.Contains("string", StringComparison.OrdinalIgnoreCase)));
-                }
-
-                pendingLogical = null;
-            }
-        }
-
-        var chosen = candidates.FirstOrDefault(c => c.Logical == "name");
-        if (string.IsNullOrEmpty(chosen.Property))
-        {
-            chosen = candidates.FirstOrDefault(c => c.IsString && c.Logical.EndsWith("name", StringComparison.Ordinal));
-        }
-
-        if (string.IsNullOrEmpty(chosen.Property))
-        {
-            chosen = candidates.FirstOrDefault(c => c.IsString);
-        }
-
-        if (string.IsNullOrEmpty(chosen.Property))
-        {
-            chosen = candidates.FirstOrDefault();
-        }
-
-        if (string.IsNullOrEmpty(chosen.Property))
-        {
-            return false;
-        }
-
-        property = chosen.Property;
-        return true;
     }
 
     // Locates the generated early-bound model file for an entity: walks up from the target project to the solution
