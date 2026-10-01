@@ -27,6 +27,51 @@ public sealed class TypedQueryFetchXmlTests
     }
 
     [Fact]
+    public void WhereIn_with_a_Guid_array_expands_each_element_as_a_value()
+    {
+        System.Guid a = System.Guid.NewGuid();
+        System.Guid b = System.Guid.NewGuid();
+
+        string xml = Query.For<TestAccount>()
+            .Select(x => x.Name)
+            .WhereIn(x => x.AccountId, new[] { a, b })   // a Guid[] - the params object[] trap would nest it as one value
+            .ToFetchXml();
+
+        Assert.Contains("operator=\"in\"", xml);
+        Assert.Contains($"<value>{a}</value>", xml);
+        Assert.Contains($"<value>{b}</value>", xml);
+    }
+
+    [Fact]
+    public void WhereNotIn_emits_not_in_with_each_element()
+    {
+        string xml = Query.For<TestAccount>()
+            .Select(x => x.Name)
+            .WhereNotIn(x => x.Name, new[] { "A", "B" })
+            .ToFetchXml();
+
+        Assert.Contains("operator=\"not-in\"", xml);
+        Assert.Contains("<value>A</value>", xml);
+        Assert.Contains("<value>B</value>", xml);
+    }
+
+    [Fact]
+    public void ConditionIn_inside_a_nested_filter_expands_each_element()
+    {
+        System.Guid a = System.Guid.NewGuid();
+        System.Guid b = System.Guid.NewGuid();
+
+        string xml = Query.For<TestAccount>()
+            .Select(x => x.Name)
+            .WhereAny(f => f.ConditionIn(x => x.AccountId, new[] { a, b }))
+            .ToFetchXml();
+
+        Assert.Contains("operator=\"in\"", xml);
+        Assert.Contains($"<value>{a}</value>", xml);
+        Assert.Contains($"<value>{b}</value>", xml);
+    }
+
+    [Fact]
     public void In_with_a_single_value_uses_value_child_elements()   // A3
     {
         string xml = Query.For<TestAccount>()

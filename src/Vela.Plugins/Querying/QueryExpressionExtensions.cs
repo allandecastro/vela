@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq.Expressions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
@@ -174,6 +175,20 @@ public sealed class TypedFilterBuilder<TEntity>(FilterExpression filter)
     {
         string logicalName = TypedQueryNames.GetAttributeLogicalName(column);
         _filter.AddCondition(new ConditionExpression(logicalName, conditionOperator, values ?? Array.Empty<object>()));
+        return this;
+    }
+
+    /// <summary>Adds an <c>In</c> condition whose values come from a sequence (for example a <c>Guid[]</c>).</summary>
+    public TypedFilterBuilder<TEntity> ConditionIn<TValue>(Expression<Func<TEntity, object?>> column, IEnumerable<TValue> values)
+    {
+        _filter.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), ConditionOperator.In, TypedQueryValues.Materialize(values)));
+        return this;
+    }
+
+    /// <summary>Adds a <c>NotIn</c> condition whose values come from a sequence.</summary>
+    public TypedFilterBuilder<TEntity> ConditionNotIn<TValue>(Expression<Func<TEntity, object?>> column, IEnumerable<TValue> values)
+    {
+        _filter.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), ConditionOperator.NotIn, TypedQueryValues.Materialize(values)));
         return this;
     }
 

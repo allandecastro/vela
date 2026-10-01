@@ -32,6 +32,17 @@ QueryExpression query = Query.For<Contact>()
 // crm.RetrieveMultiple(query) - the in-memory engine and Dataverse both accept it
 ```
 
+For an `In`/`NotIn` over an existing collection, use `WhereIn(column, values)` / `WhereNotIn(column, values)`
+(and `ConditionIn`/`ConditionNotIn` inside a `WhereAll`/`WhereAny` filter). They take an `IEnumerable<T>`, so a
+`Guid[]` or `List<Guid>` passes directly - each element becomes a distinct condition value:
+
+```csharp
+Guid[] ids = GetIds();
+QueryExpression query = Query.For<Account>()
+    .Select(a => a.Name)
+    .WhereIn(a => a.AccountId, ids);   // not .Where(a => a.AccountId, ConditionOperator.In, ids)
+```
+
 Also available on the builder: `Distinct()`, `Page(n, count)`, `WithTotalRecordCount()`, `WhereColumns(a, op, b)`
 (compare two columns), `WhereLink<TLinked>(alias, …)` (conditions on a join, e.g. records-not-in-a-set),
 `WhereRelated<TTo>(…, JoinOperator.Any/All/NotAny/NotAll, …)`, and aggregates
