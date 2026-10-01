@@ -29,8 +29,8 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
-VELA006, VELA007 and VELA012. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins` alongside the
-analyzers.
+VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
+alongside the analyzers.
 
 Plus the [typed image projection generator](#typed-image-projection-generator) that ships in the same assembly.
 
