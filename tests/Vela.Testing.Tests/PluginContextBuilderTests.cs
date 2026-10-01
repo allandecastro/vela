@@ -45,6 +45,46 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Execute_Generic_InstantiatesPrimaryConstructorPlugin()
+        {
+            // TagCapturingPlugin has only a (unsecureConfig, secureConfig) primary constructor - the shape of a
+            // generated Vela plugin. Execute<T>() must instantiate it; previously the new() constraint rejected
+            // this at compile time, so generated plugins could not be driven through the generic entry point.
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+
+            TagCapturingPlugin plugin = PluginContext.For<FakeAccount>()
+                .WithTarget(new FakeAccount { Id = Guid.NewGuid(), Name = "Zava" })
+                .WithOrganizationService(crm)
+                .WithTag("hello")
+                .Execute<TagCapturingPlugin>();
+
+            Assert.NotNull(plugin);
+            Entity task = Assert.Single(
+                crm.RetrieveMultiple(new QueryExpression("task") { ColumnSet = new ColumnSet(true) }).Entities);
+            Assert.Equal("hello", task.GetAttributeValue<string>("subject"));
+        }
+
+        [Fact]
+        public void Execute_Generic_WithoutUsableConstructor_Throws()
+        {
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+                () => PluginContext.For<FakeAccount>().Execute<NoUsableCtorPlugin>());
+            Assert.Contains("NoUsableCtorPlugin", ex.Message);
+        }
+
+        private sealed class NoUsableCtorPlugin : IPlugin
+        {
+            public NoUsableCtorPlugin(int unsupported)
+            {
+                _ = unsupported;
+            }
+
+            public void Execute(IServiceProvider serviceProvider)
+            {
+            }
+        }
+
+        [Fact]
         public void Builder_SurfacesConfiguredContextValues_WithNonEmptyIdentityIds()
         {
             LocalPluginContext ctx = new PluginContextBuilder()
