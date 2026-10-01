@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -12,6 +14,14 @@ namespace Vela.Querying;
 /// <c>RetrieveMultiple</c> directly. Start one with <see cref="Query.For{TEntity}"/>.
 /// </summary>
 /// <typeparam name="TEntity">The root early-bound entity type.</typeparam>
+internal static class TypedQueryValues
+{
+    // Expands a typed sequence into the object[] a ConditionExpression expects, so In/NotIn get one value per
+    // element instead of a single nested array (the params object[] trap for a value-typed array like Guid[]).
+    public static object[] Materialize<TValue>(IEnumerable<TValue> values)
+        => (values ?? Enumerable.Empty<TValue>()).Select(value => (object)value!).ToArray();
+}
+
 public sealed class TypedQuery<TEntity>
     where TEntity : Entity
 {
@@ -41,6 +51,24 @@ public sealed class TypedQuery<TEntity>
     public TypedQuery<TEntity> Where(Expression<Func<TEntity, object?>> column, ConditionOperator conditionOperator, params object[] values)
     {
         Expression.Criteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), conditionOperator, values ?? Array.Empty<object>()));
+        return this;
+    }
+
+    /// <summary>
+    /// Adds an <c>In</c> condition whose values come from a sequence (for example a <c>Guid[]</c> or
+    /// <c>List&lt;Guid&gt;</c>), so each element is a distinct value. Avoids the <c>params object[]</c> trap where
+    /// a typed array binds as a single nested value.
+    /// </summary>
+    public TypedQuery<TEntity> WhereIn<TValue>(Expression<Func<TEntity, object?>> column, IEnumerable<TValue> values)
+    {
+        Expression.Criteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), ConditionOperator.In, TypedQueryValues.Materialize(values)));
+        return this;
+    }
+
+    /// <summary>Adds a <c>NotIn</c> condition whose values come from a sequence (see <see cref="WhereIn{TValue}"/>).</summary>
+    public TypedQuery<TEntity> WhereNotIn<TValue>(Expression<Func<TEntity, object?>> column, IEnumerable<TValue> values)
+    {
+        Expression.Criteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), ConditionOperator.NotIn, TypedQueryValues.Materialize(values)));
         return this;
     }
 
@@ -339,6 +367,20 @@ public sealed class TypedLink<TTo>
     }
 
     /// <summary>Adds a condition to the link criteria (filters the linked rows).</summary>
+    /// <summary>Adds an <c>In</c> condition on the linked entity whose values come from a sequence (see <see cref="TypedQuery{TEntity}.WhereIn{TValue}"/>).</summary>
+    public TypedLink<TTo> WhereIn<TValue>(Expression<Func<TTo, object?>> column, IEnumerable<TValue> values)
+    {
+        Definition.LinkCriteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), ConditionOperator.In, TypedQueryValues.Materialize(values)));
+        return this;
+    }
+
+    /// <summary>Adds a <c>NotIn</c> condition on the linked entity whose values come from a sequence.</summary>
+    public TypedLink<TTo> WhereNotIn<TValue>(Expression<Func<TTo, object?>> column, IEnumerable<TValue> values)
+    {
+        Definition.LinkCriteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), ConditionOperator.NotIn, TypedQueryValues.Materialize(values)));
+        return this;
+    }
+
     public TypedLink<TTo> Where(Expression<Func<TTo, object?>> column, ConditionOperator conditionOperator, params object[] values)
     {
         Definition.LinkCriteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), conditionOperator, values ?? Array.Empty<object>()));
