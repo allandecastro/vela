@@ -328,14 +328,42 @@ namespace Vela.Testing
             plugin.Execute(BuildServiceProvider());
         }
 
-        /// <summary>Instantiates and executes a plugin, returning the instance for assertions.</summary>
+        /// <summary>
+        /// Instantiates and executes a plugin, returning the instance for assertions. Supports both a
+        /// parameterless constructor and the Vela <c>(string unsecureConfig, string secureConfig)</c> primary
+        /// constructor that generated plugins use, so <c>Execute&lt;MyPlugin&gt;()</c> works on scaffolded code.
+        /// </summary>
         public TPlugin Execute<TPlugin>()
-            where TPlugin : IPlugin, new()
+            where TPlugin : IPlugin
         {
-            TPlugin plugin = new TPlugin();
+            TPlugin plugin = CreatePluginInstance<TPlugin>();
             TryAutoConfigureTrigger(plugin);
             plugin.Execute(BuildServiceProvider());
             return plugin;
+        }
+
+        // A Vela plugin/Custom API has no parameterless constructor (its primary constructor takes the unsecure
+        // and secure configuration); fall back to that two-string constructor with empty configuration when there
+        // is no parameterless one.
+        private static TPlugin CreatePluginInstance<TPlugin>()
+            where TPlugin : IPlugin
+        {
+            Type type = typeof(TPlugin);
+
+            if (type.GetConstructor(Type.EmptyTypes) is not null)
+            {
+                return (TPlugin)Activator.CreateInstance(type)!;
+            }
+
+            ConstructorInfo? configCtor = type.GetConstructor(new[] { typeof(string), typeof(string) });
+            if (configCtor is not null)
+            {
+                return (TPlugin)configCtor.Invoke(new object?[] { string.Empty, string.Empty });
+            }
+
+            throw new InvalidOperationException(
+                $"Cannot instantiate plugin '{type.Name}': it needs either a parameterless constructor or a " +
+                "(string unsecureConfig, string secureConfig) constructor. Pass an instance to Execute(plugin) instead.");
         }
 
         // When the caller did not set a trigger (message/stage/mode), derive it from the plugin's own single

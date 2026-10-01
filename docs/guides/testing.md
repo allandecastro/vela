@@ -34,6 +34,10 @@ LocalPluginContext ctx = PluginContext.For<Account>()
     .Build();
 ```
 
+You can also let the harness construct the plugin for you with `.Execute<AccountPostUpdate>()` (it returns the
+instance for assertions). This works whether the plugin has a parameterless constructor or the Vela
+`(string unsecureConfig, string secureConfig)` primary constructor that `vela init`/`vela add` generate.
+
 **Custom APIs / message-only plugins:** `PluginContext.ForMessage("vela_DoThing").WithInputParameter("amount", 5)`.
 
 The builder also exposes: `WithInputParameter`/`WithOutputParameter`, `WithSharedVariable`, `WithTag`,
