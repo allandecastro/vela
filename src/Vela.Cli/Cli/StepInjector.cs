@@ -104,7 +104,8 @@ internal static class StepInjector
         // Point the author at the idiomatic, typed access for this message rather than the low-level
         // ctx.GetTarget<T>(): a single record is ctx.Request.Target, a bulk message is ctx.Request.Targets,
         // and a custom message reads its own input parameters.
-        bool isMultiple = message.EndsWith("Multiple", StringComparison.Ordinal);
+        // Only CreateMultiple/UpdateMultiple carry a Targets collection; RetrieveMultiple is query-based.
+        bool isMultiple = message == "CreateMultiple" || message == "UpdateMultiple";
         string accessHint = registrationCall.StartsWith("OnMessage(", StringComparison.Ordinal)
             ? "read the message inputs via ctx.PluginExecutionContext.InputParameters"
             : isMultiple

@@ -437,7 +437,10 @@ internal static class AddCommand
             // A *Multiple plugin reads ctx.Request.Targets, so the generated test must seed Targets (WithTargets),
             // not Target. --message (optional) tells us which to emit; default single-record.
             string testMessage = (TryReadOption(args, "--message") ?? "Create").Trim();
-            bool multiple = testMessage.EndsWith("Multiple", StringComparison.OrdinalIgnoreCase);
+            // Only CreateMultiple/UpdateMultiple carry a Targets collection; RetrieveMultiple (also ...Multiple)
+            // is query-based and keeps a single Target shape, so match the two bulk-write messages explicitly.
+            bool multiple = testMessage.Equals("CreateMultiple", StringComparison.OrdinalIgnoreCase)
+                || testMessage.Equals("UpdateMultiple", StringComparison.OrdinalIgnoreCase);
             string content = AddPluginTestFile(ns, pluginNamespace, modelsNamespace, testClass, name, entity!, multiple);
             return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})", HasFlag(args, "--json"));
         }

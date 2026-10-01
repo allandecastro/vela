@@ -420,6 +420,21 @@ public class AddCommandTests
     }
 
     [Fact]
+    public void Add_PluginTest_RetrieveMultiple_SeedsTargetNotTargets()
+    {
+        RunInProject("Acme.Plugins.Tests", (project, dir) =>
+        {
+            // RetrieveMultiple ends with "Multiple" but is query-based (no Targets); it must keep WithTarget.
+            int exit = AddCommand.Run(["test", "AccountSearchPlugin", "--entity", "Account", "--message", "RetrieveMultiple", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountSearchPluginTests.cs"));
+            Assert.Contains(".WithTarget(target)", content);
+            Assert.DoesNotContain(".WithTargets(target)", content);
+        });
+    }
+
+    [Fact]
     public void Add_PluginTest_GeneratesTestTargetingThePlugin()
     {
         RunInProject("Acme.Plugins.Tests", (project, dir) =>
