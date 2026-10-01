@@ -2413,7 +2413,8 @@ namespace {{ns}}
 
     /// <summary>
     /// Request for <see cref="{{className}}"/>. Derives from <see cref="CustomApiRequest"/> so each property keys
-    /// the Parameters bag with the full Dataverse name <c>{{uniqueName}}.{prop}</c> while the body stays short. The
+    /// the Parameters bag by its own plain name (for example a <c>RecordId</c> property reads/writes
+    /// <c>Parameters["RecordId"]</c>) - the registered parameter names have no dot or prefix. The
     /// same type serves authoring, calling (<c>service.Execute(new {{className}}Request { ... }).ToResponse&lt;{{className}}Response&gt;()</c>),
     /// and reacting. Add typed properties over the base <c>Get&lt;T&gt;()</c> / <c>Set(value)</c> helpers, for example:
     /// <code>
@@ -2432,8 +2433,9 @@ namespace {{ns}}
     }
 
     /// <summary>
-    /// Response for <see cref="{{className}}"/>. Derives from <see cref="CustomApiResponse"/> (keys the Results bag
-    /// with <c>{{uniqueName}}.{prop}.response</c>). Add typed properties over the base <c>Get&lt;T&gt;()</c> /
+    /// Response for <see cref="{{className}}"/>. Derives from <see cref="CustomApiResponse"/> so each property keys
+    /// the Results bag by its own plain name (for example a <c>Status</c> property reads/writes
+    /// <c>Results["Status"]</c>) - the registered output names have no dot or prefix. Add typed properties over the base <c>Get&lt;T&gt;()</c> /
     /// <c>Set(value)</c> helpers, for example:
     /// <code>
     /// public string Status

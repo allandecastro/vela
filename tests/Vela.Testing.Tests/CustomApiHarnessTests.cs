@@ -65,6 +65,28 @@ namespace Vela.Testing.Tests
             Assert.Equal("echo:ping", response["Echo"]);
         }
 
+        // --- Required input parameters are enforced like the platform -----------------------------------
+
+        [Fact]
+        public void A_missing_required_input_parameter_is_rejected()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<RequiredParamApi>();
+
+            InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
+                () => pipeline.Service.Execute(Request("vela_RequiredParam")));   // "Key" omitted
+            Assert.Contains("Key", ex.Message);
+        }
+
+        [Fact]
+        public void A_supplied_required_input_parameter_is_accepted()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<RequiredParamApi>();
+
+            OrganizationResponse response = pipeline.Service.Execute(Request("vela_RequiredParam", ("Key", "value")));
+
+            Assert.NotNull(response);
+        }
+
         // --- Typed request/response mapping -------------------------------------------------------------
 
         [Fact]
@@ -117,6 +139,19 @@ namespace Vela.Testing.Tests
             int a = ctx.GetInputParameter<int>("A");
             int b = ctx.GetInputParameter<int>("B");
             ctx.SetOutputParameter("Sum", calculator.Add(a, b));
+        }
+    }
+
+    // Declares one required input parameter ("Key" - RequestParameter defaults to optional: false).
+    public sealed class RequiredParamApi : CustomApiBase
+    {
+        public RequiredParamApi(string u, string s) : base(u, s) { }
+
+        protected override void RegisterCustomApi()
+            => RegisterCustomApi("vela_RequiredParam", nameof(Handle)).AsAction().RequestParameter<string>("Key");
+
+        private void Handle(ILocalPluginContext ctx)
+        {
         }
     }
 
