@@ -40,6 +40,7 @@ Every command returns a stable exit code, so scripts and coding agents can branc
 | `4` | Parse/read or other error (a malformed package, definition or response, or an unexpected failure). |
 | `5` | Drift detected (`vela models --verify` found the local model out of sync with the live schema). |
 | `6` | Dataverse connection failure (auth or endpoint). |
+| `7` | Partial apply (a mid-run `apply` failure; Dataverse may be partially updated, so re-run `apply` to reconcile). |
 
 > [!NOTE]
 > **Client-side (preview / work in progress).** For the **vela-client** (separate) runtime,

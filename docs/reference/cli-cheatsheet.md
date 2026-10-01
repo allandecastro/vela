@@ -66,3 +66,4 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `4` | Parse/read or other error |
 | `5` | Drift detected (`vela models --verify` found the local model out of sync) |
 | `6` | Dataverse connection failure |
+| `7` | Partial apply (mid-run failure; re-run `apply` to reconcile) |
