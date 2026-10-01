@@ -185,7 +185,7 @@ internal static class AddCommand
 
         if (inserted)
         {
-            File.WriteAllText(entriesPath, updatedEntries);
+            File.WriteAllText(entriesPath, NormalizeNewlines(updatedEntries));
             created.Add($"{entriesPath} (+ entry '{entryName}')");
         }
 
@@ -278,7 +278,7 @@ internal static class AddCommand
 
         if (inserted)
         {
-            File.WriteAllText(entriesPath, updatedEntries);
+            File.WriteAllText(entriesPath, NormalizeNewlines(updatedEntries));
             created.Add($"{entriesPath} (+ entry '{entryName}')");
         }
 
