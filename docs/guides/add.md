@@ -59,7 +59,9 @@ vela add --interactive
   into your plugin's `ConfigureServices(...)`.
 - `vela add test <ClassUnderTest>` scaffolds a `Vela.Testing` test (`<ClassUnderTest>Tests`) pre-wired with
   `PluginContext.For<…>()…Execute(…)`. Run it inside the test project (its `RootNamespace` must end in `.Tests`);
-  use `--kind customapi` for a Custom API test (and omit `--entity` for a global one).
+  use `--kind customapi` for a Custom API test (and omit `--entity` for a global one). For a `*Multiple` plugin
+  pass `--message CreateMultiple`/`--message UpdateMultiple` so the generated test seeds `WithTargets(...)` (the
+  handler reads `ctx.Request.Targets`) instead of `WithTarget(...)`.
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
   method, e.g. `OnUpdate()`, or `OnMessage("...")` for an unmodelled message, not the generic `On<TRequest>()`

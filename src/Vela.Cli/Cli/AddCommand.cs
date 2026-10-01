@@ -434,7 +434,11 @@ internal static class AddCommand
             string pluginNamespace = $"{pluginsRoot}.{entity}.Plugins";
             string modelsNamespace = $"{prefix}.Shared.Models.Generated";
             string relativePath = Path.Combine(entity!, "Plugins", $"{testClass}.cs");
-            string content = AddPluginTestFile(ns, pluginNamespace, modelsNamespace, testClass, name, entity!);
+            // A *Multiple plugin reads ctx.Request.Targets, so the generated test must seed Targets (WithTargets),
+            // not Target. --message (optional) tells us which to emit; default single-record.
+            string testMessage = (TryReadOption(args, "--message") ?? "Create").Trim();
+            bool multiple = testMessage.EndsWith("Multiple", StringComparison.OrdinalIgnoreCase);
+            string content = AddPluginTestFile(ns, pluginNamespace, modelsNamespace, testClass, name, entity!, multiple);
             return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})", HasFlag(args, "--json"));
         }
 
@@ -920,7 +924,7 @@ internal static class AddCommand
         Console.WriteLine("  vela add plugin <Name> --entity <ModelType> [--message <Message>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--filtering-attributes <Col1,Col2>] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add service <Name> --entity <ModelType> [--project <csproj>] [--force]");
         Console.WriteLine("  vela add customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--project <csproj>] [--force]");
-        Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--project <csproj>] [--force]");
+        Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--message <Message>] [--project <csproj>] [--force]");
         Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--filtering-attributes <Col1,Col2>] [--project <csproj>]");
         Console.WriteLine("  vela add form-script <entity> [--project <web-resources dir>] [--force]   (preview)");
         Console.WriteLine("  vela add ribbon-script <entity> [--project <web-resources dir>] [--force] (preview, ribbon commands)");
