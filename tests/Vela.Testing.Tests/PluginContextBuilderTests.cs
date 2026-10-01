@@ -72,6 +72,28 @@ namespace Vela.Testing.Tests
             Assert.Contains("NoUsableCtorPlugin", ex.Message);
         }
 
+        [Fact]
+        public void Build_Generic_AutoDerivesTriggerFromSingleStep()
+        {
+            // Build<T>() mirrors Execute<T>(): with no explicit trigger it derives message/stage/mode from the
+            // plugin's single registered step, so Build and Execute are consistent (TagCapturingPlugin is
+            // OnCreate / PostOperation / Sync).
+            LocalPluginContext ctx = PluginContext.For<FakeAccount>().Build<TagCapturingPlugin>();
+
+            Assert.Equal(PluginMessages.Create, ctx.MessageName);
+            Assert.Equal((int)PluginStages.PostOperation, ctx.Stage);
+            Assert.Equal((int)ExecutionMode.Synchronous, ctx.Mode);
+        }
+
+        [Fact]
+        public void Build_Parameterless_DoesNotAutoDeriveTrigger()
+        {
+            // The plugin-less Build() cannot infer a trigger; an explicit one (or Build(plugin)) is required.
+            LocalPluginContext ctx = PluginContext.For<FakeAccount>().Build();
+
+            Assert.NotEqual(PluginMessages.Create, ctx.MessageName);
+        }
+
         private sealed class NoUsableCtorPlugin : IPlugin
         {
             public NoUsableCtorPlugin(int unsupported)

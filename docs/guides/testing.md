@@ -34,6 +34,10 @@ LocalPluginContext ctx = PluginContext.For<Account>()
     .Build();
 ```
 
+`Build<MyPlugin>()` (or `Build(plugin)`) derives the message/stage/mode from the plugin's single registered
+step when you do not set one explicitly, the same inference `Execute` applies - so Build and Execute stay
+consistent. The plugin-less `Build()` keeps whatever trigger you set (or the default).
+
 You can also let the harness construct the plugin for you with `.Execute<AccountPostUpdate>()` (it returns the
 instance for assertions). This works whether the plugin has a parameterless constructor or the Vela
 `(string unsecureConfig, string secureConfig)` primary constructor that `vela init`/`vela add` generate.

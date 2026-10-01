@@ -316,6 +316,27 @@ namespace Vela.Testing
             return new LocalPluginContext(BuildServiceProvider());
         }
 
+        /// <summary>
+        /// Builds a <see cref="LocalPluginContext"/> and, when no trigger was set explicitly, auto-derives the
+        /// message/stage/mode from the plugin's single registered step - the same inference
+        /// <see cref="Execute(IPlugin)"/> applies, so Build and Execute stay consistent.
+        /// </summary>
+        public LocalPluginContext Build(IPlugin plugin)
+        {
+            if (plugin == null)
+            {
+                throw new ArgumentNullException(nameof(plugin));
+            }
+
+            TryAutoConfigureTrigger(plugin);
+            return new LocalPluginContext(BuildServiceProvider());
+        }
+
+        /// <summary>Builds a context with the trigger auto-derived from <typeparamref name="TPlugin"/>'s single step.</summary>
+        public LocalPluginContext Build<TPlugin>()
+            where TPlugin : IPlugin
+            => Build(CreatePluginInstance<TPlugin>());
+
         /// <summary>Executes the supplied plugin against the fake provider.</summary>
         public void Execute(IPlugin plugin)
         {
