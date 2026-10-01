@@ -56,6 +56,22 @@ public sealed class TypedQueryFetchXmlTests
     }
 
     [Fact]
+    public void ConditionIn_inside_a_nested_filter_expands_each_element()
+    {
+        System.Guid a = System.Guid.NewGuid();
+        System.Guid b = System.Guid.NewGuid();
+
+        string xml = Query.For<TestAccount>()
+            .Select(x => x.Name)
+            .WhereAny(f => f.ConditionIn(x => x.AccountId, new[] { a, b }))
+            .ToFetchXml();
+
+        Assert.Contains("operator=\"in\"", xml);
+        Assert.Contains($"<value>{a}</value>", xml);
+        Assert.Contains($"<value>{b}</value>", xml);
+    }
+
+    [Fact]
     public void In_with_a_single_value_uses_value_child_elements()   // A3
     {
         string xml = Query.For<TestAccount>()

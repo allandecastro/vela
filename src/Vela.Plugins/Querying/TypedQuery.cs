@@ -14,14 +14,6 @@ namespace Vela.Querying;
 /// <c>RetrieveMultiple</c> directly. Start one with <see cref="Query.For{TEntity}"/>.
 /// </summary>
 /// <typeparam name="TEntity">The root early-bound entity type.</typeparam>
-internal static class TypedQueryValues
-{
-    // Expands a typed sequence into the object[] a ConditionExpression expects, so In/NotIn get one value per
-    // element instead of a single nested array (the params object[] trap for a value-typed array like Guid[]).
-    public static object[] Materialize<TValue>(IEnumerable<TValue> values)
-        => (values ?? Enumerable.Empty<TValue>()).Select(value => (object)value!).ToArray();
-}
-
 public sealed class TypedQuery<TEntity>
     where TEntity : Entity
 {
@@ -431,4 +423,12 @@ public sealed class TypedLink<TTo>
         configure?.Invoke(new TypedLink<TDeep>(nested));
         return this;
     }
+}
+
+internal static class TypedQueryValues
+{
+    // Expands a typed sequence into the object[] a ConditionExpression expects, so In/NotIn get one value per
+    // element instead of a single nested array (the params object[] trap for a value-typed array like Guid[]).
+    public static object[] Materialize<TValue>(IEnumerable<TValue> values)
+        => (values ?? Enumerable.Empty<TValue>()).Select(value => (object)value!).ToArray();
 }
