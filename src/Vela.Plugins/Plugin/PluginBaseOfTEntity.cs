@@ -269,6 +269,7 @@ namespace Vela.Plugin
                     ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
                     ?? ctx;
                 (ctx as LocalPluginContext)?.SetCurrentHandler(runtimeHandler.Method.Name);
+                TraceHandlerEntry(ctx, runtimeHandler.Method.Name);
                 HandlerInvoker.InvokeDelegate(runtimeHandler, [delegateArgument]);
                 return;
             }
@@ -282,6 +283,7 @@ namespace Vela.Plugin
                 ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
                 ?? ctx;
             (ctx as LocalPluginContext)?.SetCurrentHandler(matchedDefinition.HandlerMethodName);
+            TraceHandlerEntry(ctx, matchedDefinition.HandlerMethodName);
             InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
         }
 

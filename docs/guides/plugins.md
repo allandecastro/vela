@@ -527,6 +527,8 @@ Managed identity: acquire a token for an external API without a stored secret wi
 
 Dataverse operation tracing is automatic through wrapped services (`UserService`, `SystemService`, `CreateOrganizationService`): each call logs operation name (`Create`, `Update`, `RetrieveMultiple`, `Execute`, ...), timestamp, duration, and pipeline context.
 
+Handler entry is traced automatically too: alongside the plugin-level `Executing ...` line (message, stage, mode, depth), the runtime writes `Entering handler '<Name>' for message '<Message>'.` naming the specific step (or Custom API) handler that fired - the missing dimension when a plugin registers several steps, so you no longer hand-trace the method name to locate a failure. Override `protected bool AutoTraceHandlerEntry => false;` on the plugin/Custom API to silence it (a lambda handler has no name and is not traced).
+
 > **Writing early-bound entities.** `ctx.UserService` accepts early-bound entities (for example
 > `new Account { ... }`) directly - the wrapped services downcast them to the base `Entity` before each
 > `Create`/`Update`/`Execute`, so you never hit the sandbox `SerializationException` ("The deserializer has no
