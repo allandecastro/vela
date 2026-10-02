@@ -20,7 +20,7 @@ using System.Linq.Expressions;
 
 namespace Microsoft.Xrm.Sdk
 {
-    public class Entity { }
+    public class Entity { public T ToEntity<T>() where T : Entity, new() => new T(); }
     [AttributeUsage(AttributeTargets.Property)]
     public sealed class AttributeLogicalNameAttribute : Attribute { public AttributeLogicalNameAttribute(string logicalName) { } }
 }
@@ -64,6 +64,7 @@ namespace Vela.Context
     using Microsoft.Xrm.Sdk;
     // Minimal stand-ins for the concrete step contexts a generated per-step context derives from, plus the image
     // accessor extensions it calls. Enough for the generated context to compile in the generator tests.
+    public interface IImageProjection { Microsoft.Xrm.Sdk.Entity? Source { get; set; } }
     public interface ILocalPluginContext { }
     public class CreatePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public CreatePostContext(ILocalPluginContext inner) { } public TEntity? PostImage => default; }
     public class UpdatePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public UpdatePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
@@ -150,6 +151,38 @@ namespace Demo
         Assert.Contains("Revenue", output);
         // A column that was NOT captured must not appear on the projection.
         Assert.DoesNotContain("telephone1", output);
+    }
+
+    [Fact]
+    public void Projection_implements_IImageProjection_and_an_explicit_cast_to_the_entity()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithPostImage(a => a.Name)
+                .Handle(OnUpdated);
+
+        private void OnUpdated() { }
+    }
+}
+");
+
+        // The projection carries its source image via the marker interface, so the cast is lossless (not a
+        // reconstruction): it implements IImageProjection with an explicit Source.
+        Assert.Contains("class OnUpdated_PostImage : global::Vela.Context.IImageProjection", output);
+        Assert.Contains("global::Microsoft.Xrm.Sdk.Entity? global::Vela.Context.IImageProjection.Source", output);
+        // The widening is an EXPLICIT operator to the entity (never implicit - that would reopen the silent-null
+        // footgun invisibly at the call site), built from the retained source image.
+        Assert.Contains("public static explicit operator global::Demo.Account(OnUpdated_PostImage? projection)", output);
+        Assert.Contains("source.ToEntity<global::Demo.Account>()", output);
+        // Null-tolerant like GetPostImage<T>(): an absent image casts to null, it does not throw.
+        Assert.Contains("Source: { } source", output);
+        Assert.DoesNotContain("implicit operator", output);
     }
 
     [Fact]
@@ -509,6 +542,35 @@ namespace Demo
         {
             OnUpdated_PostImage image = new OnUpdated_PostImage();
             _ = image.Name;
+        }
+    }
+}
+");
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Fact]
+    public void Generated_explicit_cast_from_the_projection_to_the_entity_compiles()
+    {
+        // The widening operator the generator emits must compile and be invocable: (Account)projection.
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    using Microsoft.Xrm.Sdk;
+    public sealed partial class AccountAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithPostImage(a => a.Name)
+                .Handle(OnUpdated);
+
+        private void OnUpdated()
+        {
+            OnUpdated_PostImage image = new OnUpdated_PostImage();
+            Account full = (Account)image;   // explicit widening via the generated operator
+            _ = full;
         }
     }
 }
