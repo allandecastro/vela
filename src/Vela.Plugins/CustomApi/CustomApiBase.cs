@@ -106,6 +106,7 @@ namespace Vela.CustomApi
             }
 
             (ctx as LocalPluginContext)?.SetCurrentHandler(methodName);
+            TraceHandlerEntry(ctx, methodName);
             HandlerInvoker.ResolveAndInvoke(
                 this,
                 methodName,

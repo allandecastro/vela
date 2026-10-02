@@ -100,6 +100,26 @@ namespace Vela.Plugin
         }
 
         /// <summary>
+        /// Whether the runtime writes a one-line trace naming the handler it dispatches, complementing the
+        /// plugin-level "Executing ..." line with the specific step/Custom API handler that fired (a plugin can
+        /// register several). On by default; override to return <c>false</c> to silence it. The platform Plugin
+        /// Trace Log already gates whether the line is persisted, so the cost is negligible.
+        /// </summary>
+        protected virtual bool AutoTraceHandlerEntry => true;
+
+        // Writes the handler-entry trace from a dispatch path (next to SetCurrentHandler), when enabled and the
+        // handler has a source name. A lambda / local-function handler has only a compiler-generated name (it
+        // contains '<', which is illegal in a source identifier), which would be noise in the trace log, so it is
+        // skipped - the trace names real handlers only.
+        private protected void TraceHandlerEntry(ILocalPluginContext context, string? handlerName)
+        {
+            if (AutoTraceHandlerEntry && !string.IsNullOrEmpty(handlerName) && handlerName!.IndexOf('<') < 0)
+            {
+                context.Trace("Entering handler '{0}' for message '{1}'.", handlerName, context.MessageName);
+            }
+        }
+
+        /// <summary>
         /// Optional sandbox-safe retry wrapper for organization service operations. Retries only safe-to-replay
         /// throttling faults; timeouts are not retried (a timed-out write may already have committed). See
         /// <see cref="RetryPolicy"/> for the idempotency contract.
