@@ -24,12 +24,33 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.22.0] - 2026-10-02 (Vela.Cli)
+
+CLI line, published as `cli-v0.22.0`.
+
+### Changed
+
+- **`vela add plugin` no longer guesses a filtering column.** Without `--filtering-attributes`, a Create/Update
+  plugin used to auto-select a column from the early-bound model (and failed when none could be inferred). It
+  now leaves a `// TODO: add .FilterOn(e => e.Column)` comment, matching `vela add step`, so the file compiles
+  and the author picks the real filter. An explicit `--filtering-attributes` is unchanged.
+
 ### Fixed
 
-- **CLI:** plugin packages targeting above .NET Framework 4.7.1 now produce a warning. Dataverse rejects them at
+- **Plugin packages targeting above .NET Framework 4.7.1 now produce a warning.** Dataverse rejects them at
   registration, even though Microsoft's docs recommend `net48` for plug-ins. When a package ships several
   `net4x` builds, the scanner now prefers the highest one at or below `net471` (previously `net472`/`net48`
   won).
+- **`vela add test` seeds `WithTargets(...)` for a `CreateMultiple`/`UpdateMultiple` plugin.** The generated
+  test always used `WithTarget(...)`, leaving `ctx.Request.Targets` null so the test threw. `add test` now takes
+  `--message`; `RetrieveMultiple` (query-based, no `Targets`) keeps the single-record form, as does the
+  `vela add step` handler access hint.
+- **Generated files are written with LF line endings.** Templates follow the checkout's EOL (CRLF on Windows)
+  while injected code uses `\n`, so files such as those touched by `vela add step` could mix endings. All
+  generated-file writes (`vela add`, `vela models`, `vela init`, and the `web-resources.entries.ts` updates) now
+  normalize to LF.
+- **Scaffolded Custom API request/response XML docs give the right parameter key.** They said properties key
+  the bag with `<uniquename>.{prop}`; the real key is the plain property name (no dot, no prefix).
 
 ## [0.29.11] - 2026-09-29 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
