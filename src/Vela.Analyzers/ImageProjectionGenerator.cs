@@ -743,10 +743,11 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent + 1)}/// <summary>");
             sb.AppendLine($"{Pad(indent + 1)}/// Widens this captured-columns projection to the full early-bound image (Id, logical name and every");
             sb.AppendLine($"{Pad(indent + 1)}/// attribute the image carried). Explicit on purpose: prefer reading the projection directly; cast only");
-            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "PreImageAs" : "PostImageAs")}&lt;{model.EntityType}&gt;().");
+            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "GetPreImage" : "GetPostImage")}&lt;{model.EntityType}&gt;()");
+            sb.AppendLine($"{Pad(indent + 1)}/// (both go through Entity.ToEntity, so the Id is preserved); returns null for an absent image.");
             sb.AppendLine($"{Pad(indent + 1)}/// </summary>");
-            sb.AppendLine($"{Pad(indent + 1)}public static explicit operator {model.EntityType}({model.TypeName} projection)");
-            sb.AppendLine($"{Pad(indent + 2)}=> ((global::Vela.Context.IImageProjection)projection).Source!.ToEntity<{model.EntityType}>();");
+            sb.AppendLine($"{Pad(indent + 1)}public static explicit operator {model.EntityType}({model.TypeName}? projection)");
+            sb.AppendLine($"{Pad(indent + 2)}=> projection is global::Vela.Context.IImageProjection {{ Source: {{ }} source }} ? source.ToEntity<{model.EntityType}>() : null!;");
 
             sb.AppendLine($"{Pad(indent)}}}");
 

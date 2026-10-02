@@ -295,7 +295,7 @@ public sealed partial class AccountAudit : EntityPluginBase<Account>
 
 The projection exposes only the captured columns, so it does not fit a shared service that takes the full
 early-bound entity (`void Normalize(Account account)`). When you genuinely need the whole image, widen it with an
-**explicit** cast, or read it directly with `ctx.PreImageAs<Account>()` / `ctx.PostImageAs<Account>()`:
+**explicit** cast, or read it directly with `ctx.GetPreImage<Account>()` / `ctx.GetPostImage<Account>()`:
 
 ```csharp
 private void OnUpdated(OnUpdatedContext ctx)
@@ -303,13 +303,15 @@ private void OnUpdated(OnUpdatedContext ctx)
     var pre = ctx.PreImage;              // projection: the captured columns, compile-safe
 
     _normalizer.Normalize((Account)pre); // widen to the full image for a service that wants the entity
-    // same as: _normalizer.Normalize(ctx.PreImageAs<Account>());
+    // same as: _normalizer.Normalize(ctx.GetPreImage<Account>());
 }
 ```
 
 - The cast is **lossless**: the projection retains the source image, so `(Account)pre` carries the `Id`, the
   logical name and every attribute the image held - a `service.Update(...)` on the result works. It is exactly
-  `ctx.PreImageAs<Account>()` in cast form; use whichever reads better.
+  `ctx.GetPreImage<Account>()` in cast form (both go through `Entity.ToEntity`), and casting an absent image
+  returns `null`; use whichever reads better. Note `ctx.PreImageAs<Account>()` is different: it projects annotated
+  attributes only and does not carry the `Id`.
 - It is **explicit on purpose**, never implicit. Leaving the captured-columns view means re-entering early-bound
   territory, where reading a column the step did not capture compiles and returns a silent `null` again. Keeping the
   widening visible (`(Account)`) keeps that a deliberate step, so the compile-safety the projection gives you (and

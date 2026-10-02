@@ -178,8 +178,10 @@ namespace Demo
         Assert.Contains("global::Microsoft.Xrm.Sdk.Entity? global::Vela.Context.IImageProjection.Source", output);
         // The widening is an EXPLICIT operator to the entity (never implicit - that would reopen the silent-null
         // footgun invisibly at the call site), built from the retained source image.
-        Assert.Contains("public static explicit operator global::Demo.Account(OnUpdated_PostImage projection)", output);
-        Assert.Contains("Source!.ToEntity<global::Demo.Account>()", output);
+        Assert.Contains("public static explicit operator global::Demo.Account(OnUpdated_PostImage? projection)", output);
+        Assert.Contains("source.ToEntity<global::Demo.Account>()", output);
+        // Null-tolerant like GetPostImage<T>(): an absent image casts to null, it does not throw.
+        Assert.Contains("Source: { } source", output);
         Assert.DoesNotContain("implicit operator", output);
     }
 

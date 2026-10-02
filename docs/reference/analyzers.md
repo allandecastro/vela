@@ -225,8 +225,9 @@ Key points:
 - **Explicit widening to the entity.** Each projection also carries an **explicit** cast to its entity
   (`(Account)ctx.PreImage`) for the case where a service needs the whole image. It is lossless (the projection
   retains the source image, so `Id`, logical name and every attribute survive) and equivalent to
-  `ctx.PreImageAs<Account>()`. It is deliberately not an implicit conversion: leaving the captured-columns view is
-  a visible step, so the compile-safety does not disappear silently. See
+  `ctx.GetPreImage<Account>()` / `ctx.GetPostImage<Account>()` (both go through `Entity.ToEntity`); an absent image
+  casts to `null`. It is deliberately not an implicit conversion: leaving the captured-columns view is a visible
+  step, so the compile-safety does not disappear silently. See
   [Need the whole entity](../guides/plugins.md#need-the-whole-entity-for-a-service).
 - **Typed step context.** For a named handler on a Create/Update/Delete step that captures an image, the generator
   also emits a `{Handler}Context` (a subclass of the step's message context) exposing `ctx.PreImage` / `ctx.PostImage`
