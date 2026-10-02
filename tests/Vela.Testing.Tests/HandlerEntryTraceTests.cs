@@ -35,6 +35,17 @@ namespace Vela.Testing.Tests
         private void OnUpdated(IUpdatePostContext<FakeAccount> ctx) { }
     }
 
+    // A lambda handler has only a compiler-generated name (<...>b__n), which must not be written to the trace.
+    public sealed class LambdaUpdatePlugin : EntityPluginBase<FakeAccount>
+    {
+        public LambdaUpdatePlugin(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .Handle(ctx => { });
+    }
+
     public sealed class HandlerEntryTraceTests
     {
         [Fact]
@@ -54,6 +65,18 @@ namespace Vela.Testing.Tests
         {
             Guid id = Guid.NewGuid();
             PluginPipeline pipeline = PluginPipeline.Empty().Register<SilentUpdatePlugin>()
+                .Seed(new FakeAccount { Id = id, Name = "Old" });
+
+            pipeline.Service.Update(new FakeAccount { Id = id, Name = "New" });
+
+            Assert.DoesNotContain(pipeline.Trace.Traces, t => t.Contains("Entering handler"));
+        }
+
+        [Fact]
+        public void Does_not_trace_a_lambda_handler_with_its_compiler_generated_name()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<LambdaUpdatePlugin>()
                 .Seed(new FakeAccount { Id = id, Name = "Old" });
 
             pipeline.Service.Update(new FakeAccount { Id = id, Name = "New" });

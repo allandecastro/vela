@@ -108,10 +108,12 @@ namespace Vela.Plugin
         protected virtual bool AutoTraceHandlerEntry => true;
 
         // Writes the handler-entry trace from a dispatch path (next to SetCurrentHandler), when enabled and the
-        // handler has a resolvable name (a lambda handler has none).
+        // handler has a source name. A lambda / local-function handler has only a compiler-generated name (it
+        // contains '<', which is illegal in a source identifier), which would be noise in the trace log, so it is
+        // skipped - the trace names real handlers only.
         private protected void TraceHandlerEntry(ILocalPluginContext context, string? handlerName)
         {
-            if (AutoTraceHandlerEntry && !string.IsNullOrEmpty(handlerName))
+            if (AutoTraceHandlerEntry && !string.IsNullOrEmpty(handlerName) && handlerName!.IndexOf('<') < 0)
             {
                 context.Trace("Entering handler '{0}' for message '{1}'.", handlerName, context.MessageName);
             }
