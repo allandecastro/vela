@@ -99,11 +99,29 @@ public sealed class PackageScannerScanTests : IDisposable
     [Theory]
     [InlineData(new[] { "net462" }, "net462")]
     [InlineData(new[] { "netstandard2.0", "net462" }, "net462")]      // .NET Framework preferred over netstandard
-    [InlineData(new[] { "net462", "net472" }, "net472")]              // higher net4x version wins
+    [InlineData(new[] { "net462", "net471" }, "net471")]              // higher net4x version wins
+    [InlineData(new[] { "net462", "net472" }, "net462")]              // ...but not above the net471 package cap
+    [InlineData(new[] { "net471", "net48" }, "net471")]
+    [InlineData(new[] { "net48", "netstandard2.0" }, "net48")]       // an over-cap net4x still beats netstandard
     [InlineData(new[] { "net8.0", "netstandard2.0" }, "netstandard2.0")] // netstandard over a non-loadable net8
     public void ChooseTargetFramework_prefers_the_sandbox_compatible_framework(string[] tfms, string expected)
     {
         Assert.Equal(expected, PackageScanner.ChooseTargetFramework(tfms));
+    }
+
+    [Theory]
+    [InlineData("net462", false)]
+    [InlineData("net47", false)]
+    [InlineData("net471", false)]
+    [InlineData("net472", true)]
+    [InlineData("net48", true)]
+    [InlineData("net481", true)]
+    [InlineData("netstandard2.0", false)]
+    [InlineData("net8.0", false)]
+    [InlineData("", false)]
+    public void ExceedsPluginPackageFrameworkCap_flags_frameworks_above_net471(string tfm, bool expected)
+    {
+        Assert.Equal(expected, PackageScanner.ExceedsPluginPackageFrameworkCap(tfm));
     }
 
     [Fact]
