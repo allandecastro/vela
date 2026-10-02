@@ -24,6 +24,49 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.30.0] - 2026-10-02 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.30.0`.
+
+### Added
+
+- **VELA017: reading an image the step did not capture.** A post-operation context exposes both `PreImage` and
+  `PostImage` (a pre-operation one exposes `PreImage`), so reading `ctx.PreImage`/`ctx.PostImage` when the step
+  never called `WithPreImage`/`WithPostImage` compiled but returned null at runtime. VELA017 reports it as an
+  **error** when the handler is bound by exactly one `RegisterStep()` chain that lacks the capture, including
+  null-conditional reads (`ctx?.PreImage`). Split chains and partial-class splits stay silent (under-report,
+  never a false positive), like VELA009.
+- **Explicit cast from a typed image projection to its entity.** `(Account)ctx.PreImage` widens a projection to
+  the full early-bound entity for shared services that take one. The projection now keeps its source image, so
+  the cast is lossless (Id, logical name and every attribute), equivalent to `GetPreImage<Account>()` /
+  `GetPostImage<Account>()`, and an absent image casts to null. The cast is explicit on purpose: uncaptured
+  columns read null again once you leave the projection.
+- **The trace log names the dispatched handler.** Each dispatch writes
+  `Entering handler 'OnUpdated' for message 'Update'.`, so a failure in a multi-step plugin points at its
+  handler. Lambda/local-function handlers (compiler-generated names) are not traced. Opt out with
+  `protected override bool AutoTraceHandlerEntry => false;`. Visibility still follows the org's Plugin Trace Log
+  setting.
+- **`WhereIn`/`WhereNotIn` and `ConditionIn`/`ConditionNotIn` take an `IEnumerable<TValue>`.** On `TypedQuery`,
+  `TypedLink` and `TypedFilterBuilder`, each element becomes its own condition value, so a `Guid[]` no longer has
+  to be widened to `object[]` (it used to bind as one nested value through `Where(column, In, params object[])`).
+- **Testing: `Build(plugin)` / `Build<TPlugin>()`** infer the message/stage/mode from the plugin's single step,
+  like `Execute(plugin)` / `Execute<TPlugin>()`. The plugin-less `Build()` is unchanged.
+
+### Changed
+
+- **Testing: the harness rejects a Custom API call that omits a required input parameter.** It throws
+  `InvalidPluginExecutionException` before the handler runs, like the platform. Previously the call was
+  accepted, so a test could pass on an invalid request; such tests now fail and need the parameter supplied.
+
+### Fixed
+
+- **Testing: `Execute<TPlugin>()` works with generated Vela plugins.** It required a parameterless constructor
+  (`new()`), which the `(string unsecureConfig, string secureConfig)` primary constructor does not provide. It
+  now uses a parameterless constructor if present, otherwise the `(string, string)` one with empty
+  configuration, otherwise a clear error pointing at `Execute(plugin)`.
+- **`TypedQuery`'s XML docs attach to `TypedQuery` again** (a helper type sat between the comment and the
+  declaration).
+
 ## [0.22.0] - 2026-10-02 (Vela.Cli)
 
 CLI line, published as `cli-v0.22.0`.
