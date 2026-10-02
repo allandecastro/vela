@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -264,6 +265,13 @@ internal static class PackageScanner
             && entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
         .ToList();
     string? chosenTfm = ChooseTargetFramework(libDlls.Select(entry => TargetFrameworkOf(entry.FullName)));
+    if (chosenTfm != null && ExceedsPluginPackageFrameworkCap(chosenTfm))
+    {
+        Console.Error.WriteLine(
+            $"Warning: package '{Path.GetFileName(packagePath)}' targets {chosenTfm}. Dataverse rejects plugin packages " +
+            $"above {PluginPackageFrameworkCap} at registration (the Microsoft docs recommending net48 do not apply to " +
+            "plugin packages). Set <TargetFramework>net462</TargetFramework> in the plugin project and rebuild.");
+    }
 
     List<string> extractedDllPaths = [];
     foreach (ZipArchiveEntry entry in libDlls)
@@ -315,7 +323,8 @@ internal static class PackageScanner
 
     // Pick one target framework when a package ships several. The Dataverse sandbox runs .NET Framework, so
     // prefer net4x, then netstandard, then a flat lib, and only then anything else; break ties by the higher
-    // version string (net472 over net462).
+    // version string (net471 over net462). Plugin packages above net471 are rejected at registration (despite the
+    // docs recommending net48), so a registrable net4x build ranks above a higher one.
     internal static string? ChooseTargetFramework(IEnumerable<string> targetFrameworks)
 {
     List<string> distinct = targetFrameworks.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -334,7 +343,7 @@ internal static class PackageScanner
 {
     if (tfm.StartsWith("net4", StringComparison.OrdinalIgnoreCase))
     {
-        return 3;
+        return ExceedsPluginPackageFrameworkCap(tfm) ? 3 : 4;
     }
 
     if (tfm.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase))
@@ -343,6 +352,27 @@ internal static class PackageScanner
     }
 
     return string.IsNullOrEmpty(tfm) ? 1 : 0;
+}
+
+    // Dataverse rejects plugin packages whose assemblies target above .NET Framework 4.7.1 (net472, net48, net481),
+    // even though the supported-customizations docs list 4.6.2 through 4.8 for plug-ins. Undocumented; observed.
+    internal const string PluginPackageFrameworkCap = "net471";
+
+    // "net462" -> 462, "net47" -> 470, "net48" -> 480; compares the digits padded to three places.
+    internal static bool ExceedsPluginPackageFrameworkCap(string tfm)
+{
+    if (!tfm.StartsWith("net4", StringComparison.OrdinalIgnoreCase))
+    {
+        return false;
+    }
+
+    string digits = tfm.Substring(3);
+    if (digits.Length == 0 || digits.Length > 3 || !digits.All(char.IsDigit))
+    {
+        return false;
+    }
+
+    return int.Parse(digits.PadRight(3, '0'), CultureInfo.InvariantCulture) > 471;
 }
 
     internal static bool IsLikelyDependencyAssembly(string fileName)

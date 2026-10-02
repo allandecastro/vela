@@ -24,6 +24,13 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed
+
+- **CLI:** plugin packages targeting above .NET Framework 4.7.1 now produce a warning. Dataverse rejects them at
+  registration, even though Microsoft's docs recommend `net48` for plug-ins. When a package ships several
+  `net4x` builds, the scanner now prefers the highest one at or below `net471` (previously `net472`/`net48`
+  won).
+
 ## [0.29.11] - 2026-09-29 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.29.11`.
