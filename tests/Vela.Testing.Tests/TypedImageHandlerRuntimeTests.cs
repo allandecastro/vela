@@ -55,8 +55,55 @@ namespace Vela.Testing.Tests
         }
     }
 
+    // Stand-in for a generated projection that also carries the source image (IImageProjection) and the explicit
+    // widening cast the generator emits, so the handler can hand the whole early-bound image to an entity-typed
+    // service without a silent-null reconstruction.
+    public sealed class AccountNameSourceImage : IImageProjection
+    {
+        Entity? IImageProjection.Source { get; set; }
+
+        [AttributeLogicalName("name")]
+        public string? Name { get; set; }
+
+        public static explicit operator FakeAccount(AccountNameSourceImage projection)
+            => ((IImageProjection)projection).Source!.ToEntity<FakeAccount>();
+    }
+
+    public sealed class WidenPreImageToEntity : EntityPluginBase<FakeAccount>
+    {
+        public WidenPreImageToEntity(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .WithPreImage(a => a.Name)
+                .Handle(OnUpdated);
+
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
+        {
+            AccountNameSourceImage pre = ctx.PreImageAs<AccountNameSourceImage>()!;
+            FakeAccount full = (FakeAccount)pre;   // explicit widening through the generated-style operator
+            // Id is only present if the whole image was retained; a reconstruction from the mapped columns alone
+            // (name) would drop it. Recording it proves the cast is lossless.
+            ctx.SystemService.Create(new FakeTask { Subject = $"{full.Id}|{full.Name}" });
+        }
+    }
+
     public sealed class TypedImageHandlerRuntimeTests
     {
+        [Fact]
+        public void Explicit_cast_widens_the_projection_to_the_full_image_losslessly()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<WidenPreImageToEntity>()
+                .Seed(new FakeAccount { Id = id, Name = "Old" });
+
+            pipeline.Service.Update(new FakeAccount { Id = id, Name = "New" });
+
+            FakeTask task = Assert.Single(pipeline.GetAll("task")).ToEntity<FakeTask>();
+            Assert.Equal($"{id}|Old", task.Subject);
+        }
+
         [Fact]
         public void Accessor_projects_the_captured_columns_on_the_guided_path()
         {

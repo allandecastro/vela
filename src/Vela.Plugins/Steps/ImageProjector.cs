@@ -55,6 +55,14 @@ namespace Vela.Steps
                 entry.Key.SetValue(target, value);
             }
 
+            // Retain the source image so the generated explicit (TEntity)projection cast can return the whole
+            // early-bound image (Id + logical name + every attribute), not a reconstruction limited to the mapped
+            // columns. Only generated projections implement the marker; a hand-rolled projection simply has no Source.
+            if (target is Vela.Context.IImageProjection projection)
+            {
+                projection.Source = image;
+            }
+
             return target;
         }
 

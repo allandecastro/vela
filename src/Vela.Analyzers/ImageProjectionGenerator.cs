@@ -724,13 +724,29 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent)}/// A column the step did not capture is absent here (reading it is a compile error, not a silent null);");
             sb.AppendLine($"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().");
             sb.AppendLine($"{Pad(indent)}/// </summary>");
-            sb.AppendLine($"{Pad(indent)}public sealed class {model.TypeName}");
+            sb.AppendLine($"{Pad(indent)}public sealed class {model.TypeName} : global::Vela.Context.IImageProjection");
             sb.AppendLine($"{Pad(indent)}{{");
             foreach (ProjectionColumn column in model.Columns)
             {
                 sb.AppendLine($"{Pad(indent + 1)}[global::Microsoft.Xrm.Sdk.AttributeLogicalName(\"{column.LogicalName}\")]");
                 sb.AppendLine($"{Pad(indent + 1)}public {column.TypeName} {column.PropertyName} {{ get; set; }}");
             }
+
+            // The source image, retained so the explicit cast below is lossless. Implemented explicitly so it stays
+            // off the projection's public column surface (a handler still sees only the captured columns).
+            sb.AppendLine();
+            sb.AppendLine($"{Pad(indent + 1)}global::Microsoft.Xrm.Sdk.Entity? global::Vela.Context.IImageProjection.Source {{ get; set; }}");
+
+            // Widen the captured-columns view to the full early-bound image. Explicit on purpose: leaving the view,
+            // where an uncaptured column reads null again, is a deliberate, visible step - never an implicit one.
+            sb.AppendLine();
+            sb.AppendLine($"{Pad(indent + 1)}/// <summary>");
+            sb.AppendLine($"{Pad(indent + 1)}/// Widens this captured-columns projection to the full early-bound image (Id, logical name and every");
+            sb.AppendLine($"{Pad(indent + 1)}/// attribute the image carried). Explicit on purpose: prefer reading the projection directly; cast only");
+            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "PreImageAs" : "PostImageAs")}&lt;{model.EntityType}&gt;().");
+            sb.AppendLine($"{Pad(indent + 1)}/// </summary>");
+            sb.AppendLine($"{Pad(indent + 1)}public static explicit operator {model.EntityType}({model.TypeName} projection)");
+            sb.AppendLine($"{Pad(indent + 2)}=> ((global::Vela.Context.IImageProjection)projection).Source!.ToEntity<{model.EntityType}>();");
 
             sb.AppendLine($"{Pad(indent)}}}");
 
