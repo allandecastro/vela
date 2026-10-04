@@ -5,6 +5,7 @@ using System.Reflection;
 using Microsoft.Xrm.Sdk.Metadata;
 using Vela.Cli;
 using Xunit;
+using static Vela.Cli.CliExitCodes;
 
 namespace Vela.Cli.Tests;
 
@@ -18,20 +19,65 @@ public sealed class IntersectModelsTests
     }
 
     [Fact]
+    public void Intersect_is_rejected_with_the_typescript_scopes()
+    {
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(new[] { "--forms", "--intersect", "--entities", "account" }));
+    }
+
+    [Fact]
+    public void Intersect_is_rejected_with_verify()
+    {
+        Assert.Equal(ExitInvalidArguments, ModelsCommand.Run(new[] { "--verify", "--intersect", "--entities", "account", "--namespace", "Zava.Models" }));
+    }
+
+    [Fact]
     public void CollectIntersectNames_discovers_dedupes_excludes_and_sorts()
     {
+        // Discovery order is 'widgets' then 'apples' (reverse lexical), so a sorted result proves the sort.
         EntityMetadata account = Entity("account",
-            ("accountleads", "account", "lead"),
-            ("accounttasks", "account", "task"));
-        // Same intersect reachable from two selected tables -> emitted once.
-        EntityMetadata contact = Entity("contact", ("accountleads", "account", "lead"));
+            ("widgets", "account", "widget"),
+            ("apples", "account", "apple"),
+            ("excludedjoin", "account", "task"));
+        // 'apples' reachable from two selected tables -> emitted once.
+        EntityMetadata contact = Entity("contact", ("apples", "contact", "apple"));
 
-        // 'accounttasks' is already in the batch (e.g. the user also selected it), so it is excluded.
-        HashSet<string> have = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "account", "contact", "accounttasks" };
+        // 'excludedjoin' is already in the batch (e.g. the user also selected it), so it is excluded.
+        HashSet<string> have = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "account", "contact", "excludedjoin" };
 
         List<string> names = EntityMetadataReader.CollectIntersectNames(new[] { account, contact }, have);
 
-        Assert.Equal(new[] { "accountleads" }, names);
+        Assert.Equal(new[] { "apples", "widgets" }, names);
+    }
+
+    [Fact]
+    public void AppendIntersects_reads_discovered_intersects_appends_them_and_counts()
+    {
+        List<EntityMetadata> metadata = new List<EntityMetadata> { Entity("account", ("accountleads", "account", "lead")) };
+
+        int added = EntityMetadataReader.AppendIntersects(metadata, name => Entity(name), onSkip: _ => { });
+
+        Assert.Equal(1, added);
+        Assert.Contains(metadata, m => m.LogicalName == "accountleads");
+    }
+
+    [Fact]
+    public void AppendIntersects_skips_a_failed_read_without_counting_it()
+    {
+        List<EntityMetadata> metadata = new List<EntityMetadata>
+        {
+            Entity("account", ("good", "account", "lead"), ("bad", "account", "task")),
+        };
+        List<string> skips = new List<string>();
+
+        int added = EntityMetadataReader.AppendIntersects(
+            metadata,
+            name => name == "bad" ? throw new InvalidOperationException("no access") : Entity(name),
+            skips.Add);
+
+        Assert.Equal(1, added);
+        Assert.Contains(metadata, m => m.LogicalName == "good");
+        Assert.DoesNotContain(metadata, m => m.LogicalName == "bad");
+        Assert.Single(skips);
     }
 
     [Fact]

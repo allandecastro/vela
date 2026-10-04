@@ -35,6 +35,30 @@ internal static class EntityMetadataReader
         return names.ToList();
     }
 
+    // Discovers the intersect tables of the entities already in <paramref name="metadata"/>, reads each via
+    // <paramref name="readEntity"/> and appends it, returning how many were added. A table that cannot be read is
+    // skipped (reported via <paramref name="onSkip"/>) so one bad intersect does not discard the rest. Pure wiring
+    // (no connection), so the two-phase read is testable with a fake reader.
+    internal static int AppendIntersects(List<EntityMetadata> metadata, Func<string, EntityMetadata> readEntity, Action<string>? onSkip = null)
+    {
+        HashSet<string> have = new HashSet<string>(metadata.Select(m => m.LogicalName), StringComparer.OrdinalIgnoreCase);
+        int added = 0;
+        foreach (string intersect in CollectIntersectNames(metadata, have))
+        {
+            try
+            {
+                metadata.Add(readEntity(intersect));
+                added++;
+            }
+            catch (Exception ex)
+            {
+                onSkip?.Invoke($"Warning: skipping intersect table '{intersect}' (could not read its metadata): {ex.Message}");
+            }
+        }
+
+        return added;
+    }
+
     // Collects the N:N join (intersect) table logical names reachable from the given entities' many-to-many
     // relationships, skipping any already in <paramref name="exclude"/> and de-duplicating. One level only: the
     // intersects of these entities, not transitively the intersects of those intersects.

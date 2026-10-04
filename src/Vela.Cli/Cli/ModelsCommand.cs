@@ -117,6 +117,12 @@ internal static class ModelsCommand
                 return Fail($"--verify checks the C# early-bound model only; it cannot be combined with {scopeLabel}.", ExitInvalidArguments, includeUsage: false);
             }
 
+            // --intersect generates C# entity classes for N:N join tables; it has no meaning for TypeScript output.
+            if (scope.Intersect)
+            {
+                return Fail($"--intersect generates C# entity models; it cannot be combined with {scopeLabel}.", ExitInvalidArguments, includeUsage: false);
+            }
+
             // TypeScript is the only output for the client-side scopes, so --lang defaults to ts and only an
             // explicit non-ts value is rejected.
             string tsLang = (langOption ?? "ts").Trim().ToLowerInvariant();
@@ -156,6 +162,14 @@ internal static class ModelsCommand
         outDir = ProjectNamespaceResolver.ResolveCSharpOutputDir(args, outDir);
 
         bool dataAnnotations = !HasFlag(args, "--no-annotations");
+
+        // --verify checks only the explicitly scoped tables; it does not expand to the discovered intersect tables,
+        // and the drift checker ignores out-of-scope local files, so a stale intersect model would pass unnoticed.
+        // Reject the combination rather than give a false all-clear.
+        if (scope.Intersect && HasFlag(args, "--verify"))
+        {
+            return Fail("--intersect cannot be combined with --verify (verify checks the explicitly scoped tables only).", ExitInvalidArguments, includeUsage: false);
+        }
 
         // --verify does not write: it regenerates the scoped entity models from live metadata in memory and
         // compares them, column by column, against the files already on disk, then reports drift. It verifies the
@@ -277,25 +291,13 @@ internal static class ModelsCommand
                 // (callers rarely know them) and de-duplicated against what was already read.
                 if (scope.Intersect && metadata.Count > 0)
                 {
-                    HashSet<string> have = new HashSet<string>(metadata.Select(m => m.LogicalName), StringComparer.OrdinalIgnoreCase);
-                    int added = 0;
-                    foreach (string intersect in EntityMetadataReader.CollectIntersectNames(metadata, have))
-                    {
-                        try
-                        {
-                            metadata.Add(EntityMetadataReader.ReadEntity(service, intersect));
-                            added++;
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.Error.WriteLine($"Warning: skipping intersect table '{intersect}' (could not read its metadata): {ex.Message}");
-                        }
-                    }
-
-                    if (added > 0)
-                    {
-                        Console.Error.WriteLine($"Including {added} N:N intersect table(s) (--intersect).");
-                    }
+                    int added = EntityMetadataReader.AppendIntersects(
+                        metadata,
+                        name => EntityMetadataReader.ReadEntity(service, name),
+                        skip => Console.Error.WriteLine(skip));
+                    Console.Error.WriteLine(added > 0
+                        ? $"Including {added} N:N intersect table(s) (--intersect)."
+                        : "No N:N intersect tables found for the scoped tables (--intersect).");
                 }
 
                 if (metadata.Count > 0)
