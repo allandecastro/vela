@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text.Json;
 
 namespace Vela.Cli;
@@ -32,7 +33,30 @@ public sealed record PlanPreview(string Mode, string? Environment, bool HasChang
 /// which after a successful apply is the post-apply remaining diff (all zero). Present only on the <c>apply-execute</c>
 /// JSON so a script/agent reads the executed counts directly instead of parsing the free-text notes.
 /// </summary>
-public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool PackageRepublished);
+public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool PackageRepublished, ExecutedByKind[] ByKind)
+{
+    /// <summary>Builds the executed counts (totals + per-kind breakdown) from the PRE-apply diff.</summary>
+    public static ExecutedCounts FromDiff(RegistrationDiff diff, bool packageRepublished)
+    {
+        string[] kinds = diff.Added.Select(i => i.Kind)
+            .Concat(diff.Changed.Select(c => c.Kind))
+            .Concat(diff.Removed.Select(i => i.Kind))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(k => k, StringComparer.Ordinal)
+            .ToArray();
+
+        ExecutedByKind[] byKind = kinds.Select(kind => new ExecutedByKind(
+            kind,
+            diff.Added.Count(i => i.Kind == kind),
+            diff.Changed.Count(c => c.Kind == kind),
+            diff.Removed.Count(i => i.Kind == kind))).ToArray();
+
+        return new ExecutedCounts(diff.Added.Length, diff.Changed.Length, diff.Removed.Length, packageRepublished, byKind);
+    }
+}
+
+/// <summary>The executed create/update/delete counts for one component kind (step / custom-api / web-resource).</summary>
+public sealed record ExecutedByKind(string Kind, int Created, int Updated, int Deleted);
 public sealed record ApplyOperation(string Action, string Kind, string Type, string Reason);
 public sealed record StepApplyDefinition(string PluginTypeName, string Message, string EntityLogicalName, string StepKey, string HandlerMethodName, int Stage, int Mode, int ExecutionOrder, string[] FilteringAttributes, ImageApplyDefinition[] PreImages, ImageApplyDefinition[] PostImages, bool Enabled, string UnsecureConfig, string SecureConfig, Guid ImpersonatingUserId = default, int SupportedDeployment = 0);
 public sealed record ImageApplyDefinition(string Alias, string[] Attributes);

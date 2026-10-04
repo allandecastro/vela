@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Vela.Cli;
@@ -21,15 +22,15 @@ public sealed class ApplyExecutedJsonTests
     public void Apply_execute_json_reports_executed_counts_distinct_from_the_remaining_summary()
     {
         RegistrationDiff preApply = Diff(
-            added: [Step(new { }), Step(new { }, "Zava.Plugins.B")],
+            added: [Step(new { }), CustomApi(new { })],
             changed: [new RegistrationChange("step", "Zava.Plugins.C", Json(new { }), Json(new { }))],
-            removed: [Step(new { }, "Zava.Plugins.D"), Step(new { }, "Zava.Plugins.E"), Step(new { }, "Zava.Plugins.F")]);
+            removed: [Step(new { }, "Zava.Plugins.D"), Step(new { }, "Zava.Plugins.E")]);
 
         // What a successful apply serializes: Summary from the POST-apply diff (empty = nothing remains), Executed
-        // from the PRE-apply diff (what was actually done).
+        // from the PRE-apply diff (what was actually done), totals plus a per-kind breakdown.
         PlanPreview result = OutputWriter.BuildPlanPreview("apply-execute", "env", Diff([], [], []), [], []) with
         {
-            Executed = new ExecutedCounts(preApply.Added.Length, preApply.Changed.Length, preApply.Removed.Length, PackageRepublished: true),
+            Executed = ExecutedCounts.FromDiff(preApply, packageRepublished: true),
         };
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize(result, Options));
@@ -43,8 +44,18 @@ public sealed class ApplyExecutedJsonTests
         JsonElement executed = root.GetProperty("executed");
         Assert.Equal(2, executed.GetProperty("created").GetInt32());
         Assert.Equal(1, executed.GetProperty("updated").GetInt32());
-        Assert.Equal(3, executed.GetProperty("deleted").GetInt32());
+        Assert.Equal(2, executed.GetProperty("deleted").GetInt32());
         Assert.True(executed.GetProperty("packageRepublished").GetBoolean());
+
+        // Per-kind breakdown: steps 1 created / 1 updated / 2 deleted; custom-api 1 created.
+        JsonElement[] byKind = executed.GetProperty("byKind").EnumerateArray().ToArray();
+        JsonElement step = byKind.Single(k => k.GetProperty("kind").GetString() == "step");
+        Assert.Equal(1, step.GetProperty("created").GetInt32());
+        Assert.Equal(1, step.GetProperty("updated").GetInt32());
+        Assert.Equal(2, step.GetProperty("deleted").GetInt32());
+        JsonElement api = byKind.Single(k => k.GetProperty("kind").GetString() == "custom-api");
+        Assert.Equal(1, api.GetProperty("created").GetInt32());
+        Assert.Equal(0, api.GetProperty("deleted").GetInt32());
     }
 
     [Fact]
