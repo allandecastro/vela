@@ -59,6 +59,23 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void FirstOrDefault_does_not_permanently_cap_a_reusable_query()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            for (int i = 0; i < 3; i++)
+            {
+                crm.Create(new Entity("account") { ["name"] = $"A{i}" });
+            }
+
+            TypedQuery<FakeAccount> query = Query.For<FakeAccount>().SelectAll();
+
+            _ = query.FirstOrDefault(crm);            // caps Top at 1 internally...
+            List<FakeAccount> all = query.ToList(crm); // ...but must be restored, so this still returns all 3
+
+            Assert.Equal(3, all.Count);
+        }
+
+        [Fact]
         public void RetrieveAll_honors_a_Top_cap_instead_of_paging()
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService();

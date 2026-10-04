@@ -102,14 +102,29 @@ namespace Vela.Querying
 
             QueryExpression expression = query.Expression;
 
-            // Respect an explicit Top; otherwise cap at one row so this is a single, cheap retrieve.
-            if (!expression.TopCount.HasValue)
+            // Cap at one row only when the caller set neither a Top nor a Page (Top and paging are mutually
+            // exclusive), and restore the original afterwards so FirstOrDefault never permanently shrinks a
+            // reusable query (q.FirstOrDefault(svc) then q.ToList(svc) must still return every record).
+            bool capAtOne = !expression.TopCount.HasValue
+                && (expression.PageInfo is null || expression.PageInfo.Count == 0);
+            int? originalTop = expression.TopCount;
+            if (capAtOne)
             {
                 expression.TopCount = 1;
             }
 
-            DataCollection<Entity> matches = service.RetrieveMultiple(expression).Entities;
-            return matches.Count > 0 ? matches[0].ToEntity<TEntity>() : null;
+            try
+            {
+                DataCollection<Entity> matches = service.RetrieveMultiple(expression).Entities;
+                return matches.Count > 0 ? matches[0].ToEntity<TEntity>() : null;
+            }
+            finally
+            {
+                if (capAtOne)
+                {
+                    expression.TopCount = originalTop;
+                }
+            }
         }
     }
 }
