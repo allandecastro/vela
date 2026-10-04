@@ -70,6 +70,26 @@ Condition values that are Dataverse types (`OptionSetValue`, `Money`, `EntityRef
 value - the choice integer, the money decimal, the lookup GUID - and a query's `NoLock` is carried through as
 `no-lock='true'`.
 
+## Running a typed query
+
+Execute the builder directly against an `IOrganizationService` - no `.Build()`, no hand-rolled paging:
+
+```csharp
+// every match, auto-paged (follows MoreRecords to the end)
+List<Account> all = Query.For<Account>().Select(a => a.Name).ToList(service);
+
+// the first match, or null - a single retrieve (caps Top at 1)
+Account? one = Query.For<Account>()
+    .Where(a => a.Name, ConditionOperator.Equal, "Contoso")
+    .FirstOrDefault(service);
+
+// service-first form, equivalent to ToList
+List<Account> same = service.RetrieveAll(Query.For<Account>().SelectAll());
+```
+
+All three return the early-bound `TEntity` (via `ToEntity<T>()`); you never touch `.Build()` or `AliasedValue`
+for a plain read.
+
 ## See also
 
 - [Write a plugin](plugins.md) - where these queries run.

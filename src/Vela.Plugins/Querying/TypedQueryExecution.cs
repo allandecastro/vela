@@ -83,5 +83,33 @@ namespace Vela.Querying
             service = service ?? throw new ArgumentNullException(nameof(service));
             return service.RetrieveAll(query, pageSize);
         }
+
+        /// <summary>
+        /// Runs the query and returns the first matching record, or <c>null</c> when there are none. Caps the
+        /// retrieve at one row (sets <see cref="QueryExpression.TopCount"/> to 1 when no Top was already set), so it
+        /// is a single retrieve and never pages. The fluent terminal that lets <c>.Build()</c> stay out of
+        /// caller code for the single-record case.
+        /// </summary>
+        /// <typeparam name="TEntity">The root early-bound entity type.</typeparam>
+        /// <param name="query">The typed query to run.</param>
+        /// <param name="service">The organization service to execute against.</param>
+        /// <returns>The first matching record as <typeparamref name="TEntity"/>, or <c>null</c> if none match.</returns>
+        public static TEntity? FirstOrDefault<TEntity>(this TypedQuery<TEntity> query, IOrganizationService service)
+            where TEntity : Entity
+        {
+            query = query ?? throw new ArgumentNullException(nameof(query));
+            service = service ?? throw new ArgumentNullException(nameof(service));
+
+            QueryExpression expression = query.Expression;
+
+            // Respect an explicit Top; otherwise cap at one row so this is a single, cheap retrieve.
+            if (!expression.TopCount.HasValue)
+            {
+                expression.TopCount = 1;
+            }
+
+            DataCollection<Entity> matches = service.RetrieveMultiple(expression).Entities;
+            return matches.Count > 0 ? matches[0].ToEntity<TEntity>() : null;
+        }
     }
 }
