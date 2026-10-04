@@ -28,6 +28,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA015](#vela015) | Vela.Usage | Error | A step handler's context does not match the step's message/stage |
 | [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
 | [VELA017](#vela017) | Vela.Usage | Error | A handler reads `ctx.PreImage`/`ctx.PostImage` its step did not capture |
+| [VELA018](#vela018) | Vela.Reliability | Warning | An asynchronous step's handler writes to the Target (the change is lost) |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
 VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
@@ -193,6 +194,16 @@ context if you must share a handler).
 runtime - a silent footgun. The rule fires only in the unambiguous case: the handler is an instance method bound
 by exactly one `RegisterStep()` chain in the same class, and that chain has no matching `WithPreImage(...)` /
 `WithPostImage(...)`. Add the capture to the step, or read the image it does capture.
+
+## VELA018
+
+**Write to the Target in an asynchronous step.** An asynchronous step runs after the main operation has committed,
+in its own execution, so mutating the Target (`ctx.Request.Target` / `ctx.GetTarget<T>()`) there has no effect: the
+change is neither written back to the database nor seen by any later step. Call `ctx.UserService.Update(...)` with
+the change, or move the logic to a synchronous step. Like VELA017 it fires only in the unambiguous case: the handler
+is an instance method bound by exactly one `RegisterStep()` chain and that chain is `.Async()`; a handler shared
+across steps, or a write through a local copy of the Target, is left alone. See
+[which stage persists a Target write](../guides/plugins.md#writing-the-target-which-stage-persists).
 
 ## Typed image projection generator
 
