@@ -29,6 +29,20 @@ internal static partial class DataverseRegistration
         ? service
         : new SolutionScopedOrganizationService(service, solutionUniqueName!);
 
+    // Heads-up before overwriting an assembly owned by another solution. The registered name is the DLL's assembly
+    // name (unique per org), so two projects that build the same-named assembly collide; if one already exists and
+    // is not in the target solution, this apply rewrites its content under that other solution.
+    if (!string.IsNullOrWhiteSpace(solutionUniqueName) && sourceAssemblyPayloads.Length > 0)
+    {
+        foreach (string name in FindCrossSolutionAssemblyCollisions(service, sourceAssemblyPayloads, solutionUniqueName!))
+        {
+            Console.Error.WriteLine(
+                $"Warning: plugin assembly '{name}' already exists in this org and is not part of solution '{solutionUniqueName}'. " +
+                "Applying overwrites its content, modifying an assembly owned by another solution. " +
+                "Set a unique <AssemblyName> in the plugins project (for example prefix it with the solution name) to avoid the collision.");
+        }
+    }
+
     List<RegistrationItem> removedSteps = diff.Removed.Where(IsStep).ToList();
     List<RegistrationItem> removedApis = diff.Removed.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
     List<RegistrationItem> addedApis = diff.Added.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
@@ -562,6 +576,38 @@ internal static partial class DataverseRegistration
         }
     }
 }
+
+    // Returns the names of source assemblies that already exist in the org but are NOT part of the target solution.
+    // The registered pluginassembly name is the DLL's assembly name (unique per org), so two projects that build the
+    // same-named assembly collide: applying one rewrites the other's content. This is the signal for that collision -
+    // an assembly that exists and belongs elsewhere. Pure over the service, so it is testable with a fake org.
+    internal static List<string> FindCrossSolutionAssemblyCollisions(IOrganizationService service, AssemblyPayload[] payloads, string solutionUniqueName)
+    {
+        List<string> collisions = new List<string>();
+        foreach (AssemblyPayload payload in payloads)
+        {
+            Entity? existing = GetPluginAssembly(service, payload.AssemblyName);
+            if (existing != null && !IsAssemblyInSolution(service, existing.Id, solutionUniqueName))
+            {
+                collisions.Add(payload.AssemblyName);
+            }
+        }
+
+        return collisions;
+    }
+
+    private static bool IsAssemblyInSolution(IOrganizationService service, Guid assemblyId, string solutionUniqueName)
+    {
+        QueryExpression query = new QueryExpression("solutioncomponent")
+        {
+            ColumnSet = new ColumnSet("solutioncomponentid"),
+            TopCount = 1,
+        };
+        query.Criteria.AddCondition("objectid", ConditionOperator.Equal, assemblyId);
+        LinkEntity solution = query.AddLink("solution", "solutionid", "solutionid");
+        solution.LinkCriteria.AddCondition("uniquename", ConditionOperator.Equal, solutionUniqueName);
+        return service.RetrieveMultiple(query).Entities.Count > 0;
+    }
 
     internal static void UpsertPluginAssembly(IOrganizationService service, AssemblyPayload payload)
 {

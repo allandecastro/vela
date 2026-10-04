@@ -61,6 +61,17 @@ vela plan `
 
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
+### Assembly name collisions across projects
+
+The registered plugin assembly is keyed by its **.NET assembly name** (the csproj `<AssemblyName>`, e.g. `Zava.Plugins`), which is **unique per org**. `vela init <prefix>` scaffolds the plugins project as `<prefix>.Plugins`, so two solutions initialized with the same prefix build the same assembly name and **collide**: applying the second rewrites the first's assembly content in that org. When `apply` is run with `--solution` and the target assembly already exists but is **not part of that solution**, it warns before overwriting:
+
+```
+Warning: plugin assembly 'Zava.Plugins' already exists in this org and is not part of solution 'Sales'.
+         Applying overwrites its content, modifying an assembly owned by another solution.
+```
+
+To avoid it, give each project a distinct `<AssemblyName>` (for example prefix it with the solution name). The registered name follows the csproj, so renaming the assembly is the override.
+
 ## Deploy web resources (`--webresources`)
 
 > [!NOTE]
