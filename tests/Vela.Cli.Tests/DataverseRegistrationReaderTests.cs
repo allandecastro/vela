@@ -35,6 +35,62 @@ public class DataverseRegistrationReaderTests
         return mock;
     }
 
+    // --- ReadAssembliesState (current-state assembly list, G#4b) -------------------------------
+
+    [Fact]
+    public void ReadAssembliesState_excludes_an_assembly_not_found_in_the_org()
+    {
+        // pluginassembly query returns nothing -> the assembly is absent from the org.
+        Mock<IOrganizationService> mock = ServiceReturning("pluginassembly");
+
+        DataverseRegistration.AssembliesReadResult result =
+            DataverseRegistration.ReadAssembliesState(mock.Object, ["Zava.Plugins"], new JsonSerializerOptions());
+
+        // It must NOT appear in the current assemblies while also being reported not found (the G#4b contradiction).
+        Assert.Empty(result.FoundAssemblies);
+        Assert.Contains(result.Diagnostics, d => d.Contains("Zava.Plugins") && d.Contains("not found"));
+    }
+
+    [Fact]
+    public void ReadAssembliesState_includes_a_found_assembly_even_with_no_plugin_types()
+    {
+        // pluginassembly is present; plugintype (and everything else) returns empty -> exists but no types yet.
+        Mock<IOrganizationService> mock = ServiceReturning("pluginassembly", new Entity("pluginassembly", Guid.NewGuid()) { ["name"] = "Zava.Plugins" });
+
+        DataverseRegistration.AssembliesReadResult result =
+            DataverseRegistration.ReadAssembliesState(mock.Object, ["Zava.Plugins"], new JsonSerializerOptions());
+
+        Assert.Equal(["Zava.Plugins"], result.FoundAssemblies);
+        Assert.Contains(result.Diagnostics, d => d.Contains("No plugin types"));
+    }
+
+    [Fact]
+    public void ReadAssembliesState_lists_only_the_assemblies_present_in_the_org()
+    {
+        // Name-aware mock: only "Found.Plugins" exists; "Missing.Plugins" is absent.
+        var mock = new Mock<IOrganizationService>(MockBehavior.Strict);
+        mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
+            .Returns((QueryBase q) =>
+            {
+                var query = (QueryExpression)q;
+                if (query.EntityName != "pluginassembly")
+                {
+                    return new EntityCollection();
+                }
+
+                string? name = query.Criteria.Conditions.FirstOrDefault(c => c.AttributeName == "name")?.Values.FirstOrDefault() as string;
+                return name == "Found.Plugins"
+                    ? Collection(new Entity("pluginassembly", Guid.NewGuid()) { ["name"] = "Found.Plugins" })
+                    : new EntityCollection();
+            });
+
+        DataverseRegistration.AssembliesReadResult result =
+            DataverseRegistration.ReadAssembliesState(mock.Object, ["Found.Plugins", "Missing.Plugins"], new JsonSerializerOptions());
+
+        Assert.Equal(["Found.Plugins"], result.FoundAssemblies);
+        Assert.Contains(result.Diagnostics, d => d.Contains("Missing.Plugins") && d.Contains("not found"));
+    }
+
     // --- GetPluginAssembly ---------------------------------------------------------------------
 
     [Fact]

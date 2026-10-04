@@ -22,10 +22,11 @@ namespace Vela.Cli;
 /// <summary> Reads live Dataverse registration state (assemblies, types, steps, custom APIs). </summary>
 internal static partial class DataverseRegistration
 {
-    // Stryker disable all : these three methods construct/consume a live Dataverse ServiceClient (network I/O)
-    // and cannot be exercised by an offline unit test — mutating them only yields NoCoverage noise. The reader
-    // helpers they orchestrate (GetPluginAssembly/GetPluginTypes/GetStepItems/GetCustomApiItems) are covered
-    // directly through the IOrganizationService seam.
+    // Stryker disable all : the live-client methods (BuildDataverseState here, CreateDataverseClient* below)
+    // construct/consume a live Dataverse ServiceClient (network I/O) and cannot be exercised by an offline unit
+    // test — mutating them only yields NoCoverage noise. The reader helpers they orchestrate
+    // (GetPluginAssembly/GetPluginTypes/GetStepItems/GetCustomApiItems) and the offline ReadAssembliesState are
+    // covered directly through the IOrganizationService seam, so the disable is restored around that helper.
     internal static RegistrationState BuildDataverseState(string[] sourceAssemblies, SharedOptions options, JsonSerializerOptions jsonOptions, IReadOnlyList<RankStep>? localDesiredSteps = null, Action<string>? report = null)
 {
     void Report(string phase) => report?.Invoke(phase);
@@ -34,36 +35,12 @@ internal static partial class DataverseRegistration
     using ServiceClient client = CreateDataverseClient(options);
 
     IOrganizationService service = client;
-    List<RegistrationItem> items = [];
-    List<string> diagnostics = [];
-    HashSet<Guid> ourPluginTypeIds = [];
 
     Report("Reading plugin steps and custom APIs…");
-    foreach (string assemblyName in sourceAssemblies)
-    {
-        Entity? pluginAssembly = GetPluginAssembly(service, assemblyName);
-        if (pluginAssembly == null)
-        {
-            diagnostics.Add($"Plugin assembly '{assemblyName}' not found in Dataverse.");
-            continue;
-        }
-
-        Dictionary<Guid, string> pluginTypes = GetPluginTypes(service, pluginAssembly.Id);
-        if (pluginTypes.Count == 0)
-        {
-            diagnostics.Add($"No plugin types found for assembly '{assemblyName}'.");
-            continue;
-        }
-
-        ourPluginTypeIds.UnionWith(pluginTypes.Keys);
-        items.AddRange(GetStepItems(service, pluginTypes, jsonOptions));
-
-        // Do NOT demote a custom-API read failure to a diagnostic: treating it as "no custom APIs" would
-        // make the diff see every local custom API as added and recreate APIs that already exist. Let it
-        // propagate to the top-level handler so the run fails with a proper connection/parse exit code,
-        // matching how the step read above surfaces errors.
-        items.AddRange(GetCustomApiItems(service, pluginTypes, jsonOptions));
-    }
+    AssembliesReadResult read = ReadAssembliesState(service, sourceAssemblies, jsonOptions);
+    List<RegistrationItem> items = read.Items;
+    List<string> diagnostics = read.Diagnostics;
+    HashSet<Guid> ourPluginTypeIds = read.PluginTypeIds;
 
     // Web resources reconcile independently and only when a web resources root is given, so a plugin-only run
     // never reads (and therefore never deletes) them. Scoped to the target solution (componenttype 61).
@@ -83,13 +60,64 @@ internal static partial class DataverseRegistration
     }
 
     return new RegistrationState(
-        SourceAssemblies: sourceAssemblies,
+        SourceAssemblies: read.FoundAssemblies.ToArray(),
         SourceAssemblyPayloads: [],
         PackagePayloads: [],
         GeneratedAtUtc: DateTime.UtcNow,
         Items: items.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
         Diagnostics: diagnostics.ToArray());
 }
+
+    // Stryker restore all : ReadAssembliesState below is offline (it takes an IOrganizationService seam, not a live
+    // client), so it IS mutation-tested - the live-client disable resumes before CreateDataverseClient.
+
+    // The per-assembly read over the IOrganizationService seam (so it is unit-testable offline, unlike the live
+    // BuildDataverseState that owns it). FoundAssemblies holds only the assemblies actually present in the org:
+    // a requested name absent from Dataverse is reported as a diagnostic and kept OUT of the current state, so the
+    // "current" assemblies never contradict a "not found" diagnostic.
+    internal sealed record AssembliesReadResult(List<string> FoundAssemblies, List<RegistrationItem> Items, List<string> Diagnostics, HashSet<Guid> PluginTypeIds);
+
+    internal static AssembliesReadResult ReadAssembliesState(IOrganizationService service, string[] sourceAssemblies, JsonSerializerOptions jsonOptions)
+    {
+        List<RegistrationItem> items = [];
+        List<string> diagnostics = [];
+        HashSet<Guid> pluginTypeIds = [];
+        List<string> foundAssemblies = [];
+
+        foreach (string assemblyName in sourceAssemblies)
+        {
+            Entity? pluginAssembly = GetPluginAssembly(service, assemblyName);
+            if (pluginAssembly == null)
+            {
+                diagnostics.Add($"Plugin assembly '{assemblyName}' not found in Dataverse.");
+                continue;
+            }
+
+            // Present in the org (even if it has no plugin types yet), so it belongs in the current state.
+            foundAssemblies.Add(assemblyName);
+
+            Dictionary<Guid, string> pluginTypes = GetPluginTypes(service, pluginAssembly.Id);
+            if (pluginTypes.Count == 0)
+            {
+                diagnostics.Add($"No plugin types found for assembly '{assemblyName}'.");
+                continue;
+            }
+
+            pluginTypeIds.UnionWith(pluginTypes.Keys);
+            items.AddRange(GetStepItems(service, pluginTypes, jsonOptions));
+
+            // Do NOT demote a custom-API read failure to a diagnostic: treating it as "no custom APIs" would
+            // make the diff see every local custom API as added and recreate APIs that already exist. Let it
+            // propagate to the top-level handler so the run fails with a proper connection/parse exit code,
+            // matching how the step read above surfaces errors.
+            items.AddRange(GetCustomApiItems(service, pluginTypes, jsonOptions));
+        }
+
+        return new AssembliesReadResult(foundAssemblies, items, diagnostics, pluginTypeIds);
+    }
+
+    // Stryker disable all : the connection-bound client setup below (and CreateDataverseClient*) is live network
+    // I/O, not exercisable offline - same rationale as the disable at the top of this file.
 
     // The SDK's ServiceClient defaults MaxConnectionTimeout to 4 minutes. On a large org the up-front read
     // (plugin steps, custom APIs, and especially the environment-wide rank-check read of
