@@ -83,5 +83,48 @@ namespace Vela.Querying
             service = service ?? throw new ArgumentNullException(nameof(service));
             return service.RetrieveAll(query, pageSize);
         }
+
+        /// <summary>
+        /// Runs the query and returns the first matching record, or <c>null</c> when there are none. Caps the
+        /// retrieve at one row (sets <see cref="QueryExpression.TopCount"/> to 1 when no Top was already set), so it
+        /// is a single retrieve and never pages. The fluent terminal that lets <c>.Build()</c> stay out of
+        /// caller code for the single-record case.
+        /// </summary>
+        /// <typeparam name="TEntity">The root early-bound entity type.</typeparam>
+        /// <param name="query">The typed query to run.</param>
+        /// <param name="service">The organization service to execute against.</param>
+        /// <returns>The first matching record as <typeparamref name="TEntity"/>, or <c>null</c> if none match.</returns>
+        public static TEntity? FirstOrDefault<TEntity>(this TypedQuery<TEntity> query, IOrganizationService service)
+            where TEntity : Entity
+        {
+            query = query ?? throw new ArgumentNullException(nameof(query));
+            service = service ?? throw new ArgumentNullException(nameof(service));
+
+            QueryExpression expression = query.Expression;
+
+            // Cap at one row only when the caller set neither a Top nor a Page (Top and paging are mutually
+            // exclusive), and restore the original afterwards so FirstOrDefault never permanently shrinks a
+            // reusable query (q.FirstOrDefault(svc) then q.ToList(svc) must still return every record).
+            bool capAtOne = !expression.TopCount.HasValue
+                && (expression.PageInfo is null || expression.PageInfo.Count == 0);
+            int? originalTop = expression.TopCount;
+            if (capAtOne)
+            {
+                expression.TopCount = 1;
+            }
+
+            try
+            {
+                DataCollection<Entity> matches = service.RetrieveMultiple(expression).Entities;
+                return matches.Count > 0 ? matches[0].ToEntity<TEntity>() : null;
+            }
+            finally
+            {
+                if (capAtOne)
+                {
+                    expression.TopCount = originalTop;
+                }
+            }
+        }
     }
 }
