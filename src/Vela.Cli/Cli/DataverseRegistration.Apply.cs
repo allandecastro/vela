@@ -563,6 +563,38 @@ internal static partial class DataverseRegistration
     }
 }
 
+    // Returns the names of source assemblies that already exist in the org but are NOT part of the target solution.
+    // The registered pluginassembly name is the DLL's assembly name (unique per org), so two projects that build the
+    // same-named assembly collide: applying one rewrites the other's content. This is the signal for that collision -
+    // an assembly that exists and belongs elsewhere. Pure over the service, so it is testable with a fake org.
+    internal static List<string> FindCrossSolutionAssemblyCollisions(IOrganizationService service, AssemblyPayload[] payloads, string solutionUniqueName)
+    {
+        List<string> collisions = new List<string>();
+        foreach (AssemblyPayload payload in payloads)
+        {
+            Entity? existing = GetPluginAssembly(service, payload.AssemblyName);
+            if (existing != null && !IsAssemblyInSolution(service, existing.Id, solutionUniqueName))
+            {
+                collisions.Add(payload.AssemblyName);
+            }
+        }
+
+        return collisions;
+    }
+
+    private static bool IsAssemblyInSolution(IOrganizationService service, Guid assemblyId, string solutionUniqueName)
+    {
+        QueryExpression query = new QueryExpression("solutioncomponent")
+        {
+            ColumnSet = new ColumnSet("solutioncomponentid"),
+            TopCount = 1,
+        };
+        query.Criteria.AddCondition("objectid", ConditionOperator.Equal, assemblyId);
+        LinkEntity solution = query.AddLink("solution", "solutionid", "solutionid");
+        solution.LinkCriteria.AddCondition("uniquename", ConditionOperator.Equal, solutionUniqueName);
+        return service.RetrieveMultiple(query).Entities.Count > 0;
+    }
+
     internal static void UpsertPluginAssembly(IOrganizationService service, AssemblyPayload payload)
 {
     if (!File.Exists(payload.AssemblyPath))
