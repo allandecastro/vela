@@ -56,8 +56,8 @@ namespace Vela.Tests
             preImage["telephone1"] = "123";
             context.PluginExecutionContext.PreEntityImages["PreImage"] = preImage;
 
-            // Typed overload: the effective committed record as the entity type (fails if it skips ToEntity<T> or
-            // the merge). Target overlays the image; the image contributes columns the Target did not change.
+            // Typed overload: the image's captured columns merged with the Target, as the entity type (fails if it
+            // skips ToEntity<T> or the merge). Target overlays the image; the image contributes columns not in the Target.
             TestAccount merged = context.GetPreImageMerged<TestAccount>();
 
             Assert.Equal(target.Id, merged.Id);

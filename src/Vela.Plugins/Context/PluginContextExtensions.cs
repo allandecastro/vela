@@ -334,12 +334,12 @@ namespace Vela.Context
         }
 
         // ---- Typed merged images -----------------------------------------------------------------------
-        // Typed overloads of the merged accessors (pre/post image overlaid by the Target = the effective committed
-        // record), mirroring the typed GetPreImage<T>/GetPostImage<T>. The result is an independent snapshot (a
-        // clone), so a post-operation handler reads the whole record without a post-image; writing to it does not
-        // persist (use UserService.Update).
+        // Typed overloads of the merged accessors (the image's captured columns overlaid by the Target's), mirroring
+        // the typed GetPreImage<T>/GetPostImage<T>. Only columns captured in the image or present in the Target
+        // appear; an attribute that is neither is absent (reads null) - not the stored value. The result is an
+        // independent snapshot (a clone); writing to it does not persist (use UserService.Update).
 
-        /// <summary>Gets the pre-image merged with the Target as <typeparamref name="T"/> (the effective committed record).</summary>
+        /// <summary>Gets the pre-image's captured columns merged with the Target, as <typeparamref name="T"/> (uncaptured columns are absent).</summary>
         public static T GetPreImageMerged<T>(this ILocalPluginContext context, string alias = PluginImageAliases.PreImage) where T : Entity
             => context.GetPreImageMerged(alias).ToEntity<T>();
 
