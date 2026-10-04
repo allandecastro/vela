@@ -333,6 +333,28 @@ namespace Vela.Context
             return MergeWithBulkTarget(context, targetIndex, postImage);
         }
 
+        // ---- Typed merged images -----------------------------------------------------------------------
+        // Typed overloads of the merged accessors (pre/post image overlaid by the Target = the effective committed
+        // record), mirroring the typed GetPreImage<T>/GetPostImage<T>. The result is an independent snapshot (a
+        // clone), so a post-operation handler reads the whole record without a post-image; writing to it does not
+        // persist (use UserService.Update).
+
+        /// <summary>Gets the pre-image merged with the Target as <typeparamref name="T"/> (the effective committed record).</summary>
+        public static T GetPreImageMerged<T>(this ILocalPluginContext context, string alias = PluginImageAliases.PreImage) where T : Entity
+            => context.GetPreImageMerged(alias).ToEntity<T>();
+
+        /// <summary>Gets the post-image merged with the Target as <typeparamref name="T"/>.</summary>
+        public static T GetPostImageMerged<T>(this ILocalPluginContext context, string alias = PluginImageAliases.PostImage) where T : Entity
+            => context.GetPostImageMerged(alias).ToEntity<T>();
+
+        /// <summary>Gets the per-record pre-image merged with the Target as <typeparamref name="T"/> for a bulk target index.</summary>
+        public static T GetPreImageMerged<T>(this ILocalPluginContext context, int targetIndex, string alias = PluginImageAliases.PreImage) where T : Entity
+            => context.GetPreImageMerged(targetIndex, alias).ToEntity<T>();
+
+        /// <summary>Gets the per-record post-image merged with the Target as <typeparamref name="T"/> for a bulk target index.</summary>
+        public static T GetPostImageMerged<T>(this ILocalPluginContext context, int targetIndex, string alias = PluginImageAliases.PostImage) where T : Entity
+            => context.GetPostImageMerged(targetIndex, alias).ToEntity<T>();
+
         private static Entity? GetEntityImage(EntityImageCollection images, string alias)
         {
             if (images == null || !images.Contains(alias))
