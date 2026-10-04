@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 using Vela.Querying;
 using Xunit;
 
@@ -56,6 +57,49 @@ namespace Vela.Testing.Tests
             FakeAccount? first = Query.For<FakeAccount>().SelectAll().FirstOrDefault(crm);
 
             Assert.Null(first);
+        }
+
+        [Fact]
+        public void Scalar_aggregates_count_sum_and_average_only_the_matching_rows()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            crm.Create(new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 10 });
+            crm.Create(new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 30 });
+            crm.Create(new Entity("account") { ["name"] = "drop", ["numberofemployees"] = 999 });
+
+            // A Where must compose into the aggregate (the "drop" row is excluded): count 2, sum 40, avg 20 -
+            // fails if the scalar executor loses Criteria.
+            TypedQuery<FakeAccount> Matching() => Query.For<FakeAccount>().Where(a => a.Name, ConditionOperator.Equal, "keep");
+
+            Assert.Equal(2, Matching().CountScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(40m, Matching().SumScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(20m, Matching().AverageScalar(crm, a => a.NumberOfEmployees));
+        }
+
+        [Fact]
+        public void Scalar_sum_is_null_and_count_is_zero_when_nothing_matches()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+
+            // null (not 0) distinguishes "no rows" from a real sum of 0.
+            Assert.Null(Query.For<FakeAccount>().SumScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(0, Query.For<FakeAccount>().CountScalar(crm, a => a.NumberOfEmployees));
+        }
+
+        [Fact]
+        public void Scalar_aggregate_does_not_mutate_a_reusable_query()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            crm.Create(new Entity("account") { ["name"] = "A", ["numberofemployees"] = 5 });
+            crm.Create(new Entity("account") { ["name"] = "B", ["numberofemployees"] = 7 });
+
+            TypedQuery<FakeAccount> query = Query.For<FakeAccount>().SelectAll();
+
+            _ = query.SumScalar(crm, a => a.NumberOfEmployees);   // swaps the ColumnSet to an aggregate internally...
+            List<FakeAccount> all = query.ToList(crm);             // ...and must restore it, so this is a normal read
+
+            Assert.Equal(2, all.Count);
+            Assert.Contains(all, a => a.Name == "A");
         }
 
         [Fact]

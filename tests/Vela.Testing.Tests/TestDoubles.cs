@@ -27,6 +27,13 @@ namespace Vela.Testing.Tests
             get => GetAttributeValue<string>("name");
             set => SetAttributeValue("name", value);
         }
+
+        [AttributeLogicalName("numberofemployees")]
+        public int? NumberOfEmployees
+        {
+            get => GetAttributeValue<int?>("numberofemployees");
+            set => SetAttributeValue("numberofemployees", value);
+        }
     }
 
     // User-owned early-bound entity (exposes OwnerId/StateCode) for the Update-split and SetState tests.
