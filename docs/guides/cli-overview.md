@@ -17,6 +17,7 @@ Core commands:
 | `vela plan` | Preview the create/update/delete operations needed to converge Dataverse with your package (read-only). |
 | `vela apply` | Apply those operations (idempotent upsert/delete); writes by default, prompting on a terminal or `--auto-approve` for CI. See [CLI automation](plan-apply.md). |
 | `vela inspect` | Report local package registrations alongside live Dataverse state, with diagnostics (read-only). |
+| `vela logs` (alias `vela trace`) | Read the Plug-in Trace Log, or failed system jobs with `--jobs` (read-only). See [Reading execution logs](#reading-execution-logs-vela-logs). |
 | `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
 | `vela logout` | Clear the cached interactive token and remembered Dataverse URL. |
 | `vela update` | Update the vela global tool to the latest published version (or `--version <x.y.z>`). |
@@ -79,3 +80,33 @@ Every command returns a stable exit code, so scripts and coding agents can branc
 > **Update notice.** After a command runs, the CLI checks nuget.org at most once a day and prints a one-line
 > notice to stderr when a newer version is available (`dotnet tool update -g Vela.Cli`). It never blocks or fails a
 > command, and is silent for `--json` output. Set `VELA_NO_UPDATE_CHECK` to disable it.
+
+## Reading execution logs (`vela logs`)
+
+`vela logs` (alias `vela trace`) is a **read-only** reader of a Dataverse environment's execution diagnostics, so
+you - or a coding agent - can see why a plugin failed without opening the UI. It reads two sources:
+
+- **Plug-in Trace Log** (default): the trace output of plugins (what `ctx.Trace(...)` and the automatic
+  handler-entry line emit). Only populated when plug-in tracing is enabled on the org (System Settings >
+  Customization > *Enable logging to plug-in trace log*: `All` or `Exception`). On an empty result, `vela logs`
+  says so and points at that setting.
+- **Failed system jobs** with `--jobs`: the `asyncoperation` rows, where an **asynchronous** step's failure is
+  recorded (with its error message) **even when trace logging is off**. Defaults to failed jobs; `--all-statuses`
+  shows every status.
+
+```bash
+# recent plugin errors in the last hour (interactive login)
+vela logs --errors --since 1h -i
+
+# why did my async step fail? (trace log may be off - look at the jobs)
+vela logs --jobs --since 1d -i
+
+# machine-readable, for an agent to parse
+vela logs --since 2h --type AccountNamePlugin --json
+```
+
+Filters: `--top <n>` (1-200, default 20, newest first), `--since 30m|2h|3d|<date>`, `--type <plugin type>`,
+`--message <sdk message>`, `--entity <logical name>`, `--correlation <guid>`, `--errors` (trace log only),
+`--full` (do not truncate the trace/exception text). `--json` emits `{ mode, count, logs: [...] }`; the trace text
+and exception are always complete in JSON. Connects with the usual options (`-i` or `--connection-string` /
+client-secret flags); it never writes or deletes anything.
