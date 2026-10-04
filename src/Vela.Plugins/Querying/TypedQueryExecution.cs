@@ -135,7 +135,8 @@ namespace Vela.Querying
         // result type is intrinsic (count -> int, sum/average -> decimal). Grouped aggregates stay on the
         // string-alias authoring API (TypedQuery.GroupBy/Sum(..., alias) + ToFetchXml).
 
-        /// <summary>Counts the matching rows (the non-null values of <paramref name="column"/>; pass the primary id to count rows).</summary>
+        /// <summary>Counts the matching rows. <see cref="XrmAggregateType.Count"/> counts every matching row, so the
+        /// column only names the attribute the count is keyed on (its value is irrelevant) - pass the primary id.</summary>
         public static int CountScalar<TEntity>(this TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, object?>> column)
             where TEntity : Entity
             => Convert.ToInt32(RunScalarAggregate(query, service, column, XrmAggregateType.Count) ?? 0);
@@ -150,8 +151,11 @@ namespace Vela.Querying
             where TEntity : Entity
             => ToDecimal(RunScalarAggregate(query, service, column, XrmAggregateType.Avg));
 
-        // Runs a single-aggregate retrieve without mutating the caller's query: swap the ColumnSet for the
-        // aggregate one for the duration of the retrieve and restore it in a finally (mirrors FirstOrDefault).
+        // Runs a single-aggregate retrieve against a stripped clone of the caller's query, never touching the
+        // original. The clone keeps only what an aggregate needs - entity, filter criteria and filtering links -
+        // and drops the projection shape that conflicts with aggregation: root/link column projections, orders
+        // (aggregate ordering must use a group/aggregate alias), paging and Top (which would page past the single
+        // aggregate row and read a silent 0/null). Criteria/LinkCriteria are shared by reference (read-only here).
         private static object? RunScalarAggregate<TEntity>(TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, object?>> column, XrmAggregateType type)
             where TEntity : Entity
         {
@@ -160,28 +164,55 @@ namespace Vela.Querying
             column = column ?? throw new ArgumentNullException(nameof(column));
 
             const string alias = "velaScalar";
-            string attribute = ExpressionHelper.GetAttributeLogicalName(column);
+            QueryExpression source = query.Expression;
 
-            QueryExpression expression = query.Expression;
-            ColumnSet original = expression.ColumnSet;
-            ColumnSet aggregate = new ColumnSet();
-            aggregate.AttributeExpressions.Add(new XrmAttributeExpression { AttributeName = attribute, Alias = alias, AggregateType = type });
-            expression.ColumnSet = aggregate;
-            try
+            ColumnSet aggregateColumns = new ColumnSet();
+            aggregateColumns.AttributeExpressions.Add(new XrmAttributeExpression
             {
-                DataCollection<Entity> rows = service.RetrieveMultiple(expression).Entities;
-                if (rows.Count == 0)
-                {
-                    return null;
-                }
+                AttributeName = ExpressionHelper.GetAttributeLogicalName(column),
+                Alias = alias,
+                AggregateType = type,
+            });
 
-                object? value = rows[0].Contains(alias) ? rows[0][alias] : null;
-                return value is AliasedValue aliased ? aliased.Value : value;
-            }
-            finally
+            QueryExpression aggregateQuery = new QueryExpression(source.EntityName)
             {
-                expression.ColumnSet = original;
+                ColumnSet = aggregateColumns,
+                Criteria = source.Criteria,
+                Distinct = source.Distinct,
+                NoLock = source.NoLock,
+                // No Orders / PageInfo / TopCount: they are meaningless for a scalar aggregate and conflict with it.
+            };
+            foreach (LinkEntity link in source.LinkEntities)
+            {
+                aggregateQuery.LinkEntities.Add(StripProjection(link));
             }
+
+            DataCollection<Entity> rows = service.RetrieveMultiple(aggregateQuery).Entities;
+            if (rows.Count == 0)
+            {
+                return null;
+            }
+
+            object? value = rows[0].Contains(alias) ? rows[0][alias] : null;
+            return value is AliasedValue aliased ? aliased.Value : value;
+        }
+
+        // Clones a link keeping its join and filter (LinkCriteria, shared read-only) but dropping its projection
+        // (Columns) and Orders, so a filtering link does not inject ungrouped columns into the aggregate query.
+        private static LinkEntity StripProjection(LinkEntity source)
+        {
+            LinkEntity copy = new LinkEntity(source.LinkFromEntityName, source.LinkToEntityName, source.LinkFromAttributeName, source.LinkToAttributeName, source.JoinOperator)
+            {
+                Columns = new ColumnSet(),
+                LinkCriteria = source.LinkCriteria,
+                EntityAlias = source.EntityAlias,
+            };
+            foreach (LinkEntity nested in source.LinkEntities)
+            {
+                copy.LinkEntities.Add(StripProjection(nested));
+            }
+
+            return copy;
         }
 
         private static decimal? ToDecimal(object? value) => value switch

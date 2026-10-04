@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 using Vela.Querying;
 using Xunit;
 
@@ -59,17 +60,20 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Scalar_aggregates_count_sum_and_average_the_matching_rows()
+        public void Scalar_aggregates_count_sum_and_average_only_the_matching_rows()
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService();
-            foreach (int n in new[] { 10, 20, 30 })
-            {
-                crm.Create(new Entity("account") { ["numberofemployees"] = n });
-            }
+            crm.Create(new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 10 });
+            crm.Create(new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 30 });
+            crm.Create(new Entity("account") { ["name"] = "drop", ["numberofemployees"] = 999 });
 
-            Assert.Equal(3, Query.For<FakeAccount>().CountScalar(crm, a => a.NumberOfEmployees));
-            Assert.Equal(60m, Query.For<FakeAccount>().SumScalar(crm, a => a.NumberOfEmployees));
-            Assert.Equal(20m, Query.For<FakeAccount>().AverageScalar(crm, a => a.NumberOfEmployees));
+            // A Where must compose into the aggregate (the "drop" row is excluded): count 2, sum 40, avg 20 -
+            // fails if the scalar executor loses Criteria.
+            TypedQuery<FakeAccount> Matching() => Query.For<FakeAccount>().Where(a => a.Name, ConditionOperator.Equal, "keep");
+
+            Assert.Equal(2, Matching().CountScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(40m, Matching().SumScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(20m, Matching().AverageScalar(crm, a => a.NumberOfEmployees));
         }
 
         [Fact]
