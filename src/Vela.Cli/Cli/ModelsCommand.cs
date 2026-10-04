@@ -37,7 +37,7 @@ internal static class ModelsCommand
     private static readonly HashSet<string> FlagOptions = new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--solution-roles", "--forms", "--tables", "--no-annotations", "--overwrite", "--verbose", "-v", "--json",
-        "--interactive", "-i", "--help", "-h", "--verify",
+        "--interactive", "-i", "--help", "-h", "--verify", "--intersect",
     };
 
     // Value options that may appear bare (present with no value = "all"): --messages / --custom-apis. Every other
@@ -117,6 +117,12 @@ internal static class ModelsCommand
                 return Fail($"--verify checks the C# early-bound model only; it cannot be combined with {scopeLabel}.", ExitInvalidArguments, includeUsage: false);
             }
 
+            // --intersect generates C# entity classes for N:N join tables; it has no meaning for TypeScript output.
+            if (scope.Intersect)
+            {
+                return Fail($"--intersect generates C# entity models; it cannot be combined with {scopeLabel}.", ExitInvalidArguments, includeUsage: false);
+            }
+
             // TypeScript is the only output for the client-side scopes, so --lang defaults to ts and only an
             // explicit non-ts value is rejected.
             string tsLang = (langOption ?? "ts").Trim().ToLowerInvariant();
@@ -156,6 +162,14 @@ internal static class ModelsCommand
         outDir = ProjectNamespaceResolver.ResolveCSharpOutputDir(args, outDir);
 
         bool dataAnnotations = !HasFlag(args, "--no-annotations");
+
+        // --verify checks only the explicitly scoped tables; it does not expand to the discovered intersect tables,
+        // and the drift checker ignores out-of-scope local files, so a stale intersect model would pass unnoticed.
+        // Reject the combination rather than give a false all-clear.
+        if (scope.Intersect && HasFlag(args, "--verify"))
+        {
+            return Fail("--intersect cannot be combined with --verify (verify checks the explicitly scoped tables only).", ExitInvalidArguments, includeUsage: false);
+        }
 
         // --verify does not write: it regenerates the scoped entity models from live metadata in memory and
         // compares them, column by column, against the files already on disk, then reports drift. It verifies the
@@ -270,6 +284,20 @@ internal static class ModelsCommand
                     {
                         Console.Error.WriteLine($"Warning: skipping entity '{name}' (could not read its metadata): {ex.Message}");
                     }
+                }
+
+                // --intersect: also generate the N:N join tables of the selected entities, so typed queries can
+                // target them. One level, opt-in; the intersect names are discovered from the relationship metadata
+                // (callers rarely know them) and de-duplicated against what was already read.
+                if (scope.Intersect && metadata.Count > 0)
+                {
+                    int added = EntityMetadataReader.AppendIntersects(
+                        metadata,
+                        name => EntityMetadataReader.ReadEntity(service, name),
+                        skip => Console.Error.WriteLine(skip));
+                    Console.Error.WriteLine(added > 0
+                        ? $"Including {added} N:N intersect table(s) (--intersect)."
+                        : "No N:N intersect tables found for the scoped tables (--intersect).");
                 }
 
                 if (metadata.Count > 0)
@@ -736,6 +764,11 @@ internal static class ModelsCommand
             return Fail("--verify needs live metadata to compare against; it cannot be combined with --from-solution.", ExitInvalidArguments, includeUsage: false);
         }
 
+        if (HasFlag(args, "--intersect"))
+        {
+            return Fail("--intersect needs live metadata to discover the N:N join tables; it cannot be combined with --from-solution.", ExitInvalidArguments, includeUsage: false);
+        }
+
         string lang = (TryReadOption(args, "--lang") ?? "csharp").Trim().ToLowerInvariant();
         if (lang != "csharp")
         {
@@ -878,6 +911,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --from-solution <zip>     offline: generate C# entity models + option-set enums from an exported (unmanaged) solution zip, with no connection");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
         Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
+        Console.WriteLine("  --intersect               also generate the N:N join (intersect) tables of the scoped tables, so typed queries can target them (live only)");
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response classes (into Messages/)");
         Console.WriteLine("  --messages [a,b,c]        SDK message names → typed Request/Response classes into Messages/ (any sdkmessage; pairs with OnMessage<TRequest>())");
         Console.WriteLine("                            with no value: generate ALL consumable messages, skipping internal/private, Custom-API-backed, and messages that already have an SDK request class");

@@ -35,6 +35,60 @@ internal static class EntityMetadataReader
         return names.ToList();
     }
 
+    // Discovers the intersect tables of the entities already in <paramref name="metadata"/>, reads each via
+    // <paramref name="readEntity"/> and appends it, returning how many were added. A table that cannot be read is
+    // skipped (reported via <paramref name="onSkip"/>) so one bad intersect does not discard the rest. Pure wiring
+    // (no connection), so the two-phase read is testable with a fake reader.
+    internal static int AppendIntersects(List<EntityMetadata> metadata, Func<string, EntityMetadata> readEntity, Action<string>? onSkip = null)
+    {
+        HashSet<string> have = new HashSet<string>(metadata.Select(m => m.LogicalName), StringComparer.OrdinalIgnoreCase);
+        int added = 0;
+        foreach (string intersect in CollectIntersectNames(metadata, have))
+        {
+            try
+            {
+                metadata.Add(readEntity(intersect));
+                added++;
+            }
+            catch (Exception ex)
+            {
+                onSkip?.Invoke($"Warning: skipping intersect table '{intersect}' (could not read its metadata): {ex.Message}");
+            }
+        }
+
+        return added;
+    }
+
+    // Collects the N:N join (intersect) table logical names reachable from the given entities' many-to-many
+    // relationships, skipping any already in <paramref name="exclude"/> and de-duplicating. One level only: the
+    // intersects of these entities, not transitively the intersects of those intersects.
+    internal static List<string> CollectIntersectNames(IEnumerable<EntityMetadata> entities, ISet<string> exclude)
+    {
+        List<string> names = new List<string>();
+        HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (EntityMetadata entity in entities)
+        {
+            if (entity.ManyToManyRelationships is null)
+            {
+                continue;
+            }
+
+            foreach (ManyToManyRelationshipMetadata relationship in entity.ManyToManyRelationships)
+            {
+                string? intersect = relationship.IntersectEntityName;
+                if (string.IsNullOrEmpty(intersect) || exclude.Contains(intersect!) || !seen.Add(intersect!))
+                {
+                    continue;
+                }
+
+                names.Add(intersect!);
+            }
+        }
+
+        names.Sort(StringComparer.OrdinalIgnoreCase);
+        return names;
+    }
+
     // Derives the table list from a solution's components (componenttype 1 = Entity), mapping the component
     // object ids to logical names via a lightweight RetrieveAllEntities (entity filter only).
     private static IEnumerable<string> EntitiesInSolution(IOrganizationService service, string uniqueName)
