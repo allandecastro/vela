@@ -1055,8 +1055,11 @@ namespace Vela.Testing
                 .Where(registration => registration.Step.Stage == invocation.Stage
                     && string.Equals(registration.Step.Message, invocation.Message, StringComparison.OrdinalIgnoreCase)
                     // A generic modelled message may not resolve a primary entity from the request; match its
-                    // steps by (message, stage) alone in that case.
+                    // steps by (message, stage) alone in that case. Likewise an entity-none step (empty logical
+                    // name: Associate/Disassociate, or an intentionally global step) matches any entity - mirroring
+                    // the plugin's own ResolveSingleMatchingStep, which skips the entity check for an empty name.
                     && (string.IsNullOrEmpty(invocation.EntityLogicalName)
+                        || string.IsNullOrEmpty(registration.Step.EntityLogicalName)
                         || string.Equals(registration.Step.EntityLogicalName, invocation.EntityLogicalName, StringComparison.OrdinalIgnoreCase)))
                 .Where(registration => !string.Equals(invocation.Message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase)
                     || FiltersMatch(registration.Step, invocation.ChangedAttributes))

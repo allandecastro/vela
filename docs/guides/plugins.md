@@ -446,6 +446,21 @@ message-specific `ctx.GetRequest<TRequest>()`.
 | `OnModifyAccess()` | `IModifyAccessPostContext<T>` | `ModifyAccessRequest` | `ctx.Request.Target` |
 | `OnRevokeAccess()` | `IRevokeAccessPostContext<T>` | `RevokeAccessRequest` | `ctx.Request.Target`, `ctx.Request.Revokee` |
 
+**Associate / Disassociate** register with **no primary entity**, whatever `TEntity` the plugin uses. Dataverse has
+no per-entity message filter for these (the `Target` can be either end of the relationship), so the step is global
+and you discriminate in the handler by the relationship name:
+
+```csharp
+RegisterStep().OnAssociate().PostOperation().Sync().Handle(ctx =>
+{
+    if (ctx.Request.Relationship.SchemaName != "sample_account_leads") return;   // the only filter available
+    // ctx.Request.Target + ctx.Request.RelatedEntities are the two ends of the link
+});
+```
+
+The `TEntity` on `EntityPluginBase<TEntity>` is irrelevant for these two messages (it does not scope them); pick any
+and filter on `ctx.Request.Relationship`.
+
 The scaffold generates an `AccountMessageReference.cs` cheat-sheet with one dormant (`Disabled()`) handler per
 row, so you can copy the exact shape for the message you need. The deprecated `SetState` / `SetStateDynamicEntity`
 and `Assign` messages are intentionally not modelled: update `statecode`/`statuscode` or `ownerid` with
