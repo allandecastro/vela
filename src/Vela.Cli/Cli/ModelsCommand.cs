@@ -37,7 +37,7 @@ internal static class ModelsCommand
     private static readonly HashSet<string> FlagOptions = new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--solution-roles", "--forms", "--tables", "--no-annotations", "--overwrite", "--verbose", "-v", "--json",
-        "--interactive", "-i", "--help", "-h", "--verify",
+        "--interactive", "-i", "--help", "-h", "--verify", "--intersect",
     };
 
     // Value options that may appear bare (present with no value = "all"): --messages / --custom-apis. Every other
@@ -269,6 +269,32 @@ internal static class ModelsCommand
                     catch (Exception ex)
                     {
                         Console.Error.WriteLine($"Warning: skipping entity '{name}' (could not read its metadata): {ex.Message}");
+                    }
+                }
+
+                // --intersect: also generate the N:N join tables of the selected entities, so typed queries can
+                // target them. One level, opt-in; the intersect names are discovered from the relationship metadata
+                // (callers rarely know them) and de-duplicated against what was already read.
+                if (scope.Intersect && metadata.Count > 0)
+                {
+                    HashSet<string> have = new HashSet<string>(metadata.Select(m => m.LogicalName), StringComparer.OrdinalIgnoreCase);
+                    int added = 0;
+                    foreach (string intersect in EntityMetadataReader.CollectIntersectNames(metadata, have))
+                    {
+                        try
+                        {
+                            metadata.Add(EntityMetadataReader.ReadEntity(service, intersect));
+                            added++;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"Warning: skipping intersect table '{intersect}' (could not read its metadata): {ex.Message}");
+                        }
+                    }
+
+                    if (added > 0)
+                    {
+                        Console.Error.WriteLine($"Including {added} N:N intersect table(s) (--intersect).");
                     }
                 }
 
@@ -736,6 +762,11 @@ internal static class ModelsCommand
             return Fail("--verify needs live metadata to compare against; it cannot be combined with --from-solution.", ExitInvalidArguments, includeUsage: false);
         }
 
+        if (HasFlag(args, "--intersect"))
+        {
+            return Fail("--intersect needs live metadata to discover the N:N join tables; it cannot be combined with --from-solution.", ExitInvalidArguments, includeUsage: false);
+        }
+
         string lang = (TryReadOption(args, "--lang") ?? "csharp").Trim().ToLowerInvariant();
         if (lang != "csharp")
         {
@@ -878,6 +909,7 @@ internal static class ModelsCommand
         Console.WriteLine("  --from-solution <zip>     offline: generate C# entity models + option-set enums from an exported (unmanaged) solution zip, with no connection");
         Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
         Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
+        Console.WriteLine("  --intersect               also generate the N:N join (intersect) tables of the scoped tables, so typed queries can target them (live only)");
         Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response classes (into Messages/)");
         Console.WriteLine("  --messages [a,b,c]        SDK message names → typed Request/Response classes into Messages/ (any sdkmessage; pairs with OnMessage<TRequest>())");
         Console.WriteLine("                            with no value: generate ALL consumable messages, skipping internal/private, Custom-API-backed, and messages that already have an SDK request class");

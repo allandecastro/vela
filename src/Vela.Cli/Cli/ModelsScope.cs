@@ -18,7 +18,8 @@ internal readonly record struct ModelsScope(
     string[] Messages,
     bool AllMessages,
     string[] Roles,
-    bool SolutionRoles)
+    bool SolutionRoles,
+    bool Intersect)
 {
     // True when no scope at all was requested: refusing this (rather than generating every table) is the caller's job.
     public bool IsEmpty =>
@@ -77,6 +78,10 @@ internal readonly record struct ModelsScope(
         // --solution-roles pulls every security role in --solution (like --solution does for tables).
         bool solutionRoles = HasFlag(args, "--solution-roles");
 
-        return new ModelsScope(solution, entities, customApis, allCustomApis, messages, allMessages, roles, solutionRoles);
+        // --intersect also generates the N:N join (intersect) tables of the selected entities, so typed queries can
+        // target them. Opt-in; one level (the intersects of the selected tables only, not transitive).
+        bool intersect = HasFlag(args, "--intersect");
+
+        return new ModelsScope(solution, entities, customApis, allCustomApis, messages, allMessages, roles, solutionRoles, intersect);
     }
 }

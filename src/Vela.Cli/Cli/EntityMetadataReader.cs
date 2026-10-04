@@ -35,6 +35,36 @@ internal static class EntityMetadataReader
         return names.ToList();
     }
 
+    // Collects the N:N join (intersect) table logical names reachable from the given entities' many-to-many
+    // relationships, skipping any already in <paramref name="exclude"/> and de-duplicating. One level only: the
+    // intersects of these entities, not transitively the intersects of those intersects.
+    internal static List<string> CollectIntersectNames(IEnumerable<EntityMetadata> entities, ISet<string> exclude)
+    {
+        List<string> names = new List<string>();
+        HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (EntityMetadata entity in entities)
+        {
+            if (entity.ManyToManyRelationships is null)
+            {
+                continue;
+            }
+
+            foreach (ManyToManyRelationshipMetadata relationship in entity.ManyToManyRelationships)
+            {
+                string? intersect = relationship.IntersectEntityName;
+                if (string.IsNullOrEmpty(intersect) || exclude.Contains(intersect!) || !seen.Add(intersect!))
+                {
+                    continue;
+                }
+
+                names.Add(intersect!);
+            }
+        }
+
+        names.Sort(StringComparer.OrdinalIgnoreCase);
+        return names;
+    }
+
     // Derives the table list from a solution's components (componenttype 1 = Entity), mapping the component
     // object ids to logical names via a lightweight RetrieveAllEntities (entity filter only).
     private static IEnumerable<string> EntitiesInSolution(IOrganizationService service, string uniqueName)

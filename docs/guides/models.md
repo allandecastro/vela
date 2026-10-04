@@ -77,6 +77,22 @@ properties, annotated with `[RelationshipSchemaName("...")]`:
 
 A relationship whose target table is not part of the same generation is skipped (its class would not exist).
 
+### Intersect (N:N join) tables (`--intersect`)
+
+An N:N relationship is backed by a hidden **intersect table** (the join table, e.g. `listmember`). To query that
+join directly with a typed query, you need its model, but its logical name is rarely known. Add `--intersect` and
+`vela models` discovers the intersect tables of the scoped tables from their N:N relationship metadata and generates
+them as entity classes too:
+
+```bash
+vela models --solution ZavaSales --intersect --namespace Zava.Shared.Models.Generated
+```
+
+It is opt-in and **one level** - the intersect tables of the scoped tables only, not transitively - and de-duplicates
+and reports how many it added. It needs live metadata, so it cannot be combined with `--from-solution`. It does not
+pull in the N:N *other-end* tables; add those to `--entities` if you also want their nav properties. System tables
+(for example `activityparty`, `systemuser`) are already generatable by naming them in `--entities`.
+
 A navigation property is **not a column**: it cannot be used in `FilterOn` / `Select` / `Where` / `OrderBy` /
 `WithPreImage` (select the lookup foreign-key column instead, e.g. `a.PrimaryContactId`). The analyzer
 [VELA010](../reference/analyzers.md#vela010) flags this at build time, and the runtime resolvers reject it.
