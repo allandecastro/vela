@@ -368,6 +368,8 @@ internal static class OutputWriter
         Console.WriteLine("      scope: --solution <uniquename> | --entities <a,b,c> | --custom-apis [<a,b,c>] | --messages [<a,b,c>] | --roles <a,b,c> | --solution-roles (combinable)");
         Console.WriteLine("      [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--lang csharp|ts] [--forms and/or --tables (preview, TypeScript)] [connection options] [--timeout <minutes>]");
         Console.WriteLine("      run 'vela models --help' for the full scope/option reference");
+        WriteCommand(console, "logs", "Read the plug-in trace log or failed system jobs (read-only; alias: trace).");
+        Console.WriteLine("      [--jobs] [--errors] [--top <n>] [--since 30m|2h|3d|<date>] [--type <name>] [--message <m>] [--entity <logical>] [--correlation <guid>] [--full] [connection options] [--json]");
         WriteCommand(console, "sign", "Sign a plugin package.");
         Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
         WriteCommand(console, "logout", "Clear the cached interactive-login token and remembered Dataverse URL.");
