@@ -25,7 +25,14 @@ public sealed record RegistrationDiff(string[] LocalAssemblies, string[] Current
 
 public sealed record RegistrationChange(string Kind, string Type, JsonElement Before, JsonElement After);
 public sealed record DiffSummary(int Added, int Removed, int Changed);
-public sealed record PlanPreview(string Mode, string? Environment, bool HasChanges, DiffSummary Summary, ApplyOperation[] Operations, RegistrationDiff Diff, string[] Diagnostics, string[] Notes);
+public sealed record PlanPreview(string Mode, string? Environment, bool HasChanges, DiffSummary Summary, ApplyOperation[] Operations, RegistrationDiff Diff, string[] Diagnostics, string[] Notes, ExecutedCounts? Executed = null);
+
+/// <summary>
+/// What an <c>apply</c> actually DID, taken from the pre-apply diff - distinct from <see cref="PlanPreview.Summary"/>,
+/// which after a successful apply is the post-apply remaining diff (all zero). Present only on the <c>apply-execute</c>
+/// JSON so a script/agent reads the executed counts directly instead of parsing the free-text notes.
+/// </summary>
+public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool PackageRepublished);
 public sealed record ApplyOperation(string Action, string Kind, string Type, string Reason);
 public sealed record StepApplyDefinition(string PluginTypeName, string Message, string EntityLogicalName, string StepKey, string HandlerMethodName, int Stage, int Mode, int ExecutionOrder, string[] FilteringAttributes, ImageApplyDefinition[] PreImages, ImageApplyDefinition[] PostImages, bool Enabled, string UnsecureConfig, string SecureConfig, Guid ImpersonatingUserId = default, int SupportedDeployment = 0);
 public sealed record ImageApplyDefinition(string Alias, string[] Attributes);
