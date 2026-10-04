@@ -59,6 +59,46 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Scalar_aggregates_count_sum_and_average_the_matching_rows()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            foreach (int n in new[] { 10, 20, 30 })
+            {
+                crm.Create(new Entity("account") { ["numberofemployees"] = n });
+            }
+
+            Assert.Equal(3, Query.For<FakeAccount>().CountScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(60m, Query.For<FakeAccount>().SumScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(20m, Query.For<FakeAccount>().AverageScalar(crm, a => a.NumberOfEmployees));
+        }
+
+        [Fact]
+        public void Scalar_sum_is_null_and_count_is_zero_when_nothing_matches()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+
+            // null (not 0) distinguishes "no rows" from a real sum of 0.
+            Assert.Null(Query.For<FakeAccount>().SumScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(0, Query.For<FakeAccount>().CountScalar(crm, a => a.NumberOfEmployees));
+        }
+
+        [Fact]
+        public void Scalar_aggregate_does_not_mutate_a_reusable_query()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            crm.Create(new Entity("account") { ["name"] = "A", ["numberofemployees"] = 5 });
+            crm.Create(new Entity("account") { ["name"] = "B", ["numberofemployees"] = 7 });
+
+            TypedQuery<FakeAccount> query = Query.For<FakeAccount>().SelectAll();
+
+            _ = query.SumScalar(crm, a => a.NumberOfEmployees);   // swaps the ColumnSet to an aggregate internally...
+            List<FakeAccount> all = query.ToList(crm);             // ...and must restore it, so this is a normal read
+
+            Assert.Equal(2, all.Count);
+            Assert.Contains(all, a => a.Name == "A");
+        }
+
+        [Fact]
         public void FirstOrDefault_does_not_permanently_cap_a_reusable_query()
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService();

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
+using Vela.Steps;
 
 namespace Vela.Querying
 {
@@ -126,5 +128,68 @@ namespace Vela.Querying
                 }
             }
         }
+
+        // ---- Scalar aggregates --------------------------------------------------------------------------
+        // One-call typed scalar aggregates: no alias string to repeat (an aliased-value desync would read a
+        // silent default), no explicit result generic. The column selector only identifies the column; the
+        // result type is intrinsic (count -> int, sum/average -> decimal). Grouped aggregates stay on the
+        // string-alias authoring API (TypedQuery.GroupBy/Sum(..., alias) + ToFetchXml).
+
+        /// <summary>Counts the matching rows (the non-null values of <paramref name="column"/>; pass the primary id to count rows).</summary>
+        public static int CountScalar<TEntity>(this TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, object?>> column)
+            where TEntity : Entity
+            => Convert.ToInt32(RunScalarAggregate(query, service, column, XrmAggregateType.Count) ?? 0);
+
+        /// <summary>Sums <paramref name="column"/> over the matching rows, or <c>null</c> when none match.</summary>
+        public static decimal? SumScalar<TEntity>(this TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, object?>> column)
+            where TEntity : Entity
+            => ToDecimal(RunScalarAggregate(query, service, column, XrmAggregateType.Sum));
+
+        /// <summary>Averages <paramref name="column"/> over the matching rows, or <c>null</c> when none match.</summary>
+        public static decimal? AverageScalar<TEntity>(this TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, object?>> column)
+            where TEntity : Entity
+            => ToDecimal(RunScalarAggregate(query, service, column, XrmAggregateType.Avg));
+
+        // Runs a single-aggregate retrieve without mutating the caller's query: swap the ColumnSet for the
+        // aggregate one for the duration of the retrieve and restore it in a finally (mirrors FirstOrDefault).
+        private static object? RunScalarAggregate<TEntity>(TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, object?>> column, XrmAggregateType type)
+            where TEntity : Entity
+        {
+            query = query ?? throw new ArgumentNullException(nameof(query));
+            service = service ?? throw new ArgumentNullException(nameof(service));
+            column = column ?? throw new ArgumentNullException(nameof(column));
+
+            const string alias = "velaScalar";
+            string attribute = ExpressionHelper.GetAttributeLogicalName(column);
+
+            QueryExpression expression = query.Expression;
+            ColumnSet original = expression.ColumnSet;
+            ColumnSet aggregate = new ColumnSet();
+            aggregate.AttributeExpressions.Add(new XrmAttributeExpression { AttributeName = attribute, Alias = alias, AggregateType = type });
+            expression.ColumnSet = aggregate;
+            try
+            {
+                DataCollection<Entity> rows = service.RetrieveMultiple(expression).Entities;
+                if (rows.Count == 0)
+                {
+                    return null;
+                }
+
+                object? value = rows[0].Contains(alias) ? rows[0][alias] : null;
+                return value is AliasedValue aliased ? aliased.Value : value;
+            }
+            finally
+            {
+                expression.ColumnSet = original;
+            }
+        }
+
+        private static decimal? ToDecimal(object? value) => value switch
+        {
+            null => null,
+            Money money => money.Value,
+            decimal dec => dec,
+            _ => Convert.ToDecimal(value),
+        };
     }
 }

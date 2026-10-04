@@ -90,6 +90,20 @@ List<Account> same = service.RetrieveAll(Query.For<Account>().SelectAll());
 All three return the early-bound `TEntity` (via `ToEntity<T>()`); you never touch `.Build()` or `AliasedValue`
 for a plain read.
 
+**Scalar aggregates** run and read back in one typed call - no alias string to repeat, no `AliasedValue` to
+unwrap:
+
+```csharp
+int     count = Query.For<Account>().Where(a => a.StateCode, ConditionOperator.Equal, 0)
+                     .CountScalar(service, a => a.AccountId);       // matching rows
+decimal? total = Query.For<SalesOrder>().SumScalar(service, o => o.TotalAmount);  // null when none match
+decimal? avg   = Query.For<SalesOrder>().AverageScalar(service, o => o.TotalAmount);
+```
+
+`SumScalar`/`AverageScalar` return `decimal?` (`null` distinguishes "no rows" from a real `0`); `CountScalar`
+returns `int`. For **grouped** aggregates (`GroupBy(...)` + multiple aggregates) author with the alias API
+(`.Sum(col, "alias")`) and read the rows - see the aggregate builders above.
+
 ## See also
 
 - [Write a plugin](plugins.md) - where these queries run.
