@@ -332,6 +332,24 @@ Both are inferred from the message with no cast; binding an `OnUpdate()` step to
 reading `ctx.Response` on a pre-stage handler, does not compile. Read message-specific fields off `ctx.Request`
 (for example the merge subordinate from `ctx.Request.SubordinateId`).
 
+### Writing the Target: which stage persists
+
+Setting an attribute on the Target (`ctx.Request.Target["x"] = ...` or `ctx.GetTarget<T>().X = ...`) only reaches
+the database when the main operation still lies ahead - so it is a **pre-stage, synchronous** move:
+
+- **PreValidation / PreOperation (Sync)** - the write is part of the row the platform is about to save. This is
+  where you set defaults, normalize, or derive a column. Prefer the typed `ctx.Request.Target`.
+- **PostOperation (Sync)** - the row is already written. The Target write is **not** saved to the database.
+  (It is still visible to a later post-step in the same pipeline, since `InputParameters["Target"]` is shared, but
+  do not rely on that to persist anything - use a shared variable to pass data downstream, and
+  `ctx.UserService.Update(...)` to change the row.)
+- **Asynchronous** - the step runs after the operation commits, in its own execution: a Target write has **no
+  effect at all** (not persisted, not observed by anyone). [VELA018](../reference/analyzers.md#vela018) flags this.
+  Call `ctx.UserService.Update(...)` with the change instead.
+
+A matching nuance: a **pre-validation** step has no pre-image (the row may not exist yet), and `HasChanged` needs a
+registered pre-image - see [HasChanged](#reacting-only-to-real-changes-haschanged).
+
 Every message reads its primary record off the already-typed `ctx.Request`. For `Create`, `Update` and
 `SendEmailFromTemplate`, `ctx.Request` is a Vela-owned typed request (`Vela.Messages.CreateRequest<TEntity>`,
 `UpdateRequest<TEntity>`, `SendEmailFromTemplateRequest<TEntity>`) whose `ctx.Request.Target` returns the
