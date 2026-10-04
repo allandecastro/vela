@@ -506,7 +506,7 @@ The rules the chain encodes:
 - `ctx.GetTargets()` / `ctx.TryGetTargets(...)` - Get bulk targets for `CreateMultiple` / `UpdateMultiple`
 - `ctx.GetPreImage<T>()`, `ctx.GetPostImage<T>()` - Get images as early-bound
 - `ctx.GetPreImage(index, alias)`, `ctx.GetPostImage(index, alias)` - Get per-record images in bulk operations
-- `ctx.GetPreImageMerged()`, `ctx.GetPostImageMerged()` - Merge target with image
+- `ctx.GetPreImageMerged()`, `ctx.GetPostImageMerged()` - Merge the image's captured columns with the Target's (`GetPreImageMerged<Account>()` returns it typed). Only captured/Target columns are present; a column neither captured nor in the Target is **absent** (reads `null`), not the stored value. The result is an independent snapshot - writing to it does not persist (use `ctx.UserService.Update`)
 - `ctx.GetPreImageMerged(index)`, `ctx.GetPostImageMerged(index)` - Merge per-record target with per-record image in bulk operations
 - `target.Contains(x => x.Name)` - Typed attribute-presence check (no magic strings). `Contains(x => x.A, x => x.B)` requires **all**; `ContainsAny(x => x.A, x => x.B)` needs **at least one** - useful to test which columns were in the `Target`
 - `ctx.HasChanged<Account>(x => x.Name)` / `ctx.HasAnyChanged<Account>(x => x.A, x => x.B)` - True when the attribute is in the `Target` **and** differs from the registered pre-image (requires an entity `Target` + a pre-image; throws otherwise) - the "only act when X actually changed" guard

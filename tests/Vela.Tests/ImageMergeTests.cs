@@ -42,5 +42,27 @@ namespace Vela.Tests
 
             Assert.Equal("Original", preImage.GetAttributeValue<string>("name"));
         }
+
+        [Fact]
+        public void GetPreImageMerged_Typed_ReturnsTheMergedRecordAsTheEntityType()
+        {
+            LocalPluginContext context = new PluginContextBuilder().Build();
+            Entity target = new Entity(TestAccount.EntityLogicalNameValue) { Id = Guid.NewGuid() };
+            target["name"] = "Updated Name";
+            context.PluginExecutionContext.InputParameters["Target"] = target;
+
+            Entity preImage = new Entity(TestAccount.EntityLogicalNameValue) { Id = target.Id };
+            preImage["name"] = "Old Name";
+            preImage["telephone1"] = "123";
+            context.PluginExecutionContext.PreEntityImages["PreImage"] = preImage;
+
+            // Typed overload: the image's captured columns merged with the Target, as the entity type (fails if it
+            // skips ToEntity<T> or the merge). Target overlays the image; the image contributes columns not in the Target.
+            TestAccount merged = context.GetPreImageMerged<TestAccount>();
+
+            Assert.Equal(target.Id, merged.Id);
+            Assert.Equal("Updated Name", merged.GetAttributeValue<string>("name"));
+            Assert.Equal("123", merged.GetAttributeValue<string>("telephone1"));
+        }
     }
 }
