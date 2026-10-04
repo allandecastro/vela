@@ -18,7 +18,7 @@ namespace Microsoft.Xrm.Sdk
 
 namespace Demo
 {
-    public class Account : Microsoft.Xrm.Sdk.Entity { public string? Name { get; set; } }
+    public class Account : Microsoft.Xrm.Sdk.Entity { public string? Name { get; set; } public int Count { get; set; } }
 }
 
 namespace Vela.Messages
@@ -81,6 +81,24 @@ namespace Demo
         string code = InClass(
             "public void Reg() { RegisterStep().OnUpdate().PostOperation().Async().Handle(OnUpd); }\n" +
             "        private void OnUpd(ILocalPluginContext ctx) { {|#0:ctx.GetTarget<Account>().Name|} = \"x\"; }");
+        await Verify.VerifyAnalyzerAsync(code, Expected());
+    }
+
+    [Fact]
+    public async Task Flags_a_compound_assignment_to_the_Target_in_an_async_step()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Async().Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { {|#0:ctx.GetTarget<Account>().Name|} ??= \"x\"; }");
+        await Verify.VerifyAnalyzerAsync(code, Expected());
+    }
+
+    [Fact]
+    public async Task Flags_an_increment_of_a_Target_property_in_an_async_step()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Async().Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { {|#0:ctx.Request.Target.Count|}++; }");
         await Verify.VerifyAnalyzerAsync(code, Expected());
     }
 

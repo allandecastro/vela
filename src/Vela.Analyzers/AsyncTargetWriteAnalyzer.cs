@@ -49,30 +49,54 @@ namespace Vela.Analyzers
 
                 var perTypeBindings = new ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool IsAsync)>>();
                 start.RegisterSyntaxNodeAction(
-                    nodeContext => AnalyzeAssignment(nodeContext, fluent, perTypeBindings),
-                    SyntaxKind.SimpleAssignmentExpression);
+                    nodeContext => AnalyzeWrite(nodeContext, fluent, perTypeBindings),
+                    // Every form that mutates its operand: plain and compound assignment (+=, ??=, ...) and
+                    // increment/decrement (++ / --). All write to the Target the same way a simple assignment does.
+                    SyntaxKind.SimpleAssignmentExpression,
+                    SyntaxKind.AddAssignmentExpression,
+                    SyntaxKind.SubtractAssignmentExpression,
+                    SyntaxKind.MultiplyAssignmentExpression,
+                    SyntaxKind.DivideAssignmentExpression,
+                    SyntaxKind.ModuloAssignmentExpression,
+                    SyntaxKind.AndAssignmentExpression,
+                    SyntaxKind.OrAssignmentExpression,
+                    SyntaxKind.ExclusiveOrAssignmentExpression,
+                    SyntaxKind.LeftShiftAssignmentExpression,
+                    SyntaxKind.RightShiftAssignmentExpression,
+                    SyntaxKind.CoalesceAssignmentExpression,
+                    SyntaxKind.PreIncrementExpression,
+                    SyntaxKind.PostIncrementExpression,
+                    SyntaxKind.PreDecrementExpression,
+                    SyntaxKind.PostDecrementExpression);
             });
         }
 
-        private static void AnalyzeAssignment(SyntaxNodeAnalysisContext context, INamedTypeSymbol fluent, ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool IsAsync)>> perTypeBindings)
+        private static void AnalyzeWrite(SyntaxNodeAnalysisContext context, INamedTypeSymbol fluent, ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool IsAsync)>> perTypeBindings)
         {
-            var assignment = (AssignmentExpressionSyntax)context.Node;
+            // The written expression: the left of an assignment, or the operand of ++/--.
+            ExpressionSyntax? written = context.Node switch
+            {
+                AssignmentExpressionSyntax assignment => assignment.Left,
+                PrefixUnaryExpressionSyntax prefix => prefix.Operand,
+                PostfixUnaryExpressionSyntax postfix => postfix.Operand,
+                _ => null,
+            };
 
-            // The left side must be a write INTO the Target entity (an attribute/property or indexer on it), not a
-            // reassignment of the Target reference itself.
-            ExpressionSyntax? writeBase = assignment.Left switch
+            // It must be a write INTO the Target entity (an attribute/property or indexer on it), not a reassignment
+            // of the Target reference itself.
+            ExpressionSyntax? writeBase = written switch
             {
                 ElementAccessExpressionSyntax elementAccess => elementAccess.Expression,
                 MemberAccessExpressionSyntax memberAccess => memberAccess.Expression,
                 _ => null,
             };
 
-            if (writeBase is null || !IsTargetExpression(writeBase, context.SemanticModel, context.CancellationToken))
+            if (written is null || writeBase is null || !IsTargetExpression(writeBase, context.SemanticModel, context.CancellationToken))
             {
                 return;
             }
 
-            MethodDeclarationSyntax? handler = assignment.FirstAncestorOrSelf<MethodDeclarationSyntax>();
+            MethodDeclarationSyntax? handler = context.Node.FirstAncestorOrSelf<MethodDeclarationSyntax>();
             TypeDeclarationSyntax? owningType = handler?.FirstAncestorOrSelf<TypeDeclarationSyntax>();
             if (handler is null || owningType is null)
             {
@@ -89,7 +113,7 @@ namespace Vela.Analyzers
 
             if (bindings.TryGetValue(handlerSymbol, out (int Chains, bool IsAsync) binding) && binding.Chains == 1 && binding.IsAsync)
             {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, assignment.Left.GetLocation()));
+                context.ReportDiagnostic(Diagnostic.Create(Rule, written.GetLocation()));
             }
         }
 
