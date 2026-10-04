@@ -22,10 +22,11 @@ namespace Vela.Cli;
 /// <summary> Reads live Dataverse registration state (assemblies, types, steps, custom APIs). </summary>
 internal static partial class DataverseRegistration
 {
-    // Stryker disable all : these three methods construct/consume a live Dataverse ServiceClient (network I/O)
-    // and cannot be exercised by an offline unit test — mutating them only yields NoCoverage noise. The reader
-    // helpers they orchestrate (GetPluginAssembly/GetPluginTypes/GetStepItems/GetCustomApiItems) are covered
-    // directly through the IOrganizationService seam.
+    // Stryker disable all : the live-client methods (BuildDataverseState here, CreateDataverseClient* below)
+    // construct/consume a live Dataverse ServiceClient (network I/O) and cannot be exercised by an offline unit
+    // test — mutating them only yields NoCoverage noise. The reader helpers they orchestrate
+    // (GetPluginAssembly/GetPluginTypes/GetStepItems/GetCustomApiItems) and the offline ReadAssembliesState are
+    // covered directly through the IOrganizationService seam, so the disable is restored around that helper.
     internal static RegistrationState BuildDataverseState(string[] sourceAssemblies, SharedOptions options, JsonSerializerOptions jsonOptions, IReadOnlyList<RankStep>? localDesiredSteps = null, Action<string>? report = null)
 {
     void Report(string phase) => report?.Invoke(phase);
@@ -66,6 +67,9 @@ internal static partial class DataverseRegistration
         Items: items.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
         Diagnostics: diagnostics.ToArray());
 }
+
+    // Stryker restore all : ReadAssembliesState below is offline (it takes an IOrganizationService seam, not a live
+    // client), so it IS mutation-tested - the live-client disable resumes before CreateDataverseClient.
 
     // The per-assembly read over the IOrganizationService seam (so it is unit-testable offline, unlike the live
     // BuildDataverseState that owns it). FoundAssemblies holds only the assemblies actually present in the org:
@@ -111,6 +115,9 @@ internal static partial class DataverseRegistration
 
         return new AssembliesReadResult(foundAssemblies, items, diagnostics, pluginTypeIds);
     }
+
+    // Stryker disable all : the connection-bound client setup below (and CreateDataverseClient*) is live network
+    // I/O, not exercisable offline - same rationale as the disable at the top of this file.
 
     // The SDK's ServiceClient defaults MaxConnectionTimeout to 4 minutes. On a large org the up-front read
     // (plugin steps, custom APIs, and especially the environment-wide rank-check read of
