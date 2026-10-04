@@ -311,6 +311,21 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
             return ExitSuccess;
         }
 
+        // Warn about a cross-solution assembly overwrite BEFORE the confirmation gate, so an interactive user can
+        // decline knowing the risk (and an auto-approved / non-interactive run still gets the heads-up). The
+        // registered assembly name is the DLL's (unique per org), so two projects that build the same-named
+        // assembly collide; if one already exists outside the target solution, applying rewrites its content there.
+        if (!string.IsNullOrWhiteSpace(options.SolutionUniqueName) && local.SourceAssemblyPayloads.Length > 0)
+        {
+            foreach (string name in DataverseRegistration.FindCrossSolutionAssemblyCollisions(service, local.SourceAssemblyPayloads, options.SolutionUniqueName!))
+            {
+                Console.Error.WriteLine(
+                    $"Warning: plugin assembly '{name}' already exists in this org and is not part of solution '{options.SolutionUniqueName}'. " +
+                    "Applying overwrites its content, modifying an assembly owned by another solution. " +
+                    "Set a unique <AssemblyName> in the plugins project (for example prefix it with the solution name) to avoid the collision.");
+            }
+        }
+
         // Confirmation gate: apply writes by default. In a terminal, show the plan and require a typed "yes".
         // In a non-interactive session (no stdin TTY) refuse unless --auto-approve/--yes was passed, so a
         // script can never write unattended by accident. The decision is a pure, unit-tested helper; the prompt

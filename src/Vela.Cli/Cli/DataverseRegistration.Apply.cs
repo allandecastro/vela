@@ -29,20 +29,6 @@ internal static partial class DataverseRegistration
         ? service
         : new SolutionScopedOrganizationService(service, solutionUniqueName!);
 
-    // Heads-up before overwriting an assembly owned by another solution. The registered name is the DLL's assembly
-    // name (unique per org), so two projects that build the same-named assembly collide; if one already exists and
-    // is not in the target solution, this apply rewrites its content under that other solution.
-    if (!string.IsNullOrWhiteSpace(solutionUniqueName) && sourceAssemblyPayloads.Length > 0)
-    {
-        foreach (string name in FindCrossSolutionAssemblyCollisions(service, sourceAssemblyPayloads, solutionUniqueName!))
-        {
-            Console.Error.WriteLine(
-                $"Warning: plugin assembly '{name}' already exists in this org and is not part of solution '{solutionUniqueName}'. " +
-                "Applying overwrites its content, modifying an assembly owned by another solution. " +
-                "Set a unique <AssemblyName> in the plugins project (for example prefix it with the solution name) to avoid the collision.");
-        }
-    }
-
     List<RegistrationItem> removedSteps = diff.Removed.Where(IsStep).ToList();
     List<RegistrationItem> removedApis = diff.Removed.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
     List<RegistrationItem> addedApis = diff.Added.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
