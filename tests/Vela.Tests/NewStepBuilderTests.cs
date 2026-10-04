@@ -55,6 +55,34 @@ namespace Vela.Tests
             Assert.Empty(delete.PostImages);
         }
 
+        private sealed class RelationshipLinkPlugin : EntityPluginBase<TestAccount>
+        {
+            public RelationshipLinkPlugin() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+            {
+                RegisterStep().OnAssociate().PostOperation().Sync().Handle(ctx => { });
+                RegisterStep().OnDisassociate().PostOperation().Sync().Handle(ctx => { });
+                // Control: a normal entity-bound step keeps its primary entity.
+                RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(a => a.Name).Handle(ctx => { });
+            }
+        }
+
+        [Fact]
+        public void Associate_and_disassociate_register_with_no_primary_entity()
+        {
+            StepDefinition[] defs = new RelationshipLinkPlugin().GetStepDefinitions();
+
+            // Dataverse registers Associate/Disassociate against primary entity "none" (no per-entity filter; the
+            // handler discriminates on ctx.Request.Relationship), so the builder must clear TEntity's logical name.
+            Assert.Equal(string.Empty, defs.Single(d => d.Message == PluginMessages.Associate).EntityLogicalName);
+            Assert.Equal(string.Empty, defs.Single(d => d.Message == PluginMessages.Disassociate).EntityLogicalName);
+
+            // Control: a normal Update step still carries its primary entity, so the blanking is scoped to the two
+            // relationship messages (fails if the fix blanks everything, or if it skips Associate/Disassociate).
+            Assert.Equal("account", defs.Single(d => d.Message == PluginMessages.Update).EntityLogicalName);
+        }
+
         private sealed class ExecutionOrderPlugin : EntityPluginBase<TestAccount>
         {
             public ExecutionOrderPlugin() : base(string.Empty, string.Empty) { }

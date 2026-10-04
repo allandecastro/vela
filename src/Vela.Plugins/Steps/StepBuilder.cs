@@ -88,6 +88,16 @@ public sealed partial class StepBuilder<TEntity>
         _definition.PreImages = _preImages.ToArray();
         _definition.PostImages = _postImages.ToArray();
 
+        // Associate/Disassociate have no single primary entity: Dataverse registers these steps against primary
+        // entity "none" (there is no per-entity message filter, and the Target can be either end of the
+        // relationship). The ctor stamped TEntity's logical name, so clear it here - otherwise apply fails
+        // resolving a non-existent per-entity filter. The handler discriminates on ctx.Request.Relationship.
+        if (string.Equals(_definition.Message, PluginMessages.Associate, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(_definition.Message, PluginMessages.Disassociate, StringComparison.OrdinalIgnoreCase))
+        {
+            _definition.EntityLogicalName = string.Empty;
+        }
+
         // Hard guarantee (the type-state only forces filtering when the fluent chain is consumed; the
         // RegisterStep() pattern registers by side-effect and discards it, so the framework calls Build()).
         // Create/Update must declare at least one filtering attribute — an unfiltered step fires on every change.
