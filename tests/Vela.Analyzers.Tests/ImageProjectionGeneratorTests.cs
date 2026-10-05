@@ -36,6 +36,7 @@ namespace Vela.Steps
         IStepConfig<TEntity> OnCreateMultiple();
         IStepConfig<TEntity> OnUpdateMultiple();
         IStepConfig<TEntity> OnAssign();
+        IStepConfig<TEntity> OnRecalc();
         IStepConfig<TEntity> On<TRequest>();
         IStepConfig<TEntity> OnMessage(string messageName);
         IStepConfig<TEntity> OnMessage<TMessage>();
@@ -75,6 +76,9 @@ namespace Vela.Context
     public class DeletePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public DeletePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
     public class MessagePreContext<TRequest, TEntity> : ILocalPluginContext where TEntity : Entity { public MessagePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
     public class MessagePostContext<TRequest, TEntity> : ILocalPluginContext where TEntity : Entity { public MessagePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; }
+    public class CreatePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public CreatePreContext(ILocalPluginContext inner) { } }
+    public class CreateMultiplePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public CreateMultiplePostContext(ILocalPluginContext inner) { } }
+    public class AssignPostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public AssignPostContext(ILocalPluginContext inner) { } }
     public static class ImageProjectionExtensions
     {
         public static TImage PreImageAs<TImage>(this ILocalPluginContext context) => default!;
@@ -700,10 +704,10 @@ namespace Demo
     }
 
     [Fact]
-    public void Does_not_emit_a_context_for_a_bulk_handler()
+    public void Emits_a_bare_context_for_a_bulk_handler()
     {
-        // Bulk stages do not expose the Handle(Delegate) overload a {Handler}Context would bind to, so no context is
-        // generated for them (yet). The projection, if any, is still emitted.
+        // Every stage now carries Handle(Delegate), so a bulk handler gets a {Handler}Context too - a bare subclass
+        // of the bulk message context (bulk images are per-record, so no single PreImage/PostImage member).
         string output = RunAndConcat(@"
 namespace Demo
 {
@@ -717,13 +721,14 @@ namespace Demo
 }
 ");
 
-        Assert.DoesNotContain("OnCreatedManyContext", output);
+        Assert.Contains("class OnCreatedManyContext : global::Vela.Context.CreateMultiplePostContext<global::Demo.Account>", output);
+        Assert.DoesNotContain("PreImage =>", output);
+        Assert.DoesNotContain("PostImage =>", output);
     }
 
     [Fact]
-    public void Does_not_emit_a_context_for_a_non_crud_modelled_message()
+    public void Emits_a_bare_context_for_a_non_crud_modelled_message()
     {
-        // Assign (and the other ~45 messages) have no Handle(Delegate) overload, so no {Handler}Context is generated.
         string output = RunAndConcat(@"
 namespace Demo
 {
@@ -737,14 +742,36 @@ namespace Demo
 }
 ");
 
-        Assert.DoesNotContain("OnAssignedContext", output);
+        Assert.Contains("class OnAssignedContext : global::Vela.Context.AssignPostContext<global::Demo.Account>", output);
     }
 
     [Fact]
-    public void Does_not_emit_a_context_for_a_typed_pre_operation_handler()
+    public void Does_not_emit_a_context_for_a_non_modelled_trigger()
     {
-        // The typed On<TRequest>() path uses the permissive config, whose Handle(Delegate) exists only at
-        // PostOperation; a pre-stage typed handler gets no context (it would not bind).
+        // A trigger with no matching Vela.Context.{Msg}{Pre|Post}Context type (e.g. a generated Custom API On{X}
+        // extension) gets no context - the type-existence check excludes it even though the name strips to a message.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountRecalc : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnRecalc().PostOperation().Sync().Handle(OnRecalced);
+        private void OnRecalced() { }
+    }
+}
+");
+
+        Assert.DoesNotContain("OnRecalcedContext", output);
+        Assert.DoesNotContain("RecalcPostContext", output);
+    }
+
+    [Fact]
+    public void Emits_a_pre_stage_context_for_a_typed_on_request_handler()
+    {
+        // Every typed config stage now carries Handle(Delegate), so a pre-stage typed handler gets a context too,
+        // deriving from the pre-stage generic message context.
         string output = RunAndConcat(@"
 namespace Demo
 {
@@ -758,7 +785,7 @@ namespace Demo
 }
 ");
 
-        Assert.DoesNotContain("OnDeletingContext", output);
+        Assert.Contains("class OnDeletingContext : global::Vela.Context.MessagePreContext<global::Demo.DeleteRequest, global::Demo.Account>", output);
     }
 
     [Fact]

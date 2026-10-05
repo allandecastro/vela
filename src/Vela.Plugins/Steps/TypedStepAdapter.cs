@@ -59,6 +59,8 @@ namespace Vela.Steps
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithSecureConfig(string configuration) { _b.SetSecureConfigInternal(configuration); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.Disabled() { _b.SetDisabledInternal(); return this; }
         void ITypedPreValidationConfig<TEntity, TRequest>.Handle(Action<IMessagePreContext<TRequest>> handler) { _b.SetHandlerInternal(handler); }
+        // Shared IStepConfig<TEntity>.Handle(Delegate) for every typed config (all derive from it).
+        void IStepConfig<TEntity>.Handle(Delegate handler) { _b.SetHandlerInternal(handler); }
 
         // ---- PreOperation config (pre-image) ----
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithDescription(string description) { _b.SetDescriptionInternal(description); return this; }
@@ -73,7 +75,6 @@ namespace Vela.Steps
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithSecureConfig(string configuration) { _b.SetSecureConfigInternal(configuration); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.Disabled() { _b.SetDisabledInternal(); return this; }
         void ITypedPreOperationConfig<TEntity, TRequest>.Handle(Action<IMessagePreContext<TRequest>> handler) { _b.SetHandlerInternal(handler); }
-        void ITypedPreOperationConfig<TEntity, TRequest>.Handle(Delegate handler) { _b.SetHandlerInternal(handler); }
 
         // ---- PostOperation config (pre-image + post-image) ----
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithDescription(string description) { _b.SetDescriptionInternal(description); return this; }
@@ -90,7 +91,6 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithSecureConfig(string configuration) { _b.SetSecureConfigInternal(configuration); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.Disabled() { _b.SetDisabledInternal(); return this; }
         void ITypedPostOperationConfig<TEntity, TRequest>.Handle(Action<IMessagePostContext<TRequest>> handler) { _b.SetHandlerInternal(handler); }
-        void ITypedPostOperationConfig<TEntity, TRequest>.Handle(Delegate handler) { _b.SetHandlerInternal(handler); }
 
         // IFluentStep's GetType/GetHashCode/ToString/Equals are satisfied by the inherited System.Object members.
     }

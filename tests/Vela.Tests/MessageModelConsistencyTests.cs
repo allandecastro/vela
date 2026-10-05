@@ -82,6 +82,47 @@ namespace Vela.Tests
             }
         }
 
+        [Fact]
+        public void Message_context_classes_are_not_sealed_so_generated_handler_contexts_can_derive()
+        {
+            // The source generator emits a {Handler}Context that derives from the concrete message context (e.g.
+            // AssignPostContext<TEntity>). Sealing any of them would make the generated subclass fail with CS0509 for
+            // consumers of the package - which the generator tests cannot see (they use non-sealed stand-ins). Lock
+            // the invariant here: every concrete step/message context type is inheritable.
+            System.Collections.Generic.List<string> sealedContexts = new System.Collections.Generic.List<string>();
+            foreach (Type type in PluginsAssembly.GetTypes())
+            {
+                if (!type.IsClass || !type.Name.EndsWith("Context", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (DerivesFromStepContext(type) && type.IsSealed)
+                {
+                    sealedContexts.Add(type.FullName ?? type.Name);
+                }
+            }
+
+            Assert.True(sealedContexts.Count == 0,
+                "These message context classes are sealed, so a generated {Handler}Context cannot derive from them: " +
+                string.Join(", ", sealedContexts));
+        }
+
+        private static bool DerivesFromStepContext(Type type)
+        {
+            for (Type? t = type.BaseType; t is not null; t = t.BaseType)
+            {
+                string name = t.Name;
+                if (name.StartsWith("PreStepContext", StringComparison.Ordinal) ||
+                    name.StartsWith("PostStepContext", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static void AssertTypeExists(string fullNameWithArity)
             => Assert.True(PluginsAssembly.GetType(fullNameWithArity) != null, $"Missing type {fullNameWithArity}.");
 

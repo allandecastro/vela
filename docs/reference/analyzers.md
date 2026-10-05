@@ -200,7 +200,7 @@ Request only the columns you use (the explicit `SelectAll()` on a typed query st
 ## VELA014
 
 **Plugin must be `partial`.** The source generator emits types **nested inside the plugin's own class** - a
-`{Handler}Context` for a named handler on a Create / Update / Delete step or the typed `On<TRequest>()` path, and a
+`{Handler}Context` for every named handler on a modelled message (any message, any stage), and a
 projection for every explicit image capture (`WithPreImage(a => a.X, ...)` / `WithPostImage(...)`). A nested type needs a second
 `partial` declaration of the class (and of every class that encloses it), so the rule reports a missing `partial`
 up front instead of leaving the build to fail with an obscure `CS0260`.
