@@ -44,11 +44,44 @@ services: `r => new PricingService(context.UserService, r.GetRequiredService<IPl
 These are always available to resolve without registering them yourself:
 
 `ILocalPluginContext`, `IPluginExecutionContext`, `IOrganizationService`, `ITracingService`, `ILogger`,
-`IPluginCacheService`.
+`IPluginCacheService`, `Func<Guid?, IOrganizationService>`.
 
 > [!TIP]
 > `GetRequiredService<T>()` throws if the service isn't registered; use `GetService(typeof(T))` (returns
 > `null`) when a dependency is optional.
+
+## System vs user calls in a service
+
+The built-in `IOrganizationService` is the **initiating user's** service: calls run with the caller's
+privileges (so a service that reads or writes on the user's behalf respects their security role). When a
+service needs **elevated / system** access instead, do not reach for a second `IOrganizationService`
+registration - there is only one `IOrganizationService` token and it is the user. Inject
+**`ILocalPluginContext`** and pick the scope you need from it:
+
+```csharp
+protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+{
+    // A service that must bypass the caller's privileges: give it the context, not a bare service.
+    services.AddScoped<IQuotaEnforcer>(r => new QuotaEnforcer(r.GetRequiredService<ILocalPluginContext>()));
+}
+
+public sealed class QuotaEnforcer(ILocalPluginContext ctx) : IQuotaEnforcer
+{
+    public void Enforce(EntityReference account)
+        => ctx.SystemService.Update(/* runs as SYSTEM, ignores the caller's role */ ...);
+}
+```
+
+`ctx` exposes every scope: `ctx.UserService` (initiating user), `ctx.CallingUserService` (the step's
+"run in user's context" user), `ctx.SystemService` (SYSTEM), and `ctx.AsSystem()` / `ctx.AsUser(id)` /
+`ctx.CreateOrganizationService(userId)` (a specific user, or SYSTEM when the id is `null`). The same id-based
+factory is injectable directly as `Func<Guid?, IOrganizationService>` (pass `null` for SYSTEM) when a service
+needs to switch users at call time rather than once at construction.
+
+The rule of thumb: inject a bare `IOrganizationService` for ordinary user-scoped work; inject
+`ILocalPluginContext` (or the `Func<Guid?, IOrganizationService>` factory) when the service needs a scope other
+than the caller. Injecting the context keeps the choice explicit at the call site instead of hiding an elevated
+service behind the same `IOrganizationService` type.
 
 ## Why
 
