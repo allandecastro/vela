@@ -93,12 +93,50 @@ private void OnUpdatePreSync(OnUpdatePreSyncContext ctx)
 
 ### Workflow activities become Custom APIs
 
-Vela does not host `CodeActivity` workflow activities. Convert each one to a [Custom API](custom-apis.md):
-map `InArgument<T>` to request parameters and `OutArgument<T>` to response properties, and port the body.
-A clean input/output activity maps one to one. Remember that the invocation surface changes: callers that
-triggered the activity from a classic workflow must be re-pointed at the Custom API. An activity that
-operated on the workflow's primary entity has no equivalent implicit context, so pass the target
-`EntityReference` (and any attribute name) as explicit parameters.
+Vela does not host `CodeActivity` workflow activities. Convert each one to a [Custom API](custom-apis.md). The
+mapping is mechanical:
+
+| In the workflow activity | In the Custom API |
+| --- | --- |
+| `CodeActivity` class | `CustomApiBase<TRequest, TResponse>` (or the lightweight `CustomApiBase`) |
+| `[Input] InArgument<T>` | a request parameter (required by default; `optional: true` to relax) |
+| `[Output] OutArgument<T>` | a response property |
+| `Execute(CodeActivityContext ctx)` body | `Execute(ILocalPluginContext ctx, TRequest request)` |
+| the workflow's implicit primary entity | an explicit `EntityReference` request parameter |
+
+Scaffold the shell with [`vela add customapi`](add.md), then port the body:
+
+```csharp
+// before: a workflow activity that recalculates a total on a record
+public sealed class RecalculateTotal : CodeActivity
+{
+    [RequiredArgument] public InArgument<EntityReference> Target { get; set; }
+    [Output] public OutArgument<Money> NewTotal { get; set; }
+    protected override void Execute(CodeActivityContext context) { /* ... */ }
+}
+
+// after: vela add customapi RecalculateTotal --global --action --prefix dv
+public sealed class RecalculateTotal(string u, string s) : CustomApiBase<RecalculateTotalRequest, RecalculateTotalResponse>(u, s)
+{
+    protected override void RegisterCustomApi() =>
+        RegisterCustomApi("dv_RecalculateTotal").AsAction()
+            .Request(r => r.Add(x => x.Target))
+            .Response(r => r.Add(x => x.NewTotal));
+
+    protected override RecalculateTotalResponse Execute(ILocalPluginContext ctx, RecalculateTotalRequest request)
+        => new() { NewTotal = Recalculate(ctx, request.Target) };
+}
+```
+
+A clean input/output activity maps one to one. The invocation surface changes: callers that triggered the
+activity from a classic workflow must be re-pointed at the Custom API (or the Custom API marked
+workflow-enabled with `.WorkflowSdkStep(true)` so a workflow can still call it).
+
+**The generic "operate on any entity / any attribute" activity** becomes a **global** (unbound) Custom API with an
+`EntityReference` parameter for the record plus a `string` parameter for the attribute name - there is no implicit
+primary entity to lean on. If you mark it `WorkflowSdkStep(true)`, use `EntityReference` (an `Entity` /
+`EntityCollection` / `StringArray` parameter is rejected on a workflow-enabled API), and pass several attribute
+names as one delimited `string` rather than a `string[]`.
 
 ### Consolidate the layout
 
