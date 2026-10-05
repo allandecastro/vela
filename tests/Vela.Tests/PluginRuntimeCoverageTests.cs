@@ -199,7 +199,9 @@ public sealed class PluginRuntimeCoverageTests
         ctx.SetupGet(c => c.SystemService).Returns(Mock.Of<IOrganizationService>());
         ctx.SetupGet(c => c.Logger).Returns(withLogger ? Mock.Of<ILogger>() : null!);
         ctx.SetupGet(c => c.ManagedIdentityService).Returns(withManagedIdentity ? Mock.Of<IManagedIdentityService>() : null);
-        ctx.Setup(c => c.CreateOrganizationService(It.IsAny<Guid?>())).Returns(Mock.Of<IOrganizationService>());
+        // null => system, any id => that user (used by the Func<Guid?, IOrganizationService> factory).
+        ctx.Setup(c => c.CreateOrganizationService(null)).Returns(() => ctx.Object.SystemService);
+        ctx.Setup(c => c.CreateOrganizationService(It.Is<Guid?>(id => id != null))).Returns(Mock.Of<IOrganizationService>());
         return ctx;
     }
 
@@ -226,6 +228,21 @@ public sealed class PluginRuntimeCoverageTests
 
         Func<Guid?, IOrganizationService> factory = provider.GetRequiredService<Func<Guid?, IOrganizationService>>();
         Assert.NotNull(factory(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void AddPluginRuntime_resolves_IOrganizationService_to_the_user_not_the_system_service()
+    {
+        Mock<ILocalPluginContext> ctx = ContextMock(withManagedIdentity: false, withLogger: false);
+        ServiceProvider provider = new ServiceCollection().AddPluginRuntime(ctx.Object).BuildServiceProvider();
+
+        // The bare IOrganizationService must be the initiating user, never the elevated system service.
+        Assert.Same(ctx.Object.UserService, provider.GetRequiredService<IOrganizationService>());
+        Assert.NotSame(ctx.Object.SystemService, provider.GetRequiredService<IOrganizationService>());
+
+        // System access is only via the factory (null => system).
+        Func<Guid?, IOrganizationService> factory = provider.GetRequiredService<Func<Guid?, IOrganizationService>>();
+        Assert.Same(ctx.Object.SystemService, factory(null));
     }
 
     [Fact]
