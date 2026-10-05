@@ -232,21 +232,30 @@ internal static partial class DataverseRegistration
     return false;
 }
 
-    internal static void EnsurePluginPackages(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose)
-{
     // Dataverse rejects a plugin-package import whose nuget name has no solution publisher prefix (0x80040265,
     // "The nuget file name does not contain a solution prefix"). Without a --solution to source that prefix, a
-    // package whose name isn't already prefixed can't import — fail fast with a clear message instead.
-    if (string.IsNullOrWhiteSpace(solutionUniqueName))
+    // package whose name isn't already prefixed can't import — fail fast with a clear message instead. Shared by
+    // apply (before writing) and plan (so the preview never advertises a create apply would refuse); purely local,
+    // so plan can call it without a connection.
+    internal static void EnsurePluginPackagesImportable(PluginPackagePayload[] packagePayloads, string? solutionUniqueName)
+{
+    if (!string.IsNullOrWhiteSpace(solutionUniqueName))
     {
-        PluginPackagePayload? unprefixed = packagePayloads.FirstOrDefault(p => !LooksSolutionPrefixed(p.PackageName));
-        if (unprefixed != null)
-        {
-            throw new InvalidOperationException(
-                $"Plugin package '{unprefixed.PackageName}' has no solution publisher prefix, which Dataverse requires " +
-                "to import a package. Re-run 'apply' with --solution <uniqueName> so the prefix is applied.");
-        }
+        return;
     }
+
+    PluginPackagePayload? unprefixed = packagePayloads.FirstOrDefault(p => !LooksSolutionPrefixed(p.PackageName));
+    if (unprefixed != null)
+    {
+        throw new InvalidOperationException(
+            $"Plugin package '{unprefixed.PackageName}' has no solution publisher prefix, which Dataverse requires " +
+            "to import a package. Re-run 'apply' with --solution <uniqueName> so the prefix is applied.");
+    }
+}
+
+    internal static void EnsurePluginPackages(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose)
+{
+    EnsurePluginPackagesImportable(packagePayloads, solutionUniqueName);
 
     string? solutionPrefix = string.IsNullOrWhiteSpace(solutionUniqueName)
         ? null
@@ -305,47 +314,65 @@ internal static partial class DataverseRegistration
     return existing.Id;
 }
 
-    // Read-only counterpart of EnsurePluginPackages: true if any plugin package would be created or have its
-    // content updated. The registration diff only covers steps/custom APIs, so a code-only change (same step and
-    // custom-API definitions, but a rebuilt assembly) is otherwise invisible and apply would report "no changes"
-    // and deploy nothing. This mirrors UpsertPluginPackage's create/skip decision exactly (same prefix, same
-    // import bytes, same content compare) without writing.
+    // Read-only counterpart of EnsurePluginPackages: true if any plugin package would be created or republished.
+    // The registration diff only covers steps/custom APIs, so a code-only change (same step and custom-API
+    // definitions, but a rebuilt assembly) is otherwise invisible and apply would report "no changes" and deploy
+    // nothing. Mirrors UpsertPluginPackage's create/skip decision exactly (same prefix, same import bytes, same
+    // version+content compare) without writing.
     internal static bool PluginPackagesNeedPublish(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories)
+        => ComputePackagePublishActions(service, packagePayloads, solutionUniqueName, tempDirectories).Count > 0;
+
+    // Per-package detail behind PluginPackagesNeedPublish: one action for every package that would be created
+    // (absent from Dataverse) or republished (stored version or content differs); packages whose deployed version
+    // AND content already match are omitted. Lets plan list the package operation and flag HasChanges for a
+    // code-only rebuild. Mirrors UpsertPluginPackage exactly so plan and apply never disagree: same create/skip
+    // decision, same missing-file FileNotFoundException. The importable-prefix guard (EnsurePluginPackagesImportable)
+    // runs separately in both paths, so an unprefixed package without --solution never reaches here as a "create".
+    internal static IReadOnlyList<PackagePublishAction> ComputePackagePublishActions(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories)
 {
     if (packagePayloads.Length == 0)
     {
-        return false;
+        return [];
     }
 
     string? solutionPrefix = string.IsNullOrWhiteSpace(solutionUniqueName)
         ? null
         : ResolveSolutionCustomizationPrefix(service, solutionUniqueName);
 
+    List<PackagePublishAction> actions = [];
     foreach (PluginPackagePayload package in packagePayloads)
     {
+        string desiredPackageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
+
         if (!File.Exists(package.PackagePath))
         {
-            // Let the real publish surface the missing-file error rather than silently short-circuiting.
-            return true;
+            // Match UpsertPluginPackage: a missing package file is an error, not a silent "no change". Throwing
+            // here keeps plan and apply in step (plan fails with the same message instead of advertising an
+            // operation apply cannot perform).
+            throw new FileNotFoundException($"Plugin package file not found: {package.PackagePath}", package.PackagePath);
         }
 
-        string desiredPackageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
         byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName, tempDirectories);
         string packageContent = Convert.ToBase64String(packageBytes);
         Entity? existing = GetPluginPackage(service, desiredPackageName);
         if (existing == null)
         {
-            return true;
+            actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: true));
+            continue;
         }
 
+        // UpsertPluginPackage skips only when BOTH the stored version and content match; otherwise it updates.
+        // Compare both so a version-only difference is not mistaken for "no change".
+        string existingVersion = existing.GetAttributeValue<string>("version") ?? string.Empty;
         string existingContent = existing.GetAttributeValue<string>("content") ?? string.Empty;
-        if (!string.Equals(existingContent, packageContent, StringComparison.Ordinal))
+        if (!string.Equals(existingVersion, package.Version, StringComparison.Ordinal) ||
+            !string.Equals(existingContent, packageContent, StringComparison.Ordinal))
         {
-            return true;
+            actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: false));
         }
     }
 
-    return false;
+    return actions;
 }
 
     internal static string NormalizePackageNameWithPrefix(string packageName, string? solutionPrefix)

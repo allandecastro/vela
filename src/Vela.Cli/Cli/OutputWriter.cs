@@ -316,17 +316,31 @@ internal static class OutputWriter
         return baseName;
     }
 
-    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics)
+    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null)
     {
         List<ApplyOperation> operations = [];
         operations.AddRange(diff.Added.Select(item => new ApplyOperation("create", item.Kind, item.Type, "Exists locally but not in Dataverse.")));
         operations.AddRange(diff.Removed.Select(item => new ApplyOperation("delete", item.Kind, item.Type, "Exists in Dataverse but not locally.")));
         operations.AddRange(diff.Changed.Select(item => new ApplyOperation("update", item.Kind, item.Type, "Exists in both places but differs.")));
 
+        // A code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) produces no diff item, so the package
+        // create/republish is the only signal that apply would deploy anything. Surfaced as its own "package"
+        // operation and folded into HasChanges; the numeric Summary stays the non-package registration diff (steps
+        // and custom APIs, plus web resources on a --webresources run), mirroring the apply-execute JSON where
+        // packageRepublished is a field separate from the added/updated/deleted counts.
+        IReadOnlyList<PackagePublishAction> packages = packageActions ?? [];
+        operations.AddRange(packages.Select(package => new ApplyOperation(
+            package.IsCreate ? "create" : "update",
+            "package",
+            package.PackageName,
+            package.IsCreate
+                ? "Plugin package is not in Dataverse; apply will create it."
+                : "Plugin package version or content differs from Dataverse; apply will republish it.")));
+
         return new PlanPreview(
             Mode: mode,
             Environment: environment,
-            HasChanges: diff.Summary.Added > 0 || diff.Summary.Removed > 0 || diff.Summary.Changed > 0,
+            HasChanges: diff.Summary.Added > 0 || diff.Summary.Removed > 0 || diff.Summary.Changed > 0 || packages.Count > 0,
             Summary: diff.Summary,
             Operations: operations.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
             Diff: diff,
