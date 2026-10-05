@@ -33,7 +33,9 @@ namespace Vela.Steps
         IStepConfig<TEntity> OnCreate();
         IStepConfig<TEntity> OnDelete();
         IStepConfig<TEntity> OnUpdate();
+        IStepConfig<TEntity> OnCreateMultiple();
         IStepConfig<TEntity> OnUpdateMultiple();
+        IStepConfig<TEntity> OnAssign();
         IStepConfig<TEntity> On<TRequest>();
         IStepConfig<TEntity> OnMessage(string messageName);
         IStepConfig<TEntity> OnMessage<TMessage>();
@@ -670,6 +672,93 @@ namespace Demo
         Assert.Contains("class OnDeletingContext : global::Vela.Context.DeletePreContext<global::Demo.Account>", output);
         Assert.Contains("public new OnDeleting_PreImage? PreImage", output);
         Assert.DoesNotContain("PostImage =>", output);   // no post-image member on a delete-pre context
+    }
+
+    [Fact]
+    public void Emits_a_bare_context_for_an_imageless_named_handler()
+    {
+        // The stable-signature case: a named handler with no captured image still gets a {Handler}Context. Adding a
+        // WithPreImage/WithPostImage later enriches this same type with a typed PreImage/PostImage - the handler
+        // signature never changes.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountValidate : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.Contains("class OnUpdatedContext : global::Vela.Context.UpdatePostContext<global::Demo.Account>", output);
+        // No captured image, so no shadowed image members on the bare context.
+        Assert.DoesNotContain("PreImage =>", output);
+        Assert.DoesNotContain("PostImage =>", output);
+    }
+
+    [Fact]
+    public void Does_not_emit_a_context_for_a_bulk_handler()
+    {
+        // Bulk stages do not expose the Handle(Delegate) overload a {Handler}Context would bind to, so no context is
+        // generated for them (yet). The projection, if any, is still emitted.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountBulk : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreateMultiple().PostOperation().Sync().Handle(OnCreatedMany);
+        private void OnCreatedMany() { }
+    }
+}
+");
+
+        Assert.DoesNotContain("OnCreatedManyContext", output);
+    }
+
+    [Fact]
+    public void Does_not_emit_a_context_for_a_non_crud_modelled_message()
+    {
+        // Assign (and the other ~45 messages) have no Handle(Delegate) overload, so no {Handler}Context is generated.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountAssign : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAssigned);
+        private void OnAssigned() { }
+    }
+}
+");
+
+        Assert.DoesNotContain("OnAssignedContext", output);
+    }
+
+    [Fact]
+    public void Does_not_emit_a_context_for_a_typed_pre_operation_handler()
+    {
+        // The typed On<TRequest>() path uses the permissive config, whose Handle(Delegate) exists only at
+        // PostOperation; a pre-stage typed handler gets no context (it would not bind).
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountTypedPre : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<DeleteRequest>().PreOperation().Sync().Handle(OnDeleting);
+        private void OnDeleting() { }
+    }
+}
+");
+
+        Assert.DoesNotContain("OnDeletingContext", output);
     }
 
     [Fact]

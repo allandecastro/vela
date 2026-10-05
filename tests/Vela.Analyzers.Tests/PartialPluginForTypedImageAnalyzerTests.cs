@@ -21,7 +21,9 @@ namespace Vela.Steps
     public interface IFluentStep { }
     public interface IStepConfig<TEntity> : IFluentStep
     {
+        IStepConfig<TEntity> OnCreate();
         IStepConfig<TEntity> OnUpdate();
+        IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
         IStepConfig<TEntity> Sync();
         IStepConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object>>[] a);
@@ -71,6 +73,37 @@ namespace Demo
     }");
 
         await Verify.VerifyAnalyzerAsync(code, At(0, "Audit", "Audit"));
+    }
+
+    [Fact]
+    public async Task Flags_a_non_partial_plugin_with_a_named_handler_even_without_a_typed_image()
+    {
+        // A named handler gets a generated {Handler}Context nested in the plugin, so the class must be partial even
+        // when it captures no image.
+        string code = InPlugin(@"
+    public sealed class {|#0:Validate|} : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpdated);
+        private void OnUpdated() { }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code, At(0, "Validate", "Validate"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_create_pre_operation_named_handler()
+    {
+        // Create pre-stage has no Handle(Delegate) overload, so no context is generated and 'partial' is not required.
+        string code = InPlugin(@"
+    public sealed class Guard : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreate().PreOperation().Sync().Handle(OnPre);
+        private void OnPre() { }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code);
     }
 
     [Fact]
