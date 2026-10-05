@@ -101,6 +101,7 @@ does not compile.
 - Use `ctx.GetRequiredService<T>()` for dependency resolution in handlers.
 - Read the primary record via `ctx.Request.Target` on the typed message contexts (already early-bound); `GetTarget<T>()` stays for the message-agnostic `OnMessage(...)` handlers where the request does not type the Target.
 - Read images with `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` instead of the raw `PreEntityImages` / `PostEntityImages` dictionaries.
+- Signal a user-facing failure with `throw new InvalidPluginExecutionException("...")`, or `throw new PluginBusinessException("...")` for a named business error (the Vela base surfaces its message cleanly and records a `business-exception` trace snapshot). Both are clean and neither is flagged by [VELA012](../reference/analyzers.md#vela012) inside a plugin that derives from a Vela base. Any other exception type is reported to the caller wrapped (the Vela base adds its type and message, but it is not your intended clean message), which is why VELA012 flags it.
 
 **Don't**
 - Stop a step chain before `.Handle(...)`: every step must bind a typed handler (a chain that stops earlier is flagged by analyzer VELA002). Prefer `RegisterPluginSteps()` + `RegisterStep()....Handle(...)` over a no-handler `Execute(...)` override.

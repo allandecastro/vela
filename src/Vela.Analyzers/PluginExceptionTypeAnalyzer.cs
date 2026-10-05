@@ -18,6 +18,8 @@ namespace Vela.Analyzers
         public const string DiagnosticId = "VELA012";
 
         private const string InvalidPluginExecutionExceptionMetadataName = "Microsoft.Xrm.Sdk.InvalidPluginExecutionException";
+        private const string PluginBaseMetadataName = "Vela.Plugin.PluginBase";
+        private const string PluginBusinessExceptionDisplayName = "Vela.Plugin.PluginBusinessException";
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -42,11 +44,14 @@ namespace Vela.Analyzers
                     return; // not a Dataverse plugin project
                 }
 
-                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeThrow(nodeContext, ipee), SyntaxKind.ThrowStatement, SyntaxKind.ThrowExpression);
+                // May be null when the project does not reference Vela.Plugins (then no PluginBusinessException exemption).
+                INamedTypeSymbol? pluginBase = start.Compilation.GetTypeByMetadataName(PluginBaseMetadataName);
+
+                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeThrow(nodeContext, ipee, pluginBase), SyntaxKind.ThrowStatement, SyntaxKind.ThrowExpression);
             });
         }
 
-        private static void AnalyzeThrow(SyntaxNodeAnalysisContext context, INamedTypeSymbol ipee)
+        private static void AnalyzeThrow(SyntaxNodeAnalysisContext context, INamedTypeSymbol ipee, INamedTypeSymbol? pluginBase)
         {
             ExpressionSyntax? thrown = context.Node switch
             {
@@ -73,6 +78,18 @@ namespace Vela.Analyzers
 
             INamedTypeSymbol? enclosing = EnclosingType(context.Node, context.SemanticModel, context.CancellationToken);
             if (!PluginTypes.IsPluginType(enclosing))
+            {
+                return;
+            }
+
+            // PluginBusinessException is the sanctioned business-error type ONLY inside a PluginBase-derived plugin
+            // (or Custom API base): that base's catch turns it into a clean InvalidPluginExecutionException for the
+            // caller. A type that implements IPlugin directly has no such frame, so a PluginBusinessException thrown
+            // there reaches Dataverse as an ordinary exception - keep flagging it for those. It cannot derive from
+            // the sealed SDK exception, so it is recognized by name.
+            if (pluginBase != null
+                && thrownType.ToDisplayString() == PluginBusinessExceptionDisplayName
+                && IsOrDerivesFrom(enclosing!, pluginBase))
             {
                 return;
             }
