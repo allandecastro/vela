@@ -15,14 +15,16 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
 }
 ```
 
-Resolve registered services from a handler:
+Resolve registered services from a handler. Deriving a column onto the record is a **PreOperation** move so it
+persists with the row the platform is about to save - no extra `Update`, no recursion (see
+[Writing the Target: which stage persists](plugins.md#writing-the-target-which-stage-persists)):
 
 ```csharp
-private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
+private void OnAccountUpdated(IUpdatePreContext<Account> ctx)
 {
     var target = ctx.Request.Target;
     var pricing = ctx.GetRequiredService<IPricingService>();
-    target["creditonhold"] = pricing.IsOverLimit(target);
+    target["creditonhold"] = pricing.IsOverLimit(target);   // persists in-transaction (pre-stage)
 }
 ```
 
