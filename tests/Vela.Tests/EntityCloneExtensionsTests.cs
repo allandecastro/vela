@@ -87,9 +87,12 @@ public sealed class EntityCloneExtensionsTests
     }
 
     [Fact]
-    public void Clone_deep_copies_a_partylist_collection_and_resets_child_ids()
+    public void Clone_deep_copies_a_partylist_collection_and_makes_children_create_ready()
     {
-        Entity party = new Entity("activityparty", Guid.NewGuid());
+        Guid partyId = Guid.NewGuid();
+        Entity party = new Entity("activityparty", partyId);
+        party["activitypartyid"] = partyId;   // the nested record's own primary key
+        party["createdon"] = DateTime.UtcNow;  // a nested audit column
         party["partyid"] = new EntityReference("contact", Guid.NewGuid());
         TestAccount source = new TestAccount { Id = Guid.NewGuid(), Name = "A" };
         source.Customers = new EntityCollection(new[] { party }) { EntityName = "activityparty" };
@@ -101,7 +104,44 @@ public sealed class EntityCloneExtensionsTests
         Entity clonedParty = Assert.Single(clonedCustomers.Entities);
         Assert.NotSame(party, clonedParty);
         Assert.Equal(Guid.Empty, clonedParty.Id);
+        // Nested records go through the same create-ready copy as the root: own key + audit columns dropped.
+        Assert.False(clonedParty.Contains("activitypartyid"));
+        Assert.False(clonedParty.Contains("createdon"));
         Assert.True(clonedParty.Contains("partyid"));
+    }
+
+    [Fact]
+    public void Clone_drops_the_primary_key_of_an_activity_table_that_breaks_the_naming_convention()
+    {
+        // An email's primary key is "activityid", not "emailid"; a retrieved record carries it with the same
+        // value as Entity.Id, so the clone must still drop it to stay create-ready.
+        Guid id = Guid.NewGuid();
+        Entity email = new Entity("email", id);
+        email["activityid"] = id;
+        email["subject"] = "Hi";
+
+        Entity clone = email.Clone();
+
+        Assert.Equal(Guid.Empty, clone.Id);
+        Assert.False(clone.Contains("activityid"));
+        Assert.Equal("Hi", clone["subject"]);
+    }
+
+    [Fact]
+    public void Clone_deep_copies_an_aliased_value_and_its_wrapped_value()
+    {
+        TestAccount source = new TestAccount { Id = Guid.NewGuid(), Name = "A" };
+        Money wrapped = new Money(50m);
+        source["contact.revenue"] = new AliasedValue("contact", "revenue", wrapped);
+
+        TestAccount clone = source.Clone();
+
+        AliasedValue clonedAlias = Assert.IsType<AliasedValue>(clone["contact.revenue"]);
+        Assert.Equal("contact", clonedAlias.EntityLogicalName);
+        Assert.Equal("revenue", clonedAlias.AttributeLogicalName);
+        Money clonedMoney = Assert.IsType<Money>(clonedAlias.Value);
+        Assert.NotSame(wrapped, clonedMoney);
+        Assert.Equal(50m, clonedMoney.Value);
     }
 
     [Fact]

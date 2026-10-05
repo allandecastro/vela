@@ -46,24 +46,45 @@ public static class EntityCloneExtensions
             clone.LogicalName = source.LogicalName;
         }
 
+        CopyCreateReady(source, clone);
+        return clone;
+    }
+
+    // Deep-copies source's attribute values onto target, dropping the primary-key attribute and the system-assigned
+    // audit columns so the result is create-ready. target.Id and the rest of its identity state are left untouched
+    // (a freshly constructed entity, so empty).
+    private static void CopyCreateReady(Entity source, Entity target)
+    {
         string primaryKeyAttribute = source.LogicalName + "id";
         foreach (KeyValuePair<string, object> attribute in source.Attributes)
         {
-            if (string.Equals(attribute.Key, primaryKeyAttribute, StringComparison.OrdinalIgnoreCase)
-                || NonCreatableAttributes.Contains(attribute.Key))
+            if (IsPrimaryKey(source, primaryKeyAttribute, attribute) || NonCreatableAttributes.Contains(attribute.Key))
             {
                 continue;
             }
 
-            clone[attribute.Key] = CloneValue(attribute.Value);
+            target[attribute.Key] = CloneValue(attribute.Value);
+        }
+    }
+
+    // The primary key is the conventional "{logicalname}id" column, but activity tables break the convention
+    // (e.g. email uses "activityid"). A retrieved record carries its primary key in the attribute bag with the
+    // same value as Entity.Id, so match on that too - this drops the real primary key without needing metadata.
+    private static bool IsPrimaryKey(Entity source, string primaryKeyAttribute, KeyValuePair<string, object> attribute)
+    {
+        if (string.Equals(attribute.Key, primaryKeyAttribute, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
         }
 
-        return clone;
+        return source.Id != Guid.Empty
+            && attribute.Value is Guid value
+            && value == source.Id
+            && attribute.Key.EndsWith("id", StringComparison.OrdinalIgnoreCase);
     }
 
     // Deep-copies a single attribute value. Mutable Dataverse wrappers (EntityReference, Money, option sets,
-    // byte[], nested entities and collections) are rebuilt; immutable scalars are passed through. Mirrors the
-    // harness' read-isolation clone so the semantics match what a real org round-trip would produce.
+    // byte[], aliased values, nested entities and collections) are rebuilt; immutable scalars are passed through.
     private static object? CloneValue(object? value)
     {
         switch (value)
@@ -86,6 +107,8 @@ public static class EntityCloneExtensions
                 return new OptionSetValueCollection(optionSetCollection.Select(o => new OptionSetValue(o.Value)).ToList());
             case byte[] bytes:
                 return (byte[])bytes.Clone();
+            case AliasedValue aliased:
+                return new AliasedValue(aliased.EntityLogicalName, aliased.AttributeLogicalName, CloneValue(aliased.Value)!);
             case Entity nested:
                 return CloneNested(nested);
             case EntityCollection collection:
@@ -96,16 +119,12 @@ public static class EntityCloneExtensions
         }
     }
 
-    // A nested record in a duplicated graph (e.g. an activity partylist entry) is itself a new row: deep-copy its
-    // attributes but drop its Id so Dataverse assigns a fresh one.
+    // A nested record in a duplicated graph (e.g. an activity partylist entry) is itself a new row: it goes through
+    // the same create-ready copy as the root, so its Id is reset and its primary key / audit columns are dropped.
     private static Entity CloneNested(Entity source)
     {
         Entity clone = new Entity(source.LogicalName);
-        foreach (KeyValuePair<string, object> attribute in source.Attributes)
-        {
-            clone[attribute.Key] = CloneValue(attribute.Value);
-        }
-
+        CopyCreateReady(source, clone);
         return clone;
     }
 }
