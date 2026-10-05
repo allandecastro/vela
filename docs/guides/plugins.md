@@ -107,6 +107,7 @@ does not compile.
 - Stop a step chain before `.Handle(...)`: every step must bind a typed handler (a chain that stops earlier is flagged by analyzer VELA002). Prefer `RegisterPluginSteps()` + `RegisterStep()....Handle(...)` over a no-handler `Execute(...)` override.
 - Cast context to `LocalPluginContext` in handlers.
 - Mix multiple registration styles in the same plugin class.
+- Catch and swallow an exception in a **synchronous** step. A sync step runs inside the platform transaction, so swallowing the error (a `catch` that does not rethrow) hides the failure and lets a broken operation commit. Let it propagate, or `throw new InvalidPluginExecutionException("...")` / `PluginBusinessException(...)` to roll the transaction back (see [VELA012](../reference/analyzers.md#vela012)). A deliberate best-effort block (optional telemetry, a cache warm) may still catch locally - but trace it, never leave it silent.
 
 ## Step configuration flow
 
