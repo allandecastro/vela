@@ -27,11 +27,13 @@ public sealed class AddCommandJsonTests
             string created = doc.RootElement.GetProperty("created")[0].GetString()!;
             Assert.EndsWith(Path.Combine("Account", "Plugins", "AccountValidator.cs"), created);
             Assert.True(File.Exists(created));
+            // Only a service carries a DI registration line; a plugin report omits the field entirely.
+            Assert.False(doc.RootElement.TryGetProperty("registration", out _));
         });
     }
 
     [Fact]
-    public void Add_Service_Json_Suppresses_The_Registration_Hint()
+    public void Add_Service_Json_Reports_The_Registration_Line()
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
@@ -40,8 +42,13 @@ public sealed class AddCommandJsonTests
 
             using JsonDocument doc = JsonDocument.Parse(output);
             Assert.Contains("service AccountFollowUp", doc.RootElement.GetProperty("description").GetString());
-            // The human "Register it from ConfigureServices" hint must not appear in JSON mode.
-            Assert.DoesNotContain("ConfigureServices", output);
+            // An agent driving the CLI reads the exact ConfigureServices line from a structured field,
+            // not from the human-only prose hint.
+            string registration = doc.RootElement.GetProperty("registration").GetString()!;
+            Assert.Equal(
+                "services.AddScoped<IAccountFollowUp>(r => new AccountFollowUp(r.GetRequiredService<IOrganizationService>()));",
+                registration);
+            Assert.DoesNotContain("Register it from", output);
         });
     }
 
