@@ -123,7 +123,7 @@ namespace Vela.Analyzers
                 }
 
                 if (FluentStep.IsFluentMethod(model, invocation, fluent, cancellationToken) &&
-                    ChainHasContextTrigger(member.Expression))
+                    ChainGeneratesContext(member.Expression))
                 {
                     return true;
                 }
@@ -132,26 +132,33 @@ namespace Vela.Analyzers
             return false;
         }
 
-        // True when the receiver chain contains a trigger the generator turns into a context: On<TRequest>() or any
-        // On{Msg}() (uppercase first letter after "On"), excluding the permissive OnMessage(...).
-        private static bool ChainHasContextTrigger(ExpressionSyntax? receiver)
+        // Mirrors the generator's exact emit condition, so VELA014 demands 'partial' only when a context is actually
+        // generated (the stages whose config exposes Handle(Delegate)):
+        //   OnCreate -> PostOperation only;  OnUpdate / OnDelete -> any stage;  On&lt;TRequest&gt;() -> PostOperation only.
+        // The permissive OnMessage(...) and generated On{X} Custom API extensions never generate a context.
+        private static bool ChainGeneratesContext(ExpressionSyntax? receiver)
         {
+            bool onCreate = false, onUpdateOrDelete = false, typed = false, postOperation = false;
             for (ExpressionSyntax? current = receiver; current is not null;)
             {
                 if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
                 {
                     string name = ma.Name.Identifier.ValueText;
-                    // Only the CRUD guided triggers and the typed On<TRequest>() path generate a context (they are the
-                    // stages whose config exposes Handle(Delegate)); mirror the generator so VELA014 does not demand
-                    // 'partial' for a handler that gets no generated context.
                     if (name == "On" && ma.Name is GenericNameSyntax)
                     {
-                        return true;
+                        typed = true;
                     }
-
-                    if (name is "OnCreate" or "OnUpdate" or "OnDelete")
+                    else if (name == "OnCreate")
                     {
-                        return true;
+                        onCreate = true;
+                    }
+                    else if (name is "OnUpdate" or "OnDelete")
+                    {
+                        onUpdateOrDelete = true;
+                    }
+                    else if (name == "PostOperation")
+                    {
+                        postOperation = true;
                     }
 
                     current = ma.Expression;
@@ -166,7 +173,7 @@ namespace Vela.Analyzers
                 }
             }
 
-            return false;
+            return onUpdateOrDelete || ((onCreate || typed) && postOperation);
         }
 
         private static bool DerivesFromEntityPluginBase(INamedTypeSymbol symbol)

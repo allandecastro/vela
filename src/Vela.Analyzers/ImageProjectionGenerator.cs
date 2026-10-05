@@ -680,11 +680,16 @@ namespace Vela.Analyzers
                 bool baseHasPost;
                 if (handler.RequestType is not null)
                 {
-                    // Typed On<TRequest>() step -> generic message context (pre always; post only at post-stage).
+                    // Typed On<TRequest>() uses the permissive config, whose Handle(Delegate) overload exists only at
+                    // PostOperation; a pre-stage typed config cannot bind a {Handler}Context, so skip it.
+                    if (!handler.IsPost)
+                    {
+                        continue;
+                    }
+
                     baseHasPre = true;
-                    baseHasPost = handler.IsPost;
-                    string messageBase = handler.IsPost ? "MessagePostContext" : "MessagePreContext";
-                    baseTypeFull = $"global::Vela.Context.{messageBase}<{handler.RequestType}, {handler.EntityType}>";
+                    baseHasPost = true;
+                    baseTypeFull = $"global::Vela.Context.MessagePostContext<{handler.RequestType}, {handler.EntityType}>";
                 }
                 else if (IsSingleImageMessage(handler.Message) &&
                     ResolveBaseContext(handler.Message, handler.IsPost, out baseHasPre, out baseHasPost) is string crud)

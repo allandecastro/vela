@@ -21,7 +21,9 @@ namespace Vela.Steps
     public interface IFluentStep { }
     public interface IStepConfig<TEntity> : IFluentStep
     {
+        IStepConfig<TEntity> OnCreate();
         IStepConfig<TEntity> OnUpdate();
+        IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
         IStepConfig<TEntity> Sync();
         IStepConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object>>[] a);
@@ -87,6 +89,21 @@ namespace Demo
     }");
 
         await Verify.VerifyAnalyzerAsync(code, At(0, "Validate", "Validate"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_create_pre_operation_named_handler()
+    {
+        // Create pre-stage has no Handle(Delegate) overload, so no context is generated and 'partial' is not required.
+        string code = InPlugin(@"
+    public sealed class Guard : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreate().PreOperation().Sync().Handle(OnPre);
+        private void OnPre() { }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code);
     }
 
     [Fact]

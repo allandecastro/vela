@@ -741,6 +741,27 @@ namespace Demo
     }
 
     [Fact]
+    public void Does_not_emit_a_context_for_a_typed_pre_operation_handler()
+    {
+        // The typed On<TRequest>() path uses the permissive config, whose Handle(Delegate) exists only at
+        // PostOperation; a pre-stage typed handler gets no context (it would not bind).
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountTypedPre : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<DeleteRequest>().PreOperation().Sync().Handle(OnDeleting);
+        private void OnDeleting() { }
+    }
+}
+");
+
+        Assert.DoesNotContain("OnDeletingContext", output);
+    }
+
+    [Fact]
     public void Does_not_emit_a_context_for_a_lambda_handler()
     {
         string output = RunAndConcat(@"
