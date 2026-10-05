@@ -182,9 +182,10 @@ frame to perform that mapping, so `PluginBusinessException` is still flagged the
 `InvalidPluginExecutionException` from a raw `IPlugin`.
 
 This rule checks throws inside **plugin / Custom API types** (those implementing `IPlugin` or deriving from the
-Vela bases). A throw in a plain helper or injected service class is not analyzed, so when that code must raise a
-user-facing failure, throw `InvalidPluginExecutionException` or `PluginBusinessException` there too - it still
-surfaces cleanly because `PluginBase` catches it as the call unwinds.
+Vela bases). A throw in a plain helper or injected service class is not analyzed; when that code must raise a
+user-facing failure, throw `InvalidPluginExecutionException` there - it surfaces cleanly to the caller whatever
+the entry point is. `PluginBusinessException` surfaces cleanly too, but only when the plugin that ran the code
+derives from a Vela base (that base's catch does the mapping), so reserve it for that case.
 
 **Fix:** `throw new InvalidPluginExecutionException("...")` (or `throw new PluginBusinessException("...")`) for
 user-facing failures.
