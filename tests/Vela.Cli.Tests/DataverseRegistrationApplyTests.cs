@@ -399,6 +399,44 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void ComputePackagePublishActions_create_when_package_is_new()
+    {
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-new"));
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection() };
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
+
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        Assert.Equal("acme_Pkg", action.PackageName);
+        Assert.True(action.IsCreate);
+    }
+
+    [Fact]
+    public void ComputePackagePublishActions_update_when_content_differs()
+    {
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-new"));
+        var existing = new Entity("pluginpackage", Guid.NewGuid());
+        existing["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes("pkg-old"));
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
+
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        Assert.False(action.IsCreate);
+    }
+
+    [Fact]
+    public void ComputePackagePublishActions_empty_when_content_identical()
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes("pkg-same");
+        string path = NewTempFile(bytes);
+        var existing = new Entity("pluginpackage", Guid.NewGuid());
+        existing["content"] = Convert.ToBase64String(bytes);
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
+
+        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+    }
+
+    [Fact]
     public void UpsertPluginPackage_throws_when_package_file_missing()
     {
         var svc = new TestSupport.FakeOrgService();

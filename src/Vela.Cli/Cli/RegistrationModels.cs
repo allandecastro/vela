@@ -58,6 +58,11 @@ public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool 
 /// <summary>The executed create/update/delete counts for one component kind (step / custom-api / web-resource).</summary>
 public sealed record ExecutedByKind(string Kind, int Created, int Updated, int Deleted);
 public sealed record ApplyOperation(string Action, string Kind, string Type, string Reason);
+/// <summary>A plugin package that a plan/apply would write: created when absent from Dataverse, otherwise
+/// republished because its content differs. Packages whose deployed content already matches are not reported.
+/// Lets <c>plan</c> surface a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) that the
+/// step/custom-API diff alone cannot see.</summary>
+public sealed record PackagePublishAction(string PackageName, bool IsCreate);
 public sealed record StepApplyDefinition(string PluginTypeName, string Message, string EntityLogicalName, string StepKey, string HandlerMethodName, int Stage, int Mode, int ExecutionOrder, string[] FilteringAttributes, ImageApplyDefinition[] PreImages, ImageApplyDefinition[] PostImages, bool Enabled, string UnsecureConfig, string SecureConfig, Guid ImpersonatingUserId = default, int SupportedDeployment = 0);
 public sealed record ImageApplyDefinition(string Alias, string[] Attributes);
 public sealed record StepImageApplyDefinition(string Alias, string[] Attributes, int ImageType);

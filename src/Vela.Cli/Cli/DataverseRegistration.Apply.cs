@@ -311,41 +311,54 @@ internal static partial class DataverseRegistration
     // and deploy nothing. This mirrors UpsertPluginPackage's create/skip decision exactly (same prefix, same
     // import bytes, same content compare) without writing.
     internal static bool PluginPackagesNeedPublish(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories)
+        => ComputePackagePublishActions(service, packagePayloads, solutionUniqueName, tempDirectories).Count > 0;
+
+    // Per-package detail behind PluginPackagesNeedPublish: one action for every package that would be created
+    // (absent from Dataverse) or republished (content differs); packages whose deployed content already matches
+    // are omitted. Lets plan list the package operation and flag HasChanges for a code-only rebuild. Mirrors
+    // UpsertPluginPackage's create/skip decision exactly (same prefix, same import bytes, same content compare)
+    // without writing.
+    internal static IReadOnlyList<PackagePublishAction> ComputePackagePublishActions(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories)
 {
     if (packagePayloads.Length == 0)
     {
-        return false;
+        return [];
     }
 
     string? solutionPrefix = string.IsNullOrWhiteSpace(solutionUniqueName)
         ? null
         : ResolveSolutionCustomizationPrefix(service, solutionUniqueName);
 
+    List<PackagePublishAction> actions = [];
     foreach (PluginPackagePayload package in packagePayloads)
     {
+        string desiredPackageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
+
         if (!File.Exists(package.PackagePath))
         {
-            // Let the real publish surface the missing-file error rather than silently short-circuiting.
-            return true;
+            // Let the real publish surface the missing-file error rather than silently short-circuiting; report
+            // it as a republish so plan does not hide a package that apply will attempt to write.
+            actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: false));
+            continue;
         }
 
-        string desiredPackageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
         byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName, tempDirectories);
         string packageContent = Convert.ToBase64String(packageBytes);
         Entity? existing = GetPluginPackage(service, desiredPackageName);
         if (existing == null)
         {
-            return true;
+            actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: true));
+            continue;
         }
 
         string existingContent = existing.GetAttributeValue<string>("content") ?? string.Empty;
         if (!string.Equals(existingContent, packageContent, StringComparison.Ordinal))
         {
-            return true;
+            actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: false));
         }
     }
 
-    return false;
+    return actions;
 }
 
     internal static string NormalizePackageNameWithPrefix(string packageName, string? solutionPrefix)

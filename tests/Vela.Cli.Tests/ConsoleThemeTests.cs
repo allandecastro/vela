@@ -63,6 +63,32 @@ public class ConsoleThemeTests
     }
 
     [Fact]
+    public void BuildPlanPreview_surfaces_a_package_republish_when_the_step_diff_is_empty()
+    {
+        // A code-only rebuild: unchanged steps/custom APIs (empty diff) but a rebuilt assembly whose package
+        // content differs. Plan must still report a change and list the package operation, or an agent reading
+        // plan would conclude there is nothing to deploy while apply would republish the package.
+        var diff = new RegistrationDiff([], [], [], [], [], [], [])
+        {
+            Summary = new DiffSummary(0, 0, 0),
+        };
+        PackagePublishAction[] packageActions = [new PackagePublishAction("acme_Plugins", IsCreate: false)];
+
+        PlanPreview preview = OutputWriter.BuildPlanPreview(
+            "plan", "https://zava.crm.dynamics.com", diff, [], [], packageActions);
+
+        Assert.True(preview.HasChanges);
+        ApplyOperation op = Assert.Single(preview.Operations);
+        Assert.Equal("update", op.Action);
+        Assert.Equal("package", op.Kind);
+        Assert.Equal("acme_Plugins", op.Type);
+
+        var sw = new StringWriter();
+        OutputWriter.WritePlanSummary(preview, sw, color: false);
+        Assert.Contains("update package: acme_Plugins", sw.ToString());
+    }
+
+    [Fact]
     public void WritePlanSummary_surfaces_diagnostics_as_a_warnings_block()
     {
         var diff = new RegistrationDiff([], [], [], [], [], [], [])

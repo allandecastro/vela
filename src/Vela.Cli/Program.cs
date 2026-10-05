@@ -468,7 +468,19 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
             "Connecting to Dataverse and reading current registrations…",
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
         RegistrationDiff diff = BuildDiff(local, current);
-        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics);
+
+        // A code-only change (unchanged step/custom-API definitions but a rebuilt assembly) is invisible to the
+        // registration diff, so also surface whether each plugin package would be created or republished - exactly
+        // what apply checks - so plan does not report "no changes" for a rebuild that apply would deploy. Skips the
+        // (short-lived) connection entirely when there are no local packages to compare.
+        IReadOnlyList<PackagePublishAction> packageActions = [];
+        if (local.PackagePayloads.Length > 0)
+        {
+            using ServiceClient packageCheckClient = CreateDataverseClient(options);
+            packageActions = ComputePackagePublishActions(packageCheckClient, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
+        }
+
+        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics, packageActions);
         if (options.Strict && plan.Diagnostics.Length > 0)
         {
             WriteDiagnostics(plan.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
