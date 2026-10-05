@@ -79,13 +79,16 @@ namespace Vela.Testing.Tests
         }
 
         // OlderThanXDays is 'date < Today.AddDays(-n)'. A record dated EXACTLY n days ago is NOT older
-        // (kills < -> <=, which would wrongly include the boundary day).
+        // (kills < -> <=, which would wrongly include the boundary day). The engine's "today" is the injected
+        // clock's UTC date, so pin a fixed clock and seed relative to the SAME basis - seeding with the host's
+        // local DateTime.Today made this flake a day in either direction whenever the local date differed from UTC.
         [Fact]
         public void OlderThanXDays_excludes_the_exact_boundary_day()
         {
-            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
-                new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "boundary", ["createdon"] = DateTime.Today.AddDays(-7) },
-                new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "older", ["createdon"] = DateTime.Today.AddDays(-8) });
+            DateTime now = new DateTime(2026, 6, 15, 12, 0, 0, DateTimeKind.Utc);
+            InMemoryOrganizationService crm = new InMemoryOrganizationService().WithClock(() => now).Seed(
+                new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "boundary", ["createdon"] = now.Date.AddDays(-7) },
+                new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "older", ["createdon"] = now.Date.AddDays(-8) });
 
             QueryExpression query = new QueryExpression("task") { ColumnSet = new ColumnSet("subject") };
             query.Criteria.AddCondition("createdon", ConditionOperator.OlderThanXDays, 7);
