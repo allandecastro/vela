@@ -306,7 +306,8 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
             string unchanged = JsonSerializer.Serialize(preview with
             {
                 Mode = "apply-execute",
-                Notes = [.. preview.Notes, "No changes detected; nothing executed."]
+                Notes = [.. preview.Notes, "No changes detected; nothing executed."],
+                Executed = ExecutedCounts.FromDiff(diff, packageRepublished: false)
             }, jsonOptions);
             WriteOutput(options.OutPath, unchanged);
             return ExitSuccess;
@@ -385,7 +386,10 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
                 "Compared local .nupkg plugin metadata with live Dataverse state.",
                 "Dataverse changes were executed.",
                 $"Executed operations: create={diff.Added.Length}, update={diff.Changed.Length}, delete={diff.Removed.Length}"
-            ]
+            ],
+            // Structured executed counts (totals + per-kind) from the PRE-apply diff (Summary above is the
+            // post-apply remaining = 0 on success), so an agent reads what was done without parsing Notes.
+            Executed = ExecutedCounts.FromDiff(diff, packageNeedsPublish)
         };
 
         if (options.Strict && result.Diagnostics.Length > 0)
