@@ -123,7 +123,7 @@ namespace Vela.Analyzers
                 }
 
                 if (FluentStep.IsFluentMethod(model, invocation, fluent, cancellationToken) &&
-                    ChainGeneratesContext(member.Expression))
+                    ChainGeneratesContext(member.Expression, model))
                 {
                     return true;
                 }
@@ -132,13 +132,13 @@ namespace Vela.Analyzers
             return false;
         }
 
-        // Mirrors the generator's exact emit condition, so VELA014 demands 'partial' only when a context is actually
-        // generated (the stages whose config exposes Handle(Delegate)):
-        //   OnCreate -> PostOperation only;  OnUpdate / OnDelete -> any stage;  On&lt;TRequest&gt;() -> PostOperation only.
-        // The permissive OnMessage(...) and generated On{X} Custom API extensions never generate a context.
-        private static bool ChainGeneratesContext(ExpressionSyntax? receiver)
+        // Mirrors the generator: a context is generated for a named handler on the typed On&lt;TRequest&gt;() path, or on
+        // any On{Msg}() whose modelled Vela.Context.{Msg}{Pre|Post}Context type exists. The permissive OnMessage(...)
+        // and generated On{X} Custom API extensions (no matching context type) never generate one.
+        private static bool ChainGeneratesContext(ExpressionSyntax? receiver, SemanticModel model)
         {
-            bool onCreate = false, onUpdateOrDelete = false, typed = false, postOperation = false;
+            string? message = null;
+            bool typed = false, postOperation = false;
             for (ExpressionSyntax? current = receiver; current is not null;)
             {
                 if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
@@ -148,17 +148,14 @@ namespace Vela.Analyzers
                     {
                         typed = true;
                     }
-                    else if (name == "OnCreate")
-                    {
-                        onCreate = true;
-                    }
-                    else if (name is "OnUpdate" or "OnDelete")
-                    {
-                        onUpdateOrDelete = true;
-                    }
                     else if (name == "PostOperation")
                     {
                         postOperation = true;
+                    }
+                    else if (message is null && name.Length > 2 && name.StartsWith("On", System.StringComparison.Ordinal) &&
+                        name != "OnMessage" && name != "OnAsyncOnly" && char.IsUpper(name[2]))
+                    {
+                        message = name.Substring(2);
                     }
 
                     current = ma.Expression;
@@ -173,7 +170,18 @@ namespace Vela.Analyzers
                 }
             }
 
-            return onUpdateOrDelete || ((onCreate || typed) && postOperation);
+            if (typed)
+            {
+                return true; // MessagePre/PostContext always exist.
+            }
+
+            if (message is null)
+            {
+                return false;
+            }
+
+            string suffix = postOperation ? "Post" : "Pre";
+            return model.Compilation.GetTypeByMetadataName($"Vela.Context.{message}{suffix}Context`1") is not null;
         }
 
         private static bool DerivesFromEntityPluginBase(INamedTypeSymbol symbol)

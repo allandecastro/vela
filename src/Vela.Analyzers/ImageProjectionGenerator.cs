@@ -223,8 +223,23 @@ namespace Vela.Analyzers
                 : pluginSymbol.ContainingNamespace.ToDisplayString();
 
             string? requestType = FindTypedRequestType(member.Expression, model);
+            bool isPost = stageLabel == "PostOp";
+
+            // Emit only when a real modelled context base exists. The typed On<TRequest>() path always has
+            // MessagePre/PostContext; a guided On{Msg}() needs its Vela.Context.{Msg}{Pre|Post}Context to exist. This
+            // is what excludes generated Custom API On{X} extensions (e.g. OnRecalc -> no RecalcPostContext) and any
+            // other non-modelled trigger, without classifying the trigger method itself.
+            if (requestType is null)
+            {
+                string contextMetadata = $"Vela.Context.{messageLabel}{(isPost ? "Post" : "Pre")}Context`1";
+                if (model.Compilation.GetTypeByMetadataName(contextMetadata) is null)
+                {
+                    return null;
+                }
+            }
+
             return new HandlerModel(ns, containingTypes.ToImmutableArray(), handlerName, messageLabel,
-                stageLabel == "PostOp", entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), requestType);
+                isPost, entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), requestType);
         }
 
         // Message + stage for the context driver. Like ResolveMessageAndStage but recognizes EVERY On{Msg}() trigger
@@ -243,23 +258,23 @@ namespace Vela.Analyzers
                     string name = ma.Name.Identifier.ValueText;
                     switch (name)
                     {
-                        case "OnCreate": message ??= "Create"; break;
-                        case "OnUpdate": message ??= "Update"; break;
-                        case "OnDelete": message ??= "Delete"; break;
                         case "PreValidation": stage ??= "PreVal"; break;
                         case "PreOperation": stage ??= "PreOp"; break;
                         case "PostOperation": stage ??= "PostOp"; break;
                     }
 
-                    // Only the CRUD guided triggers and the typed On<TRequest>() path are mapped: those are the stages
-                    // whose fluent config carries the Handle(Delegate) overload that a {Handler}Context (a more-derived
-                    // parameter) binds to. Other triggers (bulk, the ~45 message triggers, generated On{X} Custom API
-                    // extensions, OnMessage(...)) stay unmapped, so no context is generated for a step that could not
-                    // bind it.
                     if (message is null && name == "On" && ma.Name is GenericNameSyntax generic &&
                         generic.TypeArgumentList.Arguments.Count == 1)
                     {
                         message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
+                    }
+                    else if (message is null && name.Length > 2 && name.StartsWith("On", System.StringComparison.Ordinal) &&
+                        name != "OnMessage" && name != "OnAsyncOnly" && char.IsUpper(name[2]))
+                    {
+                        // Any On{Msg}() trigger -> {Msg}. Whether a context is actually emitted is gated downstream by
+                        // whether a real Vela.Context.{Msg}{Pre|Post}Context type exists (ExtractHandler), which
+                        // excludes generated Custom API On{X} extensions and any non-modelled trigger.
+                        message = name.Substring(2);
                     }
 
                     current = ma.Expression;
@@ -680,30 +695,31 @@ namespace Vela.Analyzers
                 bool baseHasPost;
                 if (handler.RequestType is not null)
                 {
-                    // Typed On<TRequest>() uses the permissive config, whose Handle(Delegate) overload exists only at
-                    // PostOperation; a pre-stage typed config cannot bind a {Handler}Context, so skip it.
-                    if (!handler.IsPost)
-                    {
-                        continue;
-                    }
-
+                    // Typed On<TRequest>() -> generic message context (pre at a pre-stage, post with a Response at
+                    // post-stage). Every stage config carries Handle(Delegate), so both bind.
                     baseHasPre = true;
-                    baseHasPost = true;
-                    baseTypeFull = $"global::Vela.Context.MessagePostContext<{handler.RequestType}, {handler.EntityType}>";
+                    baseHasPost = handler.IsPost;
+                    string messageBase = handler.IsPost ? "MessagePostContext" : "MessagePreContext";
+                    baseTypeFull = $"global::Vela.Context.{messageBase}<{handler.RequestType}, {handler.EntityType}>";
                 }
                 else if (IsSingleImageMessage(handler.Message) &&
                     ResolveBaseContext(handler.Message, handler.IsPost, out baseHasPre, out baseHasPost) is string crud)
                 {
-                    // Create/Update/Delete at an image-bearing stage (the stages whose config exposes Handle(Delegate)):
-                    // derive from the concrete context and expose a single typed pre/post image when captured.
+                    // Create/Update/Delete at an image-bearing stage: derive from the concrete context and expose a
+                    // single typed pre/post image when captured.
                     baseTypeFull = $"global::Vela.Context.{crud}<{handler.EntityType}>";
                 }
                 else
                 {
-                    // Any other (message, stage) - e.g. Create pre-stage - has no Handle(Delegate) overload, so a
-                    // {Handler}Context could not be bound there. Skip it rather than emit a context that would not
-                    // compile. (Bulk and the other modelled messages are already unmapped by ResolveMessageAndStageForContext.)
-                    continue;
+                    // Every other (message, stage) - bulk, the ~45 message triggers, and the image-less CRUD stages
+                    // (e.g. Create pre) - gets a bare subclass of the plain message context. No single-image property
+                    // (bulk images are per-record; those messages carry none). ExtractHandler already verified the
+                    // base context type exists. A stable signature either way: capturing an image later only enriches
+                    // the CRUD branch above.
+                    string stageSuffix = handler.IsPost ? "PostContext" : "PreContext";
+                    baseTypeFull = $"global::Vela.Context.{handler.Message}{stageSuffix}<{handler.EntityType}>";
+                    baseHasPre = false;
+                    baseHasPost = false;
                 }
 
                 string handlerKey = handler.Namespace + "|" + string.Join(".", handler.ContainingTypes) + "|" + handler.HandlerName;

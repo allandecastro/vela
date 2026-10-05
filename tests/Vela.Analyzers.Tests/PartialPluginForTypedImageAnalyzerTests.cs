@@ -42,6 +42,16 @@ namespace Vela.Plugin
     }
 }
 
+namespace Vela.Context
+{
+    using Microsoft.Xrm.Sdk;
+    // Minimal context-type stand-ins so VELA014's 'does a context get generated?' check can resolve the base type.
+    public class CreatePreContext<TEntity> where TEntity : Entity { }
+    public class CreatePostContext<TEntity> where TEntity : Entity { }
+    public class UpdatePreContext<TEntity> where TEntity : Entity { }
+    public class UpdatePostContext<TEntity> where TEntity : Entity { }
+}
+
 namespace Demo
 {
     using Microsoft.Xrm.Sdk;
@@ -92,18 +102,19 @@ namespace Demo
     }
 
     [Fact]
-    public async Task Does_not_flag_a_create_pre_operation_named_handler()
+    public async Task Flags_a_create_pre_operation_named_handler()
     {
-        // Create pre-stage has no Handle(Delegate) overload, so no context is generated and 'partial' is not required.
+        // Every stage now carries Handle(Delegate), so a named handler on Create pre also gets a generated
+        // {Handler}Context (a bare CreatePreContext subclass) and the class must be partial.
         string code = InPlugin(@"
-    public sealed class Guard : EntityPluginBase<Account>
+    public sealed class {|#0:Guard|} : EntityPluginBase<Account>
     {
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreate().PreOperation().Sync().Handle(OnPre);
         private void OnPre() { }
     }");
 
-        await Verify.VerifyAnalyzerAsync(code);
+        await Verify.VerifyAnalyzerAsync(code, At(0, "Guard", "Guard"));
     }
 
     [Fact]

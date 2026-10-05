@@ -20,6 +20,18 @@ namespace Vela.Steps
         [EditorBrowsable(EditorBrowsableState.Never)] bool Equals(object obj);
     }
 
+    /// <summary>
+    /// Base for every terminal step config. Carries the <c>Handle(Delegate)</c> overload that binds a handler taking
+    /// the generated per-step context (<c>{Handler}Context</c>, a subclass of the concrete step context). A method
+    /// group converts to <see cref="Delegate"/> via its natural type, so the developer writes <c>.Handle(OnX)</c>
+    /// with no explicit type; the runtime builds the handler's declared context. Each config also keeps its own
+    /// strongly-typed <c>Handle(Action&lt;I...Context&gt;)</c> overload for a handler taking the plain message context.
+    /// </summary>
+    public interface IStepConfig<TEntity> : IFluentStep where TEntity : Entity
+    {
+        void Handle(Delegate handler);
+    }
+
     /// <summary>Sync-only mode choice (pre-validation / pre-operation): async is PostOperation-only in Dataverse.</summary>
     public interface ISyncMode<out TConfig> : IFluentStep { TConfig Sync(); }
     /// <summary>Sync or async mode choice (post-operation only).</summary>
@@ -28,7 +40,7 @@ namespace Vela.Steps
     public interface IAsyncMode<out TConfig> : IFluentStep { TConfig Async(); }
 
     /// <summary>Config for a Create step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICreatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICreatePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICreatePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreatePreValidationConfig<TEntity> WithDescription(string description);
@@ -44,7 +56,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Create step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICreatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICreatePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICreatePreOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreatePreOperationConfig<TEntity> WithDescription(string description);
@@ -60,7 +72,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Create step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICreatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICreatePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICreatePostOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreatePostOperationConfig<TEntity> WithDescription(string description);
@@ -75,11 +87,10 @@ namespace Vela.Steps
         ICreatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
         ICreatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreatePostContext<TEntity>> handler);
-        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Update step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IUpdatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IUpdatePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IUpdatePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdatePreValidationConfig<TEntity> WithDescription(string description);
@@ -92,11 +103,10 @@ namespace Vela.Steps
         IUpdatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
         IUpdatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePreContext<TEntity>> handler);
-        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Update step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IUpdatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IUpdatePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IUpdatePreOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdatePreOperationConfig<TEntity> WithDescription(string description);
@@ -111,11 +121,10 @@ namespace Vela.Steps
         IUpdatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
         IUpdatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePreContext<TEntity>> handler);
-        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Update step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IUpdatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IUpdatePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IUpdatePostOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdatePostOperationConfig<TEntity> WithDescription(string description);
@@ -132,15 +141,10 @@ namespace Vela.Steps
         IUpdatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
         IUpdatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePostContext<TEntity>> handler);
-        // Binds a handler taking the generated per-step context (a subclass of the concrete step context exposing
-        // typed PreImage/PostImage). A method group converts to Delegate via its C# 10 natural type, so the dev writes
-        // `.Handle(OnUpdated)` with no explicit type; the runtime builds the handler's declared context. Plain handlers
-        // keep binding the specific overload above; VELA015 validates the context matches the step.
-        void Handle(Delegate handler);
     }
 
     /// <summary>Config for a CreateMultiple step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICreateMultiplePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICreateMultiplePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICreateMultiplePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreateMultiplePreValidationConfig<TEntity> WithDescription(string description);
@@ -156,7 +160,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CreateMultiple step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICreateMultiplePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICreateMultiplePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICreateMultiplePreOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreateMultiplePreOperationConfig<TEntity> WithDescription(string description);
@@ -172,7 +176,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CreateMultiple step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICreateMultiplePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICreateMultiplePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICreateMultiplePostOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         ICreateMultiplePostOperationConfig<TEntity> WithDescription(string description);
@@ -190,7 +194,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a UpdateMultiple step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IUpdateMultiplePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IUpdateMultiplePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IUpdateMultiplePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdateMultiplePreValidationConfig<TEntity> WithDescription(string description);
@@ -206,7 +210,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a UpdateMultiple step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IUpdateMultiplePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IUpdateMultiplePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IUpdateMultiplePreOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdateMultiplePreOperationConfig<TEntity> WithDescription(string description);
@@ -224,7 +228,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a UpdateMultiple step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IUpdateMultiplePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IUpdateMultiplePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IUpdateMultiplePostOperationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdateMultiplePostOperationConfig<TEntity> WithDescription(string description);
@@ -244,7 +248,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Delete step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeletePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeletePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeletePreValidationConfig<TEntity> WithDescription(string description);
         IDeletePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -256,11 +260,10 @@ namespace Vela.Steps
         IDeletePreValidationConfig<TEntity> WithSecureConfig(string configuration);
         IDeletePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePreContext<TEntity>> handler);
-        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Delete step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeletePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeletePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeletePreOperationConfig<TEntity> WithDescription(string description);
         IDeletePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
@@ -274,11 +277,10 @@ namespace Vela.Steps
         IDeletePreOperationConfig<TEntity> WithSecureConfig(string configuration);
         IDeletePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePreContext<TEntity>> handler);
-        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Delete step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeletePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeletePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeletePostOperationConfig<TEntity> WithDescription(string description);
         IDeletePostOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
@@ -292,11 +294,10 @@ namespace Vela.Steps
         IDeletePostOperationConfig<TEntity> WithSecureConfig(string configuration);
         IDeletePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePostContext<TEntity>> handler);
-        void Handle(Delegate handler);   // generated per-step typed context (see VELA015)
     }
 
     /// <summary>Config for a Retrieve step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrievePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrievePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrievePreValidationConfig<TEntity> WithDescription(string description);
         IRetrievePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -311,7 +312,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Retrieve step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrievePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrievePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrievePreOperationConfig<TEntity> WithDescription(string description);
         IRetrievePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -326,7 +327,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Retrieve step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrievePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrievePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrievePostOperationConfig<TEntity> WithDescription(string description);
         IRetrievePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -341,7 +342,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrieveMultiple step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrieveMultiplePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrieveMultiplePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrieveMultiplePreValidationConfig<TEntity> WithDescription(string description);
         IRetrieveMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -356,7 +357,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrieveMultiple step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrieveMultiplePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrieveMultiplePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrieveMultiplePreOperationConfig<TEntity> WithDescription(string description);
         IRetrieveMultiplePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -371,7 +372,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrieveMultiple step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrieveMultiplePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrieveMultiplePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrieveMultiplePostOperationConfig<TEntity> WithDescription(string description);
         IRetrieveMultiplePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -386,7 +387,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Associate step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAssociatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAssociatePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssociatePreValidationConfig<TEntity> WithDescription(string description);
         IAssociatePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -401,7 +402,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Associate step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAssociatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAssociatePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssociatePreOperationConfig<TEntity> WithDescription(string description);
         IAssociatePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -416,7 +417,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Associate step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAssociatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAssociatePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssociatePostOperationConfig<TEntity> WithDescription(string description);
         IAssociatePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -431,7 +432,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Disassociate step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDisassociatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDisassociatePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDisassociatePreValidationConfig<TEntity> WithDescription(string description);
         IDisassociatePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -446,7 +447,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Disassociate step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDisassociatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDisassociatePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDisassociatePreOperationConfig<TEntity> WithDescription(string description);
         IDisassociatePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -461,7 +462,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Disassociate step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDisassociatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDisassociatePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDisassociatePostOperationConfig<TEntity> WithDescription(string description);
         IDisassociatePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -476,7 +477,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GrantAccess step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGrantAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGrantAccessPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGrantAccessPreValidationConfig<TEntity> WithDescription(string description);
         IGrantAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -491,7 +492,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GrantAccess step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGrantAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGrantAccessPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGrantAccessPreOperationConfig<TEntity> WithDescription(string description);
         IGrantAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -506,7 +507,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GrantAccess step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGrantAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGrantAccessPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGrantAccessPostOperationConfig<TEntity> WithDescription(string description);
         IGrantAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -521,7 +522,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for an Assign step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAssignPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAssignPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssignPreValidationConfig<TEntity> WithDescription(string description);
         IAssignPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -536,7 +537,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for an Assign step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAssignPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAssignPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssignPreOperationConfig<TEntity> WithDescription(string description);
         IAssignPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -551,7 +552,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for an Assign step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAssignPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAssignPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssignPostOperationConfig<TEntity> WithDescription(string description);
         IAssignPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -566,7 +567,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RevokeAccess step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRevokeAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRevokeAccessPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRevokeAccessPreValidationConfig<TEntity> WithDescription(string description);
         IRevokeAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -581,7 +582,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RevokeAccess step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRevokeAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRevokeAccessPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRevokeAccessPreOperationConfig<TEntity> WithDescription(string description);
         IRevokeAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -596,7 +597,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RevokeAccess step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRevokeAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRevokeAccessPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRevokeAccessPostOperationConfig<TEntity> WithDescription(string description);
         IRevokeAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -611,7 +612,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a QualifyLead step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IQualifyLeadPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IQualifyLeadPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IQualifyLeadPreValidationConfig<TEntity> WithDescription(string description);
         IQualifyLeadPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -626,7 +627,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a QualifyLead step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IQualifyLeadPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IQualifyLeadPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IQualifyLeadPreOperationConfig<TEntity> WithDescription(string description);
         IQualifyLeadPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -641,7 +642,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a QualifyLead step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IQualifyLeadPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IQualifyLeadPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IQualifyLeadPostOperationConfig<TEntity> WithDescription(string description);
         IQualifyLeadPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -656,7 +657,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a WinOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IWinOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IWinOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IWinOpportunityPreValidationConfig<TEntity> WithDescription(string description);
         IWinOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -671,7 +672,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a WinOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IWinOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IWinOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IWinOpportunityPreOperationConfig<TEntity> WithDescription(string description);
         IWinOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -686,7 +687,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a WinOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IWinOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IWinOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IWinOpportunityPostOperationConfig<TEntity> WithDescription(string description);
         IWinOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -701,7 +702,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a LoseOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ILoseOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ILoseOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ILoseOpportunityPreValidationConfig<TEntity> WithDescription(string description);
         ILoseOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -716,7 +717,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a LoseOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ILoseOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ILoseOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ILoseOpportunityPreOperationConfig<TEntity> WithDescription(string description);
         ILoseOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -731,7 +732,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a LoseOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ILoseOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ILoseOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ILoseOpportunityPostOperationConfig<TEntity> WithDescription(string description);
         ILoseOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -746,7 +747,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ConvertQuoteToSalesOrder step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertQuoteToSalesOrderPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IConvertQuoteToSalesOrderPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithDescription(string description);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -761,7 +762,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ConvertQuoteToSalesOrder step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertQuoteToSalesOrderPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IConvertQuoteToSalesOrderPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithDescription(string description);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -776,7 +777,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ConvertQuoteToSalesOrder step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertQuoteToSalesOrderPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IConvertQuoteToSalesOrderPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithDescription(string description);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -791,7 +792,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ConvertSalesOrderToInvoice step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertSalesOrderToInvoicePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IConvertSalesOrderToInvoicePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithDescription(string description);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -806,7 +807,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ConvertSalesOrderToInvoice step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertSalesOrderToInvoicePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IConvertSalesOrderToInvoicePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithDescription(string description);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -821,7 +822,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ConvertSalesOrderToInvoice step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertSalesOrderToInvoicePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IConvertSalesOrderToInvoicePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithDescription(string description);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -836,7 +837,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateQuoteFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -851,7 +852,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateQuoteFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -866,7 +867,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateQuoteFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -881,7 +882,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateSalesOrderFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -896,7 +897,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateSalesOrderFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -911,7 +912,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateSalesOrderFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -926,7 +927,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateInvoiceFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -941,7 +942,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateInvoiceFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -956,7 +957,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GenerateInvoiceFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -971,7 +972,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddToQueue step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddToQueuePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddToQueuePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddToQueuePreValidationConfig<TEntity> WithDescription(string description);
         IAddToQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -986,7 +987,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddToQueue step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddToQueuePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddToQueuePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddToQueuePreOperationConfig<TEntity> WithDescription(string description);
         IAddToQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1001,7 +1002,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddToQueue step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddToQueuePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddToQueuePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddToQueuePostOperationConfig<TEntity> WithDescription(string description);
         IAddToQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1016,7 +1017,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveFromQueue step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveFromQueuePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveFromQueuePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveFromQueuePreValidationConfig<TEntity> WithDescription(string description);
         IRemoveFromQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1031,7 +1032,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveFromQueue step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveFromQueuePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveFromQueuePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveFromQueuePreOperationConfig<TEntity> WithDescription(string description);
         IRemoveFromQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1046,7 +1047,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveFromQueue step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveFromQueuePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveFromQueuePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveFromQueuePostOperationConfig<TEntity> WithDescription(string description);
         IRemoveFromQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1061,7 +1062,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a PickFromQueue step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IPickFromQueuePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IPickFromQueuePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPickFromQueuePreValidationConfig<TEntity> WithDescription(string description);
         IPickFromQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1076,7 +1077,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a PickFromQueue step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IPickFromQueuePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IPickFromQueuePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPickFromQueuePreOperationConfig<TEntity> WithDescription(string description);
         IPickFromQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1091,7 +1092,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a PickFromQueue step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IPickFromQueuePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IPickFromQueuePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPickFromQueuePostOperationConfig<TEntity> WithDescription(string description);
         IPickFromQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1106,7 +1107,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RouteTo step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRouteToPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRouteToPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRouteToPreValidationConfig<TEntity> WithDescription(string description);
         IRouteToPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1121,7 +1122,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RouteTo step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRouteToPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRouteToPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRouteToPreOperationConfig<TEntity> WithDescription(string description);
         IRouteToPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1136,7 +1137,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RouteTo step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRouteToPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRouteToPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRouteToPostOperationConfig<TEntity> WithDescription(string description);
         IRouteToPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1151,7 +1152,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ReleaseToQueue step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReleaseToQueuePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IReleaseToQueuePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IReleaseToQueuePreValidationConfig<TEntity> WithDescription(string description);
         IReleaseToQueuePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1166,7 +1167,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ReleaseToQueue step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReleaseToQueuePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IReleaseToQueuePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IReleaseToQueuePreOperationConfig<TEntity> WithDescription(string description);
         IReleaseToQueuePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1181,7 +1182,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ReleaseToQueue step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReleaseToQueuePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IReleaseToQueuePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IReleaseToQueuePostOperationConfig<TEntity> WithDescription(string description);
         IReleaseToQueuePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1196,7 +1197,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a SendEmail step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ISendEmailPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ISendEmailPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ISendEmailPreValidationConfig<TEntity> WithDescription(string description);
         ISendEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1211,7 +1212,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a SendEmail step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ISendEmailPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ISendEmailPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ISendEmailPreOperationConfig<TEntity> WithDescription(string description);
         ISendEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1226,7 +1227,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a SendEmail step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ISendEmailPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ISendEmailPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ISendEmailPostOperationConfig<TEntity> WithDescription(string description);
         ISendEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1241,7 +1242,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a SendEmailFromTemplate step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ISendEmailFromTemplatePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ISendEmailFromTemplatePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithDescription(string description);
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1256,7 +1257,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a SendEmailFromTemplate step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ISendEmailFromTemplatePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ISendEmailFromTemplatePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithDescription(string description);
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1271,7 +1272,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a SendEmailFromTemplate step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ISendEmailFromTemplatePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ISendEmailFromTemplatePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithDescription(string description);
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1286,7 +1287,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a DeliverIncomingEmail step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeliverIncomingEmailPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeliverIncomingEmailPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithDescription(string description);
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1301,7 +1302,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a DeliverIncomingEmail step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeliverIncomingEmailPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeliverIncomingEmailPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithDescription(string description);
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1316,7 +1317,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a DeliverIncomingEmail step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeliverIncomingEmailPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeliverIncomingEmailPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithDescription(string description);
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1331,7 +1332,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a DeliverPromoteEmail step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeliverPromoteEmailPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeliverPromoteEmailPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithDescription(string description);
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1346,7 +1347,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a DeliverPromoteEmail step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeliverPromoteEmailPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeliverPromoteEmailPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithDescription(string description);
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1361,7 +1362,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a DeliverPromoteEmail step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IDeliverPromoteEmailPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IDeliverPromoteEmailPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithDescription(string description);
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1376,7 +1377,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddMembersTeam step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddMembersTeamPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddMembersTeamPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddMembersTeamPreValidationConfig<TEntity> WithDescription(string description);
         IAddMembersTeamPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1391,7 +1392,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddMembersTeam step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddMembersTeamPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddMembersTeamPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddMembersTeamPreOperationConfig<TEntity> WithDescription(string description);
         IAddMembersTeamPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1406,7 +1407,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddMembersTeam step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddMembersTeamPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddMembersTeamPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddMembersTeamPostOperationConfig<TEntity> WithDescription(string description);
         IAddMembersTeamPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1421,7 +1422,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveMembersTeam step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveMembersTeamPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveMembersTeamPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveMembersTeamPreValidationConfig<TEntity> WithDescription(string description);
         IRemoveMembersTeamPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1436,7 +1437,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveMembersTeam step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveMembersTeamPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveMembersTeamPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveMembersTeamPreOperationConfig<TEntity> WithDescription(string description);
         IRemoveMembersTeamPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1451,7 +1452,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveMembersTeam step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveMembersTeamPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveMembersTeamPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveMembersTeamPostOperationConfig<TEntity> WithDescription(string description);
         IRemoveMembersTeamPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1466,7 +1467,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddListMembersList step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddListMembersListPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddListMembersListPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddListMembersListPreValidationConfig<TEntity> WithDescription(string description);
         IAddListMembersListPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1481,7 +1482,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddListMembersList step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddListMembersListPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddListMembersListPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddListMembersListPreOperationConfig<TEntity> WithDescription(string description);
         IAddListMembersListPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1496,7 +1497,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddListMembersList step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddListMembersListPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddListMembersListPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddListMembersListPostOperationConfig<TEntity> WithDescription(string description);
         IAddListMembersListPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1511,7 +1512,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddMemberList step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddMemberListPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddMemberListPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddMemberListPreValidationConfig<TEntity> WithDescription(string description);
         IAddMemberListPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1526,7 +1527,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddMemberList step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddMemberListPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddMemberListPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddMemberListPreOperationConfig<TEntity> WithDescription(string description);
         IAddMemberListPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1541,7 +1542,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a AddMemberList step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IAddMemberListPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IAddMemberListPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAddMemberListPostOperationConfig<TEntity> WithDescription(string description);
         IAddMemberListPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1556,7 +1557,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveMemberList step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveMemberListPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveMemberListPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveMemberListPreValidationConfig<TEntity> WithDescription(string description);
         IRemoveMemberListPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1571,7 +1572,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveMemberList step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveMemberListPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveMemberListPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveMemberListPreOperationConfig<TEntity> WithDescription(string description);
         IRemoveMemberListPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1586,7 +1587,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RemoveMemberList step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRemoveMemberListPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRemoveMemberListPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRemoveMemberListPostOperationConfig<TEntity> WithDescription(string description);
         IRemoveMemberListPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1601,7 +1602,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CloseIncident step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICloseIncidentPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICloseIncidentPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICloseIncidentPreValidationConfig<TEntity> WithDescription(string description);
         ICloseIncidentPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1616,7 +1617,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CloseIncident step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICloseIncidentPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICloseIncidentPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICloseIncidentPreOperationConfig<TEntity> WithDescription(string description);
         ICloseIncidentPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1631,7 +1632,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CloseIncident step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICloseIncidentPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICloseIncidentPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICloseIncidentPostOperationConfig<TEntity> WithDescription(string description);
         ICloseIncidentPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1646,7 +1647,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CancelContract step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICancelContractPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICancelContractPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICancelContractPreValidationConfig<TEntity> WithDescription(string description);
         ICancelContractPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1661,7 +1662,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CancelContract step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICancelContractPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICancelContractPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICancelContractPreOperationConfig<TEntity> WithDescription(string description);
         ICancelContractPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1676,7 +1677,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CancelContract step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICancelContractPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICancelContractPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICancelContractPostOperationConfig<TEntity> WithDescription(string description);
         ICancelContractPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1691,7 +1692,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CloneContract step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICloneContractPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICloneContractPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICloneContractPreValidationConfig<TEntity> WithDescription(string description);
         ICloneContractPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1706,7 +1707,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CloneContract step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICloneContractPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICloneContractPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICloneContractPreOperationConfig<TEntity> WithDescription(string description);
         ICloneContractPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1721,7 +1722,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a CloneContract step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ICloneContractPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface ICloneContractPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         ICloneContractPostOperationConfig<TEntity> WithDescription(string description);
         ICloneContractPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1736,7 +1737,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrievePrincipalAccess step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrievePrincipalAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrievePrincipalAccessPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithDescription(string description);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1751,7 +1752,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrievePrincipalAccess step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrievePrincipalAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrievePrincipalAccessPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithDescription(string description);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1766,7 +1767,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrievePrincipalAccess step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrievePrincipalAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrievePrincipalAccessPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithDescription(string description);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1781,7 +1782,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrieveSharedPrincipalsAndAccess step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithDescription(string description);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1796,7 +1797,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrieveSharedPrincipalsAndAccess step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithDescription(string description);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1811,7 +1812,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a RetrieveSharedPrincipalsAndAccess step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithDescription(string description);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1826,7 +1827,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a WinQuote step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IWinQuotePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IWinQuotePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IWinQuotePreValidationConfig<TEntity> WithDescription(string description);
         IWinQuotePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1841,7 +1842,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a WinQuote step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IWinQuotePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IWinQuotePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IWinQuotePreOperationConfig<TEntity> WithDescription(string description);
         IWinQuotePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1856,7 +1857,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a WinQuote step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IWinQuotePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IWinQuotePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IWinQuotePostOperationConfig<TEntity> WithDescription(string description);
         IWinQuotePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1871,7 +1872,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ReviseQuote step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReviseQuotePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IReviseQuotePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IReviseQuotePreValidationConfig<TEntity> WithDescription(string description);
         IReviseQuotePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1886,7 +1887,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ReviseQuote step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReviseQuotePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IReviseQuotePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IReviseQuotePreOperationConfig<TEntity> WithDescription(string description);
         IReviseQuotePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1901,7 +1902,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ReviseQuote step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReviseQuotePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IReviseQuotePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IReviseQuotePostOperationConfig<TEntity> WithDescription(string description);
         IReviseQuotePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1916,7 +1917,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a FulfillSalesOrder step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IFulfillSalesOrderPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IFulfillSalesOrderPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IFulfillSalesOrderPreValidationConfig<TEntity> WithDescription(string description);
         IFulfillSalesOrderPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1931,7 +1932,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a FulfillSalesOrder step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IFulfillSalesOrderPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IFulfillSalesOrderPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IFulfillSalesOrderPreOperationConfig<TEntity> WithDescription(string description);
         IFulfillSalesOrderPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1946,7 +1947,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a FulfillSalesOrder step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IFulfillSalesOrderPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IFulfillSalesOrderPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IFulfillSalesOrderPostOperationConfig<TEntity> WithDescription(string description);
         IFulfillSalesOrderPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1961,7 +1962,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetQuoteProductsFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -1976,7 +1977,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetQuoteProductsFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -1991,7 +1992,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetQuoteProductsFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2006,7 +2007,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetSalesOrderProductsFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -2021,7 +2022,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetSalesOrderProductsFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2036,7 +2037,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetSalesOrderProductsFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2051,7 +2052,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetInvoiceProductsFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -2066,7 +2067,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetInvoiceProductsFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2081,7 +2082,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a GetInvoiceProductsFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2096,7 +2097,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ModifyAccess step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IModifyAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IModifyAccessPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IModifyAccessPreValidationConfig<TEntity> WithDescription(string description);
         IModifyAccessPreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -2111,7 +2112,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ModifyAccess step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IModifyAccessPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IModifyAccessPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IModifyAccessPreOperationConfig<TEntity> WithDescription(string description);
         IModifyAccessPreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2126,7 +2127,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a ModifyAccess step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IModifyAccessPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IModifyAccessPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IModifyAccessPostOperationConfig<TEntity> WithDescription(string description);
         IModifyAccessPostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2141,7 +2142,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Merge step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IMergePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IMergePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IMergePreValidationConfig<TEntity> WithDescription(string description);
         IMergePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -2156,7 +2157,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Merge step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IMergePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IMergePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IMergePreOperationConfig<TEntity> WithDescription(string description);
         IMergePreOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2171,7 +2172,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for a Merge step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IMergePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IMergePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IMergePostOperationConfig<TEntity> WithDescription(string description);
         IMergePostOperationConfig<TEntity> WithExecutionOrder(int order);
@@ -2570,7 +2571,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for an OnMessage(...) step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IPermissivePreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IPermissivePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPermissivePreValidationConfig<TEntity> WithDescription(string description);
         IPermissivePreValidationConfig<TEntity> WithExecutionOrder(int order);
@@ -2587,7 +2588,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for an OnMessage(...) step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IPermissivePreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IPermissivePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPermissivePreOperationConfig<TEntity> WithDescription(string description);
         IPermissivePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
@@ -2606,7 +2607,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for an OnMessage(...) step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IPermissivePostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    public interface IPermissivePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPermissivePostOperationConfig<TEntity> WithDescription(string description);
         IPermissivePostOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
@@ -2643,7 +2644,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for an On&lt;TRequest&gt;() step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ITypedPreValidationConfig<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
+    public interface ITypedPreValidationConfig<TEntity, TRequest> : IStepConfig<TEntity> where TEntity : Entity where TRequest : OrganizationRequest, new()
     {
         ITypedPreValidationConfig<TEntity, TRequest> WithDescription(string description);
         ITypedPreValidationConfig<TEntity, TRequest> WithExecutionOrder(int order);
@@ -2658,7 +2659,7 @@ namespace Vela.Steps
     }
 
     /// <summary>Config for an On&lt;TRequest&gt;() step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ITypedPreOperationConfig<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
+    public interface ITypedPreOperationConfig<TEntity, TRequest> : IStepConfig<TEntity> where TEntity : Entity where TRequest : OrganizationRequest, new()
     {
         ITypedPreOperationConfig<TEntity, TRequest> WithDescription(string description);
         ITypedPreOperationConfig<TEntity, TRequest> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
@@ -2672,11 +2673,10 @@ namespace Vela.Steps
         ITypedPreOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
         ITypedPreOperationConfig<TEntity, TRequest> Disabled();
         void Handle(Action<IMessagePreContext<TRequest>> handler);
-        void Handle(Delegate handler);   // generated typed step context (see VELA015)
     }
 
     /// <summary>Config for an On&lt;TRequest&gt;() step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface ITypedPostOperationConfig<TEntity, TRequest> : IFluentStep where TEntity : Entity where TRequest : OrganizationRequest, new()
+    public interface ITypedPostOperationConfig<TEntity, TRequest> : IStepConfig<TEntity> where TEntity : Entity where TRequest : OrganizationRequest, new()
     {
         ITypedPostOperationConfig<TEntity, TRequest> WithDescription(string description);
         ITypedPostOperationConfig<TEntity, TRequest> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
@@ -2692,7 +2692,6 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
         ITypedPostOperationConfig<TEntity, TRequest> Disabled();
         void Handle(Action<IMessagePostContext<TRequest>> handler);
-        void Handle(Delegate handler);   // generated typed step context (see VELA015)
     }
 
     /// <summary>Entry point returned by RegisterStep(): pick the message the step reacts to.</summary>
