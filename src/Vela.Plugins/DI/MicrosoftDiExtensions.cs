@@ -33,8 +33,11 @@ namespace Vela.DI
             services.AddScoped(_ => context);
             services.AddScoped(_ => context.PluginExecutionContext);
             services.AddScoped(_ => context.TracingService);
+            // IOrganizationService resolves to the initiating user, matching SimpleServiceResolver. Do NOT also
+            // register SystemService under the same type: Microsoft DI returns the last registration, so that would
+            // silently hand every consumer the elevated system service. System access is available via the
+            // Func<Guid?, IOrganizationService> factory below (null => system) or ctx.SystemService.
             services.AddScoped(_ => context.UserService);
-            services.AddScoped(_ => context.SystemService);
             services.AddScoped(_ => context.Logger ?? NullLogger.Instance);
             services.AddScoped<Func<Guid?, IOrganizationService>>(_ => userId => context.CreateOrganizationService(userId));
             if (context.ManagedIdentityService != null)
