@@ -717,6 +717,7 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   ```csharp
   private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
   {
+      ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;   // net462: enable TLS 1.2 once
       string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });
       using var http = new HttpClient();
       http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -729,8 +730,10 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   an external process. (This is the plugin runtime budget - distinct from the CLI's `--timeout`, which bounds a
   `vela` command's Dataverse requests.)
 
-`net462` note: `HttpClient` on `net462` needs an explicit `System.Net.Http` reference and TLS 1.2 enabled; see the
-scaffold's integration variant.
+`net462` note: `HttpClient` on `net462` binds against the `System.Net.Http` GAC facade - the project `vela init`
+scaffolds already references it (`<Reference Include="System.Net.Http" />`) - and TLS 1.2 must be enabled once
+(`ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;`, as above), since the net462 default does
+not negotiate it.
 
 ## See also
 
