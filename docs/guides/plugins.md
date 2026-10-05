@@ -589,22 +589,24 @@ RegisterStep().OnUpdate().PostOperation().Sync()
 - `HasAnyChanged(a => a.A, a => a.B)` is the any-of form. You don't need `HasChanged` at all when reacting to the
   `Target` presence is enough, and it is unavailable on Create (there is no prior state to diff against).
 
-### FilterOn on a bulk (`*Multiple`) batch
+### FilterOn on a bulk write batch (`CreateMultiple` / `UpdateMultiple`)
 
-A `*Multiple` batch carries many rows, and only some may touch the filtered column. The filter is applied, but
-*where* depends on which step shape you used:
+A bulk **write** batch carries many rows, and only some may carry the filtered column in their `Target`. As for a
+single message, `FilterOn` tests column **presence** in the `Target` (not whether the value changed - that is
+`HasChanged`); where that test is applied depends on the step shape:
 
-- A single **`OnUpdate()`** step (which also runs under `UpdateMultiple`) fires **once per matching row**: a row
-  that does not change the filtered column is skipped, and each invocation sees only its own record.
-- A bulk **`OnUpdateMultiple()`** step fires **once for the whole batch if at least one row matches** (and not at
-  all if none match). Its handler then receives the **entire `ctx.Request.Targets` collection, including the rows
-  that did not touch the filtered column** - the platform filters at the batch level, not per row. So re-check the
-  column yourself per row (`target.Contains(a => a.X)` / `HasChanged`) before acting on each one.
-- `CreateMultiple` (like `OnCreate`) is not value-filtered - a filtered `CreateMultiple` step fires for the batch
-  regardless (there is no prior value to compare), so always iterate and decide per row.
+- A single **`OnUpdate()`** step (which also runs under `UpdateMultiple`) fires **once per row whose `Target`
+  carries a filtered column**; a row without it is skipped, and each invocation sees only its own record.
+- A bulk **`OnUpdateMultiple()`** step fires **once for the whole batch if at least one row carries a filtered
+  column** (and not at all if none do). Its handler then receives the **entire `ctx.Request.Targets` collection,
+  including the rows that lack the column** - the filter gates the batch, not each row. So re-check per row
+  (`target.Contains(a => a.X)` / `HasChanged`) before acting on each one.
+- On **`CreateMultiple`** the value filter is not applied (a create always carries the columns it sets), so the
+  step fires for the whole batch regardless - always iterate and decide per row.
 
-(This matches the in-memory [test harness](testing.md); the platform invokes a bulk step once per batch and hands
-over the submitted `Targets` verbatim.)
+(`RetrieveMultiple` is query-based and carries no `Target` batch, so none of this applies to it. This matches the
+in-memory [test harness](testing.md); the platform invokes a bulk write step once per batch and hands over the
+submitted `Targets` verbatim.)
 
 Managed identity: acquire a token for an external API without a stored secret with
 `ctx.AcquireManagedIdentityToken(scopes)` - see [Managed identity](managed-identity.md).
