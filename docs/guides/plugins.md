@@ -511,6 +511,7 @@ The rules the chain encodes:
 - `target.Contains(x => x.Name)` - Typed attribute-presence check (no magic strings). `Contains(x => x.A, x => x.B)` requires **all**; `ContainsAny(x => x.A, x => x.B)` needs **at least one** - useful to test which columns were in the `Target`
 - `ctx.HasChanged<Account>(x => x.Name)` / `ctx.HasAnyChanged<Account>(x => x.A, x => x.B)` - True when the attribute is in the `Target` **and** differs from the registered pre-image (requires an entity `Target` + a pre-image; throws otherwise) - the "only act when X actually changed" guard
 - `entity.GetFormattedValue(x => x.StatusCode)` - The formatted (display) value for a choice/lookup/money/date, or `null`
+- `entity.Clone()` - A detached, create-ready copy of a record for the "duplicate a record" pattern (see [Duplicating a record](#duplicating-a-record-clone) below)
 - `ctx.Tag` / `ctx.GetSharedVariable("key")` / `ctx.TryGetSharedVariable<T>("key", out var v)` - Read shared variables: the client-supplied `tag`, a value set by an earlier plugin in the same operation, or one inherited from the parent context of a cascaded operation
 - `ctx.IsApplicationUser`, `ctx.EnvironmentId`, `ctx.TenantId`, `ctx.InitiatingUserAgent`, `ctx.IsPortalsClientCall`, `ctx.PortalsContactId` - Extended execution context helpers with graceful fallback
 - `service.UploadFile(target, "vela_doc", "name.ext", bytes)` / `service.DownloadFile(target, "vela_doc")` / `service.DeleteFile(...)` - One-call File/Image column helpers (`using Vela.Files;`) that drive the block upload/download protocol for you
@@ -519,6 +520,26 @@ The rules the chain encodes:
 - `ctx.LogInformation(...)` / `ctx.LogWarning(...)` / `ctx.LogError(ex, ...)` / `ctx.LogMetric(...)` - Leveled, structured telemetry to the trace log and Application Insights (see [Telemetry & Application Insights](telemetry.md))
 - `ctx.TraceMethod("details")` - Trace caller method name with correlation/stage/depth
 - `ctx.TraceExecutionSnapshot("phase")` - Trace a structured context snapshot, including full Target/Image/Input/Output attribute values with PascalCase sections
+
+### Duplicating a record (`Clone`)
+
+`entity.Clone()` (`using Vela.Querying;`) returns a detached copy ready to pass to `Create` as a new row. It
+resets the `Id` and drops everything that ties the copy to the source record: the primary-key attribute, the
+system-assigned audit columns (`createdon` / `createdby` / `modifiedon` / `modifiedby` / `versionnumber`),
+`RowVersion`, `EntityState`, `KeyAttributes`, `FormattedValues` and `RelatedEntities`. Every remaining attribute
+value is **deep-copied**, so mutating the clone never touches the original.
+
+```csharp
+using Vela.Querying;
+
+var copy = original.Clone();           // Id is empty; attribute values are independent copies
+copy.Name = $"Copy of {original.Name}";
+ctx.UserService.Create(copy);          // a brand-new record
+```
+
+Business columns such as `ownerid` and `statecode` are preserved; clear any your table rejects on create before
+calling `Create`. Nested records in a collection column (for example an activity partylist) are themselves cloned
+with their `Id` reset, so the whole graph is create-ready.
 
 ### Environment variables
 
