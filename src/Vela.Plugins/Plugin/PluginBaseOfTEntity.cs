@@ -414,6 +414,7 @@ namespace Vela.Plugin
                 PluginMessages.Disassociate => post ? (object)new DisassociatePostContext<TEntity>(ctx) : new DisassociatePreContext<TEntity>(ctx),
                 PluginMessages.Merge => post ? (object)new MergePostContext<TEntity>(ctx) : new MergePreContext<TEntity>(ctx),
                 PluginMessages.GrantAccess => post ? (object)new GrantAccessPostContext<TEntity>(ctx) : new GrantAccessPreContext<TEntity>(ctx),
+                PluginMessages.Assign => post ? (object)new AssignPostContext<TEntity>(ctx) : new AssignPreContext<TEntity>(ctx),
                 PluginMessages.ModifyAccess => post ? (object)new ModifyAccessPostContext<TEntity>(ctx) : new ModifyAccessPreContext<TEntity>(ctx),
                 PluginMessages.RevokeAccess => post ? (object)new RevokeAccessPostContext<TEntity>(ctx) : new RevokeAccessPreContext<TEntity>(ctx),
                 PluginMessages.QualifyLead => post ? (object)new QualifyLeadPostContext<TEntity>(ctx) : new QualifyLeadPreContext<TEntity>(ctx),

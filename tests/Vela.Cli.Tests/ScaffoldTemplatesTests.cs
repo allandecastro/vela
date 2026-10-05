@@ -153,6 +153,7 @@ public class ScaffoldTemplatesTests
             "IRetrievePostContext<Account>", "IRetrieveMultiplePostContext<Account>",
             "IAssociatePostContext<Account>", "IDisassociatePostContext<Account>", "IMergePostContext<Account>",
             "IGrantAccessPostContext<Account>", "IModifyAccessPostContext<Account>", "IRevokeAccessPostContext<Account>",
+            "IAssignPostContext<Account>",
             "IRetrievePrincipalAccessPostContext<Account>", "IRetrieveSharedPrincipalsAndAccessPostContext<Account>",
         };
         foreach (string ctxType in contexts)
@@ -169,9 +170,9 @@ public class ScaffoldTemplatesTests
         Assert.DoesNotContain("ctx.TargetCollection", code);
         Assert.DoesNotContain(".ToEntity<", code);
 
-        // Every step is dormant and binds a handler: each registration ends with .Disabled().Handle(...) (15).
-        Assert.Equal(15, CountOccurrences(code, ".Disabled().Handle("));
-        Assert.Equal(15, CountOccurrences(code, ".Handle("));
+        // Every step is dormant and binds a handler: each registration ends with .Disabled().Handle(...) (16).
+        Assert.Equal(16, CountOccurrences(code, ".Disabled().Handle("));
+        Assert.Equal(16, CountOccurrences(code, ".Handle("));
     }
 
     [Fact]

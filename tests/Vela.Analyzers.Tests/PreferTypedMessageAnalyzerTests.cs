@@ -62,6 +62,13 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Warns_on_OnMessage_assign()
+    {
+        string code = InMethod("RegisterStep().{|#0:OnMessage|}(\"Assign\").Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("OnAssign", "Assign"));
+    }
+
+    [Fact]
     public async Task Does_not_warn_for_an_unmodelled_message()
     {
         string code = InMethod("RegisterStep().OnMessage(\"adc_DoThing\").Handle();");

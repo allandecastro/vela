@@ -17,6 +17,7 @@ namespace Vela.Steps
         IStages OnMessage(string message);
         IStages OnCreate();
         IStages OnUpdate();
+        IStages OnAssign();
     }
     public interface IStages : IFluentStep { IMode PreOperation(); IMode PostOperation(); }
     public interface IMode : IFluentStep { IConfig Sync(); IConfig Async(); }
@@ -59,6 +60,15 @@ namespace Demo
             "RegisterStep().OnCreate().PreOperation().Sync().Handle();\n" +
             "            RegisterStep().{|#0:OnMessage|}(\"Create\").PreOperation().Sync().Handle();");
         await Verify.VerifyAnalyzerAsync(code, Expected("message 'create' at preoperation (sync)"));
+    }
+
+    [Fact]
+    public async Task Flags_typed_and_permissive_forms_of_assign()
+    {
+        string code = InRegister(
+            "RegisterStep().OnAssign().PostOperation().Sync().Handle();\n" +
+            "            RegisterStep().{|#0:OnMessage|}(\"Assign\").PostOperation().Sync().Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("message 'assign' at postoperation (sync)"));
     }
 
     [Fact]

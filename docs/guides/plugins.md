@@ -445,6 +445,7 @@ message-specific `ctx.GetRequest<TRequest>()`.
 | `OnGrantAccess()` | `IGrantAccessPostContext<T>` | `GrantAccessRequest` | `ctx.Request.Target`, `ctx.Request.PrincipalAccess` |
 | `OnModifyAccess()` | `IModifyAccessPostContext<T>` | `ModifyAccessRequest` | `ctx.Request.Target` |
 | `OnRevokeAccess()` | `IRevokeAccessPostContext<T>` | `RevokeAccessRequest` | `ctx.Request.Target`, `ctx.Request.Revokee` |
+| `OnAssign()` | `IAssignPostContext<T>` | `AssignRequest` | `ctx.Request.Target`, `ctx.Request.Assignee` |
 
 **Associate / Disassociate** register with **no primary entity**, whatever `TEntity` the plugin uses. Dataverse has
 no per-entity message filter for these (the `Target` can be either end of the relationship), so the step is global
@@ -462,9 +463,10 @@ The `TEntity` on `EntityPluginBase<TEntity>` is irrelevant for these two message
 and filter on `ctx.Request.Relationship`.
 
 The scaffold generates an `AccountMessageReference.cs` cheat-sheet with one dormant (`Disabled()`) handler per
-row, so you can copy the exact shape for the message you need. The deprecated `SetState` / `SetStateDynamicEntity`
-and `Assign` messages are intentionally not modelled: update `statecode`/`statuscode` or `ownerid` with
-`OnUpdate()` instead.
+row, so you can copy the exact shape for the message you need. `OnAssign()` is entity-bound (unlike
+Associate / Disassociate): it keeps its primary entity and fires on reassignment, with `ctx.Request.Assignee`
+holding the new owner. The deprecated `SetState` / `SetStateDynamicEntity` messages are intentionally not
+modelled: update `statecode` / `statuscode` with `OnUpdate()` instead.
 
 **Enabled / disabled** - steps are registered enabled by default. Mark a step `Disabled()` to register it dormant
 (kill-switch or phased rollout); `apply` sets the step's state accordingly and `plan` shows the transition. Re-enabling

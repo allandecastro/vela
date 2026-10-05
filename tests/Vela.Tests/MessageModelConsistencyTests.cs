@@ -26,7 +26,6 @@ namespace Vela.Tests
         // context/step/builder/dispatch entry. Modelling one of these means removing it from this set on purpose.
         private static readonly HashSet<string> ConstantOnly = new HashSet<string>(StringComparer.Ordinal)
         {
-            PluginMessages.Assign,
             PluginMessages.SetState,
             PluginMessages.SetStateDynamicEntity,
             // WhoAmI is a global (entity-less) message: it cannot be registered as an entity-bound plugin step, so

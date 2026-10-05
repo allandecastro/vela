@@ -20,6 +20,7 @@ namespace Vela.Steps
         IAssociateStages<TEntity>,
         IDisassociateStages<TEntity>,
         IGrantAccessStages<TEntity>,
+        IAssignStages<TEntity>,
         IRevokeAccessStages<TEntity>,
         IQualifyLeadStages<TEntity>,
         IWinOpportunityStages<TEntity>,
@@ -116,6 +117,12 @@ namespace Vela.Steps
         IGrantAccessPreOperationConfig<TEntity>,
         ISyncAsyncMode<IGrantAccessPostOperationConfig<TEntity>>,
         IGrantAccessPostOperationConfig<TEntity>,
+        ISyncMode<IAssignPreValidationConfig<TEntity>>,
+        IAssignPreValidationConfig<TEntity>,
+        ISyncMode<IAssignPreOperationConfig<TEntity>>,
+        IAssignPreOperationConfig<TEntity>,
+        ISyncAsyncMode<IAssignPostOperationConfig<TEntity>>,
+        IAssignPostOperationConfig<TEntity>,
         ISyncMode<IRevokeAccessPreValidationConfig<TEntity>>,
         IRevokeAccessPreValidationConfig<TEntity>,
         ISyncMode<IRevokeAccessPreOperationConfig<TEntity>>,
@@ -351,6 +358,7 @@ namespace Vela.Steps
         IAssociateStages<TEntity> IStepTrigger<TEntity>.OnAssociate() { _definition.Message = PluginMessages.Associate; return this; }
         IDisassociateStages<TEntity> IStepTrigger<TEntity>.OnDisassociate() { _definition.Message = PluginMessages.Disassociate; return this; }
         IGrantAccessStages<TEntity> IStepTrigger<TEntity>.OnGrantAccess() { _definition.Message = PluginMessages.GrantAccess; return this; }
+        IAssignStages<TEntity> IStepTrigger<TEntity>.OnAssign() { _definition.Message = PluginMessages.Assign; return this; }
         IRevokeAccessStages<TEntity> IStepTrigger<TEntity>.OnRevokeAccess() { _definition.Message = PluginMessages.RevokeAccess; return this; }
         IQualifyLeadStages<TEntity> IStepTrigger<TEntity>.OnQualifyLead() { _definition.Message = PluginMessages.QualifyLead; return this; }
         IWinOpportunityStages<TEntity> IStepTrigger<TEntity>.OnWinOpportunity() { _definition.Message = PluginMessages.WinOpportunity; return this; }
@@ -487,6 +495,9 @@ namespace Vela.Steps
         ISyncMode<IGrantAccessPreValidationConfig<TEntity>> IGrantAccessStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IGrantAccessPreOperationConfig<TEntity>> IGrantAccessStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IGrantAccessPostOperationConfig<TEntity>> IGrantAccessStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IAssignPreValidationConfig<TEntity>> IAssignStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IAssignPreOperationConfig<TEntity>> IAssignStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IAssignPostOperationConfig<TEntity>> IAssignStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
         ISyncMode<IRevokeAccessPreValidationConfig<TEntity>> IRevokeAccessStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IRevokeAccessPreOperationConfig<TEntity>> IRevokeAccessStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IRevokeAccessPostOperationConfig<TEntity>> IRevokeAccessStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
@@ -636,6 +647,10 @@ namespace Vela.Steps
         IGrantAccessPreOperationConfig<TEntity> ISyncMode<IGrantAccessPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IGrantAccessPostOperationConfig<TEntity> ISyncAsyncMode<IGrantAccessPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IGrantAccessPostOperationConfig<TEntity> ISyncAsyncMode<IGrantAccessPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IAssignPreValidationConfig<TEntity> ISyncMode<IAssignPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAssignPreOperationConfig<TEntity> ISyncMode<IAssignPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAssignPostOperationConfig<TEntity> ISyncAsyncMode<IAssignPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAssignPostOperationConfig<TEntity> ISyncAsyncMode<IAssignPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
         IRevokeAccessPreValidationConfig<TEntity> ISyncMode<IRevokeAccessPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IRevokeAccessPreOperationConfig<TEntity> ISyncMode<IRevokeAccessPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IRevokeAccessPostOperationConfig<TEntity> ISyncAsyncMode<IRevokeAccessPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
@@ -1129,6 +1144,36 @@ namespace Vela.Steps
         IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
         IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGrantAccessPostOperationConfig<TEntity>.Handle(Action<IGrantAccessPostContext<TEntity>> handler) { SetHandler(handler); }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAssignPreValidationConfig<TEntity>.Handle(Action<IAssignPreContext<TEntity>> handler) { SetHandler(handler); }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAssignPreOperationConfig<TEntity>.Handle(Action<IAssignPreContext<TEntity>> handler) { SetHandler(handler); }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAssignPostOperationConfig<TEntity>.Handle(Action<IAssignPostContext<TEntity>> handler) { SetHandler(handler); }
 
         IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
@@ -2263,6 +2308,7 @@ namespace Vela.Plugin
         IAssociateStages<TEntity> IStepTrigger<TEntity>.OnAssociate() => ((IStepTrigger<TEntity>)BeginStep()).OnAssociate();
         IDisassociateStages<TEntity> IStepTrigger<TEntity>.OnDisassociate() => ((IStepTrigger<TEntity>)BeginStep()).OnDisassociate();
         IGrantAccessStages<TEntity> IStepTrigger<TEntity>.OnGrantAccess() => ((IStepTrigger<TEntity>)BeginStep()).OnGrantAccess();
+        IAssignStages<TEntity> IStepTrigger<TEntity>.OnAssign() => ((IStepTrigger<TEntity>)BeginStep()).OnAssign();
         IRevokeAccessStages<TEntity> IStepTrigger<TEntity>.OnRevokeAccess() => ((IStepTrigger<TEntity>)BeginStep()).OnRevokeAccess();
         IQualifyLeadStages<TEntity> IStepTrigger<TEntity>.OnQualifyLead() => ((IStepTrigger<TEntity>)BeginStep()).OnQualifyLead();
         IWinOpportunityStages<TEntity> IStepTrigger<TEntity>.OnWinOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnWinOpportunity();

@@ -83,6 +83,32 @@ namespace Vela.Tests
             Assert.Equal("account", defs.Single(d => d.Message == PluginMessages.Update).EntityLogicalName);
         }
 
+        private sealed class AssignPlugin : EntityPluginBase<TestAccount>
+        {
+            public AssignPlugin() : base(string.Empty, string.Empty) { }
+
+            public string Last { get; private set; } = string.Empty;
+
+            protected override void RegisterPluginSteps()
+            {
+                RegisterStep().OnAssign().PostOperation().Sync()
+                    .Handle(ctx => Last = ctx.Request.Assignee.Id.ToString());
+            }
+        }
+
+        [Fact]
+        public void OnAssign_registers_an_entity_bound_assign_step()
+        {
+            StepDefinition[] defs = new AssignPlugin().GetStepDefinitions();
+
+            StepDefinition assign = Assert.Single(defs);
+            Assert.Equal(PluginMessages.Assign, assign.Message);
+            Assert.Equal(PluginStages.PostOperation, assign.Stage);
+            Assert.Equal(ExecutionMode.Synchronous, assign.Mode);
+            // Assign is entity-bound (unlike Associate/Disassociate), so it keeps its primary entity.
+            Assert.Equal("account", assign.EntityLogicalName);
+        }
+
         private sealed class ExecutionOrderPlugin : EntityPluginBase<TestAccount>
         {
             public ExecutionOrderPlugin() : base(string.Empty, string.Empty) { }

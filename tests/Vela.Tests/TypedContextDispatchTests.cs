@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Crm.Sdk.Messages;
+using Microsoft.Xrm.Sdk;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
@@ -40,6 +41,7 @@ namespace Vela.Tests
                 RegisterStep().OnGrantAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnModifyAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRevokeAccess().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnWinOpportunity().PostOperation().Sync().Handle(OnAny);
@@ -95,6 +97,7 @@ namespace Vela.Tests
         [InlineData(PluginMessages.GrantAccess)]
         [InlineData(PluginMessages.ModifyAccess)]
         [InlineData(PluginMessages.RevokeAccess)]
+        [InlineData(PluginMessages.Assign)]
         [InlineData(PluginMessages.QualifyLead)]
         [InlineData(PluginMessages.WinOpportunity)]
         [InlineData(PluginMessages.LoseOpportunity)]
@@ -181,6 +184,38 @@ namespace Vela.Tests
             }
 
             private void OnMerge(IMessagePreContext<MergeRequest> ctx) => Seen = ctx.MessageName;
+        }
+
+        // OnAssign() builds a typed AssignPostContext<TEntity> at dispatch; prove the handler actually runs with a
+        // typed ctx.Request projected over the live InputParameters (the Assignee lookup), not just that the step
+        // shape is right.
+        private sealed class AssignTypedProbe : EntityPluginBase<TestAccount>
+        {
+            public Guid? SeenAssignee { get; private set; }
+
+            public AssignTypedProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAssign);
+
+            private void OnAssign(IAssignPostContext<TestAccount> ctx) => SeenAssignee = ctx.Request.Assignee?.Id;
+        }
+
+        [Fact]
+        public void OnAssign_dispatches_a_typed_context_exposing_the_assignee()
+        {
+            AssignTypedProbe probe = new AssignTypedProbe();
+            Guid assigneeId = Guid.NewGuid();
+
+            PluginContext.For<TestAccount>()
+                .OnMessage(PluginMessages.Assign)
+                .Stage(PluginStages.PostOperation)
+                .Mode(ExecutionMode.Synchronous)
+                .WithPrimaryEntity(TestAccount.EntityLogicalNameValue, Guid.NewGuid())
+                .WithInputParameter("Assignee", new EntityReference("systemuser", assigneeId))
+                .Execute(probe);
+
+            Assert.Equal(assigneeId, probe.SeenAssignee);
         }
 
         [Fact]
