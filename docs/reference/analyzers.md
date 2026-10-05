@@ -24,7 +24,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA011](#vela011) | Vela.Reliability | Warning | A writable field (mutable state) on a plugin type |
 | [VELA012](#vela012) | Vela.Usage | Warning | Throwing an exception other than `InvalidPluginExecutionException` from a plugin |
 | [VELA013](#vela013) | Vela.Performance | Warning | `new ColumnSet(true)` retrieves every column |
-| [VELA014](#vela014) | Vela.Usage | Error | A plugin that captures a typed image must be declared `partial` |
+| [VELA014](#vela014) | Vela.Usage | Error | A plugin with a generated context or typed image must be declared `partial` |
 | [VELA015](#vela015) | Vela.Usage | Error | A step handler's context does not match the step's message/stage |
 | [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
 | [VELA017](#vela017) | Vela.Usage | Error | A handler reads `ctx.PreImage`/`ctx.PostImage` its step did not capture |
@@ -199,13 +199,15 @@ Request only the columns you use (the explicit `SelectAll()` on a typed query st
 
 ## VELA014
 
-**Plugin with typed images must be `partial`.** When a step captures explicit columns
-(`WithPreImage(a => a.X, ...)` / `WithPostImage(...)`), the source generator emits the projection type as a
-**nested type inside the plugin's own class**, so it needs a second `partial` declaration of that class. Without
-`partial` the build fails with an obscure `CS0260`; this rule reports it up front on the plugin class.
+**Plugin must be `partial`.** The source generator emits types **nested inside the plugin's own class** - a
+`{Handler}Context` for every named handler (`.Handle(OnX)` on a modelled trigger), and a projection for every
+explicit image capture (`WithPreImage(a => a.X, ...)` / `WithPostImage(...)`). A nested type needs a second
+`partial` declaration of the class (and of every class that encloses it), so the rule reports a missing `partial`
+up front instead of leaving the build to fail with an obscure `CS0260`.
 
-**Fix:** add the `partial` modifier to the plugin class (the code fix does this). A capture with no explicit
-columns (`WithPreImage()`) generates nothing and does not require `partial`.
+**Fix:** add the `partial` modifier to the plugin class (the code fix does this). `vela init` / `vela add` scaffold
+plugins `partial` already. A plugin whose only handlers are lambdas (no generated context) and that captures no
+explicit image generates nothing and does not require `partial`.
 
 ## VELA015
 

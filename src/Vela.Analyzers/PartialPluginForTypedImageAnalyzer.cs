@@ -22,12 +22,12 @@ namespace Vela.Analyzers
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
-            title: "Plugin with typed images must be partial",
-            messageFormat: "'{0}' must be declared 'partial' so the generated typed image projection for plugin '{1}' can nest inside it",
+            title: "Plugin must be partial",
+            messageFormat: "'{0}' must be declared 'partial' so the generated step context (and any typed image projection) for plugin '{1}' can nest inside it",
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "A step that captures WithPreImage/WithPostImage columns gets a compiler-generated projection type nested inside the plugin's own class, so the plugin class - and every type that encloses it - needs a matching partial declaration. Declare them 'partial'.");
+            description: "A named handler gets a compiler-generated {Handler}Context nested inside the plugin's own class (and a step that captures WithPreImage/WithPostImage columns gets a nested projection too), so the plugin class - and every type that encloses it - needs a matching partial declaration. Declare them 'partial'.");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -78,7 +78,7 @@ namespace Vela.Analyzers
         {
             if (model.GetDeclaredSymbol(declaration, cancellationToken) is INamedTypeSymbol self &&
                 DerivesFromEntityPluginBase(self) &&
-                DeclaresTypedImageCapture(declaration, model, fluent, cancellationToken))
+                GeneratesNestedType(declaration, model, fluent, cancellationToken))
             {
                 return self.Name;
             }
@@ -87,13 +87,84 @@ namespace Vela.Analyzers
             {
                 if (model.GetDeclaredSymbol(nested, cancellationToken) is INamedTypeSymbol nestedSymbol &&
                     DerivesFromEntityPluginBase(nestedSymbol) &&
-                    DeclaresTypedImageCapture(nested, model, fluent, cancellationToken))
+                    GeneratesNestedType(nested, model, fluent, cancellationToken))
                 {
                     return nestedSymbol.Name;
                 }
             }
 
             return null;
+        }
+
+        // The generator nests a type inside the plugin class - a {Handler}Context for any named handler on a modelled
+        // trigger, and a projection for any typed image capture - so either forces the plugin to be partial.
+        private static bool GeneratesNestedType(ClassDeclarationSyntax declaration, SemanticModel model, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
+            => DeclaresTypedImageCapture(declaration, model, fluent, cancellationToken)
+                || DeclaresNamedHandlerContext(declaration, model, fluent, cancellationToken);
+
+        // A named .Handle(OnX) on a step whose trigger the generator maps to a modelled message (On{Msg}() or
+        // On<TRequest>(), but not the permissive OnMessage(...)) produces a nested {Handler}Context. Mirrors the
+        // generator's ExtractHandler conditions.
+        private static bool DeclaresNamedHandlerContext(ClassDeclarationSyntax declaration, SemanticModel model, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
+        {
+            foreach (InvocationExpressionSyntax invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                if (invocation.Expression is not MemberAccessExpressionSyntax member ||
+                    member.Name.Identifier.ValueText != "Handle" ||
+                    invocation.ArgumentList.Arguments.Count != 1)
+                {
+                    continue;
+                }
+
+                // Method group only (a lambda has no name, so no context is generated).
+                if (invocation.ArgumentList.Arguments[0].Expression is not (IdentifierNameSyntax or MemberAccessExpressionSyntax))
+                {
+                    continue;
+                }
+
+                if (FluentStep.IsFluentMethod(model, invocation, fluent, cancellationToken) &&
+                    ChainHasContextTrigger(member.Expression))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // True when the receiver chain contains a trigger the generator turns into a context: On<TRequest>() or any
+        // On{Msg}() (uppercase first letter after "On"), excluding the permissive OnMessage(...).
+        private static bool ChainHasContextTrigger(ExpressionSyntax? receiver)
+        {
+            for (ExpressionSyntax? current = receiver; current is not null;)
+            {
+                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
+                {
+                    string name = ma.Name.Identifier.ValueText;
+                    if (name == "On" && ma.Name is GenericNameSyntax)
+                    {
+                        return true;
+                    }
+
+                    if (name.Length > 2 && name.StartsWith("On", System.StringComparison.Ordinal) &&
+                        name != "OnMessage" && name != "OnAsyncOnly" && char.IsUpper(name[2]))
+                    {
+                        return true;
+                    }
+
+                    current = ma.Expression;
+                }
+                else if (current is MemberAccessExpressionSyntax bare)
+                {
+                    current = bare.Expression;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return false;
         }
 
         private static bool DerivesFromEntityPluginBase(INamedTypeSymbol symbol)

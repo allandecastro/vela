@@ -74,6 +74,22 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_a_non_partial_plugin_with_a_named_handler_even_without_a_typed_image()
+    {
+        // A named handler gets a generated {Handler}Context nested in the plugin, so the class must be partial even
+        // when it captures no image.
+        string code = InPlugin(@"
+    public sealed class {|#0:Validate|} : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpdated);
+        private void OnUpdated() { }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code, At(0, "Validate", "Validate"));
+    }
+
+    [Fact]
     public async Task Flags_a_non_partial_outer_class_of_a_nested_plugin()
     {
         // Both the outer class and the plugin lack partial: the generated projection nests inside both, so both fail

@@ -252,10 +252,10 @@ public sealed partial class AccountAudit : EntityPluginBase<Account>   // partia
 
 #### Typed step context (read images as `ctx.PreImage` / `ctx.PostImage`)
 
-Instead of reading the projection through `ctx.PreImageAs<T>()`, you can let the handler take a **generated typed
-step context** and read the images as **members**. Bind a named handler as usual; give the handler a parameter typed
-`{Handler}Context` (generated, nested in your plugin), and read `ctx.PreImage` / `ctx.PostImage` - already typed to
-the captured columns:
+Every **named** handler gets a **generated typed step context** named `{Handler}Context` (nested in your plugin
+`partial`). Give the handler that parameter type: it is the uniform signature for every step, whatever the message.
+When the step captures an image, the context exposes `ctx.PreImage` / `ctx.PostImage` **already typed** to the
+captured columns - read them as members instead of calling `ctx.PreImageAs<T>()`:
 
 ```csharp
 public sealed partial class AccountAudit : EntityPluginBase<Account>
@@ -275,18 +275,24 @@ public sealed partial class AccountAudit : EntityPluginBase<Account>
 }
 ```
 
-- The generator emits `OnUpdatedContext` (a subclass of the message context, `IUpdatePostContext<Account>` here)
-  nested in your plugin `partial`, with `PreImage` / `PostImage` typed to exactly what the step captured. It is
-  emitted only for a **named** handler on a **Create / Update / Delete** step that captures at least one image; a
-  lambda handler, or a step with no captured image, keeps the plain context and `ctx.PreImageAs<T>()`.
+- The generator emits `OnUpdatedContext` (a subclass of the message context, `UpdatePostContext<Account>` here)
+  nested in your plugin `partial`, for **every named handler** - on any modelled message, with or without a captured
+  image. When the step captures an image, the context adds `PreImage` / `PostImage` typed to exactly what it
+  captured; an imageless step gets the same `{Handler}Context` as a bare subclass. A **lambda** handler has no name,
+  so it keeps the plain context and `ctx.PreImageAs<T>()`.
+- Because the context is a type nested in your plugin, **the plugin class must be `partial`** (and so must any class
+  that encloses it) - [VELA014](../reference/analyzers.md#vela014) reports it with a one-click fix, and
+  `vela init` / `vela add` scaffold it `partial` already.
 - `.Handle(OnUpdated)` stays clean: a method group binds the context through its natural type, so you never write the
-  context type in `.Handle`. Change what the step captures and the context regenerates in place - the signature does
-  not move; a read you no longer capture simply stops compiling.
+  context type in `.Handle`. The **signature is stable**: start imageless with `OnUpdatedContext`, add a
+  `WithPreImage(...)` later and `ctx.PreImage` becomes typed on the same context - the handler signature never
+  changes; a read you no longer capture simply stops compiling.
 - Guard rails: the handler's context must match its step ([VELA015](../reference/analyzers.md#vela015), with a fix
   that corrects the type), and a handler using a typed context must bind exactly one step
   ([VELA016](../reference/analyzers.md#vela016)). To see what was generated, `F12` on `OnUpdatedContext`.
-- It is opt-in: `ctx.PreImageAs<T>()` on the plain context keeps working, and reusing one handler across steps (which
-  a typed context cannot do) is a reason to stay on it.
+- You are not forced to use it: a method group also binds when you type the parameter as the plain message context
+  (`IUpdatePostContext<Account>`), and `ctx.PreImageAs<T>()` keeps working. The one case to avoid is reusing a single
+  handler across several steps - the per-handler context cannot serve two steps ([VELA016](../reference/analyzers.md#vela016)).
 - Works on the typed `On<TRequest>()` path too: there the generated context derives from the generic message context
   (`MessagePreContext<TRequest, TEntity>` / `MessagePostContext<TRequest, TEntity>`), so a handler for a non-CRUD
   message (`On<AssignRequest>()`, ...) reads `ctx.PreImage` / `ctx.PostImage` the same way. The permissive

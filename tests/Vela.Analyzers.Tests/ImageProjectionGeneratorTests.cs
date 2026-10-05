@@ -33,7 +33,9 @@ namespace Vela.Steps
         IStepConfig<TEntity> OnCreate();
         IStepConfig<TEntity> OnDelete();
         IStepConfig<TEntity> OnUpdate();
+        IStepConfig<TEntity> OnCreateMultiple();
         IStepConfig<TEntity> OnUpdateMultiple();
+        IStepConfig<TEntity> OnAssign();
         IStepConfig<TEntity> On<TRequest>();
         IStepConfig<TEntity> OnMessage(string messageName);
         IStepConfig<TEntity> OnMessage<TMessage>();
@@ -670,6 +672,72 @@ namespace Demo
         Assert.Contains("class OnDeletingContext : global::Vela.Context.DeletePreContext<global::Demo.Account>", output);
         Assert.Contains("public new OnDeleting_PreImage? PreImage", output);
         Assert.DoesNotContain("PostImage =>", output);   // no post-image member on a delete-pre context
+    }
+
+    [Fact]
+    public void Emits_a_bare_context_for_an_imageless_named_handler()
+    {
+        // The stable-signature case: a named handler with no captured image still gets a {Handler}Context. Adding a
+        // WithPreImage/WithPostImage later enriches this same type with a typed PreImage/PostImage - the handler
+        // signature never changes.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountValidate : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.Contains("class OnUpdatedContext : global::Vela.Context.UpdatePostContext<global::Demo.Account>", output);
+        // No captured image, so no shadowed image members on the bare context.
+        Assert.DoesNotContain("PreImage =>", output);
+        Assert.DoesNotContain("PostImage =>", output);
+    }
+
+    [Fact]
+    public void Emits_a_bare_context_for_a_bulk_handler_without_a_single_image_member()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountBulk : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreateMultiple().PostOperation().Sync().Handle(OnCreatedMany);
+        private void OnCreatedMany() { }
+    }
+}
+");
+
+        Assert.Contains("class OnCreatedManyContext : global::Vela.Context.CreateMultiplePostContext<global::Demo.Account>", output);
+        // Bulk images are per-record; the context does not expose a single PreImage/PostImage member.
+        Assert.DoesNotContain("PreImage =>", output);
+        Assert.DoesNotContain("PostImage =>", output);
+    }
+
+    [Fact]
+    public void Emits_a_bare_context_for_a_non_crud_modelled_message()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountAssign : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAssigned);
+        private void OnAssigned() { }
+    }
+}
+");
+
+        Assert.Contains("class OnAssignedContext : global::Vela.Context.AssignPostContext<global::Demo.Account>", output);
     }
 
     [Fact]

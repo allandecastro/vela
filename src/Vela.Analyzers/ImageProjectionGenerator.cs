@@ -32,7 +32,19 @@ namespace Vela.Analyzers
                 .Where(static m => m is not null)
                 .Select(static (m, _) => m!.Value);
 
-            context.RegisterSourceOutput(models.Collect(), static (spc, collected) => Emit(spc, collected));
+            // A second driver keyed on the terminal .Handle(methodGroup) of every step, so a generated {Handler}Context
+            // is emitted for EVERY named entity-bound handler (not only image-capturing ones). When the step also
+            // captures a typed image, the matching projection above supplies the typed PreImage/PostImage; otherwise
+            // the context is a stable, bare subclass of the message context - adding an image later does not change
+            // the handler signature.
+            IncrementalValuesProvider<HandlerModel> handlers = context.SyntaxProvider.CreateSyntaxProvider(
+                    predicate: static (node, _) => IsHandleInvocation(node),
+                    transform: static (ctx, _) => ExtractHandler(ctx))
+                .Where(static h => h is not null)
+                .Select(static (h, _) => h!.Value);
+
+            context.RegisterSourceOutput(models.Collect().Combine(handlers.Collect()),
+                static (spc, pair) => Emit(spc, pair.Left, pair.Right));
         }
 
         private static bool IsImageInvocation(SyntaxNode node)
@@ -139,6 +151,129 @@ namespace Vela.Analyzers
 
             return new ProjectionModel(ns, containingTypes.ToImmutableArray(), typeName, columns.ToImmutableArray(),
                 handlerName, messageLabel, isPost, isPre, entityType, requestType);
+        }
+
+        private static bool IsHandleInvocation(SyntaxNode node)
+        {
+            if (node is not InvocationExpressionSyntax invocation ||
+                invocation.Expression is not MemberAccessExpressionSyntax member ||
+                member.Name.Identifier.ValueText != "Handle" ||
+                invocation.ArgumentList.Arguments.Count != 1)
+            {
+                return false;
+            }
+
+            // Only a method-group handler (.Handle(OnX)) gets a named context; a lambda has no name to key off.
+            return invocation.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax or MemberAccessExpressionSyntax;
+        }
+
+        // One HandlerModel per named .Handle(OnX) step, so a {Handler}Context is emitted for every entity-bound
+        // modelled handler - with or without a captured image (a bare subclass when imageless, so adding an image
+        // later never changes the handler signature). OnMessage("string") / OnMessage<T>() and Custom API handlers
+        // are intentionally skipped (no modelled typed context to derive from).
+        private static HandlerModel? ExtractHandler(GeneratorSyntaxContext context)
+        {
+            InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
+            MemberAccessExpressionSyntax member = (MemberAccessExpressionSyntax)invocation.Expression;
+            SemanticModel model = context.SemanticModel;
+
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
+                !ImplementsFluentStep(method.ContainingType))
+            {
+                return null;
+            }
+
+            string? handlerName = invocation.ArgumentList.Arguments[0].Expression switch
+            {
+                IdentifierNameSyntax id => id.Identifier.ValueText,
+                MemberAccessExpressionSyntax m => m.Name.Identifier.ValueText,
+                _ => null,
+            };
+            if (handlerName is null)
+            {
+                return null;
+            }
+
+            ClassDeclarationSyntax? pluginClass = invocation.FirstAncestorOrSelf<ClassDeclarationSyntax>();
+            if (pluginClass is null || model.GetDeclaredSymbol(pluginClass) is not INamedTypeSymbol pluginSymbol)
+            {
+                return null;
+            }
+
+            INamedTypeSymbol? entity = ResolveEntityType(pluginSymbol);
+            if (entity is null)
+            {
+                return null;
+            }
+
+            (string? messageLabel, string? stageLabel) = ResolveMessageAndStageForContext(member.Expression);
+            if (messageLabel is null || stageLabel is null)
+            {
+                return null;
+            }
+
+            List<string> containingTypes = new List<string>();
+            for (INamedTypeSymbol? t = pluginSymbol; t is not null; t = t.ContainingType)
+            {
+                containingTypes.Insert(0, t.Name);
+            }
+
+            string ns = pluginSymbol.ContainingNamespace.IsGlobalNamespace
+                ? string.Empty
+                : pluginSymbol.ContainingNamespace.ToDisplayString();
+
+            string? requestType = FindTypedRequestType(member.Expression, model);
+            return new HandlerModel(ns, containingTypes.ToImmutableArray(), handlerName, messageLabel,
+                stageLabel == "PostOp", entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), requestType);
+        }
+
+        // Message + stage for the context driver. Like ResolveMessageAndStage but recognizes EVERY On{Msg}() trigger
+        // (strips the "On" prefix: OnAssign -> Assign, OnGrantAccess -> GrantAccess, OnCreateMultiple ->
+        // CreateMultiple), plus the typed On<TRequest>(). OnMessage(...) stays unmapped (returns null message), so a
+        // string/marker-triggered step gets no {Handler}Context.
+        private static (string? Message, string? Stage) ResolveMessageAndStageForContext(ExpressionSyntax? receiver)
+        {
+            string? message = null;
+            string? stage = null;
+
+            for (ExpressionSyntax? current = receiver; current is not null;)
+            {
+                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
+                {
+                    string name = ma.Name.Identifier.ValueText;
+                    switch (name)
+                    {
+                        case "PreValidation": stage ??= "PreVal"; break;
+                        case "PreOperation": stage ??= "PreOp"; break;
+                        case "PostOperation": stage ??= "PostOp"; break;
+                    }
+
+                    if (message is null && name == "On" && ma.Name is GenericNameSyntax generic &&
+                        generic.TypeArgumentList.Arguments.Count == 1)
+                    {
+                        message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
+                    }
+                    else if (message is null && name.Length > 2 && name.StartsWith("On", System.StringComparison.Ordinal) &&
+                        name != "OnMessage" && name != "OnAsyncOnly" && char.IsUpper(name[2]))
+                    {
+                        // Any modelled trigger On{Msg}() -> {Msg}. Every such message has a {Msg}Pre/PostContext (the
+                        // MessageModelConsistency contract guarantees it), so the base context below always resolves.
+                        message = name.Substring(2);
+                    }
+
+                    current = ma.Expression;
+                }
+                else if (current is MemberAccessExpressionSyntax bare)
+                {
+                    current = bare.Expression;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return (message, stage);
         }
 
         // The fully-qualified request type of an On<TRequest>() step in the chain, or null (guided OnCreate()...,
@@ -453,7 +588,7 @@ namespace Vela.Analyzers
             }
         }
 
-        private static void Emit(SourceProductionContext context, ImmutableArray<ProjectionModel> models)
+        private static void Emit(SourceProductionContext context, ImmutableArray<ProjectionModel> models, ImmutableArray<HandlerModel> handlers)
         {
             // Collapse genuinely-identical projections (same name AND same column shape reached twice) to one type,
             // keyed on name + column shape. Two steps that resolve to the same name but capture different columns
@@ -503,83 +638,78 @@ namespace Vela.Analyzers
 
             // Build contexts from the FINALIZED projection names (post collision-hash) so a generated context never
             // references a projection type that was renamed for a collision.
-            EmitContexts(context, finalized);
+            EmitContexts(context, finalized, handlers);
         }
 
-        // Emit, per step with a named handler on a modelled CRUD message, a generated context nested in the plugin
-        // partial: it derives from the concrete step context and shadows PreImage/PostImage with the typed projections
-        // the step captured. The handler binds it with .Handle(OnX) and reads ctx.PreImage / ctx.PostImage typed.
-        private static void EmitContexts(SourceProductionContext context, List<ProjectionModel> models)
+        // Emit a {Handler}Context for every named entity-bound handler (driven by the .Handle(OnX) handler models),
+        // nested in the plugin partial. It derives from the step's message context; when the step also captured a
+        // typed image (a matching projection), it shadows PreImage/PostImage with the typed projection types. An
+        // imageless handler gets a bare subclass - a stable signature that gains a typed image without any change if
+        // the step later adds a capture.
+        private static void EmitContexts(SourceProductionContext context, List<ProjectionModel> projections, ImmutableArray<HandlerModel> handlers)
         {
-            // Group a step's projections by (plugin class + handler + message + stage). Only a named handler on a
-            // Create/Update/Delete message gets a context; a lambda handler (null name) does not.
-            Dictionary<string, List<ProjectionModel>> groups = new Dictionary<string, List<ProjectionModel>>(System.StringComparer.Ordinal);
-            foreach (ProjectionModel model in models)
+            // Index the finalized projections by (plugin class + handler + pre/post) so a handler's context can pick
+            // up its captured typed image(s). Keyed on handler + stage-role, not message, so it is robust to the two
+            // drivers labelling a message slightly differently.
+            Dictionary<string, string> preByHandler = new Dictionary<string, string>(System.StringComparer.Ordinal);
+            Dictionary<string, string> postByHandler = new Dictionary<string, string>(System.StringComparer.Ordinal);
+            foreach (ProjectionModel model in projections)
             {
-                if (model.HandlerName is null || (!IsContextMessage(model.Message) && model.RequestType is null))
+                if (model.HandlerName is null)
                 {
                     continue;
                 }
 
-                string key = model.Namespace + "|" + string.Join(".", model.ContainingTypes) + "|" +
-                    model.HandlerName + "|" + model.Message + "|" + (model.IsPost ? "post" : "pre");
-                if (!groups.TryGetValue(key, out List<ProjectionModel>? list))
+                string key = model.Namespace + "|" + string.Join(".", model.ContainingTypes) + "|" + model.HandlerName;
+                if (model.IsPre)
                 {
-                    list = new List<ProjectionModel>();
-                    groups[key] = list;
-                }
-
-                list.Add(model);
-            }
-
-            HashSet<string> emitted = new HashSet<string>(System.StringComparer.Ordinal);
-            foreach (List<ProjectionModel> group in groups.Values)
-            {
-                ProjectionModel any = group[0];
-                string baseTypeFull;
-                bool baseHasPre;
-                bool baseHasPost;
-                if (any.RequestType is not null)
-                {
-                    // Typed On<TRequest>() step -> generic message context (pre always; post only at post-stage).
-                    baseHasPre = true;
-                    baseHasPost = any.IsPost;
-                    string messageBase = any.IsPost ? "MessagePostContext" : "MessagePreContext";
-                    baseTypeFull = $"global::Vela.Context.{messageBase}<{any.RequestType}, {any.EntityType}>";
+                    if (!preByHandler.ContainsKey(key)) { preByHandler[key] = model.TypeName; }
                 }
                 else
                 {
-                    string? crud = ResolveBaseContext(any.Message, any.IsPost, out baseHasPre, out baseHasPost);
-                    if (crud is null)
-                    {
-                        continue;
-                    }
-
-                    baseTypeFull = $"global::Vela.Context.{crud}<{any.EntityType}>";
+                    if (!postByHandler.ContainsKey(key)) { postByHandler[key] = model.TypeName; }
                 }
+            }
 
-                string? preName = null;
-                string? postName = null;
-                foreach (ProjectionModel model in group)
+            HashSet<string> emitted = new HashSet<string>(System.StringComparer.Ordinal);
+            foreach (HandlerModel handler in handlers)
+            {
+                string baseTypeFull;
+                bool baseHasPre;
+                bool baseHasPost;
+                if (handler.RequestType is not null)
                 {
-                    if (model.IsPre && baseHasPre)
-                    {
-                        preName ??= model.TypeName;
-                    }
-                    else if (!model.IsPre && baseHasPost)
-                    {
-                        postName ??= model.TypeName;
-                    }
+                    // Typed On<TRequest>() step -> generic message context (pre always; post only at post-stage).
+                    baseHasPre = true;
+                    baseHasPost = handler.IsPost;
+                    string messageBase = handler.IsPost ? "MessagePostContext" : "MessagePreContext";
+                    baseTypeFull = $"global::Vela.Context.{messageBase}<{handler.RequestType}, {handler.EntityType}>";
                 }
-
-                if (preName is null && postName is null)
+                else if (IsSingleImageMessage(handler.Message) &&
+                    ResolveBaseContext(handler.Message, handler.IsPost, out baseHasPre, out baseHasPost) is string crud)
                 {
-                    continue;
+                    // Create/Update/Delete at an image-bearing stage: expose a single typed pre/post image on the
+                    // context, deriving from the concrete context that carries it.
+                    baseTypeFull = $"global::Vela.Context.{crud}<{handler.EntityType}>";
+                }
+                else
+                {
+                    // Every other case (bulk, Assign, sharing, queue, ... and the stages with no image such as
+                    // Create pre): a bare {Message}{Pre|Post}Context subclass. No single-image property (bulk images
+                    // are per-record; most messages carry none).
+                    string stageSuffix = handler.IsPost ? "PostContext" : "PreContext";
+                    baseTypeFull = $"global::Vela.Context.{handler.Message}{stageSuffix}<{handler.EntityType}>";
+                    baseHasPre = false;
+                    baseHasPost = false;
                 }
 
-                string contextName = Sanitize(any.HandlerName!) + "Context";
-                string prefix = any.Namespace.Length == 0 ? string.Empty : any.Namespace + ".";
-                string contextFull = prefix + string.Join(".", any.ContainingTypes) + "." + contextName;
+                string handlerKey = handler.Namespace + "|" + string.Join(".", handler.ContainingTypes) + "|" + handler.HandlerName;
+                string? preName = baseHasPre && preByHandler.TryGetValue(handlerKey, out string? p) ? p : null;
+                string? postName = baseHasPost && postByHandler.TryGetValue(handlerKey, out string? po) ? po : null;
+
+                string contextName = Sanitize(handler.HandlerName) + "Context";
+                string prefix = handler.Namespace.Length == 0 ? string.Empty : handler.Namespace + ".";
+                string contextFull = prefix + string.Join(".", handler.ContainingTypes) + "." + contextName;
 
                 // A handler reused across steps would key two contexts to the same name; emit once (VELA016 reports
                 // the reuse as an error).
@@ -589,11 +719,11 @@ namespace Vela.Analyzers
                 }
 
                 context.AddSource(Sanitize(contextFull) + ".Context.g.cs",
-                    SourceText.From(RenderContext(any, contextName, baseTypeFull, preName, postName), Encoding.UTF8));
+                    SourceText.From(RenderContext(handler, contextName, baseTypeFull, preName, postName), Encoding.UTF8));
             }
         }
 
-        private static bool IsContextMessage(string message) =>
+        private static bool IsSingleImageMessage(string message) =>
             message == "Create" || message == "Update" || message == "Delete";
 
         // The concrete step context a generated context derives from, and which typed images it can expose, for a
@@ -630,7 +760,7 @@ namespace Vela.Analyzers
             }
         }
 
-        private static string RenderContext(ProjectionModel model, string contextName, string baseTypeFull, string? preName, string? postName)
+        private static string RenderContext(HandlerModel model, string contextName, string baseTypeFull, string? preName, string? postName)
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/> Vela typed step context. Do not edit.");
@@ -653,9 +783,12 @@ namespace Vela.Analyzers
                 indent++;
             }
 
+            string images = preName != null || postName != null
+                ? "plus the typed image(s) this step captured"
+                : "for this step";
             sb.AppendLine($"{Pad(indent)}/// <summary>");
-            sb.AppendLine($"{Pad(indent)}/// Generated step context for the '{model.HandlerName}' handler: the message context plus the typed image(s)");
-            sb.AppendLine($"{Pad(indent)}/// this step captured. Bind it with .Handle({model.HandlerName}) and read ctx.PreImage / ctx.PostImage (typed).");
+            sb.AppendLine($"{Pad(indent)}/// Generated step context for the '{model.HandlerName}' handler: the message context {images}.");
+            sb.AppendLine($"{Pad(indent)}/// Bind it with .Handle({model.HandlerName}). Capturing an image later adds a typed ctx.PreImage / ctx.PostImage without changing this signature.");
             sb.AppendLine($"{Pad(indent)}/// </summary>");
             sb.AppendLine($"{Pad(indent)}public sealed class {contextName} : {baseTypeFull}");
             sb.AppendLine($"{Pad(indent)}{{");
@@ -865,6 +998,62 @@ namespace Vela.Analyzers
                         hash = (hash * 31) + column.GetHashCode();
                     }
 
+                    return hash;
+                }
+            }
+        }
+
+        // One per named .Handle(OnX) step. Value equality (ContainingTypes element-wise) so the incremental generator
+        // caches between keystrokes instead of re-running every edit.
+        private readonly struct HandlerModel : System.IEquatable<HandlerModel>
+        {
+            public HandlerModel(string @namespace, ImmutableArray<string> containingTypes, string handlerName,
+                string message, bool isPost, string entityType, string? requestType)
+            {
+                Namespace = @namespace;
+                ContainingTypes = containingTypes;
+                HandlerName = handlerName;
+                Message = message;
+                IsPost = isPost;
+                EntityType = entityType;
+                RequestType = requestType;
+            }
+
+            public string Namespace { get; }
+            public ImmutableArray<string> ContainingTypes { get; }
+            public string HandlerName { get; }
+            public string Message { get; }
+            public bool IsPost { get; }
+            public string EntityType { get; }
+            public string? RequestType { get; }
+
+            public bool Equals(HandlerModel other) =>
+                Namespace == other.Namespace &&
+                ContainingTypes.SequenceEqual(other.ContainingTypes) &&
+                HandlerName == other.HandlerName &&
+                Message == other.Message &&
+                IsPost == other.IsPost &&
+                EntityType == other.EntityType &&
+                RequestType == other.RequestType;
+
+            public override bool Equals(object? obj) => obj is HandlerModel other && Equals(other);
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = 17;
+                    hash = (hash * 31) + (Namespace?.GetHashCode() ?? 0);
+                    foreach (string containing in ContainingTypes)
+                    {
+                        hash = (hash * 31) + (containing?.GetHashCode() ?? 0);
+                    }
+
+                    hash = (hash * 31) + (HandlerName?.GetHashCode() ?? 0);
+                    hash = (hash * 31) + (Message?.GetHashCode() ?? 0);
+                    hash = (hash * 31) + IsPost.GetHashCode();
+                    hash = (hash * 31) + (EntityType?.GetHashCode() ?? 0);
+                    hash = (hash * 31) + (RequestType?.GetHashCode() ?? 0);
                     return hash;
                 }
             }
