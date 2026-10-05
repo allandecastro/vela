@@ -28,7 +28,11 @@ to large integration-heavy ones).
 - Target `net462`. Microsoft's docs list .NET Framework 4.6.2 through 4.8 for plug-ins and recommend 4.8,
   but Dataverse rejects **plugin packages** (which `vela deploy` uses) above `net471` at registration. Stay on
   `net462` (or `net471` at most); `vela` warns when a package targets higher.
-- Reference the published `Vela.Plugins` package from NuGet. Do not pin an in-repo development version.
+- Reference the published `Vela.Plugins` package from NuGet. Do not pin an in-repo development version. Its
+  dependency surface is deliberately lean so the plugin package loads in the Dataverse sandbox unmerged (no
+  ILMerge / ILRepack step): the SDK core assemblies, `Microsoft.Extensions.DependencyInjection.Abstractions`
+  and `Microsoft.Extensions.Logging.Abstractions` (the abstractions only, not the concrete containers),
+  `Newtonsoft.Json`, and `System.ComponentModel.Annotations`.
 - Generate [early-bound models](models.md) with `vela models`. If you cannot connect to the org yet, you
   can stub the few models you need by hand to get building, then regenerate later.
 - If your repository uses Central Package Management, a freshly scaffolded solution may fail to restore

@@ -8,6 +8,9 @@
 
   <ItemGroup>
     <PackageReference Include="Moq" />
+    <!-- The runtime (Vela.Plugins) only needs DI.Abstractions; this test exercises the AddPluginRuntime helper
+         against the real Microsoft container (BuildServiceProvider), so it references the full package itself. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
