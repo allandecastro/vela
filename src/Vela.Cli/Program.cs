@@ -457,6 +457,28 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
     }
 }
 
+// The unique names of the Custom APIs a plan would create or update (removed ones need no prefix). Read from the
+// diff's local-side definitions so the plan-time publisher-prefix check sees exactly what apply would write.
+static IEnumerable<string> ExtractCustomApiUniqueNames(RegistrationDiff diff)
+{
+    IEnumerable<JsonElement> definitions = diff.Added.Where(item => item.Kind == "custom-api").Select(item => item.Definition)
+        .Concat(diff.Changed.Where(change => change.Kind == "custom-api").Select(change => change.After));
+
+    foreach (JsonElement definition in definitions)
+    {
+        if (definition.ValueKind == JsonValueKind.Object
+            && definition.TryGetProperty("uniqueName", out JsonElement uniqueName)
+            && uniqueName.ValueKind == JsonValueKind.String)
+        {
+            string? value = uniqueName.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                yield return value!;
+            }
+        }
+    }
+}
+
 static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOptions jsonOptions)
 {
     List<string> tempDirectories = [];
@@ -475,15 +497,37 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
         // importable-prefix guard apply uses runs first (local, no connection) so plan fails the same way apply
         // would on an unprefixed package without --solution rather than advertising an impossible create. Skips the
         // (short-lived) connection entirely when there are no local packages to compare.
+        // When applying into a solution, a Custom API unique name without the publisher prefix is rejected by apply.
+        // Surface that mismatch at plan time as a warning (and fail under --strict) so it is caught before apply,
+        // not discovered by it. Resolved on the same short-lived connection as the package check.
         IReadOnlyList<PackagePublishAction> packageActions = [];
-        if (local.PackagePayloads.Length > 0)
+        string[] prefixDiagnostics = [];
+        bool checksPackages = local.PackagePayloads.Length > 0;
+        bool checksSolutionPrefix = !string.IsNullOrWhiteSpace(options.SolutionUniqueName);
+        if (checksPackages || checksSolutionPrefix)
         {
-            EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
-            using ServiceClient packageCheckClient = CreateDataverseClient(options);
-            packageActions = ComputePackagePublishActions(packageCheckClient, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
+            if (checksPackages)
+            {
+                EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
+            }
+
+            using ServiceClient planClient = CreateDataverseClient(options);
+            if (checksPackages)
+            {
+                packageActions = ComputePackagePublishActions(planClient, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
+            }
+
+            if (checksSolutionPrefix)
+            {
+                string solutionPrefix = ResolveSolutionCustomizationPrefix(planClient, options.SolutionUniqueName!);
+                prefixDiagnostics = ComputeCustomApiPrefixDiagnostics(solutionPrefix, ExtractCustomApiUniqueNames(diff)).ToArray();
+            }
         }
 
-        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics, packageActions);
+        string[] planDiagnostics = prefixDiagnostics.Length == 0
+            ? local.Diagnostics
+            : [.. local.Diagnostics, .. prefixDiagnostics];
+        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, planDiagnostics, current.Diagnostics, packageActions);
         if (options.Strict && plan.Diagnostics.Length > 0)
         {
             WriteDiagnostics(plan.Diagnostics, Console.Error, ConsoleTheme.StderrColor);

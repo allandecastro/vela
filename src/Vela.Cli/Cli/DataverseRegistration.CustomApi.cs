@@ -144,6 +144,28 @@ internal static partial class DataverseRegistration
         }
     }
 
+    // Plan-time, read-only counterpart of ValidateCustomApiUniqueNamePrefix: returns a warning for every Custom API
+    // unique name that does not carry the solution publisher prefix, so `plan --solution` surfaces the mismatch that
+    // apply hard-fails on (instead of the user discovering it only at apply). Non-fatal by design - it flows through
+    // the plan's diagnostics/warnings channel and only fails the command under --strict, like a rank collision.
+    internal static IReadOnlyList<string> ComputeCustomApiPrefixDiagnostics(string solutionPrefix, IEnumerable<string> customApiUniqueNames)
+    {
+        List<string> diagnostics = [];
+        foreach (string uniqueName in customApiUniqueNames)
+        {
+            if (!string.IsNullOrWhiteSpace(uniqueName) &&
+                !uniqueName.StartsWith(solutionPrefix + "_", StringComparison.OrdinalIgnoreCase))
+            {
+                diagnostics.Add(
+                    $"Custom API '{uniqueName}' does not start with the solution publisher prefix '{solutionPrefix}_'. " +
+                    $"Applying into the solution would reject it; rename it to '{solutionPrefix}_{uniqueName}' " +
+                    "(or match the solution's publisher prefix).");
+            }
+        }
+
+        return diagnostics;
+    }
+
     // A workflow-enabled Custom API ("Enabled for Workflow") has documented constraints: it must be an action
     // (IsFunction=false), and its parameters cannot use Entity, EntityCollection or StringArray types. Dataverse
     // rejects a violation at apply with an opaque platform error, so validate locally with a clear message first.
