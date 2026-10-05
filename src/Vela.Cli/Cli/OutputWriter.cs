@@ -325,8 +325,9 @@ internal static class OutputWriter
 
         // A code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) produces no diff item, so the package
         // create/republish is the only signal that apply would deploy anything. Surfaced as its own "package"
-        // operation and folded into HasChanges; the numeric Summary stays about steps/custom APIs, mirroring the
-        // apply-execute JSON where packageRepublished is a field separate from the added/updated/deleted counts.
+        // operation and folded into HasChanges; the numeric Summary stays the non-package registration diff (steps
+        // and custom APIs, plus web resources on a --webresources run), mirroring the apply-execute JSON where
+        // packageRepublished is a field separate from the added/updated/deleted counts.
         IReadOnlyList<PackagePublishAction> packages = packageActions ?? [];
         operations.AddRange(packages.Select(package => new ApplyOperation(
             package.IsCreate ? "create" : "update",
@@ -334,7 +335,7 @@ internal static class OutputWriter
             package.PackageName,
             package.IsCreate
                 ? "Plugin package is not in Dataverse; apply will create it."
-                : "Rebuilt plugin package content differs from Dataverse; apply will republish it.")));
+                : "Plugin package version or content differs from Dataverse; apply will republish it.")));
 
         return new PlanPreview(
             Mode: mode,

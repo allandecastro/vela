@@ -471,11 +471,14 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
 
         // A code-only change (unchanged step/custom-API definitions but a rebuilt assembly) is invisible to the
         // registration diff, so also surface whether each plugin package would be created or republished - exactly
-        // what apply checks - so plan does not report "no changes" for a rebuild that apply would deploy. Skips the
+        // what apply checks - so plan does not report "no changes" for a rebuild that apply would deploy. The same
+        // importable-prefix guard apply uses runs first (local, no connection) so plan fails the same way apply
+        // would on an unprefixed package without --solution rather than advertising an impossible create. Skips the
         // (short-lived) connection entirely when there are no local packages to compare.
         IReadOnlyList<PackagePublishAction> packageActions = [];
         if (local.PackagePayloads.Length > 0)
         {
+            EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
             using ServiceClient packageCheckClient = CreateDataverseClient(options);
             packageActions = ComputePackagePublishActions(packageCheckClient, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
         }
