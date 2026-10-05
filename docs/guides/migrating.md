@@ -32,7 +32,9 @@ to large integration-heavy ones).
   dependency surface is deliberately lean so the plugin package loads in the Dataverse sandbox unmerged (no
   ILMerge / ILRepack step): the SDK core assemblies, `Microsoft.Extensions.DependencyInjection.Abstractions`
   and `Microsoft.Extensions.Logging.Abstractions` (the abstractions only, not the concrete containers),
-  `Newtonsoft.Json`, and `System.ComponentModel.Annotations`.
+  `Newtonsoft.Json`, and `System.ComponentModel.Annotations`. The package also carries its companion
+  `Vela.Messages` (the typed request/response and model base types); no concrete DI container or heavy runtime
+  closure comes along.
 - Generate [early-bound models](models.md) with `vela models`. If you cannot connect to the org yet, you
   can stub the few models you need by hand to get building, then regenerate later.
 - If your repository uses Central Package Management, a freshly scaffolded solution may fail to restore
