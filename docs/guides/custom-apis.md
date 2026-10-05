@@ -64,6 +64,18 @@ public class ScoreResponse : CustomApiResponse
 }
 ```
 
+> **Why three types and a two-argument `Execute`.** A Custom API is authored as an implementation class plus a
+> typed request and a typed response. That shape is deliberate, not ceremony. The same request/response type is
+> what you pass to `service.Execute(...)`, what `ToResponse<T>()` hands back, and what you bind with
+> `On<TRequest>()`, so there is a single compile-safe, IntelliSense-friendly contract across authoring, calling
+> and reacting - and `vela models --custom-apis` generates the typed request and response (and the `On<TRequest>()`
+> reaction entry) for you, so the only part you write by hand is the implementation.
+> `Execute(ILocalPluginContext ctx, TRequest request)` keeps the two concerns apart: `ctx` is the infrastructure
+> (services, tracing, the org service) and `request` is the typed payload, so the body reads `request.AccountId`
+> instead of digging values out of the context by string key. Collapsing this into one class or a single-argument
+> `Execute(ctx)` would give back the untyped `ctx.InputParameters["..."]` access and lose the typed call/react
+> round-trip - the opposite of what the typed contract buys you.
+
 `CustomApiRequest` / `CustomApiResponse` (and the base `TypedRequest` / `TypedResponse` for standard messages)
 live in `Vela.Messages`. The `Get<T>()` / `Set(value)` helpers infer the parameter key from the property name and
 the base prepends the API unique name, so a property is a plain one-liner - no `Parameters.Contains(...)`
