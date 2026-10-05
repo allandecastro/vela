@@ -29,6 +29,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
 | [VELA017](#vela017) | Vela.Usage | Error | A handler reads `ctx.PreImage`/`ctx.PostImage` its step did not capture |
 | [VELA018](#vela018) | Vela.Reliability | Warning | An asynchronous step's handler writes to the Target (the change is lost) |
+| [VELA019](#vela019) | Vela.Reliability | Warning | A plugin accesses the filesystem (`System.IO.File` / `FileStream` / ...), which the sandbox denies |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
 VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
@@ -244,6 +245,20 @@ the change, or move the logic to a synchronous step. Like VELA017 it fires only 
 is an instance method bound by exactly one `RegisterStep()` chain and that chain is `.Async()`; a handler shared
 across steps, or a write through a local copy of the Target, is left alone. See
 [which stage persists a Target write](../guides/plugins.md#writing-the-target-which-stage-persists).
+
+## VELA019
+
+**Filesystem access in a plugin.** The Dataverse sandbox denies file I/O, so `System.IO.File` / `Directory` calls and
+`new FileStream` / `FileInfo` / `DirectoryInfo` / `DriveInfo` / `FileSystemWatcher` throw at runtime inside a plugin
+or Custom API. This is a type-identity check, so it is precise: in-memory types (`MemoryStream`, `StringReader` /
+`StringWriter`, `BinaryReader` / `BinaryWriter`) and the pure-string `System.IO.Path` helpers (`Path.Combine`,
+`Path.GetExtension`, ...) are **not** flagged, and reading an embedded resource with
+`Assembly.GetManifestResourceStream(...)` (a `Stream`, not a filesystem type) is fine. Like the other
+plugin-authoring rules it is scoped to plugin / Custom API types, so filesystem use in an unrelated helper class is
+not analyzed.
+
+**Fix:** keep data in memory, read embedded resources via `Assembly.GetManifestResourceStream`, or move file work
+out of the sandbox. See [Respect the sandbox](../guides/plugins.md#respect-the-sandbox).
 
 ## Typed image projection generator
 

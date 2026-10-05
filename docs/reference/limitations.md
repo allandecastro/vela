@@ -23,6 +23,10 @@ change.
   exposes `IManagedIdentityService`; otherwise it throws at call time (no early validation). Extended context
   members (`EnvironmentId`, `TenantId`, `IsApplicationUser`, …) are resolved reflectively and fall back to
   `null`/`false` on older hosts.
+- **Sandbox constraints.** No filesystem access (`System.IO.File` / `Directory` / `FileStream` throw at runtime -
+  flagged by [VELA019](analyzers.md#vela019)); outbound HTTP is limited to an administrator-configured allow-list
+  over TLS; and the whole synchronous pipeline must finish within a ~2-minute execution budget. See
+  [Respect the sandbox](../guides/plugins.md#respect-the-sandbox).
 - **Step registration follows platform rules.** `MainOperation` is reserved for Custom API handlers (rejected
   for plugin steps); `FilteringAttributes` apply to `Create`/`Update` only (and Vela requires at least one there);
   images are constrained by stage/message
