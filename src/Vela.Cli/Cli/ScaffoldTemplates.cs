@@ -1560,6 +1560,9 @@ namespace {{prefix}}.Plugins.Account.Plugins
             RegisterStep().OnModifyAccess().PostOperation().Sync().Disabled().Handle(OnModifyAccess);
             RegisterStep().OnRevokeAccess().PostOperation().Sync().Disabled().Handle(OnRevokeAccess);
 
+            // Ownership reassignment (entity-bound).
+            RegisterStep().OnAssign().PostOperation().Sync().Disabled().Handle(OnAssign);
+
             // Sharing reads (also valid on account).
             RegisterStep().OnRetrievePrincipalAccess().PostOperation().Sync().Disabled().Handle(OnRetrievePrincipalAccess);
             RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Disabled().Handle(OnRetrieveSharedPrincipalsAndAccess);
@@ -1619,6 +1622,10 @@ namespace {{prefix}}.Plugins.Account.Plugins
 
         private void OnRevokeAccess(IRevokeAccessPostContext<Account> ctx)
             => ctx.Trace("Revoke on {0} from {1}", ctx.Request.Target.Id, ctx.Request.Revokee.Id);
+
+        // Assign: ctx.Request.Target is the reassigned record; ctx.Request.Assignee the new owner.
+        private void OnAssign(IAssignPostContext<Account> ctx)
+            => ctx.Trace("Assign {0} to {1}", ctx.Request.Target.Id, ctx.Request.Assignee.Id);
 
         // Sharing reads: ctx.Response.AccessRights (one principal) / ctx.Response.PrincipalAccesses (all shares).
         private void OnRetrievePrincipalAccess(IRetrievePrincipalAccessPostContext<Account> ctx)
