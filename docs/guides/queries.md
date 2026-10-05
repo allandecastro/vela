@@ -98,11 +98,18 @@ int     count = Query.For<Account>().Where(a => a.StateCode, ConditionOperator.E
                      .CountScalar(service, a => a.AccountId);       // matching rows
 decimal? total = Query.For<SalesOrder>().SumScalar(service, o => o.TotalAmount);  // null when none match
 decimal? avg   = Query.For<SalesOrder>().AverageScalar(service, o => o.TotalAmount);
+
+DateTime? earliest = Query.For<Task>().MinScalar(service, t => t.ScheduledStart); // DateTime? column -> DateTime?
+int?      largest  = Query.For<Account>().MaxScalar(service, a => a.NumberOfEmployees);
+decimal?  topDeal  = Query.For<SalesOrder>().MaxScalar(service, o => o.TotalAmount); // Money column -> decimal?
 ```
 
 `SumScalar`/`AverageScalar` return `decimal?` (`null` distinguishes "no rows" from a real `0`); `CountScalar`
-returns `int`. For **grouped** aggregates (`GroupBy(...)` + multiple aggregates) author with the alias API
-(`.Sum(col, "alias")`) and read the rows - see the aggregate builders above.
+returns `int`. `MinScalar`/`MaxScalar` return the **column's own type**, inferred from the selector, so there
+is no cast at the call site: a `DateTime?` column hands back `DateTime?`, an `int?` column `int?`, and a money
+column `decimal?` (the amount). All read back `null` when nothing matches. For **grouped** aggregates
+(`GroupBy(...)` + multiple aggregates) author with the alias API (`.Sum(col, "alias")`) and read the rows -
+see the aggregate builders above.
 
 ## See also
 

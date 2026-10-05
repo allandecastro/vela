@@ -52,6 +52,15 @@ internal static class ExpressionHelper
     /// message otherwise (used by the typed querying helpers).
     /// </summary>
     public static string GetAttributeLogicalName<TEntity>(Expression<Func<TEntity, object?>> expression)
+        => GetAttributeLogicalName((LambdaExpression)(expression ?? throw new ArgumentNullException(nameof(expression))));
+
+    /// <summary>
+    /// Resolves the Dataverse logical name for the attribute targeted by a lambda whose body is a property
+    /// access, regardless of the lambda's return type. This lets the typed aggregate helpers accept a
+    /// strongly-typed column selector (for example <c>x =&gt; x.createdon</c> typed <see cref="DateTime"/> or
+    /// <c>x =&gt; x.amount</c> typed <see cref="Money"/>) rather than forcing an <c>object</c> boxing selector.
+    /// </summary>
+    public static string GetAttributeLogicalName(LambdaExpression expression)
     {
         expression = expression ?? throw new ArgumentNullException(nameof(expression));
 

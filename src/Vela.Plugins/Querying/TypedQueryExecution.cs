@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq.Expressions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -132,8 +133,9 @@ namespace Vela.Querying
         // ---- Scalar aggregates --------------------------------------------------------------------------
         // One-call typed scalar aggregates: no alias string to repeat (an aliased-value desync would read a
         // silent default), no explicit result generic. The column selector only identifies the column; the
-        // result type is intrinsic (count -> int, sum/average -> decimal). Grouped aggregates stay on the
-        // string-alias authoring API (TypedQuery.GroupBy/Sum(..., alias) + ToFetchXml).
+        // result type is intrinsic: count -> int, sum/average -> decimal, and min/max -> the column's own type,
+        // taken from a strongly-typed selector so there is no cast at the call site. Grouped aggregates stay on
+        // the string-alias authoring API (TypedQuery.GroupBy/Sum(..., alias) + ToFetchXml).
 
         /// <summary>Counts the matching rows. <see cref="XrmAggregateType.Count"/> counts every matching row, so the
         /// column only names the attribute the count is keyed on (its value is irrelevant) - pass the primary id.</summary>
@@ -151,12 +153,46 @@ namespace Vela.Querying
             where TEntity : Entity
             => ToDecimal(RunScalarAggregate(query, service, column, XrmAggregateType.Avg));
 
+        // Min/Max return the column's own type, so the selector is strongly typed (x => x.scheduledstart typed
+        // DateTime?, x => x.quantity typed int?) and TResult is inferred from it - the caller writes no type
+        // argument and gets back the same type, with no AliasedValue and no cast. Money columns surface as the
+        // reference type Microsoft.Xrm.Sdk.Money, which the struct constraint excludes, so they get a dedicated
+        // overload that returns the decimal amount (matching SumScalar/AverageScalar over money).
+
+        /// <summary>The smallest <paramref name="column"/> value over the matching rows, or <c>null</c> when none
+        /// match. The result type matches the selected column (for example <see cref="DateTime"/> or
+        /// <see cref="decimal"/>).</summary>
+        public static TResult? MinScalar<TEntity, TResult>(this TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, TResult?>> column)
+            where TEntity : Entity
+            where TResult : struct
+            => ConvertScalar<TResult>(RunScalarAggregate(query, service, column, XrmAggregateType.Min));
+
+        /// <summary>The largest <paramref name="column"/> value over the matching rows, or <c>null</c> when none
+        /// match. The result type matches the selected column (for example <see cref="DateTime"/> or
+        /// <see cref="decimal"/>).</summary>
+        public static TResult? MaxScalar<TEntity, TResult>(this TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, TResult?>> column)
+            where TEntity : Entity
+            where TResult : struct
+            => ConvertScalar<TResult>(RunScalarAggregate(query, service, column, XrmAggregateType.Max));
+
+        /// <summary>The smallest money <paramref name="column"/> amount over the matching rows, or <c>null</c>
+        /// when none match.</summary>
+        public static decimal? MinScalar<TEntity>(this TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, Money?>> column)
+            where TEntity : Entity
+            => ToDecimal(RunScalarAggregate(query, service, column, XrmAggregateType.Min));
+
+        /// <summary>The largest money <paramref name="column"/> amount over the matching rows, or <c>null</c>
+        /// when none match.</summary>
+        public static decimal? MaxScalar<TEntity>(this TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, Money?>> column)
+            where TEntity : Entity
+            => ToDecimal(RunScalarAggregate(query, service, column, XrmAggregateType.Max));
+
         // Runs a single-aggregate retrieve against a stripped clone of the caller's query, never touching the
         // original. The clone keeps only what an aggregate needs - entity, filter criteria and filtering links -
         // and drops the projection shape that conflicts with aggregation: root/link column projections, orders
         // (aggregate ordering must use a group/aggregate alias), paging and Top (which would page past the single
         // aggregate row and read a silent 0/null). Criteria/LinkCriteria are shared by reference (read-only here).
-        private static object? RunScalarAggregate<TEntity>(TypedQuery<TEntity> query, IOrganizationService service, Expression<Func<TEntity, object?>> column, XrmAggregateType type)
+        private static object? RunScalarAggregate<TEntity>(TypedQuery<TEntity> query, IOrganizationService service, LambdaExpression column, XrmAggregateType type)
             where TEntity : Entity
         {
             query = query ?? throw new ArgumentNullException(nameof(query));
@@ -222,5 +258,25 @@ namespace Vela.Querying
             decimal dec => dec,
             _ => Convert.ToDecimal(value),
         };
+
+        // Coerces a min/max aggregate value (already unwrapped from AliasedValue by RunScalarAggregate) to the
+        // caller's struct result type. The value is normally that type already; Convert.ChangeType covers the
+        // odd provider that widens (for example an int column surfaced as long) and runs in the invariant culture
+        // so a decimal is parsed the same everywhere.
+        private static TResult? ConvertScalar<TResult>(object? value)
+            where TResult : struct
+        {
+            if (value is null)
+            {
+                return null;
+            }
+
+            if (value is TResult typed)
+            {
+                return typed;
+            }
+
+            return (TResult)Convert.ChangeType(value, typeof(TResult), CultureInfo.InvariantCulture);
+        }
     }
 }

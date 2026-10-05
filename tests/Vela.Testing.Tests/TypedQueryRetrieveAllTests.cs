@@ -77,6 +77,49 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Scalar_min_and_max_return_the_column_type_over_the_matching_rows()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            crm.Create(new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 10, ["createdon"] = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
+            crm.Create(new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 30, ["createdon"] = new DateTime(2022, 6, 1, 0, 0, 0, DateTimeKind.Utc) });
+            crm.Create(new Entity("account") { ["name"] = "drop", ["numberofemployees"] = 999, ["createdon"] = new DateTime(1999, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
+
+            TypedQuery<FakeAccount> Matching() => Query.For<FakeAccount>().Where(a => a.Name, ConditionOperator.Equal, "keep");
+
+            // int? column -> int? back (no cast at the call site), and the Where excludes the "drop" row.
+            Assert.Equal(10, Matching().MinScalar(crm, a => a.NumberOfEmployees));
+            Assert.Equal(30, Matching().MaxScalar(crm, a => a.NumberOfEmployees));
+
+            // DateTime? column -> DateTime? back.
+            Assert.Equal(new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc), Matching().MinScalar(crm, a => a.CreatedOn));
+            Assert.Equal(new DateTime(2022, 6, 1, 0, 0, 0, DateTimeKind.Utc), Matching().MaxScalar(crm, a => a.CreatedOn));
+        }
+
+        [Fact]
+        public void Scalar_min_and_max_over_a_money_column_return_the_decimal_amount()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            crm.Create(new Entity("account") { ["name"] = "keep", ["revenue"] = new Money(100m) });
+            crm.Create(new Entity("account") { ["name"] = "keep", ["revenue"] = new Money(250m) });
+
+            TypedQuery<FakeAccount> Matching() => Query.For<FakeAccount>().Where(a => a.Name, ConditionOperator.Equal, "keep");
+
+            // Money column surfaces as Microsoft.Xrm.Sdk.Money; the dedicated overload hands back the decimal amount.
+            Assert.Equal(100m, Matching().MinScalar(crm, a => a.Revenue));
+            Assert.Equal(250m, Matching().MaxScalar(crm, a => a.Revenue));
+        }
+
+        [Fact]
+        public void Scalar_min_and_max_are_null_when_nothing_matches()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+
+            Assert.Null(Query.For<FakeAccount>().MinScalar(crm, a => a.NumberOfEmployees));
+            Assert.Null(Query.For<FakeAccount>().MaxScalar(crm, a => a.CreatedOn));
+            Assert.Null(Query.For<FakeAccount>().MaxScalar(crm, a => a.Revenue));
+        }
+
+        [Fact]
         public void Scalar_sum_is_null_and_count_is_zero_when_nothing_matches()
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService();
