@@ -57,6 +57,32 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Does_not_flag_PluginBusinessException()
+    {
+        // The sanctioned business-error type: PluginBase surfaces its message cleanly, so VELA012 must not flag it
+        // even though it cannot derive from the sealed InvalidPluginExecutionException.
+        string code = Harness + @"
+namespace Vela.Plugin
+{
+    public sealed class PluginBusinessException : System.Exception
+    {
+        public PluginBusinessException(string message) : base(message) { }
+    }
+}
+namespace Demo
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using Vela.Plugin;
+    public class MyPlugin : IPlugin
+    {
+        public void Execute(IServiceProvider sp) { throw new PluginBusinessException(""nope""); }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
     public async Task Does_not_flag_a_rethrow()
     {
         string code = Harness + @"

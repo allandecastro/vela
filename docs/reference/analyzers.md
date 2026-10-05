@@ -172,7 +172,19 @@ between unrelated operations and races. Only writable fields are flagged; `const
 caller (and the UI); any other exception thrown from a plugin is reported as a generic, unhelpful error. Rethrows
 (`throw;` / `throw ex;`) are left alone. A code fix changes the thrown type, keeping the arguments.
 
-**Fix:** `throw new InvalidPluginExecutionException("...")` for user-facing failures.
+`PluginBusinessException` is **not** flagged: it is Vela's sanctioned business-error type, which `PluginBase`
+catches and surfaces to the caller as a clean `InvalidPluginExecutionException` (with a dedicated
+`business-exception` trace snapshot). It cannot derive from `InvalidPluginExecutionException` because the SDK
+seals that type, so the analyzer recognizes it by name. Use it when you want business semantics (and a localizable
+message); use `InvalidPluginExecutionException` directly for a plain user-facing failure. Both are clean.
+
+This rule checks throws inside **plugin / Custom API types** (those implementing `IPlugin` or deriving from the
+Vela bases). A throw in a plain helper or injected service class is not analyzed, so when that code must raise a
+user-facing failure, throw `InvalidPluginExecutionException` or `PluginBusinessException` there too - it still
+surfaces cleanly because `PluginBase` catches it as the call unwinds.
+
+**Fix:** `throw new InvalidPluginExecutionException("...")` (or `throw new PluginBusinessException("...")`) for
+user-facing failures.
 
 ## VELA013
 

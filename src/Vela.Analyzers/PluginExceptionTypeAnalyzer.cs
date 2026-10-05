@@ -71,6 +71,14 @@ namespace Vela.Analyzers
                 return;
             }
 
+            // PluginBusinessException is the sanctioned business-error type: PluginBase catches it and surfaces its
+            // message to the caller as a clean InvalidPluginExecutionException. It cannot derive from the (sealed)
+            // SDK exception, so recognize it by name rather than flagging it.
+            if (thrownType.ToDisplayString() == "Vela.Plugin.PluginBusinessException")
+            {
+                return;
+            }
+
             INamedTypeSymbol? enclosing = EnclosingType(context.Node, context.SemanticModel, context.CancellationToken);
             if (!PluginTypes.IsPluginType(enclosing))
             {
