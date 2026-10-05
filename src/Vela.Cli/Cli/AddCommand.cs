@@ -541,14 +541,10 @@ internal static class AddCommand
         string ns = $"{rootNamespace}.{entity}.Services";
         string relativePath = Path.Combine(entity!, "Services", $"{name}.cs");
         string content = AddServiceFile(ns, interfaceName, name, entity!, modelsNamespace);
-        int result = WriteFile(projectDir, relativePath, content, force, $"service {name} (scoped to {entity})", json);
-        if (result == ExitSuccess && !json)
-        {
-            Console.WriteLine("  Register it from your plugin's ConfigureServices(...):");
-            Console.WriteLine($"    services.AddScoped<{interfaceName}>(r => new {name}(r.GetRequiredService<IOrganizationService>()));");
-        }
-
-        return result;
+        // The exact line to wire the service into a plugin's ConfigureServices. Surfaced both in the human
+        // output and in the --json report (field "registration") so an agent driving the CLI gets it too.
+        string registration = $"services.AddScoped<{interfaceName}>(r => new {name}(r.GetRequiredService<IOrganizationService>()));";
+        return WriteFile(projectDir, relativePath, content, force, $"service {name} (scoped to {entity})", json, registration);
     }
 
     private static int AddCustomApi(string[] args, string name, string? entity, bool force, string projectDir, string rootNamespace, string modelsNamespace, string prefix)
@@ -640,7 +636,7 @@ internal static class AddCommand
         }
     }
 
-    private static int WriteFile(string projectDir, string relativePath, string content, bool force, string description, bool json = false)
+    private static int WriteFile(string projectDir, string relativePath, string content, bool force, string description, bool json = false, string? registration = null)
     {
         string fullPath = Path.Combine(projectDir, relativePath);
         if (File.Exists(fullPath) && !force)
@@ -652,22 +648,28 @@ internal static class AddCommand
         File.WriteAllText(fullPath, NormalizeNewlines(content));
         if (json)
         {
-            Console.WriteLine(BuildAddReport(description, [fullPath]));
+            Console.WriteLine(BuildAddReport(description, [fullPath], registration));
         }
         else
         {
             ConsoleTheme.WriteSuccessLine($"Created {description}");
             Console.WriteLine($"  {fullPath}");
+            if (registration is not null)
+            {
+                Console.WriteLine("  Register it from your plugin's ConfigureServices(...):");
+                Console.WriteLine($"    {registration}");
+            }
         }
 
         return ExitSuccess;
     }
 
-    // The --json success report: what was added and the file(s) it created/updated.
-    internal static string BuildAddReport(string description, string[] files) =>
+    // The --json success report: what was added, the file(s) it created/updated, and (for a service) the exact
+    // ConfigureServices registration line. The "registration" field is omitted when there is nothing to wire up.
+    internal static string BuildAddReport(string description, string[] files, string? registration = null) =>
         System.Text.Json.JsonSerializer.Serialize(
-            new { description, created = files },
-            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            new { description, created = files, registration },
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
 
     // Resolves the target .csproj: an explicit path/dir, or the single .csproj in the current directory.
     private static bool TryResolveProject(string? requested, out string projectFile, out string error)

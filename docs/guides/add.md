@@ -55,8 +55,10 @@ vela add --interactive
   post-stage handler gets `I<Message>PostContext<T>`. Dataverse only allows asynchronous steps at
   `PostOperation`, so `--mode Async` with a pre-stage is rejected with a clear message.
 - `vela add service` scaffolds a table-scoped `I<Name>` interface + sealed implementation (injecting
-  `IOrganizationService`) under `<Table>/Services/`, and prints the `services.AddScoped<...>(...)` line to drop
-  into your plugin's `ConfigureServices(...)`.
+  `IOrganizationService`) under `<Table>/Services/`, and surfaces the `services.AddScoped<...>(...)` line to drop
+  into your plugin's `ConfigureServices(...)`. With `--json` that line is returned in a structured `registration`
+  field (omitted for every other `add` kind), so an agent driving the CLI can wire the service up without parsing
+  the human prose.
 - `vela add test <ClassUnderTest>` scaffolds a `Vela.Testing` test (`<ClassUnderTest>Tests`) pre-wired with
   `PluginContext.For<…>()…Execute(…)`. Run it inside the test project (its `RootNamespace` must end in `.Tests`);
   use `--kind customapi` for a Custom API test (and omit `--entity` for a global one). For a `*Multiple` plugin
