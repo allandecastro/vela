@@ -252,10 +252,11 @@ public sealed partial class AccountAudit : EntityPluginBase<Account>   // partia
 
 #### Typed step context (read images as `ctx.PreImage` / `ctx.PostImage`)
 
-Every **named** handler gets a **generated typed step context** named `{Handler}Context` (nested in your plugin
-`partial`). Give the handler that parameter type: it is the uniform signature for every step, whatever the message.
-When the step captures an image, the context exposes `ctx.PreImage` / `ctx.PostImage` **already typed** to the
-captured columns - read them as members instead of calling `ctx.PreImageAs<T>()`:
+A **named** handler on a **Create / Update / Delete** step (or the typed `On<TRequest>()` path) gets a **generated
+typed step context** named `{Handler}Context` (nested in your plugin `partial`). Give the handler that parameter
+type: it is the uniform signature for that step whether or not it captures an image. When the step captures one,
+the context exposes `ctx.PreImage` / `ctx.PostImage` **already typed** to the captured columns - read them as
+members instead of calling `ctx.PreImageAs<T>()`:
 
 ```csharp
 public sealed partial class AccountAudit : EntityPluginBase<Account>
@@ -276,10 +277,11 @@ public sealed partial class AccountAudit : EntityPluginBase<Account>
 ```
 
 - The generator emits `OnUpdatedContext` (a subclass of the message context, `UpdatePostContext<Account>` here)
-  nested in your plugin `partial`, for **every named handler** - on any modelled message, with or without a captured
-  image. When the step captures an image, the context adds `PreImage` / `PostImage` typed to exactly what it
-  captured; an imageless step gets the same `{Handler}Context` as a bare subclass. A **lambda** handler has no name,
-  so it keeps the plain context and `ctx.PreImageAs<T>()`.
+  nested in your plugin `partial`, for a named handler on a **Create / Update / Delete** step (the image-bearing
+  stages) or the typed **`On<TRequest>()`** path, **with or without** a captured image. When the step captures one,
+  the context adds `PreImage` / `PostImage` typed to exactly what it captured; an imageless step gets the same
+  `{Handler}Context` as a bare subclass. A **lambda** handler has no name, so it keeps the plain context and
+  `ctx.PreImageAs<T>()`. (Bulk `*Multiple` and the other message triggers keep the plain message context for now.)
 - Because the context is a type nested in your plugin, **the plugin class must be `partial`** (and so must any class
   that encloses it) - [VELA014](../reference/analyzers.md#vela014) reports it with a one-click fix, and
   `vela init` / `vela add` scaffold it `partial` already.

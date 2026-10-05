@@ -700,8 +700,10 @@ namespace Demo
     }
 
     [Fact]
-    public void Emits_a_bare_context_for_a_bulk_handler_without_a_single_image_member()
+    public void Does_not_emit_a_context_for_a_bulk_handler()
     {
+        // Bulk stages do not expose the Handle(Delegate) overload a {Handler}Context would bind to, so no context is
+        // generated for them (yet). The projection, if any, is still emitted.
         string output = RunAndConcat(@"
 namespace Demo
 {
@@ -715,15 +717,13 @@ namespace Demo
 }
 ");
 
-        Assert.Contains("class OnCreatedManyContext : global::Vela.Context.CreateMultiplePostContext<global::Demo.Account>", output);
-        // Bulk images are per-record; the context does not expose a single PreImage/PostImage member.
-        Assert.DoesNotContain("PreImage =>", output);
-        Assert.DoesNotContain("PostImage =>", output);
+        Assert.DoesNotContain("OnCreatedManyContext", output);
     }
 
     [Fact]
-    public void Emits_a_bare_context_for_a_non_crud_modelled_message()
+    public void Does_not_emit_a_context_for_a_non_crud_modelled_message()
     {
+        // Assign (and the other ~45 messages) have no Handle(Delegate) overload, so no {Handler}Context is generated.
         string output = RunAndConcat(@"
 namespace Demo
 {
@@ -737,7 +737,7 @@ namespace Demo
 }
 ");
 
-        Assert.Contains("class OnAssignedContext : global::Vela.Context.AssignPostContext<global::Demo.Account>", output);
+        Assert.DoesNotContain("OnAssignedContext", output);
     }
 
     [Fact]

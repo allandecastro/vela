@@ -141,13 +141,15 @@ namespace Vela.Analyzers
                 if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
                 {
                     string name = ma.Name.Identifier.ValueText;
+                    // Only the CRUD guided triggers and the typed On<TRequest>() path generate a context (they are the
+                    // stages whose config exposes Handle(Delegate)); mirror the generator so VELA014 does not demand
+                    // 'partial' for a handler that gets no generated context.
                     if (name == "On" && ma.Name is GenericNameSyntax)
                     {
                         return true;
                     }
 
-                    if (name.Length > 2 && name.StartsWith("On", System.StringComparison.Ordinal) &&
-                        name != "OnMessage" && name != "OnAsyncOnly" && char.IsUpper(name[2]))
+                    if (name is "OnCreate" or "OnUpdate" or "OnDelete")
                     {
                         return true;
                     }
