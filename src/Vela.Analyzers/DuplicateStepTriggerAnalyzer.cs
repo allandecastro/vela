@@ -27,7 +27,7 @@ namespace Vela.Analyzers
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Dataverse allows only one plugin step per trigger (message + stage + mode + entity). Two RegisterStep() chains with the same trigger in one plugin fail at registration.");
+            description: "Dataverse allows only one plugin step per trigger (message + stage + mode + entity). Two RegisterStep() chains with the same trigger in one plugin fail at registration. Filtering attributes are NOT part of the trigger: the runtime resolves a single step and never re-evaluates filters itself (Dataverse applies the registered filter upstream), so two steps that differ only by FilterOn(...) are indistinguishable and their step keys collide. Keep one step with the union of the filtering attributes and branch in the handler with HasChanged(...).");
 
         private static readonly ImmutableDictionary<string, string> TypedTriggerMessage = new Dictionary<string, string>
         {

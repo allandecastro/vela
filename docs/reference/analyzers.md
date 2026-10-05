@@ -111,7 +111,29 @@ exposed unconditionally. The message is read from the chain; a message Vela does
 the same `RegisterPluginSteps()` with the same message, stage, and mode are flagged (the entity is fixed per
 plugin). Only complete chains whose message and stage are statically determinable are compared.
 
-**Fix:** merge the two steps into one (combine their filtering attributes), or move one to a different stage/mode.
+**Different filtering attributes do not make the steps distinct.** The trigger is message + stage + mode + entity;
+filtering attributes are not part of it. At runtime the framework resolves a *single* step for the executing
+message, and it never re-evaluates filtering attributes itself - Dataverse applies the step's registered filter
+upstream, before the plugin runs. So two steps that differ only by `FilterOn(...)` are indistinguishable once the
+plugin executes (Dataverse does not tell the plugin which step row fired), their auto step-keys collide, and the
+runtime throws `registers more than one step for the same trigger`. Splitting the logic across two steps is not a
+way to react to different column sets.
+
+**Fix:** keep one step with the **union** of the filtering attributes, then branch inside the handler on what
+actually changed:
+
+```csharp
+RegisterStep().OnUpdate().PostOperation().Sync()
+    .FilterOn(a => a.CreditLimit, a => a.Name)   // union of both triggers' columns
+    .WithPreImage(a => a.CreditLimit, a => a.Name)
+    .Handle(ctx =>
+    {
+        if (ctx.HasChanged<Account>(a => a.CreditLimit)) { /* credit path */ }
+        if (ctx.HasChanged<Account>(a => a.Name)) { /* rename path */ }
+    });
+```
+
+If the two really are unrelated, move one to a different stage/mode, or put it in a separate plugin class.
 
 ## VELA009
 
