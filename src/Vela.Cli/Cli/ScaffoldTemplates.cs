@@ -1288,6 +1288,9 @@ $$"""
     <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="{{CrmCoreAssembliesVersion}}" PrivateAssets="all" />
     <PackageReference Include="Microsoft.PowerApps.MSBuild.Plugin" Version="{{PluginSdkVersion}}" PrivateAssets="all" />
     <PackageReference Include="Vela.Plugins" Version="{{coreVersion}}" />
+    <!-- HttpClient on net462 binds against this GAC facade; without it, outbound HTTP (e.g. a managed-identity
+         call) fails to compile/load. Harmless when unused. Enable TLS 1.2 once before the call (see the docs). -->
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>

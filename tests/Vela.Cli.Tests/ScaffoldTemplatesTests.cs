@@ -37,6 +37,9 @@ public class ScaffoldTemplatesTests
         // Early-bound entities passed to ctx.UserService inside a plugin need the assembly marked as a proxy-types
         // assembly, or the sandbox throws a SerializationException at runtime.
         Assert.Contains("<AssemblyAttribute Include=\"Microsoft.Xrm.Sdk.Client.ProxyTypesAssemblyAttribute\" />", csproj);
+        // HttpClient on net462 binds against the System.Net.Http GAC facade; the scaffold references it so an
+        // outbound (e.g. managed-identity) call compiles and loads out of the box.
+        Assert.Contains("<Reference Include=\"System.Net.Http\" />", csproj);
     }
 
     [Fact]
