@@ -40,6 +40,7 @@ namespace Vela.Analyzers
             ["OnRetrieveMultiple"] = "retrievemultiple",
             ["OnAssociate"] = "associate",
             ["OnDisassociate"] = "disassociate",
+            ["OnAssign"] = "assign",
             ["OnMerge"] = "merge",
         }.ToImmutableDictionary();
 

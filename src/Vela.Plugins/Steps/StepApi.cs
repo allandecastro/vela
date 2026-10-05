@@ -520,6 +520,51 @@ namespace Vela.Steps
         void Handle(Action<IGrantAccessPostContext<TEntity>> handler);
     }
 
+    /// <summary>Config for an Assign step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAssignPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
+    {
+        IAssignPreValidationConfig<TEntity> WithDescription(string description);
+        IAssignPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IAssignPreValidationConfig<TEntity> WithStepKey(string key);
+        IAssignPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssignPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAssignPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAssignPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAssignPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssignPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IAssignPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for an Assign step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAssignPreOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    {
+        IAssignPreOperationConfig<TEntity> WithDescription(string description);
+        IAssignPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAssignPreOperationConfig<TEntity> WithStepKey(string key);
+        IAssignPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssignPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAssignPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAssignPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAssignPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssignPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IAssignPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for an Assign step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAssignPostOperationConfig<TEntity> : IFluentStep where TEntity : Entity
+    {
+        IAssignPostOperationConfig<TEntity> WithDescription(string description);
+        IAssignPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAssignPostOperationConfig<TEntity> WithStepKey(string key);
+        IAssignPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
+        IAssignPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAssignPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAssignPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAssignPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssignPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IAssignPostContext<TEntity>> handler);
+    }
+
     /// <summary>Config for a RevokeAccess step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IRevokeAccessPreValidationConfig<TEntity> : IFluentStep where TEntity : Entity
     {
@@ -2220,6 +2265,14 @@ namespace Vela.Steps
         ISyncAsyncMode<IGrantAccessPostOperationConfig<TEntity>> PostOperation();
     }
 
+    /// <summary>Stage choice for OnAssign(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IAssignStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IAssignPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IAssignPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IAssignPostOperationConfig<TEntity>> PostOperation();
+    }
+
     /// <summary>Stage choice for OnRevokeAccess(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
     public interface IRevokeAccessStages<TEntity> : IFluentStep where TEntity : Entity
     {
@@ -2656,6 +2709,7 @@ namespace Vela.Steps
         IDisassociateStages<TEntity> OnDisassociate();
         IGrantAccessStages<TEntity> OnGrantAccess();
         IRevokeAccessStages<TEntity> OnRevokeAccess();
+        IAssignStages<TEntity> OnAssign();
         IQualifyLeadStages<TEntity> OnQualifyLead();
         IWinOpportunityStages<TEntity> OnWinOpportunity();
         ILoseOpportunityStages<TEntity> OnLoseOpportunity();

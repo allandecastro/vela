@@ -54,6 +54,10 @@ namespace Vela.Context
     public interface IGrantAccessPreContext<TEntity> : IStepRequestContext<GrantAccessRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a GrantAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
     public interface IGrantAccessPostContext<TEntity> : IStepRequestContext<GrantAccessRequest>, IStepResponseContext<GrantAccessResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for an Assign step (<c>ctx.Request</c> only).</summary>
+    public interface IAssignPreContext<TEntity> : IStepRequestContext<AssignRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for an Assign step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IAssignPostContext<TEntity> : IStepRequestContext<AssignRequest>, IStepResponseContext<AssignResponse> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a ModifyAccess step (<c>ctx.Request</c> only).</summary>
     public interface IModifyAccessPreContext<TEntity> : IStepRequestContext<ModifyAccessRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a ModifyAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
@@ -338,6 +342,18 @@ namespace Vela.Context
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public GrantAccessPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for Assign.</summary>
+    public sealed class AssignPreContext<TEntity> : PreStepContext<AssignRequest>, IAssignPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AssignPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for Assign.</summary>
+    public sealed class AssignPostContext<TEntity> : PostStepContext<AssignRequest, AssignResponse>, IAssignPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AssignPostContext(ILocalPluginContext inner) : base(inner) { }
     }
     /// <summary>Runtime pre-stage context for ModifyAccess.</summary>
     public sealed class ModifyAccessPreContext<TEntity> : PreStepContext<ModifyAccessRequest>, IModifyAccessPreContext<TEntity> where TEntity : Entity

@@ -29,6 +29,7 @@ namespace Vela.CodeFixes
             ["retrievemultiple"] = "OnRetrieveMultiple",
             ["associate"] = "OnAssociate",
             ["disassociate"] = "OnDisassociate",
+            ["assign"] = "OnAssign",
             ["merge"] = "OnMerge",
         };
 
