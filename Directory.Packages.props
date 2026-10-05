@@ -12,6 +12,7 @@
   <ItemGroup>
     <!-- Runtime / CLI -->
     <PackageVersion Include="Microsoft.CrmSdk.CoreAssemblies" Version="9.0.2.59" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
