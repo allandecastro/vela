@@ -56,19 +56,45 @@ namespace Demo
         await Verify.VerifyAnalyzerAsync(code);
     }
 
-    [Fact]
-    public async Task Does_not_flag_PluginBusinessException()
-    {
-        // The sanctioned business-error type: PluginBase surfaces its message cleanly, so VELA012 must not flag it
-        // even though it cannot derive from the sealed InvalidPluginExecutionException.
-        string code = Harness + @"
+    // A PluginBase + PluginBusinessException stub, in the real namespaces, so the analyzer resolves them.
+    private const string VelaStub = @"
 namespace Vela.Plugin
 {
+    public abstract class PluginBase : Microsoft.Xrm.Sdk.IPlugin
+    {
+        public abstract void Execute(System.IServiceProvider sp);
+    }
     public sealed class PluginBusinessException : System.Exception
     {
         public PluginBusinessException(string message) : base(message) { }
     }
 }
+";
+
+    [Fact]
+    public async Task Does_not_flag_PluginBusinessException_in_a_PluginBase_plugin()
+    {
+        // The sanctioned business-error type: PluginBase surfaces its message cleanly, so VELA012 must not flag it
+        // even though it cannot derive from the sealed InvalidPluginExecutionException.
+        string code = Harness + VelaStub + @"
+namespace Demo
+{
+    using System;
+    using Vela.Plugin;
+    public sealed class MyPlugin : PluginBase
+    {
+        public override void Execute(IServiceProvider sp) { throw new PluginBusinessException(""nope""); }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_PluginBusinessException_in_a_direct_IPlugin()
+    {
+        // A direct IPlugin has no PluginBase frame to turn PluginBusinessException into a clean
+        // InvalidPluginExecutionException, so throwing it there still reaches the caller as a generic error.
+        string code = Harness + VelaStub + @"
 namespace Demo
 {
     using System;
@@ -76,10 +102,10 @@ namespace Demo
     using Vela.Plugin;
     public class MyPlugin : IPlugin
     {
-        public void Execute(IServiceProvider sp) { throw new PluginBusinessException(""nope""); }
+        public void Execute(IServiceProvider sp) { throw new {|#0:PluginBusinessException|}(""nope""); }
     }
 }";
-        await Verify.VerifyAnalyzerAsync(code);
+        await Verify.VerifyAnalyzerAsync(code, Expected("PluginBusinessException"));
     }
 
     [Fact]
