@@ -702,6 +702,36 @@ Example output - wrapped Dataverse operation tracing (automatic on `UserService`
 Keep your own handler traces business-focused (decisions and key values); rely on the framework for the
 pipeline, snapshot, and Dataverse-operation tracing.
 
+## Respect the sandbox
+
+A plugin runs in the Dataverse **sandbox**, which constrains what the code may do:
+
+- **No filesystem access.** `System.IO.File` / `Directory` and `new FileStream` / `FileInfo` / `DirectoryInfo` throw
+  at runtime - [VELA019](../reference/analyzers.md#vela019) flags them. Keep data in memory (`MemoryStream`), read
+  embedded resources with `Assembly.GetManifestResourceStream(...)`, or move file work out of the sandbox. In-memory
+  types and the pure-string `System.IO.Path` helpers are fine.
+- **Outbound HTTP is restricted** to an allow-list the administrator configures (and only over TLS). Route external
+  calls through `HttpClient`, authenticating with a [managed identity](managed-identity.md) token rather than a
+  stored secret:
+
+  ```csharp
+  private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
+  {
+      string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });
+      using var http = new HttpClient();
+      http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+      // ... call the allow-listed endpoint; keep it well under the execution budget below.
+  }
+  ```
+
+- **~2-minute execution budget.** The whole pipeline execution (all synchronous steps) must finish inside roughly two
+  minutes or the platform aborts it. Keep outbound calls fast and few; offload slow work to an asynchronous step or
+  an external process. (This is the plugin runtime budget - distinct from the CLI's `--timeout`, which bounds a
+  `vela` command's Dataverse requests.)
+
+`net462` note: `HttpClient` on `net462` needs an explicit `System.Net.Http` reference and TLS 1.2 enabled; see the
+scaffold's integration variant.
+
 ## See also
 
 - [Typed queries](queries.md) - strongly-typed `QueryExpression` and `ToFetchXml()`.
