@@ -445,6 +445,53 @@ namespace Demo
     }
 
     [Fact]
+    public void An_unrelated_edit_reuses_the_cached_projections_and_contexts()
+    {
+        // The incremental pipeline compares its models (columns, projections, handlers) by value: an edit elsewhere in
+        // the compilation must leave every generated source cached rather than regenerated.
+        string plugin = @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPreImage(""before"", a => a.Revenue).WithPostImage(a => a.Name, a => a.NumberOfEmployees).Handle(OnUpdated);
+            RegisterStep().OnCreate().PostOperation().Sync().WithPostImage(a => a.Telephone1).Handle(OnCreated);
+        }
+        private void OnUpdated() { }
+        private void OnCreated() { }
+    }
+}
+";
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
+            .Split(Path.PathSeparator)
+            .Where(p => p.Length > 0)
+            .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p));
+        CSharpCompilation compilation = CSharpCompilation.Create(
+            "gen_cache_test",
+            new[] { CSharpSyntaxTree.ParseText(Harness + plugin) },
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new[] { new ImageProjectionGenerator().AsSourceGenerator() },
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+        driver = driver.RunGenerators(compilation);
+        int generated = driver.GetRunResult().Results.Single().GeneratedSources.Length;
+
+        driver = driver.RunGenerators(compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText("namespace Other { public class Unrelated { } }")));
+        GeneratorRunResult second = driver.GetRunResult().Results.Single();
+
+        Assert.True(generated >= 3); // two projections + at least one context
+        Assert.Equal(generated, second.GeneratedSources.Length);
+        Assert.All(
+            second.TrackedOutputSteps.SelectMany(step => step.Value).SelectMany(run => run.Outputs),
+            output => Assert.True(output.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged, output.Reason.ToString()));
+    }
+
+    [Fact]
     public void Resolves_a_column_selector_behind_a_cast()
     {
         // a => (object)a.Name must not suppress the projection: the cast is unwrapped to the member access.
