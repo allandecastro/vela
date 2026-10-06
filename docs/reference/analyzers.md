@@ -240,7 +240,7 @@ by exactly one `RegisterStep()` chain in the same class, and that chain has no m
 
 **Write to the Target in an asynchronous step.** An asynchronous step runs after the main operation has committed,
 in its own execution, so mutating the Target (`ctx.Request.Target` / `ctx.GetTarget<T>()`) there has no effect: the
-change is neither written back to the database nor seen by any later step. Call `ctx.UserService.Update(...)` with
+change is neither written back to the database nor seen by any later step. Call `ctx.Service.Update(...)` with
 the change, or move the logic to a synchronous step. Like VELA017 it fires only in the unambiguous case: the handler
 is an instance method bound by exactly one `RegisterStep()` chain and that chain is `.Async()`; a handler shared
 across steps, or a write through a local copy of the Target, is left alone. See

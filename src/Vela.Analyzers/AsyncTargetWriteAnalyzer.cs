@@ -26,7 +26,7 @@ namespace Vela.Analyzers
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
             title: "Write to the Target in an asynchronous step",
-            messageFormat: "This async step's handler writes to the Target, which has no effect: an async step runs after the operation commits, so the change is neither persisted nor seen by a later step. Call UserService.Update(...) with the change, or move the logic to a synchronous step.",
+            messageFormat: "This async step's handler writes to the Target, which has no effect: an async step runs after the operation commits, so the change is neither persisted nor seen by a later step. Call ctx.Service.Update(...) with the change, or move the logic to a synchronous step.",
             category: "Vela.Reliability",
             defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true,

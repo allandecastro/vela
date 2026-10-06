@@ -107,7 +107,7 @@ namespace Vela.Localization
             };
             query.Criteria.AddCondition("systemuserid", ConditionOperator.Equal, _context.InitiatingUserId);
 
-            Entity? settings = _context.AsSystem().RetrieveMultiple(query).Entities.FirstOrDefault();
+            Entity? settings = _context.SystemService.RetrieveMultiple(query).Entities.FirstOrDefault();
             int uiLanguage = settings?.GetAttributeValue<int>("uilanguageid") ?? 0;
             return uiLanguage > 0 ? uiLanguage : DefaultLanguageCode;
         }

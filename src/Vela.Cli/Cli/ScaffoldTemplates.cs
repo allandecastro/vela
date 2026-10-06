@@ -800,12 +800,13 @@ These are pre-registered for every execution - request them from the resolver (`
 
 | Service | Notes |
 | --- | --- |
-| `IOrganizationService` | Runs as the **initiating user**. For elevated access use `ctx.AsSystem()`. |
+| `IOrganizationService` | Runs as the **current user** (`ctx.Service`; the step's impersonated user when set). For elevated access use `ctx.SystemService`. |
 | `ITracingService` | Plugin trace log (`ctx.Trace(...)` wraps it). |
 | `IPluginExecutionContext` | The raw execution context. |
 | `ILocalPluginContext` | The framework context itself. |
 | `ILogger` | Logging abstraction. |
-| `Func<Guid?, IOrganizationService>` | Factory: pass a user id, or `null` for the system user. |
+| `IEnvironmentVariableReader` | Reads Dataverse environment variables (cached). |
+| `IMessageService` | Localized messages. |
 | `IPluginCacheService` | Cache that survives across executions. |
 
 ### Registering services
@@ -847,8 +848,8 @@ returns `null` instead.
   anything request-specific) in a `static`/singleton field.
 - **Inject `IOrganizationService` through the constructor** (as the samples do) instead of reaching into the
   context from deep in your code - it makes the dependency explicit and mockable.
-- **Mind the user context.** The injected `IOrganizationService` runs as the initiating user; for elevated
-  work use `ctx.AsSystem()` or the `Func<Guid?, IOrganizationService>` factory.
+- **Mind the user context.** The injected `IOrganizationService` runs as the current user; for elevated
+  work use `ctx.SystemService`, and `ctx.AsUser(id)` to act as a specific user.
 - **Place logic by reach** - cross-table logic in `Shared/Services`, table-specific logic in
   `<Table>/Services`.
 - **Do light work in constructors.** Services are built lazily on first resolve; keep queries and writes in
@@ -1341,7 +1342,7 @@ $$"""
   </ItemGroup>
 
   <!-- Register this assembly's early-bound entity types with the SDK serializer. Without it, passing an
-       early-bound entity (e.g. new Account { ... }) to ctx.UserService.Create/Update inside a plugin fails at
+       early-bound entity (e.g. new Account { ... }) to ctx.Service.Create/Update inside a plugin fails at
        runtime with a SerializationException ("The deserializer has no knowledge of any type that maps to the
        name '<namespace>:Account'"), because the sandbox cannot resolve the generated subclass. -->
   <ItemGroup>
@@ -1452,7 +1453,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
             int count = cache.GetOrCreate(
                 $"account:related-contacts:{target.Id}",
                 TimeSpan.FromMinutes(5),
-                () => ctx.UserService.RetrieveMultiple(query).Entities.Count);
+                () => ctx.Service.RetrieveMultiple(query).Entities.Count);
 
             ctx.Trace("Account {0} has {1} related contact(s).", target.Id, count);
         }

@@ -87,7 +87,7 @@ namespace Vela.Localization
         private Dictionary<string, string> Load()
         {
             Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.Ordinal);
-            IOrganizationService service = _context.AsSystem();
+            IOrganizationService service = _context.SystemService;
             QueryExpression query = new QueryExpression(_table)
             {
                 ColumnSet = new ColumnSet(_keyColumn, _languageColumn, _valueColumn),

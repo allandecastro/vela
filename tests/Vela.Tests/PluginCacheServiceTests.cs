@@ -336,11 +336,10 @@ public sealed class PluginCacheServiceTests
         Mock<ITracingService> tracingService = new Mock<ITracingService>();
 
         context.SetupGet(c => c.PluginExecutionContext).Returns(executionContext.Object);
-        context.SetupGet(c => c.UserService).Returns(organizationService.Object);
+        context.SetupGet(c => c.Service).Returns(organizationService.Object);
         context.SetupGet(c => c.TracingService).Returns(tracingService.Object);
         context.SetupGet(c => c.Logger).Returns(NullLogger.Instance);
         context.SetupGet(c => c.ManagedIdentityService).Returns((IManagedIdentityService?)null);
-        context.Setup(c => c.CreateOrganizationService(It.IsAny<Guid?>())).Returns(organizationService.Object);
 
         return context.Object;
     }

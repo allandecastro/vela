@@ -49,20 +49,40 @@ namespace Vela.DI
             }
 
             SimpleServiceResolver resolver = new();
-            resolver.AddScoped<ILocalPluginContext>(_ => context);
-            resolver.AddScoped(_ => context.PluginExecutionContext);
-            resolver.AddScoped(_ => context.UserService);
-            resolver.AddScoped(_ => context.TracingService);
-            resolver.AddScoped(_ => context.Logger ?? NullLogger.Instance);
-            resolver.AddScoped<Func<Guid?, IOrganizationService>>(_ => userId => context.CreateOrganizationService(userId));
-            resolver.AddScoped<IPluginCacheService>(_ => GlobalCacheService);
-            resolver.AddScoped<IEnvironmentVariableReader>(_ => new EnvironmentVariableReader(context, GlobalCacheService));
-            resolver.AddScoped<IMessageService>(_ => new MessageService(context, GlobalCacheService));
+            foreach (KeyValuePair<Type, Func<object>> registration in DefaultServices(context))
+            {
+                Func<object> create = registration.Value;
+                resolver.Add(registration.Key, new Func<IPluginServiceResolver, object>(_ => create()), isScoped: true);
+            }
+
+            return resolver;
+        }
+
+        /// <summary>
+        /// The default per-execution services, shared by <see cref="CreateDefault"/> and
+        /// <see cref="MicrosoftDiExtensions.AddPluginRuntime"/> so both containers resolve the same set.
+        /// <see cref="IOrganizationService"/> is the current user's <see cref="ILocalPluginContext.Service"/>; SYSTEM is
+        /// never resolved implicitly (take <see cref="ILocalPluginContext"/> and use <c>SystemService</c>).
+        /// </summary>
+        internal static IEnumerable<KeyValuePair<Type, Func<object>>> DefaultServices(ILocalPluginContext context)
+        {
+            yield return Scoped<ILocalPluginContext>(() => context);
+            yield return Scoped(() => context.PluginExecutionContext);
+            yield return Scoped(() => context.Service);
+            yield return Scoped(() => context.TracingService);
+            yield return Scoped(() => context.Logger ?? NullLogger.Instance);
+            yield return Scoped<IPluginCacheService>(() => GlobalCacheService);
+            yield return Scoped<IEnvironmentVariableReader>(() => new EnvironmentVariableReader(context, GlobalCacheService));
+            yield return Scoped<IMessageService>(() => new MessageService(context, GlobalCacheService));
             if (context.ManagedIdentityService != null)
             {
-                resolver.AddScoped<IManagedIdentityService>(_ => context.ManagedIdentityService);
+                yield return Scoped(() => context.ManagedIdentityService);
             }
-            return resolver;
+        }
+
+        private static KeyValuePair<Type, Func<object>> Scoped<TService>(Func<TService> factory) where TService : class
+        {
+            return new KeyValuePair<Type, Func<object>>(typeof(TService), () => factory());
         }
 
         /// <summary>

@@ -10,8 +10,8 @@ execution, before your handler runs):
 ```csharp
 protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
 {
-    services.AddScoped<IPricingService>(r => new PricingService(context.UserService, r.GetRequiredService<IPluginCacheService>()));
-    services.AddTransient<IAuditWriter>(_ => new AuditWriter(context.UserService));
+    services.AddScoped<IPricingService>(r => new PricingService(context.Service, r.GetRequiredService<IPluginCacheService>()));
+    services.AddTransient<IAuditWriter>(_ => new AuditWriter(context.Service));
 }
 ```
 
@@ -42,8 +42,8 @@ public sealed class MyServices : IServiceRegistrar
 {
     public void Register(SimpleServiceResolver services, ILocalPluginContext context)
     {
-        services.AddScoped<IPricingService>(r => new PricingService(context.UserService, r.GetRequiredService<IPluginCacheService>()));
-        services.AddScoped<IAuditWriter>(_ => new AuditWriter(context.UserService));
+        services.AddScoped<IPricingService>(r => new PricingService(context.Service, r.GetRequiredService<IPluginCacheService>()));
+        services.AddScoped<IAuditWriter>(_ => new AuditWriter(context.Service));
     }
 }
 ```
@@ -65,14 +65,15 @@ lifetimes are scoped to a single execution:
 | `AddTransient<T>(factory)` | **a new instance every resolve** | cheap, stateless helpers |
 
 The factory receives the resolver (`IPluginServiceResolver`), so a service can depend on other registered
-services: `r => new PricingService(context.UserService, r.GetRequiredService<IPluginCacheService>())`.
+services: `r => new PricingService(context.Service, r.GetRequiredService<IPluginCacheService>())`.
 
 ## Built-in registrations
 
 These are always available to resolve without registering them yourself:
 
-`ILocalPluginContext`, `IPluginExecutionContext`, `IOrganizationService`, `ITracingService`, `ILogger`,
-`IPluginCacheService`, `Func<Guid?, IOrganizationService>`.
+`ILocalPluginContext`, `IPluginExecutionContext`, `IOrganizationService` (the current user), `ITracingService`,
+`ILogger`, `IPluginCacheService`, `IEnvironmentVariableReader`, `IMessageService` (and `IManagedIdentityService`
+when the runtime provides it). The built-in resolver and `AddPluginRuntime` register the same set.
 
 > [!TIP]
 > `GetRequiredService<T>()` throws if the service isn't registered; use `GetService(typeof(T))` (returns
@@ -80,8 +81,8 @@ These are always available to resolve without registering them yourself:
 
 ## System vs user calls in a service
 
-The built-in `IOrganizationService` is the **initiating user's** service: calls run with the caller's
-privileges (so a service that reads or writes on the user's behalf respects their security role). When a
+The built-in `IOrganizationService` is the **current user's** service (`ctx.Service`: the step's impersonated user
+when it has one, otherwise the caller): calls run with that user's privileges (so a service that reads or writes on the user's behalf respects their security role). When a
 service needs **elevated / system** access instead, do not reach for a second `IOrganizationService`
 registration - there is only one `IOrganizationService` token and it is the user. Inject
 **`ILocalPluginContext`** and pick the scope you need from it:
@@ -100,15 +101,11 @@ public sealed class QuotaEnforcer(ILocalPluginContext ctx) : IQuotaEnforcer
 }
 ```
 
-`ctx` exposes every scope: `ctx.UserService` (initiating user), `ctx.CallingUserService` (the step's
-"run in user's context" user), `ctx.SystemService` (SYSTEM), and `ctx.AsSystem()` / `ctx.AsUser(id)` /
-`ctx.CreateOrganizationService(userId)` (a specific user, or SYSTEM when the id is `null`). The same id-based
-factory is injectable directly as `Func<Guid?, IOrganizationService>` (pass `null` for SYSTEM) when a service
-needs to switch users at call time rather than once at construction.
+`ctx` exposes three scopes: `ctx.Service` (the current user), `ctx.SystemService` (SYSTEM) and `ctx.AsUser(id)`
+(a specific user; `ctx.AsUser(ctx.InitiatingUserId)` for the user who started the operation).
 
 The rule of thumb: inject a bare `IOrganizationService` for ordinary user-scoped work; inject
-`ILocalPluginContext` (or the `Func<Guid?, IOrganizationService>` factory) when the service needs a scope other
-than the caller. Injecting the context keeps the choice explicit at the call site instead of hiding an elevated
+`ILocalPluginContext` when the service needs a scope other than the current user. Injecting the context keeps the choice explicit at the call site instead of hiding an elevated
 service behind the same `IOrganizationService` type.
 
 ## Why

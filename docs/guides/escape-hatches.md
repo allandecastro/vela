@@ -14,13 +14,15 @@ did not generate a model for, or when you need full control over the request.
 `ILocalPluginContext` hands you the real `IOrganizationService`, so you can execute any `OrganizationRequest`:
 
 ```csharp
-IOrganizationService service = ctx.UserService;   // also: ctx.SystemService, ctx.AsUser(id), ctx.AsSystem()
+IOrganizationService service = ctx.Service;   // also: ctx.SystemService, ctx.AsUser(id)
 service.Execute(new SomeSdkRequest { /* ... */ });
 ```
 
-Use `UserService` to run as the initiating user (respects their privileges), or `SystemService` to run with
-elevated access. `ctx.GetRequiredService<IOrganizationService>()` resolves the same initiating-user service
-through dependency injection.
+Use `Service` to act as the current user (the step's impersonated user when it has one, otherwise the caller;
+their privileges apply), `SystemService` to run with elevated access, or `AsUser(id)` to act as a given user
+(`ctx.AsUser(ctx.InitiatingUserId)` for the user who started the operation).
+`ctx.GetRequiredService<IOrganizationService>()` resolves the same current-user service through dependency
+injection; SYSTEM is never injected implicitly.
 
 ## The raw query
 
@@ -45,7 +47,7 @@ object raw = ctx.PluginExecutionContext.InputParameters["Target"];
 
 Dataverse returns a record together with its related records in a single call through a
 `RelationshipQueryCollection`. For generated relationship navigation properties, prefer the typed
-`ctx.UserService.RetrieveWithRelated<T>(target, q => q.Include(o => o.Nav))`
+`ctx.Service.RetrieveWithRelated<T>(target, q => q.Include(o => o.Nav))`
 (see [relationship-aware read](models.md#relationship-navigation-properties)); the raw pattern below stays available
 for un-generated relationships or full control:
 
@@ -55,7 +57,7 @@ using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Querying;
 
-IOrganizationService service = ctx.UserService;
+IOrganizationService service = ctx.Service;
 var childRelationship = new Relationship("contact_customer_accounts");   // account 1:N contacts
 
 var response = (RetrieveResponse)service.Execute(new RetrieveRequest
@@ -96,7 +98,7 @@ account.RelatedEntities[new Relationship("contact_customer_accounts")] = new Ent
     new Contact { FirstName = "Grace", LastName = "Hopper" },
 });
 
-Guid accountId = ctx.UserService.Create(account);   // account + two contacts, in one transaction
+Guid accountId = ctx.Service.Create(account);   // account + two contacts, in one transaction
 ```
 
 The same shape associates existing records over an N:N relationship (populate the collection with references to
@@ -114,7 +116,7 @@ creates), so keep the graph shallow.
 > account.Contacts.Add(new Contact { FirstName = "Ada", LastName = "Lovelace" });
 > account.Contacts.Add(new Contact { FirstName = "Grace", LastName = "Hopper" });
 >
-> Guid accountId = ctx.UserService.CreateWithRelated(account);   // account + two contacts, one transaction
+> Guid accountId = ctx.Service.CreateWithRelated(account);   // account + two contacts, one transaction
 > ```
 > `CreateWithRelated` projects the populated 1:N collections into `RelatedEntities` for you,
 > `RetrieveWithRelated<T>(target, q => q.Include(...))` reads them back typed (single-record, N:1/1:N/N:N), and

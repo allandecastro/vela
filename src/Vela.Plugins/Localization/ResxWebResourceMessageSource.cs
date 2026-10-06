@@ -123,7 +123,7 @@ namespace Vela.Localization
 
         private string? RetrieveContent(string webResourceName)
         {
-            IOrganizationService service = _context.AsSystem();
+            IOrganizationService service = _context.SystemService;
             QueryExpression query = new QueryExpression("webresource")
             {
                 ColumnSet = new ColumnSet("content"),
