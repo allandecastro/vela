@@ -18,7 +18,21 @@ namespace Microsoft.Xrm.Sdk
     public class Entity
     {
         public string LogicalName { get; set; }
+        public virtual Guid Id { get; set; }
+    }
+
+    public class EntityReference
+    {
         public Guid Id { get; set; }
+        public string Name { get; set; }
+    }
+}
+
+namespace Microsoft.Xrm.Sdk.Client
+{
+    public sealed class AttributeLogicalNameAttribute : Attribute
+    {
+        public AttributeLogicalNameAttribute(string logicalName) { }
     }
 }
 
@@ -29,6 +43,21 @@ namespace Demo
     public class Account : Entity
     {
         public string Name { get; set; }
+        public EntityReference PrimaryContactId { get; set; }
+        public Account ParentAccount { get; set; }
+    }
+
+    // As `vela models` used to emit it: an Id override with no column name.
+    public class Lead : Entity
+    {
+        public override Guid Id { get; set; }
+    }
+
+    // As `vela models` emits it now (and the SDK generator does): the override names the primary key column.
+    public class Contact : Entity
+    {
+        [Microsoft.Xrm.Sdk.Client.AttributeLogicalName(""contactid"")]
+        public override Guid Id { get; set; }
     }
 
     public static class Steps
@@ -72,6 +101,26 @@ namespace Demo
             new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
                 .WithLocation(0)
                 .WithArguments("Id"));
+    }
+
+    [Fact]
+    public async Task Flags_a_nested_path_which_is_not_a_column_of_the_entity()
+    {
+        // a.PrimaryContactId.Id / a.ParentAccount.Name used to register "id" / "name": a wrong or nonexistent column.
+        string code = InMethod("Steps.Filtering<Account>(x => {|#0:x.PrimaryContactId.Id|}, x => {|#1:x.ParentAccount.Name|});");
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error).WithLocation(0).WithArguments("x.PrimaryContactId.Id"),
+            new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error).WithLocation(1).WithArguments("x.ParentAccount.Name"));
+    }
+
+    [Fact]
+    public async Task Flags_an_Id_override_without_a_column_name_but_not_one_with_it()
+    {
+        string code = InMethod("Steps.Filtering<Lead>(x => x.{|#0:Id|}); Steps.Filtering<Contact>(x => x.Id); Steps.Filtering<Account>(x => x.PrimaryContactId);");
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error).WithLocation(0).WithArguments("Id"));
     }
 
     [Fact]

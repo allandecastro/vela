@@ -53,7 +53,7 @@ public class ModelGeneratorTests
     {
         string code = GenerateAccount();
 
-        Assert.Contains("public override Guid Id", code);
+        Assert.Contains("[AttributeLogicalName(\"accountid\")]\n        public override Guid Id", code.Replace("\r\n", "\n")); // a => a.Id selects the primary key column
         Assert.Contains("SetAttributeValue(\"accountid\", value)", code);
         Assert.Contains("public Guid? AccountId", code);
     }

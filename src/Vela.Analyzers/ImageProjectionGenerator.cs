@@ -541,6 +541,20 @@ namespace Vela.Analyzers
                 return null;
             }
 
+            // Only a column of the entity itself: a nested path (a.ParentAccount.Name) is another record's member
+            // (VELA001 reports it), so it must not become a column of the projection.
+            string? parameterName = selector switch
+            {
+                SimpleLambdaExpressionSyntax simple => simple.Parameter.Identifier.ValueText,
+                ParenthesizedLambdaExpressionSyntax parenthesized when parenthesized.ParameterList.Parameters.Count == 1
+                    => parenthesized.ParameterList.Parameters[0].Identifier.ValueText,
+                _ => null,
+            };
+            if (memberAccess.Expression is not IdentifierNameSyntax receiver || receiver.Identifier.ValueText != parameterName)
+            {
+                return null;
+            }
+
             string? logicalName = GetAttributeLogicalName(property);
             if (logicalName is null)
             {

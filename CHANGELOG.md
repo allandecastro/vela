@@ -26,6 +26,16 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **A column selector that is not a column of the entity fails instead of registering a wrong column.** A nested
+  path (`a => a.PrimaryContactId.Id`, `a => a.ParentAccount.Name`) resolved to the last member's name ("id",
+  "name"), and `a => a.Id` on a model without a named `Id` to "id", so `FilterOn` and images silently targeted a
+  wrong or nonexistent column. VELA001 now reports both, the runtime throws for both, and the image generator no
+  longer projects a nested path. One resolver now backs FilterOn, images and typed queries.
+
+### Fixed (CLI)
+
+- **`vela models` names the `Id` override's column** (`[AttributeLogicalName("accountid")]`, as the SDK generator
+  does), so `a => a.Id` selects the primary key column.
 - **A generated step context reads an aliased image.** For `WithPostImage("snap", ...)` (or a pre-image alias) the
   generated `ctx.PostImage` / `ctx.PreImage` read the image under the default alias, so it was always null at runtime.
   The context now passes the step's alias.
