@@ -58,7 +58,7 @@ type instead (such as `a => a.Id` or `a => a.LogicalName`) does not name a Datav
 
 **Set each single-value modifier at most once per step.** `FilterOn(...)` and the `With...` setters
 (`WithExecutionOrder`, `WithDescription`, `WithStepKey`, `WithImpersonation`, `WithSupportedDeployment`,
-`WithUnsecureConfig`, `WithSecureConfig`) overwrite the earlier value when called twice, silently dropping it, so a
+`WithUnsecureConfig`, `WithSecureConfigFrom`) overwrite the earlier value when called twice, silently dropping it, so a
 second call is flagged. `Disabled()` is exempt (it is an idempotent flag toggle). The runtime builder throws on the
 second call as well, so a chain split across locals is still caught at registration.
 

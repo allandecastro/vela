@@ -148,10 +148,10 @@ public class DefinitionNormalizerValueTests
         Assert.DoesNotContain(secret, JsonSerializer.Serialize(n));
         Assert.DoesNotContain("hunter2", JsonSerializer.Serialize(n));
 
-        // It is replaced by a stable digest.
+        // It is replaced by a keyed digest, stable within the run (so local and live compare equal).
         string digest = n.GetProperty("secureConfig").GetString()!;
-        Assert.StartsWith("sha256:", digest);
-        Assert.Equal(DefinitionNormalizer.HashSecret(secret), digest); // deterministic
+        Assert.StartsWith("hmac-sha256:", digest);
+        Assert.Equal(DefinitionNormalizer.HashSecret(secret), digest);
     }
 
     [Fact]

@@ -68,7 +68,6 @@ public sealed class StepBuilderCoverageTests
             .WithStepKey("  the-key  ")
             .WithDescription(null!)    // null -> empty
             .WithUnsecureConfig(null!) // null -> empty
-            .WithSecureConfig(null!)   // null -> empty
             .Handle(InstanceHandler);  // instance delegate -> method name
 
         StepDefinition definition = builder.Build();
@@ -77,7 +76,7 @@ public sealed class StepBuilderCoverageTests
         Assert.Equal(nameof(InstanceHandler), definition.HandlerMethodName);
         Assert.Equal(string.Empty, definition.Description);
         Assert.Equal(string.Empty, definition.UnsecureConfig);
-        Assert.Equal(string.Empty, definition.SecureConfig);
+        Assert.Equal(string.Empty, definition.SecureConfigName);
     }
 
     [Fact]

@@ -48,7 +48,7 @@ public sealed class ManifestScannerTests
 
         Assert.True(definition.Enabled);
         Assert.Equal(string.Empty, definition.UnsecureConfig);
-        Assert.Equal(string.Empty, definition.SecureConfig);
+        Assert.Equal(string.Empty, definition.SecureConfigName);
     }
 
     [Fact]
@@ -62,13 +62,26 @@ public sealed class ManifestScannerTests
             .FilterOn(a => a.Name)
             .Disabled()
             .WithUnsecureConfig("u-cfg")
-            .WithSecureConfig("s-cfg");
+            .WithSecureConfigFrom("PaymentApiKey");
 
         StepDefinition definition = builder.Build();
 
         Assert.False(definition.Enabled);
         Assert.Equal("u-cfg", definition.UnsecureConfig);
-        Assert.Equal("s-cfg", definition.SecureConfig);
+        Assert.Equal("PaymentApiKey", definition.SecureConfigName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("sk-live-1234")]   // a value, not a name: rejected so a secret is never compiled in
+    [InlineData("1Key")]
+    [InlineData("api key")]
+    public void WithSecureConfigFrom_rejects_anything_but_a_name(string name)
+    {
+        ArgumentException ex = Assert.Throws<ArgumentException>(() => Trigger(new StepBuilder<TestAccount>())
+            .OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).WithSecureConfigFrom(name));
+
+        Assert.DoesNotContain(name.Length > 0 ? name : "\0", ex.Message);
     }
 
     [Fact]

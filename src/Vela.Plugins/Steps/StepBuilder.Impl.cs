@@ -416,7 +416,7 @@ namespace Vela.Steps
         IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPermissivePreValidationConfig<TEntity>.Handle(Action<ILocalPluginContext> handler) { SetHandler(handler); }
         void IPermissivePreValidationConfig<TEntity>.Handle<TRequest>(Action<IMessagePreContext<TRequest>> handler) { SetHandler(handler); }
@@ -431,7 +431,7 @@ namespace Vela.Steps
         IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IPermissivePreOperationConfig<TEntity> IPermissivePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPermissivePreOperationConfig<TEntity>.Handle(Action<ILocalPluginContext> handler) { SetHandler(handler); }
         void IPermissivePreOperationConfig<TEntity>.Handle<TRequest>(Action<IMessagePreContext<TRequest>> handler) { SetHandler(handler); }
@@ -448,7 +448,7 @@ namespace Vela.Steps
         IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IPermissivePostOperationConfig<TEntity> IPermissivePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPermissivePostOperationConfig<TEntity>.Handle(Action<ILocalPluginContext> handler) { SetHandler(handler); }
         void IPermissivePostOperationConfig<TEntity>.Handle<TRequest>(Action<IMessagePostContext<TRequest>> handler) { SetHandler(handler); }
@@ -462,7 +462,7 @@ namespace Vela.Steps
         internal void SetImpersonationUserInternal(System.Guid systemUserId) => SetImpersonationUser(systemUserId);
         internal void SetSupportedDeploymentInternal(SupportedDeployment deployment) => SetSupportedDeployment(deployment);
         internal void SetUnsecureConfigInternal(string configuration) => SetUnsecureConfig(configuration);
-        internal void SetSecureConfigInternal(string configuration) => SetSecureConfig(configuration);
+        internal void SetSecureConfigNameInternal(string name) => SetSecureConfigName(name);
         internal void SetDisabledInternal() => SetDisabled();
 
         ISyncMode<ICreatePreValidationConfig<TEntity>> ICreateStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
@@ -804,7 +804,7 @@ namespace Vela.Steps
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePreValidationConfig<TEntity>.Handle(Action<ICreatePreContext<TEntity>> handler) { SetHandler(handler); }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
@@ -815,7 +815,7 @@ namespace Vela.Steps
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICreatePreOperationConfig<TEntity> ICreatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePreOperationConfig<TEntity>.Handle(Action<ICreatePreContext<TEntity>> handler) { SetHandler(handler); }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
@@ -828,7 +828,7 @@ namespace Vela.Steps
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICreatePostOperationConfig<TEntity> ICreatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreatePostOperationConfig<TEntity>.Handle(Action<ICreatePostContext<TEntity>> handler) { SetHandler(handler); }
         // One impl of the shared IStepConfig<TEntity>.Handle(Delegate) serves every config interface (they all derive
@@ -844,7 +844,7 @@ namespace Vela.Steps
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePreValidationConfig<TEntity>.Handle(Action<IUpdatePreContext<TEntity>> handler) { SetHandler(handler); }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
@@ -857,7 +857,7 @@ namespace Vela.Steps
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IUpdatePreOperationConfig<TEntity> IUpdatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePreOperationConfig<TEntity>.Handle(Action<IUpdatePreContext<TEntity>> handler) { SetHandler(handler); }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
@@ -872,7 +872,7 @@ namespace Vela.Steps
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IUpdatePostOperationConfig<TEntity> IUpdatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdatePostOperationConfig<TEntity>.Handle(Action<IUpdatePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -884,7 +884,7 @@ namespace Vela.Steps
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICreateMultiplePreValidationConfig<TEntity> ICreateMultiplePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePreValidationConfig<TEntity>.Handle(Action<ICreateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
@@ -895,7 +895,7 @@ namespace Vela.Steps
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICreateMultiplePreOperationConfig<TEntity> ICreateMultiplePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePreOperationConfig<TEntity>.Handle(Action<ICreateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
@@ -908,7 +908,7 @@ namespace Vela.Steps
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICreateMultiplePostOperationConfig<TEntity> ICreateMultiplePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICreateMultiplePostOperationConfig<TEntity>.Handle(Action<ICreateMultiplePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -920,7 +920,7 @@ namespace Vela.Steps
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdateMultiplePreValidationConfig<TEntity>.Handle(Action<IUpdateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
@@ -933,7 +933,7 @@ namespace Vela.Steps
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IUpdateMultiplePreOperationConfig<TEntity> IUpdateMultiplePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdateMultiplePreOperationConfig<TEntity>.Handle(Action<IUpdateMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
@@ -948,7 +948,7 @@ namespace Vela.Steps
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IUpdateMultiplePostOperationConfig<TEntity> IUpdateMultiplePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IUpdateMultiplePostOperationConfig<TEntity>.Handle(Action<IUpdateMultiplePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -959,7 +959,7 @@ namespace Vela.Steps
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePreValidationConfig<TEntity>.Handle(Action<IDeletePreContext<TEntity>> handler) { SetHandler(handler); }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -971,7 +971,7 @@ namespace Vela.Steps
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeletePreOperationConfig<TEntity> IDeletePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePreOperationConfig<TEntity>.Handle(Action<IDeletePreContext<TEntity>> handler) { SetHandler(handler); }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -983,7 +983,7 @@ namespace Vela.Steps
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeletePostOperationConfig<TEntity> IDeletePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeletePostOperationConfig<TEntity>.Handle(Action<IDeletePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -994,7 +994,7 @@ namespace Vela.Steps
         IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrievePreValidationConfig<TEntity> IRetrievePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePreValidationConfig<TEntity>.Handle(Action<IRetrievePreContext<TEntity>> handler) { SetHandler(handler); }
         IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1004,7 +1004,7 @@ namespace Vela.Steps
         IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrievePreOperationConfig<TEntity> IRetrievePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePreOperationConfig<TEntity>.Handle(Action<IRetrievePreContext<TEntity>> handler) { SetHandler(handler); }
         IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1014,7 +1014,7 @@ namespace Vela.Steps
         IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrievePostOperationConfig<TEntity> IRetrievePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePostOperationConfig<TEntity>.Handle(Action<IRetrievePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1025,7 +1025,7 @@ namespace Vela.Steps
         IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrieveMultiplePreValidationConfig<TEntity> IRetrieveMultiplePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveMultiplePreValidationConfig<TEntity>.Handle(Action<IRetrieveMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1035,7 +1035,7 @@ namespace Vela.Steps
         IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrieveMultiplePreOperationConfig<TEntity> IRetrieveMultiplePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveMultiplePreOperationConfig<TEntity>.Handle(Action<IRetrieveMultiplePreContext<TEntity>> handler) { SetHandler(handler); }
         IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1045,7 +1045,7 @@ namespace Vela.Steps
         IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrieveMultiplePostOperationConfig<TEntity> IRetrieveMultiplePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveMultiplePostOperationConfig<TEntity>.Handle(Action<IRetrieveMultiplePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1056,7 +1056,7 @@ namespace Vela.Steps
         IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAssociatePreValidationConfig<TEntity> IAssociatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAssociatePreValidationConfig<TEntity>.Handle(Action<IAssociatePreContext<TEntity>> handler) { SetHandler(handler); }
         IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1066,7 +1066,7 @@ namespace Vela.Steps
         IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAssociatePreOperationConfig<TEntity> IAssociatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAssociatePreOperationConfig<TEntity>.Handle(Action<IAssociatePreContext<TEntity>> handler) { SetHandler(handler); }
         IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1076,7 +1076,7 @@ namespace Vela.Steps
         IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAssociatePostOperationConfig<TEntity> IAssociatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAssociatePostOperationConfig<TEntity>.Handle(Action<IAssociatePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1087,7 +1087,7 @@ namespace Vela.Steps
         IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDisassociatePreValidationConfig<TEntity> IDisassociatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDisassociatePreValidationConfig<TEntity>.Handle(Action<IDisassociatePreContext<TEntity>> handler) { SetHandler(handler); }
         IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1097,7 +1097,7 @@ namespace Vela.Steps
         IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDisassociatePreOperationConfig<TEntity> IDisassociatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDisassociatePreOperationConfig<TEntity>.Handle(Action<IDisassociatePreContext<TEntity>> handler) { SetHandler(handler); }
         IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1107,7 +1107,7 @@ namespace Vela.Steps
         IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDisassociatePostOperationConfig<TEntity> IDisassociatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDisassociatePostOperationConfig<TEntity>.Handle(Action<IDisassociatePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1118,7 +1118,7 @@ namespace Vela.Steps
         IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGrantAccessPreValidationConfig<TEntity> IGrantAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGrantAccessPreValidationConfig<TEntity>.Handle(Action<IGrantAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1128,7 +1128,7 @@ namespace Vela.Steps
         IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGrantAccessPreOperationConfig<TEntity> IGrantAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGrantAccessPreOperationConfig<TEntity>.Handle(Action<IGrantAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1138,7 +1138,7 @@ namespace Vela.Steps
         IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGrantAccessPostOperationConfig<TEntity> IGrantAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGrantAccessPostOperationConfig<TEntity>.Handle(Action<IGrantAccessPostContext<TEntity>> handler) { SetHandler(handler); }
         IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1179,7 +1179,7 @@ namespace Vela.Steps
         IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRevokeAccessPreValidationConfig<TEntity> IRevokeAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRevokeAccessPreValidationConfig<TEntity>.Handle(Action<IRevokeAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1189,7 +1189,7 @@ namespace Vela.Steps
         IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRevokeAccessPreOperationConfig<TEntity> IRevokeAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRevokeAccessPreOperationConfig<TEntity>.Handle(Action<IRevokeAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1199,7 +1199,7 @@ namespace Vela.Steps
         IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRevokeAccessPostOperationConfig<TEntity> IRevokeAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRevokeAccessPostOperationConfig<TEntity>.Handle(Action<IRevokeAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1210,7 +1210,7 @@ namespace Vela.Steps
         IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IQualifyLeadPreValidationConfig<TEntity> IQualifyLeadPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IQualifyLeadPreValidationConfig<TEntity>.Handle(Action<IQualifyLeadPreContext<TEntity>> handler) { SetHandler(handler); }
         IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1220,7 +1220,7 @@ namespace Vela.Steps
         IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IQualifyLeadPreOperationConfig<TEntity> IQualifyLeadPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IQualifyLeadPreOperationConfig<TEntity>.Handle(Action<IQualifyLeadPreContext<TEntity>> handler) { SetHandler(handler); }
         IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1230,7 +1230,7 @@ namespace Vela.Steps
         IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IQualifyLeadPostOperationConfig<TEntity> IQualifyLeadPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IQualifyLeadPostOperationConfig<TEntity>.Handle(Action<IQualifyLeadPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1241,7 +1241,7 @@ namespace Vela.Steps
         IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IWinOpportunityPreValidationConfig<TEntity> IWinOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinOpportunityPreValidationConfig<TEntity>.Handle(Action<IWinOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1251,7 +1251,7 @@ namespace Vela.Steps
         IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IWinOpportunityPreOperationConfig<TEntity> IWinOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinOpportunityPreOperationConfig<TEntity>.Handle(Action<IWinOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1261,7 +1261,7 @@ namespace Vela.Steps
         IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IWinOpportunityPostOperationConfig<TEntity> IWinOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinOpportunityPostOperationConfig<TEntity>.Handle(Action<IWinOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1272,7 +1272,7 @@ namespace Vela.Steps
         ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ILoseOpportunityPreValidationConfig<TEntity> ILoseOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ILoseOpportunityPreValidationConfig<TEntity>.Handle(Action<ILoseOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1282,7 +1282,7 @@ namespace Vela.Steps
         ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ILoseOpportunityPreOperationConfig<TEntity> ILoseOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ILoseOpportunityPreOperationConfig<TEntity>.Handle(Action<ILoseOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1292,7 +1292,7 @@ namespace Vela.Steps
         ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ILoseOpportunityPostOperationConfig<TEntity>.Handle(Action<ILoseOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1303,7 +1303,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1313,7 +1313,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1323,7 +1323,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1334,7 +1334,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.Handle(Action<IConvertSalesOrderToInvoicePreContext<TEntity>> handler) { SetHandler(handler); }
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1344,7 +1344,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertSalesOrderToInvoicePreOperationConfig<TEntity>.Handle(Action<IConvertSalesOrderToInvoicePreContext<TEntity>> handler) { SetHandler(handler); }
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1354,7 +1354,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IConvertSalesOrderToInvoicePostOperationConfig<TEntity>.Handle(Action<IConvertSalesOrderToInvoicePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1365,7 +1365,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGenerateQuoteFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1375,7 +1375,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGenerateQuoteFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1385,7 +1385,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateQuoteFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1396,7 +1396,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1406,7 +1406,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1416,7 +1416,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1427,7 +1427,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1437,7 +1437,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1447,7 +1447,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1458,7 +1458,7 @@ namespace Vela.Steps
         IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddToQueuePreValidationConfig<TEntity>.Handle(Action<IAddToQueuePreContext<TEntity>> handler) { SetHandler(handler); }
         IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1468,7 +1468,7 @@ namespace Vela.Steps
         IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddToQueuePreOperationConfig<TEntity> IAddToQueuePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddToQueuePreOperationConfig<TEntity>.Handle(Action<IAddToQueuePreContext<TEntity>> handler) { SetHandler(handler); }
         IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1478,7 +1478,7 @@ namespace Vela.Steps
         IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddToQueuePostOperationConfig<TEntity> IAddToQueuePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddToQueuePostOperationConfig<TEntity>.Handle(Action<IAddToQueuePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1489,7 +1489,7 @@ namespace Vela.Steps
         IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveFromQueuePreValidationConfig<TEntity> IRemoveFromQueuePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveFromQueuePreValidationConfig<TEntity>.Handle(Action<IRemoveFromQueuePreContext<TEntity>> handler) { SetHandler(handler); }
         IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1499,7 +1499,7 @@ namespace Vela.Steps
         IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveFromQueuePreOperationConfig<TEntity> IRemoveFromQueuePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveFromQueuePreOperationConfig<TEntity>.Handle(Action<IRemoveFromQueuePreContext<TEntity>> handler) { SetHandler(handler); }
         IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1509,7 +1509,7 @@ namespace Vela.Steps
         IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveFromQueuePostOperationConfig<TEntity> IRemoveFromQueuePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveFromQueuePostOperationConfig<TEntity>.Handle(Action<IRemoveFromQueuePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1520,7 +1520,7 @@ namespace Vela.Steps
         IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IPickFromQueuePreValidationConfig<TEntity> IPickFromQueuePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPickFromQueuePreValidationConfig<TEntity>.Handle(Action<IPickFromQueuePreContext<TEntity>> handler) { SetHandler(handler); }
         IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1530,7 +1530,7 @@ namespace Vela.Steps
         IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IPickFromQueuePreOperationConfig<TEntity> IPickFromQueuePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPickFromQueuePreOperationConfig<TEntity>.Handle(Action<IPickFromQueuePreContext<TEntity>> handler) { SetHandler(handler); }
         IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1540,7 +1540,7 @@ namespace Vela.Steps
         IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IPickFromQueuePostOperationConfig<TEntity> IPickFromQueuePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IPickFromQueuePostOperationConfig<TEntity>.Handle(Action<IPickFromQueuePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1551,7 +1551,7 @@ namespace Vela.Steps
         IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRouteToPreValidationConfig<TEntity> IRouteToPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRouteToPreValidationConfig<TEntity>.Handle(Action<IRouteToPreContext<TEntity>> handler) { SetHandler(handler); }
         IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1561,7 +1561,7 @@ namespace Vela.Steps
         IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRouteToPreOperationConfig<TEntity> IRouteToPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRouteToPreOperationConfig<TEntity>.Handle(Action<IRouteToPreContext<TEntity>> handler) { SetHandler(handler); }
         IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1571,7 +1571,7 @@ namespace Vela.Steps
         IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRouteToPostOperationConfig<TEntity> IRouteToPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRouteToPostOperationConfig<TEntity>.Handle(Action<IRouteToPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1582,7 +1582,7 @@ namespace Vela.Steps
         IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IReleaseToQueuePreValidationConfig<TEntity> IReleaseToQueuePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReleaseToQueuePreValidationConfig<TEntity>.Handle(Action<IReleaseToQueuePreContext<TEntity>> handler) { SetHandler(handler); }
         IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1592,7 +1592,7 @@ namespace Vela.Steps
         IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IReleaseToQueuePreOperationConfig<TEntity> IReleaseToQueuePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReleaseToQueuePreOperationConfig<TEntity>.Handle(Action<IReleaseToQueuePreContext<TEntity>> handler) { SetHandler(handler); }
         IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1602,7 +1602,7 @@ namespace Vela.Steps
         IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IReleaseToQueuePostOperationConfig<TEntity> IReleaseToQueuePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReleaseToQueuePostOperationConfig<TEntity>.Handle(Action<IReleaseToQueuePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1613,7 +1613,7 @@ namespace Vela.Steps
         ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ISendEmailPreValidationConfig<TEntity> ISendEmailPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailPreValidationConfig<TEntity>.Handle(Action<ISendEmailPreContext<TEntity>> handler) { SetHandler(handler); }
         ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1623,7 +1623,7 @@ namespace Vela.Steps
         ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ISendEmailPreOperationConfig<TEntity> ISendEmailPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailPreOperationConfig<TEntity>.Handle(Action<ISendEmailPreContext<TEntity>> handler) { SetHandler(handler); }
         ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1633,7 +1633,7 @@ namespace Vela.Steps
         ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ISendEmailPostOperationConfig<TEntity> ISendEmailPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailPostOperationConfig<TEntity>.Handle(Action<ISendEmailPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1644,7 +1644,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ISendEmailFromTemplatePreValidationConfig<TEntity> ISendEmailFromTemplatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailFromTemplatePreValidationConfig<TEntity>.Handle(Action<ISendEmailFromTemplatePreContext<TEntity>> handler) { SetHandler(handler); }
         ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1654,7 +1654,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ISendEmailFromTemplatePreOperationConfig<TEntity> ISendEmailFromTemplatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailFromTemplatePreOperationConfig<TEntity>.Handle(Action<ISendEmailFromTemplatePreContext<TEntity>> handler) { SetHandler(handler); }
         ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1664,7 +1664,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ISendEmailFromTemplatePostOperationConfig<TEntity> ISendEmailFromTemplatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ISendEmailFromTemplatePostOperationConfig<TEntity>.Handle(Action<ISendEmailFromTemplatePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1675,7 +1675,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeliverIncomingEmailPreValidationConfig<TEntity> IDeliverIncomingEmailPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverIncomingEmailPreValidationConfig<TEntity>.Handle(Action<IDeliverIncomingEmailPreContext<TEntity>> handler) { SetHandler(handler); }
         IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1685,7 +1685,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeliverIncomingEmailPreOperationConfig<TEntity> IDeliverIncomingEmailPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverIncomingEmailPreOperationConfig<TEntity>.Handle(Action<IDeliverIncomingEmailPreContext<TEntity>> handler) { SetHandler(handler); }
         IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1695,7 +1695,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeliverIncomingEmailPostOperationConfig<TEntity> IDeliverIncomingEmailPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverIncomingEmailPostOperationConfig<TEntity>.Handle(Action<IDeliverIncomingEmailPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1706,7 +1706,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeliverPromoteEmailPreValidationConfig<TEntity> IDeliverPromoteEmailPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverPromoteEmailPreValidationConfig<TEntity>.Handle(Action<IDeliverPromoteEmailPreContext<TEntity>> handler) { SetHandler(handler); }
         IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1716,7 +1716,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeliverPromoteEmailPreOperationConfig<TEntity> IDeliverPromoteEmailPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverPromoteEmailPreOperationConfig<TEntity>.Handle(Action<IDeliverPromoteEmailPreContext<TEntity>> handler) { SetHandler(handler); }
         IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1726,7 +1726,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IDeliverPromoteEmailPostOperationConfig<TEntity> IDeliverPromoteEmailPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IDeliverPromoteEmailPostOperationConfig<TEntity>.Handle(Action<IDeliverPromoteEmailPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1737,7 +1737,7 @@ namespace Vela.Steps
         IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddMembersTeamPreValidationConfig<TEntity> IAddMembersTeamPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMembersTeamPreValidationConfig<TEntity>.Handle(Action<IAddMembersTeamPreContext<TEntity>> handler) { SetHandler(handler); }
         IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1747,7 +1747,7 @@ namespace Vela.Steps
         IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddMembersTeamPreOperationConfig<TEntity> IAddMembersTeamPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMembersTeamPreOperationConfig<TEntity>.Handle(Action<IAddMembersTeamPreContext<TEntity>> handler) { SetHandler(handler); }
         IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1757,7 +1757,7 @@ namespace Vela.Steps
         IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddMembersTeamPostOperationConfig<TEntity> IAddMembersTeamPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMembersTeamPostOperationConfig<TEntity>.Handle(Action<IAddMembersTeamPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1768,7 +1768,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveMembersTeamPreValidationConfig<TEntity> IRemoveMembersTeamPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMembersTeamPreValidationConfig<TEntity>.Handle(Action<IRemoveMembersTeamPreContext<TEntity>> handler) { SetHandler(handler); }
         IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1778,7 +1778,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveMembersTeamPreOperationConfig<TEntity> IRemoveMembersTeamPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMembersTeamPreOperationConfig<TEntity>.Handle(Action<IRemoveMembersTeamPreContext<TEntity>> handler) { SetHandler(handler); }
         IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1788,7 +1788,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveMembersTeamPostOperationConfig<TEntity> IRemoveMembersTeamPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMembersTeamPostOperationConfig<TEntity>.Handle(Action<IRemoveMembersTeamPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1799,7 +1799,7 @@ namespace Vela.Steps
         IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddListMembersListPreValidationConfig<TEntity> IAddListMembersListPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddListMembersListPreValidationConfig<TEntity>.Handle(Action<IAddListMembersListPreContext<TEntity>> handler) { SetHandler(handler); }
         IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1809,7 +1809,7 @@ namespace Vela.Steps
         IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddListMembersListPreOperationConfig<TEntity> IAddListMembersListPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddListMembersListPreOperationConfig<TEntity>.Handle(Action<IAddListMembersListPreContext<TEntity>> handler) { SetHandler(handler); }
         IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1819,7 +1819,7 @@ namespace Vela.Steps
         IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddListMembersListPostOperationConfig<TEntity> IAddListMembersListPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddListMembersListPostOperationConfig<TEntity>.Handle(Action<IAddListMembersListPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1830,7 +1830,7 @@ namespace Vela.Steps
         IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddMemberListPreValidationConfig<TEntity> IAddMemberListPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMemberListPreValidationConfig<TEntity>.Handle(Action<IAddMemberListPreContext<TEntity>> handler) { SetHandler(handler); }
         IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1840,7 +1840,7 @@ namespace Vela.Steps
         IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddMemberListPreOperationConfig<TEntity> IAddMemberListPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMemberListPreOperationConfig<TEntity>.Handle(Action<IAddMemberListPreContext<TEntity>> handler) { SetHandler(handler); }
         IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1850,7 +1850,7 @@ namespace Vela.Steps
         IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IAddMemberListPostOperationConfig<TEntity> IAddMemberListPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAddMemberListPostOperationConfig<TEntity>.Handle(Action<IAddMemberListPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1861,7 +1861,7 @@ namespace Vela.Steps
         IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveMemberListPreValidationConfig<TEntity> IRemoveMemberListPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMemberListPreValidationConfig<TEntity>.Handle(Action<IRemoveMemberListPreContext<TEntity>> handler) { SetHandler(handler); }
         IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1871,7 +1871,7 @@ namespace Vela.Steps
         IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveMemberListPreOperationConfig<TEntity> IRemoveMemberListPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMemberListPreOperationConfig<TEntity>.Handle(Action<IRemoveMemberListPreContext<TEntity>> handler) { SetHandler(handler); }
         IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1881,7 +1881,7 @@ namespace Vela.Steps
         IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRemoveMemberListPostOperationConfig<TEntity> IRemoveMemberListPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRemoveMemberListPostOperationConfig<TEntity>.Handle(Action<IRemoveMemberListPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1892,7 +1892,7 @@ namespace Vela.Steps
         ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICloseIncidentPreValidationConfig<TEntity> ICloseIncidentPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloseIncidentPreValidationConfig<TEntity>.Handle(Action<ICloseIncidentPreContext<TEntity>> handler) { SetHandler(handler); }
         ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1902,7 +1902,7 @@ namespace Vela.Steps
         ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICloseIncidentPreOperationConfig<TEntity> ICloseIncidentPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloseIncidentPreOperationConfig<TEntity>.Handle(Action<ICloseIncidentPreContext<TEntity>> handler) { SetHandler(handler); }
         ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1912,7 +1912,7 @@ namespace Vela.Steps
         ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICloseIncidentPostOperationConfig<TEntity> ICloseIncidentPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloseIncidentPostOperationConfig<TEntity>.Handle(Action<ICloseIncidentPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1923,7 +1923,7 @@ namespace Vela.Steps
         ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICancelContractPreValidationConfig<TEntity> ICancelContractPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICancelContractPreValidationConfig<TEntity>.Handle(Action<ICancelContractPreContext<TEntity>> handler) { SetHandler(handler); }
         ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1933,7 +1933,7 @@ namespace Vela.Steps
         ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICancelContractPreOperationConfig<TEntity> ICancelContractPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICancelContractPreOperationConfig<TEntity>.Handle(Action<ICancelContractPreContext<TEntity>> handler) { SetHandler(handler); }
         ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1943,7 +1943,7 @@ namespace Vela.Steps
         ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICancelContractPostOperationConfig<TEntity> ICancelContractPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICancelContractPostOperationConfig<TEntity>.Handle(Action<ICancelContractPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1954,7 +1954,7 @@ namespace Vela.Steps
         ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICloneContractPreValidationConfig<TEntity> ICloneContractPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloneContractPreValidationConfig<TEntity>.Handle(Action<ICloneContractPreContext<TEntity>> handler) { SetHandler(handler); }
         ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1964,7 +1964,7 @@ namespace Vela.Steps
         ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICloneContractPreOperationConfig<TEntity> ICloneContractPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloneContractPreOperationConfig<TEntity>.Handle(Action<ICloneContractPreContext<TEntity>> handler) { SetHandler(handler); }
         ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1974,7 +1974,7 @@ namespace Vela.Steps
         ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         ICloneContractPostOperationConfig<TEntity> ICloneContractPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ICloneContractPostOperationConfig<TEntity>.Handle(Action<ICloneContractPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -1985,7 +1985,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrievePrincipalAccessPreValidationConfig<TEntity> IRetrievePrincipalAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePrincipalAccessPreValidationConfig<TEntity>.Handle(Action<IRetrievePrincipalAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -1995,7 +1995,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrievePrincipalAccessPreOperationConfig<TEntity> IRetrievePrincipalAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePrincipalAccessPreOperationConfig<TEntity>.Handle(Action<IRetrievePrincipalAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2005,7 +2005,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrievePrincipalAccessPostOperationConfig<TEntity> IRetrievePrincipalAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrievePrincipalAccessPostOperationConfig<TEntity>.Handle(Action<IRetrievePrincipalAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2016,7 +2016,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity>.Handle(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2026,7 +2026,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity>.Handle(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2036,7 +2036,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity>.Handle(Action<IRetrieveSharedPrincipalsAndAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2047,7 +2047,7 @@ namespace Vela.Steps
         IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IWinQuotePreValidationConfig<TEntity> IWinQuotePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinQuotePreValidationConfig<TEntity>.Handle(Action<IWinQuotePreContext<TEntity>> handler) { SetHandler(handler); }
         IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2057,7 +2057,7 @@ namespace Vela.Steps
         IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IWinQuotePreOperationConfig<TEntity> IWinQuotePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinQuotePreOperationConfig<TEntity>.Handle(Action<IWinQuotePreContext<TEntity>> handler) { SetHandler(handler); }
         IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2067,7 +2067,7 @@ namespace Vela.Steps
         IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinQuotePostOperationConfig<TEntity>.Handle(Action<IWinQuotePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2078,7 +2078,7 @@ namespace Vela.Steps
         IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReviseQuotePreValidationConfig<TEntity>.Handle(Action<IReviseQuotePreContext<TEntity>> handler) { SetHandler(handler); }
         IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2088,7 +2088,7 @@ namespace Vela.Steps
         IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReviseQuotePreOperationConfig<TEntity>.Handle(Action<IReviseQuotePreContext<TEntity>> handler) { SetHandler(handler); }
         IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2098,7 +2098,7 @@ namespace Vela.Steps
         IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IReviseQuotePostOperationConfig<TEntity>.Handle(Action<IReviseQuotePostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2109,7 +2109,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IFulfillSalesOrderPreValidationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
         IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2119,7 +2119,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IFulfillSalesOrderPreOperationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
         IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2129,7 +2129,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IFulfillSalesOrderPostOperationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2140,7 +2140,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2150,7 +2150,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2160,7 +2160,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2171,7 +2171,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2181,7 +2181,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2191,7 +2191,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2202,7 +2202,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2212,7 +2212,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2222,7 +2222,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2233,7 +2233,7 @@ namespace Vela.Steps
         IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IModifyAccessPreValidationConfig<TEntity>.Handle(Action<IModifyAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2243,7 +2243,7 @@ namespace Vela.Steps
         IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IModifyAccessPreOperationConfig<TEntity> IModifyAccessPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IModifyAccessPreOperationConfig<TEntity>.Handle(Action<IModifyAccessPreContext<TEntity>> handler) { SetHandler(handler); }
         IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2253,7 +2253,7 @@ namespace Vela.Steps
         IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IModifyAccessPostOperationConfig<TEntity> IModifyAccessPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IModifyAccessPostOperationConfig<TEntity>.Handle(Action<IModifyAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
@@ -2264,7 +2264,7 @@ namespace Vela.Steps
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePreValidationConfig<TEntity>.Handle(Action<IMergePreContext<TEntity>> handler) { SetHandler(handler); }
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2274,7 +2274,7 @@ namespace Vela.Steps
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePreOperationConfig<TEntity>.Handle(Action<IMergePreContext<TEntity>> handler) { SetHandler(handler); }
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2284,7 +2284,7 @@ namespace Vela.Steps
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSecureConfig(string configuration) { SetSecureConfig(configuration); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePostOperationConfig<TEntity>.Handle(Action<IMergePostContext<TEntity>> handler) { SetHandler(handler); }
 

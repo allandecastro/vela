@@ -9,16 +9,17 @@ public sealed class DataverseConnectionException : Exception
     public DataverseConnectionException(string message) : base(message) { }
     public DataverseConnectionException(string message, Exception innerException) : base(message, innerException) { }
 }
-public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null);
+public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null);
 public sealed record ExtractedPackage(string PackagePath, string TempDirectory, string PrimaryAssemblyPath, string[] RegistrableAssemblyPaths);
 public sealed record AssemblyPayload(string AssemblyName, string AssemblyPath);
 public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath);
 public sealed record RegistrationItem(string Kind, string Type, JsonElement Definition);
-// SecureConfigByStepKey carries each step's RAW secure config keyed by stepKey. The step definitions in Items have
-// their secure config redacted to a hash (so it never lands in plan/inspect output); apply reads the real value
-// from this side channel instead, so the plaintext secret is written to Dataverse rather than the digest. It is
-// only populated for the local package scan; the live/dataverse state leaves it null.
-public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null);
+// Local package scan only (the live state leaves both null), keyed by full step key (DiffEngine.GetStepKey):
+// SecureConfigNameByStepKey is the secure configuration NAME each step declares (WithSecureConfigFrom);
+// SecureConfigByStepKey is the RAW value SecureConfigResolver resolved for it from --secure-config or the environment.
+// Step definitions in Items only ever carry a digest, so a secret never lands in plan/inspect output; apply writes
+// the raw value, and only for the steps present here (every other secure configuration is left untouched).
+public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null);
 public sealed record RegistrationDiff(string[] LocalAssemblies, string[] CurrentAssemblies, RegistrationItem[] Added, RegistrationItem[] Removed, RegistrationChange[] Changed, RegistrationItem[] LocalItems, RegistrationItem[] CurrentItems)
 {
     public DiffSummary Summary { get; init; } = new DiffSummary(Added.Length, Removed.Length, Changed.Length);

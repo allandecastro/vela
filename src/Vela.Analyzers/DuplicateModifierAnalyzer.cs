@@ -39,7 +39,7 @@ namespace Vela.Analyzers
             "WithImpersonation",
             "WithSupportedDeployment",
             "WithUnsecureConfig",
-            "WithSecureConfig");
+            "WithSecureConfigFrom");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 

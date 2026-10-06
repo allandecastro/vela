@@ -76,10 +76,10 @@ internal static class DefinitionNormalizer
             // Carried so .WithSupportedDeployment(...) is honoured and drift is detected instead of silently ignored.
             supportedDeployment,
             // Secure config can hold secrets (API keys, connection strings). It must never appear in the
-            // plan/inspect JSON output, but the diff still has to detect when it changes — so the shape carries
-            // a stable hash, not the value. Same value on both sides -> same hash -> no diff; a changed secret
-            // -> different hash -> "changed" (without revealing either value). The real value is written by the
-            // apply path via StepApplyDefinition.SecureConfig, which is unaffected by this.
+            // plan/inspect JSON output, but the diff still has to detect when it changes - so the shape carries
+            // a digest, not the value. Same value on both sides -> same digest -> no diff; a changed secret
+            // -> different digest -> "changed" (without revealing either value). Apply writes the raw value
+            // from RegistrationState.SecureConfigByStepKey (see SecureConfigResolver).
             secureConfig = HashSecret(secureConfig)
         };
 
@@ -93,9 +93,13 @@ internal static class DefinitionNormalizer
         string.Equals(message, "Associate", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(message, "Disassociate", StringComparison.OrdinalIgnoreCase);
 
-    // Redacts a secret to a stable digest so it never lands in plan output while staying change-detectable.
-    // Empty stays empty (no secret to hide), so "no secure config" reads cleanly rather than as a hash.
-    internal const string SecretDigestPrefix = "sha256:";
+    // Redacts a secret to a digest so it never lands in plan output while staying change-detectable. The digest is
+    // an HMAC keyed per process: the local and live sides of one run compare equal, but a digest in a saved plan
+    // cannot be brute-forced offline (a plain SHA-256 of a short or guessable secret could). Empty stays empty (no
+    // secret to hide), so "no secure config" reads cleanly rather than as a digest.
+    internal const string SecretDigestPrefix = "hmac-sha256:";
+
+    private static readonly byte[] SecretDigestKey = RandomNumberGenerator.GetBytes(32);
 
     internal static string HashSecret(string? value)
     {
@@ -111,7 +115,7 @@ internal static class DefinitionNormalizer
             return value;
         }
 
-        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        byte[] hash = HMACSHA256.HashData(SecretDigestKey, Encoding.UTF8.GetBytes(value));
         return SecretDigestPrefix + Convert.ToHexString(hash).ToLowerInvariant();
     }
 

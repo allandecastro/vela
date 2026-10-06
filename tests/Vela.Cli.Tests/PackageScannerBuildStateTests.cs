@@ -43,6 +43,9 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         Assert.Equal("SamplePluginFixture.SampleAccountPlugin", step.Type);
         Assert.Equal("Create", step.Definition.GetProperty("message").GetString());
         Assert.Equal("account", step.Definition.GetProperty("entityLogicalName").GetString());
+        // Only the secure configuration's NAME is scanned, keyed by plugin type + step key; no value exists yet.
+        Assert.Equal(new Dictionary<string, string> { ["SamplePluginFixture.SampleAccountPlugin:stepkey:main"] = "SampleApiKey" }, state.SecureConfigNameByStepKey);
+        Assert.Null(state.SecureConfigByStepKey);
 
         RegistrationItem api = Assert.Single(state.Items.Where(i => i.Kind == "custom-api"));
         Assert.Equal("SamplePluginFixture.SampleCustomApi", api.Type);
