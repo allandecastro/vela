@@ -10,7 +10,7 @@ namespace Vela.Cli.Tests;
 
 public class ProjectScaffolderTests
 {
-    private static ScaffoldOptions Options(string outputDir, bool console = true, bool integrations = true, bool tests = true, bool force = false) => new(
+    private static ScaffoldOptions Options(string outputDir, bool console = true, bool integrations = true, bool tests = true, bool force = false, bool demos = true) => new(
         SolutionName: "ZavaSales",
         Prefix: "Zava",
         OutputDirectory: outputDir,
@@ -19,7 +19,47 @@ public class ProjectScaffolderTests
         IncludeTests: tests,
         CoreVersion: "1.0.0",
         Force: force,
-        Interactive: false);
+        Interactive: false,
+        IncludeDemos: demos);
+
+    [Fact]
+    public void Generate_Minimal_WritesBareShellWithoutDemoContent()
+    {
+        RunInTempDir(temp =>
+        {
+            // A --minimal / --no-demos run: Shared + Plugins csproj and the structural files, but no sample
+            // models/services/plugins/Custom APIs and none of the demo-only projects.
+            int exit = ProjectScaffolder.Generate(Options(temp, console: false, integrations: false, tests: false, demos: false));
+            Assert.Equal(ExitSuccess, exit);
+
+            string root = Path.Combine(temp, "ZavaSales");
+
+            // Structural files are still written, so the empty solution builds unedited.
+            AssertFileExists(root, "ZavaSales.sln");
+            AssertFileExists(root, "README.md");
+            AssertFileExists(root, ".gitignore");
+            AssertFileExists(root, "Directory.Build.props");
+            AssertFileExists(root, "Directory.Packages.props");
+            AssertFileExists(root, "src", "Zava.Shared", "Zava.Shared.csproj");
+            AssertFileExists(root, "src", "Zava.Plugins", "Zava.Plugins.csproj");
+
+            // No demo content.
+            Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.Shared", "Models")), "minimal should not emit sample models");
+            Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.Shared", "Services")), "minimal should not emit the sample service");
+            Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.Plugins", "Account")), "minimal should not emit sample plugins");
+            Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.Plugins", "Contact")), "minimal should not emit sample plugins");
+            Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.Plugins", "GlobalCustomApis")), "minimal should not emit the sample global Custom API");
+
+            // No demo-only projects.
+            Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.Integrations")), "minimal should not emit the Integrations project");
+            Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.ConsoleApp")), "minimal should not emit the ConsoleApp project");
+            Assert.False(Directory.Exists(Path.Combine(root, "tests")), "minimal should not emit the tests project");
+
+            // The Plugins project has no source files at all - it is a clean canvas.
+            string pluginsDir = Path.Combine(root, "src", "Zava.Plugins");
+            Assert.Empty(Directory.GetFiles(pluginsDir, "*.cs", SearchOption.AllDirectories));
+        });
+    }
 
     [Fact]
     public void Generate_CreatesExpectedLayout()

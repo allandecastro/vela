@@ -87,8 +87,33 @@ public class ScaffoldOptionsTests
         Assert.Equal(".", options.OutputDirectory);
         Assert.True(options.IncludeConsole);
         Assert.True(options.IncludeIntegrations);
+        Assert.True(options.IncludeDemos);
         Assert.Equal(ScaffoldOptions.DefaultCoreVersion, options.CoreVersion);
         Assert.False(options.Force);
+    }
+
+    [Theory]
+    [InlineData("--minimal")]
+    [InlineData("--no-demos")]
+    public void TryParse_Minimal_DisablesDemosAndDemoOnlyProjects(string flag)
+    {
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", flag], out ScaffoldOptions options, out _));
+
+        Assert.False(options.IncludeDemos);
+        // The demo-only projects are forced off - a bare scaffold has no use for an empty Integrations/Tests/Console.
+        Assert.False(options.IncludeConsole);
+        Assert.False(options.IncludeIntegrations);
+        Assert.False(options.IncludeTests);
+    }
+
+    [Fact]
+    public void TryParse_Minimal_StillHonorsExplicitWebResources()
+    {
+        // Web resources are a separate (opt-in) project, not demo plugin content, so an explicit request wins.
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--minimal", "--web-resources"], out ScaffoldOptions options, out _));
+
+        Assert.False(options.IncludeDemos);
+        Assert.True(options.IncludeWebResources);
     }
 
     [Fact]

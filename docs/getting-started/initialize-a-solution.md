@@ -35,6 +35,11 @@ shared service, and two **table-scoped** services (one write, one read). `Zava.P
 plugins and Custom APIs with `Vela.Testing`, no Dataverse connection.
 
 > [!TIP]
+> Want a bare starting point instead of the examples? Add **`--minimal`** (alias `--no-demos`) to get just the
+> empty `Shared` and `Plugins` projects - it builds unedited and you fill it in with `vela models` and
+> `vela add`. See [Scaffold a solution](../guides/scaffold.md#minimal-demo-free-scaffold).
+
+> [!TIP]
 > For the full set of `vela init` flags and the wizard, see the
 > [Scaffold a solution](../guides/scaffold.md) guide.
 

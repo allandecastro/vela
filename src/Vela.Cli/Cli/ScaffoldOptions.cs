@@ -42,7 +42,8 @@ internal sealed record ScaffoldOptions(
     bool IncludeWebResources = false,
     string WebResourceNamespace = "",
     string WebResourcesFolder = "dist",
-    bool Json = false)
+    bool Json = false,
+    bool IncludeDemos = true)
 {
     // Solution name doubles as a folder + file name, so keep it to filename-safe characters. The first character
     // must be alphanumeric so the name can never be a path-traversal segment (".", "..", ".hidden"): the solution
@@ -180,11 +181,28 @@ internal sealed record ScaffoldOptions(
             output = ".";
         }
 
-        bool includeConsole = !HasFlag(args, "--no-console");
-        bool includeIntegrations = !HasFlag(args, "--no-integrations");
-        bool includeTests = !HasFlag(args, "--no-tests");
+        // --minimal (alias --no-demos) scaffolds a bare, demo-free solution: the Shared + Plugins projects with no
+        // sample models/services/plugins/Custom APIs, and none of the demo-only Integrations/Tests/Console projects.
+        // The structural files (.sln, csproj, Directory.*.props, README, .gitignore) are still written, so the empty
+        // solution builds and packs unedited - the clean starting point a developer (or an agent driving the CLI)
+        // fills in with `vela add`. The rich default is unchanged; this is the explicit opt-out.
+        bool includeDemos = !HasFlag(args, "--minimal") && !HasFlag(args, "--no-demos");
 
-        if (interactive)
+        bool includeConsole = includeDemos && !HasFlag(args, "--no-console");
+        bool includeIntegrations = includeDemos && !HasFlag(args, "--no-integrations");
+        bool includeTests = includeDemos && !HasFlag(args, "--no-tests");
+
+        if (interactive && !HasFlag(args, "--minimal") && !HasFlag(args, "--no-demos"))
+        {
+            includeDemos = PromptYesNo("Include the demo examples (models, services, sample plugins and Custom APIs)? [Y/n]:", defaultYes: true);
+            includeConsole = includeDemos;
+            includeIntegrations = includeDemos;
+            includeTests = includeDemos;
+        }
+
+        // The demo-only project prompts only make sense when demos are kept (a bare scaffold has no use for an empty
+        // Integrations/Tests/Console project), so they are skipped entirely in a minimal/no-demos run.
+        if (interactive && includeDemos)
         {
             if (!HasFlag(args, "--no-integrations"))
             {
@@ -275,7 +293,8 @@ internal sealed record ScaffoldOptions(
             IncludeWebResources: includeWebResources,
             WebResourceNamespace: webResourceNamespace,
             WebResourcesFolder: webResourcesFolder,
-            Json: HasFlag(args, "--json"));
+            Json: HasFlag(args, "--json"),
+            IncludeDemos: includeDemos);
         return true;
     }
 
@@ -331,7 +350,7 @@ internal sealed record ScaffoldOptions(
     private static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "--force", "--json", "--managed-identity", "--mi", "--no-console", "--no-integrations", "--no-tests",
-        "--web-resources", "--webresources", "--interactive", "-i", "--help", "-h",
+        "--web-resources", "--webresources", "--interactive", "-i", "--help", "-h", "--minimal", "--no-demos",
     };
 
     private static bool PromptYesNo(string label, bool defaultYes)
