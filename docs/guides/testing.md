@@ -252,7 +252,24 @@ Supported: filters (And/Or, operators incl. Between, Begins/Ends/Like, date oper
 CompareColumns), conditions on linked entities (records-not-in-a-set), link-entities
 (Inner/LeftOuter/Exists/In/MatchFirstRowUsingCrossApply, aliased columns, criteria, nested), Any/All filters,
 ordering (incl. linked columns), TopCount, paging, Distinct, total record count, column aliases, and
-aggregates (count/sum/avg/min/max + group-by). FetchXML aggregates via `<fetch aggregate='true'>`.
+aggregates (count/countcolumn/sum/avg/min/max + group-by, also on linked columns and over joins).
+
+FetchXML is parsed into the equivalent `QueryExpression` and runs through the same engine path, so a query and
+its `ToFetchXml()` return the same rows. The parser is strict: anything it does not model throws
+`NotSupportedException` naming the element or attribute, never silently ignored.
+
+| FetchXML | Supported |
+| --- | --- |
+| `<fetch>` | `aggregate`, `distinct`, `top`, `count`, `page`, `returntotalrecordcount`, `aggregatelimit`; accepted as no-op hints: `no-lock`, `latematerialize`, `options`, `useraworderby`, `paging-cookie`, `mapping`, `version`, `output-format` |
+| `<entity>` | `name`; children `attribute`, `all-attributes`, `filter`, `order`, `link-entity` |
+| `<attribute>` | `name`, `alias`; in an aggregate: `aggregate` (count/countcolumn/sum/avg/min/max), `groupby`, `dategrouping` (day/month/quarter/year), `distinct` (countcolumn), `usertimezone` (the store is UTC) |
+| `<link-entity>` | `name`, `from`, `to`, `alias`, `link-type` (inner, outer, exists, in, matchfirstrowusingcrossapply, and any/not any/all/not all, also inside a `<filter>`); `visible`/`intersect` accepted; children as `<entity>` |
+| `<filter>` | `type` (and/or); `hint`/`isquickfindfields` accepted; children `condition`, `filter`, `link-entity` |
+| `<condition>` | `attribute`, `operator`, `value` / `<value>`, `entityname` (a linked column, selected or not), `valueof` (column comparison: eq/ne/gt/ge/lt/le); `uiname`/`uitype`/`uihidden` accepted |
+| `<order>` | `attribute`, `descending`, `entityname` (root only); `alias` in an aggregate |
+
+Rejected: `datasource` (retained data), `rowaggregate`, `link-type='natural'`, week/fiscal-period/fiscal-year date
+grouping, and every other element or attribute.
 
 ### Typed query builder
 

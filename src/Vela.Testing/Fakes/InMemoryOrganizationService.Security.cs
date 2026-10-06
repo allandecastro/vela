@@ -171,25 +171,18 @@ namespace Vela.Testing
                 return;
             }
 
-            if (query is QueryExpression qe && qe.ColumnSet?.AttributeExpressions != null)
+            // FetchXML is checked through its parsed QueryExpression, so both forms are covered identically, including
+            // group-by/aggregate columns on link-entities (checked against the linked table).
+            QueryExpression? expression = query as QueryExpression
+                ?? (query is FetchExpression fetch ? FetchXmlParser.Parse(fetch.Query).Query : null);
+            if (expression == null)
             {
-                foreach (XrmAttributeExpression expression in qe.ColumnSet.AttributeExpressions)
-                {
-                    DemandSecuredAggregateColumn(qe.EntityName, expression.AttributeName);
-                }
+                return;
             }
-            else if (query is FetchExpression fetch && FetchXmlParser.IsAggregate(fetch.Query))
-            {
-                AggregateQuery aggregate = FetchXmlParser.ParseAggregate(fetch.Query);
-                foreach (AggregateColumn column in aggregate.Aggregates)
-                {
-                    DemandSecuredAggregateColumn(aggregate.EntityName, column.Attribute);
-                }
 
-                foreach (AggregateColumn column in aggregate.Groups)
-                {
-                    DemandSecuredAggregateColumn(aggregate.EntityName, column.Attribute);
-                }
+            foreach (KeyValuePair<string, string> column in InMemoryQueryEngine.AttributeExpressionColumns(expression))
+            {
+                DemandSecuredAggregateColumn(column.Key, column.Value);
             }
         }
 
