@@ -24,6 +24,12 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed (CLI)
+
+- **A second `apply --solution` no longer re-imports an unchanged plugin package.** Adding the publisher prefix
+  repacked the package by extracting and re-zipping it, which stamped every entry with the current time, so the
+  bytes never matched the package in Dataverse and every run re-imported it. The repack is now done in memory and is
+  deterministic (original entry order and timestamps; only the `.nuspec` changes).
 ### Changed (Framework, breaking)
 
 - **A Custom API parameter type with no Dataverse equivalent fails when the step is built.** `long`, `short`,

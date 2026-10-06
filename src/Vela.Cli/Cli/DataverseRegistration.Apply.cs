@@ -7,6 +7,7 @@ using System.Reflection;
 using System.ServiceModel;
 using System.Text.Json;
 using System.Threading;
+using System.Xml;
 using System.Xml.Linq;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.PowerPlatform.Dataverse.Client;
@@ -277,7 +278,7 @@ internal static partial class DataverseRegistration
     }
 
     string desiredPackageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
-    byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName, tempDirectories);
+    byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName);
     string packageContent = Convert.ToBase64String(packageBytes);
     Entity? existing = GetPluginPackage(service, desiredPackageName);
     if (existing == null)
@@ -352,7 +353,7 @@ internal static partial class DataverseRegistration
             throw new FileNotFoundException($"Plugin package file not found: {package.PackagePath}", package.PackagePath);
         }
 
-        byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName, tempDirectories);
+        byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName);
         string packageContent = Convert.ToBase64String(packageBytes);
         Entity? existing = GetPluginPackage(service, desiredPackageName);
         if (existing == null)
@@ -431,7 +432,7 @@ internal static partial class DataverseRegistration
     return prefix.Trim();
 }
 
-    internal static byte[] ReadPackageBytesForImport(string packagePath, string originalPackageName, string desiredPackageName, List<string> tempDirectories)
+    internal static byte[] ReadPackageBytesForImport(string packagePath, string originalPackageName, string desiredPackageName)
 {
     if (string.Equals(originalPackageName, desiredPackageName, StringComparison.OrdinalIgnoreCase))
     {
@@ -452,46 +453,66 @@ internal static partial class DataverseRegistration
             $"prefix ('{desiredPackageName}'), or apply without --solution.");
     }
 
-    string tempRoot = Path.Combine(Path.GetTempPath(), "vela-tools", Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(tempRoot);
-    tempDirectories.Add(tempRoot);
+    return RepackWithPackageId(File.ReadAllBytes(packagePath), packagePath, desiredPackageName);
+}
 
-    ZipFile.ExtractToDirectory(packagePath, tempRoot);
-    string[] nuspecFiles = Directory.GetFiles(tempRoot, "*.nuspec", SearchOption.TopDirectoryOnly);
-    if (nuspecFiles.Length == 0)
+    // Rewrites the package id deterministically, in memory: every entry is copied in its original order with its
+    // original timestamp, and only the .nuspec is replaced (renamed to the new id, keeping its timestamp). The same
+    // input therefore always yields the same bytes, so PluginPackagesNeedPublish sees an unchanged package as
+    // unchanged; extracting and re-zipping stamped every entry with the current time, so the package was re-imported
+    // on every apply.
+    private static readonly XmlWriterSettings NuspecWriterSettings = new()
     {
-        throw new InvalidOperationException($"No .nuspec found in package '{packagePath}'.");
+        Encoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        Indent = true,
+        IndentChars = "  ",
+        NewLineChars = "\n",
+        NewLineHandling = NewLineHandling.Replace,
+    };
+
+    internal static byte[] RepackWithPackageId(byte[] packageBytes, string packagePath, string desiredPackageName)
+{
+    using MemoryStream input = new(packageBytes, writable: false);
+    using ZipArchive source = new(input, ZipArchiveMode.Read);
+    ZipArchiveEntry nuspecEntry = source.Entries.FirstOrDefault(e => !e.FullName.Contains('/') && e.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException($"No .nuspec found in package '{packagePath}'.");
+
+    XDocument nuspec;
+    using (Stream nuspecStream = nuspecEntry.Open())
+    {
+        nuspec = XDocument.Load(nuspecStream);
     }
 
-    string nuspecPath = nuspecFiles[0];
-    XDocument nuspec = XDocument.Load(nuspecPath);
     XNamespace ns = nuspec.Root?.Name.Namespace ?? XNamespace.None;
-    XElement? idElement = nuspec.Root?.Element(ns + "metadata")?.Element(ns + "id");
-    if (idElement == null)
-    {
-        throw new InvalidOperationException($"Package '{packagePath}' is missing metadata id in nuspec.");
-    }
-
+    XElement idElement = nuspec.Root?.Element(ns + "metadata")?.Element(ns + "id")
+        ?? throw new InvalidOperationException($"Package '{packagePath}' is missing metadata id in nuspec.");
     idElement.Value = desiredPackageName;
-    nuspec.Save(nuspecPath);
 
-    string desiredNuspecPath = Path.Combine(tempRoot, $"{desiredPackageName}.nuspec");
-    if (!string.Equals(Path.GetFileName(nuspecPath), Path.GetFileName(desiredNuspecPath), StringComparison.OrdinalIgnoreCase))
+    using MemoryStream output = new();
+    using (ZipArchive target = new(output, ZipArchiveMode.Create, leaveOpen: true))
     {
-        if (File.Exists(desiredNuspecPath))
+        foreach (ZipArchiveEntry entry in source.Entries)
         {
-            File.Delete(desiredNuspecPath);
+            bool isNuspec = ReferenceEquals(entry, nuspecEntry);
+            ZipArchiveEntry copy = target.CreateEntry(isNuspec ? $"{desiredPackageName}.nuspec" : entry.FullName, CompressionLevel.Optimal);
+            copy.LastWriteTime = entry.LastWriteTime;
+            using Stream destination = copy.Open();
+            if (isNuspec)
+            {
+                // Explicit encoding and newlines: XDocument.Save's defaults follow the platform (CRLF on Windows), so
+                // the same package repacked on Linux and Windows runners would differ and be re-imported.
+                using XmlWriter writer = XmlWriter.Create(destination, NuspecWriterSettings);
+                nuspec.Save(writer);
+            }
+            else
+            {
+                using Stream content = entry.Open();
+                content.CopyTo(destination);
+            }
         }
-
-        File.Move(nuspecPath, desiredNuspecPath);
     }
 
-    string outputDirectory = Path.Combine(Path.GetTempPath(), "vela-tools", Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(outputDirectory);
-    tempDirectories.Add(outputDirectory);
-    string transformedPackagePath = Path.Combine(outputDirectory, $"{desiredPackageName}.nupkg");
-    ZipFile.CreateFromDirectory(tempRoot, transformedPackagePath);
-    return File.ReadAllBytes(transformedPackagePath);
+    return output.ToArray();
 }
 
     // A NuGet-signed package carries a top-level '.signature.p7s' entry (the PKCS#7 signature). Its presence means

@@ -212,23 +212,19 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     {
         byte[] bytes = Encoding.UTF8.GetBytes("nupkg-content");
         string path = NewTempFile(bytes);
-        var tempDirs = new List<string>();
 
-        byte[] result = DataverseRegistration.ReadPackageBytesForImport(path, "Same.Name", "Same.Name", tempDirs);
+        byte[] result = DataverseRegistration.ReadPackageBytesForImport(path, "Same.Name", "Same.Name");
 
         Assert.Equal(bytes, result);
-        Assert.Empty(tempDirs); // no rename → no temp extraction
     }
 
     [Fact]
     public void ReadPackageBytesForImport_rewrites_nuspec_id_when_renamed()
     {
         string nupkg = BuildNupkg("Old.Name", nuspecId: "Old.Name");
-        var tempDirs = new List<string>();
 
-        byte[] result = DataverseRegistration.ReadPackageBytesForImport(nupkg, "Old.Name", "new_Old.Name", tempDirs);
+        byte[] result = DataverseRegistration.ReadPackageBytesForImport(nupkg, "Old.Name", "new_Old.Name");
 
-        Assert.Equal(2, tempDirs.Count); // both the extraction dir and the re-zip output dir are tracked for cleanup
         // The returned package must carry the renamed nuspec id, in a file named after the new id.
         string extractDir = NewTempDir();
         using var stream = new MemoryStream(result);
@@ -239,11 +235,39 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void ReadPackageBytesForImport_repack_is_deterministic_so_an_unchanged_package_is_not_republished()
+    {
+        // PluginPackagesNeedPublish compares these bytes with the package content in Dataverse: if two repacks of the
+        // same package differed (fresh entry timestamps), every 'apply --solution' would re-import the package.
+        string nupkg = BuildNupkg("Old.Name", nuspecId: "Old.Name");
+
+        byte[] first = DataverseRegistration.ReadPackageBytesForImport(nupkg, "Old.Name", "new_Old.Name");
+        byte[] second = DataverseRegistration.ReadPackageBytesForImport(nupkg, "Old.Name", "new_Old.Name");
+
+        Assert.Equal(first, second);
+        // The nuspec is written with explicit LF newlines and UTF-8 without BOM, whatever the platform default.
+        using (ZipArchive check = new ZipArchive(new MemoryStream(first)))
+        using (StreamReader nuspecReader = new StreamReader(check.Entries.Single(e => e.FullName.EndsWith(".nuspec", StringComparison.Ordinal)).Open()))
+        {
+            string nuspecText = nuspecReader.ReadToEnd();
+            Assert.DoesNotContain("\r", nuspecText);
+            Assert.False(nuspecText.StartsWith("\uFEFF", StringComparison.Ordinal));
+        }
+
+        // Every entry keeps its original timestamp (re-zipping from disk stamped them with the current time).
+        using ZipArchive original = ZipFile.OpenRead(nupkg);
+        using ZipArchive repacked = new ZipArchive(new MemoryStream(first));
+        Assert.Equal(
+            original.Entries.Select(e => e.LastWriteTime),
+            repacked.Entries.Select(e => e.LastWriteTime));
+    }
+
+    [Fact]
     public void ReadPackageBytesForImport_throws_when_no_nuspec()
     {
         string nupkg = BuildZip(new Dictionary<string, string> { ["readme.txt"] = "hi" });
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DataverseRegistration.ReadPackageBytesForImport(nupkg, "A", "b_A", new List<string>()));
+            () => DataverseRegistration.ReadPackageBytesForImport(nupkg, "A", "b_A"));
         Assert.Contains("No .nuspec found", ex.Message);
     }
 
@@ -253,7 +277,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string nuspec = "<package xmlns=\"http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd\"><metadata><version>1.0.0</version></metadata></package>";
         string nupkg = BuildZip(new Dictionary<string, string> { ["pkg.nuspec"] = nuspec });
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DataverseRegistration.ReadPackageBytesForImport(nupkg, "A", "b_A", new List<string>()));
+            () => DataverseRegistration.ReadPackageBytesForImport(nupkg, "A", "b_A"));
         Assert.Contains("missing metadata id", ex.Message);
     }
 

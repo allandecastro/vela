@@ -199,10 +199,9 @@ public class DataverseRegistrationHelperTests
     {
         // No rename needed → the signed package is passed through untouched (signature stays valid).
         string path = WriteTempNupkg("zava_MyPackage", signed: true);
-        var temps = new List<string>();
         try
         {
-            byte[] bytes = DataverseRegistration.ReadPackageBytesForImport(path, "zava_MyPackage", "zava_MyPackage", temps);
+            byte[] bytes = DataverseRegistration.ReadPackageBytesForImport(path, "zava_MyPackage", "zava_MyPackage");
             Assert.Equal(System.IO.File.ReadAllBytes(path), bytes);
         }
         finally
@@ -216,11 +215,10 @@ public class DataverseRegistrationHelperTests
     {
         // Applying with --solution would rename (add the publisher prefix) and repack, invalidating the signature.
         string path = WriteTempNupkg("MyPackage", signed: true);
-        var temps = new List<string>();
         try
         {
             var ex = Assert.Throws<InvalidOperationException>(
-                () => DataverseRegistration.ReadPackageBytesForImport(path, "MyPackage", "zava_MyPackage", temps));
+                () => DataverseRegistration.ReadPackageBytesForImport(path, "MyPackage", "zava_MyPackage"));
             Assert.Contains("signed", ex.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("zava_MyPackage", ex.Message);
         }
