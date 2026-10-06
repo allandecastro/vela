@@ -91,7 +91,8 @@ namespace Vela.Context
                 trace.AppendFormat("  BulkPreEntityImagesCount: {0}{1}", context.BulkPreEntityImagesCollection.Count, nl);
                 trace.AppendFormat("  BulkPostEntityImagesCount: {0}{1}", context.BulkPostEntityImagesCollection.Count, nl);
             }
-            if (detail == TraceSnapshotDetail.Metadata)
+            // Fail closed: only exactly Full traces values; any other value (including an out-of-range cast) is metadata.
+            if (detail != TraceSnapshotDetail.Full)
             {
                 trace.AppendFormat("  InputParameters: {0}{1}", DescribeParameters(context.PluginExecutionContext.InputParameters), nl);
                 trace.AppendFormat("  OutputParameters: {0}{1}", DescribeParameters(context.PluginExecutionContext.OutputParameters), nl);

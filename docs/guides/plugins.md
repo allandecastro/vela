@@ -703,6 +703,9 @@ Dataverse.Update start scope=User depth=1 entity=account; id=3a0b9d52-1e44-4c8a-
 Dataverse.Update ok 42 ms
 ```
 
+A failed call traces `Dataverse.Update fail 42 ms <ExceptionType>`: only the exception type, since a fault message
+can echo submitted values (the exception itself still reaches your handler, message included).
+
 Keep your own handler traces business-focused (decisions and key values); rely on the framework for the
 pipeline, snapshot, and Dataverse-operation tracing.
 

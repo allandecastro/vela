@@ -158,12 +158,13 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
         }
         catch (Exception ex)
         {
+            // The exception type only: a service fault's message can echo submitted values or record names, and this
+            // line is metadata-only. The exception itself propagates to the plugin with its full message.
             _context.Trace(
-                "Dataverse.{0} fail {1} ms {2}: {3}",
+                "Dataverse.{0} fail {1} ms {2}",
                 operation,
                 stopwatch.ElapsedMilliseconds,
-                ex.GetType().FullName ?? ex.GetType().Name,
-                ex.Message ?? string.Empty);
+                ex.GetType().FullName ?? ex.GetType().Name);
             throw;
         }
     }

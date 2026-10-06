@@ -211,7 +211,8 @@ public sealed class PluginHelpersCoverageTests
         TracingOrganizationService svc = new TracingOrganizationService(inner.Object, ctx.Object, "Custom");
 
         Assert.Throws<InvalidOperationException>(() => svc.Create(new Entity("account")));
-        Assert.Contains(traces, t => t.Contains("Dataverse.Create fail") && t.Contains("boom"));
+        // The exception type only: a fault message can echo record data (the exception itself still propagates).
+        Assert.Contains(traces, t => t.Contains("Dataverse.Create fail") && t.Contains("InvalidOperationException") && !t.Contains("boom"));
     }
 
     [Fact]

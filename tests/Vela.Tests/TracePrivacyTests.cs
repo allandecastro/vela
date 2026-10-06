@@ -71,4 +71,31 @@ public sealed class TracePrivacyTests
         Assert.Contains("Jane Doe", builder.TraceCapture.Output);  // ...in the trace log
         Assert.DoesNotContain(builder.LogCapture.Entries, e => e.Message.Contains("ExecutionSnapshot") || e.Message.Contains("Jane Doe"));
     }
+
+    [Fact]
+    public void An_unknown_snapshot_detail_fails_closed_to_metadata()
+    {
+        PluginContextBuilder<TestAccount> builder = Update();
+        LocalPluginContext ctx = builder.Build();
+
+        ctx.TraceExecutionSnapshot("cast", (TraceSnapshotDetail)42);
+
+        Assert.Contains("[name]", builder.TraceCapture.Output);
+        Assert.DoesNotContain("Jane Doe", builder.TraceCapture.Output);
+    }
+
+    [Fact]
+    public void A_failed_Dataverse_call_traces_the_exception_type_but_not_its_message()
+    {
+        var inner = new Moq.Mock<Microsoft.Xrm.Sdk.IOrganizationService>();
+        inner.Setup(s => s.Create(Moq.It.IsAny<Microsoft.Xrm.Sdk.Entity>())).Throws(new System.InvalidOperationException("duplicate name " + Secret));
+        PluginContextBuilder<TestAccount> builder = Update();
+        var traced = new TracingOrganizationService(inner.Object, builder.Build(), "User");
+
+        Assert.Throws<System.InvalidOperationException>(() => traced.Create(new TestAccount()));
+
+        Assert.Contains("Dataverse.Create fail", builder.TraceCapture.Output);
+        Assert.Contains("System.InvalidOperationException", builder.TraceCapture.Output);
+        Assert.DoesNotContain("Jane Doe", builder.TraceCapture.Output);
+    }
 }
