@@ -79,8 +79,9 @@ Pass the **base name without the language suffix**. For the resolved user langua
 read once through the elevated system service, its base64 content decoded and the resx XML parsed (plain `<data>`
 string entries only; typed/binary resources such as images are skipped). When a language's resource is absent the
 source returns nothing and language resolution falls back to `DefaultLanguageCode` (so you only need the base-language
-`.resx` plus the languages you translate). A missing or malformed resource never breaks resolution - it is traced and
-treated as empty.
+`.resx` plus the languages you translate). Neither case breaks resolution: a missing resource falls back silently,
+while a resource that is present but malformed (bad base64 or invalid resx XML) is written to the plug-in trace log
+and treated as empty.
 
 ## Language resolution
 

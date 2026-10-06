@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
-using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using Vela.Caching;
@@ -105,8 +105,12 @@ namespace Vela.Localization
 
             try
             {
-                string xml = Encoding.UTF8.GetString(Convert.FromBase64String(base64!));
-                return Parse(xml);
+                // The base64 is the raw resx bytes; load them through a stream so the byte-order mark or the XML
+                // declaration decides the encoding (a resx may be UTF-8 or UTF-16), rather than forcing UTF-8.
+                using (MemoryStream stream = new MemoryStream(Convert.FromBase64String(base64!)))
+                {
+                    return Parse(XDocument.Load(stream));
+                }
             }
             catch (Exception ex) when (ex is FormatException || ex is XmlException)
             {
@@ -134,10 +138,10 @@ namespace Vela.Localization
         // Parses the resx XML into key -> value. A resx data element is <data name="KEY"><value>TEXT</value></data>;
         // a data element carrying a type or mimetype is a typed/binary resource (an image, an icon, ...) and is
         // skipped, so only plain string entries become message templates.
-        private static Dictionary<string, string> Parse(string resxXml)
+        private static Dictionary<string, string> Parse(XDocument document)
         {
             Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.Ordinal);
-            XElement? root = XDocument.Parse(resxXml).Root;
+            XElement? root = document.Root;
             if (root == null)
             {
                 return map;

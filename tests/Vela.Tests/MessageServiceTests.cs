@@ -244,6 +244,26 @@ public sealed class MessageServiceTests
     }
 
     [Fact]
+    public void Resx_source_reads_a_utf16_encoded_resource()
+    {
+        // A resx exported as UTF-16 must be read via its byte-order mark, not force-decoded as UTF-8 (which would
+        // corrupt it). Build UTF-16 bytes with a BOM and confirm the accented value round-trips intact.
+        string xml = new XDocument(new XElement("root",
+            new XElement("data", new XAttribute("name", "K"), new XElement("value", "Validé")))).ToString();
+        byte[] preamble = Encoding.Unicode.GetPreamble();
+        byte[] body = Encoding.Unicode.GetBytes(xml);
+        byte[] bytes = new byte[preamble.Length + body.Length];
+        Buffer.BlockCopy(preamble, 0, bytes, 0, preamble.Length);
+        Buffer.BlockCopy(body, 0, bytes, preamble.Length, body.Length);
+
+        ILocalPluginContext ctx = Context(UserSettings(1033), WebResource("acme_messages.1033.resx", Convert.ToBase64String(bytes)));
+        var source = new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages");
+
+        Assert.True(source.TryGetTemplate("K", 1033, out string? value));
+        Assert.Equal("Validé", value);
+    }
+
+    [Fact]
     public void Resx_source_degrades_gracefully_on_malformed_content()
     {
         // Valid base64 but not valid resx XML: must not throw; resolution falls through (no template).
@@ -254,16 +274,25 @@ public sealed class MessageServiceTests
     }
 
     [Fact]
-    public void Resx_source_can_cache_across_executions()
+    public void Resx_source_caches_across_executions()
     {
-        ILocalPluginContext ctx = Context(
-            UserSettings(1033),
-            WebResource("acme_messages.1033.resx", Resx(("K", "cached"))));
-        MessageService svc = Service(ctx);
-        svc.AddSource(new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages", cacheFor: TimeSpan.FromMinutes(5)));
+        // One cache shared by two executions (same org). The first populates it; the second has DIFFERENT backing
+        // content, so reading the first value back proves the second execution hit the cache instead of re-reading.
+        var cache = new PluginCacheService();
 
-        Assert.Equal("cached", svc.GetMessage("K"));
-        Assert.Equal("cached", svc.GetMessage("K")); // second read hits the cache
+        ILocalPluginContext first = Context(
+            UserSettings(1033),
+            WebResource("acme_messages.1033.resx", Resx(("K", "first"))));
+        MessageService firstSvc = Service(first);
+        firstSvc.AddSource(new ResxWebResourceMessageSource(first, cache, "acme_messages", cacheFor: TimeSpan.FromMinutes(5)));
+        Assert.Equal("first", firstSvc.GetMessage("K")); // populates the shared cache
+
+        ILocalPluginContext second = Context(
+            UserSettings(1033),
+            WebResource("acme_messages.1033.resx", Resx(("K", "second"))));
+        MessageService secondSvc = Service(second);
+        secondSvc.AddSource(new ResxWebResourceMessageSource(second, cache, "acme_messages", cacheFor: TimeSpan.FromMinutes(5)));
+        Assert.Equal("first", secondSvc.GetMessage("K")); // cache hit: the second execution did not re-read "second"
     }
 
     [Fact]
