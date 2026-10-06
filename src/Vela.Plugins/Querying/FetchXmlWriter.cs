@@ -68,7 +68,9 @@ public static class FetchXmlWriter
         }
 
         ColumnSet columns = query.ColumnSet ?? new ColumnSet();
-        bool aggregate = columns.AttributeExpressions != null && columns.AttributeExpressions.Count > 0;
+        // aggregate='true' only when a column actually aggregates or groups (on the root or on any link-entity): a
+        // plain column alias is an XrmAttributeExpression too, but it belongs in a normal fetch.
+        bool aggregate = IsAggregation(columns) || (query.LinkEntities ?? Enumerable.Empty<LinkEntity>()).Any(HasAggregation);
 
         XElement fetch = new XElement("fetch");
         if (aggregate)
@@ -161,6 +163,13 @@ public static class FetchXmlWriter
         fetch.Add(entity);
         return fetch.ToString(SaveOptions.DisableFormatting);
     }
+
+    private static bool HasAggregation(LinkEntity link) =>
+        IsAggregation(link.Columns) || (link.LinkEntities ?? Enumerable.Empty<LinkEntity>()).Any(HasAggregation);
+
+    private static bool IsAggregation(ColumnSet? columns) =>
+        columns?.AttributeExpressions != null
+        && columns.AttributeExpressions.Any(e => e.AggregateType != XrmAggregateType.None || e.HasGroupBy);
 
     // options apply only to the root entity's attributes (aggregate distinct, UTC date grouping, row aggregates);
     // links pass null.
@@ -308,6 +317,12 @@ public static class FetchXmlWriter
         XElement element = string.IsNullOrEmpty(order.Alias)
             ? new XElement("order", new XAttribute("attribute", order.AttributeName ?? string.Empty))
             : new XElement("order", new XAttribute("alias", order.Alias));
+        // An order on a linked entity's column from the root <entity> names the link alias.
+        if (string.IsNullOrEmpty(order.Alias) && !string.IsNullOrEmpty(order.EntityName))
+        {
+            element.SetAttributeValue("entityname", order.EntityName);
+        }
+
         if (order.OrderType == OrderType.Descending)
         {
             element.SetAttributeValue("descending", "true");
@@ -343,6 +358,11 @@ public static class FetchXmlWriter
         if (criteria != null)
         {
             element.Add(criteria);
+        }
+
+        foreach (OrderExpression order in link.Orders ?? Enumerable.Empty<OrderExpression>())
+        {
+            element.Add(WriteOrder(order));
         }
 
         foreach (LinkEntity child in link.LinkEntities ?? Enumerable.Empty<LinkEntity>())

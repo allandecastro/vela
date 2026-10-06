@@ -524,8 +524,9 @@ namespace Vela.Testing.Tests
                 .Seed(AccountOwnedBy(Guid.NewGuid(), Alice, SalesBu))  // readable
                 .Seed(AccountOwnedBy(Guid.NewGuid(), Alice, SalesBu)); // readable
 
+            // An aggregate query selects only group-by/aggregate columns (Dataverse rejects a plain column next to
+            // an aggregate, and so does the harness).
             QueryExpression query = new QueryExpression("account");
-            query.ColumnSet.AddColumn("accountid");
             query.ColumnSet.AttributeExpressions.Add(new XrmAttributeExpression("accountid", XrmAggregateType.Count, "n"));
 
             EntityCollection result = svc.RetrieveMultiple(query);

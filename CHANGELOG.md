@@ -90,6 +90,18 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **A generated step context reads an aliased image.** For `WithPostImage("snap", ...)` (or a pre-image alias) the
   generated `ctx.PostImage` / `ctx.PreImage` read the image under the default alias, so it was always null at runtime.
   The context now passes the step's alias.
+- **Harness FetchXML joins and conditions return the same rows as the QueryExpression.** The FetchXML parser mapped
+  every link-type except `outer` to an inner join (so `not any` returned the opposite rows), never read `entityname`
+  or `valueof` on a condition, and dropped link-entities inside a `<filter>`, link-entities under aggregates, link
+  orders, attribute aliases, `dategrouping`, `distinct` countcolumns and `returntotalrecordcount`; QueryExpression
+  aggregates ignored their link-entities and `OrderByAggregate`. FetchXML now parses into the equivalent
+  QueryExpression (aggregates included) and runs through the same engine path: all nine link-types, conditions on
+  any linked column (selected or not), column comparisons, joins before aggregating, and date grouping by
+  day/month/quarter/year. Anything not modelled (an unknown element or attribute, `natural`, `datasource`,
+  `rowaggregate`, week/fiscal date grouping) throws `NotSupportedException` naming it instead of being ignored.
+  `matchfirstrowusingcrossapply` now drops unmatched parents (an inner variant), a joined row no longer carries an
+  unselected join-key column, and `ToFetchXml()` emits link orders and `order entityname`, and writes a column alias
+  as a plain fetch rather than an aggregate.
 - **The test pipeline honours a step's registration: enabled flag, configuration and impersonation.**
   `PluginPipeline` fired a `.Disabled()` step, always constructed the plugin with `(null, null)`, ignored
   `WithImpersonation(Guid)`, and wired `ctx.Service` and `ctx.SystemService` to one service subject to the same

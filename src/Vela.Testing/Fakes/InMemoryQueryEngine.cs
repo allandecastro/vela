@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.ServiceModel;
 using System.Text.RegularExpressions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -43,14 +44,34 @@ namespace Vela.Testing
             return _canRead == null ? rows : rows.Where(_canRead);
         }
 
-        public EntityCollection ExecuteQueryExpression(QueryExpression query)
+        // A parsed FetchXML query runs through the exact QueryExpression path; it only adds the FetchXML-only
+        // aggregate options (distinct countcolumn, aggregatelimit) a QueryExpression cannot carry.
+        public EntityCollection ExecuteFetch(FetchQuery fetch) => ExecuteQueryExpression(fetch.Query, fetch);
+
+        public EntityCollection ExecuteQueryExpression(QueryExpression query, FetchQuery? fetch = null)
         {
-            // Native QueryExpression aggregation via ColumnSet.AttributeExpressions (AggregateType / HasGroupBy).
-            if (HasAggregation(query.ColumnSet))
+            if (!string.IsNullOrEmpty(query.DataSource))
             {
-                return ExecuteAggregate(BuildAggregateQuery(query));
+                throw new NotSupportedException(
+                    $"InMemoryOrganizationService does not support the '{query.DataSource}' data source (long-term retained data).");
             }
 
+            // Native QueryExpression aggregation via ColumnSet.AttributeExpressions (AggregateType / HasGroupBy) on
+            // the root or on any link-entity.
+            if (HasAggregation(query))
+            {
+                return ExecuteAggregate(query, fetch);
+            }
+
+            List<Entity> filtered = JoinedRows(query);
+            return BuildCollection(query.EntityName, filtered, query.ColumnSet, CollectOrders(query), query.TopCount, query.Distinct, query.PageInfo);
+        }
+
+        // The readable primary rows expanded through every link-entity, then filtered by Criteria. Criteria is
+        // applied AFTER the joins so conditions can target linked entities via ConditionExpression.EntityName
+        // (e.g. the "records not in a set" pattern with a left-outer join).
+        private List<Entity> JoinedRows(QueryExpression query)
+        {
             List<Entity> rows = new List<Entity>();
             foreach (Entity baseRow in ReadableRows(query.EntityName))
             {
@@ -63,13 +84,8 @@ namespace Vela.Testing
                 rows.AddRange(expanded);
             }
 
-            // Criteria is applied AFTER the joins so conditions can target linked entities via
-            // ConditionExpression.EntityName (e.g. the "records not in a set" pattern with a left-outer join).
-            List<Entity> filtered = rows.Where(row => EvaluateFilter(row, query.Criteria)).ToList();
-
-            return BuildCollection(query.EntityName, filtered, query.ColumnSet, CollectOrders(query), query.TopCount, query.Distinct, query.PageInfo);
+            return rows.Where(row => EvaluateFilter(row, query.Criteria)).ToList();
         }
-
         public EntityCollection ExecuteQueryByAttribute(QueryByAttribute query)
         {
             IEnumerable<Entity> matches = ReadableRows(query.EntityName).Where(entity =>
@@ -94,37 +110,179 @@ namespace Vela.Testing
             return BuildCollection(query.EntityName, matches, query.ColumnSet, orders, query.TopCount, distinct: false, query.PageInfo);
         }
 
-        private static bool HasAggregation(ColumnSet columnSet)
+        private static bool HasAggregation(QueryExpression query)
+        {
+            return IsAggregation(query.ColumnSet) || query.LinkEntities.Any(HasAggregation);
+        }
+
+        private static bool HasAggregation(LinkEntity link)
+        {
+            return IsAggregation(link.Columns) || link.LinkEntities.Any(HasAggregation);
+        }
+
+        private static bool IsAggregation(ColumnSet? columnSet)
         {
             return columnSet != null && columnSet.AttributeExpressions.Any(a => a.AggregateType != XrmAggregateType.None || a.HasGroupBy);
         }
 
-        private static AggregateQuery BuildAggregateQuery(QueryExpression query)
+        /// <summary>
+        /// Every (table, column) a query reads through a <see cref="XrmAttributeExpression"/> (aggregate, group-by or
+        /// column alias) on the root and on every link-entity, for the field-level-security pre-check.
+        /// </summary>
+        internal static IEnumerable<KeyValuePair<string, string>> AttributeExpressionColumns(QueryExpression query)
         {
-            AggregateQuery aggregate = new AggregateQuery { EntityName = query.EntityName, Top = query.TopCount };
-            foreach (FilterExpression filter in new[] { query.Criteria })
+            List<KeyValuePair<string, string>> columns = new List<KeyValuePair<string, string>>();
+            AddExpressionColumns(columns, query.EntityName, query.ColumnSet);
+            foreach (LinkEntity link in query.LinkEntities)
             {
-                aggregate.Criteria.AddFilter(filter);
+                AddExpressionColumns(columns, link);
             }
 
-            foreach (XrmAttributeExpression expression in query.ColumnSet.AttributeExpressions)
+            return columns;
+        }
+
+        private static void AddExpressionColumns(List<KeyValuePair<string, string>> columns, LinkEntity link)
+        {
+            AddExpressionColumns(columns, link.LinkToEntityName, link.Columns);
+            foreach (LinkEntity child in link.LinkEntities)
             {
-                if (expression.HasGroupBy)
-                {
-                    aggregate.Groups.Add(new AggregateColumn { Attribute = expression.AttributeName, Alias = expression.Alias });
-                }
-                else if (expression.AggregateType != XrmAggregateType.None)
-                {
-                    aggregate.Aggregates.Add(new AggregateColumn { Attribute = expression.AttributeName, Alias = expression.Alias, Function = MapAggregate(expression.AggregateType) });
-                }
+                AddExpressionColumns(columns, child);
+            }
+        }
+
+        private static void AddExpressionColumns(List<KeyValuePair<string, string>> columns, string entityName, ColumnSet? columnSet)
+        {
+            foreach (XrmAttributeExpression expression in columnSet?.AttributeExpressions ?? Enumerable.Empty<XrmAttributeExpression>())
+            {
+                columns.Add(new KeyValuePair<string, string>(entityName, expression.AttributeName));
+            }
+        }
+
+        private static AggregateQuery BuildAggregateQuery(QueryExpression query, FetchQuery? fetch)
+        {
+            AggregateQuery aggregate = new AggregateQuery { EntityName = query.EntityName };
+            AddAggregateColumns(aggregate, query.ColumnSet, null, query.EntityName, fetch);
+            foreach (LinkEntity link in query.LinkEntities)
+            {
+                AddLinkAggregateColumns(aggregate, link, fetch);
             }
 
             foreach (OrderExpression order in query.Orders)
             {
-                aggregate.Orders.Add(new AggregateColumn { Alias = order.AttributeName, Descending = order.OrderType == OrderType.Descending });
+                // An aggregate result is ordered by a result alias (OrderExpression.Alias, or the AttributeName when
+                // it names an alias). Anything else would order by a column the result doesn't carry.
+                string key = string.IsNullOrEmpty(order.Alias) ? order.AttributeName : order.Alias;
+                if (!aggregate.Groups.Concat(aggregate.Aggregates).Any(column => column.Alias == key))
+                {
+                    throw new NotSupportedException(
+                        $"An aggregate query must order by a group-by or aggregate alias; '{key}' is not one.");
+                }
+
+                aggregate.Orders.Add(new AggregateColumn { Alias = key, Descending = order.OrderType == OrderType.Descending });
             }
 
             return aggregate;
+        }
+
+        private static void AddLinkAggregateColumns(AggregateQuery aggregate, LinkEntity link, FetchQuery? fetch)
+        {
+            if (link.Orders.Count > 0)
+            {
+                throw new NotSupportedException("An aggregate query cannot order a link-entity; order by a result alias on the root.");
+            }
+
+            string alias = string.IsNullOrEmpty(link.EntityAlias) ? link.LinkToEntityName : link.EntityAlias;
+            AddAggregateColumns(aggregate, link.Columns, alias, link.LinkToEntityName, fetch);
+            foreach (LinkEntity child in link.LinkEntities)
+            {
+                AddLinkAggregateColumns(aggregate, child, fetch);
+            }
+        }
+
+        // entityAlias is null for the root, else the link alias the joined row keys the linked columns under.
+        private static void AddAggregateColumns(AggregateQuery aggregate, ColumnSet? columnSet, string? entityAlias, string entityName, FetchQuery? fetch)
+        {
+            if (columnSet == null)
+            {
+                return;
+            }
+
+            if (columnSet.AllColumns || columnSet.Columns.Count > 0)
+            {
+                throw new NotSupportedException(
+                    $"An aggregate query can only select group-by and aggregate columns; '{entityName}' also selects plain columns.");
+            }
+
+            foreach (XrmAttributeExpression expression in columnSet.AttributeExpressions)
+            {
+                if (string.IsNullOrEmpty(expression.Alias))
+                {
+                    throw new NotSupportedException($"The aggregate column '{expression.AttributeName}' requires an alias.");
+                }
+
+                AggregateColumn column = new AggregateColumn
+                {
+                    Attribute = expression.AttributeName,
+                    Alias = expression.Alias,
+                    EntityName = entityName,
+                    Key = entityAlias == null ? expression.AttributeName : entityAlias + "." + expression.AttributeName
+                };
+
+                if (expression.HasGroupBy)
+                {
+                    column.DateGrouping = CheckDateGrouping(expression.DateTimeGrouping);
+                    aggregate.Groups.Add(column);
+                }
+                else if (expression.AggregateType != XrmAggregateType.None)
+                {
+                    column.Function = MapAggregate(expression.AggregateType);
+                    column.Distinct = fetch != null && fetch.DistinctAggregateAliases.Contains(expression.Alias);
+                    aggregate.Aggregates.Add(column);
+                }
+                else
+                {
+                    throw new NotSupportedException(
+                        $"An aggregate query column must be a group-by or an aggregate; '{expression.Alias}' is neither.");
+                }
+            }
+        }
+
+        // Calendar date groupings are computed from the stored (UTC) value. Week and fiscal groupings depend on
+        // per-organization calendar settings the harness doesn't model, so they are rejected rather than guessed.
+        private static XrmDateTimeGrouping CheckDateGrouping(XrmDateTimeGrouping grouping)
+        {
+            switch (grouping)
+            {
+                case XrmDateTimeGrouping.None:
+                case XrmDateTimeGrouping.Day:
+                case XrmDateTimeGrouping.Month:
+                case XrmDateTimeGrouping.Quarter:
+                case XrmDateTimeGrouping.Year:
+                    return grouping;
+                default:
+                    throw new NotSupportedException($"InMemoryOrganizationService does not support the '{grouping}' date grouping.");
+            }
+        }
+
+        private static object? DateGroupValue(object? value, XrmDateTimeGrouping grouping)
+        {
+            if (grouping == XrmDateTimeGrouping.None || value == null)
+            {
+                return value;
+            }
+
+            if (!(EntityValues.Normalize(value) is DateTime date))
+            {
+                throw new NotSupportedException("A date grouping can only group a date/time column.");
+            }
+
+            switch (grouping)
+            {
+                case XrmDateTimeGrouping.Day: return date.Day;
+                case XrmDateTimeGrouping.Month: return date.Month;
+                case XrmDateTimeGrouping.Quarter: return ((date.Month - 1) / 3) + 1;
+                default: return date.Year; // Year (CheckDateGrouping admits no other)
+            }
         }
 
         private static string MapAggregate(XrmAggregateType type)
@@ -141,6 +299,38 @@ namespace Vela.Testing
             }
         }
 
+        // A group-by/aggregate query (group-by + aggregate + order columns), built from the QueryExpression.
+        private sealed class AggregateQuery
+        {
+            public string EntityName { get; set; } = string.Empty;
+
+            public List<AggregateColumn> Groups { get; } = new List<AggregateColumn>();
+
+            public List<AggregateColumn> Aggregates { get; } = new List<AggregateColumn>();
+
+            public List<AggregateColumn> Orders { get; } = new List<AggregateColumn>();
+        }
+
+        private sealed class AggregateColumn
+        {
+            public string Attribute { get; set; } = string.Empty;
+
+            public string Alias { get; set; } = string.Empty;
+
+            // The logical table the column belongs to (root or linked), reported on the AliasedValue.
+            public string EntityName { get; set; } = string.Empty;
+
+            // Where the joined row exposes the value: the attribute (root) or "{linkAlias}.{attribute}".
+            public string Key { get; set; } = string.Empty;
+
+            public string Function { get; set; } = string.Empty;
+
+            public bool Distinct { get; set; }
+
+            public XrmDateTimeGrouping DateGrouping { get; set; }
+
+            public bool Descending { get; set; }
+        }
         private List<OrderSpec> CollectOrders(QueryExpression query)
         {
             List<OrderSpec> specs = new List<OrderSpec>();
@@ -184,16 +374,30 @@ namespace Vela.Testing
             public bool Descending { get; set; }
         }
 
-        // Aggregate FetchXML: group rows, compute aggregates, expose group/aggregate values as aliased columns.
-        // Aggregates are computed over the rows the caller may read (security-trimmed), like the platform.
-        public EntityCollection ExecuteAggregate(AggregateQuery query)
+        // The platform's default AggregateQueryRecordLimit.
+        private const int DefaultAggregateLimit = 50000;
+
+        // Group the joined + filtered rows, compute the aggregates, expose group/aggregate values as aliased
+        // columns. Aggregates are computed over the rows the caller may read (security-trimmed), like the platform,
+        // and over the JOINED rows, so link-entities filter (inner), multiply (1:N) and feed linked columns exactly as
+        // they do for a plain query.
+        private EntityCollection ExecuteAggregate(QueryExpression query, FetchQuery? fetch)
         {
-            // Deep-copy the rows so group-by and min/max values (exposed as AliasedValue) cannot alias the store
-            // and let a caller mutate a stored record through an aggregate result.
-            List<Entity> rows = ReadableRows(query.EntityName).Where(entity => EvaluateFilter(entity, query.Criteria)).Select(EntityValues.Clone).ToList();
+            AggregateQuery aggregate = BuildAggregateQuery(query, fetch);
+
+            // Rows are deep copies (Clone) and linked values are cloned on output, so group-by and min/max values
+            // (exposed as AliasedValue) cannot alias the store.
+            List<Entity> rows = JoinedRows(query);
+            int limit = fetch?.AggregateLimit ?? DefaultAggregateLimit;
+            if (rows.Count > limit)
+            {
+                throw new FaultException<OrganizationServiceFault>(
+                    new OrganizationServiceFault { ErrorCode = AggregateQueryRecordLimitExceeded, Message = "AggregateQueryRecordLimit exceeded. Cannot perform this operation." },
+                    new FaultReason("AggregateQueryRecordLimit exceeded. Cannot perform this operation."));
+            }
 
             List<List<Entity>> groups = new List<List<Entity>>();
-            if (query.Groups.Count == 0)
+            if (aggregate.Groups.Count == 0)
             {
                 groups.Add(rows); // a single group over all rows
             }
@@ -204,10 +408,10 @@ namespace Vela.Testing
                 foreach (Entity row in rows)
                 {
                     // Delimit fields with a unit separator (never present in data) and qualify each with its
-                    // attribute name, so distinct tuples cannot collide: without a separator (city:"New",
-                    // region:"York") and (city:"NewYork",region:"") both keyed to "NewYork" and merged into one
-                    // group with wrong aggregate/count values.
-                    string key = string.Join("\u001f", query.Groups.Select(g => $"{g.Attribute}={EntityValues.Normalize(EntityValues.GetValue(row, g.Attribute))?.ToString() ?? " "}"));
+                    // alias, so distinct tuples cannot collide: without a separator (city:"New", region:"York")
+                    // and (city:"NewYork",region:"") both keyed to "NewYork" and merged into one group with wrong
+                    // aggregate/count values.
+                    string key = string.Join("\u001f", aggregate.Groups.Select(g => $"{g.Alias}={EntityValues.Normalize(GroupValue(row, g))?.ToString() ?? " "}"));
                     if (!byKey.TryGetValue(key, out List<Entity>? bucket))
                     {
                         bucket = new List<Entity>();
@@ -227,26 +431,23 @@ namespace Vela.Testing
             List<Entity> results = new List<Entity>();
             foreach (List<Entity> group in groups)
             {
-                Entity result = new Entity(query.EntityName);
-                // Stryker disable once all : a group is built from at least one row, so it is never empty (group.Count > 0 is always true here).
-                Entity? first = group.Count > 0 ? group[0] : null;
-                foreach (AggregateColumn groupColumn in query.Groups)
+                Entity result = new Entity(aggregate.EntityName);
+                foreach (AggregateColumn groupColumn in aggregate.Groups)
                 {
-                    // Stryker disable once all : first is the head of a non-empty group above, so it is never null.
-                    object? value = first != null ? EntityValues.GetValue(first, groupColumn.Attribute) : null;
-                    result[groupColumn.Alias] = new AliasedValue(query.EntityName, groupColumn.Attribute, value);
+                    // A group is built from at least one row, so group[0] exists whenever there are group columns.
+                    result[groupColumn.Alias] = new AliasedValue(groupColumn.EntityName, groupColumn.Attribute, EntityValues.CloneValue(GroupValue(group[0], groupColumn)));
                 }
 
-                foreach (AggregateColumn aggregate in query.Aggregates)
+                foreach (AggregateColumn column in aggregate.Aggregates)
                 {
-                    result[aggregate.Alias] = new AliasedValue(query.EntityName, aggregate.Attribute, ComputeAggregate(aggregate.Function, group, aggregate.Attribute));
+                    result[column.Alias] = new AliasedValue(column.EntityName, column.Attribute, EntityValues.CloneValue(ComputeAggregate(column, group)));
                 }
 
                 results.Add(result);
             }
 
             IOrderedEnumerable<Entity>? ordered = null;
-            foreach (AggregateColumn order in query.Orders)
+            foreach (AggregateColumn order in aggregate.Orders)
             {
                 string alias = order.Alias;
                 Func<Entity, object?> key = entity => OrderKey(entity, alias);
@@ -260,45 +461,58 @@ namespace Vela.Testing
                 }
             }
 
-            IEnumerable<Entity> final = ordered ?? (IEnumerable<Entity>)results;
-            if (query.Top.HasValue)
-            {
-                final = final.Take(query.Top.Value);
-            }
-
-            EntityCollection collection = new EntityCollection { EntityName = query.EntityName };
-            collection.Entities.AddRange(final);
+            EntityCollection collection = new EntityCollection { EntityName = aggregate.EntityName };
+            Page(collection, (ordered ?? (IEnumerable<Entity>)results).ToList(), query.TopCount, query.PageInfo);
             return collection;
         }
 
-        private static object? ComputeAggregate(string function, List<Entity> group, string attribute)
+        // AggregateQueryRecordLimit exceeded (0x8004E023).
+        private const int AggregateQueryRecordLimitExceeded = unchecked((int)0x8004E023);
+
+        private static object? GroupValue(Entity row, AggregateColumn column)
         {
-            switch (function)
+            return DateGroupValue(RowValue(row, column.Key), column.DateGrouping);
+        }
+
+        private static object? ComputeAggregate(AggregateColumn column, List<Entity> group)
+        {
+            List<object> values = group.Select(entity => RowValue(entity, column.Key)).Where(value => value != null).Select(value => value!).ToList();
+            switch (column.Function)
             {
                 case "count":
                     return group.Count;
                 case "countcolumn":
-                    return group.Count(entity => EntityValues.GetValue(entity, attribute) != null);
+                    if (!column.Distinct)
+                    {
+                        return values.Count;
+                    }
+
+                    // distinct='true': the number of unique non-null values (compared like a filter: case-insensitive).
+                    List<object> unique = new List<object>();
+                    foreach (object value in values)
+                    {
+                        if (!unique.Any(seen => EntityValues.AreEqual(seen, value)))
+                        {
+                            unique.Add(value);
+                        }
+                    }
+
+                    return unique.Count;
                 case "sum":
-                    List<decimal> sumValues = group.Select(entity => ToDecimal(EntityValues.GetValue(entity, attribute))).Where(value => value.HasValue).Select(value => value!.Value).ToList();
+                    List<decimal> sumValues = values.Select(ToDecimal).Where(value => value.HasValue).Select(value => value!.Value).ToList();
                     // No values to sum -> null, as Dataverse returns for an aggregate over no (non-null) rows
                     // (consistent with avg/min/max below), rather than 0 which would be indistinguishable from a real 0.
                     return sumValues.Count == 0 ? (object?)null : sumValues.Sum();
                 case "avg":
-                    List<decimal> values = group.Select(entity => ToDecimal(EntityValues.GetValue(entity, attribute))).Where(value => value.HasValue).Select(value => value!.Value).ToList();
+                    List<decimal> avgValues = values.Select(ToDecimal).Where(value => value.HasValue).Select(value => value!.Value).ToList();
                     // No values to average -> null, as Dataverse returns (and consistent with min/max above).
-                    return values.Count == 0 ? null : values.Average();
+                    return avgValues.Count == 0 ? null : avgValues.Average();
                 case "min":
-                    return group.Select(entity => EntityValues.GetValue(entity, attribute)).Where(value => value != null)
-                        .OrderBy(value => EntityValues.Normalize(value), ValueComparer.Instance).FirstOrDefault();
-                case "max":
-                    return group.Select(entity => EntityValues.GetValue(entity, attribute)).Where(value => value != null)
-                        .OrderByDescending(value => EntityValues.Normalize(value), ValueComparer.Instance).FirstOrDefault();
-                default:
-                    throw new NotSupportedException($"FetchXML aggregate function '{function}' is not supported yet.");
+                    return values.OrderBy(value => EntityValues.Normalize(value), ValueComparer.Instance).FirstOrDefault();
+                default: // max (MapAggregate admits no other function)
+                    return values.OrderByDescending(value => EntityValues.Normalize(value), ValueComparer.Instance).FirstOrDefault();
             }
         }
-
         private static decimal? ToDecimal(object? value)
         {
             object? normalized = EntityValues.Normalize(value);
@@ -328,7 +542,14 @@ namespace Vela.Testing
             }
 
             EntityCollection result = new EntityCollection { EntityName = entityName };
+            Page(result, projected, topCount, pageInfo);
+            return result;
+        }
 
+        // TopCount, else paging (PageNumber/Count, MoreRecords, informational cookie), plus the total record count.
+        // Shared by plain and aggregate queries.
+        private static void Page(EntityCollection result, List<Entity> projected, int? topCount, PagingInfo? pageInfo)
+        {
             if (pageInfo != null && pageInfo.ReturnTotalRecordCount)
             {
                 const int limit = 5000;
@@ -357,8 +578,6 @@ namespace Vela.Testing
             {
                 result.Entities.AddRange(projected);
             }
-
-            return result;
         }
 
         private static List<Entity> DistinctRows(List<Entity> rows)
@@ -387,7 +606,7 @@ namespace Vela.Testing
 
         // Joins a single LinkEntity: matches LinkFrom (on the source) == LinkTo (on the linked rows), applies
         // LinkCriteria, appends aliased columns, and recurses into nested links. Inner drops unmatched rows;
-        // LeftOuter/Natural keep them. Yields one result row per matched linked record.
+        // LeftOuter keeps them. Yields one result row per matched linked record.
         //
         // Security trims the linked rows the same way it trims primary rows (via _canRead): a linked record the
         // caller can't read is not a match, so an INNER join drops the primary row while a LEFT-OUTER join keeps it
@@ -395,6 +614,25 @@ namespace Vela.Testing
         // trim applies at every level of a nested join. No-op when security is off (_canRead == null).
         private IEnumerable<Entity> ApplyLink(Entity resultRow, Entity source, LinkEntity link)
         {
+            switch (link.JoinOperator)
+            {
+                case JoinOperator.Any:
+                case JoinOperator.NotAny:
+                case JoinOperator.All:
+                case JoinOperator.NotAll:
+                    // A related-record filter used as a join: it keeps or drops the parent row, never multiplies it
+                    // nor returns linked columns (same semantics as FilterExpression.AnyAllFilterLinkEntity).
+                    if (EvaluateAnyAll(source, link))
+                    {
+                        yield return resultRow;
+                    }
+
+                    yield break;
+
+                case JoinOperator.Natural:
+                    throw new NotSupportedException("InMemoryOrganizationService does not support the 'Natural' join operator.");
+            }
+
             object? fromValue = EntityValues.GetValue(source, link.LinkFromAttributeName);
             List<Entity> matched = _table(link.LinkToEntityName)
                 .Where(target => EntityValues.AreEqual(fromValue, EntityValues.GetValue(target, link.LinkToAttributeName)))
@@ -406,8 +644,9 @@ namespace Vela.Testing
             {
                 case JoinOperator.Exists:
                 case JoinOperator.In:
-                    // Inner variants that don't multiply the parent row nor return the linked columns.
-                    if (matched.Count > 0)
+                    // Inner variants that don't multiply the parent row nor return the linked columns. A nested
+                    // link restricts which linked rows count as a match.
+                    if (matched.Any(target => NestedMatch(target, link)))
                     {
                         yield return resultRow;
                     }
@@ -415,22 +654,22 @@ namespace Vela.Testing
                     yield break;
 
                 case JoinOperator.MatchFirstRowUsingCrossApply:
-                    // Left-outer, but the parent row appears at most once (columns from the first match).
-                    if (matched.Count == 0)
+                    // An inner variant (CROSS APPLY): an unmatched parent is dropped; a matched one appears once,
+                    // with the columns of its first matching linked row.
+                    Entity? first = matched.FirstOrDefault(target => NestedMatch(target, link));
+                    if (first == null)
                     {
-                        yield return resultRow;
                         yield break;
                     }
 
-                    foreach (Entity first in ExpandNested(AddAliasedColumns(resultRow, matched[0], link), matched[0], link))
+                    foreach (Entity row in ExpandNested(AddAliasedColumns(resultRow, first, link), first, link).Take(1))
                     {
-                        yield return first;
+                        yield return row;
                     }
 
                     yield break;
 
                 case JoinOperator.LeftOuter:
-                case JoinOperator.Natural:
                     if (matched.Count == 0)
                     {
                         yield return resultRow;
@@ -468,10 +707,34 @@ namespace Vela.Testing
             return expanded;
         }
 
+        // True when a linked row survives the link's own nested link-entities (an inner/exists child with no match
+        // rejects it; an outer child never does). Used by the joins that only test for a match.
+        private bool NestedMatch(Entity target, LinkEntity link)
+        {
+            return ExpandNested(target, target, link).Any();
+        }
+
+        // The joined row keeps a reference to every linked record under this hidden key, so conditions
+        // (ConditionExpression.EntityName), column comparisons, link orders and aggregates can read ANY column of
+        // the linked row — not only the selected ones. Finalize strips it, so it never reaches the caller.
+        private const string LinkedRecordPrefix = "\u0001link:";
+
+        private sealed class LinkedRecord
+        {
+            public LinkedRecord(Entity target)
+            {
+                Target = target;
+            }
+
+            public Entity Target { get; }
+        }
+
         private static Entity AddAliasedColumns(Entity resultRow, Entity target, LinkEntity link)
         {
             Entity copy = EntityValues.Clone(resultRow);
             string alias = string.IsNullOrEmpty(link.EntityAlias) ? link.LinkToEntityName : link.EntityAlias;
+            copy[LinkedRecordPrefix + alias] = new LinkedRecord(target);
+
             IEnumerable<string> names = link.Columns == null || link.Columns.AllColumns
                 ? target.Attributes.Keys.ToList()
                 : link.Columns.Columns;
@@ -486,15 +749,35 @@ namespace Vela.Testing
                 }
             }
 
-            // Always expose the join key under the alias so conditions targeting the link (ConditionExpression.EntityName),
-            // such as the "records not in a set" pattern, can tell matched from unmatched rows.
-            string keyColumn = $"{alias}.{link.LinkToAttributeName}";
-            if (!copy.Contains(keyColumn))
+            // Column aliases on the link (<attribute name alias/> in a link-entity) are returned under the alias.
+            foreach (XrmAttributeExpression expression in link.Columns.AttributeExpressions)
             {
-                copy[keyColumn] = new AliasedValue(target.LogicalName, link.LinkToAttributeName, EntityValues.CloneValue(EntityValues.GetValue(target, link.LinkToAttributeName)));
+                object? value = EntityValues.GetValue(target, expression.AttributeName);
+                if (value != null)
+                {
+                    copy[expression.Alias] = new AliasedValue(target.LogicalName, expression.AttributeName, EntityValues.CloneValue(value));
+                }
             }
 
             return copy;
+        }
+
+        // Reads a value from a (possibly joined) row: a root column by name, or a linked column as
+        // "{linkAlias}.{column}" — from the projected aliased column or, when not selected, the linked record itself.
+        private static object? RowValue(Entity row, string key)
+        {
+            if (row.Attributes.TryGetValue(key, out object? value))
+            {
+                return value is AliasedValue aliased ? aliased.Value : value;
+            }
+
+            int dot = key.IndexOf('.');
+            if (dot != -1 && row.Attributes.TryGetValue(LinkedRecordPrefix + key.Substring(0, dot), out object? linked))
+            {
+                return EntityValues.GetValue(((LinkedRecord)linked).Target, key.Substring(dot + 1));
+            }
+
+            return EntityValues.GetValue(row, key);
         }
 
         // Project base attributes per the ColumnSet; aliased (linked) columns are always kept.
@@ -504,6 +787,11 @@ namespace Vela.Testing
             bool allColumns = columnSet == null || columnSet.AllColumns;
             foreach (KeyValuePair<string, object> attribute in row.Attributes)
             {
+                if (attribute.Value is LinkedRecord)
+                {
+                    continue; // internal join state, never returned
+                }
+
                 if (attribute.Value is AliasedValue)
                 {
                     result[attribute.Key] = attribute.Value;
@@ -519,8 +807,8 @@ namespace Vela.Testing
             {
                 foreach (XrmAttributeExpression expression in columnSet.AttributeExpressions)
                 {
-                    if (expression.AggregateType == XrmAggregateType.None && !expression.HasGroupBy
-                        && row.Attributes.TryGetValue(expression.AttributeName, out object? value))
+                    object? value = EntityValues.GetValue(row, expression.AttributeName);
+                    if (value != null)
                     {
                         result[expression.Alias] = new AliasedValue(row.LogicalName, expression.AttributeName, value);
                     }
@@ -561,13 +849,7 @@ namespace Vela.Testing
 
         private static object? OrderKey(Entity entity, string attributeName)
         {
-            if (!entity.Contains(attributeName))
-            {
-                return null;
-            }
-
-            object value = entity[attributeName];
-            return EntityValues.Normalize(value is AliasedValue aliased ? aliased.Value : value);
+            return EntityValues.Normalize(RowValue(entity, attributeName));
         }
 
         private bool EvaluateFilter(Entity entity, FilterExpression? filter)
@@ -591,7 +873,8 @@ namespace Vela.Testing
             return isAnd ? results.All(r => r) : results.Count == 0 || results.Any(r => r);
         }
 
-        // Any/All/NotAny/NotAll filters on related records (FilterExpression.AnyAllFilterLinkEntity).
+        // Any/All/NotAny/NotAll filters on related records (FilterExpression.AnyAllFilterLinkEntity). A related
+        // record "satisfies" the link when it passes LinkCriteria and its nested link-entities.
         private bool EvaluateAnyAll(Entity parent, LinkEntity link)
         {
             object? fromValue = EntityValues.GetValue(parent, link.LinkFromAttributeName);
@@ -599,15 +882,13 @@ namespace Vela.Testing
                 .Where(target => EntityValues.AreEqual(fromValue, EntityValues.GetValue(target, link.LinkToAttributeName)))
                 .Where(target => _canRead == null || _canRead(target)) // an Any/All is evaluated over readable related records
                 .ToList();
-            bool anySatisfies = linked.Any(target => EvaluateFilter(target, link.LinkCriteria));
+            bool anySatisfies = linked.Any(target => EvaluateFilter(target, link.LinkCriteria) && NestedMatch(target, link));
 
             switch (link.JoinOperator)
             {
-                case JoinOperator.Any: return anySatisfies;
                 case JoinOperator.NotAny: return !anySatisfies;
-                case JoinOperator.NotAll: return anySatisfies; // equivalent to Any per the SDK docs
                 case JoinOperator.All: return linked.Count > 0 && !anySatisfies;
-                default: return anySatisfies;
+                default: return anySatisfies; // Any, and NotAll (equivalent to Any per the SDK docs)
             }
         }
 
@@ -616,15 +897,14 @@ namespace Vela.Testing
             object? actual = GetConditionValue(entity, condition);
             IList<object> values = condition.Values;
 
+            if (condition.CompareColumns)
+            {
+                return EvaluateColumnComparison(entity, condition, actual);
+            }
+
             object? Operand(int index)
             {
-                if (index >= values.Count)
-                {
-                    return null;
-                }
-
-                // CompareColumns: the value is the name of another column on the same row.
-                return condition.CompareColumns ? EntityValues.GetValue(entity, EntityValues.AsString(values[index])) : values[index];
+                return index >= values.Count ? null : values[index];
             }
 
             // Dataverse uses SQL three-valued logic: a NULL attribute never satisfies a comparison, so the
@@ -750,18 +1030,56 @@ namespace Vela.Testing
 
         private static object? GetConditionValue(Entity entity, ConditionExpression condition)
         {
-            if (!string.IsNullOrEmpty(condition.EntityName))
-            {
-                string key = condition.EntityName + "." + condition.AttributeName;
-                if (entity.Attributes.TryGetValue(key, out object? value))
-                {
-                    return value is AliasedValue aliased ? aliased.Value : value;
-                }
+            // EntityName targets a linked entity by alias: read its column from the joined row, selected or not (an
+            // unmatched outer join has no linked record, so the column reads as null).
+            return string.IsNullOrEmpty(condition.EntityName)
+                ? EntityValues.GetValue(entity, condition.AttributeName)
+                : RowValue(entity, condition.EntityName + "." + condition.AttributeName);
+        }
 
-                return null;
+        // A column comparison (CompareColumns / FetchXML valueof): the single value names the other column, on the
+        // same table as the condition (or "{alias}.{column}" for a linked one). Dataverse only compares columns with
+        // eq/ne/gt/ge/lt/le, and a NULL on either side never satisfies the comparison (SQL three-valued logic).
+        private static bool EvaluateColumnComparison(Entity entity, ConditionExpression condition, object? actual)
+        {
+            if (condition.Values.Count != 1)
+            {
+                throw new NotSupportedException(
+                    $"A column comparison on '{condition.AttributeName}' must name exactly one other column.");
             }
 
-            return EntityValues.GetValue(entity, condition.AttributeName);
+            string other = EntityValues.AsString(condition.Values[0]);
+            string key = other.IndexOf('.') < 0 && !string.IsNullOrEmpty(condition.EntityName) ? condition.EntityName + "." + other : other;
+            object? operand = RowValue(entity, key);
+
+            switch (condition.Operator)
+            {
+                case ConditionOperator.Equal:
+                case ConditionOperator.NotEqual:
+                case ConditionOperator.GreaterThan:
+                case ConditionOperator.GreaterEqual:
+                case ConditionOperator.LessThan:
+                case ConditionOperator.LessEqual:
+                    break;
+                default:
+                    throw new NotSupportedException(
+                        $"InMemoryOrganizationService does not support the '{condition.Operator}' operator in a column comparison (only eq, ne, gt, ge, lt, le).");
+            }
+
+            if (actual == null || operand == null)
+            {
+                return false;
+            }
+
+            switch (condition.Operator)
+            {
+                case ConditionOperator.Equal: return EntityValues.AreEqual(actual, operand);
+                case ConditionOperator.NotEqual: return !EntityValues.AreEqual(actual, operand);
+                case ConditionOperator.GreaterThan: return EntityValues.Compare(actual, operand) > 0;
+                case ConditionOperator.GreaterEqual: return EntityValues.Compare(actual, operand) >= 0;
+                case ConditionOperator.LessThan: return EntityValues.Compare(actual, operand) < 0;
+                default: return EntityValues.Compare(actual, operand) <= 0; // LessEqual
+            }
         }
 
         private static DateTime? DatePart(object? value)

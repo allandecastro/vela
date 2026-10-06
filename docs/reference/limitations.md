@@ -142,7 +142,8 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   (no duplicate-key fault), and a self-referential N:N maps its two columns positionally. A 1:N relationship is
   modelled by `Update`-ing the lookup column.
 - **`RetrieveMultiple` is a common subset.** No query hints, `NoLock`, `FilterHint=union`, or faithful paging
-  cookies. FetchXML support covers a common subset (incl. aggregates).
+  cookies. FetchXML support covers a common subset (incl. aggregates); anything outside it throws
+  `NotSupportedException` naming the element or attribute (see [Testing](../guides/testing.md#queries)).
 - **System columns are a simplified model.** `createdon`/`createdby`/`modifiedon`/`modifiedby`, the owner
   columns and `organizationid` are stamped from the configured actor (`WithCurrentUser` /
   `WithCurrentBusinessUnit` / `WithOrganizationId`) - not server-computed. Without `WithCurrentUser` a stable

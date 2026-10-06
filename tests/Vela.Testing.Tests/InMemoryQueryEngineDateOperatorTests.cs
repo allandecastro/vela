@@ -133,7 +133,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void CrossApply_returns_the_parent_once_for_a_match_and_keeps_unmatched_parents()
+        public void CrossApply_returns_the_parent_once_for_a_match_and_drops_unmatched_parents()
         {
             Guid withChild = Guid.NewGuid();
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
@@ -149,8 +149,9 @@ namespace Vela.Testing.Tests
                 .Select(e => e.GetAttributeValue<string>("name"))
                 .OrderBy(s => s, StringComparer.Ordinal)
                 .ToArray();
-            // HasContacts has two children but appears once (first match); Lonely is kept (left-outer semantics).
-            Assert.Equal(new[] { "HasContacts", "Lonely" }, names);
+            // HasContacts has two children but appears once (first match); Lonely is dropped:
+            // matchfirstrowusingcrossapply is an inner-join variant (CROSS APPLY), not a left-outer one.
+            Assert.Equal(new[] { "HasContacts" }, names);
         }
 
         [Fact]

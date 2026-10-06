@@ -972,9 +972,9 @@ namespace Vela.Testing
                     result = engine.ExecuteQueryByAttribute(qba);
                     break;
                 case FetchExpression fetch:
-                    result = FetchXmlParser.IsAggregate(fetch.Query)
-                        ? engine.ExecuteAggregate(FetchXmlParser.ParseAggregate(fetch.Query))
-                        : engine.ExecuteQueryExpression(FetchXmlParser.Parse(fetch.Query));
+                    // FetchXML is parsed into the equivalent QueryExpression (aggregates included) and runs through the
+                    // same engine path, so the two forms of a query can never diverge.
+                    result = engine.ExecuteFetch(FetchXmlParser.Parse(fetch.Query));
                     break;
                 default:
                     throw new NotSupportedException(
