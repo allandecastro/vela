@@ -545,7 +545,7 @@ The rules the chain encodes:
 - `ctx.AcquireManagedIdentityToken(scopes)` - Acquire token via `IManagedIdentityService` when available
 - `ctx.LogInformation(...)` / `ctx.LogWarning(...)` / `ctx.LogError(ex, ...)` / `ctx.LogMetric(...)` - Leveled, structured telemetry to the trace log and Application Insights (see [Telemetry & Application Insights](telemetry.md))
 - `ctx.TraceMethod("details")` - Trace caller method name with correlation/stage/depth
-- `ctx.TraceExecutionSnapshot("phase")` - Trace a structured context snapshot, including full Target/Image/Input/Output attribute values with PascalCase sections
+- `ctx.TraceExecutionSnapshot("phase")` - Trace a structured context snapshot to the trace log, including the Target/Image/Input/Output attribute values (pass `TraceSnapshotDetail.Metadata` for names only)
 
 ### Duplicating a record (`Clone`)
 
@@ -640,14 +640,22 @@ When plugin telemetry is available in runtime (`Microsoft.Xrm.Sdk.PluginTelemetr
 
 Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment setting (`Off` / `Exception` / `All`) - not anything in code. There is no framework-level verbosity switch: server-side plugins run in Microsoft's sandbox where OS environment variables cannot be set, so a runtime verbosity flag would have no effect online. What you control in code is *what extra detail* you trace, at the call site.
 
-**You get two snapshots for free on every execution.** `PluginBase` wraps your handler and emits the
-boundaries automatically - a `start` snapshot before your code runs, then `success` when it returns (or
-`invalid-plugin-exception` / `business-exception` / `unhandled-exception` if it throws). You write nothing for
-those; the phase names are fixed.
+**You get an automatic snapshot on every execution, without record data.** `PluginBase` wraps your handler and
+writes a `start` snapshot before your code runs, then one for the failure if it throws
+(`invalid-plugin-exception` / `business-exception` / `unhandled-exception`). By default these list only
+**metadata**: message, stage, ids, and the *names* of the parameters, images and attributes, never their values.
+Plugins routinely handle personal data and secrets, and the trace log is persisted when the environment's Plugin
+Trace Log is `All`. While debugging, opt into values for one plugin:
+
+```csharp
+protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full; // adds values, and a success snapshot
+```
+
+Snapshots go **only to the plug-in trace log**: they are never forwarded to `ILogger` / Application Insights.
 
 To capture **intermediate** state, call `TraceExecutionSnapshot(...)` yourself **inside your handler** with your
-own phase label - a checkpoint around a risky step. (The framework already covers entry and exit, so there's no
-point re-emitting `start` yourself.) Use the lighter `TraceMethod(...)` when you don't need the full payload:
+own phase label - a checkpoint around a risky step. An explicit call traces values (`TraceSnapshotDetail.Full`)
+unless you pass `TraceSnapshotDetail.Metadata`. Use the lighter `TraceMethod(...)` when you don't need a payload:
 
 ```csharp
 private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
@@ -657,79 +665,46 @@ private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
     var limit = ComputeCreditLimit(target);
 
     ctx.TraceExecutionSnapshot("after-credit-calc"); // full snapshot at this exact point, your own label
-    ctx.Service.Update(target);
 }
 ```
 
 > [!WARNING]
-> A snapshot dumps Target/Image/Input/Output attribute values into the Plugin Trace Log. Avoid calling `TraceExecutionSnapshot` from plugins handling sensitive data when the environment's Plugin Trace Log is set to `All`.
+> A full snapshot writes Target/Image/Input/Output attribute values into the Plugin Trace Log. Keep it out of
+> plugins that handle sensitive data when the environment's Plugin Trace Log is set to `All`.
 
-`TraceExecutionSnapshot(...)` always emits the **full** structured payload (every Input/Output parameter, the
-pre/post images and the Target, with attribute values); there is no compact/verbose mode. A snapshot looks like:
+A metadata snapshot (the automatic default) looks like:
 
 ```text
 [2026-06-14T09:12:44.1573820Z] ExecutionSnapshot
   Phase: start
   MessageName: Update
-  Stage: 20
+  Stage: 40
   Mode: 0
   Depth: 1
   CorrelationId: 8f1c2d6e-4a7b-4f0e-9c11-2b6e1d2a9f33
   PrimaryEntityName: account
   PrimaryEntityId: 3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
-  UserId: 6c2f1a8b-5d33-4e90-8a17-0f4b2c9d7e55
-  InitiatingUserId: 6c2f1a8b-5d33-4e90-8a17-0f4b2c9d7e55
-  IsApplicationUser: False
-  IsPortalsClientCall: False
-  PortalsContactId: <none>
-  InitiatingUserAgent: <none>
-  EnvironmentId: <none>
-  TenantId: <none>
-  IsBulkOperation: False
-  InputParameters:
-    Target:
-      LogicalName: account
-      Id: 3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
-      Attributes:
-        creditlimit: 1500 (Money)
-        name: "Zava"
-  OutputParameters:
-    <none>
-  PreEntityImages:
-    PreImage:
-      LogicalName: account
-      Id: 3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
-      Attributes:
-        name: "Old Zava"
-  PostEntityImages:
-    PostImage:
-      LogicalName: account
-      Id: 3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
-      Attributes:
-        name: "Zava"
-  Target:
-    LogicalName: account
-    Id: 3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
-    Attributes:
-      creditlimit: 1500 (Money)
-      name: "Zava"
+  ...
+  InputParameters: Target=account:3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41 [creditlimit, name]
+  OutputParameters: <none>
+  PreEntityImages: PreImage=account:3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41 [name]
+  PostEntityImages: <none>
+  Target: account:3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41 [creditlimit, name]
 ```
 
-Example output - wrapped Dataverse operation tracing (automatic on `Service` / `SystemService`), emitted as paired `start` / `ok` entries:
+A full snapshot replaces the last five lines with every parameter and attribute value
+(`name: "Zava"`, `creditlimit: 1500 (Money)`, ...).
+
+Each Dataverse call made through the wrapped services is traced as one line when it starts (so a call that hangs or
+times out is still visible) and one when it ends - metadata only (operation, table, ids, request name):
 
 ```text
-[2026-06-14T09:12:44.1790021Z] Dataverse.Update start
-  scope       : User
-  message     : Update
-  stage/mode  : 20/0
-  depth       : 1
-  correlation : 8f1c2d6e-4a7b-4f0e-9c11-2b6e1d2a9f33
-  details     : entity=account; id=3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
-[2026-06-14T09:12:44.1820017Z] Dataverse.Update ok
-  scope       : User
-  durationMs  : 42
-  details     : entity=account; id=3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
+Dataverse.Update start scope=User depth=1 entity=account; id=3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
+Dataverse.Update ok 42 ms
 ```
+
+A failed call traces `Dataverse.Update fail 42 ms <ExceptionType>`: only the exception type, since a fault message
+can echo submitted values (the exception itself still reaches your handler, message included).
 
 Keep your own handler traces business-focused (decisions and key values); rely on the framework for the
 pipeline, snapshot, and Dataverse-operation tracing.

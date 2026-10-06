@@ -47,11 +47,17 @@ namespace Vela.Context
         }
 
         /// <summary>
-        /// Traces a rich execution snapshot including target and image metadata.
+        /// Traces an execution snapshot (message, stage, ids, then the input/output parameters, images and target) to
+        /// the plug-in trace log only: it never reaches <see cref="ILocalPluginContext.Logger"/> or Application Insights.
         /// </summary>
         /// <param name="context">Plugin context.</param>
         /// <param name="phase">Logical phase name.</param>
-        public static void TraceExecutionSnapshot(this ILocalPluginContext context, string phase)
+        /// <param name="detail">
+        /// <see cref="TraceSnapshotDetail.Full"/> (the default for an explicit call) includes attribute and parameter
+        /// values; <see cref="TraceSnapshotDetail.Metadata"/> lists only names, ids and counts, so no record data
+        /// (personal data, secrets) is written.
+        /// </param>
+        public static void TraceExecutionSnapshot(this ILocalPluginContext context, string phase, TraceSnapshotDetail detail = TraceSnapshotDetail.Full)
         {
             if (context == null)
             {
@@ -85,18 +91,66 @@ namespace Vela.Context
                 trace.AppendFormat("  BulkPreEntityImagesCount: {0}{1}", context.BulkPreEntityImagesCollection.Count, nl);
                 trace.AppendFormat("  BulkPostEntityImagesCount: {0}{1}", context.BulkPostEntityImagesCollection.Count, nl);
             }
-            trace.AppendLine("  InputParameters:");
-            trace.AppendLine(FormatParameterCollection(context.PluginExecutionContext.InputParameters, 2));
-            trace.AppendLine("  OutputParameters:");
-            trace.AppendLine(FormatParameterCollection(context.PluginExecutionContext.OutputParameters, 2));
-            trace.AppendLine("  PreEntityImages:");
-            trace.AppendLine(FormatImageCollection(context.PluginExecutionContext.PreEntityImages, 2));
-            trace.AppendLine("  PostEntityImages:");
-            trace.AppendLine(FormatImageCollection(context.PluginExecutionContext.PostEntityImages, 2));
-            trace.AppendLine("  Target:");
-            trace.Append(FormatTarget(context, 2));
-            context.Trace(trace.ToString());
+            // Fail closed: only exactly Full traces values; any other value (including an out-of-range cast) is metadata.
+            if (detail != TraceSnapshotDetail.Full)
+            {
+                trace.AppendFormat("  InputParameters: {0}{1}", DescribeParameters(context.PluginExecutionContext.InputParameters), nl);
+                trace.AppendFormat("  OutputParameters: {0}{1}", DescribeParameters(context.PluginExecutionContext.OutputParameters), nl);
+                trace.AppendFormat("  PreEntityImages: {0}{1}", DescribeImages(context.PluginExecutionContext.PreEntityImages), nl);
+                trace.AppendFormat("  PostEntityImages: {0}{1}", DescribeImages(context.PluginExecutionContext.PostEntityImages), nl);
+                trace.AppendFormat("  Target: {0}", TryGetTarget(context, out Entity? metadataTarget) && metadataTarget != null ? DescribeEntity(metadataTarget) : "<none>");
+            }
+            else
+            {
+                trace.AppendLine("  InputParameters:");
+                trace.AppendLine(FormatParameterCollection(context.PluginExecutionContext.InputParameters, 2));
+                trace.AppendLine("  OutputParameters:");
+                trace.AppendLine(FormatParameterCollection(context.PluginExecutionContext.OutputParameters, 2));
+                trace.AppendLine("  PreEntityImages:");
+                trace.AppendLine(FormatImageCollection(context.PluginExecutionContext.PreEntityImages, 2));
+                trace.AppendLine("  PostEntityImages:");
+                trace.AppendLine(FormatImageCollection(context.PluginExecutionContext.PostEntityImages, 2));
+                trace.AppendLine("  Target:");
+                trace.Append(FormatTarget(context, 2));
+            }
+
+            // Straight to the plug-in trace log: Trace() would also fan the snapshot out to ILogger / Application
+            // Insights, copying record data into telemetry.
+            if (context.TracingService != null)
+            {
+                context.TracingService.Trace("{0}", trace.ToString());
+            }
+            else
+            {
+                context.Trace(trace.ToString());
+            }
         }
+
+        // Metadata-only descriptions: names, types, ids and counts, never values.
+        private static string DescribeParameters(ParameterCollection parameters) =>
+            parameters == null || parameters.Count == 0
+                ? "<none>"
+                : string.Join("; ", parameters.Keys.Cast<string>().OrderBy(x => x, StringComparer.Ordinal).Select(key => $"{key}={DescribeValue(parameters[key])}"));
+
+        private static string DescribeImages(EntityImageCollection images) =>
+            images == null || images.Count == 0
+                ? "<none>"
+                : string.Join("; ", images.Keys.Cast<string>().OrderBy(x => x, StringComparer.Ordinal).Select(alias => $"{alias}={DescribeEntity(images[alias])}"));
+
+        private static string DescribeEntity(Entity entity) =>
+            entity == null
+                ? "<null>"
+                : $"{entity.LogicalName}:{entity.Id} [{string.Join(", ", entity.Attributes.Keys.OrderBy(x => x, StringComparer.Ordinal))}]";
+
+        private static string DescribeValue(object? value) => value switch
+        {
+            null => "<null>",
+            Entity entity => DescribeEntity(entity),
+            EntityReference reference => $"{reference.LogicalName}:{reference.Id}",
+            EntityCollection collection => $"EntityCollection(Count={collection.Entities.Count}, {collection.EntityName})",
+            Guid guid => guid.ToString(),
+            _ => $"({value.GetType().Name})",
+        };
 
         private static string FormatTarget(ILocalPluginContext context, int indentLevel)
         {
