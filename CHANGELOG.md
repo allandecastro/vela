@@ -62,6 +62,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **VELA009, VELA017 and VELA018 analyze handlers bound through `Handle(Delegate)`.** A handler taking a generated
+  typed step context (or any context other than the config's `Handle(Action<...>)` one) binds to that overload, and
+  the analyzers missed it entirely: an uncaptured image read, a `HasChanged` without a pre-image or a Target write in
+  an async step went unreported. VELA009 also covers the static-call form `PluginContextExtensions.HasChanged<T>(ctx, ...)`.
 - **A column selector that is not a column of the entity fails instead of registering a wrong column.** A nested
   path (`a => a.PrimaryContactId.Id`, `a => a.ParentAccount.Name`) resolved to the last member's name ("id",
   "name"), and `a => a.Id` on a model without a named `Id` to "id", so `FilterOn` and images silently targeted a

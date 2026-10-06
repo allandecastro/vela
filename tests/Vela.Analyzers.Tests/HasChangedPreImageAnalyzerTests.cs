@@ -14,6 +14,7 @@ using System;
 namespace Vela.Context
 {
     public interface ILocalPluginContext { }
+    public interface IGeneratedContext : ILocalPluginContext { }
     public static class Changes
     {
         public static bool HasChanged(this ILocalPluginContext ctx, Func<object, object> attribute, string preImageAlias = ""PreImage"") => false;
@@ -31,6 +32,7 @@ namespace Vela.Steps
     {
         IConfig WithPreImage(params string[] columns);
         void Handle(Action<Vela.Context.ILocalPluginContext> handler);
+        void Handle(Delegate handler);
     }
 }
 
@@ -176,6 +178,34 @@ namespace Demo
     public sealed class Use { public bool Run(Tracker t) => t.HasChanged(""name""); }
 }
 ";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_HasChanged_in_a_handler_bound_through_Handle_Delegate()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }\n" +
+            "        private void OnUpd(IGeneratedContext ctx) { ctx.{|#0:HasChanged|}(x => x); }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("HasChanged"));
+    }
+
+    [Fact]
+    public async Task Flags_the_static_call_form_of_HasChanged_without_an_alias()
+    {
+        // Changes.HasChanged(ctx, selector): the context is the first argument, not an explicit alias.
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { Changes.{|#0:HasChanged|}(ctx, x => x); }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("HasChanged"));
+    }
+
+    [Fact]
+    public async Task Skips_the_static_call_form_with_an_explicit_alias()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { Changes.HasChanged(ctx, x => x, \"custom\"); }");
         await Verify.VerifyAnalyzerAsync(code);
     }
 }

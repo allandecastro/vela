@@ -20,6 +20,16 @@ namespace Vela.Analyzers
             return ImplementsFluent(method.ContainingType, fluent);
         }
 
+        // The method a `.Handle(X)` argument binds to. When the call resolves to the Handle(Delegate) overload (a handler
+        // taking a generated typed context, or any context other than the config's Handle(Action<...>) one), Roslyn
+        // leaves Symbol null and reports the method only as a candidate; a single candidate is that method.
+        public static IMethodSymbol? BoundHandler(SemanticModel model, ExpressionSyntax handler, System.Threading.CancellationToken cancellationToken)
+        {
+            SymbolInfo info = model.GetSymbolInfo(handler, cancellationToken);
+            return info.Symbol as IMethodSymbol
+                ?? (info.CandidateSymbols.Length == 1 ? info.CandidateSymbols[0] as IMethodSymbol : null);
+        }
+
         public static bool ImplementsFluent(ITypeSymbol type, INamedTypeSymbol fluent)
         {
             if (SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, fluent))

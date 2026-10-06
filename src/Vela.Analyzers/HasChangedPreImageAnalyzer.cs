@@ -78,7 +78,10 @@ namespace Vela.Analyzers
 
             // A HasChanged with an explicit (non-default) pre-image alias is out of scope - matching aliases to the
             // WithPreImage alias is ambiguous, so skip to avoid false positives. HasAnyChanged always uses default.
-            if (name == "HasChanged" && invocation.ArgumentList.Arguments.Count > 1)
+            // Called as a static method (PluginContextExtensions.HasChanged<T>(ctx, selector)) the context is the
+            // first argument, not an alias.
+            int receiverArguments = method.ReducedFrom is null && method.IsExtensionMethod ? 1 : 0;
+            if (name == "HasChanged" && invocation.ArgumentList.Arguments.Count - receiverArguments > 1)
             {
                 return;
             }
@@ -129,7 +132,7 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                if (model.GetSymbolInfo(handlerArg.Expression, cancellationToken).Symbol is not IMethodSymbol bound
+                if (FluentStep.BoundHandler(model, handlerArg.Expression, cancellationToken) is not IMethodSymbol bound
                     || !FluentStep.IsFluentMethod(model, handleCall, fluent, cancellationToken))
                 {
                     continue;
