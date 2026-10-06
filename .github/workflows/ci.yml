@@ -41,10 +41,10 @@ jobs:
       - name: Test
         run: dotnet test Vela.sln -c Release --no-build
 
-      # Branch-coverage gates (not line coverage) on the two areas where edge-case coverage matters most:
-      # the diff engine (plan/apply idempotence) and the in-memory test harness. coverlet.msbuild fails the
-      # run if branch coverage drops below the threshold. Thresholds are set below current coverage so they
-      # catch regressions without churn; raise them as coverage improves.
+      # Branch-coverage gates (not line coverage): diff engine, test harness, analyzers, code fixes and the plugin
+      # runtime (below). coverlet.msbuild fails the run if branch coverage drops below the threshold; every gated
+      # test project must reference coverlet.msbuild, or the threshold is silently ignored. Thresholds sit just
+      # below measured coverage so they catch regressions without churn; raise them as coverage improves.
       - name: Coverage gate (branch) — diff engine
         run: >
           dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release
@@ -61,13 +61,13 @@ jobs:
         run: >
           dotnet test tests/Vela.Analyzers.Tests/Vela.Analyzers.Tests.csproj -c Release
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
-          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=78
+          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=77
           -p:Include="[Vela.Analyzers]*"
       - name: Coverage gate (branch) — code fixes
         run: >
           dotnet test tests/Vela.CodeFixes.Tests/Vela.CodeFixes.Tests.csproj -c Release
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
-          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=65
+          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=82
           -p:Include="[Vela.CodeFixes]*"
 
       # Vela.Plugins (the plugin runtime) is exercised by BOTH Vela.Tests and Vela.Testing.Tests, so its

@@ -10,6 +10,10 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit" />
+    <PackageReference Include="coverlet.msbuild">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <!-- Pin Roslyn to the version the analyzer is compiled against (4.8.0) so the test host and the analyzer agree
          (the testing harness would otherwise resolve an older Microsoft.CodeAnalysis and fail with CS1705). -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
