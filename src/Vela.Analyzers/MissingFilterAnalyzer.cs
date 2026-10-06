@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -22,7 +23,7 @@ namespace Vela.Analyzers
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
             title: "Create/Update step is missing FilterOn(...)",
-            messageFormat: "This {0} step has no filtering attribute; add .FilterOn(e => e.Column) before .Handle(...)",
+            messageFormat: "This {0} step has no filtering attribute; {1}",
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
@@ -32,6 +33,12 @@ namespace Vela.Analyzers
         private static readonly Regex FilteredConfig = new Regex(
             "^I(Create|Update|CreateMultiple|UpdateMultiple)(PreValidation|PreOperation|PostOperation)Config$",
             RegexOptions.CultureInvariant);
+
+        private static readonly Regex PermissiveConfig = new Regex(
+            "^IPermissive(PreValidation|PreOperation|PostOperation)Config$",
+            RegexOptions.CultureInvariant);
+
+        private static readonly string[] FilteredMessages = { "Create", "Update", "CreateMultiple", "UpdateMultiple" };
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -66,12 +73,54 @@ namespace Vela.Analyzers
             }
 
             Match match = FilteredConfig.Match(handle.ContainingType.Name);
-            if (!match.Success || !ReachesRegisterStepWithoutFilter(member.Expression))
+            if (match.Success)
             {
+                if (ReachesRegisterStepWithoutFilter(member.Expression))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), match.Groups[1].Value,
+                        "add .FilterOn(e => e.Column) before .Handle(...)"));
+                }
+
                 return;
             }
 
-            context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), match.Groups[1].Value));
+            // The permissive OnMessage("Create") path offers no FilterOn at all, so a filter-required message there
+            // always fails when the step is built: point at the typed trigger, which does.
+            if (PermissiveConfig.IsMatch(handle.ContainingType.Name)
+                && FindOnMessageName(member.Expression, context.SemanticModel, context.CancellationToken) is { } message
+                && FilteredMessages.FirstOrDefault(m => string.Equals(m, message, System.StringComparison.OrdinalIgnoreCase)) is { } canonical)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), canonical,
+                    $"use the typed On{canonical}() trigger, which offers .FilterOn(...), instead of OnMessage(...)"));
+            }
+        }
+
+        // The compile-time constant message name of the OnMessage("...") call on the chain (a literal or a const), or
+        // null when there is none or it is not constant.
+        private static string? FindOnMessageName(ExpressionSyntax receiver, SemanticModel model, System.Threading.CancellationToken cancellationToken)
+        {
+            for (ExpressionSyntax? current = receiver; current is not null;)
+            {
+                switch (current)
+                {
+                    case InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax ma } invocation:
+                        if (ma.Name.Identifier.ValueText == "OnMessage" && invocation.ArgumentList.Arguments.Count >= 1)
+                        {
+                            Optional<object?> value = model.GetConstantValue(invocation.ArgumentList.Arguments[0].Expression, cancellationToken);
+                            return value.HasValue ? value.Value as string : null;
+                        }
+
+                        current = ma.Expression;
+                        break;
+                    case ParenthesizedExpressionSyntax paren:
+                        current = paren.Expression;
+                        break;
+                    default:
+                        return null;
+                }
+            }
+
+            return null;
         }
 
         // Walks the receiver spine back to the chain root. True only when the root is a RegisterStep() call and no

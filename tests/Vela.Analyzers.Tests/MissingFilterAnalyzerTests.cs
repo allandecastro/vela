@@ -14,7 +14,9 @@ public sealed class MissingFilterAnalyzerTests
 namespace Vela.Steps
 {
     public interface IFluentStep { }
-    public interface ITrigger : IFluentStep { IStage OnCreate(); IStage OnUpdate(); IStage OnCreateMultiple(); IDeleteStage OnDelete(); }
+    public interface ITrigger : IFluentStep { IStage OnCreate(); IStage OnUpdate(); IStage OnCreateMultiple(); IDeleteStage OnDelete(); IPermissiveStage OnMessage(string message); }
+    public interface IPermissiveStage : IFluentStep { IPermissivePostOperationConfig PostOperation(); }
+    public interface IPermissivePostOperationConfig : IFluentStep { void Handle(System.Action h); }
     public interface IStage : IFluentStep { ICreatePostOperationConfig PostOperation(); IUpdatePreOperationConfig PreOperation(); ICreateMultiplePreValidationConfig PreValidation(); }
     public interface IDeleteStage : IFluentStep { IDeletePostOperationConfig PostOperation(); }
     public interface ICreatePostOperationConfig : IFluentStep { ICreatePostOperationConfig FilterOn(string a); ICreatePostOperationConfig Disabled(); void Handle(System.Action h); }
@@ -49,7 +51,8 @@ namespace Demo
 ";
 
     private static DiagnosticResult Missing(int location, string message) =>
-        new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(location).WithArguments(message);
+        new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(location)
+            .WithArguments(message, "add .FilterOn(e => e.Column) before .Handle(...)");
 
     [Fact]
     public async Task Flags_create_update_and_bulk_steps_without_FilterOn()
@@ -79,5 +82,21 @@ namespace Demo
             ICreatePostOperationConfig step = RegisterStep().OnCreate().PostOperation().FilterOn(""name"");
             step.Handle(H);");
         await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_filter_required_message_on_the_permissive_path()
+    {
+        // OnMessage("create") (any casing, literal or const) has no FilterOn, so building the step always fails.
+        string code = InMethod(@"
+            const string Msg = ""Update"";
+            RegisterStep().OnMessage(""create"").PostOperation().{|#0:Handle|}(H);
+            RegisterStep().OnMessage(Msg).PostOperation().{|#1:Handle|}(H);
+            RegisterStep().OnMessage(""Delete"").PostOperation().Handle(H);");
+        await Verify.VerifyAnalyzerAsync(code,
+            new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(0)
+                .WithArguments("Create", "use the typed OnCreate() trigger, which offers .FilterOn(...), instead of OnMessage(...)"),
+            new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(1)
+                .WithArguments("Update", "use the typed OnUpdate() trigger, which offers .FilterOn(...), instead of OnMessage(...)"));
     }
 }

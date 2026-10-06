@@ -69,9 +69,13 @@ internal static class StepInjector
 
         // Emit the FilterOn selector the caller resolved. A message that requires one (AddCommand.RequiresFilter)
         // is rejected before injection when none was given, so there is never a placeholder to write.
-        if (AddCommand.RequiresFilter(message) && explicitFilterAttributes is not { Length: > 0 })
+        bool hasAttributes = explicitFilterAttributes is { Length: > 0 };
+        if (AddCommand.RequiresFilter(message) != hasAttributes)
         {
-            error = $"A {message} step needs filtering attributes.";
+            // FilterOn exists only on the filter-required messages: emitting it elsewhere would not compile.
+            error = hasAttributes
+                ? $"A {message} step has no FilterOn; filtering attributes only apply to Create, Update, CreateMultiple and UpdateMultiple."
+                : $"A {message} step needs filtering attributes.";
             return false;
         }
 

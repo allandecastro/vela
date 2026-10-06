@@ -333,8 +333,16 @@ internal static class AddCommand
 
     // The messages whose steps must declare a filtering attribute (FilterOn), shared by 'add plugin', 'add step'
     // and StepInjector so the rule lives in one place.
+    // Case-insensitive, like the CLI's message matching (the wizard passes the text as typed). These are also the only
+    // messages whose fluent config offers FilterOn.
     internal static bool RequiresFilter(string message) =>
-        message is "Create" or "Update" or "CreateMultiple" or "UpdateMultiple";
+        message.Equals("Create", StringComparison.OrdinalIgnoreCase)
+        || message.Equals("Update", StringComparison.OrdinalIgnoreCase)
+        || message.Equals("CreateMultiple", StringComparison.OrdinalIgnoreCase)
+        || message.Equals("UpdateMultiple", StringComparison.OrdinalIgnoreCase);
+
+    private static string FilterNotSupportedMessage(string message) =>
+        $"--filtering-attributes only applies to Create, Update, CreateMultiple and UpdateMultiple steps; a {message} step has no FilterOn. Remove the option.";
 
     private static string MissingFilterMessage(string message) =>
         $"A {message} step needs a filtering attribute: pass --filtering-attributes <Column[,Column]> with the early-bound property name(s), e.g. --filtering-attributes Name. The step then fires only when the request sets one of them.";
@@ -371,6 +379,11 @@ internal static class AddCommand
         // validation + wrong-case correction as add plugin). When omitted, add step leaves a TODO comment.
         string[] explicitAttributes = SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter"));
         string[]? filterAttributes = null;
+        if (explicitAttributes.Length > 0 && !RequiresFilter(message))
+        {
+            return Fail(FilterNotSupportedMessage(message), ExitInvalidArguments, includeUsage: false);
+        }
+
         if (explicitAttributes.Length > 0)
         {
             if (!TryResolveFilteringAttributes(explicitAttributes, projectDir, entity!, out string[] resolved, out string? filteringError))
@@ -503,6 +516,11 @@ internal static class AddCommand
         // Create/Update (and their bulk variants) require a FilterOn: the builder (and VELA018) reject such a step
         // without one, so the caller must name the column(s). We do NOT guess one from the model.
         string filteringCall = string.Empty;
+        if (!RequiresFilter(message) && SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter")).Length > 0)
+        {
+            return Fail(FilterNotSupportedMessage(message), ExitInvalidArguments, includeUsage: false);
+        }
+
         if (RequiresFilter(message))
         {
             string[] explicitAttributes = SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter"));

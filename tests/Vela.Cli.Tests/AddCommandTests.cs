@@ -60,7 +60,8 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--filtering-attributes", "Name", "--project", project, "--force"]);
+            string[] filter = AddCommand.RequiresFilter(message) ? ["--filtering-attributes", "Name"] : []; // FilterOn exists only on these
+            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, .. filter, "--project", project, "--force"]);
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
@@ -141,6 +142,35 @@ public class AddCommandTests
             Assert.Contains(".FilterOn(e => e.Name)", content);
             Assert.DoesNotContain("// TODO: add .FilterOn", content);
         });
+    }
+
+    [Fact]
+    public void Filtering_attributes_on_a_message_without_FilterOn_are_rejected()
+    {
+        // A Delete config has no FilterOn: emitting one would write a plugin that does not compile.
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["plugin", "AccountDelete", "--entity", "Account", "--message", "Delete", "--filtering-attributes", "Name", "--project", project]));
+            Assert.False(File.Exists(Path.Combine(dir, "Account", "Plugins", "AccountDelete.cs")));
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountRouter3", "--entity", "Account", "--message", "Delete", "--project", project]));
+            string path = Path.Combine(dir, "Account", "Plugins", "AccountRouter3.cs");
+            string before = File.ReadAllText(path);
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["step", "AccountRouter3", "--entity", "Account", "--message", "Delete", "--handler", "HandleDelete2", "--filtering-attributes", "Name", "--project", project]));
+            Assert.Equal(before, File.ReadAllText(path));
+        });
+    }
+
+    [Theory]
+    [InlineData("update", true)]
+    [InlineData("CREATE", true)]
+    [InlineData("createmultiple", true)]
+    [InlineData("Delete", false)]
+    [InlineData("acme_DoThing", false)]
+    public void RequiresFilter_matches_the_message_case_insensitively(string message, bool expected)
+    {
+        // The wizard passes the message as typed; the CLI accepts any casing, so the rule must too.
+        Assert.Equal(expected, AddCommand.RequiresFilter(message));
     }
 
     [Fact]
