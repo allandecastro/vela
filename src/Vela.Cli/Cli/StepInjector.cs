@@ -13,11 +13,11 @@ namespace Vela.Cli;
 internal static class StepInjector
 {
     // Convenience overload: default to a PostOperation + Sync step (the historical behaviour), no explicit filter.
-    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, out string result, out string error)
-        => TryInject(source, entityType, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", true, null, out result, out error);
+    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string[]? explicitFilterAttributes, out string result, out string error)
+        => TryInject(source, entityType, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", true, explicitFilterAttributes, out result, out error);
 
-    // <paramref name="explicitFilterAttributes"/>: when non-null, the resolved property name(s) to emit as a
-    // FilterOn selector; when null, a Create/Update step gets a TODO comment instead (columns are unknown here).
+    // <paramref name="explicitFilterAttributes"/>: the resolved property name(s) to emit as a FilterOn selector.
+    // Required for the messages AddCommand.RequiresFilter names; null or empty for any other message.
     public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, string[]? explicitFilterAttributes, out string result, out string error)
     {
         result = source;
@@ -67,26 +67,21 @@ internal static class StepInjector
             return false;
         }
 
-        // When the caller resolved explicit --filtering-attributes, emit the FilterOn selector. Otherwise FilterOn
-        // is optional and we cannot know the entity's columns here: do NOT emit a placeholder such as e => e.Id
-        // (that is a VELA001 error, so the file would not compile). Leave a TODO comment for Create/Update (and
-        // their bulk variants) instead - the step compiles as-is and the author adds the real filter.
-        bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
-            || string.Equals(message, "Update", StringComparison.Ordinal)
-            || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
-            || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
-        string filtering;
-        if (explicitFilterAttributes is { Length: > 0 })
+        // Emit the FilterOn selector the caller resolved. A message that requires one (AddCommand.RequiresFilter)
+        // is rejected before injection when none was given, so there is never a placeholder to write.
+        bool hasAttributes = explicitFilterAttributes is { Length: > 0 };
+        if (AddCommand.RequiresFilter(message) != hasAttributes)
         {
-            string lambdas = string.Join(", ", System.Array.ConvertAll(explicitFilterAttributes, a => $"e => e.{a}"));
-            filtering = $"                .FilterOn({lambdas})\n";
+            // FilterOn exists only on the filter-required messages: emitting it elsewhere would not compile.
+            error = hasAttributes
+                ? $"A {message} step has no FilterOn; filtering attributes only apply to Create, Update, CreateMultiple and UpdateMultiple."
+                : $"A {message} step needs filtering attributes.";
+            return false;
         }
-        else
-        {
-            filtering = needsFiltering
-                ? "                // TODO: add .FilterOn(e => e.Column) to scope this step to the attribute changes it needs.\n"
-                : string.Empty;
-        }
+
+        string filtering = explicitFilterAttributes is { Length: > 0 }
+            ? $"                .FilterOn({string.Join(", ", System.Array.ConvertAll(explicitFilterAttributes, a => $"e => e.{a}"))})\n"
+            : string.Empty;
 
         string registration =
             $"\n\n            RegisterStep().{registrationCall}\n" +

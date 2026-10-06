@@ -6,7 +6,7 @@ follow the same by-table layout as `vela init` (so they drop straight into a sca
 
 ```powershell
 # run inside the project folder, or pass --project <csproj>
-vela add plugin AccountValidatorPlugin --entity Account --message Update
+vela add plugin AccountValidatorPlugin --entity Account --message Update --filtering-attributes Name
 vela add service AccountFollowUpService --entity Account  # table-scoped interface + implementation
 vela add customapi RecalculateTotals                  # global (unbound), lightweight Custom API
 vela add customapi ExportContact --entity Contact     # typed Custom API bound to a table
@@ -16,7 +16,7 @@ vela add test AccountValidatorPlugin --entity Account            # test for a pl
 vela add test RecalculateTotals --kind customapi                # test for a global Custom API
 
 # add a step to an existing multi-step plugin (edits the file in place)
-vela add step AccountRouterPlugin --entity Account --message Update
+vela add step AccountRouterPlugin --entity Account --message Update --filtering-attributes Name
 
 # or run the guided wizard (prompts for kind/name/entity/options)
 vela add --interactive
@@ -41,11 +41,11 @@ vela add --interactive
   and `Assign` messages have no typed method (update `statecode`/`statuscode` or `ownerid` with `Update`
   instead), so they too render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
   current directory), `--force` (overwrite an existing file).
-- **Filtering attributes on a `Create`/`Update` plugin** (also `CreateMultiple`/`UpdateMultiple`): a `FilterOn`
-  scopes these steps to the attribute changes they care about. Pass `--filtering-attributes <Col1,Col2>` with the
+- **Filtering attributes on a `Create`/`Update` plugin or step** (also `CreateMultiple`/`UpdateMultiple`):
+  these steps require a `FilterOn`, so `--filtering-attributes <Col1,Col2>` is **required** for them. Pass the
   early-bound property name(s) (for example `--filtering-attributes Name,Telephone1` renders
-  `FilterOn(e => e.Name, e => e.Telephone1)`). If you omit it, `add` does not guess a column from the model: it
-  leaves a `// TODO: add .FilterOn(e => e.Column)` comment, so the file compiles and you pick the real filter.
+  `FilterOn(e => e.Name, e => e.Telephone1)`). `add` never guesses a column from the model: without the option it
+  fails with a message naming it, and writes nothing. The interactive wizard asks for the columns.
   Property names are **case-sensitive** (`Name`, not `name`): when the model is available and a value differs
   only in case (for example `name` for `Name`), `add` corrects it to the real property and prints a note, so the
   emitted `FilterOn` compiles; a name that matches no property is left as-is with a warning.

@@ -19,6 +19,13 @@ namespace Vela.Testing.Tests
             : base(EntityLogicalNameValue)
         {
         }
+
+        [AttributeLogicalName("vela_name")]
+        public string? Name
+        {
+            get => GetAttributeValue<string>("vela_name");
+            set => SetAttributeValue("vela_name", value);
+        }
     }
 
     // All pipeline doubles expose a (string, string) constructor so FrameworkManifestScanner discovers them.
@@ -259,7 +266,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnCreate().PostOperation().Sync()
-                .FilterOn(a => a.Id)
+                .FilterOn(a => a.Name)
                 .Handle(OnCreated);
 
         private void OnCreated(ICreatePostContext<FakeAuto> ctx)

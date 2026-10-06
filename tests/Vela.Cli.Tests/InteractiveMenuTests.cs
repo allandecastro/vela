@@ -64,9 +64,9 @@ public class InteractiveMenuTests
     [Fact]
     public void ComposeAddArgs_Plugin_IncludesEntityAndMessage()
     {
-        string[] args = InteractiveMenu.ComposeAddArgs("plugin", "AccountValidator", "Account", "Update", null, null, function: false);
+        string[] args = InteractiveMenu.ComposeAddArgs("plugin", "AccountValidator", "Account", "Update", null, null, function: false, filteringAttributes: "Name,Telephone1");
 
-        Assert.Equal(["plugin", "AccountValidator", "--entity", "Account", "--message", "Update"], args);
+        Assert.Equal(["plugin", "AccountValidator", "--entity", "Account", "--message", "Update", "--filtering-attributes", "Name,Telephone1"], args);
     }
 
     [Fact]

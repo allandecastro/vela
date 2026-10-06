@@ -60,7 +60,8 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--filtering-attributes", "Name", "--project", project, "--force"]);
+            string[] filter = AddCommand.RequiresFilter(message) ? ["--filtering-attributes", "Name"] : []; // FilterOn exists only on these
+            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, .. filter, "--project", project, "--force"]);
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
@@ -144,17 +145,48 @@ public class AddCommandTests
     }
 
     [Fact]
-    public void Add_Step_NoFilteringAttributes_LeavesTodoComment()
+    public void Filtering_attributes_on_a_message_without_FilterOn_are_rejected()
     {
+        // A Delete config has no FilterOn: emitting one would write a plugin that does not compile.
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["plugin", "AccountDelete", "--entity", "Account", "--message", "Delete", "--filtering-attributes", "Name", "--project", project]));
+            Assert.False(File.Exists(Path.Combine(dir, "Account", "Plugins", "AccountDelete.cs")));
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountRouter3", "--entity", "Account", "--message", "Delete", "--project", project]));
+            string path = Path.Combine(dir, "Account", "Plugins", "AccountRouter3.cs");
+            string before = File.ReadAllText(path);
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["step", "AccountRouter3", "--entity", "Account", "--message", "Delete", "--handler", "HandleDelete2", "--filtering-attributes", "Name", "--project", project]));
+            Assert.Equal(before, File.ReadAllText(path));
+        });
+    }
+
+    [Theory]
+    [InlineData("update", true)]
+    [InlineData("CREATE", true)]
+    [InlineData("createmultiple", true)]
+    [InlineData("Delete", false)]
+    [InlineData("acme_DoThing", false)]
+    public void RequiresFilter_matches_the_message_case_insensitively(string message, bool expected)
+    {
+        // The wizard passes the message as typed; the CLI accepts any casing, so the rule must too.
+        Assert.Equal(expected, AddCommand.RequiresFilter(message));
+    }
+
+    [Fact]
+    public void Add_Step_NoFilteringAttributes_FailsAndLeavesThePluginUntouched()
+    {
+        // An Update step must FilterOn; without --filtering-attributes the step would not build at runtime.
         RunInProject("Acme.Plugins", (project, dir) =>
         {
             Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountRouter2", "--entity", "Account", "--message", "Delete", "--project", project]));
-            int exit = AddCommand.Run(["step", "AccountRouter2", "--entity", "Account", "--message", "Update", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
+            string path = Path.Combine(dir, "Account", "Plugins", "AccountRouter2.cs");
+            string before = File.ReadAllText(path);
 
-            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountRouter2.cs"));
-            Assert.Contains("// TODO: add .FilterOn", content);
-            Assert.DoesNotContain("e.Id", content);
+            int exit = AddCommand.Run(["step", "AccountRouter2", "--entity", "Account", "--message", "Update", "--project", project]);
+
+            Assert.Equal(ExitInvalidArguments, exit);
+            Assert.Equal(before, File.ReadAllText(path));
         });
     }
 
@@ -191,20 +223,19 @@ public class AddCommandTests
         });
     }
 
-    // E2: a filtering-required message with no explicit attributes and no discoverable model fails with a clear
-    // error instead of emitting a non-compiling placeholder.
-    [Fact]
-    public void Add_Plugin_Update_NoFiltering_LeavesTodoAndSucceeds()
+    // A filtering-required message with no explicit attributes fails with a clear error and writes nothing, instead
+    // of emitting a plugin whose step fails to build at runtime.
+    [Theory]
+    [InlineData("Create")]
+    [InlineData("Update")]
+    public void Add_Plugin_FilteredMessage_NoFiltering_FailsAndWritesNothing(string message)
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["plugin", "AccountNoFilter", "--entity", "Account", "--message", "Update", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
+            int exit = AddCommand.Run(["plugin", "AccountNoFilter", "--entity", "Account", "--message", message, "--project", project]);
 
-            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountNoFilter.cs"));
-            Assert.Contains("// TODO: add .FilterOn(", content);
-            // Only the TODO comment mentions FilterOn; no executable selector is emitted.
-            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(content, @"\.FilterOn\(").Count);
+            Assert.Equal(ExitInvalidArguments, exit);
+            Assert.False(File.Exists(Path.Combine(dir, "Account", "Plugins", "AccountNoFilter.cs")));
         });
     }
 
@@ -229,12 +260,10 @@ public class AddCommandTests
                 "public sealed class Account : Entity\n{\n    [AttributeLogicalName(\"accountnumber\")]\n    public string? AccountNumber\n    {\n        get; set;\n    }\n\n    [AttributeLogicalName(\"name\")]\n    public string? Name\n    {\n        get; set;\n    }\n}\n");
 
             int exit = AddCommand.Run(["plugin", "AccountAuto", "--entity", "Account", "--message", "Update", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
 
-            string content = File.ReadAllText(Path.Combine(pluginsDir, "Account", "Plugins", "AccountAuto.cs"));
-            Assert.Contains("// TODO: add .FilterOn(", content);
-            // Despite a model with a Name column, no column is auto-selected into a FilterOn.
-            Assert.DoesNotContain(".FilterOn(e => e.Name)", content);
+            // Despite a model with a Name column, no column is auto-selected: the caller must name it.
+            Assert.Equal(ExitInvalidArguments, exit);
+            Assert.False(File.Exists(Path.Combine(pluginsDir, "Account", "Plugins", "AccountAuto.cs")));
         }
         finally
         {
@@ -440,7 +469,7 @@ public class AddCommandTests
         RunInProject("Acme.Plugins", (project, dir) =>
         {
             Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountEol", "--entity", "Account", "--message", "Delete", "--project", project]));
-            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountEol", "--entity", "Account", "--message", "Update", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountEol", "--entity", "Account", "--message", "Update", "--filtering-attributes", "Name", "--project", project]));
 
             // Generated files must use a single line ending (LF). On a CRLF checkout the raw-string templates
             // and the injected ("\n") step would otherwise mix endings.
@@ -619,7 +648,7 @@ public class AddCommandTests
             Directory.CreateDirectory(Path.GetDirectoryName(pluginPath)!);
             File.WriteAllText(pluginPath, HandlerBasedPlugin);
 
-            int exit = AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--message", "Update", "--project", project]);
+            int exit = AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--message", "Update", "--filtering-attributes", "Name", "--project", project]);
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(pluginPath);

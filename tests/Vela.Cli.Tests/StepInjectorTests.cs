@@ -6,6 +6,8 @@ namespace Vela.Cli.Tests;
 
 public class StepInjectorTests
 {
+    private static readonly string[] Name = ["Name"];
+
     // A handler-based plugin (uses .Handle(...)), which is what 'vela add step' targets.
     private const string HandlerBased = """
 namespace Acme.Plugins.Account.Plugins
@@ -66,7 +68,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_AddsRegistrationAndHandler_WithBalancedBraces()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains("RegisterStep().OnUpdate()", result);
@@ -81,7 +83,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_CustomMessage_UsesOnMessage()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "acme_DoThing", "OnMessage(\"acme_DoThing\")", "HandleDoThing", out string result, out _);
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "acme_DoThing", "OnMessage(\"acme_DoThing\")", "HandleDoThing", null, out string result, out _);
 
         Assert.True(ok);
         Assert.Contains("RegisterStep().OnMessage(\"acme_DoThing\")", result);
@@ -90,7 +92,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_RejectsSingleStepPlugin()
     {
-        bool ok = StepInjector.TryInject(SingleStep, "Account", "Update", "OnUpdate()", "HandleUpdate", out _, out string error);
+        bool ok = StepInjector.TryInject(SingleStep, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out _, out string error);
 
         Assert.False(ok);
         Assert.Contains("handler-bound step", error);
@@ -99,7 +101,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_RejectsDuplicateHandlerName()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleCreate", out _, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleCreate", Name, out _, out string error);
 
         Assert.False(ok);
         Assert.Contains("already exists", error);
@@ -108,39 +110,43 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_RejectsFileWithoutRegisterPluginSteps()
     {
-        bool ok = StepInjector.TryInject("namespace N { public class C { } }", "Account", "Update", "OnUpdate()", "HandleUpdate", out _, out string error);
+        bool ok = StepInjector.TryInject("namespace N { public class C { } }", "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out _, out string error);
 
         Assert.False(ok);
         Assert.Contains("RegisterPluginSteps", error);
     }
 
-    [Fact]
-    public void TryInject_DoesNotEmitNonCompilingIdFilter()
+    [Theory]
+    [InlineData("Create")]
+    [InlineData("Update")]
+    [InlineData("CreateMultiple")]
+    [InlineData("UpdateMultiple")]
+    public void TryInject_RejectsAFilteredMessageWithoutAttributes(string message)
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", out string result, out string error);
+        // These steps must FilterOn: emitting none (or a placeholder such as e => e.Id, a VELA001 error) would give a
+        // plugin that fails to build its steps at runtime.
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", message, $"On{message}()", "HandleNew" + message, null, out string result, out string error);
 
-        Assert.True(ok, error);
-        // e => e.Id is a VELA001 error (Id is not a Dataverse column), so it must never be emitted.
-        Assert.DoesNotContain("e.Id", result);
-        // No executable selector is generated; the author gets a TODO (a comment) to add the real filter.
-        Assert.Contains("// TODO: add .FilterOn(", result);
+        Assert.False(ok);
+        Assert.Contains("filtering attributes", error);
+        Assert.Equal(HandlerBased, result);
     }
 
     [Fact]
     public void TryInject_HandlerTodoUsesTypedRequestNotGetTarget()
     {
-        StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", out string single, out _);
+        StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string single, out _);
         Assert.DoesNotContain("GetTarget<", single);
         Assert.Contains("ctx.Request.Target", single);
 
-        StepInjector.TryInject(HandlerBased, "Account", "UpdateMultiple", "OnUpdateMultiple()", "HandleUpdateMultiple", out string bulk, out _);
+        StepInjector.TryInject(HandlerBased, "Account", "UpdateMultiple", "OnUpdateMultiple()", "HandleUpdateMultiple", Name, out string bulk, out _);
         Assert.Contains("ctx.Request.Targets", bulk);
     }
 
     [Fact]
     public void TryInject_PreStage_EmitsPreStageCallAndPreContext()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PreOperation()", ".Sync()", postStage: false, explicitFilterAttributes: null, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PreOperation()", ".Sync()", postStage: false, explicitFilterAttributes: Name, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains(".PreOperation()", result);
@@ -151,7 +157,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_AsyncMode_EmitsAsyncCall()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Async()", postStage: true, explicitFilterAttributes: null, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Async()", postStage: true, explicitFilterAttributes: Name, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains(".Async()", result);

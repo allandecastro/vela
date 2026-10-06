@@ -399,9 +399,22 @@ namespace Vela.Testing.Tests
         {
             PluginPipeline pipeline = PluginPipeline.FromAssemblyOf<FakeAuto>();
 
-            pipeline.Service.Create(new FakeAuto());
+            pipeline.Service.Create(new FakeAuto { Name = "auto" });
 
             Assert.Contains(pipeline.ExecutionLog, entry => entry.PluginTypeName.Contains("AutoDiscoveredPlugin"));
+        }
+
+        [Fact]
+        public void Create_step_fires_only_when_the_request_sets_a_filtering_attribute()
+        {
+            // FilterOn applies to Create as it does to Update: the step is filtered on vela_name.
+            PluginPipeline pipeline = PluginPipeline.FromAssemblyOf<FakeAuto>();
+
+            pipeline.Service.Create(new FakeAuto());
+            Assert.DoesNotContain(pipeline.ExecutionLog, entry => entry.PluginTypeName.Contains("AutoDiscoveredPlugin"));
+
+            pipeline.Service.Create(new FakeAuto { Name = "set" });
+            Assert.Single(pipeline.ExecutionLog, entry => entry.PluginTypeName.Contains("AutoDiscoveredPlugin"));
         }
 
         [Fact]

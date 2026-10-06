@@ -331,6 +331,22 @@ internal static class AddCommand
         return true;
     }
 
+    // The messages whose steps must declare a filtering attribute (FilterOn), shared by 'add plugin', 'add step'
+    // and StepInjector so the rule lives in one place.
+    // Case-insensitive, like the CLI's message matching (the wizard passes the text as typed). These are also the only
+    // messages whose fluent config offers FilterOn.
+    internal static bool RequiresFilter(string message) =>
+        message.Equals("Create", StringComparison.OrdinalIgnoreCase)
+        || message.Equals("Update", StringComparison.OrdinalIgnoreCase)
+        || message.Equals("CreateMultiple", StringComparison.OrdinalIgnoreCase)
+        || message.Equals("UpdateMultiple", StringComparison.OrdinalIgnoreCase);
+
+    private static string FilterNotSupportedMessage(string message) =>
+        $"--filtering-attributes only applies to Create, Update, CreateMultiple and UpdateMultiple steps; a {message} step has no FilterOn. Remove the option.";
+
+    private static string MissingFilterMessage(string message) =>
+        $"A {message} step needs a filtering attribute: pass --filtering-attributes <Column[,Column]> with the early-bound property name(s), e.g. --filtering-attributes Name. The step then fires only when the request sets one of them.";
+
     private static int AddStep(string[] args, string name, string? entity, string projectDir)
     {
         if (string.IsNullOrWhiteSpace(entity))
@@ -363,6 +379,11 @@ internal static class AddCommand
         // validation + wrong-case correction as add plugin). When omitted, add step leaves a TODO comment.
         string[] explicitAttributes = SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter"));
         string[]? filterAttributes = null;
+        if (explicitAttributes.Length > 0 && !RequiresFilter(message))
+        {
+            return Fail(FilterNotSupportedMessage(message), ExitInvalidArguments, includeUsage: false);
+        }
+
         if (explicitAttributes.Length > 0)
         {
             if (!TryResolveFilteringAttributes(explicitAttributes, projectDir, entity!, out string[] resolved, out string? filteringError))
@@ -371,6 +392,10 @@ internal static class AddCommand
             }
 
             filterAttributes = resolved;
+        }
+        else if (RequiresFilter(message))
+        {
+            return Fail(MissingFilterMessage(message), ExitInvalidArguments, includeUsage: false);
         }
 
         string filePath = Path.Combine(projectDir, entity!, "Plugins", $"{name}.cs");
@@ -488,17 +513,15 @@ internal static class AddCommand
             return Fail(stageError, ExitInvalidArguments, includeUsage: false);
         }
 
-        // Create/Update (and their bulk variants) are the messages a FilterOn scopes. When the caller passes
-        // explicit --filtering-attributes we emit the selector (validated + case-corrected). Otherwise we do NOT
-        // guess a column from the model: we leave a TODO comment (same restraint as 'add step'), so the file
-        // compiles and the author picks the real filter.
-        bool needsFiltering = string.Equals(message, "Create", StringComparison.Ordinal)
-            || string.Equals(message, "Update", StringComparison.Ordinal)
-            || string.Equals(message, "CreateMultiple", StringComparison.Ordinal)
-            || string.Equals(message, "UpdateMultiple", StringComparison.Ordinal);
-
+        // Create/Update (and their bulk variants) require a FilterOn: the builder (and VELA018) reject such a step
+        // without one, so the caller must name the column(s). We do NOT guess one from the model.
         string filteringCall = string.Empty;
-        if (needsFiltering)
+        if (!RequiresFilter(message) && SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter")).Length > 0)
+        {
+            return Fail(FilterNotSupportedMessage(message), ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (RequiresFilter(message))
         {
             string[] explicitAttributes = SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter"));
             if (explicitAttributes.Length > 0)
@@ -515,7 +538,7 @@ internal static class AddCommand
             }
             else
             {
-                filteringCall = "\n                // TODO: add .FilterOn(e => e.Column) to scope this step to the attribute changes it needs.";
+                return Fail(MissingFilterMessage(message), ExitInvalidArguments, includeUsage: false);
             }
         }
 
