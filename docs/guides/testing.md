@@ -299,6 +299,16 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` come from `WithCurrentUser(...)` /
   `WithCurrentBusinessUnit(...)` / `WithOrganizationId(...)`, consistent with what `WhoAmI` and the
   `createdby`/`ownerid` stamping report (not random values).
+- **Step registration is honoured.** A `.Disabled()` step never fires. The plugin is constructed with the step's
+  `WithUnsecureConfig(...)` value and, for `WithSecureConfigFrom("Name")`, the value you supply with
+  `pipeline.WithSecureConfig("Name", "value")` (what `vela apply --secure-config Name=value` provides in
+  production; unset configuration is passed as `null`). A step registered with `WithImpersonation(userId)` runs with
+  `ctx.UserId` set to that user, and its `ctx.Service` acts as that user (privileges under `WithSecurity`, audit
+  stamping); `InitiatingUserId` stays the caller.
+- **User vs SYSTEM service.** `ctx.Service` acts as `ctx.UserId` and is subject to the security model when
+  `WithSecurity` is used; `ctx.SystemService` is SYSTEM and is not (audit columns still record the calling user). A
+  plugin fired by a write made through `ctx.SystemService` sees `ctx.UserId == PluginPipeline.SystemUserId`, and its
+  own `ctx.Service` is SYSTEM too.
 - **`ParentContext` on a cascade.** A plugin fired by another plugin's write sees its caller's context as
   `ctx.ParentContext` (with its shared variables), so a re-entrancy guard like
   `if (ctx.ParentContext?.MessageName == "Create") return;` behaves as it does in Dataverse.
@@ -340,10 +350,17 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   `BypassCustomPluginExecution = true` skips every step; `BypassBusinessLogicExecution = "CustomSync"` /
   `"CustomAsync"` skips by execution mode; and `BypassBusinessLogicExecutionStepIds` skips specific steps
   (matched against the step **key**: pass a comma-separated string or a collection of keys). The data is still
-  written; only the plugins are skipped.
-- **Associate/Disassociate** fire their registered plugins, and the N:N intersect rows persist when the
-  relationship is declared with `WithManyToMany(...)` (or derived from registered metadata); the store has no
-  live relationship metadata otherwise.
+  written; only the plugins are skipped. They apply at any depth: a request's effective bypass is the one it
+  inherits (from an enclosing request or an `ExecuteMultiple`/`ExecuteTransaction` batch) plus its own, so a plugin
+  that writes with `BypassCustomPluginExecution = true` does not re-enter itself.
+- **Associate/Disassociate** fire their registered plugins whatever the entity (they are global messages, as on
+  the platform: a step declared on `account` also fires for an association made from `contact`), and the N:N
+  intersect rows persist when the relationship is declared with `WithManyToMany(...)` (or derived from registered
+  metadata); the store has no live relationship metadata otherwise.
+- **Upsert and alternate keys.** `Execute(new UpsertRequest { ... })` matches the target by id or alternate key
+  (declared with `WithAlternateKey(...)`): an existing record runs the Update steps, a new one runs the Create steps,
+  and the response reports `RecordCreated` and `Target`. `Update`/`Delete` addressed by `KeyAttributes` resolve the
+  key first, so their steps see the real record id.
 - Use `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
 
 ## Not supported (by design)

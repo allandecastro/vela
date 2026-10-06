@@ -611,7 +611,7 @@ namespace Vela.Testing
         // Resolves an EntityReference to a record id: a direct id when set, otherwise an alternate-key lookup
         // (KeyAttributes) - the record whose columns match every key attribute. Throws the platform not-found fault
         // when no record matches, so RetrieveByKey and key-based Update/Delete behave like a real service.
-        private Guid ResolveReference(EntityReference reference)
+        internal Guid ResolveReference(EntityReference reference)
         {
             if (reference.Id != Guid.Empty || reference.KeyAttributes == null || reference.KeyAttributes.Count == 0)
             {
@@ -632,7 +632,7 @@ namespace Vela.Testing
 
         // Non-throwing reference resolution: a direct id (when it exists), else an alternate-key match. Returns
         // false when nothing matches (used by upsert to decide create vs update).
-        private bool TryResolveReference(EntityReference reference, out Guid id)
+        internal bool TryResolveReference(EntityReference reference, out Guid id)
         {
             id = Guid.Empty;
             if (reference.Id != Guid.Empty)
@@ -936,7 +936,7 @@ namespace Vela.Testing
                 throw RecordDoesNotExist(entityName, id);
             }
 
-            if (_security != null)
+            if (Enforcing != null)
             {
                 DemandAccess(entityName, Privilege.Delete, stored);
             }
@@ -983,7 +983,7 @@ namespace Vela.Testing
             }
 
             // Field-level security masks field-secured columns the caller can't read from each returned record.
-            if (_security != null)
+            if (Enforcing != null)
             {
                 foreach (Entity row in result.Entities)
                 {

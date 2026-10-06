@@ -31,6 +31,8 @@
        can't drift. A ProjectReference is avoided to keep the CrmSdk (net462) out of the CLI. -->
   <ItemGroup>
     <Compile Include="..\Vela.Plugins\Constants\PluginStages.cs" Link="Shared\PluginStages.cs" />
+    <!-- Global (entity-agnostic) messages: shared with the runtime step resolution and the test harness. -->
+    <Compile Include="..\Vela.Plugins\Constants\PluginMessages.cs" Link="Shared\PluginMessages.cs" />
   </ItemGroup>
 
   <ItemGroup>

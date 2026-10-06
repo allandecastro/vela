@@ -339,9 +339,7 @@ namespace Vela.Plugin
                 // an (Dis)Associate has no matching single primary entity, so an entity filter here would never
                 // match and the step would be dropped. Skip the entity check for these messages. (For sync steps
                 // this previously surfaced as "no registered step matching message 'Associate'"; async hid it.)
-                bool relationshipMessage =
-                    string.Equals(ctx.MessageName, PluginMessages.Associate, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(ctx.MessageName, PluginMessages.Disassociate, StringComparison.OrdinalIgnoreCase);
+                bool relationshipMessage = PluginMessages.IsGlobalMessage(ctx.MessageName);
 
                 if (!relationshipMessage &&
                     !string.IsNullOrWhiteSpace(definition.EntityLogicalName) &&

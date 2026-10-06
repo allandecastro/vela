@@ -89,9 +89,8 @@ internal static class DefinitionNormalizer
     // Messages that are not bound to a primary entity via the sdkmessagefilter (its primaryobjecttypecode is
     // "none"). Steps on these read back with an empty entityLogicalName regardless of what was declared, so the
     // field must be excluded from the diff to keep plan/apply idempotent.
-    internal static bool IsGlobalMessage(string message) =>
-        string.Equals(message, "Associate", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(message, "Disassociate", StringComparison.OrdinalIgnoreCase);
+    // The list is shared with the runtime and the test harness (Vela.Constants.PluginMessages, linked as source).
+    internal static bool IsGlobalMessage(string message) => Vela.Constants.PluginMessages.IsGlobalMessage(message);
 
     // Redacts a secret to a digest so it never lands in plan output while staying change-detectable. The digest is
     // an HMAC keyed per process: the local and live sides of one run compare equal, but a digest in a saved plan

@@ -90,6 +90,27 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **A generated step context reads an aliased image.** For `WithPostImage("snap", ...)` (or a pre-image alias) the
   generated `ctx.PostImage` / `ctx.PreImage` read the image under the default alias, so it was always null at runtime.
   The context now passes the step's alias.
+- **The test pipeline honours a step's registration: enabled flag, configuration and impersonation.**
+  `PluginPipeline` fired a `.Disabled()` step, always constructed the plugin with `(null, null)`, ignored
+  `WithImpersonation(Guid)`, and wired `ctx.Service` and `ctx.SystemService` to one service subject to the same
+  security checks. A disabled step no longer fires; the plugin receives the step's unsecure configuration and the
+  value of its secure configuration (supply it with the new `PluginPipeline.WithSecureConfig(name, value)`); an
+  impersonated step sees the impersonated `UserId` and its `ctx.Service` acts as that user (privileges, audit
+  stamping), while `InitiatingUserId` stays the caller; under `WithSecurity`, `ctx.SystemService` is SYSTEM and is not
+  subject to the security model, while `ctx.Service` is.
+- **Associate/Disassociate fire regardless of the entity in the test pipeline.** The harness matched these steps on
+  the entity, so a step declared on `account` did not fire for an association made from `contact`, unlike the runtime
+  and the CLI, which treat both messages as global. The list now lives in one place
+  (`PluginMessages.GlobalMessages` / `PluginMessages.IsGlobalMessage`), shared by the runtime, the harness and the CLI.
+- **Upsert and alternate keys run through the test pipeline.** An `UpsertRequest` skipped the pipeline (no step
+  fired), and an `UpdateRequest`/`DeleteRequest` addressed by `KeyAttributes` fired its steps with `Guid.Empty` (or
+  failed). Upsert now resolves the id or alternate key and runs the Create steps (new record) or the Update steps
+  (existing record), returning `RecordCreated` and `Target`; Update and Delete by alternate key fire their steps with
+  the resolved id.
+- **A nested request's own bypass parameters are honoured by the test pipeline.** Bypass parameters were read only
+  from the outermost request, so a plugin's own write with `BypassCustomPluginExecution` (the usual way to avoid
+  re-entering itself) re-fired the plugin, and `ExecuteMultiple`/`ExecuteTransaction` children's own parameters were
+  ignored. The effective bypass is now the inherited bypass plus the request's own, at any depth.
 
 ### Added (CLI)
 
