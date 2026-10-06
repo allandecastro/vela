@@ -26,9 +26,14 @@ namespace Vela.Testing
 
         public StepDefinition Step { get; }
 
-        public IPlugin CreateInstance()
+        // Instantiates the plugin the way the platform does for this step: the step's unsecure configuration and the
+        // secure configuration value (resolved by the pipeline from the step's SecureConfigName) reach the
+        // (unsecureConfig, secureConfig) constructor. An unset configuration is passed as null, as before.
+        public IPlugin CreateInstance(string? secureConfig)
         {
-            return (IPlugin)_constructor.Invoke(new object?[] { null, null });
+            string? unsecureConfig = string.IsNullOrEmpty(Step.UnsecureConfig) ? null : Step.UnsecureConfig;
+            string? secure = string.IsNullOrEmpty(secureConfig) ? null : secureConfig;
+            return (IPlugin)_constructor.Invoke(new object?[] { unsecureConfig, secure });
         }
     }
 }

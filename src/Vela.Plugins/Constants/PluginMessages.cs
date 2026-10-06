@@ -191,5 +191,30 @@ namespace Vela.Constants
         /// Merge message.
         /// </summary>
         public const string Merge = "Merge";
+
+        /// <summary>
+        /// The messages that are not bound to a primary entity: their sdkmessagefilter has primaryobjecttypecode
+        /// "none", so a step registered on them fires for every relationship regardless of the entity it was declared
+        /// on (Associate/Disassociate). The single source of truth shared by the runtime step resolution, the
+        /// in-memory test pipeline and the CLI (which links this file).
+        /// </summary>
+        public static readonly string[] GlobalMessages = { Associate, Disassociate };
+
+        /// <summary>
+        /// Whether <paramref name="message"/> is one of the <see cref="GlobalMessages"/> (compared case-insensitively),
+        /// i.e. a step registered on it is matched regardless of the primary entity.
+        /// </summary>
+        public static bool IsGlobalMessage(string? message)
+        {
+            foreach (string global in GlobalMessages)
+            {
+                if (string.Equals(global, message, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

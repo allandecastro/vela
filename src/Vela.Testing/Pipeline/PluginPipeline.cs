@@ -52,6 +52,22 @@ namespace Vela.Testing
         // / BypassBusinessLogicExecution / BypassBusinessLogicExecutionStepIds). Empty = nothing bypassed.
         private BypassContext _bypass = BypassContext.None;
 
+        // Secure configuration values by name (WithSecureConfig). A step only carries its SecureConfigName; the
+        // value is supplied at deployment time (vela apply --secure-config NAME=VALUE), so the test supplies it here.
+        private readonly Dictionary<string, string> _secureConfigs = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // The identity of the service issuing the current call (null = the test-facing service: the configured
+        // current user) and the user who initiated the outermost request (null until a plugin-issued call runs).
+        private Guid? _callerUserId;
+        private Guid? _initiatingUserId;
+
+        /// <summary>
+        /// The user id a plugin execution context carries when it was triggered by a write issued through the SYSTEM
+        /// service (<c>ctx.SystemService</c>). A service created for this id (e.g. <c>ctx.Service</c> in that nested
+        /// plugin) is the unrestricted SYSTEM service, as on a real org.
+        /// </summary>
+        public static readonly Guid SystemUserId = new Guid("5e5e5e00-0000-0000-0000-000000000000");
+
         private PluginPipeline()
         {
             _service = new PipelineOrganizationService(this);
@@ -150,6 +166,22 @@ namespace Vela.Testing
         public PluginPipeline Seed(params Entity[] entities)
         {
             _store.Seed(entities);
+            return this;
+        }
+
+        /// <summary>
+        /// Supplies the value of a named secure configuration. A step declared with <c>.WithSecureConfigFrom(name)</c>
+        /// receives this value as the <c>secureConfig</c> constructor argument, exactly as <c>vela apply
+        /// --secure-config NAME=VALUE</c> provides it in production. A step whose name has no value receives null.
+        /// </summary>
+        public PluginPipeline WithSecureConfig(string name, string value)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("A secure configuration name is required.", nameof(name));
+            }
+
+            _secureConfigs[name] = value;
             return this;
         }
 
@@ -373,6 +405,7 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(entity));
             }
 
+            entity = ResolveKeyedTarget(entity);
             Entity? standard = ProjectAttributes(entity, special: false);
             Entity? special = ProjectAttributes(entity, special: true);
 
@@ -393,6 +426,24 @@ namespace Vela.Testing
             {
                 ExecuteUpdateMultiple(new[] { entity }, sharedVariables);
             }
+        }
+
+        // A write target addressed by alternate key (Id empty + KeyAttributes) is resolved to the record's id before
+        // any step fires, as Dataverse does: the steps see Target.Id / PrimaryEntityId set to the resolved record, and
+        // a key that matches nothing throws the platform not-found fault. Returns a clone (the caller's entity is not
+        // mutated); a target that already has an id (or no key) is returned unchanged.
+        private Entity ResolveKeyedTarget(Entity entity)
+        {
+            if (entity.Id != Guid.Empty || entity.KeyAttributes == null || entity.KeyAttributes.Count == 0)
+            {
+                return entity;
+            }
+
+            Guid id = _store.ResolveReference(new EntityReference(entity.LogicalName) { KeyAttributes = entity.KeyAttributes });
+            Entity resolved = EntityValues.Clone(entity);
+            resolved.Id = id;
+            resolved.KeyAttributes.Clear();
+            return resolved;
         }
 
         // The owner / state-status fields the platform processes as a separate Update execution.
@@ -485,6 +536,7 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(entities));
             }
 
+            entities = entities.Select(ResolveKeyedTarget).ToArray();
             RunOperation<object?>(asyncQueue =>
             {
                 string entityName = entities.Length > 0 ? entities[0].LogicalName : string.Empty;
@@ -567,13 +619,12 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(request));
             }
 
-            // Bypass parameters apply to the whole top-level operation (and its cascade); a nested Execute
-            // inherits the active bypass, mirroring how shared variables flow.
+            // Bypass parameters apply to the request and its cascade. The effective bypass of a request is the union
+            // of the bypass it inherits (from an enclosing request or batch) and its own parameters - at any depth, so
+            // a plugin's nested write that sets BypassCustomPluginExecution (the standard way to avoid re-entering
+            // itself) is honoured. The inherited bypass is restored once the request returns.
             BypassContext previousBypass = _bypass;
-            if (_depth == 0)
-            {
-                _bypass = ExtractBypass(request);
-            }
+            _bypass = _bypass.Union(ExtractBypass(request));
 
             try
             {
@@ -653,6 +704,9 @@ namespace Vela.Testing
                     ExecuteUpdate(update.Target, shared);
                     return new UpdateResponse();
 
+                case OrganizationRequest upsert when IsUpsert(upsert, out Entity? upsertTarget):
+                    return ExecuteUpsert(upsert, upsertTarget!, shared);
+
                 case CreateMultipleRequest createMultiple:
                 {
                     Guid[] ids = ExecuteCreateMultiple(createMultiple.Targets.Entities.ToArray(), shared);
@@ -666,7 +720,9 @@ namespace Vela.Testing
                     return new UpdateMultipleResponse();
 
                 case DeleteRequest delete:
-                    ExecuteDelete(delete.Target.LogicalName, delete.Target.Id, shared);
+                    // A key-addressed target (KeyAttributes, no Id) is resolved first so the Delete steps fire with the
+                    // real record id; a key matching nothing throws the platform not-found fault.
+                    ExecuteDelete(delete.Target.LogicalName, _store.ResolveReference(delete.Target), shared);
                     return new DeleteResponse();
 
                 case AssociateRequest associate:
@@ -692,11 +748,75 @@ namespace Vela.Testing
             }
         }
 
+        // Upsert is matched by RequestName so both the SDK UpsertRequest and Vela's typed UpsertRequest<T> (a plain
+        // OrganizationRequest named "Upsert") run through the pipeline, as the store does.
+        private static bool IsUpsert(OrganizationRequest request, out Entity? target)
+        {
+            target = null;
+            if (string.Equals(request.RequestName, "Upsert", StringComparison.OrdinalIgnoreCase)
+                && request.Parameters.TryGetValue("Target", out object? value)
+                && value is Entity entity)
+            {
+                target = entity;
+                return true;
+            }
+
+            return false;
+        }
+
+        // Upsert, mirroring Dataverse: the target is matched by its id or alternate key. A match runs the Update
+        // pipeline (Update steps fire with the resolved id); no match runs the Create pipeline (Create steps fire; the
+        // key columns become real columns of the new row, and a supplied id is kept). Steps registered on the Upsert
+        // message itself fire around the inner operation, and the response carries RecordCreated and Target.
+        private OrganizationResponse ExecuteUpsert(OrganizationRequest request, Entity target, ParameterCollection shared)
+        {
+            return RunOperation(asyncQueue =>
+            {
+                FireStage(GenericInvocation("Upsert", PluginStages.PreValidation, target.LogicalName, target.Id, request.Parameters, null), asyncQueue);
+                FireStage(GenericInvocation("Upsert", PluginStages.PreOperation, target.LogicalName, target.Id, request.Parameters, null), asyncQueue);
+
+                EntityReference key = target.Id != Guid.Empty
+                    ? new EntityReference(target.LogicalName, target.Id)
+                    : new EntityReference(target.LogicalName) { KeyAttributes = target.KeyAttributes };
+
+                UpsertResponse response = new UpsertResponse();
+                Guid affectedId;
+                if (_store.TryResolveReference(key, out Guid existingId))
+                {
+                    Entity toUpdate = EntityValues.Clone(target);
+                    toUpdate.Id = existingId;
+                    toUpdate.KeyAttributes.Clear();
+                    ExecuteUpdate(toUpdate);
+                    response.Results["RecordCreated"] = false;
+                    affectedId = existingId;
+                }
+                else
+                {
+                    Entity toCreate = EntityValues.Clone(target);
+                    foreach (KeyValuePair<string, object> pair in target.KeyAttributes)
+                    {
+                        if (!toCreate.Attributes.Contains(pair.Key))
+                        {
+                            toCreate[pair.Key] = pair.Value;
+                        }
+                    }
+
+                    toCreate.KeyAttributes.Clear();
+                    affectedId = ExecuteCreate(toCreate);
+                    response.Results["RecordCreated"] = true;
+                }
+
+                response.Results["Target"] = new EntityReference(target.LogicalName, affectedId);
+                FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, target.LogicalName, affectedId, request.Parameters, response.Results), asyncQueue);
+                return (OrganizationResponse)response;
+            }, shared);
+        }
+
         // ExecuteMultiple/ExecuteTransaction must run each child through the pipeline so registered steps fire,
         // exactly as they would in production. Routing to _store.Execute (the default fall-through) would call the
         // store's own child dispatch, which bypasses the pipeline entirely and gives tests false confidence that
-        // no plugin ran. Children go through ExecuteRequestCore (not ExecuteRequest) so they inherit the batch's
-        // active bypass instead of re-extracting their own.
+        // no plugin ran. Children go through ExecuteRequest so each child's effective bypass is the batch's bypass
+        // united with the child's own bypass parameters.
         private ExecuteMultipleResponse ExecuteMultipleThroughPipeline(ExecuteMultipleRequest request)
         {
             bool continueOnError = request.Settings?.ContinueOnError ?? false;
@@ -708,7 +828,7 @@ namespace Vela.Testing
             {
                 try
                 {
-                    OrganizationResponse childResponse = ExecuteRequestCore(request.Requests[i]);
+                    OrganizationResponse childResponse = ExecuteRequest(request.Requests[i]);
                     if (returnResponses)
                     {
                         items.Add(new ExecuteMultipleResponseItem { RequestIndex = i, Response = childResponse });
@@ -764,7 +884,7 @@ namespace Vela.Testing
             {
                 foreach (OrganizationRequest child in request.Requests)
                 {
-                    OrganizationResponse childResponse = ExecuteRequestCore(child);
+                    OrganizationResponse childResponse = ExecuteRequest(child);
                     if (request.ReturnResponses == true)
                     {
                         responses.Add(childResponse);
@@ -793,8 +913,8 @@ namespace Vela.Testing
         private OrganizationResponse ExecuteModelledMessage(OrganizationRequest request, ParameterCollection shared)
         {
             string message = request.RequestName;
-            bool hasSteps = _registrations.Any(registration =>
-                string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
+            bool hasSteps = _registrations.Any(registration => registration.Step.Enabled
+                && string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
             if (!hasSteps)
             {
                 return _store.Execute(request);
@@ -1058,13 +1178,17 @@ namespace Vela.Testing
         private void FireStage(StageInvocation invocation, List<Action> asyncQueue)
         {
             List<PipelineRegistration> steps = _registrations
-                .Where(registration => registration.Step.Stage == invocation.Stage
+                // A disabled step (.Disabled()) is registered but dormant: it never fires, as on a real org.
+                .Where(registration => registration.Step.Enabled
+                    && registration.Step.Stage == invocation.Stage
                     && string.Equals(registration.Step.Message, invocation.Message, StringComparison.OrdinalIgnoreCase)
                     // A generic modelled message may not resolve a primary entity from the request; match its
                     // steps by (message, stage) alone in that case. Likewise an entity-none step (empty logical
-                    // name: Associate/Disassociate, or an intentionally global step) matches any entity - mirroring
-                    // the plugin's own ResolveSingleMatchingStep, which skips the entity check for an empty name.
+                    // name, an intentionally global step) matches any entity, and a global message
+                    // (Associate/Disassociate: sdkmessagefilter "none") fires regardless of the entity the step was
+                    // declared on - mirroring the runtime's ResolveSingleMatchingStep and the CLI's registration.
                     && (string.IsNullOrEmpty(invocation.EntityLogicalName)
+                        || PluginMessages.IsGlobalMessage(invocation.Message)
                         || string.IsNullOrEmpty(registration.Step.EntityLogicalName)
                         || string.Equals(registration.Step.EntityLogicalName, invocation.EntityLogicalName, StringComparison.OrdinalIgnoreCase)))
                 .Where(registration => !string.Equals(invocation.Message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase)
@@ -1095,7 +1219,8 @@ namespace Vela.Testing
             bool isUpdate = string.Equals(singleMessage, PluginMessages.Update, StringComparison.OrdinalIgnoreCase);
 
             List<PipelineRegistration> matching = _registrations
-                .Where(registration => registration.Step.Stage == stage
+                .Where(registration => registration.Step.Enabled
+                    && registration.Step.Stage == stage
                     && string.Equals(registration.Step.EntityLogicalName, entityName, StringComparison.OrdinalIgnoreCase)
                     && (string.Equals(registration.Step.Message, singleMessage, StringComparison.OrdinalIgnoreCase)
                         || string.Equals(registration.Step.Message, bulkMessage, StringComparison.OrdinalIgnoreCase)))
@@ -1205,8 +1330,8 @@ namespace Vela.Testing
             }
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, message, stage, registration.Step.Mode, entityName, _depth));
-            IPlugin plugin = registration.CreateInstance();
-            ExecuteWithContext(context, plugin);
+            IPlugin plugin = registration.CreateInstance(SecureConfigFor(registration.Step));
+            ExecuteWithContext(context, plugin, registration.Step);
         }
 
         private static EntityImageCollection BuildImageCollection(ImageDefinition[] definitions, Entity? state)
@@ -1274,19 +1399,63 @@ namespace Vela.Testing
             BuildImages(context.PostEntityImages, registration.Step.PostImages, invocation.PostState);
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth));
-            IPlugin plugin = registration.CreateInstance();
-            ExecuteWithContext(context, plugin);
+            IPlugin plugin = registration.CreateInstance(SecureConfigFor(registration.Step));
+            ExecuteWithContext(context, plugin, registration.Step);
         }
 
-        // Finalizes a freshly built context and runs the plugin. Stamps the calling identity from the store's
-        // actor (so ctx.UserId/InitiatingUserId/BusinessUnitId/OrganizationId match WhoAmI and system-field
-        // stamping instead of being random), links the ParentContext for a cascaded (nested) execution, and keeps
-        // the context on the stack while the plugin runs so a write it triggers sees it as the parent.
-        private void ExecuteWithContext(FakePluginExecutionContext context, IPlugin plugin)
+        private string? SecureConfigFor(StepDefinition step)
         {
-            (Guid userId, Guid businessUnitId, Guid organizationId) = _store.CurrentActor();
+            return !string.IsNullOrEmpty(step.SecureConfigName) && _secureConfigs.TryGetValue(step.SecureConfigName, out string? value)
+                ? value
+                : null;
+        }
+
+        // Runs a call as the identity of the service that issued it (see PipelineOrganizationService): the store
+        // enforces security as that user (or not at all for SYSTEM), and plugins fired by the call see that user as
+        // ctx.UserId. The test-facing service (Caller) keeps whatever identity is in force. The outermost caller is
+        // remembered as the initiating user, which never changes through impersonation or SYSTEM calls.
+        internal T RunAs<T>(PipelineIdentity identity, Func<T> body)
+        {
+            if (identity.IsCaller)
+            {
+                return body();
+            }
+
+            bool system = identity.IsSystem || identity.UserId == SystemUserId;
+            Guid? previousCaller = _callerUserId;
+            Guid? previousInitiating = _initiatingUserId;
+            _initiatingUserId ??= _callerUserId ?? _store.CurrentActor().UserId;
+            _callerUserId = system ? SystemUserId : identity.UserId;
+            try
+            {
+                return _store.RunAs(system ? (Guid?)null : identity.UserId, body);
+            }
+            finally
+            {
+                _callerUserId = previousCaller;
+                _initiatingUserId = previousInitiating;
+            }
+        }
+
+        // Finalizes a freshly built context and runs the plugin. Stamps the calling identity (so ctx.UserId/
+        // InitiatingUserId/BusinessUnitId/OrganizationId match WhoAmI and system-field stamping instead of being
+        // random): UserId is the step's impersonated user (WithImpersonation(Guid)) when set, otherwise the identity
+        // of the service that issued the triggering call; InitiatingUserId is always the outermost caller. Links the
+        // ParentContext for a cascaded (nested) execution, and keeps the context on the stack while the plugin runs
+        // so a write it triggers sees it as the parent.
+        private void ExecuteWithContext(FakePluginExecutionContext context, IPlugin plugin, StepDefinition? step = null)
+        {
+            (Guid actingUserId, Guid businessUnitId, Guid organizationId) = _store.CurrentActor();
+            Guid caller = _callerUserId ?? actingUserId;
+            Guid userId = step?.ImpersonatingUserId is Guid impersonated && impersonated != Guid.Empty ? impersonated : caller;
+            if (userId != caller && userId != SystemUserId)
+            {
+                // The impersonated user's own business unit (from its security registration, when configured).
+                businessUnitId = _store.RunAs<Guid>(userId, () => _store.CurrentActor().BusinessUnitId);
+            }
+
             context.UserId = userId;
-            context.InitiatingUserId = userId;
+            context.InitiatingUserId = _initiatingUserId ?? actingUserId;
             context.BusinessUnitId = businessUnitId;
             context.OrganizationId = organizationId;
             context.ParentContext = _contextStack.Count > 0 ? _contextStack.Peek() : null;
@@ -1304,11 +1473,9 @@ namespace Vela.Testing
 
         private IServiceProvider BuildProvider(FakePluginExecutionContext context)
         {
-            HookOrganizationServiceFactory factory = new HookOrganizationServiceFactory
-            {
-                UserService = _service,
-                SystemService = _service
-            };
+            // ctx.Service is CreateOrganizationService(ctx.UserId): a service acting as that user (subject to the
+            // security model). ctx.SystemService is CreateOrganizationService(null): SYSTEM, not subject to it.
+            IOrganizationServiceFactory factory = new PipelineServiceFactory(this);
 
             Dictionary<Type, object> services = new Dictionary<Type, object>
             {
@@ -1400,6 +1567,24 @@ namespace Vela.Testing
             return string.IsNullOrEmpty(fullName) ? null : assembly.GetType(fullName);
         }
 
+        // Hands plugins identity-bound pipeline services: null (or SystemUserId) -> SYSTEM, any other id -> that user.
+        private sealed class PipelineServiceFactory : IOrganizationServiceFactory
+        {
+            private readonly PluginPipeline _pipeline;
+
+            public PipelineServiceFactory(PluginPipeline pipeline)
+            {
+                _pipeline = pipeline;
+            }
+
+            public IOrganizationService CreateOrganizationService(Guid? userId)
+            {
+                return userId == null || userId.Value == SystemUserId
+                    ? new PipelineOrganizationService(_pipeline, PipelineIdentity.System)
+                    : new PipelineOrganizationService(_pipeline, PipelineIdentity.User(userId.Value));
+            }
+        }
+
         // The bypass directives in force for the current operation. ShouldBypass decides whether a registered
         // step is suppressed (by "all custom", by execution mode, or by step key).
         private sealed class BypassContext
@@ -1410,6 +1595,25 @@ namespace Vela.Testing
             public bool BypassSync;
             public bool BypassAsync;
             public readonly HashSet<string> StepKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // The directives of both contexts: a nested request keeps everything it inherited and adds its own.
+            public BypassContext Union(BypassContext other)
+            {
+                if (!other.AllCustom && !other.BypassSync && !other.BypassAsync && other.StepKeys.Count == 0)
+                {
+                    return this;
+                }
+
+                BypassContext union = new BypassContext
+                {
+                    AllCustom = AllCustom || other.AllCustom,
+                    BypassSync = BypassSync || other.BypassSync,
+                    BypassAsync = BypassAsync || other.BypassAsync,
+                };
+                union.StepKeys.UnionWith(StepKeys);
+                union.StepKeys.UnionWith(other.StepKeys);
+                return union;
+            }
 
             public bool ShouldBypass(StepDefinition step)
             {

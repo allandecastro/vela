@@ -90,10 +90,49 @@ namespace Vela.Testing
             return (actor.UserId, actor.BusinessUnitId, actor.OrganizationId);
         }
 
+        // Set while the store runs on behalf of the SYSTEM identity (a plugin's ctx.SystemService, i.e.
+        // IOrganizationServiceFactory.CreateOrganizationService(null)): SYSTEM is not subject to the security model,
+        // so every privilege / field-security / read-filter check is skipped. Audit/owner stamping still uses the
+        // calling user (and its registered business unit), so the configured security model is not torn down.
+        private bool _actingAsSystem;
+
+        // The security model to ENFORCE for the current call: null when no model is configured or when acting as
+        // SYSTEM. Stamping (Actor, owning-business-unit realignment) keeps reading _security directly.
+        private SecurityModel? Enforcing => _actingAsSystem ? null : _security;
+
+        // Runs <paramref name="body"/> as another identity: a specific user (privileges, field security, EqualUserId
+        // and audit stamping resolve against that user), or SYSTEM when <paramref name="userId"/> is null (no
+        // security enforcement). The previous identity is restored afterwards, so nested calls compose. Used by the
+        // pipeline to give each plugin's ctx.Service / ctx.SystemService the identity it has on a real org.
+        internal T RunAs<T>(Guid? userId, Func<T> body)
+        {
+            Guid previousUser = _currentUserId;
+            bool previousSystem = _actingAsSystem;
+            if (userId.HasValue)
+            {
+                _currentUserId = userId.Value;
+                _actingAsSystem = false;
+            }
+            else
+            {
+                _actingAsSystem = true;
+            }
+
+            try
+            {
+                return body();
+            }
+            finally
+            {
+                _currentUserId = previousUser;
+                _actingAsSystem = previousSystem;
+            }
+        }
+
         // Field-level security: drop field-secured columns the current user may not read from a returned record.
         private void MaskSecuredColumns(Entity entity)
         {
-            if (_security == null)
+            if (Enforcing == null)
             {
                 return;
             }
@@ -127,7 +166,7 @@ namespace Vela.Testing
         // caller can't read (the aggregate value would otherwise leak it).
         private void DemandAggregateColumnReads(QueryBase query)
         {
-            if (_security == null)
+            if (Enforcing == null)
             {
                 return;
             }
@@ -167,12 +206,12 @@ namespace Vela.Testing
         // when the column is field-secured and the current user cannot read it.
         private void DemandSecuredColumnRead(string entity, string column)
         {
-            if (_security == null)
+            if (Enforcing == null)
             {
                 return;
             }
 
-            if (!string.IsNullOrEmpty(column) && _security.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
+            if (!string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
             {
                 throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
             }
@@ -181,14 +220,14 @@ namespace Vela.Testing
         // Field-level security: reject a Create/Update that sets a field-secured column the caller can't write.
         private void DemandSecuredColumnWrites(Entity entity)
         {
-            if (_security == null)
+            if (Enforcing == null)
             {
                 return;
             }
 
             foreach (string column in entity.Attributes.Keys)
             {
-                if (_security.IsSecuredColumn(entity.LogicalName, column) && !_security.CanWriteColumn(_currentUserId, entity.LogicalName, column))
+                if (_security!.IsSecuredColumn(entity.LogicalName, column) && !_security.CanWriteColumn(_currentUserId, entity.LogicalName, column))
                 {
                     throw _security.PrivilegeDenied(_currentUserId, Privilege.Write, $"{entity.LogicalName}.{column}");
                 }
@@ -200,7 +239,7 @@ namespace Vela.Testing
         // parental parent record — so a user who can act on the parent can act on the child.
         private void DemandAccess(string entityName, Privilege privilege, Entity? record)
         {
-            if (_security == null)
+            if (Enforcing == null)
             {
                 DemandStrictSecurityConfigured();
                 return;
@@ -211,7 +250,7 @@ namespace Vela.Testing
                 return;
             }
 
-            throw _security.PrivilegeDenied(_currentUserId, privilege, entityName);
+            throw _security!.PrivilegeDenied(_currentUserId, privilege, entityName);
         }
 
         // WithStrictSecurity guard: a security-relevant operation run with no configured security model fails loudly
@@ -273,7 +312,7 @@ namespace Vela.Testing
         // assignment, so it additionally needs Assign. No-op when security is off.
         private void DemandCreate(Entity entity)
         {
-            if (_security == null)
+            if (Enforcing == null)
             {
                 DemandStrictSecurityConfigured();
                 return;
@@ -285,7 +324,7 @@ namespace Vela.Testing
                     : new EntityReference("systemuser", _currentUserId);
 
             Entity prospective = new Entity(entity.LogicalName) { [SystemFieldApplier.OwnerId] = owner };
-            Guid ownerBusinessUnit = _security.BusinessUnitOfPrincipal(owner);
+            Guid ownerBusinessUnit = _security!.BusinessUnitOfPrincipal(owner);
             if (ownerBusinessUnit != Guid.Empty)
             {
                 prospective[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", ownerBusinessUnit);
@@ -306,7 +345,7 @@ namespace Vela.Testing
         // mirroring the platform. Off (or nothing configured) is a no-op.
         private void DemandAssociationAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
         {
-            if (_security == null)
+            if (Enforcing == null)
             {
                 return;
             }
@@ -335,7 +374,7 @@ namespace Vela.Testing
         // carrying the lookup (the stored row on Update; null on Create, where it does not exist yet).
         private void DemandLookupAppends(Entity entity, Entity? self)
         {
-            if (_security == null)
+            if (Enforcing == null)
             {
                 return;
             }
@@ -377,7 +416,12 @@ namespace Vela.Testing
         {
             // The sharer's effective rights include role, ownership, sharing AND inherited access — reuse the same
             // computation RetrievePrincipalAccess uses. With security off this returns full rights, so the clamp is a
-            // no-op (unchanged behaviour).
+            // no-op (unchanged behaviour). SYSTEM holds every right, so a share issued as SYSTEM is never clamped.
+            if (_actingAsSystem)
+            {
+                return access;
+            }
+
             AccessRights sharerRights = EffectiveAccess(new EntityReference("systemuser", _currentUserId), target);
             return new PrincipalAccess { Principal = access.Principal, AccessMask = access.AccessMask & sharerRights };
         }
@@ -603,6 +647,6 @@ namespace Vela.Testing
         // Includes access inherited from a parental parent, and reads the stored record's own owner columns so
         // filtering is correct regardless of the query's ColumnSet.
         private Func<Entity, bool>? ReadFilter() =>
-            _security == null ? null : row => SecurityInfraTables.Contains(row.LogicalName) || CanAccess(row.LogicalName, Privilege.Read, row);
+            Enforcing == null ? null : row => SecurityInfraTables.Contains(row.LogicalName) || CanAccess(row.LogicalName, Privilege.Read, row);
     }
 }
