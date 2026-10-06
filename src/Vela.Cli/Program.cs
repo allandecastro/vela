@@ -491,20 +491,23 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
         RegistrationDiff diff = BuildDiff(local, current);
 
-        // A code-only change (unchanged step/custom-API definitions but a rebuilt assembly) is invisible to the
-        // registration diff, so also surface whether each plugin package would be created or republished - exactly
-        // what apply checks - so plan does not report "no changes" for a rebuild that apply would deploy. The same
-        // importable-prefix guard apply uses runs first (local, no connection) so plan fails the same way apply
-        // would on an unprefixed package without --solution rather than advertising an impossible create. Skips the
-        // (short-lived) connection entirely when there are no local packages to compare.
-        // When applying into a solution, a Custom API unique name without the publisher prefix is rejected by apply.
-        // Surface that mismatch at plan time as a warning (and fail under --strict) so it is caught before apply,
-        // not discovered by it. Resolved on the same short-lived connection as the package check.
+        // Two live-state checks the registration diff alone cannot express, both run on one short-lived connection:
+        //  1. Package publish: a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) produces no diff
+        //     item, yet apply republishes the package - surface it so plan does not report "no changes". The same
+        //     importable-prefix guard apply uses runs first (local, no connection) so plan fails the same way apply
+        //     would on an unprefixed package without --solution rather than advertising an impossible create.
+        //  2. Custom API publisher prefix: applying into a solution rejects a Custom API unique name without the
+        //     prefix - warn at plan time (and fail under --strict) so it is caught before apply. Resolve the prefix
+        //     only when apply would: a solution is targeted AND a Custom API is being created or updated (removed
+        //     APIs need no prefix), so a step-only or delete-only plan neither pays for nor can fail on the lookup.
         IReadOnlyList<PackagePublishAction> packageActions = [];
         string[] prefixDiagnostics = [];
         bool checksPackages = local.PackagePayloads.Length > 0;
-        bool checksSolutionPrefix = !string.IsNullOrWhiteSpace(options.SolutionUniqueName);
-        if (checksPackages || checksSolutionPrefix)
+        string[] customApiNames = string.IsNullOrWhiteSpace(options.SolutionUniqueName)
+            ? []
+            : ExtractCustomApiUniqueNames(diff).ToArray();
+        bool checksCustomApiPrefix = customApiNames.Length > 0;
+        if (checksPackages || checksCustomApiPrefix)
         {
             if (checksPackages)
             {
@@ -517,10 +520,10 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
                 packageActions = ComputePackagePublishActions(planClient, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
             }
 
-            if (checksSolutionPrefix)
+            if (checksCustomApiPrefix)
             {
                 string solutionPrefix = ResolveSolutionCustomizationPrefix(planClient, options.SolutionUniqueName!);
-                prefixDiagnostics = ComputeCustomApiPrefixDiagnostics(solutionPrefix, ExtractCustomApiUniqueNames(diff)).ToArray();
+                prefixDiagnostics = ComputeCustomApiPrefixDiagnostics(solutionPrefix, customApiNames).ToArray();
             }
         }
 
