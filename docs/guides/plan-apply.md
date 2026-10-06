@@ -65,6 +65,11 @@ vela plan `
 
 `apply` sends its writes in **batches** rather than one request per record: the create/update/delete operations are grouped into dependency tiers (the step and custom API rows first, then their images, parameters, secure config and state) and each tier is flushed in chunked `ExecuteMultiple` requests. This collapses hundreds of round-trips into a handful, so `apply` is much faster on a large environment and far less likely to hit the connection timeout. Deletes run in the reverse order (children before parents). The output is unchanged: results are still reported **per plugin and per custom API**. If a whole batch cannot run on a given environment (for example `ExecuteMultiple` is unavailable, or a request times out), that chunk automatically falls back to one-by-one execution, so batching never makes `apply` less reliable. See [connection timeout](../configuration/authentication.md#connection-timeout) to raise the per-request budget on a very large org.
 
+**Unmanaged registrations.** An assembly can mix Vela plugins with classic `IPlugin` / `CodeActivity` classes
+registered by other tools. Those classes are not Vela types, so `plan` and `apply` leave their steps and Custom APIs
+alone and list them under `unmanaged` (JSON) / "unmanaged (left untouched)" (terminal). This is information, not a
+warning: `--strict` does not fail on it.
+
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
 ### Assembly name collisions across projects

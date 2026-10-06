@@ -24,6 +24,16 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed (CLI)
+
+- **`apply` no longer deletes the registrations of classic plugins in the same assembly.** The live read took every
+  plugin type of the assembly while the scan only produced the Vela ones, so the steps and Custom APIs of a classic
+  `IPlugin`/`CodeActivity` class (registered with the Plugin Registration Tool, for example) diffed as "removed" and
+  were deleted. They are now left untouched and reported under `unmanaged` in `plan`/`apply`/`inspect` output (info,
+  not a warning). The registrations of a Vela plugin class you deleted are still removed.
+- **`apply` no longer takes over a Custom API owned by another assembly.** A local Custom API whose unique name already
+  existed, implemented by another assembly, was silently re-pointed to the local plugin while the plan said "create".
+  `apply` now stops with an error naming the owning type and assembly.
 ### Added (Framework)
 
 - **VELA020: a Create/Update step without `FilterOn(...)` is a build error.** These steps already had to declare a

@@ -49,6 +49,15 @@ internal static class OutputWriter
         string changed = ConsoleTheme.Changed($"~{preview.Summary.Changed}", color);
         writer.WriteLine($"{ConsoleTheme.Muted("summary:", color)} {added} {removed} {changed}");
 
+        if (preview.Unmanaged is { Length: > 0 })
+        {
+            writer.WriteLine(ConsoleTheme.Muted("unmanaged (left untouched):", color));
+            foreach (string line in preview.Unmanaged)
+            {
+                writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {line}", color));
+            }
+        }
+
         if (preview.Operations.Length > 0)
         {
             writer.WriteLine(ConsoleTheme.Muted("operations:", color));
@@ -316,7 +325,7 @@ internal static class OutputWriter
         return baseName;
     }
 
-    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null)
+    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null)
     {
         List<ApplyOperation> operations = [];
         operations.AddRange(diff.Added.Select(item => new ApplyOperation("create", item.Kind, item.Type, "Exists locally but not in Dataverse.")));
@@ -349,7 +358,8 @@ internal static class OutputWriter
             [
                 "Compared local .nupkg plugin metadata with live Dataverse state.",
                 "This is a preview; nothing was written to Dataverse."
-            ]);
+            ],
+            Unmanaged: unmanaged ?? []);
     }
 
     // Top-level `vela --help`. Section headers and command names are rendered through Spectre so a real
