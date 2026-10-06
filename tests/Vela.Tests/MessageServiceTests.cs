@@ -1,4 +1,6 @@
 using System;
+using System.Text;
+using System.Xml.Linq;
 using Vela.Caching;
 using Vela.Context;
 using Vela.Localization;
@@ -34,6 +36,28 @@ public sealed class MessageServiceTests
             ["vela_lcid"] = lcid,
             ["vela_value"] = value,
         };
+
+    // A String (RESX) web resource row: name follows the platform convention <base>.<LCID>.resx and content is the
+    // base64 of the resx XML. BuildResx produces a minimal but valid resx document.
+    private static Entity WebResource(string name, string base64Content) =>
+        new Entity("webresource", Guid.NewGuid())
+        {
+            ["name"] = name,
+            ["content"] = base64Content,
+        };
+
+    private static string Resx(params (string name, string value)[] entries)
+    {
+        XElement root = new XElement("root");
+        foreach ((string name, string value) in entries)
+        {
+            root.Add(new XElement("data", new XAttribute("name", name), new XElement("value", value)));
+        }
+
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(new XDocument(root).ToString()));
+    }
+
+    private static string Base64(string raw) => Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
 
     private static ILocalPluginContext Context(params Entity[] rows)
     {
@@ -162,6 +186,104 @@ public sealed class MessageServiceTests
         svc.AddSource(new DataverseTableMessageSource(ctx, new PluginCacheService(), "vela_label", "vela_key", "vela_lcid", "vela_value"));
 
         Assert.Equal("Bonjour Alice", svc.GetMessage("GREETING", "Alice"));
+    }
+
+    // ---- RESX web-resource source -----------------------------------------------------------------
+
+    [Fact]
+    public void Reads_templates_from_a_resx_web_resource_in_the_users_language()
+    {
+        ILocalPluginContext ctx = Context(
+            UserSettings(1036),
+            WebResource("acme_messages.1033.resx", Resx(("GREETING", "Hello {0}"))),
+            WebResource("acme_messages.1036.resx", Resx(("GREETING", "Bonjour {0}"))));
+        MessageService svc = Service(ctx);
+        svc.AddSource(new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages"));
+
+        Assert.Equal("Bonjour Alice", svc.GetMessage("GREETING", "Alice"));
+    }
+
+    [Fact]
+    public void Resx_source_falls_back_to_the_base_language_when_the_user_resx_is_absent()
+    {
+        // Only the 1033 resource exists; a 1036 user resolves through the service's default-language fallback,
+        // which asks this source for <base>.1033.resx.
+        ILocalPluginContext ctx = Context(
+            UserSettings(1036),
+            WebResource("acme_messages.1033.resx", Resx(("GREETING", "Hello"))));
+        MessageService svc = Service(ctx);
+        svc.AddSource(new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages"));
+
+        Assert.Equal("Hello", svc.GetMessage("GREETING"));
+    }
+
+    [Fact]
+    public void Resx_source_skips_typed_and_binary_entries()
+    {
+        // A <data> with a type/mimetype is a typed/binary resource (image, ...), not a string template.
+        XElement root = new XElement("root",
+            new XElement("data", new XAttribute("name", "IMG"), new XAttribute("type", "System.Byte[], mscorlib"), new XElement("value", "AAAA")),
+            new XElement("data", new XAttribute("name", "GREETING"), new XElement("value", "Hello")));
+        string content = Convert.ToBase64String(Encoding.UTF8.GetBytes(new XDocument(root).ToString()));
+        ILocalPluginContext ctx = Context(UserSettings(1033), WebResource("acme_messages.1033.resx", content));
+        var source = new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages");
+
+        Assert.True(source.TryGetTemplate("GREETING", 1033, out string? greeting));
+        Assert.Equal("Hello", greeting);
+        Assert.False(source.TryGetTemplate("IMG", 1033, out _));
+    }
+
+    [Fact]
+    public void Resx_source_returns_no_template_when_the_web_resource_is_absent()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1033)); // no webresource row seeded
+        var source = new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages");
+
+        Assert.False(source.TryGetTemplate("GREETING", 1033, out string? template));
+        Assert.Null(template);
+    }
+
+    [Fact]
+    public void Resx_source_degrades_gracefully_on_malformed_content()
+    {
+        // Valid base64 but not valid resx XML: must not throw; resolution falls through (no template).
+        ILocalPluginContext ctx = Context(UserSettings(1033), WebResource("acme_messages.1033.resx", Base64("<<< not xml")));
+        var source = new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages");
+
+        Assert.False(source.TryGetTemplate("GREETING", 1033, out _));
+    }
+
+    [Fact]
+    public void Resx_source_can_cache_across_executions()
+    {
+        ILocalPluginContext ctx = Context(
+            UserSettings(1033),
+            WebResource("acme_messages.1033.resx", Resx(("K", "cached"))));
+        MessageService svc = Service(ctx);
+        svc.AddSource(new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages", cacheFor: TimeSpan.FromMinutes(5)));
+
+        Assert.Equal("cached", svc.GetMessage("K"));
+        Assert.Equal("cached", svc.GetMessage("K")); // second read hits the cache
+    }
+
+    [Fact]
+    public void ResxWebResourceMessageSource_rejects_missing_configuration()
+    {
+        ILocalPluginContext ctx = Context();
+        var cache = new PluginCacheService();
+        Assert.Throws<ArgumentException>(() => new ResxWebResourceMessageSource(ctx, cache, ""));
+        Assert.Throws<ArgumentNullException>(() => new ResxWebResourceMessageSource(null!, cache, "acme_messages"));
+        Assert.Throws<ArgumentNullException>(() => new ResxWebResourceMessageSource(ctx, null!, "acme_messages"));
+    }
+
+    [Fact]
+    public void Resx_source_TryGetTemplate_rejects_an_empty_key()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1033));
+        var source = new ResxWebResourceMessageSource(ctx, new PluginCacheService(), "acme_messages");
+
+        Assert.False(source.TryGetTemplate("", 1033, out string? template));
+        Assert.Null(template);
     }
 
     // ---- Context helpers --------------------------------------------------------------------------
