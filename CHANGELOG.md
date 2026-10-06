@@ -24,6 +24,94 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+Framework line, published as `framework-v0.31.0`.
+
+### Added
+
+- **One-call typed query execution and scalar aggregates.** On a `TypedQuery`, `FirstOrDefault(service)` returns
+  the first match (or `null`) with no `.Build()`, and `CountScalar` / `SumScalar` / `AverageScalar` /
+  `MinScalar` / `MaxScalar` run a single aggregate and read the typed result back in one call - no alias string,
+  no `AliasedValue` to unwrap. `Count`/`Sum`/`Average` return `int`/`decimal?`; `Min`/`Max` return the selected
+  column's own type (a `DateTime?` column hands back `DateTime?`, a money column `decimal?`). Each runs against a
+  stripped clone, so the caller's query is never mutated.
+- **`OnAssign()` trigger.** A first-class builder trigger for the Assign message (owner change), alongside the
+  existing `On*` triggers, with a typed `{Handler}Context`.
+- **Typed merged-image accessors.** `ctx.GetPreImageMerged<T>()` / `ctx.GetPostImageMerged<T>()` (and the bulk
+  variants) overlay the captured image with the step Target so a handler sees the effective record without
+  registering the opposite image.
+- **`Clone<T>()` on early-bound entities.** A create-ready detached copy (id reset, audit/row-version/key
+  columns dropped, attribute values deep-copied, nested collection records cloned) for the common
+  duplicate-a-record pattern, replacing a hand-rolled attribute-by-attribute copy.
+- **Uniform typed step context on every message and stage.** The generated `{Handler}Context` is now emitted for
+  every named handler - not only image-capturing CRUD steps - so a handler's signature is the same typed context
+  throughout, with `ctx.PreImage`/`ctx.PostImage` typed to the captured columns where present.
+- **VELA018 and VELA019.** VELA018 warns when an `.Async()` step writes the step Target (the write is lost after
+  the synchronous commit). VELA019 flags `System.IO` filesystem access inside a plugin (the sandbox has no file
+  system), with a "Respect the sandbox" guide covering the HTTP allow-list and the two-minute budget.
+- **Associate / Disassociate register for any entity.** These two relationship messages register with no primary
+  entity (Dataverse has no per-entity filter and the Target is either relationship end); the handler filters on
+  `ctx.Request.Relationship`.
+
+### Changed
+
+- **`Vela.Plugins` trims its .NET Framework 4.6.2 dependency graph.** It now references only
+  `Microsoft.Extensions.DependencyInjection.Abstractions` instead of the full `Microsoft.Extensions.DependencyInjection`
+  package (the runtime never builds a service provider), reducing the transitive 8.x footprint a sandboxed plugin
+  carries.
+- **VELA012 no longer flags `PluginBusinessException`.** Throwing `PluginBusinessException` from a plugin that
+  derives from a Vela base type (`PluginBase`/`EntityPluginBase`/`CustomApiBase`) is the blessed business-error
+  path and is no longer reported; a raw `IPlugin` (which has no Vela catch frame) is still flagged. Helper/service
+  code should throw `InvalidPluginExecutionException` directly.
+- **VELA008's message now explains same-trigger steps.** The diagnostic describes why two steps on the same
+  message/stage/mode in one class collide and how to consolidate (one step, a union of filtering attributes, and
+  per-column `HasChanged`/`Contains` in the handler).
+
+### Fixed
+
+- **Plugin DI no longer silently elevates to the system user.** `AddPluginRuntime` registered both the user and
+  system organization services under `IOrganizationService`, and Microsoft DI returns the last registration, so
+  every consumer resolving `IOrganizationService` silently got the **system** service. It now registers the user
+  service (matching the lightweight resolver); use `ctx.SystemService` or the `Func<Guid?, IOrganizationService>`
+  factory for a system/impersonated call.
+
+## [0.23.0] - 2026-10-06 (Vela.Cli)
+
+CLI line, published as `cli-v0.23.0`.
+
+### Added
+
+- **`vela logs` / `vela trace`.** A read-only reader of the Dataverse plug-in trace log (and `--jobs` for failed
+  system jobs), with filters for `--top` / `--since` / type / message / entity / correlation / errors. The human
+  view truncates; `--json` is complete - so an agent can read plug-in traces without a human.
+- **`vela models --intersect`.** Auto-discovers and generates the N:N intersect tables of the scoped tables (one
+  level, opt-in, deduplicated), so typed queries can traverse many-to-many relationships.
+- **`vela plan` surfaces a code-only rebuild.** When steps and Custom APIs are unchanged but the assembly was
+  rebuilt, `plan` now lists a `package` operation (create, or update when the stored version or content differs)
+  and sets `hasChanges`, instead of reporting "no changes" for a rebuild that `apply` would deploy.
+- **`vela plan --solution` checks the publisher prefix.** It warns for every Custom API being created or updated
+  whose unique name lacks the solution's publisher prefix - the mismatch `apply` rejects - so it is caught in the
+  preview (and fails the command under `--strict`).
+- **`vela init --minimal` (alias `--no-demos`).** Scaffolds a bare `Shared` + `Plugins` solution with no sample
+  code and none of the demo-only Integrations/Tests/ConsoleApp projects - a clean, build-ready canvas to fill in
+  with `vela models` and `vela add`. The rich default is unchanged.
+- **`apply` reports what it executed in JSON.** The `apply-execute` JSON carries an `executed`
+  block - `{ created, updated, deleted, packageRepublished, byKind: [...] }` from the pre-apply diff - so a
+  script or agent reads the executed counts directly instead of parsing the free-text notes.
+- **`vela add service` reports the DI registration line in `--json`.** A new `registration` field gives the
+  `services.AddScoped(...)` line to wire up (omitted when there is nothing to register).
+- **The scaffold references `System.Net.Http`.** Generated plugin projects reference it (with a TLS 1.2 snippet)
+  so a net462 integration plugin using `HttpClient` compiles without a manual reference.
+
+### Changed
+
+- **`apply --solution` warns before the confirmation gate on a cross-solution assembly overwrite.** When the
+  target plugin assembly already exists in the org outside the target solution, the heads-up now precedes the
+  prompt so an interactive user can decline knowing the risk.
+- **`vela plan` lists only the assemblies actually found in the org** under `currentAssemblies`, instead of the
+  requested names - so it no longer lists an assembly it also reports as not found.
+
 ## [0.30.0] - 2026-10-02 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.30.0`.
