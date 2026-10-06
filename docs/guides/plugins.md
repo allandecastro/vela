@@ -122,9 +122,10 @@ The fluent builder enforces a specific order:
    determines which images the rest of the chain will offer)
 3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only)
 4. **Filtering** - `FilterOn(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
-   `CreateMultiple` and `UpdateMultiple`** (at least one attribute; the first is mandatory at compile time);
-   not offered on other messages. An unfiltered Create/Update step would fire on every change, so the builder
-   makes you state the trigger.
+   `CreateMultiple` and `UpdateMultiple`** (at least one attribute; a chain without it is a build error,
+   [VELA020](../reference/analyzers.md#vela020)); not offered on other messages. The step fires only when the
+   request sets one of the attributes: on Update the changed columns, on Create the columns the record is created
+   with. An unfiltered Create/Update step would fire on every change, so the builder makes you state the trigger.
 5. **Optional** - `WithDescription()`, `WithImpersonation(...)` (see [Impersonation](#impersonation)), `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfigFrom(...)`
 6. **Images** - `WithPreImage(...)` and/or `WithPostImage(...)`
 7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).

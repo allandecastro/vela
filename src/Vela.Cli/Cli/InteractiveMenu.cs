@@ -94,6 +94,7 @@ internal static class InteractiveMenu
         string? message = null;
         string? handler = null;
         string? testKind = null;
+        string? filteringAttributes = null;
         bool function = false;
 
         switch (kind)
@@ -101,6 +102,7 @@ internal static class InteractiveMenu
             case "plugin":
                 entity = PromptEntity();
                 message = PromptMessage();
+                filteringAttributes = PromptFilteringAttributes(message);
                 break;
             case "service":
                 entity = PromptEntity();
@@ -108,6 +110,7 @@ internal static class InteractiveMenu
             case "step":
                 entity = PromptEntity();
                 message = PromptMessage();
+                filteringAttributes = PromptFilteringAttributes(message);
                 break;
             case "customapi":
                 if (AnsiConsole.Confirm("Bind it to a table?", false))
@@ -128,7 +131,7 @@ internal static class InteractiveMenu
                 break;
         }
 
-        return ComposeAddArgs(kind, name, entity, message, handler, testKind, function);
+        return ComposeAddArgs(kind, name, entity, message, handler, testKind, function, filteringAttributes);
     }
 
     private static string PromptEntity() =>
@@ -141,8 +144,14 @@ internal static class InteractiveMenu
     private static string PromptMessage() =>
         AnsiConsole.Prompt(new TextPrompt<string>("Message:").DefaultValue("Create"));
 
+    // Create/Update steps must FilterOn, so the wizard asks for the column(s) instead of producing a failing command.
+    private static string? PromptFilteringAttributes(string message) =>
+        AddCommand.RequiresFilter(message)
+            ? AnsiConsole.Prompt(new TextPrompt<string>("Filtering attributes (early-bound property names, comma-separated, e.g. Name):"))
+            : null;
+
     /// <summary>Builds the <c>add</c> subcommand argument array (no leading <c>add</c>). Pure, for testability.</summary>
-    public static string[] ComposeAddArgs(string kind, string name, string? entity, string? message, string? handler, string? testKind, bool function)
+    public static string[] ComposeAddArgs(string kind, string name, string? entity, string? message, string? handler, string? testKind, bool function, string? filteringAttributes = null)
     {
         List<string> args = [kind, name];
         if (!string.IsNullOrWhiteSpace(testKind))
@@ -161,6 +170,12 @@ internal static class InteractiveMenu
         {
             args.Add("--message");
             args.Add(message!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filteringAttributes))
+        {
+            args.Add("--filtering-attributes");
+            args.Add(filteringAttributes!);
         }
 
         if (!string.IsNullOrWhiteSpace(handler))

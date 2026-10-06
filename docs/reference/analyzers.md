@@ -30,6 +30,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA017](#vela017) | Vela.Usage | Error | A handler reads `ctx.PreImage`/`ctx.PostImage` its step did not capture |
 | [VELA018](#vela018) | Vela.Reliability | Warning | An asynchronous step's handler writes to the Target (the change is lost) |
 | [VELA019](#vela019) | Vela.Reliability | Warning | A plugin accesses the filesystem (`System.IO.File` / `FileStream` / ...), which the sandbox denies |
+| [VELA020](#vela020) | Vela.Usage | Error | A Create/Update (or bulk) step reaches `Handle(...)` without `FilterOn(...)` |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
 VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
@@ -259,6 +260,14 @@ not analyzed.
 
 **Fix:** keep data in memory, read embedded resources via `Assembly.GetManifestResourceStream`, or move file work
 out of the sandbox. See [Respect the sandbox](../guides/plugins.md#respect-the-sandbox).
+
+## VELA020
+
+A `Create`, `Update`, `CreateMultiple` or `UpdateMultiple` step must declare at least one filtering attribute, or
+building the step fails at runtime (the step would otherwise fire on every create/update). VELA020 reports a
+`RegisterStep()` chain that reaches `.Handle(...)` without `.FilterOn(...)`, so the mistake fails in the editor and
+at build instead. Add `.FilterOn(e => e.Column)` before `.Handle(...)`. A chain split across a local variable is not
+analyzed (it may have been filtered before the split).
 
 ## Typed image projection generator
 

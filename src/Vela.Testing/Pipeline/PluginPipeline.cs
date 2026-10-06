@@ -445,7 +445,13 @@ namespace Vela.Testing
             return RunOperation(asyncQueue =>
             {
                 string entityName = entities.Length > 0 ? entities[0].LogicalName : string.Empty;
-                List<BatchItem> items = entities.Select(e => new BatchItem { Target = e }).ToList();
+                // FilterOn applies to Create as it does to Update: a Create step fires only when the request sets one
+                // of its filtering attributes, so the "changed" set of a create is the attributes it carries.
+                List<BatchItem> items = entities.Select(e => new BatchItem
+                {
+                    Target = e,
+                    ChangedAttributes = new HashSet<string>(e.Attributes.Keys, StringComparer.OrdinalIgnoreCase)
+                }).ToList();
 
                 FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PreValidation, entityName, items, asyncQueue);
                 FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PreOperation, entityName, items, asyncQueue);
@@ -1083,7 +1089,7 @@ namespace Vela.Testing
 
         // Fires one stage of a Create/Update batch. The two registration messages are merged: a bulk step
         // (CreateMultiple/UpdateMultiple) fires once with the whole Targets collection; a single step
-        // (Create/Update) fires once per row. Both are ordered by execution order; Update steps are filtered.
+        // (Create/Update) fires once per row. Both are ordered by execution order and filtered by FilterOn.
         private void FireBatchStage(string singleMessage, string bulkMessage, PluginStages stage, string entityName, IReadOnlyList<BatchItem> items, List<Action> asyncQueue)
         {
             bool isUpdate = string.Equals(singleMessage, PluginMessages.Update, StringComparison.OrdinalIgnoreCase);
@@ -1111,7 +1117,7 @@ namespace Vela.Testing
                 if (isBulk)
                 {
                     // A bulk step fires once for the batch. For UpdateMultiple, fire if any row matches the filter.
-                    if (isUpdate && !items.Any(item => FiltersMatch(captured.Step, item.ChangedAttributes)))
+                    if (!items.Any(item => FiltersMatch(captured.Step, item.ChangedAttributes)))
                     {
                         continue;
                     }
@@ -1123,7 +1129,7 @@ namespace Vela.Testing
                 {
                     foreach (BatchItem item in items)
                     {
-                        if (isUpdate && !FiltersMatch(captured.Step, item.ChangedAttributes))
+                        if (!FiltersMatch(captured.Step, item.ChangedAttributes))
                         {
                             continue;
                         }

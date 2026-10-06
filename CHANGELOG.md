@@ -24,6 +24,23 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Added (Framework)
+
+- **VELA020: a Create/Update step without `FilterOn(...)` is a build error.** These steps already had to declare a
+  filtering attribute, but only building the step at runtime enforced it, so a chain without one compiled and then
+  failed in `vela plan` or at execution. The rule makes the documented compile-time guarantee real.
+
+### Fixed (Framework)
+
+- **The test harness filters Create steps.** A Create step fired whatever columns the record was created with; it now
+  fires only when the record sets one of its filtering attributes, like Update (and like Dataverse).
+
+### Fixed (CLI)
+
+- **`vela add plugin` / `add step` no longer generate a plugin that fails at runtime.** For Create/Update (and the bulk
+  variants) without `--filtering-attributes`, they emitted a `// TODO` instead of `FilterOn`, so the default
+  `vela add plugin X --entity Account` produced a step that failed to build. The option is now required for these
+  messages: the command names it and writes nothing, and `vela add --interactive` asks for the columns.
 ### Changed (Framework, breaking)
 
 - **Secure configuration is named in code, never valued.** `WithSecureConfig("<secret>")` is replaced by

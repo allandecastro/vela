@@ -709,7 +709,7 @@ Add a new table by creating `<Table>/Plugins/`, `<Table>/Services/` and/or `<Tab
 or let the CLI place a new file for you (it infers the namespace from the project):
 
 ```powershell
-vela add plugin AccountValidatorPlugin --entity Account --message Update
+vela add plugin AccountValidatorPlugin --entity Account --message Update --filtering-attributes Name
 vela add customapi RecalculateTotals          # global (unbound) Custom API
 vela add customapi ExportContact --entity Contact   # Custom API bound to a table
 ```
