@@ -45,7 +45,7 @@ built-in TTL cache. See [Dependency injection](dependency-injection.md) and [Cac
 
 ```csharp
 protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext ctx) =>
-    services.AddScoped<IPricingService>(_ => new PricingService(ctx.UserService));
+    services.AddScoped<IPricingService>(_ => new PricingService(ctx.Service));
 ```
 
 ## Test any of the above without a connection

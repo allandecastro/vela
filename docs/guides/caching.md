@@ -11,13 +11,13 @@ IPluginCacheService cache = ctx.GetRequiredService<IPluginCacheService>();
 string configJson = cache.GetOrCreate(
     "tenant:feature-config",
     TimeSpan.FromMinutes(5),
-    () => LoadConfigurationFromDataverse(ctx.UserService));
+    () => LoadConfigurationFromDataverse(ctx.Service));
 
 // Force refresh when needed
 string refreshed = cache.Refresh(
     "tenant:feature-config",
     TimeSpan.FromMinutes(5),
-    () => LoadConfigurationFromDataverse(ctx.UserService));
+    () => LoadConfigurationFromDataverse(ctx.Service));
 ```
 
 Supported operations:

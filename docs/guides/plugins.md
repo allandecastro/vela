@@ -171,8 +171,8 @@ RegisterStep().OnUpdate().PreOperation().Sync()
 ### Impersonation
 
 `WithImpersonation(Guid systemUserId)` registers the step to run in the context of a specific Dataverse
-**systemuser** (the `sdkmessageprocessingstep.impersonatinguserid`), so the plugin's `IOrganizationService`
-acts as that user rather than the calling user:
+**systemuser** (the `sdkmessageprocessingstep.impersonatinguserid`), so `ctx.Service` (and the injected
+`IOrganizationService`) acts as that user rather than the calling user:
 
 ```csharp
 // Runs this step as the integration service account, whatever user triggered the update.
@@ -354,10 +354,10 @@ the database when the main operation still lies ahead - so it is a **pre-stage, 
 - **PostOperation (Sync)** - the row is already written. The Target write is **not** saved to the database.
   (It is still visible to a later post-step in the same pipeline, since `InputParameters["Target"]` is shared, but
   do not rely on that to persist anything - use a shared variable to pass data downstream, and
-  `ctx.UserService.Update(...)` to change the row.)
+  `ctx.Service.Update(...)` to change the row.)
 - **Asynchronous** - the step runs after the operation commits, in its own execution: a Target write has **no
   effect at all** (not persisted, not observed by anyone). [VELA018](../reference/analyzers.md#vela018) flags this.
-  Call `ctx.UserService.Update(...)` with the change instead.
+  Call `ctx.Service.Update(...)` with the change instead.
 
 A matching nuance: a **pre-validation** step has no pre-image (the row may not exist yet), and `HasChanged` needs a
 registered pre-image - see [HasChanged](#reacting-only-to-real-changes-haschanged).
@@ -520,7 +520,7 @@ The rules the chain encodes:
 - `ctx.GetTargets()` / `ctx.TryGetTargets(...)` - Get bulk targets for `CreateMultiple` / `UpdateMultiple`
 - `ctx.GetPreImage<T>()`, `ctx.GetPostImage<T>()` - Get images as early-bound
 - `ctx.GetPreImage(index, alias)`, `ctx.GetPostImage(index, alias)` - Get per-record images in bulk operations
-- `ctx.GetPreImageMerged()`, `ctx.GetPostImageMerged()` - Merge the image's captured columns with the Target's (`GetPreImageMerged<Account>()` returns it typed). Only captured/Target columns are present; a column neither captured nor in the Target is **absent** (reads `null`), not the stored value. The result is an independent snapshot - writing to it does not persist (use `ctx.UserService.Update`)
+- `ctx.GetPreImageMerged()`, `ctx.GetPostImageMerged()` - Merge the image's captured columns with the Target's (`GetPreImageMerged<Account>()` returns it typed). Only captured/Target columns are present; a column neither captured nor in the Target is **absent** (reads `null`), not the stored value. The result is an independent snapshot - writing to it does not persist (use `ctx.Service.Update`)
 - `ctx.GetPreImageMerged(index)`, `ctx.GetPostImageMerged(index)` - Merge per-record target with per-record image in bulk operations
 - `target.Contains(x => x.Name)` - Typed attribute-presence check (no magic strings). `Contains(x => x.A, x => x.B)` requires **all**; `ContainsAny(x => x.A, x => x.B)` needs **at least one** - useful to test which columns were in the `Target`
 - `ctx.HasChanged<Account>(x => x.Name)` / `ctx.HasAnyChanged<Account>(x => x.A, x => x.B)` - True when the attribute is in the `Target` **and** differs from the registered pre-image (requires an entity `Target` + a pre-image; throws otherwise) - the "only act when X actually changed" guard
@@ -548,7 +548,7 @@ using Vela.Querying;
 
 var copy = original.Clone();           // Id is empty; attribute values are independent copies
 copy.Name = $"Copy of {original.Name}";
-ctx.UserService.Create(copy);          // a brand-new record
+ctx.Service.Create(copy);          // a brand-new record
 ```
 
 Business columns such as `ownerid` and `statecode` are preserved; clear any your table rejects on create before
@@ -612,11 +612,11 @@ submitted `Targets` verbatim.)
 Managed identity: acquire a token for an external API without a stored secret with
 `ctx.AcquireManagedIdentityToken(scopes)` - see [Managed identity](managed-identity.md).
 
-Dataverse operation tracing is automatic through wrapped services (`UserService`, `SystemService`, `CreateOrganizationService`): each call logs operation name (`Create`, `Update`, `RetrieveMultiple`, `Execute`, ...), timestamp, duration, and pipeline context.
+Dataverse operation tracing is automatic through wrapped services (`Service`, `SystemService`, `AsUser(id)`): each call logs operation name (`Create`, `Update`, `RetrieveMultiple`, `Execute`, ...), timestamp, duration, and pipeline context.
 
 Handler entry is traced automatically too: alongside the plugin-level `Executing ...` line (message, stage, mode, depth), the runtime writes `Entering handler '<Name>' for message '<Message>'.` naming the specific step (or Custom API) handler that fired - the missing dimension when a plugin registers several steps, so you no longer hand-trace the method name to locate a failure. Add `protected override bool AutoTraceHandlerEntry => false;` on the plugin/Custom API to silence it (a lambda handler has only a compiler-generated name and is not traced).
 
-> **Writing early-bound entities.** `ctx.UserService` accepts early-bound entities (for example
+> **Writing early-bound entities.** `ctx.Service` accepts early-bound entities (for example
 > `new Account { ... }`) directly - the wrapped services downcast them to the base `Entity` before each
 > `Create`/`Update`/`Execute`, so you never hit the sandbox `SerializationException` ("The deserializer has no
 > knowledge of any type that maps to the name '&lt;namespace&gt;:Account'"). `vela init` also marks the plugin
@@ -645,7 +645,7 @@ private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
     var limit = ComputeCreditLimit(target);
 
     ctx.TraceExecutionSnapshot("after-credit-calc"); // full snapshot at this exact point, your own label
-    ctx.UserService.Update(target);
+    ctx.Service.Update(target);
 }
 ```
 
@@ -703,18 +703,18 @@ pre/post images and the Target, with attribute values); there is no compact/verb
       name: "Zava"
 ```
 
-Example output - wrapped Dataverse operation tracing (automatic on `UserService` / `SystemService`), emitted as paired `start` / `ok` entries:
+Example output - wrapped Dataverse operation tracing (automatic on `Service` / `SystemService`), emitted as paired `start` / `ok` entries:
 
 ```text
 [2026-06-14T09:12:44.1790021Z] Dataverse.Update start
-  scope       : UserService
+  scope       : User
   message     : Update
   stage/mode  : 20/0
   depth       : 1
   correlation : 8f1c2d6e-4a7b-4f0e-9c11-2b6e1d2a9f33
   details     : entity=account; id=3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
 [2026-06-14T09:12:44.1820017Z] Dataverse.Update ok
-  scope       : UserService
+  scope       : User
   durationMs  : 42
   details     : entity=account; id=3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
 ```

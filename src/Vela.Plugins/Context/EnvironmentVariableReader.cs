@@ -160,7 +160,7 @@ namespace Vela.Context
             value.LinkCriteria.AddCondition("statecode", ConditionOperator.Equal, 0); // active values only
             query.LinkEntities.Add(value);
 
-            Entity? definition = _context.AsSystem().RetrieveMultiple(query).Entities.FirstOrDefault();
+            Entity? definition = _context.SystemService.RetrieveMultiple(query).Entities.FirstOrDefault();
             if (definition == null)
             {
                 return new EnvironmentVariable(schemaName, exists: false, EnvironmentVariableType.Unknown, value: null);

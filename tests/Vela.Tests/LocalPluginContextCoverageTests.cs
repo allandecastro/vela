@@ -112,16 +112,29 @@ public sealed class LocalPluginContextCoverageTests
     // ---- Service scoping -----------------------------------------------------------------------------
 
     [Fact]
-    public void Service_accessors_return_tracing_wrapped_services()
+    public void Service_acts_as_the_current_user_not_the_initiating_user()
     {
-        LocalPluginContext context = new PluginContextBuilder().Build();
+        // A step impersonating (or a CallerId call) makes UserId differ from InitiatingUserId: Service must follow
+        // UserId, so the impersonation is honoured; SystemService is the null (SYSTEM) service; AsUser is the given id.
+        Guid initiating = Guid.NewGuid(), current = Guid.NewGuid(), other = Guid.NewGuid();
+        FakePluginExecutionContext execution = new FakePluginExecutionContext { InitiatingUserId = initiating, UserId = current };
+        Mock<IOrganizationService> userService = new Mock<IOrganizationService>();
+        Mock<IOrganizationService> systemService = new Mock<IOrganizationService>();
+        Mock<IOrganizationService> otherService = new Mock<IOrganizationService>();
+        Mock<IOrganizationServiceFactory> factory = new Mock<IOrganizationServiceFactory>();
+        factory.Setup(f => f.CreateOrganizationService(current)).Returns(userService.Object);
+        factory.Setup(f => f.CreateOrganizationService(null)).Returns(systemService.Object);
+        factory.Setup(f => f.CreateOrganizationService(other)).Returns(otherService.Object);
 
-        Assert.NotNull(context.AsInitiatingUser());
-        Assert.NotNull(context.AsCallingUser());
-        Assert.NotNull(context.AsSystem());
-        Assert.NotNull(context.CreateOrganizationService());                 // FactorySystem scope
-        Assert.NotNull(context.CreateOrganizationService(Guid.NewGuid()));   // FactoryUser scope
-        Assert.NotNull(context.AsUser(Guid.NewGuid()));
+        LocalPluginContext context = new LocalPluginContext(Provider(execution, factory.Object, tracing: null));
+        context.Service.Delete("account", Guid.Empty);
+        context.SystemService.Delete("account", Guid.Empty);
+        context.AsUser(other).Delete("account", Guid.Empty);
+
+        userService.Verify(s => s.Delete("account", Guid.Empty), Times.Once);
+        systemService.Verify(s => s.Delete("account", Guid.Empty), Times.Once);
+        otherService.Verify(s => s.Delete("account", Guid.Empty), Times.Once);
+        factory.Verify(f => f.CreateOrganizationService(initiating), Times.Never);
         Assert.Throws<ArgumentException>(() => context.AsUser(Guid.Empty));
     }
 

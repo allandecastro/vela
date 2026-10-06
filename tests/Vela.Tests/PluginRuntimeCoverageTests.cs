@@ -6,10 +6,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Moq;
+using Vela.Caching;
 using Vela.Constants;
 using Vela.Context;
 using Vela.CustomApi;
 using Vela.DI;
+using Vela.Localization;
 using Vela.Plugin;
 using Vela.Steps;
 using Vela.Tests.TestSupport;
@@ -195,13 +197,10 @@ public sealed class PluginRuntimeCoverageTests
         Mock<ILocalPluginContext> ctx = new Mock<ILocalPluginContext>();
         ctx.SetupGet(c => c.PluginExecutionContext).Returns(Mock.Of<IPluginExecutionContext>());
         ctx.SetupGet(c => c.TracingService).Returns(Mock.Of<ITracingService>());
-        ctx.SetupGet(c => c.UserService).Returns(Mock.Of<IOrganizationService>());
+        ctx.SetupGet(c => c.Service).Returns(Mock.Of<IOrganizationService>());
         ctx.SetupGet(c => c.SystemService).Returns(Mock.Of<IOrganizationService>());
         ctx.SetupGet(c => c.Logger).Returns(withLogger ? Mock.Of<ILogger>() : null!);
         ctx.SetupGet(c => c.ManagedIdentityService).Returns(withManagedIdentity ? Mock.Of<IManagedIdentityService>() : null);
-        // null => system, any id => that user (used by the Func<Guid?, IOrganizationService> factory).
-        ctx.Setup(c => c.CreateOrganizationService(null)).Returns(() => ctx.Object.SystemService);
-        ctx.Setup(c => c.CreateOrganizationService(It.Is<Guid?>(id => id != null))).Returns(Mock.Of<IOrganizationService>());
         return ctx;
     }
 
@@ -215,34 +214,38 @@ public sealed class PluginRuntimeCoverageTests
     [Fact]
     public void AddPluginRuntime_registers_the_runtime_services_including_managed_identity()
     {
+        Mock<ILocalPluginContext> context = ContextMock(withManagedIdentity: true, withLogger: true);
         ServiceProvider provider = new ServiceCollection()
-            .AddPluginRuntime(ContextMock(withManagedIdentity: true, withLogger: true).Object)
+            .AddPluginRuntime(context.Object)
             .BuildServiceProvider();
 
-        Assert.NotNull(provider.GetService<ILocalPluginContext>());
-        Assert.NotNull(provider.GetService<IPluginExecutionContext>());
-        Assert.NotNull(provider.GetService<ITracingService>());
-        Assert.NotNull(provider.GetService<IOrganizationService>());
+        Assert.Same(context.Object, provider.GetService<ILocalPluginContext>());
+        Assert.Same(context.Object.PluginExecutionContext, provider.GetService<IPluginExecutionContext>());
+        Assert.Same(context.Object.TracingService, provider.GetService<ITracingService>());
+        // The injected service is the current user's, never SYSTEM (both used to be registered; the last one won).
+        Assert.Same(context.Object.Service, provider.GetService<IOrganizationService>());
+        Assert.NotSame(context.Object.SystemService, provider.GetService<IOrganizationService>());
         Assert.NotNull(provider.GetService<ILogger>());
         Assert.NotNull(provider.GetService<IManagedIdentityService>());
-
-        Func<Guid?, IOrganizationService> factory = provider.GetRequiredService<Func<Guid?, IOrganizationService>>();
-        Assert.NotNull(factory(Guid.NewGuid()));
+        Assert.NotNull(provider.GetService<IPluginCacheService>());
+        Assert.NotNull(provider.GetService<IEnvironmentVariableReader>());
+        Assert.NotNull(provider.GetService<IMessageService>());
     }
 
     [Fact]
-    public void AddPluginRuntime_resolves_IOrganizationService_to_the_user_not_the_system_service()
+    public void AddPluginRuntime_and_the_built_in_resolver_register_the_same_services()
     {
-        Mock<ILocalPluginContext> ctx = ContextMock(withManagedIdentity: false, withLogger: false);
-        ServiceProvider provider = new ServiceCollection().AddPluginRuntime(ctx.Object).BuildServiceProvider();
+        ILocalPluginContext context = ContextMock(withManagedIdentity: true, withLogger: true).Object;
+        ServiceProvider provider = new ServiceCollection().AddPluginRuntime(context).BuildServiceProvider();
+        using SimpleServiceResolver resolver = SimpleServiceResolver.CreateDefault(context);
 
-        // The bare IOrganizationService must be the initiating user, never the elevated system service.
-        Assert.Same(ctx.Object.UserService, provider.GetRequiredService<IOrganizationService>());
-        Assert.NotSame(ctx.Object.SystemService, provider.GetRequiredService<IOrganizationService>());
+        foreach (KeyValuePair<Type, Func<object>> registration in SimpleServiceResolver.DefaultServices(context))
+        {
+            Assert.NotNull(provider.GetService(registration.Key));
+            Assert.NotNull(resolver.GetService(registration.Key));
+        }
 
-        // System access is only via the factory (null => system).
-        Func<Guid?, IOrganizationService> factory = provider.GetRequiredService<Func<Guid?, IOrganizationService>>();
-        Assert.Same(ctx.Object.SystemService, factory(null));
+        Assert.Same(context.Service, resolver.GetService(typeof(IOrganizationService)));
     }
 
     [Fact]

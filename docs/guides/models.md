@@ -52,8 +52,8 @@ vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models
   `EntityReference`. Each key column is a **typed parameter** (a composite key takes one per column, in order), so
   wrong types or arity fail at compile time. Use the reference to set a lookup
   (`contact.ParentCustomerId = Account.ByAccountNumberKey("A-001")`), to read the record with
-  `ctx.UserService.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name)`, or to create-or-update
-  by business key with `ctx.UserService.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` (returns whether
+  `ctx.Service.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name)`, or to create-or-update
+  by business key with `ctx.Service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` (returns whether
   a record was created). The factory is a method (not a property), so it can never be used as a column in
   `FilterOn`/`Select`.
 - **Typed relationship navigation properties** (see below).
@@ -107,7 +107,7 @@ var account = new Account { Name = "Contoso" };
 account.Contacts.Add(new Contact { FirstName = "Ada", LastName = "Lovelace" });
 account.Contacts.Add(new Contact { FirstName = "Grace", LastName = "Hopper" });
 
-Guid accountId = ctx.UserService.CreateWithRelated(account);   // account + two contacts, one transaction
+Guid accountId = ctx.Service.CreateWithRelated(account);   // account + two contacts, one transaction
 ```
 
 **Relationship-aware read (`Include`).** Retrieve a record together with related records in one call and have the
@@ -117,7 +117,7 @@ alternate-key reference:
 ```csharp
 using Vela.Context;
 
-SalesOrder order = ctx.UserService.RetrieveWithRelated<SalesOrder>(
+SalesOrder order = ctx.Service.RetrieveWithRelated<SalesOrder>(
     new EntityReference(SalesOrder.EntityLogicalNameValue, orderId),
     q => q.Include(o => o.Parent_Account)     // N:1 parent, typed
           .Include(o => o.Order_Details),     // 1:N children, typed
@@ -133,7 +133,7 @@ For a set of records, or deeper graphs, run a second query on the children and s
 `Include` also works for **N:N** relationships (it reads the associated records).
 
 **Associate (N:N).** An N:N link connects records that already exist, so you associate rather than create: populate
-the N:N collection with existing records (each with its id) and call `ctx.UserService.AssociateRelated(account)`,
+the N:N collection with existing records (each with its id) and call `ctx.Service.AssociateRelated(account)`,
 which associates every populated N:N collection. (`CreateWithRelated` deliberately ignores N:N collections - it only
 deep-inserts 1:N children.)
 

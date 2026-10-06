@@ -36,17 +36,16 @@ namespace Vela.Context
         IOrganizationServiceFactory OrganizationServiceFactory { get; }
 
         /// <summary>
-        /// Gets organization service for default user context (initiating user).
+        /// Gets the organization service for the current user (<see cref="UserId"/>): the step's "Run in User's
+        /// Context" user when the step impersonates, otherwise the caller (including a CallerId impersonation).
+        /// Record-level security applies. This is the service to use by default, and the one dependency injection
+        /// resolves for <see cref="IOrganizationService"/>.
         /// </summary>
-        IOrganizationService UserService { get; }
+        IOrganizationService Service { get; }
 
         /// <summary>
-        /// Gets organization service for the step user context (Run in User's Context).
-        /// </summary>
-        IOrganizationService CallingUserService { get; }
-
-        /// <summary>
-        /// Gets organization service for SYSTEM user context.
+        /// Gets the organization service for the SYSTEM user, which bypasses record-level security. Use it only
+        /// where elevation is intended.
         /// </summary>
         IOrganizationService SystemService { get; }
 
@@ -199,36 +198,12 @@ namespace Vela.Context
         bool TryGetSharedVariable<T>(string key, out T value);
 
         /// <summary>
-        /// Creates organization service for a specific user id, or system when null.
-        /// </summary>
-        /// <param name="userId">User id or null.</param>
-        /// <returns>Organization service.</returns>
-        IOrganizationService CreateOrganizationService(Guid? userId = null);
-
-        /// <summary>
-        /// Gets organization service in initiating user context.
-        /// </summary>
-        /// <returns>Organization service for <see cref="InitiatingUserId"/>.</returns>
-        IOrganizationService AsInitiatingUser();
-
-        /// <summary>
-        /// Gets organization service in calling (step) user context.
-        /// </summary>
-        /// <returns>Organization service for <see cref="UserId"/>.</returns>
-        IOrganizationService AsCallingUser();
-
-        /// <summary>
-        /// Gets organization service in a specific user context.
+        /// Creates an organization service that acts as a specific user, for example
+        /// <c>ctx.AsUser(ctx.InitiatingUserId)</c> to act as the user who started the operation.
         /// </summary>
         /// <param name="userId">Dataverse system user id.</param>
         /// <returns>Organization service for the specified user id.</returns>
         IOrganizationService AsUser(Guid userId);
-
-        /// <summary>
-        /// Gets organization service in system context.
-        /// </summary>
-        /// <returns>Organization service for system context.</returns>
-        IOrganizationService AsSystem();
 
         /// <summary>
         /// Traces formatted runtime messages.

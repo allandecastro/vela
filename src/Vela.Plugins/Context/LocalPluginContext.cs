@@ -43,12 +43,8 @@ namespace Vela.Context
             NotificationService = serviceProvider.GetService(typeof(IServiceEndpointNotificationService)) as IServiceEndpointNotificationService ?? new NullNotificationService();
             OrganizationServiceFactory = serviceProvider.GetService(typeof(IOrganizationServiceFactory)) as IOrganizationServiceFactory
                 ?? throw new InvalidPluginExecutionException("IOrganizationServiceFactory is unavailable.");
-            IOrganizationService initiatingUserService = OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.InitiatingUserId);
-            IOrganizationService callingUserService = OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.UserId);
-            IOrganizationService systemService = OrganizationServiceFactory.CreateOrganizationService(null);
-            UserService = new TracingOrganizationService(initiatingUserService, this, "InitiatingUser");
-            CallingUserService = new TracingOrganizationService(callingUserService, this, "CallingUser");
-            SystemService = new TracingOrganizationService(systemService, this, "System");
+            Service = new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.UserId), this, "User");
+            SystemService = new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(null), this, "System");
             Logger = serviceProvider.GetService(typeof(ILogger)) as ILogger ?? NullLogger.Instance;
             ManagedIdentityService = serviceProvider.GetService(typeof(IManagedIdentityService)) as IManagedIdentityService;
             _pluginTelemetryLogger = ResolvePluginTelemetryLogger(serviceProvider);
@@ -88,10 +84,7 @@ namespace Vela.Context
         public IOrganizationServiceFactory OrganizationServiceFactory { get; }
 
         /// <inheritdoc />
-        public IOrganizationService UserService { get; }
-
-        /// <inheritdoc />
-        public IOrganizationService CallingUserService { get; }
+        public IOrganizationService Service { get; }
 
         /// <inheritdoc />
         public IOrganizationService SystemService { get; }
@@ -209,26 +202,6 @@ namespace Vela.Context
         }
 
         /// <inheritdoc />
-        public IOrganizationService CreateOrganizationService(Guid? userId = null)
-        {
-            string scope = userId.HasValue ? "FactoryUser" : "FactorySystem";
-            IOrganizationService service = OrganizationServiceFactory.CreateOrganizationService(userId);
-            return new TracingOrganizationService(service, this, scope);
-        }
-
-        /// <inheritdoc />
-        public IOrganizationService AsInitiatingUser()
-        {
-            return UserService;
-        }
-
-        /// <inheritdoc />
-        public IOrganizationService AsCallingUser()
-        {
-            return CallingUserService;
-        }
-
-        /// <inheritdoc />
         public IOrganizationService AsUser(Guid userId)
         {
             if (userId == Guid.Empty)
@@ -236,13 +209,7 @@ namespace Vela.Context
                 throw new ArgumentException("User id cannot be empty.", nameof(userId));
             }
 
-            return CreateOrganizationService(userId);
-        }
-
-        /// <inheritdoc />
-        public IOrganizationService AsSystem()
-        {
-            return SystemService;
+            return new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(userId), this, "AsUser");
         }
 
         /// <inheritdoc />

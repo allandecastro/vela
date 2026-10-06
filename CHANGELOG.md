@@ -24,6 +24,23 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Changed (Framework, breaking)
+
+- **One organization service per identity.** `ILocalPluginContext` now exposes `Service` (the current user),
+  `SystemService` and `AsUser(Guid)`. `UserService`, `CallingUserService`, `AsInitiatingUser()`,
+  `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected
+  `Func<Guid?, IOrganizationService>` factory are removed. Migrate `ctx.UserService` to `ctx.Service`,
+  `ctx.AsSystem()` to `ctx.SystemService`, and `ctx.AsInitiatingUser()` to `ctx.AsUser(ctx.InitiatingUserId)`.
+
+### Fixed (Framework)
+
+- **Step impersonation and CallerId are honoured.** The default service was built on `InitiatingUserId`, so a
+  step registered with `WithImpersonation(...)` (or a CallerId call) still ran with the triggering user's
+  privileges. `ctx.Service` and the injected `IOrganizationService` now act as `UserId`, like the platform.
+- **`AddPluginRuntime` registers the same services as the built-in resolver.** Both now share one default set, so
+  Microsoft DI also gets `IPluginCacheService`, `IEnvironmentVariableReader` and `IMessageService`, and its
+  `IOrganizationService` is the current user's service.
+
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 Framework line, published as `framework-v0.31.0`.

@@ -96,7 +96,7 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
     // Dataverse sandbox unless the plugin assembly is a proxy-types assembly, throwing a SerializationException
     // ("The deserializer has no knowledge of any type that maps to the name '<namespace>:Account'"). Downcasting
     // to the base Entity keeps the same LogicalName, Id and attributes, so the write succeeds regardless. This
-    // makes ctx.UserService accept early-bound entities out of the box, including in projects that predate the
+    // makes ctx.Service accept early-bound entities out of the box, including in projects that predate the
     // scaffold's [assembly: ProxyTypesAssembly].
     private static Entity? ToBaseEntity(Entity? entity) =>
         entity == null || entity.GetType() == typeof(Entity) ? entity : entity.ToEntity<Entity>();

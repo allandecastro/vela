@@ -49,9 +49,7 @@ namespace Vela.Context
         /// <inheritdoc />
         public IOrganizationServiceFactory OrganizationServiceFactory => _inner.OrganizationServiceFactory;
         /// <inheritdoc />
-        public IOrganizationService UserService => _inner.UserService;
-        /// <inheritdoc />
-        public IOrganizationService CallingUserService => _inner.CallingUserService;
+        public IOrganizationService Service => _inner.Service;
         /// <inheritdoc />
         public IOrganizationService SystemService => _inner.SystemService;
         /// <inheritdoc />
@@ -110,15 +108,7 @@ namespace Vela.Context
         /// <inheritdoc />
         public bool TryGetSharedVariable<T>(string key, out T value) => _inner.TryGetSharedVariable(key, out value);
         /// <inheritdoc />
-        public IOrganizationService CreateOrganizationService(Guid? userId = null) => _inner.CreateOrganizationService(userId);
-        /// <inheritdoc />
-        public IOrganizationService AsInitiatingUser() => _inner.AsInitiatingUser();
-        /// <inheritdoc />
-        public IOrganizationService AsCallingUser() => _inner.AsCallingUser();
-        /// <inheritdoc />
         public IOrganizationService AsUser(Guid userId) => _inner.AsUser(userId);
-        /// <inheritdoc />
-        public IOrganizationService AsSystem() => _inner.AsSystem();
         /// <inheritdoc />
         public void Trace(string format, params object[] args) => _inner.Trace(format, args);
 
