@@ -41,6 +41,22 @@ jobs:
       - name: Test
         run: dotnet test Vela.sln -c Release --no-build
 
+      # The only check that compiles what `vela init` generates: scaffold a solution, pack the repo's
+      # Vela.Plugins / Vela.Testing / Vela.Messages into a local feed, then restore + build it. Opt-in locally
+      # (skipped without VELA_BUILD_SMOKE=1), always on in CI. The packs are version 1.0.0, and a 1.0.0 left in the
+      # runner's persistent global NuGet cache would shadow the fresh local feed, so evict it first.
+      - name: Scaffold build smoke
+        env:
+          VELA_BUILD_SMOKE: '1'
+        run: |
+          $cache = Join-Path $env:USERPROFILE '.nuget\packages'
+          foreach ($p in 'vela.plugins', 'vela.testing', 'vela.messages') {
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $cache "$p\1.0.0")
+          }
+          dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release --no-build `
+            --filter "FullyQualifiedName~ProjectScaffolderTests.Generate_ThenDotnetBuild_Succeeds"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       # Branch-coverage gates (not line coverage): diff engine, test harness, analyzers, code fixes and the plugin
       # runtime (below). coverlet.msbuild fails the run if branch coverage drops below the threshold; every gated
       # test project must reference coverlet.msbuild, or the threshold is silently ignored. Thresholds sit just

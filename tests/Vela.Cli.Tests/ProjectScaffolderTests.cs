@@ -315,16 +315,12 @@ public class ProjectScaffolderTests
         });
     }
 
-    [Fact]
+    [OptInFact("VELA_BUILD_SMOKE=1")]
     public void Generate_ThenDotnetBuild_Succeeds()
     {
         // Heavy integration test: restores + builds a generated solution end to end, which is the only thing
         // that actually compiles the generated C#. Opt-in (VELA_BUILD_SMOKE=1) so the default suite stays fast
         // and offline; needs the .NET SDK plus network/cache for the Microsoft SDK packages.
-        if (Environment.GetEnvironmentVariable("VELA_BUILD_SMOKE") != "1")
-        {
-            return;
-        }
 
         string? coreProject = FindRepoProject("Vela.Plugins");
         string? testingProject = FindRepoProject("Vela.Testing");

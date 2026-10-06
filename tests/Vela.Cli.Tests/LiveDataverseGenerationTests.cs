@@ -20,17 +20,13 @@ namespace Vela.Cli.Tests;
 /// </summary>
 public class LiveDataverseGenerationTests
 {
-    [Fact]
+    [OptInFact("VELA_LIVE_URL", "VELA_LIVE_TOKEN")]
     public void Generates_Form_Models_From_A_Real_Org()
     {
-        string? url = Environment.GetEnvironmentVariable("VELA_LIVE_URL");
-        string? token = Environment.GetEnvironmentVariable("VELA_LIVE_TOKEN");
-        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(token))
-        {
-            return; // opt-in only
-        }
+        string url = Environment.GetEnvironmentVariable("VELA_LIVE_URL")!;
+        string token = Environment.GetEnvironmentVariable("VELA_LIVE_TOKEN")!;
 
-        using ServiceClient service = new ServiceClient(new Uri(url), _ => Task.FromResult(token!), useUniqueInstance: true);
+        using ServiceClient service = new ServiceClient(new Uri(url), _ => Task.FromResult(token), useUniqueInstance: true);
         Assert.True(service.IsReady, service.LastError);
 
         // Scope: an explicit --solution (resolved to its tables via the real ModelsCommand path) or an explicit
