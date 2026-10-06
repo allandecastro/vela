@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -91,12 +92,69 @@ namespace Vela.Analyzers
                 return;
             }
 
+            // A nested path (a.ParentAccount.Name, a.PrimaryContactId.Id) names a member of another object, not a
+            // column of this entity: the runtime would register the last member's name ("name", "id"), a wrong or
+            // nonexistent column. A selector must read a property of the lambda parameter directly.
+            if (!IsLambdaParameter(UnwrapParentheses(memberAccess.Expression), lambda))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Rule, memberAccess.GetLocation(), memberAccess.ToString()));
+                return;
+            }
+
             // A member declared on Entity itself (never a real column) - as opposed to a generated/authored model
-            // property declared on the derived entity type.
-            if (SymbolEqualityComparer.Default.Equals(symbol.ContainingType.OriginalDefinition, entityType))
+            // property declared on the derived entity type. An override of one (the generated `Id`) is still that
+            // member unless it names its column with [AttributeLogicalName].
+            if (IsEntityMember(symbol, entityType))
             {
                 context.ReportDiagnostic(Diagnostic.Create(Rule, memberAccess.Name.GetLocation(), symbol.Name));
             }
+        }
+
+        private static bool IsEntityMember(ISymbol symbol, INamedTypeSymbol entityType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(symbol.ContainingType.OriginalDefinition, entityType))
+            {
+                return true;
+            }
+
+            if (symbol is not IPropertySymbol property
+                || property.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Microsoft.Xrm.Sdk.Client.AttributeLogicalNameAttribute"))
+            {
+                return false;
+            }
+
+            for (IPropertySymbol? overridden = property.OverriddenProperty; overridden is not null; overridden = overridden.OverriddenProperty)
+            {
+                if (SymbolEqualityComparer.Default.Equals(overridden.ContainingType.OriginalDefinition, entityType))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsLambdaParameter(ExpressionSyntax expression, LambdaExpressionSyntax lambda)
+        {
+            string? parameter = lambda switch
+            {
+                SimpleLambdaExpressionSyntax simple => simple.Parameter.Identifier.ValueText,
+                ParenthesizedLambdaExpressionSyntax parenthesized when parenthesized.ParameterList.Parameters.Count == 1
+                    => parenthesized.ParameterList.Parameters[0].Identifier.ValueText,
+                _ => null,
+            };
+
+            return parameter is not null && expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == parameter;
+        }
+
+        private static ExpressionSyntax UnwrapParentheses(ExpressionSyntax expression)
+        {
+            while (expression is ParenthesizedExpressionSyntax parenthesized)
+            {
+                expression = parenthesized.Expression;
+            }
+
+            return expression;
         }
 
         // Sees through leading conversions on a column-selector body: an explicit cast ((object)a.X), an `as`

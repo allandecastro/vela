@@ -125,10 +125,13 @@ public static class ModelGenerator
         sb.AppendLine("        {");
         sb.AppendLine("        }");
 
-        // Keep Entity.Id in sync with the primary-id attribute both ways.
+        // Keep Entity.Id in sync with the primary-id attribute both ways. [AttributeLogicalName] names its column (as
+        // the SDK's own early-bound generator does), so a selector `a => a.Id` resolves to the primary key column
+        // rather than a nonexistent "id".
         if (!string.IsNullOrWhiteSpace(primaryId))
         {
             sb.AppendLine();
+            sb.AppendLine($"        [AttributeLogicalName(\"{primaryId}\")]");
             sb.AppendLine("        public override Guid Id");
             sb.AppendLine("        {");
             sb.AppendLine("            get => base.Id;");

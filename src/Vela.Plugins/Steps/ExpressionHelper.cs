@@ -14,28 +14,10 @@ namespace Vela.Steps;
 internal static class ExpressionHelper
 {
     /// <summary>
-    /// Extracts the property name from a member expression.
-    /// Handles both direct property access and unary conversions.
+    /// Resolves the Dataverse column a selector targets (<c>a =&gt; a.Name</c>): its <c>[AttributeLogicalName]</c>,
+    /// or the lowercased property name. Used by FilterOn, the image selectors and the typed query helpers.
     /// </summary>
-    public static string GetAttributeName<TEntity>(Expression<Func<TEntity, object?>> expression)
-    {
-        var member = GetMemberExpression(expression) ?? throw new ArgumentException($"Expression must be a property access: {expression}", nameof(expression));
-
-        // Get the AttributeLogicalNameAttribute if present, otherwise use the property name
-        var property = member.Member as PropertyInfo;
-        if (property != null)
-        {
-            EnsureNotRelationship(property);
-            var attribute = property.GetCustomAttribute<AttributeLogicalNameAttribute>();
-            if (attribute != null)
-            {
-                return attribute.LogicalName;
-            }
-        }
-
-        // Fallback to lowercase property name (convention)
-        return member.Member.Name.ToLowerInvariant();
-    }
+    public static string GetAttributeName<TEntity>(Expression<Func<TEntity, object?>> expression) => ResolveColumn(expression);
 
     /// <summary>
     /// Extracts multiple attribute names from an array of expressions.
@@ -45,14 +27,8 @@ internal static class ExpressionHelper
         return expressions.Select(GetAttributeName).ToArray();
     }
 
-    /// <summary>
-    /// Resolves the Dataverse logical name for the attribute targeted by the expression.
-    /// Unlike <see cref="GetAttributeName{TEntity}"/>, this requires the member to be a property
-    /// and throws <see cref="ArgumentException"/> with the "Expression must target a property."
-    /// message otherwise (used by the typed querying helpers).
-    /// </summary>
-    public static string GetAttributeLogicalName<TEntity>(Expression<Func<TEntity, object?>> expression)
-        => GetAttributeLogicalName((LambdaExpression)(expression ?? throw new ArgumentNullException(nameof(expression))));
+    /// <summary>Same as <see cref="GetAttributeName{TEntity}"/> (kept for the typed querying helpers).</summary>
+    public static string GetAttributeLogicalName<TEntity>(Expression<Func<TEntity, object?>> expression) => ResolveColumn(expression);
 
     /// <summary>
     /// Resolves the Dataverse logical name for the attribute targeted by a lambda whose body is a property
@@ -60,24 +36,52 @@ internal static class ExpressionHelper
     /// strongly-typed column selector (for example <c>x =&gt; x.createdon</c> typed <see cref="DateTime"/> or
     /// <c>x =&gt; x.amount</c> typed <see cref="Money"/>) rather than forcing an <c>object</c> boxing selector.
     /// </summary>
-    public static string GetAttributeLogicalName(LambdaExpression expression)
+    public static string GetAttributeLogicalName(LambdaExpression expression) => ResolveColumn(expression);
+
+    // The single column resolver. The selector must read a property of the lambda parameter directly: a nested path
+    // (a.ParentAccount.Name, a.PrimaryContactId.Id) would otherwise resolve to the last member's name ("name", "id"),
+    // a wrong or nonexistent column, and a base Entity member (Id, LogicalName, ...) without a logical name is not a
+    // column at all. Both fail here instead of registering the wrong column.
+    private static string ResolveColumn(LambdaExpression expression)
     {
         expression = expression ?? throw new ArgumentNullException(nameof(expression));
 
         Expression body = expression.Body;
-        if (body is UnaryExpression unary && (unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked))
+        while (body is UnaryExpression unary && (unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked || unary.NodeType == ExpressionType.TypeAs))
         {
             body = unary.Operand;
         }
 
         if (body is not MemberExpression member || member.Member is not PropertyInfo property)
         {
-            throw new ArgumentException("Expression must target a property.", nameof(expression));
+            throw new ArgumentException($"A column selector must target a property, e.g. a => a.Name: {expression}", nameof(expression));
         }
 
+        if (member.Expression is not ParameterExpression parameter)
+        {
+            throw new ArgumentException(
+                $"A column selector must read a column of the entity itself, e.g. a => a.Name, not a nested path: {expression}. For a lookup, select the lookup column (a => a.PrimaryContactId).",
+                nameof(expression));
+        }
+
+        // An expression tree references an overridden property by its base declaration (c => c.Id is Entity.Id), so
+        // read the attributes off the most-derived declaration on the selector's entity type.
+        property = MostDerived(parameter.Type, property);
         EnsureNotRelationship(property);
         var attribute = property.GetCustomAttribute<AttributeLogicalNameAttribute>();
-        return attribute?.LogicalName ?? property.Name.ToLowerInvariant();
+        if (attribute != null)
+        {
+            return attribute.LogicalName;
+        }
+
+        if (property.DeclaringType == typeof(Entity) || property.GetGetMethod()?.GetBaseDefinition().DeclaringType == typeof(Entity))
+        {
+            throw new ArgumentException(
+                $"'{property.Name}' is a member of Entity, not a Dataverse column: {expression}. Select a column property (for the primary key, e.g. a => a.AccountId).",
+                nameof(expression));
+        }
+
+        return property.Name.ToLowerInvariant();
     }
 
     /// <summary>
@@ -120,17 +124,18 @@ internal static class ExpressionHelper
         return typeof(TMessage).Name;
     }
 
-    private static MemberExpression? GetMemberExpression<TEntity>(Expression<Func<TEntity, object?>> expression)
+    private static PropertyInfo MostDerived(Type entityType, PropertyInfo property)
     {
-        var body = expression.Body;
-
-        // Handle Convert/UnboxAny for value types
-        if (body is UnaryExpression unary && (unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked))
+        for (Type? type = entityType; type != null && type != property.DeclaringType; type = type.BaseType)
         {
-            body = unary.Operand;
+            PropertyInfo? declared = type.GetProperty(property.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            if (declared != null)
+            {
+                return declared;
+            }
         }
 
-        return body as MemberExpression;
+        return property;
     }
 
     // A generated relationship navigation property carries [RelationshipSchemaName(...)] (not a column). Selecting

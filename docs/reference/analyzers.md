@@ -43,7 +43,10 @@ Plus the [typed image projection generator](#typed-image-projection-generator) t
 **A column selector must target a real column, not a base `Entity` member.** The column selectors used by
 `FilterOn(...)`, the image selectors in `WithPreImage(...)` / `WithPostImage(...)`, and the typed query / change
 helpers accept an early-bound column, e.g. `a => a.Name`. Selecting a member of the base `Microsoft.Xrm.Sdk.Entity`
-type instead (such as `a => a.Id` or `a => a.LogicalName`) does not name a Dataverse column and is flagged.
+type instead (such as `a => a.LogicalName`, or an `Id` override with no `[AttributeLogicalName]`) does not name a
+Dataverse column and is flagged. So is a **nested path** such as `a => a.PrimaryContactId.Id` or
+`a => a.ParentAccount.Name`: it reads another object's member, not a column of this entity (select the lookup
+column itself, `a => a.PrimaryContactId`). The runtime rejects both too, instead of registering a wrong column.
 
 **Fix:** select a generated column of your entity (`a => a.Name`), not an `Entity` member.
 
