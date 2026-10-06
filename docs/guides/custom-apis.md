@@ -80,7 +80,9 @@ public class ScoreResponse : CustomApiResponse
 live in `Vela.Messages`. The `Get<T>()` / `Set(value)` helpers infer the parameter key from the property name and
 the base prepends the API unique name, so a property is a plain one-liner - no `Parameters.Contains(...)`
 boilerplate and no need to spell out the full key. A read-only response property can drop the setter:
-`public int Score => Get<int>();`.
+`public int Score => Get<int>();`. An absent parameter reads as `default`; a value of another type throws an
+`InvalidCastException` naming the parameter, and a base `Entity` (what Dataverse sends) is converted to a declared
+early-bound type such as `Account`.
 
 > **Why a dedicated base.** Dataverse names a custom API's parameters `{apiUniqueName}.{param}` (inputs) and
 > `{apiUniqueName}.{prop}.response` (outputs) - that is the value the OData operation exposes and the key the
@@ -158,7 +160,7 @@ extension next to the generated request/response. Its shape is driven by the API
 invalid registration does not compile:
 
 ```csharp
-public sealed class AfterEstimate : EntityPluginBase<Account>   // API bound to account
+public sealed class AfterEstimate(string unsecure, string secure) : EntityPluginBase<Account>(unsecure, secure)   // API bound to account
 {
     protected override void RegisterPluginSteps()
         => RegisterStep().OnAccountEstimateValue()   // only exists on IStepTrigger<Account>
@@ -211,7 +213,8 @@ in place. An unchanged parameter is not written at all.
 **Parameter types.** A parameter's CLR type must have an exact Custom API type: `bool`, `int`, `decimal`, `double`
 (Float), `DateTime`, `Guid`, `string`, `string[]` (StringArray), `Money`, `OptionSetValue` (Picklist),
 `EntityReference`, `Entity` (or an early-bound entity such as `Account`) and `EntityCollection`. Any other type
-(`long`, `float`, an enum, `byte[]`, `List<string>`, ...) fails when the step is built, with the type to use
+(`long`, `float`, an enum, `byte[]`, `List<string>`, ...) fails when the Custom API definition is built (and in
+`vela plan`), with the type to use
 instead: registering it as a lookalike would make the property read back as its default value.
 
 Several **API-level** fields are fixed by Dataverse when the Custom API is first created and cannot be changed

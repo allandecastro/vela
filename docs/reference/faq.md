@@ -43,9 +43,10 @@ and [limitations](limitations.md).
 ### Does `apply` manage solutions, security roles, or environment variables?
 
 No. `plan`/`apply` manage plugin packages/assemblies, steps, step images, Custom APIs, and web resources
-(with `--webresources --solution`). Solutions must already exist (`--solution` only adds components), and SDK
-message filters, step enabled/disabled state, step configuration, security roles / field security, and
-environment variables are not managed. Assemblies are upserted, never deleted. See [limitations](limitations.md).
+(with `--webresources --solution`), including each step's enabled/disabled state and unsecure configuration (and
+its secure configuration when you supply the value with `--secure-config`). Solutions must already exist
+(`--solution` only adds components), and SDK message filters, security roles / field security, and environment
+variables are not managed. Assemblies are upserted, never deleted. See [limitations](limitations.md).
 
 ### Can I register a plugin from a bare `.dll`?
 
@@ -55,7 +56,7 @@ not supported. See [limitations](limitations.md).
 ### Does the in-memory test harness support every SDK message?
 
 No - it covers a common set (`Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`, the `*Multiple` bulk
-messages, `Assign`/`Associate`/`Disassociate`, metadata reads, and `ExecuteMultiple`/`ExecuteTransaction`).
+messages, `Upsert`, `Assign`/`Associate`/`Disassociate`, metadata reads, and `ExecuteMultiple`/`ExecuteTransaction`).
 For any other message, inject your own `IOrganizationService` via `WithOrganizationService(...)`.
 See [testing](../guides/testing.md).
 

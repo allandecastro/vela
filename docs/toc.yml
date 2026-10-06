@@ -2,11 +2,15 @@
   href: getting-started/
 - name: Guides
   href: guides/
+  topicHref: guides/index.md
 - name: Configuration
   href: configuration/
+  topicHref: configuration/index.md
 - name: Advanced
   href: advanced/
+  topicHref: advanced/index.md
 - name: Reference
   href: reference/
+  topicHref: reference/index.md
 - name: Contributing
   href: contributing/

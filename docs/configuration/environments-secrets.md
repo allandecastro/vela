@@ -17,6 +17,11 @@ An app-registration login needs a client secret. Supply it one of three ways:
 > over `--client-secret`, which is exposed to shell history and process listings (the
 > CLI warns when you use it).
 
+A step's **secure configuration** (declared in code with `WithSecureConfigFrom("Name")`) is a deployment secret
+too: pass it to `plan`/`apply` with `--secure-config Name=@file` (or `Name=VALUE`), or set the
+`VELA_SECURE_CONFIG_<Name>` environment variable in the pipeline. Without a value, `apply` leaves the environment's
+own secure configuration untouched. See [Write a plugin](../guides/plugins.md).
+
 The unattended `plan` / `apply` invocations take the same connection flags:
 
 ```powershell

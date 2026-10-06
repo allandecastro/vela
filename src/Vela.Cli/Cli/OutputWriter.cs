@@ -390,7 +390,7 @@ internal static class OutputWriter
         WriteCommand(console, "plan", "Preview registration changes; never writes to Dataverse.");
         Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [connection options] [--timeout <minutes>] [--environment <label>] [--out <file>] [--secure-config <NAME=VALUE|NAME=@file>]... [--interactive] [--strict] [--verbose] [--json]");
         WriteCommand(console, "apply", "Same inputs as plan; writes the changes (prompts for confirmation).");
-        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--auto-approve|--yes] [--strict] [--verbose] [--json]");
+        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--auto-approve|--yes] [--batch-size <1-1000>] [--strict] [--verbose] [--json]");
         WriteCommand(console, "inspect", "Compare local packages with the live environment.");
         Console.WriteLine("      [same args as plan] [--verbose] [--json]");
         WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");
@@ -402,7 +402,7 @@ internal static class OutputWriter
         Console.WriteLine("      [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--lang csharp|ts] [--forms and/or --tables (preview, TypeScript)] [connection options] [--timeout <minutes>]");
         Console.WriteLine("      run 'vela models --help' for the full scope/option reference");
         WriteCommand(console, "logs", "Read the plug-in trace log or failed system jobs (read-only; alias: trace).");
-        Console.WriteLine("      [--jobs] [--errors] [--top <n>] [--since 30m|2h|3d|<date>] [--type <name>] [--message <m>] [--entity <logical>] [--correlation <guid>] [--full] [connection options] [--json]");
+        Console.WriteLine("      [--jobs [--all-statuses]] [--errors] [--top <n>] [--since 30m|2h|3d|<date>] [--type <name>] [--message <m>] [--entity <logical>] [--correlation <guid>] [--full] [connection options] [--json]");
         WriteCommand(console, "sign", "Sign a plugin package.");
         Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
         WriteCommand(console, "logout", "Clear the cached interactive-login token and remembered Dataverse URL.");
@@ -437,7 +437,9 @@ internal static class OutputWriter
         Console.WriteLine("  2: Invalid arguments");
         Console.WriteLine("  3: File not found");
         Console.WriteLine("  4: Parse/read error");
+        Console.WriteLine("  5: Drift detected (vela models --verify)");
         Console.WriteLine("  6: Dataverse connection failure");
+        Console.WriteLine("  7: Partial apply (re-run apply to reconcile)");
     }
 
     // Renders one command row: a colored, aligned name followed by a short summary. Names are padded to a

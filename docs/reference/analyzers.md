@@ -5,7 +5,7 @@ Vela ships a small set of Roslyn **analyzers** and one **source generator** insi
 reference** - they come with `Vela.Plugins` automatically and run in the editor and at build with no extra
 configuration. Rules that catch a build-breaking mistake in the fluent step builder are reported as **errors** so
 they fail fast instead of surfacing as a silent runtime surprise; advisory and best-practice rules (VELA006 usage,
-VELA011 reliability, VELA012 usage, VELA013 performance) are **warnings** and never break a build. Together they
+VELA011 reliability, VELA012 usage, VELA013 performance, VELA018 and VELA019 reliability) are **warnings** and never break a build. Together they
 let the compiler enforce the framework's rules, so both a human developer and an AI author get told what is valid up
 front. Several rules also ship an IDE **code fix** (see below).
 
@@ -269,8 +269,10 @@ out of the sandbox. See [Respect the sandbox](../guides/plugins.md#respect-the-s
 A `Create`, `Update`, `CreateMultiple` or `UpdateMultiple` step must declare at least one filtering attribute, or
 building the step fails at runtime (the step would otherwise fire on every create/update). VELA020 reports a
 `RegisterStep()` chain that reaches `.Handle(...)` without `.FilterOn(...)`, so the mistake fails in the editor and
-at build instead. Add `.FilterOn(e => e.Column)` before `.Handle(...)`. A chain split across a local variable is not
-analyzed (it may have been filtered before the split).
+at build instead. Add `.FilterOn(e => e.Column)` before `.Handle(...)`. It also reports `OnMessage("Create")` (and the other three
+messages) reaching `.Handle(...)`: the permissive `OnMessage` path offers no `FilterOn`, so use the typed
+`OnCreate()` / `OnUpdate()` / ... trigger instead. A chain split across a local variable is not analyzed (it may
+have been filtered before the split).
 
 ## Typed image projection generator
 

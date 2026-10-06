@@ -12,7 +12,7 @@ using Vela.Plugin;
 using Vela.Steps;
 using Zava.Shared.Models.Generated;
 
-public class AccountPostUpdate : EntityPluginBase<Account>
+public partial class AccountPostUpdate : EntityPluginBase<Account>
 {
     public AccountPostUpdate(string unsecure, string secure) : base(unsecure, secure) { }
 

@@ -26,7 +26,7 @@ to large integration-heavy ones).
 ## Before you start
 
 - Target `net462`. Microsoft's docs list .NET Framework 4.6.2 through 4.8 for plug-ins and recommend 4.8,
-  but Dataverse rejects **plugin packages** (which `vela deploy` uses) above `net471` at registration. Stay on
+  but Dataverse rejects **plugin packages** (which `vela apply` uses) above `net471` at registration. Stay on
   `net462` (or `net471` at most); `vela` warns when a package targets higher.
 - Reference the published `Vela.Plugins` package from NuGet. Do not pin an in-repo development version. Its
   dependency surface is deliberately lean so the plugin package loads in the Dataverse sandbox unmerged (no
@@ -78,17 +78,18 @@ public sealed partial class AccountPlugin(string unsecure, string secure) : Enti
 }
 ```
 
-The generated context (`OnUpdatePostSyncContext`) requires the class to be `partial`. A handler on a step
-that captures no image uses the interface context instead (for example `ICreatePreContext<Account>`).
+The generated context (`OnUpdatePostSyncContext`) requires the class to be `partial`. Every named handler gets
+one, with or without a captured image; a handler typed with the interface context (for example
+`ICreatePreContext<Account>`) binds too.
 
 The typed image is a projection of the captured columns, not the entity itself. When you need to hand the
-whole image to a service typed on the early-bound entity, bridge with `ctx.PreImageAs<T>()` /
-`ctx.PostImageAs<T>()`:
+whole image to a service typed on the early-bound entity, read it with `ctx.GetPreImage<T>()` /
+`ctx.GetPostImage<T>()` (or cast the projection, `(Account)ctx.PreImage`):
 
 ```csharp
 private void OnUpdatePreSync(OnUpdatePreSyncContext ctx)
     => ctx.GetRequiredService<IAccountRules>()
-          .Apply(ctx.Request.Target, ctx.PreImageAs<Account>());
+          .Apply(ctx.Request.Target, ctx.GetPreImage<Account>());
 ```
 
 ### Workflow activities become Custom APIs
@@ -172,8 +173,8 @@ collides with the generated entity type of the same name.
 
 ## Known limits and escape hatches
 
-- **Aggregates and N:N intersect traversal** are not expressible in the typed query today. Keep those as
-  FetchXML through the [escape hatch](escape-hatches.md).
+- **N:N intersect traversal** is not expressible in the typed query today. Keep it as FetchXML through the
+  [escape hatch](escape-hatches.md). (Aggregates are: see [Typed queries](queries.md).)
 - **Two steps on the same message, stage, and mode** cannot live in one plugin class even when their
   filtering attributes differ. Put each in its own plugin class; both still register as distinct steps.
 - **Pre-validation has no image.** Dataverse supplies images only at pre-operation and post-operation, so

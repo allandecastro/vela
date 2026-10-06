@@ -28,7 +28,8 @@ change.
   over TLS; and the whole synchronous pipeline must finish within a ~2-minute execution budget. See
   [Respect the sandbox](../guides/plugins.md#respect-the-sandbox).
 - **Step registration follows platform rules.** `MainOperation` is reserved for Custom API handlers (rejected
-  for plugin steps); `FilteringAttributes` apply to `Create`/`Update` only (and Vela requires at least one there);
+  for plugin steps); `FilteringAttributes` apply to `Create`/`Update` (and `CreateMultiple`/`UpdateMultiple`) only, and Vela requires
+  at least one there ([VELA020](analyzers.md#vela020));
   images are constrained by stage/message
   (no images in `PreValidation`; `PreImage` only for `Update`/`Delete` in `PreOperation`; `PostImage` only for
   `Create`/`Update`). Violations throw.
@@ -38,8 +39,8 @@ change.
   bulk operations, and read per-record pre/post images by index, not by target reference.
 - **Custom APIs run at `MainOperation`, synchronously** - that stage/mode is fixed.
 - **Typed query builder = typed `QueryExpression`.** `Query.For<T>()` adds type safety and attribute-name
-  mapping; it does **not** add capabilities beyond `QueryExpression` and does not author FetchXML (you can
-  still pass a `FetchExpression` straight to the service).
+  mapping; it does **not** add capabilities beyond `QueryExpression` (`ToFetchXml()` renders the same query as
+  FetchXML, and you can still pass a `FetchExpression` straight to the service).
 - **Retry classifies transients with a fixed rule.** `RetryPolicy` retries `TimeoutException`,
   `WebException` and `FaultException<OrganizationServiceFault>` matching `timeout`/`throttle`/`temporar`, with
   attempt-scaled backoff - the classification isn't pluggable.
@@ -64,7 +65,7 @@ untouched.
 - **Custom API parameter types are limited** to the Dataverse Custom API types: `bool`, `int`, `decimal`,
   `double`, `DateTime`, `Guid`, `string`, `string[]`, `Money`, `OptionSetValue`, `EntityReference`, `Entity` (or
   an early-bound entity) and `EntityCollection`. Any other type (long, float, enums, multi-select option sets,
-  nested/complex types) is rejected when the step is built.
+  nested/complex types) is rejected when the Custom API definition is built.
 - **Some Custom API fields are create-only.** `IsFunction`, the binding type, the bound entity, the allowed
   custom-processing-step type, and `WorkflowSdkStepEnabled` are fixed when the Custom API is created; Dataverse
   ignores updates to them. `apply` detects such a change and fails fast (delete and recreate the Custom API to
@@ -123,7 +124,7 @@ The in-memory CRM (`InMemoryOrganizationService`) and `PluginPipeline` are a fai
 anything below, inject your own `IOrganizationService` via `WithOrganizationService(...)`.
 
 - **`Execute` covers a common set:** `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`,
-  `CreateMultiple`/`UpdateMultiple`, `Assign`/`Associate`/`Disassociate`, the metadata reads
+  `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`Associate`/`Disassociate`, the metadata reads
   (`RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute`), and `ExecuteMultiple`/`ExecuteTransaction`
   (the latter rolls the whole batch back on failure). For any other message, inject your own service.
 - **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on
@@ -131,7 +132,7 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   logic, but the record changes the platform would make are not simulated.
 - **Execution-context identity is the configured caller.** `ctx.UserId`/`InitiatingUserId`/`BusinessUnitId`/
   `OrganizationId` come from `WithCurrentUser`/`WithCurrentBusinessUnit`/`WithOrganizationId`, and a cascaded
-  plugin sees its caller's context as `ctx.ParentContext`.
+  plugin sees its caller's context as `ctx.PluginExecutionContext.ParentContext`.
 - **Fault codes are partial.** A not-found `Retrieve`/`Update` throws `FaultException<OrganizationServiceFault>`
   with `ObjectDoesNotExist` (`-2147220969`), and a privilege denial carries `PrincipalPrivilegeDenied`; other
   faults (for example an `ExecuteMultiple` child failure) surface an `OrganizationServiceFault` with no

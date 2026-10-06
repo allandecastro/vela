@@ -22,7 +22,7 @@ _disableBreadcrumb: true
 Register a plugin step with a strongly-typed handler, preview it, apply it, then test it with no connection and no mocking library:
 
 ```csharp
-public sealed class AccountValidator : EntityPluginBase<Account>
+public sealed class AccountValidator(string unsecure, string secure) : EntityPluginBase<Account>(unsecure, secure)
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnUpdate().PreOperation().Sync()
@@ -41,8 +41,8 @@ vela apply --packages-dir ./artifacts --interactive   # upsert it into your envi
 ```
 
 ```csharp
-var ctx = PluginContext.For<Account>().WithTarget(new Account { Name = "" });
-Assert.Throws<InvalidPluginExecutionException>(() => new AccountValidator().Execute(ctx.Build()));
+Assert.Throws<InvalidPluginExecutionException>(() =>
+    PluginContext.For<Account>().WithTarget(new Account { Name = "" }).Execute<AccountValidator>());
 ```
 
 ## Why Vela

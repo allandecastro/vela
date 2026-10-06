@@ -11,7 +11,7 @@ using Zava.Shared.Models.Generated;
 
 namespace Zava.Plugins.Account
 {
-    public class AccountPostUpdate : EntityPluginBase<Account>
+    public partial class AccountPostUpdate : EntityPluginBase<Account>
     {
         public AccountPostUpdate(string unsecure, string secure) : base(unsecure, secure) { }
 
@@ -42,7 +42,7 @@ namespace Zava.Plugins.Account
 You can register multiple steps in one plugin class and bind each step to a dedicated method:
 
 ```csharp
-public class AccountStepRouter : EntityPluginBase<Account>
+public partial class AccountStepRouter : EntityPluginBase<Account>
 {
     public AccountStepRouter(string u, string s) : base(u, s) { }
 
@@ -141,8 +141,10 @@ at build, and the builder also throws at registration. (`Disabled()` is exempt: 
 > [!NOTE]
 > Column selectors (`FilterOn`, the image selectors in `WithPreImage(...)` / `WithPostImage(...)`, and the typed query/change helpers) accept an
 > early-bound column, e.g. `a => a.Name`. A bundled analyzer (`VELA001`, shipped in `Vela.Plugins`) flags, in the
-> editor and at build, a selector that targets a member of the base `Entity` type (such as `a => a.LogicalName` or
-> `a => a.Id`) rather than a real column - no reference or configuration needed.
+> editor and at build, a selector that targets a member of the base `Entity` type (such as `a => a.LogicalName`, or
+> `a => a.Id` on a model whose `Id` override has no `[AttributeLogicalName]`) rather than a real column, and a nested
+> path such as `a => a.PrimaryContactId.Id` - no reference or configuration needed. (`vela models` names the `Id`
+> override's column, so `a => a.Id` selects the primary key.)
 
 ### Execution order (rank)
 
@@ -209,7 +211,7 @@ reads it **unqualified**, no `using` to add. This is why a plugin that captures 
 handler has no name, so its projection falls back to `{Message}{Stage}_{PreImage|PostImage}`.)
 
 ```csharp
-public sealed partial class AccountAudit : EntityPluginBase<Account>   // partial: the projection nests here
+public sealed partial class AccountAudit(string unsecure, string secure) : EntityPluginBase<Account>(unsecure, secure)   // partial: the projection nests here
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnUpdate().PostOperation().Sync()
@@ -262,7 +264,7 @@ signature for the step whether or not it captures an image. When the step captur
 calling `ctx.PreImageAs<T>()`:
 
 ```csharp
-public sealed partial class AccountAudit : EntityPluginBase<Account>
+public sealed partial class AccountAudit(string unsecure, string secure) : EntityPluginBase<Account>(unsecure, secure)
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnUpdate().PostOperation().Sync()
@@ -608,14 +610,13 @@ A bulk **write** batch carries many rows, and only some may carry the filtered c
 single message, `FilterOn` tests column **presence** in the `Target` (not whether the value changed - that is
 `HasChanged`); where that test is applied depends on the step shape:
 
-- A single **`OnUpdate()`** step (which also runs under `UpdateMultiple`) fires **once per row whose `Target`
-  carries a filtered column**; a row without it is skipped, and each invocation sees only its own record.
-- A bulk **`OnUpdateMultiple()`** step fires **once for the whole batch if at least one row carries a filtered
-  column** (and not at all if none do). Its handler then receives the **entire `ctx.Request.Targets` collection,
-  including the rows that lack the column** - the filter gates the batch, not each row. So re-check per row
-  (`target.Contains(a => a.X)` / `HasChanged`) before acting on each one.
-- On **`CreateMultiple`** the value filter is not applied (a create always carries the columns it sets), so the
-  step fires for the whole batch regardless - always iterate and decide per row.
+- A single **`OnCreate()`** / **`OnUpdate()`** step (which also runs under `CreateMultiple` / `UpdateMultiple`)
+  fires **once per row whose `Target` carries a filtered column**; a row without it is skipped, and each invocation
+  sees only its own record.
+- A bulk **`OnCreateMultiple()`** / **`OnUpdateMultiple()`** step fires **once for the whole batch if at least one
+  row carries a filtered column** (and not at all if none do). Its handler then receives the **entire
+  `ctx.Request.Targets` collection, including the rows that lack the column** - the filter gates the batch, not each
+  row. So re-check per row (`target.Contains(a => a.X)` / `HasChanged`) before acting on each one.
 
 (`RetrieveMultiple` is query-based and carries no `Target` batch, so none of this applies to it. This matches the
 in-memory [test harness](testing.md); the platform invokes a bulk write step once per batch and hands over the
