@@ -40,6 +40,11 @@ namespace Vela.Plugin
         public void Execute(IServiceProvider serviceProvider)
         {
             LocalPluginContext localContext = new LocalPluginContext(serviceProvider ?? throw new InvalidPluginExecutionException(nameof(serviceProvider)), GetType().FullName);
+
+            // Assembly-wide shared services first (one [assembly: VelaServiceRegistrar] for all plugins/Custom APIs
+            // in the assembly), then the per-plugin ConfigureServices - so a plugin can still override a shared
+            // registration (the resolver is last-registration-wins).
+            AssemblyServiceRegistrars.Resolve(GetType())?.Register(localContext.Resolver, localContext);
             ConfigureServices(localContext.Resolver, localContext);
 
             Stopwatch stopwatch = Stopwatch.StartNew();
