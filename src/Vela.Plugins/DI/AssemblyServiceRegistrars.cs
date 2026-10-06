@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Threading;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.DI
@@ -14,8 +15,12 @@ namespace Vela.DI
     /// </summary>
     internal static class AssemblyServiceRegistrars
     {
-        private static readonly ConcurrentDictionary<Assembly, IServiceRegistrar?> Cache =
-            new ConcurrentDictionary<Assembly, IServiceRegistrar?>();
+        // A Lazy per assembly: ConcurrentDictionary.GetOrAdd may run its value factory on several threads for the
+        // same key, so caching the registrar directly could instantiate it more than once. Caching a Lazy with
+        // ExecutionAndPublication evaluates CreateRegistrar exactly once per assembly even under concurrent first
+        // executions (mirrors the plugin cache), so constructor side effects never duplicate.
+        private static readonly ConcurrentDictionary<Assembly, Lazy<IServiceRegistrar?>> Cache =
+            new ConcurrentDictionary<Assembly, Lazy<IServiceRegistrar?>>();
 
         /// <summary>The registrar declared by the plugin type's assembly, or null when none is declared.</summary>
         public static IServiceRegistrar? Resolve(Type pluginType)
@@ -23,7 +28,9 @@ namespace Vela.DI
             pluginType = pluginType ?? throw new ArgumentNullException(nameof(pluginType));
             return Cache.GetOrAdd(
                 pluginType.Assembly,
-                assembly => CreateRegistrar(assembly.GetCustomAttribute<VelaServiceRegistrarAttribute>()));
+                assembly => new Lazy<IServiceRegistrar?>(
+                    () => CreateRegistrar(assembly.GetCustomAttribute<VelaServiceRegistrarAttribute>()),
+                    LazyThreadSafetyMode.ExecutionAndPublication)).Value;
         }
 
         // Instantiates the registrar an attribute points at (null when the attribute is absent). Kept separate from
@@ -41,6 +48,15 @@ namespace Vela.DI
             {
                 throw new InvalidPluginExecutionException(
                     $"[assembly: VelaServiceRegistrar] type '{type.FullName}' must implement {nameof(IServiceRegistrar)}.");
+            }
+
+            // An abstract/interface/open-generic type can implement the interface yet is not instantiable;
+            // Activator.CreateInstance would throw an opaque MemberAccessException/ArgumentException, so reject it
+            // up front with the same clear message.
+            if (type.IsAbstract || type.IsInterface || type.ContainsGenericParameters)
+            {
+                throw new InvalidPluginExecutionException(
+                    $"[assembly: VelaServiceRegistrar] type '{type.FullName}' must be a concrete, non-generic class.");
             }
 
             try

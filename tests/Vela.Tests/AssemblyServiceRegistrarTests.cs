@@ -47,6 +47,19 @@ namespace Vela.Tests
         }
     }
 
+    // Implements the interface but is not instantiable (abstract / open generic), for the guard tests.
+    internal abstract class AbstractRegistrar : IServiceRegistrar
+    {
+        public abstract void Register(SimpleServiceResolver services, ILocalPluginContext context);
+    }
+
+    internal sealed class OpenGenericRegistrar<T> : IServiceRegistrar
+    {
+        public void Register(SimpleServiceResolver services, ILocalPluginContext context)
+        {
+        }
+    }
+
     /// <summary>
     /// Assembly-level DI hook: <c>[assembly: VelaServiceRegistrar(typeof(...))]</c> registers shared services for
     /// every plugin/Custom API in the assembly, before each plugin's <c>ConfigureServices</c> (so a plugin can still
@@ -79,6 +92,16 @@ namespace Vela.Tests
         public void CreateRegistrar_rejects_a_registrar_without_a_parameterless_constructor()
             => Assert.Throws<InvalidPluginExecutionException>(() =>
                 AssemblyServiceRegistrars.CreateRegistrar(new VelaServiceRegistrarAttribute(typeof(RegistrarWithoutParameterlessCtor))));
+
+        [Fact]
+        public void CreateRegistrar_rejects_an_abstract_registrar()
+            => Assert.Throws<InvalidPluginExecutionException>(() =>
+                AssemblyServiceRegistrars.CreateRegistrar(new VelaServiceRegistrarAttribute(typeof(AbstractRegistrar))));
+
+        [Fact]
+        public void CreateRegistrar_rejects_an_open_generic_registrar()
+            => Assert.Throws<InvalidPluginExecutionException>(() =>
+                AssemblyServiceRegistrars.CreateRegistrar(new VelaServiceRegistrarAttribute(typeof(OpenGenericRegistrar<>))));
 
         [Fact]
         public void Attribute_rejects_a_null_type()
