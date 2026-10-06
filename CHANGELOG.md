@@ -24,6 +24,11 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed (Framework)
+
+- **A generated step context reads an aliased image.** For `WithPostImage("snap", ...)` (or a pre-image alias) the
+  generated `ctx.PostImage` / `ctx.PreImage` read the image under the default alias, so it was always null at runtime.
+  The context now passes the step's alias.
 ### Fixed (CLI)
 
 - **A second `apply --solution` no longer re-imports an unchanged plugin package.** Adding the publisher prefix

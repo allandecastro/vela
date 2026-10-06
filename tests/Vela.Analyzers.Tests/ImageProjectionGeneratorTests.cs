@@ -81,8 +81,8 @@ namespace Vela.Context
     public class AssignPostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public AssignPostContext(ILocalPluginContext inner) { } }
     public static class ImageProjectionExtensions
     {
-        public static TImage PreImageAs<TImage>(this ILocalPluginContext context) => default!;
-        public static TImage PostImageAs<TImage>(this ILocalPluginContext context) => default!;
+        public static TImage PreImageAs<TImage>(this ILocalPluginContext context, string alias = ""PreImage"") => default!;
+        public static TImage PostImageAs<TImage>(this ILocalPluginContext context, string alias = ""PostImage"") => default!;
     }
 }
 
@@ -630,6 +630,75 @@ namespace Demo
         Assert.Contains("class OnUpdatedContext : global::Vela.Context.UpdatePostContext<global::Demo.Account>", output);
         Assert.Contains("public new OnUpdated_PreImage? PreImage", output);
         Assert.Contains("public new OnUpdated_PostImage? PostImage", output);
+    }
+
+    [Fact]
+    public void A_typed_context_reads_each_image_under_its_alias()
+    {
+        // The step registers the images as "before" / "snap": reading them under the default aliases returned null.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithPreImage(""before"", a => a.Revenue)
+                .WithPostImage(""snap"", a => a.Name)
+                .Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.Contains("PreImageAs<OnUpdated_PreImage_before>(this, \"before\")", output);
+        Assert.Contains("PostImageAs<OnUpdated_PostImage_snap>(this, \"snap\")", output);
+    }
+
+    [Fact]
+    public void A_constant_alias_is_resolved_and_a_non_constant_one_generates_nothing()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountAudit : EntityPluginBase<Account>
+    {
+        private const string Snap = ""snap"";
+        private static readonly string Dynamic = ""dyn"";
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(Snap, a => a.Name).Handle(OnUpdated);
+            RegisterStep().OnDelete().PreOperation().Sync().WithPreImage(Dynamic, a => a.Name).Handle(OnDeleted);
+        }
+        private void OnUpdated() { }
+        private void OnDeleted() { }
+    }
+}
+");
+
+        Assert.Contains("PostImageAs<OnUpdated_PostImage_snap>(this, \"snap\")", output);
+        Assert.DoesNotContain("OnDeleted_PreImage", output); // the runtime alias is unknown: no projection reading null
+    }
+
+    [Fact]
+    public void A_typed_context_with_a_default_alias_passes_no_alias()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountCreate : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(OnCreated);
+        private void OnCreated() { }
+    }
+}
+");
+
+        Assert.Contains("PostImageAs<OnCreated_PostImage>(this);", output);
     }
 
     [Fact]
