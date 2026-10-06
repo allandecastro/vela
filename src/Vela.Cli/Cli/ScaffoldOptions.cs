@@ -195,9 +195,11 @@ internal sealed record ScaffoldOptions(
         if (interactive && !HasFlag(args, "--minimal") && !HasFlag(args, "--no-demos"))
         {
             includeDemos = PromptYesNo("Include the demo examples (models, services, sample plugins and Custom APIs)? [Y/n]:", defaultYes: true);
-            includeConsole = includeDemos;
-            includeIntegrations = includeDemos;
-            includeTests = includeDemos;
+            // Applying the demo answer must still respect an explicit --no-console/-integrations/-tests exclusion:
+            // enabling demos never resurrects a project the user turned off on the command line.
+            includeConsole = includeDemos && !HasFlag(args, "--no-console");
+            includeIntegrations = includeDemos && !HasFlag(args, "--no-integrations");
+            includeTests = includeDemos && !HasFlag(args, "--no-tests");
         }
 
         // The demo-only project prompts only make sense when demos are kept (a bare scaffold has no use for an empty

@@ -85,4 +85,20 @@ public sealed class ScaffoldOptionsInteractiveTests
         Assert.True(options.ManagedIdentity);
         Assert.False(options.IncludeWebResources);
     }
+
+    [Fact]
+    public void Interactive_Demos_Yes_StillHonors_ExplicitNoTests()
+    {
+        // demos=yes must not resurrect a project excluded on the command line: --no-tests stays off, and the
+        // tests prompt is skipped. Prompts: demos(y), integrations(y), console(y), managed-identity(n), web(n).
+        bool ok = Parse("y\ny\ny\nn\nn\n",
+            ["--name", "DemoSol", "--prefix", "Demo", "--output", ".", "--interactive", "--no-tests"],
+            out ScaffoldOptions options);
+
+        Assert.True(ok);
+        Assert.True(options.IncludeDemos);
+        Assert.True(options.IncludeIntegrations);
+        Assert.True(options.IncludeConsole);
+        Assert.False(options.IncludeTests);
+    }
 }
