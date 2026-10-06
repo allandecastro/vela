@@ -375,7 +375,7 @@ internal static class OutputWriter
         WriteCommand(console, "inspect", "Compare local packages with the live environment.");
         Console.WriteLine("      [same args as plan] [--verbose] [--json]");
         WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");
-        Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--web-resources (preview) [--web-resources-namespace <name>] [--web-resources-folder <dir>]] [--json] [--force] [--interactive]");
+        Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--minimal|--no-demos] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--web-resources (preview) [--web-resources-namespace <name>] [--web-resources-folder <dir>]] [--json] [--force] [--interactive]");
         WriteCommand(console, "add", "Add a plugin, service, Custom API, test, or step to a project.");
         Console.WriteLine("      (plugin|service|customapi|test|step) <Name> [...]   run 'vela add --help' for the full options");
         WriteCommand(console, "models", "Generate early-bound model classes (C#) or TypeScript (preview).");

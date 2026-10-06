@@ -31,8 +31,8 @@ public sealed class ScaffoldOptionsInteractiveTests
     [Fact]
     public void Interactive_WebResources_Yes_Prompts_Namespace_And_Folder()
     {
-        // Prompts in order: integrations, tests, console, web-resources, then namespace + folder.
-        bool ok = Parse("n\nn\nn\ny\nadc\ndist\n",
+        // Prompts in order: demos, integrations, tests, console, web-resources, then namespace + folder.
+        bool ok = Parse("y\nn\nn\nn\ny\nadc\ndist\n",
             ["--name", "DemoSol", "--prefix", "Demo", "--output", ".", "--interactive"],
             out ScaffoldOptions options);
 
@@ -48,8 +48,8 @@ public sealed class ScaffoldOptionsInteractiveTests
     [Fact]
     public void Interactive_WebResources_Yes_Empty_Answers_Use_Defaults()
     {
-        // web-resources yes, empty namespace -> default (prefix lower-cased), empty folder -> "dist".
-        bool ok = Parse("n\nn\nn\ny\n\n\n",
+        // demos yes; web-resources yes, empty namespace -> default (prefix lower-cased), empty folder -> "dist".
+        bool ok = Parse("y\nn\nn\nn\ny\n\n\n",
             ["--name", "DemoSol", "--prefix", "Demo", "--output", ".", "--interactive"],
             out ScaffoldOptions options);
 
@@ -75,8 +75,8 @@ public sealed class ScaffoldOptionsInteractiveTests
     [Fact]
     public void Interactive_Integrations_Yes_Prompts_ManagedIdentity_And_WebResources_Declined()
     {
-        // integrations yes -> managed-identity prompt; then web-resources declined.
-        bool ok = Parse("y\ny\ny\ny\nn\n",
+        // demos yes; integrations yes -> managed-identity prompt; then web-resources declined.
+        bool ok = Parse("y\ny\ny\ny\ny\nn\n",
             ["--name", "DemoSol", "--prefix", "Demo", "--output", ".", "--interactive"],
             out ScaffoldOptions options);
 
@@ -84,5 +84,21 @@ public sealed class ScaffoldOptionsInteractiveTests
         Assert.True(options.IncludeIntegrations);
         Assert.True(options.ManagedIdentity);
         Assert.False(options.IncludeWebResources);
+    }
+
+    [Fact]
+    public void Interactive_Demos_Yes_StillHonors_ExplicitNoTests()
+    {
+        // demos=yes must not resurrect a project excluded on the command line: --no-tests stays off, and the
+        // tests prompt is skipped. Prompts: demos(y), integrations(y), console(y), managed-identity(n), web(n).
+        bool ok = Parse("y\ny\ny\nn\nn\n",
+            ["--name", "DemoSol", "--prefix", "Demo", "--output", ".", "--interactive", "--no-tests"],
+            out ScaffoldOptions options);
+
+        Assert.True(ok);
+        Assert.True(options.IncludeDemos);
+        Assert.True(options.IncludeIntegrations);
+        Assert.True(options.IncludeConsole);
+        Assert.False(options.IncludeTests);
     }
 }

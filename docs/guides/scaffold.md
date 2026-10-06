@@ -38,7 +38,8 @@ The tree comments label each project. Two carry detail beyond that:
 - `Zava.Plugins.Tests` runs those plugins and Custom APIs with [`Vela.Testing`](testing.md), no Dataverse
   connection. Run them with `dotnet test tests/Zava.Plugins.Tests`.
 
-Flags: `--prefix` (default: derived from name), `--output` (default: `.`), `--core-version`
+Flags: `--prefix` (default: derived from name), `--output` (default: `.`), `--minimal` (alias `--no-demos`;
+see below), `--core-version`
 (the `Vela.Plugins` / `Vela.Testing` version the generated projects reference; default: the latest published
 framework version, resolved from nuget.org), `--no-integrations`, `--no-tests`, `--no-console`,
 `--managed-identity` / `--mi`
@@ -47,6 +48,23 @@ framework version, resolved from nuget.org), `--no-integrations`, `--no-tests`, 
 and `--web-resources-folder` set its global name and build folder),
 `--force` (overwrite an existing folder). The generated solution references `Vela.Plugins` as
 a NuGet package, then follows the `dotnet build -c Release` → `vela plan` → `vela apply` loop from the [Quickstart](../getting-started/quickstart.md).
+
+### Minimal (demo-free) scaffold
+
+By default the scaffold ships a rich set of examples (sample models, a service, example plugins and Custom APIs,
+and the Integrations / Tests / ConsoleApp projects) so you can see every pattern working. Pass **`--minimal`**
+(alias **`--no-demos`**) when you want a bare starting point instead:
+
+```bash
+vela init --name Acme.Crm --prefix acme --minimal
+```
+
+This writes only the `Shared` and `Plugins` projects - no sample models, services, plugins or Custom APIs - plus
+the structural files (`.sln`, the `.csproj` files, `Directory.*.props`, `README`, `.gitignore`). The demo-only
+Integrations, Tests and ConsoleApp projects are skipped; an explicit `--web-resources` is still honored. The empty
+solution builds and packs unedited, so you go straight to `vela models` and `vela add plugin`/`vela add customapi`
+to fill it with your own code. This is the clean canvas to start a real migration from - and the frictionless
+starting point when a script or agent drives the CLI, with no demo content to delete first.
 
 `Vela.Plugins` and `Vela.Testing` resolve from **nuget.org** (the default package source), so the generated
 solution restores and builds out of the box with no `nuget.config`. Add your own only if you use a private feed.

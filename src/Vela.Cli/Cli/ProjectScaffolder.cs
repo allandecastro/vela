@@ -99,27 +99,37 @@ internal static class ProjectScaffolder
             projects.Add(new ProjectEntry(name, $"{folder}\\{name}\\{name}.csproj", StableGuid(name)));
 
         // ---- Shared ----
+        // The csproj is always written (structural); the sample models + GreetingService are demo content, omitted
+        // under --minimal/--no-demos so the project is a clean, empty library the user fills with `vela models`.
         AddProject(sharedName, "src");
         Write(Path.Combine("src", sharedName, $"{sharedName}.csproj"), SharedCsproj(options));
-        Write(Path.Combine("src", sharedName, "Models", "Generated", "Account.cs"), AccountModel(prefix));
-        Write(Path.Combine("src", sharedName, "Models", "Generated", "Contact.cs"), ContactModel(prefix));
-        Write(Path.Combine("src", sharedName, "Services", "IGreetingService.cs"), GreetingServiceInterface(prefix));
-        Write(Path.Combine("src", sharedName, "Services", "GreetingService.cs"), GreetingService(prefix));
+        if (options.IncludeDemos)
+        {
+            Write(Path.Combine("src", sharedName, "Models", "Generated", "Account.cs"), AccountModel(prefix));
+            Write(Path.Combine("src", sharedName, "Models", "Generated", "Contact.cs"), ContactModel(prefix));
+            Write(Path.Combine("src", sharedName, "Services", "IGreetingService.cs"), GreetingServiceInterface(prefix));
+            Write(Path.Combine("src", sharedName, "Services", "GreetingService.cs"), GreetingService(prefix));
+        }
 
         // ---- Plugins ----
         // Code is organised by table (Account/, Contact/) with Plugins/ and CustomApis/ subfolders;
-        // unbound (global) Custom APIs live under GlobalCustomApis/.
+        // unbound (global) Custom APIs live under GlobalCustomApis/. The csproj is structural (always written); the
+        // sample plugins/services/Custom APIs are demo content, omitted under --minimal/--no-demos - the empty
+        // package still builds and packs, ready for `vela add`.
         AddProject(pluginsName, "src");
         Write(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion));
-        Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountPostCreatePlugin.cs"), AccountPostCreatePlugin(prefix));
-        Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountRelatedContactsPlugin.cs"), AccountRelatedContactsPlugin(prefix));
-        Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountMessageReference.cs"), AccountMessageReference(prefix));
-        Write(Path.Combine("src", pluginsName, "Account", "Services", "AccountFollowUpService.cs"), AccountFollowUpService(prefix));
-        Write(Path.Combine("src", pluginsName, "Account", "CustomApis", "AccountEstimateValueCustomApi.cs"), AccountEstimateValueCustomApi(prefix));
-        Write(Path.Combine("src", pluginsName, "Contact", "Plugins", "ContactRouterPlugin.cs"), ContactRouterPlugin(prefix));
-        Write(Path.Combine("src", pluginsName, "Contact", "Services", "ContactDuplicateService.cs"), ContactDuplicateService(prefix));
-        Write(Path.Combine("src", pluginsName, "Contact", "CustomApis", "ContactValidateCustomApi.cs"), ContactValidateCustomApi(prefix));
-        Write(Path.Combine("src", pluginsName, "GlobalCustomApis", "PingCustomApi.cs"), PingCustomApi(prefix));
+        if (options.IncludeDemos)
+        {
+            Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountPostCreatePlugin.cs"), AccountPostCreatePlugin(prefix));
+            Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountRelatedContactsPlugin.cs"), AccountRelatedContactsPlugin(prefix));
+            Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountMessageReference.cs"), AccountMessageReference(prefix));
+            Write(Path.Combine("src", pluginsName, "Account", "Services", "AccountFollowUpService.cs"), AccountFollowUpService(prefix));
+            Write(Path.Combine("src", pluginsName, "Account", "CustomApis", "AccountEstimateValueCustomApi.cs"), AccountEstimateValueCustomApi(prefix));
+            Write(Path.Combine("src", pluginsName, "Contact", "Plugins", "ContactRouterPlugin.cs"), ContactRouterPlugin(prefix));
+            Write(Path.Combine("src", pluginsName, "Contact", "Services", "ContactDuplicateService.cs"), ContactDuplicateService(prefix));
+            Write(Path.Combine("src", pluginsName, "Contact", "CustomApis", "ContactValidateCustomApi.cs"), ContactValidateCustomApi(prefix));
+            Write(Path.Combine("src", pluginsName, "GlobalCustomApis", "PingCustomApi.cs"), PingCustomApi(prefix));
+        }
 
         // ---- Integrations (optional) ----
         if (options.IncludeIntegrations)
