@@ -24,6 +24,16 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Changed (Framework)
+
+- **Automatic execution snapshots no longer trace record data.** The `start` / `success` / failure snapshots wrote
+  every Target, image and parameter value on every execution, and also sent them to `ILogger` / Application
+  Insights. They now list only metadata (message, stage, ids, parameter/attribute names), the redundant `success`
+  snapshot is dropped, and snapshots go to the plug-in trace log only. Opt back into values per plugin with
+  `protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full;`. An explicit
+  `ctx.TraceExecutionSnapshot(phase)` still traces values (`TraceSnapshotDetail.Metadata` for names only).
+- **Dataverse call tracing is one line per event** (`Dataverse.Update start scope=User depth=1 entity=account; id=...`
+  then `Dataverse.Update ok 42 ms`) instead of an 11-line block per call, which filled the ~10 KB trace log.
 ### Fixed (Framework)
 
 - **`HasChanged` detects casing edits and multi-select changes.** It compared strings case-insensitively, so

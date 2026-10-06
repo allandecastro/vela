@@ -142,60 +142,26 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
         }
     }
 
+    // One line when the call starts (so a call that hangs or times out is still visible) and one when it ends: the
+    // plug-in trace log is capped (about 10 KB), so a verbose multi-line block per call would crowd out the handler's
+    // own traces. Only metadata is traced (operation, table, ids, request name), never attribute values.
     private TResult Trace<TResult>(string operation, string details, Func<TResult> action)
     {
         Stopwatch stopwatch = Stopwatch.StartNew();
-        string nl = Environment.NewLine;
-        _context.Trace(
-            "[{0:o}] Dataverse.{1} start{2}" +
-            "  scope       : {3}{2}" +
-            "  message     : {4}{2}" +
-            "  stage/mode  : {5}/{6}{2}" +
-            "  depth       : {7}{2}" +
-            "  correlation : {8}{2}" +
-            "  details     : {9}",
-            DateTime.UtcNow,
-            operation,
-            nl,
-            _scopeName,
-            _context.MessageName,
-            _context.Stage,
-            _context.Mode,
-            _context.Depth,
-            _context.CorrelationId,
-            details);
+        _context.Trace("Dataverse.{0} start scope={1} depth={2} {3}", operation, _scopeName, _context.Depth, details);
 
         try
         {
             TResult result = action();
-            _context.Trace(
-                "[{0:o}] Dataverse.{1} ok{2}" +
-                "  scope       : {3}{2}" +
-                "  durationMs  : {4}{2}" +
-                "  details     : {5}",
-                DateTime.UtcNow,
-                operation,
-                nl,
-                _scopeName,
-                stopwatch.ElapsedMilliseconds,
-                details);
+            _context.Trace("Dataverse.{0} ok {1} ms", operation, stopwatch.ElapsedMilliseconds);
             return result;
         }
         catch (Exception ex)
         {
             _context.Trace(
-                "[{0:o}] Dataverse.{1} fail{2}" +
-                "  scope       : {3}{2}" +
-                "  durationMs  : {4}{2}" +
-                "  details     : {5}{2}" +
-                "  error       : {6}{2}" +
-                "  message     : {7}",
-                DateTime.UtcNow,
+                "Dataverse.{0} fail {1} ms {2}: {3}",
                 operation,
-                nl,
-                _scopeName,
                 stopwatch.ElapsedMilliseconds,
-                details,
                 ex.GetType().FullName ?? ex.GetType().Name,
                 ex.Message ?? string.Empty);
             throw;

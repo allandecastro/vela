@@ -24,15 +24,16 @@ public sealed class OrganizationServiceTracingTests
         TracingOrganizationService traced = new TracingOrganizationService(inner.Object, context.Object, "User");
         _ = traced.Create(new Entity("account"));
 
+        // One compact line when the call starts and one when it ends, each a single line (no embedded newline).
         context.Verify(
             value => value.Trace(
-                It.Is<string>(format => format.Contains("start")),
-                It.Is<object[]>(args => args.Length > 1 && object.Equals(args[1], "Create"))),
+                It.Is<string>(format => format.Contains("start") && !format.Contains("\n")),
+                It.Is<object[]>(args => object.Equals(args[0], "Create") && object.Equals(args[1], "User") && object.Equals(args[3], "entity=account"))),
             Times.Once);
         context.Verify(
             value => value.Trace(
-                It.Is<string>(format => format.Contains("ok")),
-                It.Is<object[]>(args => args.Length > 1 && object.Equals(args[1], "Create"))),
+                It.Is<string>(format => format.Contains("ok") && !format.Contains("\n")),
+                It.Is<object[]>(args => object.Equals(args[0], "Create"))),
             Times.Once);
     }
 }

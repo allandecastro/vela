@@ -55,30 +55,35 @@ namespace Vela.Plugin
                 localContext.Stage,
                 localContext.Mode,
                 localContext.Depth);
-            localContext.TraceExecutionSnapshot("start");
+            TraceSnapshotDetail snapshotDetail = AutoSnapshotDetail;
+            localContext.TraceExecutionSnapshot("start", snapshotDetail);
 
             try
             {
                 EnforceDepth(localContext);
                 ExecuteDataversePlugin(localContext);
                 localContext.Trace("Execution completed in {0} ms.", stopwatch.ElapsedMilliseconds);
-                localContext.TraceExecutionSnapshot("success");
+                // A metadata snapshot would only repeat the start one; a full one shows the values the handler set.
+                if (snapshotDetail == TraceSnapshotDetail.Full)
+                {
+                    localContext.TraceExecutionSnapshot("success", snapshotDetail);
+                }
             }
             catch (InvalidPluginExecutionException)
             {
-                localContext.TraceExecutionSnapshot("invalid-plugin-exception");
+                localContext.TraceExecutionSnapshot("invalid-plugin-exception", snapshotDetail);
                 throw;
             }
             catch (PluginBusinessException businessException)
             {
                 localContext.Trace("Business exception: {0}", businessException.Message);
-                localContext.TraceExecutionSnapshot("business-exception");
+                localContext.TraceExecutionSnapshot("business-exception", snapshotDetail);
                 throw new InvalidPluginExecutionException(businessException.Message);
             }
             catch (Exception ex)
             {
                 localContext.Trace("Unhandled exception: {0}", ex);
-                localContext.TraceExecutionSnapshot("unhandled-exception");
+                localContext.TraceExecutionSnapshot("unhandled-exception", snapshotDetail);
                 // Surface the real cause (type + message) to the caller instead of a generic "an error occurred":
                 // the caller only ever sees the InvalidPluginExecutionException message, and a generic one hides
                 // the actual failure (for example a SerializationException from passing an early-bound entity to a
@@ -94,6 +99,14 @@ namespace Vela.Plugin
                 localContext.Resolver.Dispose();
             }
         }
+
+        /// <summary>
+        /// How much the automatic execution snapshots (at start, and on failure) write to the plug-in trace log.
+        /// Defaults to <see cref="TraceSnapshotDetail.Metadata"/> (names, ids and counts, no record values), so
+        /// personal data and secrets never land in the trace log by default. Override with
+        /// <see cref="TraceSnapshotDetail.Full"/> while debugging to also trace every value, at start and on success.
+        /// </summary>
+        protected virtual TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Metadata;
 
         /// <summary>
         /// Allows derived plugins to register custom services.
