@@ -28,6 +28,32 @@ private void OnAccountUpdated(IUpdatePreContext<Account> ctx)
 }
 ```
 
+## Share services across the assembly
+
+When several plugins and Custom APIs need the **same** services, declare them once for the whole assembly
+instead of repeating `ConfigureServices` in each class (or inventing a shared base type just to carry it).
+Implement `IServiceRegistrar` and point the assembly at it with an assembly-level attribute:
+
+```csharp
+// AssemblyInfo.cs (or any file, at assembly scope)
+[assembly: VelaServiceRegistrar(typeof(MyServices))]
+
+public sealed class MyServices : IServiceRegistrar
+{
+    public void Register(SimpleServiceResolver services, ILocalPluginContext context)
+    {
+        services.AddScoped<IPricingService>(r => new PricingService(context.UserService, r.GetRequiredService<IPluginCacheService>()));
+        services.AddScoped<IAuditWriter>(_ => new AuditWriter(context.UserService));
+    }
+}
+```
+
+The registrar runs for every plugin and Custom API in the assembly, **before** each one's `ConfigureServices`,
+so a plugin can still override a shared registration locally (the resolver is last-registration-wins). The
+registrar type must be stateless with a public parameterless constructor (the sandbox reuses instances); it is
+resolved once per assembly and cached, so the attribute lookup never repeats on the execution path. Only one
+`[assembly: VelaServiceRegistrar]` is read per assembly.
+
 ## Lifetimes
 
 A plugin runs in a fresh instance per pipeline invocation, so there is **no singleton lifetime** - the two
