@@ -96,9 +96,9 @@ public class JsonReaderTests
     }
 
     [Theory]
-    [InlineData("System.Int64", "System.Int32")]     // A4: equivalent integer types collapse to the stored form
-    [InlineData("long", "System.Int32")]
-    [InlineData("System.Single", "System.Double")]
+    [InlineData("int", "System.Int32")]              // A4: an alias collapses to the stored form
+    [InlineData("double", "System.Double")]
+    [InlineData("System.String[]", "System.String")] // an array name is a StringArray (collection flag set)
     [InlineData("System.Int32", "System.Int32")]     // already canonical -> unchanged (idempotent)
     public void CustomApiParameterType_isCanonicalized_toTheLiveForm(string declared, string expected)
     {

@@ -3,8 +3,9 @@ using Xunit;
 
 namespace Vela.Tests
 {
-    // Guards TypedRequest/TypedResponse.Get<T>: a missing, null, or wrong-typed parameter must return default(T)
-    // rather than throwing InvalidCastException, matching the safe accessor pattern used elsewhere.
+    // Guards TypedRequest/TypedResponse.Get<T>: a missing or null parameter returns default(T), a base Entity converts
+    // to the early-bound type, and a wrong-typed value throws (it used to read as default(T), which hid a property
+    // declared with a type Dataverse never sends, e.g. long for an Integer parameter).
     public sealed class TypedRequestGetSafetyTests
     {
         private sealed class SampleRequest : TypedRequest
@@ -24,12 +25,27 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void Get_ReturnsDefault_WhenStoredValueTypeDiffers()
+        public void Get_Throws_WhenStoredValueTypeDiffers()
         {
             SampleRequest request = new SampleRequest();
             request.Parameters["Count"] = "not-an-int"; // wrong type in the bag
 
-            Assert.Equal(0, request.Count); // mismatched type -> default, not InvalidCastException
+            System.InvalidCastException ex = Assert.Throws<System.InvalidCastException>(() => request.Count);
+            Assert.Contains("'Count'", ex.Message);
+        }
+
+        private sealed class EntityRequest : TypedRequest
+        {
+            public Vela.Tests.TestSupport.TestAccount? Account { get => Get<Vela.Tests.TestSupport.TestAccount?>(); set => Set(value); }
+        }
+
+        [Fact]
+        public void Get_ConvertsABaseEntityToTheEarlyBoundType()
+        {
+            EntityRequest request = new EntityRequest();
+            request.Parameters["Account"] = new Microsoft.Xrm.Sdk.Entity("account") { ["name"] = "Zava" }; // as Dataverse sends it
+
+            Assert.Equal("Zava", request.Account!.Name);
         }
     }
 }

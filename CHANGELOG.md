@@ -24,6 +24,29 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Changed (Framework, breaking)
+
+- **A Custom API parameter type with no Dataverse equivalent fails when the step is built.** `long`, `short`,
+  `float`, enums, `byte[]`, `List<string>` and other types were registered as a lookalike (Integer, Float or
+  String) and then read back as their default value, silently. Building the definition now throws a message naming
+  the parameter and the type to use (`int`, `double`, `OptionSetValue`, `string[]`, ...).
+- **`TypedRequest.Get<T>` / `TypedResponse.Get<T>` throw on a value of the wrong type** instead of returning
+  `default`, and convert a base `Entity` to a declared early-bound type (Dataverse sends `Entity`, so an
+  `Account` property used to read as null).
+
+### Fixed (Framework)
+
+- **`string[]` Custom API parameters register as StringArray.** The builders emitted `System.String[]`, which the
+  CLI registered as a plain `String` (with no drift shown). Early-bound entity parameters now register as `Entity`
+  instead of `String`. One shared mapping serves every builder.
+
+### Fixed (CLI)
+
+- **Custom API parameters converge when their optionality or table changes.** `isoptional` and
+  `logicalentityname` are create-only but were updated in place; a change now recreates that one parameter (like a
+  type change), and an unchanged parameter is no longer rewritten on every apply. `System.String[]` from an older
+  package is read as StringArray, and a type with no Custom API equivalent fails the plan with a clear message
+  instead of registering as `String`.
 ### Changed (Framework)
 
 - **Automatic execution snapshots no longer trace record data.** The `start` / `success` / failure snapshots wrote
