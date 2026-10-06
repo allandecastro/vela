@@ -69,7 +69,7 @@ namespace Vela.Context
 
             object? newValue = target[attribute];
             object? oldValue = preImage.Contains(attribute) ? preImage[attribute] : null;
-            return !AttributeValueComparer.AreEqual(newValue, oldValue);
+            return !AttributeValueComparer.IsSameValue(newValue, oldValue);
         }
     }
 }

@@ -9,11 +9,24 @@ namespace Vela.Context
     /// The single source of Dataverse attribute value-equality, shared by the runtime (change detection /
     /// <c>HasChanged</c>) and the in-memory test harness (<c>EntityValues</c>, used by the query engine), so the
     /// two can't diverge: option sets compare by value, lookups by id, money by amount, partylists by their set
-    /// of party references; everything else by value (with a tolerant string fallback).
+    /// of party references, multi-select option sets by their set of values; everything else by value (with a
+    /// string fallback). The two callers differ only in string casing: see <see cref="AreEqual"/> and
+    /// <see cref="IsSameValue"/>.
     /// </summary>
     internal static class AttributeValueComparer
     {
-        public static bool AreEqual(object? actual, object? expected)
+        /// <summary>
+        /// Query equality, as Dataverse filters compare: strings case-insensitively ("acme" matches "ACME").
+        /// </summary>
+        public static bool AreEqual(object? actual, object? expected) => Compare(actual, expected, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Change detection (<c>HasChanged</c>): Dataverse stores a string as written, so a casing edit
+        /// ("acme" to "ACME") is a real change and must not compare equal.
+        /// </summary>
+        public static bool IsSameValue(object? actual, object? expected) => Compare(actual, expected, StringComparison.Ordinal);
+
+        private static bool Compare(object? actual, object? expected, StringComparison stringComparison)
         {
             // Two lookups are equal only when BOTH the target table and the id match: a polymorphic lookup
             // (e.g. regardingobjectid) can reuse the same id across tables, and Normalize reduces a reference to
@@ -23,6 +36,16 @@ namespace Vela.Context
             {
                 return actualRef.Id == expectedRef.Id
                     && string.Equals(actualRef.LogicalName, expectedRef.LogicalName, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // A multi-select option set has no value-equality and no meaningful ToString(): the string fallback below
+            // would compare the type name for both sides and report any two selections as equal. Compare the set of
+            // selected values instead; Dataverse stores an empty selection as null, so the two are the same value.
+            if (actual is OptionSetValueCollection || expected is OptionSetValueCollection)
+            {
+                return SelectedValues(actual).SetEquals(SelectedValues(expected))
+                    && (actual is null or OptionSetValueCollection)
+                    && (expected is null or OptionSetValueCollection);
             }
 
             object? left = Normalize(actual);
@@ -47,8 +70,16 @@ namespace Vela.Context
                     && CollectionsEqual(leftCollection, rightCollection);
             }
 
-            return string.Equals(left.ToString(), right.ToString(), StringComparison.OrdinalIgnoreCase);
+            return string.Equals(
+                Convert.ToString(left, System.Globalization.CultureInfo.InvariantCulture),
+                Convert.ToString(right, System.Globalization.CultureInfo.InvariantCulture),
+                stringComparison);
         }
+
+        private static HashSet<int> SelectedValues(object? value) =>
+            value is OptionSetValueCollection selection
+                ? new HashSet<int>(selection.Where(option => option != null).Select(option => option.Value))
+                : new HashSet<int>();
 
         private static bool CollectionsEqual(EntityCollection left, EntityCollection right)
         {

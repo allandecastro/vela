@@ -29,6 +29,13 @@ public sealed class TestAccount : Entity
     }
 
     // Partylist-style column typed as EntityCollection (mirrors how ActivityParty columns are generated).
+    [AttributeLogicalName("vela_tags")]
+    public OptionSetValueCollection? Tags
+    {
+        get => GetAttributeValue<OptionSetValueCollection>("vela_tags");
+        set => SetAttributeValue("vela_tags", value);
+    }
+
     [AttributeLogicalName("customers")]
     public EntityCollection Customers
     {
