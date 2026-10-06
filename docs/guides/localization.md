@@ -26,7 +26,8 @@ string text = context.GetMessage("ERR_REQUIRED", "name");
 ## Message sources
 
 Sources are consulted in the order they are added; the first with a template for the requested key and language
-wins. Two sources ship in the box, and you can add your own by implementing `IMessageSource`.
+wins. Three sources ship in the box - an in-code dictionary, a Dataverse labels table, and String (RESX) web
+resources - and you can add your own by implementing `IMessageSource`.
 
 ### In-code dictionary
 
@@ -57,6 +58,30 @@ context.GetRequiredService<IMessageService>()
 
 The whole table is read once through the elevated system service (so it works regardless of the calling user's
 privilege) and kept as an in-memory snapshot, so a plugin run does not query per message.
+
+### String (RESX) web resources
+
+Reuse the **String (RESX) web resources** a model-driven app already ships for client-side strings
+(`Xrm.Utility.getResourceString`), so the same translations serve the client and your plugins. Follow the platform
+naming convention `<baseName>.<LCID>.resx` - one web resource per language (for example
+`acme_/strings/messages.1033.resx` for English, `.1036.resx` for French):
+
+```csharp
+context.GetRequiredService<IMessageService>()
+    .AddSource(new ResxWebResourceMessageSource(
+        context,
+        context.GetRequiredService<IPluginCacheService>(),
+        baseName: "acme_/strings/messages",   // the per-language resource is <baseName>.<LCID>.resx
+        cacheFor: TimeSpan.FromMinutes(10)));
+```
+
+Pass the **base name without the language suffix**. For the resolved user language the matching web resource row is
+read once through the elevated system service, its base64 content decoded and the resx XML parsed (plain `<data>`
+string entries only; typed/binary resources such as images are skipped). When a language's resource is absent the
+source returns nothing and language resolution falls back to `DefaultLanguageCode` (so you only need the base-language
+`.resx` plus the languages you translate). Neither case breaks resolution: a missing resource falls back silently,
+while a resource that is present but malformed (bad base64 or invalid resx XML) is written to the plug-in trace log
+and treated as empty.
 
 ## Language resolution
 
