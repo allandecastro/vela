@@ -165,6 +165,11 @@ public sealed class DataverseRegistrationCustomApiTests
         Assert.Contains("zava_DoThing", ex.Message);
         Assert.Contains("cannot be changed", ex.Message);
         Assert.Contains((string)expectedInMessage[0], ex.Message);
+        // The message explains why (no convergence) and both ways out, so the fix is actionable on its own.
+        Assert.EndsWith(
+            "cannot be changed on an existing Custom API. These are set at creation and Dataverse ignores such updates, so applying " +
+            "would report success but never converge. Delete the Custom API and re-apply to recreate it with " +
+            "the new shape, or revert the change.", ex.Message);
         Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
     }
@@ -198,13 +203,50 @@ public sealed class DataverseRegistrationCustomApiTests
     }
 
     [Fact]
+    public void UpsertCustomApi_throws_when_workflow_enabled_with_a_string_array_output()
+    {
+        // Output properties are checked too, and the message shows the collection marker of the type.
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService();
+        JsonElement def = Json(new
+        {
+            pluginTypeName = Plugin,
+            uniqueName = "zava_DoThing",
+            isFunction = false,
+            workflowSdkStepEnabled = true,
+            outputParameters = new[] { new { name = "Tags", parameterTypeName = "System.String", isCollection = true } },
+        });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
+        Assert.Contains("parameter 'Tags' uses a type (System.String[])", ex.Message);
+    }
+
+    [Fact]
+    public void UpsertCustomApi_refuses_an_existing_api_implemented_by_another_assembly()
+    {
+        // UpsertCustomApi must consult the ownership guard before re-pointing an existing API to our plugin.
+        var existingId = Guid.NewGuid();
+        var foreignType = Guid.NewGuid();
+        (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService(new Entity("customapi", existingId));
+        svc.OnRetrieve = (entity, id, _) => entity == "plugintype"
+            ? new Entity("plugintype", id) { ["typename"] = "Other.Plugin", ["assemblyname"] = "Other" }
+            : new Entity("customapi", existingId) { ["plugintypeid"] = new EntityReference("plugintype", foreignType) };
+        JsonElement def = Json(new { pluginTypeName = Plugin, uniqueName = "zava_DoThing" });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
+        Assert.Contains("implemented by 'Other.Plugin'", ex.Message);
+        Assert.Empty(svc.Updated);
+    }
+
+    [Fact]
     public void UpsertCustomApi_throws_when_workflow_enabled_on_a_function()
     {
         (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) = NewService();
         JsonElement def = Json(new { pluginTypeName = Plugin, uniqueName = "zava_DoThing", isFunction = true, workflowSdkStepEnabled = true });
 
         var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
-        Assert.Contains("WorkflowSdkStepEnabled requires an action", ex.Message);
+        Assert.Equal(
+            "Custom API 'zava_DoThing': WorkflowSdkStepEnabled requires an action, but IsFunction is true. " +
+            "A function cannot be enabled for workflow - make it an action or disable workflow support.", ex.Message);
         Assert.Empty(svc.Created);
     }
 
@@ -222,7 +264,10 @@ public sealed class DataverseRegistrationCustomApiTests
         });
 
         var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false));
-        Assert.Contains("not allowed when WorkflowSdkStepEnabled", ex.Message);
+        Assert.Equal(
+            "Custom API 'zava_DoThing': parameter 'Record' uses a type (Microsoft.Xrm.Sdk.Entity) that is not allowed when WorkflowSdkStepEnabled is set. " +
+            "Workflow-enabled Custom APIs cannot use Entity, EntityCollection or StringArray parameters. " +
+            "Change the parameter type or disable workflow support.", ex.Message);
         Assert.Empty(svc.Created);
     }
 
@@ -234,8 +279,10 @@ public sealed class DataverseRegistrationCustomApiTests
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => DataverseRegistration.UpsertCustomApi(svc, types, def, verbose: false, solutionPrefix: "zava"));
-        Assert.Contains("must start with the solution publisher prefix", ex.Message);
-        Assert.Contains("zava_", ex.Message);
+        Assert.Equal(
+            "Custom API 'DoThing' must start with the solution publisher prefix 'zava_'. " +
+            "Dataverse requires the customization prefix on a Custom API's unique name. Rename it to " +
+            "'zava_DoThing' (or match the solution's publisher prefix).", ex.Message);
         Assert.Empty(svc.Created);
     }
 

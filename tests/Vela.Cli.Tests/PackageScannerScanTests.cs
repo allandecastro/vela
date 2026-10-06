@@ -104,6 +104,8 @@ public sealed class PackageScannerScanTests : IDisposable
     [InlineData(new[] { "net471", "net48" }, "net471")]
     [InlineData(new[] { "net48", "netstandard2.0" }, "net48")]       // an over-cap net4x still beats netstandard
     [InlineData(new[] { "net8.0", "netstandard2.0" }, "netstandard2.0")] // netstandard over a non-loadable net8
+    [InlineData(new[] { "net8.0", "" }, "")]                          // a flat lib/ (no TFM folder) over net8
+    [InlineData(new[] { "", "netstandard2.0" }, "netstandard2.0")]     // ...but under netstandard
     public void ChooseTargetFramework_prefers_the_sandbox_compatible_framework(string[] tfms, string expected)
     {
         Assert.Equal(expected, PackageScanner.ChooseTargetFramework(tfms));
@@ -119,9 +121,34 @@ public sealed class PackageScannerScanTests : IDisposable
     [InlineData("netstandard2.0", false)]
     [InlineData("net8.0", false)]
     [InlineData("", false)]
+    [InlineData("net4", false)]      // no version digits
+    [InlineData("net4721", false)]   // more than three digits: not a net4x moniker
+    [InlineData("net4x8", false)]    // not all digits (would not parse)
     public void ExceedsPluginPackageFrameworkCap_flags_frameworks_above_net471(string tfm, bool expected)
     {
         Assert.Equal(expected, PackageScanner.ExceedsPluginPackageFrameworkCap(tfm));
+    }
+
+    [Theory]
+    [InlineData("lib/net462/Zava.Plugins.dll", "net462")]
+    [InlineData("lib/Zava.Plugins.dll", "")]   // a flat lib/ has no TFM folder
+    public void TargetFrameworkOf_reads_the_folder_under_lib(string entry, string expected)
+    {
+        Assert.Equal(expected, PackageScanner.TargetFrameworkOf(entry));
+    }
+
+    [Fact]
+    public void CleanupTempDirectories_deletes_existing_folders_and_ignores_missing_ones()
+    {
+        string existing = Path.Combine(Path.GetTempPath(), "vela-clean-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(existing, "nested"));
+        File.WriteAllText(Path.Combine(existing, "nested", "a.dll"), "x");
+        string missing = Path.Combine(Path.GetTempPath(), "vela-clean-missing-" + Guid.NewGuid().ToString("N"));
+
+        PackageScanner.CleanupTempDirectories([existing, missing]);
+
+        Assert.False(Directory.Exists(existing)); // removed recursively
+        Assert.False(Directory.Exists(missing));
     }
 
     [Fact]

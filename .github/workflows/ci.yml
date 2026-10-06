@@ -77,7 +77,7 @@ jobs:
         run: >
           dotnet test tests/Vela.Analyzers.Tests/Vela.Analyzers.Tests.csproj -c Release
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
-          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=77
+          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=80
           -p:Include="[Vela.Analyzers]*"
       - name: Coverage gate (branch) — code fixes
         run: >
