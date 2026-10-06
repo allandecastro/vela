@@ -648,15 +648,43 @@ public sealed class DataverseRegistrationStepsTests
             OnCreate = e => e.LogicalName == "sdkmessageprocessingstep" ? stepId : Guid.NewGuid(),
         };
 
-        // The definition carries the REDACTED hash (Items never hold the plaintext); the side channel has the real
-        // secret. Apply must write the real secret to Dataverse, not the digest.
-        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Create", entityLogicalName = "", stepKey = "dv-key", stage = 40, mode = 0, enabled = true, secureConfig = "sha256:redacted" });
-        var secureByKey = new Dictionary<string, string> { ["dv-key"] = "real-secret" };
+        // The definition carries the REDACTED digest (Items never hold the plaintext); the side channel has the real
+        // secret, keyed by the FULL step key. Apply must write the real secret to Dataverse, not the digest.
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Create", entityLogicalName = "", stepKey = "dv-key", stage = 40, mode = 0, enabled = true, secureConfig = "hmac-sha256:redacted" });
+        var secureByKey = new Dictionary<string, string> { [Plugin + ":stepkey:dv-key"] = "real-secret" };
 
         DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false, metadataCache: null, secureConfigByStepKey: secureByKey);
 
         Entity secureRow = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstepsecureconfig");
         Assert.Equal("real-secret", secureRow.GetAttributeValue<string>("secureconfig")); // the real secret, not the hash
+    }
+
+    [Fact]
+    public void UpsertStep_leaves_the_secure_config_alone_without_a_value_for_this_plugin_type()
+    {
+        // An admin-set secure config must survive apply when Vela was given no value for this step, including when
+        // ANOTHER plugin type uses the same step key (the value is keyed by plugin type + step key, never step key alone).
+        var pluginTypeId = Guid.NewGuid();
+        var stepId = Guid.NewGuid();
+        var existingConfig = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessage"
+                ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid()))
+                : new EntityCollection(),
+            OnRetrieve = (e, id, _) => new Entity(e, id) { ["sdkmessageprocessingstepsecureconfigid"] = new EntityReference("sdkmessageprocessingstepsecureconfig", existingConfig) },
+            OnCreate = e => e.LogicalName == "sdkmessageprocessingstep" ? stepId : Guid.NewGuid(),
+        };
+
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Create", entityLogicalName = "", stepKey = "main", stage = 40, mode = 0, enabled = true, secureConfig = "" });
+        var otherPluginsSecret = new Dictionary<string, string> { ["Other.Plugin:stepkey:main"] = "other-secret" };
+
+        DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false, metadataCache: null, secureConfigByStepKey: otherPluginsSecret);
+
+        Assert.DoesNotContain(svc.Created, e => e.LogicalName == "sdkmessageprocessingstepsecureconfig");
+        Assert.DoesNotContain(svc.Updated, e => e.LogicalName == "sdkmessageprocessingstepsecureconfig");
+        Assert.DoesNotContain(svc.Updated, e => e.Contains("sdkmessageprocessingstepsecureconfigid"));
+        Assert.Empty(svc.Deleted);
     }
 
     [Fact]

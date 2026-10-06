@@ -67,8 +67,12 @@ public sealed class StepDefinition
     /// <summary>The unsecure configuration string passed to the plugin constructor.</summary>
     public string UnsecureConfig { get; set; } = string.Empty;
 
-    /// <summary>The secure configuration string passed to the plugin constructor.</summary>
-    public string SecureConfig { get; set; } = string.Empty;
+    /// <summary>
+    /// The name of the step's secure configuration, or empty when the step declares none. Only the name is part of
+    /// the definition: <c>vela apply</c> resolves the value at deployment time and passes it to the plugin
+    /// constructor at runtime, so the secret is never compiled into the assembly.
+    /// </summary>
+    public string SecureConfigName { get; set; } = string.Empty;
 }
 
 /// <summary>

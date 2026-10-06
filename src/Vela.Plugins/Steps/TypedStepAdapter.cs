@@ -56,7 +56,7 @@ namespace Vela.Steps
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithImpersonation(Guid systemUserId) { _b.SetImpersonationUserInternal(systemUserId); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithSupportedDeployment(SupportedDeployment deployment) { _b.SetSupportedDeploymentInternal(deployment); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithUnsecureConfig(string configuration) { _b.SetUnsecureConfigInternal(configuration); return this; }
-        ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithSecureConfig(string configuration) { _b.SetSecureConfigInternal(configuration); return this; }
+        ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithSecureConfigFrom(string name) { _b.SetSecureConfigNameInternal(name); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.Disabled() { _b.SetDisabledInternal(); return this; }
         void ITypedPreValidationConfig<TEntity, TRequest>.Handle(Action<IMessagePreContext<TRequest>> handler) { _b.SetHandlerInternal(handler); }
         // Shared IStepConfig<TEntity>.Handle(Delegate) for every typed config (all derive from it).
@@ -72,7 +72,7 @@ namespace Vela.Steps
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithImpersonation(Guid systemUserId) { _b.SetImpersonationUserInternal(systemUserId); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithSupportedDeployment(SupportedDeployment deployment) { _b.SetSupportedDeploymentInternal(deployment); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithUnsecureConfig(string configuration) { _b.SetUnsecureConfigInternal(configuration); return this; }
-        ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithSecureConfig(string configuration) { _b.SetSecureConfigInternal(configuration); return this; }
+        ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithSecureConfigFrom(string name) { _b.SetSecureConfigNameInternal(name); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.Disabled() { _b.SetDisabledInternal(); return this; }
         void ITypedPreOperationConfig<TEntity, TRequest>.Handle(Action<IMessagePreContext<TRequest>> handler) { _b.SetHandlerInternal(handler); }
 
@@ -88,7 +88,7 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithImpersonation(Guid systemUserId) { _b.SetImpersonationUserInternal(systemUserId); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithSupportedDeployment(SupportedDeployment deployment) { _b.SetSupportedDeploymentInternal(deployment); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithUnsecureConfig(string configuration) { _b.SetUnsecureConfigInternal(configuration); return this; }
-        ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithSecureConfig(string configuration) { _b.SetSecureConfigInternal(configuration); return this; }
+        ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithSecureConfigFrom(string name) { _b.SetSecureConfigNameInternal(name); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.Disabled() { _b.SetDisabledInternal(); return this; }
         void ITypedPostOperationConfig<TEntity, TRequest>.Handle(Action<IMessagePostContext<TRequest>> handler) { _b.SetHandlerInternal(handler); }
 

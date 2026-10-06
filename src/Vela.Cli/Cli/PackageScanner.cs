@@ -39,7 +39,7 @@ internal static class PackageScanner
     List<string> sourceAssemblies = [];
     List<AssemblyPayload> sourceAssemblyPayloads = [];
     List<PluginPackagePayload> packagePayloads = [];
-    Dictionary<string, string> secureConfigByStepKey = new(StringComparer.Ordinal);
+    Dictionary<string, string> secureConfigNameByStepKey = new(StringComparer.Ordinal);
 
     // An isolated load context that resolves the package's assemblies (and their siblings) from the temp
     // folders by *bytes*, so no .dll file is ever locked - on Windows Assembly.LoadFrom would hold the file
@@ -91,16 +91,18 @@ internal static class PackageScanner
                             "image on the single Create/Update step instead (it also runs for bulk operations, where " +
                             "per-record images are available by index), or remove the image from the bulk step.");
                     }
-                    // Items keep only the hash of the secure config (so secrets never reach plan/inspect output);
-                    // stash the RAW value here, keyed by stepKey, so apply can write the real secret to Dataverse.
-                    if (raw.TryGetProperty("secureConfig", out JsonElement secureEl) && secureEl.ValueKind == JsonValueKind.String
-                        && secureEl.GetString() is { Length: > 0 } rawSecureConfig
-                        && normalized.TryGetProperty("stepKey", out JsonElement keyEl) && keyEl.GetString() is { Length: > 0 } stepKey)
+                    RegistrationItem item = new("step", type.FullName ?? type.Name, normalized);
+                    // Code names the secure configuration; SecureConfigResolver supplies its value at plan/apply time.
+                    // Keyed by the full step key (plugin type + step key), so two plugins sharing a step key never
+                    // receive each other's secret.
+                    if (raw.TryGetProperty("secureConfigName", out JsonElement nameEl) && nameEl.ValueKind == JsonValueKind.String
+                        && nameEl.GetString() is { Length: > 0 } secureConfigName
+                        )
                     {
-                        secureConfigByStepKey[stepKey] = rawSecureConfig;
+                        secureConfigNameByStepKey[DiffEngine.GetSecureConfigKey(item)] = secureConfigName;
                     }
 
-                    items.Add(new RegistrationItem("step", type.FullName ?? type.Name, normalized));
+                    items.Add(item);
                 }
             }
 
@@ -138,7 +140,7 @@ internal static class PackageScanner
         GeneratedAtUtc: DateTime.UtcNow,
         Items: items.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
         Diagnostics: [],
-        SecureConfigByStepKey: secureConfigByStepKey);
+        SecureConfigNameByStepKey: secureConfigNameByStepKey);
     }
     finally
     {

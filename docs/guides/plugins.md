@@ -125,7 +125,7 @@ The fluent builder enforces a specific order:
    `CreateMultiple` and `UpdateMultiple`** (at least one attribute; the first is mandatory at compile time);
    not offered on other messages. An unfiltered Create/Update step would fire on every change, so the builder
    makes you state the trigger.
-5. **Optional** - `WithDescription()`, `WithImpersonation(...)` (see [Impersonation](#impersonation)), `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfig(...)`
+5. **Optional** - `WithDescription()`, `WithImpersonation(...)` (see [Impersonation](#impersonation)), `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfigFrom(...)`
 6. **Images** - `WithPreImage(...)` and/or `WithPostImage(...)`
 7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).
 
@@ -484,13 +484,24 @@ modelled: update `statecode` / `statuscode` with `OnUpdate()` instead.
 (kill-switch or phased rollout); `apply` sets the step's state accordingly and `plan` shows the transition. Re-enabling
 is just removing the `Disabled()` marker.
 
-**Step configuration** - `WithUnsecureConfig("...")` and `WithSecureConfig("...")` declare the configuration strings passed to the
-plugin constructor `(string unsecureConfig, string secureConfig)`. Both are reconciled by `apply` (the secure value is
-stored on the linked `sdkmessageprocessingstepsecureconfig` row). Unsecure config appears verbatim in the `vela plan`
-JSON (it is non-sensitive by design); the **secure** value is **redacted to a hash** in plan/inspect output (and any
-`-o` plan file), so a changed secret is still detected without the value ever leaving Dataverse. **Put any secret
-(API key, connection string, token) in `WithSecureConfig`, never in `WithUnsecureConfig`** - unsecure config is
-stored unencrypted by Dataverse and printed verbatim in `plan`/`inspect` output.
+**Step configuration** - both strings reach the plugin constructor `(string unsecureConfig, string secureConfig)`.
+
+- `WithUnsecureConfig("...")` holds non-sensitive settings. It is compiled into the assembly, stored unencrypted
+  by Dataverse and printed verbatim in `plan`/`inspect` output.
+- `WithSecureConfigFrom("PaymentApiKey")` holds a **secret** (API key, connection string, token). The code only
+  **names** it; the value is supplied at deployment, so it never lands in git or in the uploaded assembly:
+
+```powershell
+vela apply --packages-dir artifacts --solution ZavaSales --secure-config PaymentApiKey=@payment-key.txt
+# or: $env:VELA_SECURE_CONFIG_PaymentApiKey = "..."   (handy in CI; --secure-config wins when both are set)
+```
+
+`NAME=VALUE` passes the value inline and `NAME=@path` reads it from a file. `apply` writes it to the step's linked
+`sdkmessageprocessingstepsecureconfig` row; plan/inspect output only ever shows a digest, so a changed secret is
+detected without printing it. **When no value is given, the environment owns the secure configuration**: `apply`
+never writes, clears or deletes it, so a value an admin set in the environment survives every deployment. `plan`
+reports a step whose declared secure configuration has no value anywhere (fatal under `--strict`). Pass an empty
+value (`--secure-config PaymentApiKey=`) to clear it.
 
 `MainOperation` is reserved for Custom API main handlers; it is not one of the typed stage methods, so a
 regular plugin step cannot register there.

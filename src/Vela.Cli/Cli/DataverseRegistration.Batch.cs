@@ -93,10 +93,15 @@ internal static partial class DataverseRegistration
 
         BatchApplyReport report = new BatchApplyReport();
         HashSet<string> skip = new HashSet<string>();
+        // Children first, then the step/API rows, then a step's secure-config row. The secure config goes last, in its
+        // own tier, so it is deleted only once its step's delete succeeded: an owner whose step delete failed or was
+        // ignored is in `skip`, and its secure config is kept for the step that survives.
         List<CapturedOperation> children = capturing.Operations.Where(IsChildDelete).ToList();
-        List<CapturedOperation> parents = capturing.Operations.Where(o => !IsChildDelete(o)).ToList();
+        List<CapturedOperation> secureConfigs = capturing.Operations.Where(o => o.Category == "secure-config").ToList();
+        List<CapturedOperation> parents = capturing.Operations.Where(o => !IsChildDelete(o) && o.Category != "secure-config").ToList();
         ExecuteBatchTier(service, children, chunkSize, report, skip);
         ExecuteBatchTier(service, parents, chunkSize, report, skip);
+        ExecuteBatchTier(service, secureConfigs, chunkSize, report, skip);
         RenderBatchReport(report);
         ThrowIfBatchFailed(report, ref done);
         done = planned;

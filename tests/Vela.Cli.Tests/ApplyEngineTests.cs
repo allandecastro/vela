@@ -150,7 +150,7 @@ public class ApplyEngineTests
             OnRetrieve = (e, id, _) => new Entity(e, id), // no existing secure-config link
         };
 
-        JsonElement def = Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", enabled = false, unsecureConfig = "u-cfg", secureConfig = "s-cfg" });
+        JsonElement def = Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", enabled = false, unsecureConfig = "u-cfg", secureConfig = "hmac-sha256:redacted" });
         var diff = new RegistrationDiff(
             LocalAssemblies: ["Zava.Plugins"],
             CurrentAssemblies: ["Zava.Plugins"],
@@ -160,7 +160,8 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false,
+            secureConfigByStepKey: new Dictionary<string, string> { [PluginType + ":stepkey:dv-x"] = "s-cfg" });
 
         // Unsecure config is written directly onto the step entity.
         Entity step = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstep");

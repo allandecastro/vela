@@ -260,10 +260,38 @@ public sealed partial class StepBuilder<TEntity>
         _definition.UnsecureConfig = configuration ?? string.Empty;
     }
 
-    private void SetSecureConfig(string configuration)
+    private void SetSecureConfigName(string name)
     {
-        MarkSetOnce(SetOnceModifier.SecureConfig, "WithSecureConfig");
-        _definition.SecureConfig = configuration ?? string.Empty;
+        MarkSetOnce(SetOnceModifier.SecureConfig, "WithSecureConfigFrom");
+        // The name only identifies the secret: its value is supplied to `vela apply` (--secure-config NAME=... or
+        // the VELA_SECURE_CONFIG_NAME environment variable) and never compiled into the assembly. Restricting it to
+        // an identifier keeps it usable as an environment variable suffix.
+        if (string.IsNullOrEmpty(name) || !IsSecureConfigName(name))
+        {
+            throw new ArgumentException(
+                "WithSecureConfigFrom takes the NAME of a secure configuration (letters, digits and '_', not starting with a digit), not its value. Pass the value to 'vela apply --secure-config NAME=VALUE'.",
+                nameof(name));
+        }
+
+        _definition.SecureConfigName = name;
+    }
+
+    internal static bool IsSecureConfigName(string name)
+    {
+        if (char.IsDigit(name[0]))
+        {
+            return false;
+        }
+
+        foreach (char c in name)
+        {
+            if (!(c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void StartImage(string alias, bool isPre)

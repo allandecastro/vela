@@ -36,7 +36,7 @@ internal static class CommandLineOptions
     private static readonly HashSet<string> SharedValueOptions = new(ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--webresources", "--package", "-p", "--packages-dir", "--solution", "--solution-unique-name",
-        "--package-assembly", "--environment", "--out", "--batch-size",
+        "--package-assembly", "--environment", "--out", "--batch-size", "--secure-config",
     };
 
     private static readonly HashSet<string> SharedFlagOptions = new(ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
@@ -332,7 +332,8 @@ internal static class CommandLineOptions
             WebResourcesRoot: webResourcesRoot,
             Json: args.Any(x => string.Equals(x, "--json", StringComparison.OrdinalIgnoreCase)),
             TimeoutMinutes: timeoutMinutes,
-            BatchChunkSize: batchChunkSize);
+            BatchChunkSize: batchChunkSize,
+            SecureConfigs: [.. ReadMultiOption(args, "--secure-config")]);
         return true;
     }
 

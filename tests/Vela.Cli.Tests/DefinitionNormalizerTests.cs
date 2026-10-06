@@ -109,12 +109,12 @@ public class DefinitionNormalizerTests
             "P", "Associate", "account", stepKey: "", name: "P - PostOpSync: Associate of account",
             stage: 40, mode: 0, executionOrder: 1,
             filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
-            enabled: true, unsecureConfig: "", secureConfig: "", impersonatingUserId: null, supportedDeployment: 0, Options);
+            enabled: true, unsecureConfig: "", secureConfigDigest: "", impersonatingUserId: null, supportedDeployment: 0, Options);
         JsonElement live = DefinitionNormalizer.BuildStepShape(
             "P", "Associate", "", stepKey: "", name: "P - PostOpSync: Associate of account",
             stage: 40, mode: 0, executionOrder: 1,
             filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
-            enabled: true, unsecureConfig: "", secureConfig: "", impersonatingUserId: null, supportedDeployment: 0, Options);
+            enabled: true, unsecureConfig: "", secureConfigDigest: "", impersonatingUserId: null, supportedDeployment: 0, Options);
 
         Assert.Equal(JsonSerializer.Serialize(local), JsonSerializer.Serialize(live));
     }
@@ -221,11 +221,9 @@ public class DefinitionNormalizerTests
             Options);
 
         Assert.Equal("u-cfg", n.GetProperty("unsecureConfig").GetString());
-        // Unsecure config stays plaintext (non-sensitive by design); secure config is redacted to a stable
-        // hash so the secret never reaches plan/inspect output, yet a change is still diff-detectable.
-        string secure = n.GetProperty("secureConfig").GetString()!;
-        Assert.NotEqual("s-cfg", secure);
-        Assert.Equal(DefinitionNormalizer.HashSecret("s-cfg"), secure);
+        // Unsecure config stays plaintext (non-sensitive by design); a raw secure config never enters the shape, so
+        // it never reaches plan/inspect output (the resolver supplies the digest).
+        Assert.Equal(string.Empty, n.GetProperty("secureConfig").GetString());
     }
 
     [Fact]

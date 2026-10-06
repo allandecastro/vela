@@ -50,7 +50,7 @@ namespace Vela.Steps
         ICreatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICreatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreatePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         ICreatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICreatePreContext<TEntity>> handler);
     }
@@ -66,7 +66,7 @@ namespace Vela.Steps
         ICreatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICreatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreatePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICreatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreatePreContext<TEntity>> handler);
     }
@@ -84,7 +84,7 @@ namespace Vela.Steps
         ICreatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICreatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreatePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICreatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreatePostContext<TEntity>> handler);
     }
@@ -100,7 +100,7 @@ namespace Vela.Steps
         IUpdatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IUpdatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdatePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IUpdatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePreContext<TEntity>> handler);
     }
@@ -118,7 +118,7 @@ namespace Vela.Steps
         IUpdatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IUpdatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdatePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IUpdatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePreContext<TEntity>> handler);
     }
@@ -138,7 +138,7 @@ namespace Vela.Steps
         IUpdatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IUpdatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdatePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IUpdatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdatePostContext<TEntity>> handler);
     }
@@ -154,7 +154,7 @@ namespace Vela.Steps
         ICreateMultiplePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreateMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreateMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICreateMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreateMultiplePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         ICreateMultiplePreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICreateMultiplePreContext<TEntity>> handler);
     }
@@ -170,7 +170,7 @@ namespace Vela.Steps
         ICreateMultiplePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreateMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreateMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICreateMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreateMultiplePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICreateMultiplePreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreateMultiplePreContext<TEntity>> handler);
     }
@@ -188,7 +188,7 @@ namespace Vela.Steps
         ICreateMultiplePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICreateMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICreateMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICreateMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICreateMultiplePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICreateMultiplePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICreateMultiplePostContext<TEntity>> handler);
     }
@@ -204,7 +204,7 @@ namespace Vela.Steps
         IUpdateMultiplePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdateMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdateMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IUpdateMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdateMultiplePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IUpdateMultiplePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IUpdateMultiplePreContext<TEntity>> handler);
     }
@@ -222,7 +222,7 @@ namespace Vela.Steps
         IUpdateMultiplePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdateMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdateMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IUpdateMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdateMultiplePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IUpdateMultiplePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdateMultiplePreContext<TEntity>> handler);
     }
@@ -242,7 +242,7 @@ namespace Vela.Steps
         IUpdateMultiplePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IUpdateMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IUpdateMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IUpdateMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IUpdateMultiplePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IUpdateMultiplePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IUpdateMultiplePostContext<TEntity>> handler);
     }
@@ -257,7 +257,7 @@ namespace Vela.Steps
         IDeletePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeletePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeletePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeletePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeletePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeletePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePreContext<TEntity>> handler);
     }
@@ -274,7 +274,7 @@ namespace Vela.Steps
         IDeletePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeletePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeletePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeletePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeletePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeletePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePreContext<TEntity>> handler);
     }
@@ -291,7 +291,7 @@ namespace Vela.Steps
         IDeletePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeletePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeletePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeletePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeletePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeletePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeletePostContext<TEntity>> handler);
     }
@@ -306,7 +306,7 @@ namespace Vela.Steps
         IRetrievePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrievePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrievePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePreContext<TEntity>> handler);
     }
@@ -321,7 +321,7 @@ namespace Vela.Steps
         IRetrievePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrievePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrievePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePreContext<TEntity>> handler);
     }
@@ -336,7 +336,7 @@ namespace Vela.Steps
         IRetrievePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrievePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrievePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePostContext<TEntity>> handler);
     }
@@ -351,7 +351,7 @@ namespace Vela.Steps
         IRetrieveMultiplePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveMultiplePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveMultiplePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrieveMultiplePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveMultiplePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrieveMultiplePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveMultiplePreContext<TEntity>> handler);
     }
@@ -366,7 +366,7 @@ namespace Vela.Steps
         IRetrieveMultiplePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveMultiplePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveMultiplePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrieveMultiplePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveMultiplePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrieveMultiplePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveMultiplePreContext<TEntity>> handler);
     }
@@ -381,7 +381,7 @@ namespace Vela.Steps
         IRetrieveMultiplePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveMultiplePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveMultiplePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrieveMultiplePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveMultiplePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrieveMultiplePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveMultiplePostContext<TEntity>> handler);
     }
@@ -396,7 +396,7 @@ namespace Vela.Steps
         IAssociatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssociatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssociatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAssociatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssociatePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IAssociatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAssociatePreContext<TEntity>> handler);
     }
@@ -411,7 +411,7 @@ namespace Vela.Steps
         IAssociatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssociatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssociatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAssociatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssociatePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAssociatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAssociatePreContext<TEntity>> handler);
     }
@@ -426,7 +426,7 @@ namespace Vela.Steps
         IAssociatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssociatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssociatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAssociatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssociatePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAssociatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAssociatePostContext<TEntity>> handler);
     }
@@ -441,7 +441,7 @@ namespace Vela.Steps
         IDisassociatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDisassociatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDisassociatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDisassociatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IDisassociatePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IDisassociatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDisassociatePreContext<TEntity>> handler);
     }
@@ -456,7 +456,7 @@ namespace Vela.Steps
         IDisassociatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDisassociatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDisassociatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDisassociatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDisassociatePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IDisassociatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDisassociatePreContext<TEntity>> handler);
     }
@@ -471,7 +471,7 @@ namespace Vela.Steps
         IDisassociatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDisassociatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDisassociatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDisassociatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDisassociatePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IDisassociatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDisassociatePostContext<TEntity>> handler);
     }
@@ -486,7 +486,7 @@ namespace Vela.Steps
         IGrantAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGrantAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGrantAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGrantAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGrantAccessPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IGrantAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGrantAccessPreContext<TEntity>> handler);
     }
@@ -501,7 +501,7 @@ namespace Vela.Steps
         IGrantAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGrantAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGrantAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGrantAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGrantAccessPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGrantAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGrantAccessPreContext<TEntity>> handler);
     }
@@ -516,7 +516,7 @@ namespace Vela.Steps
         IGrantAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGrantAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGrantAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGrantAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGrantAccessPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGrantAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGrantAccessPostContext<TEntity>> handler);
     }
@@ -531,7 +531,7 @@ namespace Vela.Steps
         IAssignPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssignPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssignPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAssignPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssignPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IAssignPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAssignPreContext<TEntity>> handler);
     }
@@ -546,7 +546,7 @@ namespace Vela.Steps
         IAssignPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssignPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssignPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAssignPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssignPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAssignPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAssignPreContext<TEntity>> handler);
     }
@@ -561,7 +561,7 @@ namespace Vela.Steps
         IAssignPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAssignPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAssignPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAssignPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAssignPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAssignPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAssignPostContext<TEntity>> handler);
     }
@@ -576,7 +576,7 @@ namespace Vela.Steps
         IRevokeAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRevokeAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRevokeAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRevokeAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRevokeAccessPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRevokeAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRevokeAccessPreContext<TEntity>> handler);
     }
@@ -591,7 +591,7 @@ namespace Vela.Steps
         IRevokeAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRevokeAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRevokeAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRevokeAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRevokeAccessPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRevokeAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRevokeAccessPreContext<TEntity>> handler);
     }
@@ -606,7 +606,7 @@ namespace Vela.Steps
         IRevokeAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRevokeAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRevokeAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRevokeAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRevokeAccessPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRevokeAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRevokeAccessPostContext<TEntity>> handler);
     }
@@ -621,7 +621,7 @@ namespace Vela.Steps
         IQualifyLeadPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IQualifyLeadPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IQualifyLeadPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IQualifyLeadPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IQualifyLeadPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IQualifyLeadPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IQualifyLeadPreContext<TEntity>> handler);
     }
@@ -636,7 +636,7 @@ namespace Vela.Steps
         IQualifyLeadPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IQualifyLeadPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IQualifyLeadPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IQualifyLeadPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IQualifyLeadPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IQualifyLeadPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IQualifyLeadPreContext<TEntity>> handler);
     }
@@ -651,7 +651,7 @@ namespace Vela.Steps
         IQualifyLeadPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IQualifyLeadPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IQualifyLeadPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IQualifyLeadPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IQualifyLeadPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IQualifyLeadPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IQualifyLeadPostContext<TEntity>> handler);
     }
@@ -666,7 +666,7 @@ namespace Vela.Steps
         IWinOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IWinOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IWinOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IWinOpportunityPreContext<TEntity>> handler);
     }
@@ -681,7 +681,7 @@ namespace Vela.Steps
         IWinOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IWinOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IWinOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IWinOpportunityPreContext<TEntity>> handler);
     }
@@ -696,7 +696,7 @@ namespace Vela.Steps
         IWinOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IWinOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IWinOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IWinOpportunityPostContext<TEntity>> handler);
     }
@@ -711,7 +711,7 @@ namespace Vela.Steps
         ILoseOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ILoseOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ILoseOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ILoseOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ILoseOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         ILoseOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ILoseOpportunityPreContext<TEntity>> handler);
     }
@@ -726,7 +726,7 @@ namespace Vela.Steps
         ILoseOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ILoseOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ILoseOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ILoseOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ILoseOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ILoseOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ILoseOpportunityPreContext<TEntity>> handler);
     }
@@ -741,7 +741,7 @@ namespace Vela.Steps
         ILoseOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ILoseOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ILoseOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ILoseOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ILoseOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ILoseOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ILoseOpportunityPostContext<TEntity>> handler);
     }
@@ -756,7 +756,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IConvertQuoteToSalesOrderPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler);
     }
@@ -771,7 +771,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IConvertQuoteToSalesOrderPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler);
     }
@@ -786,7 +786,7 @@ namespace Vela.Steps
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IConvertQuoteToSalesOrderPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IConvertQuoteToSalesOrderPostContext<TEntity>> handler);
     }
@@ -801,7 +801,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IConvertSalesOrderToInvoicePreContext<TEntity>> handler);
     }
@@ -816,7 +816,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IConvertSalesOrderToInvoicePreContext<TEntity>> handler);
     }
@@ -831,7 +831,7 @@ namespace Vela.Steps
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IConvertSalesOrderToInvoicePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IConvertSalesOrderToInvoicePostContext<TEntity>> handler);
     }
@@ -846,7 +846,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateQuoteFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateQuoteFromOpportunityPreContext<TEntity>> handler);
     }
@@ -861,7 +861,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateQuoteFromOpportunityPreContext<TEntity>> handler);
     }
@@ -876,7 +876,7 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateQuoteFromOpportunityPostContext<TEntity>> handler);
     }
@@ -891,7 +891,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler);
     }
@@ -906,7 +906,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler);
     }
@@ -921,7 +921,7 @@ namespace Vela.Steps
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateSalesOrderFromOpportunityPostContext<TEntity>> handler);
     }
@@ -936,7 +936,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler);
     }
@@ -951,7 +951,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler);
     }
@@ -966,7 +966,7 @@ namespace Vela.Steps
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateInvoiceFromOpportunityPostContext<TEntity>> handler);
     }
@@ -981,7 +981,7 @@ namespace Vela.Steps
         IAddToQueuePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddToQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddToQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddToQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddToQueuePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddToQueuePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAddToQueuePreContext<TEntity>> handler);
     }
@@ -996,7 +996,7 @@ namespace Vela.Steps
         IAddToQueuePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddToQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddToQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddToQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddToQueuePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddToQueuePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddToQueuePreContext<TEntity>> handler);
     }
@@ -1011,7 +1011,7 @@ namespace Vela.Steps
         IAddToQueuePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddToQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddToQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddToQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddToQueuePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddToQueuePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddToQueuePostContext<TEntity>> handler);
     }
@@ -1026,7 +1026,7 @@ namespace Vela.Steps
         IRemoveFromQueuePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveFromQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveFromQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveFromQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveFromQueuePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveFromQueuePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveFromQueuePreContext<TEntity>> handler);
     }
@@ -1041,7 +1041,7 @@ namespace Vela.Steps
         IRemoveFromQueuePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveFromQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveFromQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveFromQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveFromQueuePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveFromQueuePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveFromQueuePreContext<TEntity>> handler);
     }
@@ -1056,7 +1056,7 @@ namespace Vela.Steps
         IRemoveFromQueuePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveFromQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveFromQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveFromQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveFromQueuePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveFromQueuePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveFromQueuePostContext<TEntity>> handler);
     }
@@ -1071,7 +1071,7 @@ namespace Vela.Steps
         IPickFromQueuePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPickFromQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPickFromQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IPickFromQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IPickFromQueuePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IPickFromQueuePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IPickFromQueuePreContext<TEntity>> handler);
     }
@@ -1086,7 +1086,7 @@ namespace Vela.Steps
         IPickFromQueuePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPickFromQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPickFromQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IPickFromQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IPickFromQueuePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IPickFromQueuePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IPickFromQueuePreContext<TEntity>> handler);
     }
@@ -1101,7 +1101,7 @@ namespace Vela.Steps
         IPickFromQueuePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPickFromQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPickFromQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IPickFromQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IPickFromQueuePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IPickFromQueuePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IPickFromQueuePostContext<TEntity>> handler);
     }
@@ -1116,7 +1116,7 @@ namespace Vela.Steps
         IRouteToPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRouteToPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRouteToPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRouteToPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRouteToPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRouteToPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRouteToPreContext<TEntity>> handler);
     }
@@ -1131,7 +1131,7 @@ namespace Vela.Steps
         IRouteToPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRouteToPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRouteToPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRouteToPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRouteToPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRouteToPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRouteToPreContext<TEntity>> handler);
     }
@@ -1146,7 +1146,7 @@ namespace Vela.Steps
         IRouteToPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRouteToPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRouteToPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRouteToPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRouteToPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRouteToPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRouteToPostContext<TEntity>> handler);
     }
@@ -1161,7 +1161,7 @@ namespace Vela.Steps
         IReleaseToQueuePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReleaseToQueuePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReleaseToQueuePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReleaseToQueuePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IReleaseToQueuePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IReleaseToQueuePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IReleaseToQueuePreContext<TEntity>> handler);
     }
@@ -1176,7 +1176,7 @@ namespace Vela.Steps
         IReleaseToQueuePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReleaseToQueuePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReleaseToQueuePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReleaseToQueuePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IReleaseToQueuePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IReleaseToQueuePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IReleaseToQueuePreContext<TEntity>> handler);
     }
@@ -1191,7 +1191,7 @@ namespace Vela.Steps
         IReleaseToQueuePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReleaseToQueuePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReleaseToQueuePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReleaseToQueuePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IReleaseToQueuePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IReleaseToQueuePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IReleaseToQueuePostContext<TEntity>> handler);
     }
@@ -1206,7 +1206,7 @@ namespace Vela.Steps
         ISendEmailPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ISendEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         ISendEmailPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailPreContext<TEntity>> handler);
     }
@@ -1221,7 +1221,7 @@ namespace Vela.Steps
         ISendEmailPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ISendEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ISendEmailPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailPreContext<TEntity>> handler);
     }
@@ -1236,7 +1236,7 @@ namespace Vela.Steps
         ISendEmailPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ISendEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ISendEmailPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailPostContext<TEntity>> handler);
     }
@@ -1251,7 +1251,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailFromTemplatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ISendEmailFromTemplatePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailFromTemplatePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         ISendEmailFromTemplatePreValidationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailFromTemplatePreContext<TEntity>> handler);
     }
@@ -1266,7 +1266,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailFromTemplatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ISendEmailFromTemplatePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailFromTemplatePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ISendEmailFromTemplatePreOperationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailFromTemplatePreContext<TEntity>> handler);
     }
@@ -1281,7 +1281,7 @@ namespace Vela.Steps
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ISendEmailFromTemplatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ISendEmailFromTemplatePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ISendEmailFromTemplatePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ISendEmailFromTemplatePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ISendEmailFromTemplatePostContext<TEntity>> handler);
     }
@@ -1296,7 +1296,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverIncomingEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeliverIncomingEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverIncomingEmailPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeliverIncomingEmailPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverIncomingEmailPreContext<TEntity>> handler);
     }
@@ -1311,7 +1311,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverIncomingEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeliverIncomingEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverIncomingEmailPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeliverIncomingEmailPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverIncomingEmailPreContext<TEntity>> handler);
     }
@@ -1326,7 +1326,7 @@ namespace Vela.Steps
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverIncomingEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeliverIncomingEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverIncomingEmailPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeliverIncomingEmailPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverIncomingEmailPostContext<TEntity>> handler);
     }
@@ -1341,7 +1341,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverPromoteEmailPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeliverPromoteEmailPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverPromoteEmailPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeliverPromoteEmailPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverPromoteEmailPreContext<TEntity>> handler);
     }
@@ -1356,7 +1356,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverPromoteEmailPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeliverPromoteEmailPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverPromoteEmailPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeliverPromoteEmailPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverPromoteEmailPreContext<TEntity>> handler);
     }
@@ -1371,7 +1371,7 @@ namespace Vela.Steps
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IDeliverPromoteEmailPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IDeliverPromoteEmailPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IDeliverPromoteEmailPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IDeliverPromoteEmailPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IDeliverPromoteEmailPostContext<TEntity>> handler);
     }
@@ -1386,7 +1386,7 @@ namespace Vela.Steps
         IAddMembersTeamPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMembersTeamPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMembersTeamPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddMembersTeamPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMembersTeamPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddMembersTeamPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAddMembersTeamPreContext<TEntity>> handler);
     }
@@ -1401,7 +1401,7 @@ namespace Vela.Steps
         IAddMembersTeamPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMembersTeamPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMembersTeamPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddMembersTeamPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMembersTeamPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddMembersTeamPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddMembersTeamPreContext<TEntity>> handler);
     }
@@ -1416,7 +1416,7 @@ namespace Vela.Steps
         IAddMembersTeamPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMembersTeamPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMembersTeamPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddMembersTeamPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMembersTeamPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddMembersTeamPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddMembersTeamPostContext<TEntity>> handler);
     }
@@ -1431,7 +1431,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMembersTeamPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMembersTeamPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveMembersTeamPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMembersTeamPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveMembersTeamPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMembersTeamPreContext<TEntity>> handler);
     }
@@ -1446,7 +1446,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMembersTeamPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMembersTeamPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveMembersTeamPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMembersTeamPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveMembersTeamPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMembersTeamPreContext<TEntity>> handler);
     }
@@ -1461,7 +1461,7 @@ namespace Vela.Steps
         IRemoveMembersTeamPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMembersTeamPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMembersTeamPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveMembersTeamPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMembersTeamPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveMembersTeamPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMembersTeamPostContext<TEntity>> handler);
     }
@@ -1476,7 +1476,7 @@ namespace Vela.Steps
         IAddListMembersListPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddListMembersListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddListMembersListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddListMembersListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddListMembersListPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddListMembersListPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAddListMembersListPreContext<TEntity>> handler);
     }
@@ -1491,7 +1491,7 @@ namespace Vela.Steps
         IAddListMembersListPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddListMembersListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddListMembersListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddListMembersListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddListMembersListPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddListMembersListPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddListMembersListPreContext<TEntity>> handler);
     }
@@ -1506,7 +1506,7 @@ namespace Vela.Steps
         IAddListMembersListPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddListMembersListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddListMembersListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddListMembersListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddListMembersListPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddListMembersListPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddListMembersListPostContext<TEntity>> handler);
     }
@@ -1521,7 +1521,7 @@ namespace Vela.Steps
         IAddMemberListPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMemberListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMemberListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddMemberListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMemberListPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddMemberListPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IAddMemberListPreContext<TEntity>> handler);
     }
@@ -1536,7 +1536,7 @@ namespace Vela.Steps
         IAddMemberListPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMemberListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMemberListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddMemberListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMemberListPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddMemberListPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddMemberListPreContext<TEntity>> handler);
     }
@@ -1551,7 +1551,7 @@ namespace Vela.Steps
         IAddMemberListPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IAddMemberListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IAddMemberListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IAddMemberListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IAddMemberListPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IAddMemberListPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IAddMemberListPostContext<TEntity>> handler);
     }
@@ -1566,7 +1566,7 @@ namespace Vela.Steps
         IRemoveMemberListPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMemberListPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMemberListPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveMemberListPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMemberListPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveMemberListPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMemberListPreContext<TEntity>> handler);
     }
@@ -1581,7 +1581,7 @@ namespace Vela.Steps
         IRemoveMemberListPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMemberListPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMemberListPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveMemberListPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMemberListPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveMemberListPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMemberListPreContext<TEntity>> handler);
     }
@@ -1596,7 +1596,7 @@ namespace Vela.Steps
         IRemoveMemberListPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRemoveMemberListPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRemoveMemberListPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRemoveMemberListPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRemoveMemberListPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRemoveMemberListPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRemoveMemberListPostContext<TEntity>> handler);
     }
@@ -1611,7 +1611,7 @@ namespace Vela.Steps
         ICloseIncidentPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloseIncidentPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloseIncidentPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICloseIncidentPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloseIncidentPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         ICloseIncidentPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICloseIncidentPreContext<TEntity>> handler);
     }
@@ -1626,7 +1626,7 @@ namespace Vela.Steps
         ICloseIncidentPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloseIncidentPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloseIncidentPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICloseIncidentPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloseIncidentPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICloseIncidentPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICloseIncidentPreContext<TEntity>> handler);
     }
@@ -1641,7 +1641,7 @@ namespace Vela.Steps
         ICloseIncidentPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloseIncidentPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloseIncidentPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICloseIncidentPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloseIncidentPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICloseIncidentPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICloseIncidentPostContext<TEntity>> handler);
     }
@@ -1656,7 +1656,7 @@ namespace Vela.Steps
         ICancelContractPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICancelContractPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICancelContractPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICancelContractPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICancelContractPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         ICancelContractPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICancelContractPreContext<TEntity>> handler);
     }
@@ -1671,7 +1671,7 @@ namespace Vela.Steps
         ICancelContractPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICancelContractPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICancelContractPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICancelContractPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICancelContractPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICancelContractPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICancelContractPreContext<TEntity>> handler);
     }
@@ -1686,7 +1686,7 @@ namespace Vela.Steps
         ICancelContractPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICancelContractPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICancelContractPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICancelContractPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICancelContractPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICancelContractPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICancelContractPostContext<TEntity>> handler);
     }
@@ -1701,7 +1701,7 @@ namespace Vela.Steps
         ICloneContractPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloneContractPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloneContractPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICloneContractPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloneContractPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         ICloneContractPreValidationConfig<TEntity> Disabled();
         void Handle(Action<ICloneContractPreContext<TEntity>> handler);
     }
@@ -1716,7 +1716,7 @@ namespace Vela.Steps
         ICloneContractPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloneContractPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloneContractPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICloneContractPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloneContractPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICloneContractPreOperationConfig<TEntity> Disabled();
         void Handle(Action<ICloneContractPreContext<TEntity>> handler);
     }
@@ -1731,7 +1731,7 @@ namespace Vela.Steps
         ICloneContractPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         ICloneContractPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         ICloneContractPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        ICloneContractPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        ICloneContractPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         ICloneContractPostOperationConfig<TEntity> Disabled();
         void Handle(Action<ICloneContractPostContext<TEntity>> handler);
     }
@@ -1746,7 +1746,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePrincipalAccessPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrievePrincipalAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePrincipalAccessPreContext<TEntity>> handler);
     }
@@ -1761,7 +1761,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePrincipalAccessPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrievePrincipalAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePrincipalAccessPreContext<TEntity>> handler);
     }
@@ -1776,7 +1776,7 @@ namespace Vela.Steps
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrievePrincipalAccessPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrievePrincipalAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrievePrincipalAccessPostContext<TEntity>> handler);
     }
@@ -1791,7 +1791,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrieveSharedPrincipalsAndAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler);
     }
@@ -1806,7 +1806,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrieveSharedPrincipalsAndAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveSharedPrincipalsAndAccessPreContext<TEntity>> handler);
     }
@@ -1821,7 +1821,7 @@ namespace Vela.Steps
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IRetrieveSharedPrincipalsAndAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IRetrieveSharedPrincipalsAndAccessPostContext<TEntity>> handler);
     }
@@ -1836,7 +1836,7 @@ namespace Vela.Steps
         IWinQuotePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinQuotePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinQuotePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IWinQuotePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinQuotePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IWinQuotePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IWinQuotePreContext<TEntity>> handler);
     }
@@ -1851,7 +1851,7 @@ namespace Vela.Steps
         IWinQuotePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinQuotePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinQuotePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IWinQuotePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinQuotePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IWinQuotePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IWinQuotePreContext<TEntity>> handler);
     }
@@ -1866,7 +1866,7 @@ namespace Vela.Steps
         IWinQuotePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IWinQuotePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IWinQuotePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IWinQuotePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IWinQuotePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IWinQuotePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IWinQuotePostContext<TEntity>> handler);
     }
@@ -1881,7 +1881,7 @@ namespace Vela.Steps
         IReviseQuotePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReviseQuotePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReviseQuotePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReviseQuotePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IReviseQuotePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IReviseQuotePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IReviseQuotePreContext<TEntity>> handler);
     }
@@ -1896,7 +1896,7 @@ namespace Vela.Steps
         IReviseQuotePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReviseQuotePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReviseQuotePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReviseQuotePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IReviseQuotePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IReviseQuotePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IReviseQuotePreContext<TEntity>> handler);
     }
@@ -1911,7 +1911,7 @@ namespace Vela.Steps
         IReviseQuotePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IReviseQuotePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IReviseQuotePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReviseQuotePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IReviseQuotePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IReviseQuotePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IReviseQuotePostContext<TEntity>> handler);
     }
@@ -1926,7 +1926,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IFulfillSalesOrderPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IFulfillSalesOrderPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IFulfillSalesOrderPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IFulfillSalesOrderPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler);
     }
@@ -1941,7 +1941,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IFulfillSalesOrderPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IFulfillSalesOrderPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IFulfillSalesOrderPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IFulfillSalesOrderPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler);
     }
@@ -1956,7 +1956,7 @@ namespace Vela.Steps
         IFulfillSalesOrderPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IFulfillSalesOrderPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IFulfillSalesOrderPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IFulfillSalesOrderPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IFulfillSalesOrderPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IFulfillSalesOrderPostContext<TEntity>> handler);
     }
@@ -1971,7 +1971,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler);
     }
@@ -1986,7 +1986,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler);
     }
@@ -2001,7 +2001,7 @@ namespace Vela.Steps
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetQuoteProductsFromOpportunityPostContext<TEntity>> handler);
     }
@@ -2016,7 +2016,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler);
     }
@@ -2031,7 +2031,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler);
     }
@@ -2046,7 +2046,7 @@ namespace Vela.Steps
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetSalesOrderProductsFromOpportunityPostContext<TEntity>> handler);
     }
@@ -2061,7 +2061,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler);
     }
@@ -2076,7 +2076,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler);
     }
@@ -2091,7 +2091,7 @@ namespace Vela.Steps
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGetInvoiceProductsFromOpportunityPostContext<TEntity>> handler);
     }
@@ -2106,7 +2106,7 @@ namespace Vela.Steps
         IModifyAccessPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IModifyAccessPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IModifyAccessPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IModifyAccessPreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IModifyAccessPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IModifyAccessPreValidationConfig<TEntity> Disabled();
         void Handle(Action<IModifyAccessPreContext<TEntity>> handler);
     }
@@ -2121,7 +2121,7 @@ namespace Vela.Steps
         IModifyAccessPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IModifyAccessPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IModifyAccessPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IModifyAccessPreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IModifyAccessPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IModifyAccessPreOperationConfig<TEntity> Disabled();
         void Handle(Action<IModifyAccessPreContext<TEntity>> handler);
     }
@@ -2136,7 +2136,7 @@ namespace Vela.Steps
         IModifyAccessPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IModifyAccessPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IModifyAccessPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IModifyAccessPostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IModifyAccessPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IModifyAccessPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IModifyAccessPostContext<TEntity>> handler);
     }
@@ -2151,7 +2151,7 @@ namespace Vela.Steps
         IMergePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IMergePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IMergePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IMergePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IMergePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IMergePreValidationConfig<TEntity> Disabled();
         void Handle(Action<IMergePreContext<TEntity>> handler);
     }
@@ -2166,7 +2166,7 @@ namespace Vela.Steps
         IMergePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IMergePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IMergePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IMergePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IMergePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IMergePreOperationConfig<TEntity> Disabled();
         void Handle(Action<IMergePreContext<TEntity>> handler);
     }
@@ -2181,7 +2181,7 @@ namespace Vela.Steps
         IMergePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IMergePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IMergePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IMergePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IMergePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IMergePostOperationConfig<TEntity> Disabled();
         void Handle(Action<IMergePostContext<TEntity>> handler);
     }
@@ -2580,7 +2580,7 @@ namespace Vela.Steps
         IPermissivePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPermissivePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPermissivePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IPermissivePreValidationConfig<TEntity> WithSecureConfig(string configuration);
+        IPermissivePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
         IPermissivePreValidationConfig<TEntity> Disabled();
         void Handle(Action<ILocalPluginContext> handler);
         void Handle<TRequest>(Action<IMessagePreContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
@@ -2599,7 +2599,7 @@ namespace Vela.Steps
         IPermissivePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPermissivePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPermissivePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IPermissivePreOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IPermissivePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IPermissivePreOperationConfig<TEntity> Disabled();
         void Handle(Action<ILocalPluginContext> handler);
         void Handle<TRequest>(Action<IMessagePreContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
@@ -2620,7 +2620,7 @@ namespace Vela.Steps
         IPermissivePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
         IPermissivePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
         IPermissivePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IPermissivePostOperationConfig<TEntity> WithSecureConfig(string configuration);
+        IPermissivePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IPermissivePostOperationConfig<TEntity> Disabled();
         void Handle(Action<ILocalPluginContext> handler);
         void Handle<TRequest>(Action<IMessagePostContext<TRequest>> handler) where TRequest : OrganizationRequest, new();
@@ -2653,7 +2653,7 @@ namespace Vela.Steps
         ITypedPreValidationConfig<TEntity, TRequest> WithImpersonation(Guid systemUserId);
         ITypedPreValidationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
         ITypedPreValidationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
-        ITypedPreValidationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
+        ITypedPreValidationConfig<TEntity, TRequest> WithSecureConfigFrom(string name);
         ITypedPreValidationConfig<TEntity, TRequest> Disabled();
         void Handle(Action<IMessagePreContext<TRequest>> handler);
     }
@@ -2670,7 +2670,7 @@ namespace Vela.Steps
         ITypedPreOperationConfig<TEntity, TRequest> WithImpersonation(Guid systemUserId);
         ITypedPreOperationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
         ITypedPreOperationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
-        ITypedPreOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
+        ITypedPreOperationConfig<TEntity, TRequest> WithSecureConfigFrom(string name);
         ITypedPreOperationConfig<TEntity, TRequest> Disabled();
         void Handle(Action<IMessagePreContext<TRequest>> handler);
     }
@@ -2689,7 +2689,7 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> WithImpersonation(Guid systemUserId);
         ITypedPostOperationConfig<TEntity, TRequest> WithSupportedDeployment(SupportedDeployment deployment);
         ITypedPostOperationConfig<TEntity, TRequest> WithUnsecureConfig(string configuration);
-        ITypedPostOperationConfig<TEntity, TRequest> WithSecureConfig(string configuration);
+        ITypedPostOperationConfig<TEntity, TRequest> WithSecureConfigFrom(string name);
         ITypedPostOperationConfig<TEntity, TRequest> Disabled();
         void Handle(Action<IMessagePostContext<TRequest>> handler);
     }

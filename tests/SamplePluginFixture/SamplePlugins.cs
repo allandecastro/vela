@@ -39,6 +39,8 @@ namespace SamplePluginFixture
                     Stage = 20, // PreOperation
                     ExecutionOrder = 1,
                     Enabled = true,
+                    StepKey = "main",
+                    SecureConfigName = "SampleApiKey",
                 },
             };
         }

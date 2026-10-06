@@ -359,7 +359,7 @@ internal static partial class DataverseRegistration
             postImages,
             enabled,
             unsecureConfig,
-            secureConfig,
+            DefinitionNormalizer.HashSecret(secureConfig),
             impersonatingUserId,
             supportedDeployment,
             jsonOptions);

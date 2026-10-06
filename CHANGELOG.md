@@ -26,6 +26,28 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Secure configuration is named in code, never valued.** `WithSecureConfig("<secret>")` is replaced by
+  `WithSecureConfigFrom("<Name>")`, and `StepDefinition.SecureConfig` by `SecureConfigName`. The secret used to be
+  compiled into the plugin assembly (so it lived in git and in the uploaded, decompilable `pluginassembly`). Move the
+  value to `vela apply --secure-config <Name>=...` or the `VELA_SECURE_CONFIG_<Name>` environment variable.
+
+### Added (CLI)
+
+- **`--secure-config NAME=VALUE|NAME=@file`** (repeatable) on `plan`/`apply`/`inspect`, with the
+  `VELA_SECURE_CONFIG_<NAME>` environment variable as a fallback. A package built with an older framework that still
+  compiles a `WithSecureConfig` literal no longer has that value deployed: the environment keeps its current value.
+
+### Fixed (CLI)
+
+- **`apply` no longer deletes a secure configuration it was not given.** A step declaring none had its live secure
+  config unlinked and deleted, wiping a value an admin set in the environment. Without a value, the environment now
+  owns it: no diff, never written, cleared or deleted.
+- **A secret no longer leaks between plugins sharing a step key.** Secure configuration values were keyed by step key
+  alone, so two plugin types using `WithStepKey("main")` received each other's secret (and the plan never converged).
+  They are now keyed by plugin type + step key.
+- **The secure-config digest in plan output can no longer be brute-forced.** It was a plain SHA-256 of the secret; it
+  is now an HMAC keyed per run.
+- **Deleting a step also deletes its secure configuration row**, which Dataverse does not cascade.
 - **One organization service per identity.** `ILocalPluginContext` now exposes `Service` (the current user),
   `SystemService` and `AsUser(Guid)`. `UserService`, `CallingUserService`, `AsInitiatingUser()`,
   `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected

@@ -38,7 +38,7 @@ internal static class DefinitionNormalizer
         IEnumerable<StepImage> postImages,
         bool enabled,
         string unsecureConfig,
-        string secureConfig,
+        string secureConfigDigest,
         Guid? impersonatingUserId,
         int supportedDeployment,
         JsonSerializerOptions jsonOptions)
@@ -76,11 +76,11 @@ internal static class DefinitionNormalizer
             // Carried so .WithSupportedDeployment(...) is honoured and drift is detected instead of silently ignored.
             supportedDeployment,
             // Secure config can hold secrets (API keys, connection strings). It must never appear in the
-            // plan/inspect JSON output, but the diff still has to detect when it changes — so the shape carries
-            // a stable hash, not the value. Same value on both sides -> same hash -> no diff; a changed secret
-            // -> different hash -> "changed" (without revealing either value). The real value is written by the
-            // apply path via StepApplyDefinition.SecureConfig, which is unaffected by this.
-            secureConfig = HashSecret(secureConfig)
+            // plan/inspect JSON output, but the diff still has to detect when it changes - so the shape carries
+            // a digest, not the value. Same value on both sides -> same digest -> no diff; a changed secret
+            // -> different digest -> "changed" (without revealing either value). Apply writes the raw value
+            // from RegistrationState.SecureConfigByStepKey (see SecureConfigResolver).
+            secureConfig = secureConfigDigest
         };
 
         return JsonSerializer.SerializeToElement(shape, jsonOptions);
@@ -93,9 +93,19 @@ internal static class DefinitionNormalizer
         string.Equals(message, "Associate", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(message, "Disassociate", StringComparison.OrdinalIgnoreCase);
 
-    // Redacts a secret to a stable digest so it never lands in plan output while staying change-detectable.
-    // Empty stays empty (no secret to hide), so "no secure config" reads cleanly rather than as a hash.
-    internal const string SecretDigestPrefix = "sha256:";
+    // Redacts a secret to a digest so it never lands in plan output while staying change-detectable. The digest is
+    // an HMAC keyed per process: the local and live sides of one run compare equal, but a digest in a saved plan
+    // cannot be brute-forced offline (a plain SHA-256 of a short or guessable secret could). Empty stays empty (no
+    // secret to hide), so "no secure config" reads cleanly rather than as a digest.
+    internal const string SecretDigestPrefix = "hmac-sha256:";
+
+    private static readonly byte[] SecretDigestKey = RandomNumberGenerator.GetBytes(32);
+
+    // A digest this process produced: the prefix followed by exactly 64 lowercase hex characters.
+    internal static bool IsSecretDigest(string value) =>
+        value.Length == SecretDigestPrefix.Length + 64
+        && value.StartsWith(SecretDigestPrefix, StringComparison.Ordinal)
+        && value.Skip(SecretDigestPrefix.Length).All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
 
     internal static string HashSecret(string? value)
     {
@@ -104,14 +114,9 @@ internal static class DefinitionNormalizer
             return string.Empty;
         }
 
-        // Idempotent: re-normalizing an already-normalized shape must be a fixed point, so an existing digest
-        // passes through unchanged instead of being hashed again.
-        if (value.StartsWith(SecretDigestPrefix, StringComparison.Ordinal))
-        {
-            return value;
-        }
-
-        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        // Always hash a raw value, even one that happens to start with the digest prefix: passing such a value
+        // through would print a secret verbatim in plan/inspect output.
+        byte[] hash = HMACSHA256.HashData(SecretDigestKey, Encoding.UTF8.GetBytes(value));
         return SecretDigestPrefix + Convert.ToHexString(hash).ToLowerInvariant();
     }
 
@@ -183,7 +188,11 @@ internal static class DefinitionNormalizer
         StepImage[] postImages = LowerImageAttributes(TryGetStepImages(raw, "postImages"));
         bool enabled = TryGetBool(raw, "enabled", defaultValue: true);
         string unsecureConfig = TryGetString(raw, "unsecureConfig") ?? string.Empty;
-        string secureConfig = TryGetString(raw, "secureConfig") ?? string.Empty;
+        // A definition carries no secret: code only names its secure configuration, and SecureConfigResolver sets the
+        // digest afterwards. The only value kept here is an existing digest, so re-normalizing an already-normalized
+        // shape is a fixed point; anything else (a literal from an older package) is never trusted into the shape.
+        string rawSecureConfig = TryGetString(raw, "secureConfig") ?? string.Empty;
+        string secureConfig = IsSecretDigest(rawSecureConfig) ? rawSecureConfig : string.Empty;
         // StepDefinition.ImpersonatingUserId serializes as a Guid string (or null); parse leniently so an absent or
         // empty value normalizes to "no impersonation" (Guid.Empty) rather than churning the diff.
         Guid? impersonatingUserId = Guid.TryParse(TryGetString(raw, "impersonatingUserId"), out Guid parsed) ? parsed : null;

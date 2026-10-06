@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.ServiceModel;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
@@ -92,23 +93,15 @@ internal static partial class DataverseRegistration
         LogOperation("step", "create", BuildStepName(definition), verbose: verbose);
     }
 
-    // definition.SecureConfig is the redacted hash (Items never carry the plaintext); write the RAW value from the
-    // scan-time side channel so the real secret reaches Dataverse. Falls back to the definition value when no map
-    // is supplied (e.g. a direct unit test that passes a plaintext definition), or empty when there is no secret.
-    string secureConfig = secureConfigByStepKey != null && secureConfigByStepKey.TryGetValue(definition.StepKey, out string? rawSecureConfig)
-        ? rawSecureConfig
-        : definition.SecureConfig ?? string.Empty;
-
-    // A2: if the plaintext secret did not round-trip (no stable step key to carry it through the scan-time side
-    // channel), the only value left is the redacted digest. Writing that to Dataverse would hand the plugin the
-    // literal hash and make every later plan report the step as "changed". Fail clearly instead of corrupting it.
-    if (!string.IsNullOrEmpty(secureConfig) && secureConfig.StartsWith(DefinitionNormalizer.SecretDigestPrefix, StringComparison.Ordinal))
+    // definition.SecureConfig is only a digest. The raw value exists only for a secure configuration Vela was given a
+    // value for (SecureConfigResolver), keyed by the full step key; every other one belongs to the environment and is
+    // left untouched (never written, unlinked or deleted).
+    if (secureConfigByStepKey != null
+        && secureConfigByStepKey.TryGetValue(DiffEngine.GetSecureConfigKey(new RegistrationItem("step", definition.PluginTypeName, definitionElement)), out string? rawSecureConfig))
     {
-        throw new InvalidOperationException(
-            $"Cannot register the secure configuration for step '{BuildStepName(definition)}': only its redacted digest is available at apply time. This happens when the step has no stable step key to carry the plaintext secret; give the step a step key so the secret can round-trip.");
+        SyncStepSecureConfig(service, stepId, rawSecureConfig);
     }
 
-    SyncStepSecureConfig(service, stepId, secureConfig);
     SyncStepState(service, stepId, definition.Enabled);
     SyncStepImages(service, stepId, definition.Message, definition.PreImages, definition.PostImages);
 }
@@ -184,7 +177,7 @@ internal static partial class DataverseRegistration
         Guid? stepId = FindStepId(service, pluginTypeId, definition);
         if (stepId.HasValue)
         {
-            DeleteIfExists(service, "sdkmessageprocessingstep", stepId.Value);
+            DeleteStep(service, stepId.Value);
             return;
         }
 
@@ -193,7 +186,7 @@ internal static partial class DataverseRegistration
             Guid? byName = FindStepByName(service, stepName, pluginTypeId);
             if (byName.HasValue)
             {
-                DeleteIfExists(service, "sdkmessageprocessingstep", byName.Value);
+                DeleteStep(service, byName.Value);
             }
         }
 
@@ -207,8 +200,30 @@ internal static partial class DataverseRegistration
         Guid? byName = FindStepByName(service, stepName);
         if (byName.HasValue)
         {
-            DeleteIfExists(service, "sdkmessageprocessingstep", byName.Value);
+            DeleteStep(service, byName.Value);
         }
+    }
+}
+
+    // Deletes a step and then its secure configuration row: Dataverse does not cascade the delete to
+    // sdkmessageprocessingstepsecureconfig, so without this the secret would outlive the step as an orphan.
+    private static void DeleteStep(IOrganizationService service, Guid stepId)
+{
+    EntityReference? secureConfig;
+    try
+    {
+        secureConfig = service.Retrieve("sdkmessageprocessingstep", stepId, new ColumnSet("sdkmessageprocessingstepsecureconfigid"))?
+            .GetAttributeValue<EntityReference>("sdkmessageprocessingstepsecureconfigid");
+    }
+    catch (FaultException<OrganizationServiceFault> ex) when (ex.Detail?.ErrorCode == ObjectDoesNotExistErrorCode)
+    {
+        return; // already gone
+    }
+
+    DeleteIfExists(service, "sdkmessageprocessingstep", stepId);
+    if (secureConfig != null)
+    {
+        DeleteIfExists(service, "sdkmessageprocessingstepsecureconfig", secureConfig.Id);
     }
 }
 

@@ -180,6 +180,17 @@ static int RunInspect(string[] args, JsonSerializerOptions jsonOptions)
     return ExecuteInspect(options, jsonOptions);
 }
 
+// Code only names a step's secure configuration; its value comes from --secure-config or VELA_SECURE_CONFIG_<NAME>.
+// Resolved against the live state so a configuration Vela was given no value for keeps its live digest (no diff, never
+// written). See SecureConfigResolver.
+static RegistrationState ResolveSecureConfigs(RegistrationState local, RegistrationState current, SharedOptions options, JsonSerializerOptions jsonOptions) =>
+    SecureConfigResolver.Resolve(
+        local,
+        current,
+        SecureConfigResolver.ParseSpecs(options.SecureConfigs ?? [], File.ReadAllText),
+        Environment.GetEnvironmentVariable,
+        jsonOptions);
+
 static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptions)
 {
     List<string> tempDirectories = [];
@@ -189,6 +200,7 @@ static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptio
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
+        local = ResolveSecureConfigs(local, current, options, jsonOptions);
 
         var localSteps = local.Items.Where(IsStep)
             .OrderBy(x => x.Type, StringComparer.Ordinal)
@@ -265,6 +277,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
+        local = ResolveSecureConfigs(local, current, options, jsonOptions);
         RegistrationDiff diff = BuildDiff(local, current);
         PlanPreview preview = BuildPlanPreview("apply-execute-preview", options.Environment, diff, local.Diagnostics, current.Diagnostics);
         if (options.Strict && preview.Diagnostics.Length > 0)
@@ -489,6 +502,7 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
+        local = ResolveSecureConfigs(local, current, options, jsonOptions);
         RegistrationDiff diff = BuildDiff(local, current);
 
         // Two live-state checks the registration diff alone cannot express, both run on one short-lived connection:

@@ -52,7 +52,14 @@ internal sealed class FakeOrgService : IOrganizationService
 
     public void Update(Entity entity) => Updated.Add(entity);
 
-    public void Delete(string entityName, Guid id) => Deleted.Add((entityName, id));
+    /// <summary>Called before a delete is recorded; throw from it to fault that delete.</summary>
+    public Action<string, Guid>? OnDelete { get; set; }
+
+    public void Delete(string entityName, Guid id)
+    {
+        OnDelete?.Invoke(entityName, id);
+        Deleted.Add((entityName, id));
+    }
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet) => OnRetrieve(entityName, id, columnSet);
 
