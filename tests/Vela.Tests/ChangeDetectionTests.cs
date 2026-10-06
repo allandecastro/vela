@@ -45,6 +45,49 @@ public sealed class ChangeDetectionTests
     }
 
     [Fact]
+    public void HasChanged_TrueWhenOnlyTheCasingChanges()
+    {
+        // Dataverse stores the string as written, so a casing edit is a real change (queries compare
+        // case-insensitively, change detection must not).
+        LocalPluginContext ctx = UpdateContext(new TestAccount { Name = "ACME" }, new TestAccount { Name = "acme" });
+
+        Assert.True(ctx.HasChanged<TestAccount>(x => x.Name));
+    }
+
+    [Theory]
+    [InlineData(new[] { 1, 2 }, new[] { 1, 3 }, true)]
+    [InlineData(new[] { 1, 2 }, new[] { 2, 1 }, false)] // order is not a change
+    [InlineData(new int[0], null, false)]               // an empty selection is stored as null
+    [InlineData(new[] { 1 }, null, true)]
+    public void HasChanged_ComparesMultiSelectByTheSelectedValues(int[] newValues, int[]? oldValues, bool changed)
+    {
+        static OptionSetValueCollection? Selection(int[]? values) =>
+            values == null ? null : new OptionSetValueCollection(Array.ConvertAll(values, v => new OptionSetValue(v)));
+        TestAccount target = new TestAccount { Tags = Selection(newValues) };
+        TestAccount pre = new TestAccount { Tags = Selection(oldValues) };
+
+        Assert.Equal(changed, UpdateContext(target, pre).HasChanged<TestAccount>(x => x.Tags));
+    }
+
+    [Fact]
+    public void HasChanged_ComparesImageColumnsByContent()
+    {
+        // byte[] has reference equality and ToString() is the type name: two different images compared equal.
+        LocalPluginContext changed = UpdateContext(new TestAccount { Photo = new byte[] { 1, 2 } }, new TestAccount { Photo = new byte[] { 1, 3 } });
+        LocalPluginContext same = UpdateContext(new TestAccount { Photo = new byte[] { 1, 2 } }, new TestAccount { Photo = new byte[] { 1, 2 } });
+
+        Assert.True(changed.HasChanged<TestAccount>(x => x.Photo));
+        Assert.False(same.HasChanged<TestAccount>(x => x.Photo));
+    }
+
+    [Fact]
+    public void Query_equality_stays_case_insensitive()
+    {
+        Assert.True(AttributeValueComparer.AreEqual("ACME", "acme"));
+        Assert.False(AttributeValueComparer.IsSameValue("ACME", "acme"));
+    }
+
+    [Fact]
     public void HasChanged_FalseWhenAttributeNotInTarget()
     {
         // Name wasn't part of this update → not a change attributable to this operation.

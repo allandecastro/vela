@@ -24,6 +24,13 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
+### Fixed (Framework)
+
+- **`HasChanged` detects casing edits and multi-select changes.** It compared strings case-insensitively, so
+  "acme" to "ACME" was not a change, and compared multi-select option sets through `ToString()` (the type name), so
+  any two selections were equal. Change detection now compares strings exactly and multi-selects by their set of
+  values (order-free; an empty selection equals null). Harness queries keep Dataverse's case-insensitive matching,
+  and a multi-select equality filter now compares the selected values instead of matching every row.
 ### Fixed (CLI)
 
 - **`apply` no longer deletes the registrations of classic plugins in the same assembly.** The live read took every
