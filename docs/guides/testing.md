@@ -307,8 +307,7 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   stamping); `InitiatingUserId` stays the caller.
 - **User vs SYSTEM service.** `ctx.Service` acts as `ctx.UserId` and is subject to the security model when
   `WithSecurity` is used; `ctx.SystemService` is SYSTEM and is not (audit columns still record the calling user). A
-  plugin fired by a write made through `ctx.SystemService` sees `ctx.UserId == PluginPipeline.SystemUserId`, and its
-  own `ctx.Service` is SYSTEM too.
+  plugin fired by a write made through `ctx.SystemService` runs as SYSTEM: its own `ctx.Service` is unrestricted too.
 - **`ParentContext` on a cascade.** A plugin fired by another plugin's write sees its caller's context as
   `ctx.ParentContext` (with its shared variables), so a re-entrancy guard like
   `if (ctx.ParentContext?.MessageName == "Create") return;` behaves as it does in Dataverse.
