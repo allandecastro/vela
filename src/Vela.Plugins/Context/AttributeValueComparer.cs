@@ -48,6 +48,13 @@ namespace Vela.Context
                     && (expected is null or OptionSetValueCollection);
             }
 
+            // An image column (byte[]) has reference equality and a ToString() of its type name, so two different
+            // images would compare equal through the string fallback: compare the bytes.
+            if (actual is byte[] leftBytes && expected is byte[] rightBytes)
+            {
+                return leftBytes.SequenceEqual(rightBytes);
+            }
+
             object? left = Normalize(actual);
             object? right = Normalize(expected);
             if (Equals(left, right))

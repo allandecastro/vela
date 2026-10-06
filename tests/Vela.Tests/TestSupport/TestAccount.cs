@@ -28,7 +28,6 @@ public sealed class TestAccount : Entity
         set => SetAttributeValue("name", value);
     }
 
-    // Partylist-style column typed as EntityCollection (mirrors how ActivityParty columns are generated).
     [AttributeLogicalName("vela_tags")]
     public OptionSetValueCollection? Tags
     {
@@ -36,6 +35,14 @@ public sealed class TestAccount : Entity
         set => SetAttributeValue("vela_tags", value);
     }
 
+    [AttributeLogicalName("vela_photo")]
+    public byte[]? Photo
+    {
+        get => GetAttributeValue<byte[]>("vela_photo");
+        set => SetAttributeValue("vela_photo", value);
+    }
+
+    // Partylist-style column typed as EntityCollection (mirrors how ActivityParty columns are generated).
     [AttributeLogicalName("customers")]
     public EntityCollection Customers
     {

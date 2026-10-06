@@ -70,6 +70,17 @@ public sealed class ChangeDetectionTests
     }
 
     [Fact]
+    public void HasChanged_ComparesImageColumnsByContent()
+    {
+        // byte[] has reference equality and ToString() is the type name: two different images compared equal.
+        LocalPluginContext changed = UpdateContext(new TestAccount { Photo = new byte[] { 1, 2 } }, new TestAccount { Photo = new byte[] { 1, 3 } });
+        LocalPluginContext same = UpdateContext(new TestAccount { Photo = new byte[] { 1, 2 } }, new TestAccount { Photo = new byte[] { 1, 2 } });
+
+        Assert.True(changed.HasChanged<TestAccount>(x => x.Photo));
+        Assert.False(same.HasChanged<TestAccount>(x => x.Photo));
+    }
+
+    [Fact]
     public void Query_equality_stays_case_insensitive()
     {
         Assert.True(AttributeValueComparer.AreEqual("ACME", "acme"));
