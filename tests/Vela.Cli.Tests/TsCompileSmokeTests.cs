@@ -76,14 +76,9 @@ public class TsCompileSmokeTests
             .File("contract", "Contract").Display("Contract")
             .Build();
 
-    [Fact]
+    [OptInFact("VELA_TS_SMOKE=1")] // the assertions below need a TypeScript toolchain
     public void Generated_Ts_Compiles_Against_FormModel()
     {
-        if (Environment.GetEnvironmentVariable("VELA_TS_SMOKE") != "1")
-        {
-            return; // opt-in only; the assertions below need a TypeScript toolchain.
-        }
-
         string? clientDir = Environment.GetEnvironmentVariable("VELA_CLIENT_DIR");
         string? modelPath = Environment.GetEnvironmentVariable("VELA_CLIENT_MODEL")
             ?? (clientDir != null ? Path.Combine(clientDir, "src", "form", "model.ts") : null);

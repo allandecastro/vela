@@ -84,10 +84,13 @@ mutant** (or add the missing test) to lift the score rather than relaxing the ga
 
 The tools tests include an **opt-in build smoke test** (`Generate_ThenDotnetBuild_Succeeds`) that packs
 `Vela.Plugins`, scaffolds a solution via `vela init`, and runs `dotnet build` on it - the only test that
-actually compiles the generated C#. It is skipped unless enabled (it restores/builds, so it needs the SDK
-and the Microsoft packages):
+actually compiles the generated C#. It always runs in CI; locally it is reported as skipped unless enabled
+(it restores/builds, so it needs the SDK and the Microsoft packages):
 
 ```powershell
+# The smoke test packs Vela.Plugins / Vela.Testing / Vela.Messages as 1.0.0: evict any stale 1.0.0 from the
+# global NuGet cache first, or it shadows the fresh local feed and the build compiles against old binaries.
+foreach ($p in 'vela.plugins', 'vela.testing', 'vela.messages') { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:USERPROFILE\.nuget\packages\$p\1.0.0" }
 $env:VELA_BUILD_SMOKE = "1"
 dotnet test .\tests\Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
 ```
