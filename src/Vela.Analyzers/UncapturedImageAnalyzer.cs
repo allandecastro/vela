@@ -145,7 +145,7 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                if (model.GetSymbolInfo(handlerArg.Expression, cancellationToken).Symbol is not IMethodSymbol bound
+                if (FluentStep.BoundHandler(model, handlerArg.Expression, cancellationToken) is not IMethodSymbol bound
                     || !FluentStep.IsFluentMethod(model, handleCall, fluent, cancellationToken))
                 {
                     continue;

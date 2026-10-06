@@ -34,6 +34,7 @@ namespace Vela.Context
         T GetPreImage<T>() where T : Microsoft.Xrm.Sdk.Entity;
         Vela.Messages.IRequest Request { get; }
     }
+    public interface IGeneratedContext : ILocalPluginContext { }
 }
 
 namespace Vela.Steps
@@ -42,7 +43,7 @@ namespace Vela.Steps
     public interface ITrigger : IFluentStep { IStages OnUpdate(); }
     public interface IStages : IFluentStep { IMode PostOperation(); }
     public interface IMode : IFluentStep { IConfig Sync(); IConfig Async(); }
-    public interface IConfig : IFluentStep { void Handle(Action<Vela.Context.ILocalPluginContext> handler); }
+    public interface IConfig : IFluentStep { void Handle(Action<Vela.Context.ILocalPluginContext> handler); void Handle(Delegate handler); }
 }
 
 namespace Demo
@@ -234,5 +235,14 @@ namespace Demo
 }
 ";
         await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_target_write_in_a_handler_bound_through_Handle_Delegate()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Async().Handle(OnUpd); }\n" +
+            "        private void OnUpd(IGeneratedContext ctx) { {|#0:ctx.Request.Target[\"name\"]|} = \"x\"; }");
+        await Verify.VerifyAnalyzerAsync(code, Expected());
     }
 }

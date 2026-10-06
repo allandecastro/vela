@@ -19,6 +19,8 @@ namespace Vela.Context
         object? PostImage { get; }
     }
     public interface IUpdatePostContext<TEntity> : ILocalPluginContext { }
+    // Stands in for a generated typed step context: the handler binds through Handle(Delegate).
+    public interface IGeneratedContext : ILocalPluginContext { }
 }
 
 namespace Vela.Steps
@@ -32,6 +34,7 @@ namespace Vela.Steps
         IConfig WithPreImage(params string[] columns);
         IConfig WithPostImage(params string[] columns);
         void Handle(Action<Vela.Context.ILocalPluginContext> handler);
+        void Handle(Delegate handler);
     }
 }
 
@@ -184,5 +187,16 @@ namespace Demo
 }
 ";
         await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_an_uncaptured_image_in_a_handler_bound_through_Handle_Delegate()
+    {
+        // A handler taking the generated typed context binds to Handle(Delegate): Roslyn reports the method only as a
+        // candidate, which the analyzer used to ignore.
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(\"name\").Handle(OnUpd); }\n" +
+            "        private void OnUpd(IGeneratedContext ctx) { object? x = ctx.{|#0:PreImage|}; }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("pre-image", "PreImage", "WithPreImage"));
     }
 }
