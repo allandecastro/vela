@@ -81,8 +81,8 @@ namespace Vela.Context
     public class AssignPostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public AssignPostContext(ILocalPluginContext inner) { } }
     public static class ImageProjectionExtensions
     {
-        public static TImage PreImageAs<TImage>(this ILocalPluginContext context) => default!;
-        public static TImage PostImageAs<TImage>(this ILocalPluginContext context) => default!;
+        public static TImage PreImageAs<TImage>(this ILocalPluginContext context, string alias = ""PreImage"") => default!;
+        public static TImage PostImageAs<TImage>(this ILocalPluginContext context, string alias = ""PostImage"") => default!;
     }
 }
 
@@ -445,6 +445,53 @@ namespace Demo
     }
 
     [Fact]
+    public void An_unrelated_edit_reuses_the_cached_projections_and_contexts()
+    {
+        // The incremental pipeline compares its models (columns, projections, handlers) by value: an edit elsewhere in
+        // the compilation must leave every generated source cached rather than regenerated.
+        string plugin = @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPreImage(""before"", a => a.Revenue).WithPostImage(a => a.Name, a => a.NumberOfEmployees).Handle(OnUpdated);
+            RegisterStep().OnCreate().PostOperation().Sync().WithPostImage(a => a.Telephone1).Handle(OnCreated);
+        }
+        private void OnUpdated() { }
+        private void OnCreated() { }
+    }
+}
+";
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
+            .Split(Path.PathSeparator)
+            .Where(p => p.Length > 0)
+            .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p));
+        CSharpCompilation compilation = CSharpCompilation.Create(
+            "gen_cache_test",
+            new[] { CSharpSyntaxTree.ParseText(Harness + plugin) },
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new[] { new ImageProjectionGenerator().AsSourceGenerator() },
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+        driver = driver.RunGenerators(compilation);
+        int generated = driver.GetRunResult().Results.Single().GeneratedSources.Length;
+
+        driver = driver.RunGenerators(compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText("namespace Other { public class Unrelated { } }")));
+        GeneratorRunResult second = driver.GetRunResult().Results.Single();
+
+        Assert.True(generated >= 3); // two projections + at least one context
+        Assert.Equal(generated, second.GeneratedSources.Length);
+        Assert.All(
+            second.TrackedOutputSteps.SelectMany(step => step.Value).SelectMany(run => run.Outputs),
+            output => Assert.True(output.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged, output.Reason.ToString()));
+    }
+
+    [Fact]
     public void Resolves_a_column_selector_behind_a_cast()
     {
         // a => (object)a.Name must not suppress the projection: the cast is unwrapped to the member access.
@@ -630,6 +677,75 @@ namespace Demo
         Assert.Contains("class OnUpdatedContext : global::Vela.Context.UpdatePostContext<global::Demo.Account>", output);
         Assert.Contains("public new OnUpdated_PreImage? PreImage", output);
         Assert.Contains("public new OnUpdated_PostImage? PostImage", output);
+    }
+
+    [Fact]
+    public void A_typed_context_reads_each_image_under_its_alias()
+    {
+        // The step registers the images as "before" / "snap": reading them under the default aliases returned null.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountAudit : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithPreImage(""before"", a => a.Revenue)
+                .WithPostImage(""snap"", a => a.Name)
+                .Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.Contains("PreImageAs<OnUpdated_PreImage_before>(this, \"before\")", output);
+        Assert.Contains("PostImageAs<OnUpdated_PostImage_snap>(this, \"snap\")", output);
+    }
+
+    [Fact]
+    public void A_constant_alias_is_resolved_and_a_non_constant_one_generates_nothing()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountAudit : EntityPluginBase<Account>
+    {
+        private const string Snap = ""snap"";
+        private static readonly string Dynamic = ""dyn"";
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(Snap, a => a.Name).Handle(OnUpdated);
+            RegisterStep().OnDelete().PreOperation().Sync().WithPreImage(Dynamic, a => a.Name).Handle(OnDeleted);
+        }
+        private void OnUpdated() { }
+        private void OnDeleted() { }
+    }
+}
+");
+
+        Assert.Contains("PostImageAs<OnUpdated_PostImage_snap>(this, \"snap\")", output);
+        Assert.DoesNotContain("OnDeleted_PreImage", output); // the runtime alias is unknown: no projection reading null
+    }
+
+    [Fact]
+    public void A_typed_context_with_a_default_alias_passes_no_alias()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountCreate : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(OnCreated);
+        private void OnCreated() { }
+    }
+}
+");
+
+        Assert.Contains("PostImageAs<OnCreated_PostImage>(this);", output);
     }
 
     [Fact]

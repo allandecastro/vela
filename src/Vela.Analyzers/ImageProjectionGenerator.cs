@@ -96,7 +96,14 @@ namespace Vela.Analyzers
             }
 
             // Arguments: optional leading string alias, then the column selector lambdas.
-            (string? alias, List<LambdaExpressionSyntax> selectors) = SplitArguments(invocation);
+            (string? alias, bool aliasUnresolved, List<LambdaExpressionSyntax> selectors) = SplitArguments(invocation, model);
+            if (aliasUnresolved)
+            {
+                // An alias that is not a compile-time constant: the image's runtime key is unknown here, so a typed
+                // projection could not read it. Generate nothing rather than a context that reads null.
+                return null;
+            }
+
             if (selectors.Count == 0)
             {
                 // No explicit columns -> the image carries every column; there is nothing to narrow, so skip.
@@ -150,7 +157,7 @@ namespace Vela.Analyzers
             string? requestType = FindTypedRequestType(member.Expression, model);
 
             return new ProjectionModel(ns, containingTypes.ToImmutableArray(), typeName, columns.ToImmutableArray(),
-                handlerName, messageLabel, isPost, isPre, entityType, requestType);
+                handlerName, messageLabel, isPost, isPre, entityType, requestType, alias);
         }
 
         private static bool IsHandleInvocation(SyntaxNode node)
@@ -469,25 +476,38 @@ namespace Vela.Analyzers
         private static string Capitalize(string value)
             => value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value.Substring(1);
 
-        private static (string? Alias, List<LambdaExpressionSyntax> Selectors) SplitArguments(InvocationExpressionSyntax invocation)
+        // The optional leading alias and the column selectors. The alias may be any compile-time string constant (a
+        // literal or a const); an explicit alias that is not constant cannot be known here, so it is reported as
+        // unresolved and no projection is generated (a context reading the default alias would read null).
+        private static (string? Alias, bool AliasUnresolved, List<LambdaExpressionSyntax> Selectors) SplitArguments(InvocationExpressionSyntax invocation, SemanticModel model)
         {
             string? alias = null;
+            bool unresolved = false;
             List<LambdaExpressionSyntax> selectors = new List<LambdaExpressionSyntax>();
 
             foreach (ArgumentSyntax argument in invocation.ArgumentList.Arguments)
             {
-                switch (argument.Expression)
+                if (argument.Expression is LambdaExpressionSyntax lambda)
                 {
-                    case LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.StringLiteralExpression):
-                        alias = literal.Token.ValueText;
-                        break;
-                    case LambdaExpressionSyntax lambda:
-                        selectors.Add(lambda);
-                        break;
+                    selectors.Add(lambda);
+                    continue;
+                }
+
+                if (model.GetTypeInfo(argument.Expression).Type?.SpecialType == SpecialType.System_String)
+                {
+                    Optional<object?> constant = model.GetConstantValue(argument.Expression);
+                    if (constant.HasValue && constant.Value is string text)
+                    {
+                        alias = text;
+                    }
+                    else
+                    {
+                        unresolved = true;
+                    }
                 }
             }
 
-            return (alias, selectors);
+            return (alias, unresolved, selectors);
         }
 
         private static ProjectionColumn? ResolveColumn(LambdaExpressionSyntax selector, SemanticModel model)
@@ -667,8 +687,9 @@ namespace Vela.Analyzers
             // Index the finalized projections by (plugin class + handler + pre/post) so a handler's context can pick
             // up its captured typed image(s). Keyed on handler + stage-role, not message, so it is robust to the two
             // drivers labelling a message slightly differently.
-            Dictionary<string, string> preByHandler = new Dictionary<string, string>(System.StringComparer.Ordinal);
-            Dictionary<string, string> postByHandler = new Dictionary<string, string>(System.StringComparer.Ordinal);
+            // The projection each handler's context exposes; the model carries the image alias the context reads.
+            Dictionary<string, ProjectionModel> preByHandler = new Dictionary<string, ProjectionModel>(System.StringComparer.Ordinal);
+            Dictionary<string, ProjectionModel> postByHandler = new Dictionary<string, ProjectionModel>(System.StringComparer.Ordinal);
             foreach (ProjectionModel model in projections)
             {
                 if (model.HandlerName is null)
@@ -679,11 +700,11 @@ namespace Vela.Analyzers
                 string key = model.Namespace + "|" + string.Join(".", model.ContainingTypes) + "|" + model.HandlerName;
                 if (model.IsPre)
                 {
-                    if (!preByHandler.ContainsKey(key)) { preByHandler[key] = model.TypeName; }
+                    if (!preByHandler.ContainsKey(key)) { preByHandler[key] = model; }
                 }
                 else
                 {
-                    if (!postByHandler.ContainsKey(key)) { postByHandler[key] = model.TypeName; }
+                    if (!postByHandler.ContainsKey(key)) { postByHandler[key] = model; }
                 }
             }
 
@@ -723,8 +744,8 @@ namespace Vela.Analyzers
                 }
 
                 string handlerKey = handler.Namespace + "|" + string.Join(".", handler.ContainingTypes) + "|" + handler.HandlerName;
-                string? preName = baseHasPre && preByHandler.TryGetValue(handlerKey, out string? p) ? p : null;
-                string? postName = baseHasPost && postByHandler.TryGetValue(handlerKey, out string? po) ? po : null;
+                ProjectionModel? pre = baseHasPre && preByHandler.TryGetValue(handlerKey, out ProjectionModel p) ? p : null;
+                ProjectionModel? post = baseHasPost && postByHandler.TryGetValue(handlerKey, out ProjectionModel po) ? po : null;
 
                 string contextName = Sanitize(handler.HandlerName) + "Context";
                 string prefix = handler.Namespace.Length == 0 ? string.Empty : handler.Namespace + ".";
@@ -738,9 +759,13 @@ namespace Vela.Analyzers
                 }
 
                 context.AddSource(Sanitize(contextFull) + ".Context.g.cs",
-                    SourceText.From(RenderContext(handler, contextName, baseTypeFull, preName, postName), Encoding.UTF8));
+                    SourceText.From(RenderContext(handler, contextName, baseTypeFull, pre, post), Encoding.UTF8));
             }
         }
+
+        // ", \"snap\"" for a custom alias, nothing for the default one (the extension's default argument matches it).
+        private static string AliasArgument(ProjectionModel image) =>
+            string.IsNullOrEmpty(image.Alias) ? string.Empty : ", " + SymbolDisplay.FormatLiteral(image.Alias!, quote: true);
 
         private static bool IsSingleImageMessage(string message) =>
             message == "Create" || message == "Update" || message == "Delete";
@@ -779,7 +804,7 @@ namespace Vela.Analyzers
             }
         }
 
-        private static string RenderContext(HandlerModel model, string contextName, string baseTypeFull, string? preName, string? postName)
+        private static string RenderContext(HandlerModel model, string contextName, string baseTypeFull, ProjectionModel? pre, ProjectionModel? post)
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/> Vela typed step context. Do not edit.");
@@ -802,7 +827,7 @@ namespace Vela.Analyzers
                 indent++;
             }
 
-            string images = preName != null || postName != null
+            string images = pre != null || post != null
                 ? "plus the typed image(s) this step captured"
                 : "for this step";
             sb.AppendLine($"{Pad(indent)}/// <summary>");
@@ -812,14 +837,14 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent)}public sealed class {contextName} : {baseTypeFull}");
             sb.AppendLine($"{Pad(indent)}{{");
             sb.AppendLine($"{Pad(indent + 1)}public {contextName}(global::Vela.Context.ILocalPluginContext inner) : base(inner) {{ }}");
-            if (preName != null)
+            if (pre is { } preImage)
             {
-                sb.AppendLine($"{Pad(indent + 1)}public new {preName}? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<{preName}>(this);");
+                sb.AppendLine($"{Pad(indent + 1)}public new {preImage.TypeName}? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<{preImage.TypeName}>(this{AliasArgument(preImage)});");
             }
 
-            if (postName != null)
+            if (post is { } postImage)
             {
-                sb.AppendLine($"{Pad(indent + 1)}public new {postName}? PostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<{postName}>(this);");
+                sb.AppendLine($"{Pad(indent + 1)}public new {postImage.TypeName}? PostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<{postImage.TypeName}>(this{AliasArgument(postImage)});");
             }
 
             sb.AppendLine($"{Pad(indent)}}}");
@@ -957,8 +982,9 @@ namespace Vela.Analyzers
         private readonly struct ProjectionModel : System.IEquatable<ProjectionModel>
         {
             public ProjectionModel(string @namespace, ImmutableArray<string> containingTypes, string typeName, ImmutableArray<ProjectionColumn> columns,
-                string? handlerName, string message, bool isPost, bool isPre, string entityType, string? requestType)
+                string? handlerName, string message, bool isPost, bool isPre, string entityType, string? requestType, string? alias)
             {
+                Alias = alias;
                 Namespace = @namespace;
                 ContainingTypes = containingTypes;
                 TypeName = typeName;
@@ -982,9 +1008,12 @@ namespace Vela.Analyzers
             public bool IsPre { get; }
             public string EntityType { get; }
             public string? RequestType { get; }
+            // The image alias passed to WithPreImage/WithPostImage, or null for the default (PreImage / PostImage).
+            // The generated context must read the image under this alias, or ctx.PreImage / ctx.PostImage is null.
+            public string? Alias { get; }
 
             public ProjectionModel WithTypeName(string typeName) =>
-                new ProjectionModel(Namespace, ContainingTypes, typeName, Columns, HandlerName, Message, IsPost, IsPre, EntityType, RequestType);
+                new ProjectionModel(Namespace, ContainingTypes, typeName, Columns, HandlerName, Message, IsPost, IsPre, EntityType, RequestType, Alias);
 
             public bool Equals(ProjectionModel other) =>
                 Namespace == other.Namespace &&
@@ -996,7 +1025,8 @@ namespace Vela.Analyzers
                 IsPost == other.IsPost &&
                 IsPre == other.IsPre &&
                 EntityType == other.EntityType &&
-                RequestType == other.RequestType;
+                RequestType == other.RequestType &&
+                Alias == other.Alias;
 
             public override bool Equals(object? obj) => obj is ProjectionModel other && Equals(other);
 
@@ -1012,6 +1042,7 @@ namespace Vela.Analyzers
                     }
 
                     hash = (hash * 31) + (TypeName?.GetHashCode() ?? 0);
+                    hash = (hash * 31) + (Alias?.GetHashCode() ?? 0);
                     foreach (ProjectionColumn column in Columns)
                     {
                         hash = (hash * 31) + column.GetHashCode();
