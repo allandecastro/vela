@@ -24,27 +24,6 @@ All notable changes to Vela are documented here. The format is based on
 The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
 (`cli-vX.Y.Z` / `framework-vX.Y.Z`).
 
-### Fixed (Framework)
-
-- **A column selector that is not a column of the entity fails instead of registering a wrong column.** A nested
-  path (`a => a.PrimaryContactId.Id`, `a => a.ParentAccount.Name`) resolved to the last member's name ("id",
-  "name"), and `a => a.Id` on a model without a named `Id` to "id", so `FilterOn` and images silently targeted a
-  wrong or nonexistent column. VELA001 now reports both, the runtime throws for both, and the image generator no
-  longer projects a nested path. One resolver now backs FilterOn, images and typed queries.
-
-### Fixed (CLI)
-
-- **`vela models` names the `Id` override's column** (`[AttributeLogicalName("accountid")]`, as the SDK generator
-  does), so `a => a.Id` selects the primary key column.
-- **A generated step context reads an aliased image.** For `WithPostImage("snap", ...)` (or a pre-image alias) the
-  generated `ctx.PostImage` / `ctx.PreImage` read the image under the default alias, so it was always null at runtime.
-  The context now passes the step's alias.
-### Fixed (CLI)
-
-- **A second `apply --solution` no longer re-imports an unchanged plugin package.** Adding the publisher prefix
-  repacked the package by extracting and re-zipping it, which stamped every entry with the current time, so the
-  bytes never matched the package in Dataverse and every run re-imported it. The repack is now done in memory and is
-  deterministic (original entry order and timestamps; only the `.nuspec` changes).
 ### Changed (Framework, breaking)
 
 - **A Custom API parameter type with no Dataverse equivalent fails when the step is built.** `long`, `short`,
@@ -54,20 +33,22 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`TypedRequest.Get<T>` / `TypedResponse.Get<T>` throw on a value of the wrong type** instead of returning
   `default`, and convert a base `Entity` to a declared early-bound type (Dataverse sends `Entity`, so an
   `Account` property used to read as null).
+- **Secure configuration is named in code, never valued.** `WithSecureConfig("<secret>")` is replaced by
+  `WithSecureConfigFrom("<Name>")`, and `StepDefinition.SecureConfig` by `SecureConfigName`. The secret used to be
+  compiled into the plugin assembly (so it lived in git and in the uploaded, decompilable `pluginassembly`). Move the
+  value to `vela apply --secure-config <Name>=...` or the `VELA_SECURE_CONFIG_<Name>` environment variable.
+- **One organization service per identity.** `ILocalPluginContext` now exposes `Service` (the current user),
+  `SystemService` and `AsUser(Guid)`. `UserService`, `CallingUserService`, `AsInitiatingUser()`,
+  `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected
+  `Func<Guid?, IOrganizationService>` factory are removed. Migrate `ctx.UserService` to `ctx.Service`,
+  `ctx.AsSystem()` to `ctx.SystemService`, and `ctx.AsInitiatingUser()` to `ctx.AsUser(ctx.InitiatingUserId)`.
 
-### Fixed (Framework)
+### Added (Framework)
 
-- **`string[]` Custom API parameters register as StringArray.** The builders emitted `System.String[]`, which the
-  CLI registered as a plain `String` (with no drift shown). Early-bound entity parameters now register as `Entity`
-  instead of `String`. One shared mapping serves every builder.
+- **VELA020: a Create/Update step without `FilterOn(...)` is a build error.** These steps already had to declare a
+  filtering attribute, but only building the step at runtime enforced it, so a chain without one compiled and then
+  failed in `vela plan` or at execution. The rule makes the documented compile-time guarantee real.
 
-### Fixed (CLI)
-
-- **Custom API parameters converge when their optionality or table changes.** `isoptional` and
-  `logicalentityname` are create-only but were updated in place; a change now recreates that one parameter (like a
-  type change), and an unchanged parameter is no longer rewritten on every apply. `System.String[]` from an older
-  package is read as StringArray, and a type with no Custom API equivalent fails the plan with a clear message
-  instead of registering as `String`.
 ### Changed (Framework)
 
 - **Automatic execution snapshots no longer trace record data.** The `start` / `success` / failure snapshots wrote
@@ -78,46 +59,33 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ctx.TraceExecutionSnapshot(phase)` still traces values (`TraceSnapshotDetail.Metadata` for names only).
 - **Dataverse call tracing is one line per event** (`Dataverse.Update start scope=User depth=1 entity=account; id=...`
   then `Dataverse.Update ok 42 ms`) instead of an 11-line block per call, which filled the ~10 KB trace log.
+
 ### Fixed (Framework)
 
+- **A column selector that is not a column of the entity fails instead of registering a wrong column.** A nested
+  path (`a => a.PrimaryContactId.Id`, `a => a.ParentAccount.Name`) resolved to the last member's name ("id",
+  "name"), and `a => a.Id` on a model without a named `Id` to "id", so `FilterOn` and images silently targeted a
+  wrong or nonexistent column. VELA001 now reports both, the runtime throws for both, and the image generator no
+  longer projects a nested path. One resolver now backs FilterOn, images and typed queries.
+- **`string[]` Custom API parameters register as StringArray.** The builders emitted `System.String[]`, which the
+  CLI registered as a plain `String` (with no drift shown). Early-bound entity parameters now register as `Entity`
+  instead of `String`. One shared mapping serves every builder.
 - **`HasChanged` detects casing edits and multi-select changes.** It compared strings case-insensitively, so
   "acme" to "ACME" was not a change, and compared multi-select option sets through `ToString()` (the type name), so
   any two selections were equal. Change detection now compares strings exactly and multi-selects by their set of
   values (order-free; an empty selection equals null). Harness queries keep Dataverse's case-insensitive matching,
   and a multi-select equality filter now compares the selected values instead of matching every row.
-### Fixed (CLI)
-
-- **`apply` no longer deletes the registrations of classic plugins in the same assembly.** The live read took every
-  plugin type of the assembly while the scan only produced the Vela ones, so the steps and Custom APIs of a classic
-  `IPlugin`/`CodeActivity` class (registered with the Plugin Registration Tool, for example) diffed as "removed" and
-  were deleted. They are now left untouched and reported under `unmanaged` in `plan`/`apply`/`inspect` output (info,
-  not a warning). The registrations of a Vela plugin class you deleted are still removed.
-- **`apply` no longer takes over a Custom API owned by another assembly.** A local Custom API whose unique name already
-  existed, implemented by another assembly, was silently re-pointed to the local plugin while the plan said "create".
-  `apply` now stops with an error naming the owning type and assembly.
-### Added (Framework)
-
-- **VELA020: a Create/Update step without `FilterOn(...)` is a build error.** These steps already had to declare a
-  filtering attribute, but only building the step at runtime enforced it, so a chain without one compiled and then
-  failed in `vela plan` or at execution. The rule makes the documented compile-time guarantee real.
-
-### Fixed (Framework)
-
 - **The test harness filters Create steps.** A Create step fired whatever columns the record was created with; it now
   fires only when the record sets one of its filtering attributes, like Update (and like Dataverse).
-
-### Fixed (CLI)
-
-- **`vela add plugin` / `add step` no longer generate a plugin that fails at runtime.** For Create/Update (and the bulk
-  variants) without `--filtering-attributes`, they emitted a `// TODO` instead of `FilterOn`, so the default
-  `vela add plugin X --entity Account` produced a step that failed to build. The option is now required for these
-  messages: the command names it and writes nothing, and `vela add --interactive` asks for the columns.
-### Changed (Framework, breaking)
-
-- **Secure configuration is named in code, never valued.** `WithSecureConfig("<secret>")` is replaced by
-  `WithSecureConfigFrom("<Name>")`, and `StepDefinition.SecureConfig` by `SecureConfigName`. The secret used to be
-  compiled into the plugin assembly (so it lived in git and in the uploaded, decompilable `pluginassembly`). Move the
-  value to `vela apply --secure-config <Name>=...` or the `VELA_SECURE_CONFIG_<Name>` environment variable.
+- **Step impersonation and CallerId are honoured.** The default service was built on `InitiatingUserId`, so a
+  step registered with `WithImpersonation(...)` (or a CallerId call) still ran with the triggering user's
+  privileges. `ctx.Service` and the injected `IOrganizationService` now act as `UserId`, like the platform.
+- **`AddPluginRuntime` registers the same services as the built-in resolver.** Both now share one default set, so
+  Microsoft DI also gets `IPluginCacheService`, `IEnvironmentVariableReader` and `IMessageService`, and its
+  `IOrganizationService` is the current user's service.
+- **A generated step context reads an aliased image.** For `WithPostImage("snap", ...)` (or a pre-image alias) the
+  generated `ctx.PostImage` / `ctx.PreImage` read the image under the default alias, so it was always null at runtime.
+  The context now passes the step's alias.
 
 ### Added (CLI)
 
@@ -127,6 +95,29 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **`vela models` names the `Id` override's column** (`[AttributeLogicalName("accountid")]`, as the SDK generator
+  does), so `a => a.Id` selects the primary key column.
+- **A second `apply --solution` no longer re-imports an unchanged plugin package.** Adding the publisher prefix
+  repacked the package by extracting and re-zipping it, which stamped every entry with the current time, so the
+  bytes never matched the package in Dataverse and every run re-imported it. The repack is now done in memory and is
+  deterministic (original entry order and timestamps; only the `.nuspec` changes).
+- **Custom API parameters converge when their optionality or table changes.** `isoptional` and
+  `logicalentityname` are create-only but were updated in place; a change now recreates that one parameter (like a
+  type change), and an unchanged parameter is no longer rewritten on every apply. `System.String[]` from an older
+  package is read as StringArray, and a type with no Custom API equivalent fails the plan with a clear message
+  instead of registering as `String`.
+- **`apply` no longer deletes the registrations of classic plugins in the same assembly.** The live read took every
+  plugin type of the assembly while the scan only produced the Vela ones, so the steps and Custom APIs of a classic
+  `IPlugin`/`CodeActivity` class (registered with the Plugin Registration Tool, for example) diffed as "removed" and
+  were deleted. They are now left untouched and reported under `unmanaged` in `plan`/`apply`/`inspect` output (info,
+  not a warning). The registrations of a Vela plugin class you deleted are still removed.
+- **`apply` no longer takes over a Custom API owned by another assembly.** A local Custom API whose unique name already
+  existed, implemented by another assembly, was silently re-pointed to the local plugin while the plan said "create".
+  `apply` now stops with an error naming the owning type and assembly.
+- **`vela add plugin` / `add step` no longer generate a plugin that fails at runtime.** For Create/Update (and the bulk
+  variants) without `--filtering-attributes`, they emitted a `// TODO` instead of `FilterOn`, so the default
+  `vela add plugin X --entity Account` produced a step that failed to build. The option is now required for these
+  messages: the command names it and writes nothing, and `vela add --interactive` asks for the columns.
 - **`apply` no longer deletes a secure configuration it was not given.** A step declaring none had its live secure
   config unlinked and deleted, wiping a value an admin set in the environment. Without a value, the environment now
   owns it: no diff, never written, cleared or deleted.
@@ -136,20 +127,6 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **The secure-config digest in plan output can no longer be brute-forced.** It was a plain SHA-256 of the secret; it
   is now an HMAC keyed per run.
 - **Deleting a step also deletes its secure configuration row**, which Dataverse does not cascade.
-- **One organization service per identity.** `ILocalPluginContext` now exposes `Service` (the current user),
-  `SystemService` and `AsUser(Guid)`. `UserService`, `CallingUserService`, `AsInitiatingUser()`,
-  `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected
-  `Func<Guid?, IOrganizationService>` factory are removed. Migrate `ctx.UserService` to `ctx.Service`,
-  `ctx.AsSystem()` to `ctx.SystemService`, and `ctx.AsInitiatingUser()` to `ctx.AsUser(ctx.InitiatingUserId)`.
-
-### Fixed (Framework)
-
-- **Step impersonation and CallerId are honoured.** The default service was built on `InitiatingUserId`, so a
-  step registered with `WithImpersonation(...)` (or a CallerId call) still ran with the triggering user's
-  privileges. `ctx.Service` and the injected `IOrganizationService` now act as `UserId`, like the platform.
-- **`AddPluginRuntime` registers the same services as the built-in resolver.** Both now share one default set, so
-  Microsoft DI also gets `IPluginCacheService`, `IEnvironmentVariableReader` and `IMessageService`, and its
-  `IOrganizationService` is the current user's service.
 
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
