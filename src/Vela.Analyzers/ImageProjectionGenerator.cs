@@ -550,7 +550,13 @@ namespace Vela.Analyzers
                     => parenthesized.ParameterList.Parameters[0].Identifier.ValueText,
                 _ => null,
             };
-            if (memberAccess.Expression is not IdentifierNameSyntax receiver || receiver.Identifier.ValueText != parameterName)
+            ExpressionSyntax receiverExpression = memberAccess.Expression;
+            while (receiverExpression is ParenthesizedExpressionSyntax parenthesized)
+            {
+                receiverExpression = parenthesized.Expression; // (a).Name is a.Name (parentheses vanish from the tree)
+            }
+
+            if (receiverExpression is not IdentifierNameSyntax receiver || receiver.Identifier.ValueText != parameterName)
             {
                 return null;
             }

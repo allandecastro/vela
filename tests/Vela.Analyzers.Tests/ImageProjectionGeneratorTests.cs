@@ -490,6 +490,29 @@ namespace Demo
         Assert.All(
             second.TrackedOutputSteps.SelectMany(step => step.Value).SelectMany(run => run.Outputs),
             output => Assert.True(output.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged, output.Reason.ToString()));
+    }
+
+    [Fact]
+    public void Resolves_a_parenthesized_receiver()
+    {
+        // a => (a).Name is a.Name: the parentheses vanish from the expression tree, and VELA001 accepts it.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountParen : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => (a).Name).Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.Contains("class OnUpdated_PostImage", output);
+    }
+
+    [Fact]
     public void Emits_nothing_for_a_nested_path_selector()
     {
         // a.Parent.Name is another record's column (VELA001), never a column of this image.

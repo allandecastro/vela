@@ -47,6 +47,18 @@ namespace Demo
         public Account ParentAccount { get; set; }
     }
 
+    // An unrelated attribute that merely shares the SDK attribute's simple name does not name a column.
+    public sealed class AttributeLogicalNameAttribute : Attribute
+    {
+        public AttributeLogicalNameAttribute(string logicalName) { }
+    }
+
+    public class Opportunity : Entity
+    {
+        [AttributeLogicalName(""opportunityid"")]
+        public override Guid Id { get; set; }
+    }
+
     // As `vela models` used to emit it: an Id override with no column name.
     public class Lead : Entity
     {
@@ -117,10 +129,12 @@ namespace Demo
     [Fact]
     public async Task Flags_an_Id_override_without_a_column_name_but_not_one_with_it()
     {
-        string code = InMethod("Steps.Filtering<Lead>(x => x.{|#0:Id|}); Steps.Filtering<Contact>(x => x.Id); Steps.Filtering<Account>(x => x.PrimaryContactId);");
+        string code = InMethod("Steps.Filtering<Lead>(x => x.{|#0:Id|}); Steps.Filtering<Contact>(x => x.Id); Steps.Filtering<Account>(x => x.PrimaryContactId); Steps.Filtering<Opportunity>(x => x.{|#1:Id|});");
         await Verify.VerifyAnalyzerAsync(
             code,
-            new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error).WithLocation(0).WithArguments("Id"));
+            new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error).WithLocation(0).WithArguments("Id"),
+            // A look-alike attribute (not Microsoft.Xrm.Sdk.Client's) does not name the column the runtime reads.
+            new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error).WithLocation(1).WithArguments("Id"));
     }
 
     [Fact]

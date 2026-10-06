@@ -118,7 +118,7 @@ namespace Vela.Analyzers
             }
 
             if (symbol is not IPropertySymbol property
-                || property.GetAttributes().Any(a => a.AttributeClass?.Name == "AttributeLogicalNameAttribute"))
+                || property.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Microsoft.Xrm.Sdk.Client.AttributeLogicalNameAttribute"))
             {
                 return false;
             }
