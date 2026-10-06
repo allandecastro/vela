@@ -457,6 +457,28 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
     }
 }
 
+// The unique names of the Custom APIs a plan would create or update (removed ones need no prefix). Read from the
+// diff's local-side definitions so the plan-time publisher-prefix check sees exactly what apply would write.
+static IEnumerable<string> ExtractCustomApiUniqueNames(RegistrationDiff diff)
+{
+    IEnumerable<JsonElement> definitions = diff.Added.Where(item => item.Kind == "custom-api").Select(item => item.Definition)
+        .Concat(diff.Changed.Where(change => change.Kind == "custom-api").Select(change => change.After));
+
+    foreach (JsonElement definition in definitions)
+    {
+        if (definition.ValueKind == JsonValueKind.Object
+            && definition.TryGetProperty("uniqueName", out JsonElement uniqueName)
+            && uniqueName.ValueKind == JsonValueKind.String)
+        {
+            string? value = uniqueName.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                yield return value!;
+            }
+        }
+    }
+}
+
 static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOptions jsonOptions)
 {
     List<string> tempDirectories = [];
@@ -469,21 +491,46 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
         RegistrationDiff diff = BuildDiff(local, current);
 
-        // A code-only change (unchanged step/custom-API definitions but a rebuilt assembly) is invisible to the
-        // registration diff, so also surface whether each plugin package would be created or republished - exactly
-        // what apply checks - so plan does not report "no changes" for a rebuild that apply would deploy. The same
-        // importable-prefix guard apply uses runs first (local, no connection) so plan fails the same way apply
-        // would on an unprefixed package without --solution rather than advertising an impossible create. Skips the
-        // (short-lived) connection entirely when there are no local packages to compare.
+        // Two live-state checks the registration diff alone cannot express, both run on one short-lived connection:
+        //  1. Package publish: a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) produces no diff
+        //     item, yet apply republishes the package - surface it so plan does not report "no changes". The same
+        //     importable-prefix guard apply uses runs first (local, no connection) so plan fails the same way apply
+        //     would on an unprefixed package without --solution rather than advertising an impossible create.
+        //  2. Custom API publisher prefix: applying into a solution rejects a Custom API unique name without the
+        //     prefix - warn at plan time (and fail under --strict) so it is caught before apply. Resolve the prefix
+        //     only when apply would: a solution is targeted AND a Custom API is being created or updated (removed
+        //     APIs need no prefix), so a step-only or delete-only plan neither pays for nor can fail on the lookup.
         IReadOnlyList<PackagePublishAction> packageActions = [];
-        if (local.PackagePayloads.Length > 0)
+        string[] prefixDiagnostics = [];
+        bool checksPackages = local.PackagePayloads.Length > 0;
+        string[] customApiNames = string.IsNullOrWhiteSpace(options.SolutionUniqueName)
+            ? []
+            : ExtractCustomApiUniqueNames(diff).ToArray();
+        bool checksCustomApiPrefix = customApiNames.Length > 0;
+        if (checksPackages || checksCustomApiPrefix)
         {
-            EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
-            using ServiceClient packageCheckClient = CreateDataverseClient(options);
-            packageActions = ComputePackagePublishActions(packageCheckClient, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
+            if (checksPackages)
+            {
+                EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
+            }
+
+            using ServiceClient planClient = CreateDataverseClient(options);
+            if (checksPackages)
+            {
+                packageActions = ComputePackagePublishActions(planClient, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
+            }
+
+            if (checksCustomApiPrefix)
+            {
+                string solutionPrefix = ResolveSolutionCustomizationPrefix(planClient, options.SolutionUniqueName!);
+                prefixDiagnostics = ComputeCustomApiPrefixDiagnostics(solutionPrefix, customApiNames).ToArray();
+            }
         }
 
-        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics, packageActions);
+        string[] planDiagnostics = prefixDiagnostics.Length == 0
+            ? local.Diagnostics
+            : [.. local.Diagnostics, .. prefixDiagnostics];
+        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, planDiagnostics, current.Diagnostics, packageActions);
         if (options.Strict && plan.Diagnostics.Length > 0)
         {
             WriteDiagnostics(plan.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
