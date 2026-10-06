@@ -49,14 +49,7 @@ internal static class OutputWriter
         string changed = ConsoleTheme.Changed($"~{preview.Summary.Changed}", color);
         writer.WriteLine($"{ConsoleTheme.Muted("summary:", color)} {added} {removed} {changed}");
 
-        if (preview.Unmanaged is { Length: > 0 })
-        {
-            writer.WriteLine(ConsoleTheme.Muted("unmanaged (left untouched):", color));
-            foreach (string line in preview.Unmanaged)
-            {
-                writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {line}", color));
-            }
-        }
+        WriteUnmanaged(preview.Unmanaged, writer, color);
 
         if (preview.Operations.Length > 0)
         {
@@ -247,11 +240,27 @@ internal static class OutputWriter
         _ => action,
     };
 
-    public static void WriteInspectSummary(RegistrationState local, RegistrationState current, string? environment, TextWriter writer, bool color)
+    public static void WriteInspectSummary(RegistrationState local, RegistrationState current, string? environment, TextWriter writer, bool color, IReadOnlyList<string>? unmanaged = null)
     {
         writer.WriteLine(ConsoleTheme.Heading($"inspect {environment}", color));
         WriteStateSummary("local", local, writer, color);
         WriteStateSummary("current", current, writer, color);
+        WriteUnmanaged(unmanaged, writer, color);
+    }
+
+    // The plugin types of the deployed assembly Vela does not own (OwnershipScope): information, never a warning.
+    public static void WriteUnmanaged(IReadOnlyList<string>? unmanaged, TextWriter writer, bool color)
+    {
+        if (unmanaged is not { Count: > 0 })
+        {
+            return;
+        }
+
+        writer.WriteLine(ConsoleTheme.Muted("unmanaged (left untouched):", color));
+        foreach (string line in unmanaged)
+        {
+            writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {line}", color));
+        }
     }
 
     public static void WriteStateSummary(string label, RegistrationState state, TextWriter writer, bool color)

@@ -94,4 +94,33 @@ public class OwnershipScopeTests
         DataverseRegistration.EnsureCustomApiNotOwnedElsewhere(Service(ours, owner: null), Guid.NewGuid(), "zava_Score", mine);
         DataverseRegistration.EnsureCustomApiNotOwnedElsewhere(Service(Guid.NewGuid(), owner: null), Guid.NewGuid(), "zava_Score", mine); // type gone (rename)
     }
+
+    // A type whose interfaces fail to load (a missing dependency).
+    private sealed class UnloadableType : System.Reflection.TypeDelegator
+    {
+        public UnloadableType() : base(typeof(OwnershipScopeTests)) { }
+
+        public override Type[] GetInterfaces() => throw new TypeLoadException("missing dependency");
+    }
+
+    [Fact]
+    public void A_type_that_cannot_be_classified_aborts_the_scan()
+    {
+        // Treating it as managed would diff its live registrations as removed, and apply would delete them.
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => PackageScanner.IsUnmanagedPluginType(new UnloadableType()));
+        Assert.Contains("missing dependency", ex.Message);
+    }
+
+    [Fact]
+    public void Inspect_and_apply_output_render_the_unmanaged_lines()
+    {
+        using var inspect = new System.IO.StringWriter();
+        OutputWriter.WriteInspectSummary(State(), State(), "dev", inspect, color: false, unmanaged: ["Legacy is not a Vela plugin type"]);
+        Assert.Contains("unmanaged (left untouched):", inspect.ToString());
+        Assert.Contains("Legacy is not a Vela plugin type", inspect.ToString());
+
+        using var none = new System.IO.StringWriter();
+        OutputWriter.WriteUnmanaged([], none, color: false);
+        Assert.Equal(string.Empty, none.ToString());
+    }
 }

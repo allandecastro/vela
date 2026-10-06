@@ -467,7 +467,10 @@ internal static class PackageScanner
         }
         catch (Exception ex) when (ex is TypeLoadException or FileNotFoundException or FileLoadException)
         {
-            return false; // an unresolvable dependency: not a type the scan can reason about
+            // Treating an unclassifiable type as managed would leave its live registrations in the diff, where they
+            // read as "removed" and apply deletes them: abort the scan instead, as GetLoadableTypes does.
+            throw new InvalidOperationException(
+                $"Cannot tell whether '{type.FullName}' is a plugin type: its interfaces fail to load ({ex.Message}). Fix the package's dependencies before planning or applying.", ex);
         }
     }
 
