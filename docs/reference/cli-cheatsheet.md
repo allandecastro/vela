@@ -8,11 +8,12 @@ exit codes. For the full narrative, see [The vela CLI](../guides/cli-overview.md
 | Command | Purpose | Key options |
 | --- | --- | --- |
 | `vela init` (alias `new`) | Scaffold a build-ready solution | `--name`, `--prefix`, `--minimal`/`--no-demos`, `--output`, `--no-tests`/`--no-console`/`--no-integrations`, `--managed-identity`, `--web-resources`, `--core-version`, `--force` |
-| `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; `--entity`, `--message`, `--filtering-attributes`, `--function`/`--action`, `--bound`/`--global`, `--prefix` (customapi publisher prefix), `--project`, `--force` |
+| `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; `--entity`, `--message`, `--stage`, `--mode`, `--filtering-attributes` (required for Create/Update steps), `--handler` (step), `--function`/`--action`, `--bound`/`--global`, `--prefix` (customapi publisher prefix), `--project`, `--force` |
 | `vela models <scope>` | Generate early-bound / typed models | see [scopes](#models-scopes) + connection flags |
 | `vela plan` | Preview registrations (read-only) | package inputs + connection flags, `--secure-config NAME=VALUE\|NAME=@file`, `--strict`, `--verbose`, `--json`, `--out` |
-| `vela apply` | Apply registrations (writes) | same as `plan` + `--solution`, `--auto-approve` (alias `--yes`), `--webresources` |
-| `vela inspect` | Compare local packages with the live environment | package inputs + connection flags |
+| `vela apply` | Apply registrations (writes) | same as `plan` + `--solution`, `--auto-approve` (alias `--yes`), `--batch-size <1-1000>`, `--webresources` |
+| `vela inspect` | Compare local packages with the live environment | package inputs + connection flags, `--secure-config` |
+| `vela logs` (alias `trace`) | Read the plug-in trace log, or failed system jobs (read-only) | `--jobs` (`--all-statuses`), `--errors`, `--top`, `--since`, `--type`, `--message`, `--entity`, `--correlation`, `--full`, `--json` + connection flags |
 | `vela sign` | Sign a plugin package | `--package`, `--fingerprint` \| (`--pfx`/`--pfx-base64` + `--pfx-password`/`--pfx-credential`), `--timestamp` |
 | `vela logout` | Clear the cached interactive token and remembered URL | |
 | `vela update` | Update the global tool (`dotnet tool update --global Vela.Cli`) | `--version <x.y.z>` (Windows: run from a fresh shell, the running exe is locked) |

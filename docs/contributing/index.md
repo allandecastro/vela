@@ -33,13 +33,14 @@ dotnet test .\tests\Vela.Tests\Vela.Tests.csproj `
   --collect:"XPlat Code Coverage"
 ```
 
-CI enforces a **branch-coverage gate** (via `coverlet.msbuild`) on the two areas where edge-case coverage matters
-most - the **diff engine** (plan/apply idempotence) and the **in-memory harness**. The run fails if branch
-coverage drops below the threshold. Reproduce a gate locally, e.g. the diff engine:
+CI enforces a **branch-coverage gate** (via `coverlet.msbuild`) on five areas: the **diff engine** (plan/apply
+idempotence), the **in-memory harness**, the **plugin runtime** (`Vela.Plugins`), the **analyzers** and the **code
+fixes**. The run fails if branch coverage drops below the threshold. A gated test project must reference
+`coverlet.msbuild`, otherwise the threshold is silently ignored. Reproduce a gate locally, e.g. the diff engine:
 
 ```bash
 dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release \
-  -p:CollectCoverage=true -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=88 \
+  -p:CollectCoverage=true -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=90 \
   -p:Include="[Vela.Cli]Vela.Cli.DiffEngine%2c[Vela.Cli]Vela.Cli.DefinitionNormalizer"
 ```
 
@@ -49,10 +50,11 @@ Thresholds are set just below current coverage to catch regressions without chur
 
 Two gate families guard the correctness-critical cores, and both follow the same policy:
 
-- **Branch coverage** (`ci.yml`) - diff engine, in-memory harness, and the plugin runtime (`Vela.Plugins`).
-- **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine and normalizer, the CLI reconciliation and
-  security cores, and the harness query core (see [Mutation testing](../advanced/mutation-testing.md) for the full
-  gated set).
+- **Branch coverage** (`ci.yml`) - diff engine, in-memory harness, plugin runtime (`Vela.Plugins`), analyzers and
+  code fixes.
+- **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine + normalizer, the harness query core and
+  security model, and the CLI apply / Custom API / reader / steps / scanner / role-generation cores (see
+  [Mutation testing](../advanced/mutation-testing.md) for the full gated set).
 
 **Policy - 80% floor, ratcheted above it.** Every gated core stays at **≥ 80%** on *both* metrics; `80` is a hard
 minimum, never to be lowered below. On top of that floor the enforced threshold is **ratcheted to just under the
@@ -77,16 +79,16 @@ VELA_BUILD_SMOKE=1 dotnet test tests/Vela.Cli.Tests --filter Generate_ThenDotnet
 > The smoke test packs the framework into a local feed at version **1.0.0**, but the global NuGet cache
 > (`~/.nuget/packages/vela.plugins/1.0.0`, `.../vela.testing/1.0.0`, `.../vela.messages/1.0.0`) *shadows* that feed. If a stale 1.0.0 is
 > cached, the generated code is compiled against an **old framework** and you get misleading errors. Delete those
-> two cache folders before running the smoke test (or any manual compile of `vela init` / `vela add` output
+> three cache folders before running the smoke test (or any manual compile of `vela init` / `vela add` output
 > against the local framework) so restore picks up the freshly packed sources.
 
 ## Release
 
 Release artifacts are produced by the release pipeline and should include only the framework packages
-(`Vela.Plugins`, `Vela.Testing`) and the shared CLI tool (`Vela.Cli`).
+(`Vela.Messages`, `Vela.Plugins`, `Vela.Testing`) and the shared CLI tool (`Vela.Cli`).
 
 The packages follow [Semantic Versioning](https://semver.org/) and ship as two independent release lines: the
-**framework** (`Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
+**framework** (`Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
 notable change in `CHANGELOG.md` under **Unreleased** as you merge it; cutting a release means
 renaming that section (with a date) and pushing the line's tag - `framework-vX.Y.Z` or `cli-vX.Y.Z` - which
 packs and publishes only that line. See the changelog's *Versioning policy* section for the pre-1.0 rules.

@@ -604,7 +604,7 @@ This is a bare, demo-free scaffold: the plugin projects ship no sample code, wai
 Run these from the solution root:
 
 1. Generate early-bound models from your environment: `vela models --entities account,contact` (writes into `src/{{options.Prefix}}.Shared`).
-2. Add a plugin or Custom API (`--entity` is the early-bound model type): `vela add plugin MyPlugin --entity Account` or `vela add customapi MyApi --global`.
+2. Add a plugin or Custom API (`--entity` is the early-bound model type): `vela add plugin MyPlugin --entity Account --filtering-attributes Name` (a Create/Update step needs its filtering columns) or `vela add customapi MyApi --global`.
 3. Build, then preview and deploy: `dotnet build -c Release`, then `vela plan --packages-dir artifacts` and `vela apply --packages-dir artifacts`.
 
 Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts` simply reports no changes.
@@ -764,10 +764,11 @@ RegisterStep().OnUpdate()
 | `.OnCreate()` … `.OnUpdate()` … `.OnMessage("custom_action")` | The message the step listens to. |
 | `.PreValidation()` / `.PreOperation()` / `.PostOperation()` | Pipeline stage. |
 | `.Sync()` / `.Async()` | Execution mode (Async is PostOperation-only). |
-| `.FilterOn(...)` | (create/update) fire only when one of the listed columns changes. |
+| `.FilterOn(...)` | (create/update, required there - analyzer VELA020) fire only when the request sets one of the listed columns. |
 | `.WithPreImage(...)` / `.WithPostImage(...)` | Capture a before/after snapshot, scoped to named columns. |
 | `.WithExecutionOrder(n)` | Step rank when several steps share a message + stage. |
-| `.WithImpersonation(...)` | Run as `CallingUser` or `PluginOwner`. |
+| `.WithImpersonation(userId)` | Run as a specific Dataverse user (`ctx.Service` acts as that user). |
+| `.WithUnsecureConfig(...)` / `.WithSecureConfigFrom("Name")` | Step configuration passed to the plugin constructor; the secure value is supplied at deploy time (`vela apply --secure-config Name=...`), never compiled in. |
 | `.WithDescription(...)` | Step description shown in Dataverse. |
 | `.Disabled()` | Register the step dormant (kill-switch / phased rollout). |
 | `.Handle(M)` | The handler the step dispatches to; takes the message-typed context. Required, last in the chain. |
@@ -870,8 +871,8 @@ vela models `
 ```
 
 `vela models` emits `partial` classes with option-set enums, multi-select choices, alternate-key factories and
-DataAnnotations. For the few things it leaves out (relationship navigation properties / `OrganizationServiceContext`
-LINQ, localized multi-language labels, custom casing), use `pac modelbuilder` instead.
+DataAnnotations, and typed relationship navigation properties. For the few things it leaves out
+(`OrganizationServiceContext` LINQ, localized multi-language labels, custom casing), use `pac modelbuilder` instead.
 
 Add `--roles "<names>"` (or `--solution-roles` with `--solution`) to also generate a dependency-light `Roles`
 class into the same `Shared.Models.Generated` folder: `Roles.XName` / `Roles.XId` are usable from plugin code at

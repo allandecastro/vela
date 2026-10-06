@@ -39,7 +39,8 @@ vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models
 
 `--solution` / `--entities` generate `partial` entity classes (extend them in a sibling file) with:
 
-- **Primary id kept in sync** with `Entity.Id`.
+- **Primary id kept in sync** with `Entity.Id`. The `Id` override carries `[AttributeLogicalName]` naming the primary-id column (e.g. `"accountid"`), so
+  `a => a.Id` selects the primary key column in `FilterOn`, images and typed queries.
 - **XML doc** on each property (display name, description, constraints, lookup targets).
 - **DataAnnotations** (`[StringLength]` / `[Range]`); omit with `--no-annotations`.
 - **Two facet attributes** no standard annotation can express: `[RequiredLevel(...)]` (the full four-value
@@ -235,7 +236,7 @@ context already exist with **no `vela models` run needed**. `QualifyLead` is one
 and the handler receives the typed `QualifyLeadRequest`/`QualifyLeadResponse`.
 
 ```csharp
-public sealed class RouteQualifiedLead : EntityPluginBase<Lead>
+public sealed partial class RouteQualifiedLead(string unsecure, string secure) : EntityPluginBase<Lead>(unsecure, secure)
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnQualified);

@@ -38,14 +38,15 @@ vela add --interactive
   email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and case/contract messages (see the full
   list in [Write a plugin](plugins.md)); any other name is
   registered as a custom SDK message via `OnMessage("...")`. The deprecated `SetState` / `SetStateDynamicEntity`
-  and `Assign` messages have no typed method (update `statecode`/`statuscode` or `ownerid` with `Update`
-  instead), so they too render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
+  messages have no typed method (update `statecode`/`statuscode` with `Update` instead), and `add` does not
+  emit the typed `OnAssign()` either, so these render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
   current directory), `--force` (overwrite an existing file).
 - **Filtering attributes on a `Create`/`Update` plugin or step** (also `CreateMultiple`/`UpdateMultiple`):
   these steps require a `FilterOn`, so `--filtering-attributes <Col1,Col2>` is **required** for them. Pass the
   early-bound property name(s) (for example `--filtering-attributes Name,Telephone1` renders
   `FilterOn(e => e.Name, e => e.Telephone1)`). `add` never guesses a column from the model: without the option it
-  fails with a message naming it, and writes nothing. The interactive wizard asks for the columns.
+  fails with a message naming it, and writes nothing. On any other message the option is rejected (those steps
+  have no `FilterOn`). The interactive wizard asks for the columns.
   Property names are **case-sensitive** (`Name`, not `name`): when the model is available and a value differs
   only in case (for example `name` for `Name`), `add` corrects it to the real property and prints a note, so the
   emitted `FilterOn` compiles; a name that matches no property is left as-is with a warning.
@@ -72,9 +73,8 @@ vela add --interactive
   step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source. It
   accepts the same `--stage`/`--mode` and `--filtering-attributes` options as `add plugin`: pass
   `--filtering-attributes <Col1,Col2>` to emit `FilterOn(e => e.Col1, e => e.Col2)` (identifiers validated and
-  wrong casing corrected against the model, as above). If you omit it on a `Create`/`Update` (or `*Multiple`)
-  step, `add step` leaves a `// TODO: add .FilterOn(e => e.Column)` comment (it cannot know the entity's columns
-  from the file alone), so the step compiles as-is and you add the filter yourself. The handler body's TODO
+  wrong casing corrected against the model, as above). As for `add plugin`, the option is required on a
+  `Create`/`Update` (or `*Multiple`) step and rejected on any other message. The handler body's TODO
   points at the typed access for the message (`ctx.Request.Target`, or `ctx.Request.Targets` for a `*Multiple`
   step).
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +

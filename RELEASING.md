@@ -6,7 +6,7 @@ NuGet.org via Trusted Publishing (OIDC, no stored API key), and create a GitHub 
 
 | Line | Tag | Packages |
 | --- | --- | --- |
-| Framework | `framework-vX.Y.Z` | `Vela.Plugins` + `Vela.Testing` (versioned together) |
+| Framework | `framework-vX.Y.Z` | `Vela.Messages` + `Vela.Plugins` + `Vela.Testing` (versioned together) |
 | CLI | `cli-vX.Y.Z` | `Vela.Cli` |
 
 The tag is the single source of truth for the version; the `<Version>` in each `.csproj` is only the
@@ -29,7 +29,7 @@ local-dev default.
    there is no self-hosted runner to keep online.
 3. Tag and push:
    ```bash
-   git tag framework-v0.1.0 && git push origin framework-v0.1.0   # Vela.Plugins + Vela.Testing
+   git tag framework-v0.1.0 && git push origin framework-v0.1.0   # Vela.Messages + Vela.Plugins + Vela.Testing
    git tag cli-v0.1.0       && git push origin cli-v0.1.0         # Vela.Cli
    ```
 4. Watch the run under the repo's Actions tab. On success the packages are live on NuGet.org and a GitHub

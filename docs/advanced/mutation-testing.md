@@ -15,10 +15,10 @@ For the companion branch-coverage gate and the test stack, see
 Two gate families guard the correctness-critical cores, and both follow the same
 policy:
 
-- **Branch coverage** (`ci.yml`) - diff engine, in-memory harness, and the plugin
-  runtime (`Vela.Plugins`).
-- **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine + normalizer, and
-  the harness query core, plus the CLI reconciliation cores below.
+- **Branch coverage** (`ci.yml`) - diff engine, in-memory harness, plugin runtime
+  (`Vela.Plugins`), analyzers and code fixes.
+- **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine + normalizer, the
+  harness query core and security model, plus the CLI cores below.
 
 The `mutation.yml` workflow runs weekly / on demand; each job reports into the run
 summary and an HTML artifact.
@@ -63,12 +63,12 @@ All jobs run on GitHub-hosted `windows-latest` runners.
 | diff engine | `DiffEngine` + `DefinitionNormalizer` | ~87.7% | 85 |
 | harness query core | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | ~91.6% | 89 |
 | security enforcement wiring | `InMemoryOrganizationService.Security.cs` | ~84.8% | 82 |
-| security model | `Security/SecurityModel.cs` (+ sharing, access teams, 1:N) | ~86% | 84 |
+| security model | `Security/SecurityModel.cs` (+ sharing, access teams, 1:N) | ~86.2% | 84 |
 | `cli-apply` | `DataverseRegistration.Apply.cs` (web resources excluded) | ~80.3% | 80 |
-| `cli-customapi` | `DataverseRegistration.CustomApi.cs` | ~85.1% | 80 |
-| `cli-reader` | `DataverseRegistration.cs` | ~87.5% | 83 |
-| `cli-steps` | `DataverseRegistration.Steps.cs` | ~88.1% | 87 |
-| `cli-scanner` | `PackageScanner.cs` | ~81.2% | 80 |
+| `cli-customapi` | `DataverseRegistration.CustomApi.cs` | ~82.7% | 80 |
+| `cli-reader` | `DataverseRegistration.cs` | ~85.3% | 83 |
+| `cli-steps` | `DataverseRegistration.Steps.cs` | ~89.4% | 87 |
+| `cli-scanner` | `PackageScanner.cs` | ~81.6% | 80 |
 | `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | ~89.4% | 80 |
 
 Notes on the scores:

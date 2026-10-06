@@ -48,7 +48,9 @@ line so the value is visible via the logger / trace log too.
 
 `ctx.Trace(...)` still works and is equivalent to `ctx.LogInformation(...)`: it writes to the plug-in trace log and,
 at Information level, to Application Insights. Use the leveled helpers when you want a severity other than
-Information, an attached exception, or metrics.
+Information, an attached exception, or metrics. Execution snapshots (the automatic ones and
+`ctx.TraceExecutionSnapshot(...)`) are the exception: they go to the plug-in trace log only, never to Application
+Insights (see [Write a plugin](plugins.md)).
 
 ## Whether Application Insights is set up or not
 

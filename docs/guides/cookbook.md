@@ -7,7 +7,7 @@ Quick sketches for the patterns you'll reach for most. Each links to the full gu
 Declare one step in `RegisterPluginSteps()`. See [Write a plugin](plugins.md).
 
 ```csharp
-public class AccountPostUpdate : EntityPluginBase<Account>
+public partial class AccountPostUpdate(string unsecure, string secure) : EntityPluginBase<Account>(unsecure, secure)
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnUpdate().PostOperation().Sync()

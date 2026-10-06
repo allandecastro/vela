@@ -63,18 +63,28 @@ vela plan `
 
 ### Batched writes
 
-`apply` sends its writes in **batches** rather than one request per record: the create/update/delete operations are grouped into dependency tiers (the step and custom API rows first, then their images, parameters, secure config and state) and each tier is flushed in chunked `ExecuteMultiple` requests. This collapses hundreds of round-trips into a handful, so `apply` is much faster on a large environment and far less likely to hit the connection timeout. Deletes run in the reverse order (children before parents). The output is unchanged: results are still reported **per plugin and per custom API**. If a whole batch cannot run on a given environment (for example `ExecuteMultiple` is unavailable, or a request times out), that chunk automatically falls back to one-by-one execution, so batching never makes `apply` less reliable. See [connection timeout](../configuration/authentication.md#connection-timeout) to raise the per-request budget on a very large org.
+`apply` sends its writes in **batches** rather than one request per record: the create/update/delete operations are grouped into dependency tiers (the step and custom API rows first, then their images, parameters, secure config and state) and each tier is flushed in chunked `ExecuteMultiple` requests. This collapses hundreds of round-trips into a handful, so `apply` is much faster on a large environment and far less likely to hit the connection timeout. Deletes run in the reverse order (children before parents). The output is unchanged: results are still reported **per plugin and per custom API**. If a whole batch cannot run on a given environment (for example `ExecuteMultiple` is unavailable, or a request times out), that chunk automatically falls back to one-by-one execution, so batching never makes `apply` less reliable. Each `ExecuteMultiple` carries up to 100 requests; tune it with `--batch-size <1-1000>`. See [connection timeout](../configuration/authentication.md#connection-timeout) to raise the per-request budget on a very large org.
 
 **Unmanaged registrations.** An assembly can mix Vela plugins with classic `IPlugin` / `CodeActivity` classes
 registered by other tools. Those classes are not Vela types, so `plan` and `apply` leave their steps and Custom APIs
 alone and list them under `unmanaged` (JSON) / "unmanaged (left untouched)" (terminal). This is information, not a
 warning: `--strict` does not fail on it.
 
+**Custom APIs owned by another assembly.** A Custom API unique name is environment-wide. If a local Custom API's
+name already exists in the environment, implemented by a plugin type in an assembly that is not being applied,
+`apply` stops with an error naming that type and assembly instead of re-pointing it to your plugin. Rename the
+Custom API, or remove the existing one first.
+
+**Secure configuration.** A step's secure configuration value is supplied at plan/apply time with
+`--secure-config NAME=VALUE` / `NAME=@file` (or `VELA_SECURE_CONFIG_<NAME>`), never compiled into the package;
+without a value the environment keeps its own. Deleting a step also deletes its secure-configuration row. See
+the step configuration section of [Write a plugin](plugins.md).
+
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
 ### Assembly name collisions across projects
 
-The registered plugin assembly is keyed by its **.NET assembly name** (the csproj `<AssemblyName>`, e.g. `Zava.Plugins`), which is **unique per org**. `vela init <prefix>` scaffolds the plugins project as `<prefix>.Plugins`, so two solutions initialized with the same prefix build the same assembly name and **collide**: applying the second rewrites the first's assembly content in that org. When `apply` is run with `--solution` and the target assembly already exists but is **not part of that solution**, it warns before overwriting:
+The registered plugin assembly is keyed by its **.NET assembly name** (the csproj `<AssemblyName>`, e.g. `Zava.Plugins`), which is **unique per org**. `vela init --prefix <prefix>` scaffolds the plugins project as `<prefix>.Plugins`, so two solutions initialized with the same prefix build the same assembly name and **collide**: applying the second rewrites the first's assembly content in that org. When `apply` is run with `--solution` and the target assembly already exists but is **not part of that solution**, it warns before overwriting:
 
 ```
 Warning: plugin assembly 'Zava.Plugins' already exists in this org and is not part of solution 'Sales'.

@@ -60,7 +60,7 @@ fixes**. The run fails if branch coverage drops below the threshold. A gated tes
 
 ```bash
 dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release \
-  -p:CollectCoverage=true -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=88 \
+  -p:CollectCoverage=true -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=90 \
   -p:Include="[Vela.Cli]Vela.Cli.DiffEngine%2c[Vela.Cli]Vela.Cli.DefinitionNormalizer"
 ```
 
@@ -100,10 +100,10 @@ dotnet test .\tests\Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
 ## Release
 
 Release artifacts are produced by the release pipeline and should include only the framework packages
-(`Vela.Plugins`, `Vela.Testing`) and the shared CLI tool (`Vela.Cli`).
+(`Vela.Messages`, `Vela.Plugins`, `Vela.Testing`) and the shared CLI tool (`Vela.Cli`).
 
 The packages follow [Semantic Versioning](https://semver.org/) and ship as two independent release lines: the
-**framework** (`Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
+**framework** (`Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
 notable change in [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** as you merge it; cutting a release means
 renaming that section (with a date) and pushing the line's tag - `framework-vX.Y.Z` or `cli-vX.Y.Z` - which
 packs and publishes only that line. See the changelog's *Versioning policy* section for the pre-1.0 rules.

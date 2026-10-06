@@ -245,7 +245,7 @@ link.Columns = new ColumnSet("name");
 query.Criteria.AddCondition("fullname", ConditionOperator.BeginsWith, "J");
 
 Entity contact = crm.RetrieveMultiple(query).Entities.Single();
-contact.GetAttributeValue<AliasedValue>("acct.name").Value; // "Zava"
+object name = contact.GetAttributeValue<AliasedValue>("acct.name").Value; // "Zava"
 ```
 
 Supported: filters (And/Or, operators incl. Between, Begins/Ends/Like, date operators, EqualUserId,
@@ -326,8 +326,8 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   `WithSecurity` is used; `ctx.SystemService` is SYSTEM and is not (audit columns still record the calling user). A
   plugin fired by a write made through `ctx.SystemService` runs as SYSTEM: its own `ctx.Service` is unrestricted too.
 - **`ParentContext` on a cascade.** A plugin fired by another plugin's write sees its caller's context as
-  `ctx.ParentContext` (with its shared variables), so a re-entrancy guard like
-  `if (ctx.ParentContext?.MessageName == "Create") return;` behaves as it does in Dataverse.
+  `ctx.PluginExecutionContext.ParentContext` (with its shared variables), so a re-entrancy guard like
+  `if (ctx.PluginExecutionContext.ParentContext?.MessageName == "Create") return;` behaves as it does in Dataverse.
 - **Not-found faults.** Retrieving or updating a record that does not exist throws
   `FaultException<OrganizationServiceFault>` with the platform `ObjectDoesNotExist` code (`-2147220969`), like a
   real `IOrganizationService`, so a plugin that catches that fault code is exercised faithfully.

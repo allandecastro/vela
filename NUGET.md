@@ -26,7 +26,7 @@ using Vela.Context;
 using Vela.Plugin;
 using Vela.Steps;
 
-public class AccountPostUpdate : EntityPluginBase<Account>
+public partial class AccountPostUpdate : EntityPluginBase<Account>
 {
     public AccountPostUpdate(string unsecure, string secure) : base(unsecure, secure) { }
 
