@@ -18,6 +18,8 @@ namespace Vela.Context
     public interface ILocalPluginContext { }
     public interface IUpdatePostContext<TEntity> : ILocalPluginContext { }
     public interface ICreatePostContext<TEntity> : ILocalPluginContext { }
+    public interface IUpdatePreContext<TEntity> : ILocalPluginContext { }
+    public interface IDeletePreContext<TEntity> : ILocalPluginContext { }
 }
 
 namespace Vela.Steps
@@ -28,6 +30,9 @@ namespace Vela.Steps
     {
         IStepConfig<TEntity> OnCreate();
         IStepConfig<TEntity> OnUpdate();
+        IStepConfig<TEntity> OnDelete();
+        IStepConfig<TEntity> PreValidation();
+        IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
         IStepConfig<TEntity> Sync();
         void Handle(Action<IUpdatePostContext<TEntity>> handler);
@@ -68,13 +73,15 @@ namespace Demo
         private void OnWrongEntity(IUpdatePostContext<Contact> ctx) { }
         private void OnPlain(ILocalPluginContext ctx) { }
         private void OnGenerated(GenCtx ctx) { }
+        private void OnPre(IUpdatePreContext<Account> ctx) { }
+        private void OnDeletePre(IDeletePreContext<Account> ctx) { }
     }
 }
 ";
 
-    private static DiagnosticResult Expected(string handler) =>
+    private static DiagnosticResult Expected(string handler, string step = "Update post-operation", string expected = "IUpdatePostContext") =>
         new DiagnosticResult(Vela.Analyzers.HandlerContextMatchAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
-            .WithLocation(0).WithArguments(handler, "Update post-operation", "IUpdatePostContext");
+            .WithLocation(0).WithArguments(handler, step, expected);
 
     [Fact]
     public async Task Does_not_flag_the_matching_message_context()
@@ -99,4 +106,171 @@ namespace Demo
     [Fact]
     public async Task Flags_the_right_context_shape_but_for_the_wrong_entity()
         => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnUpdate().PostOperation().Sync().Handle({|#0:OnWrongEntity|});"), Expected("OnWrongEntity"));
+
+    [Fact]
+    public async Task Flags_a_post_context_bound_to_a_pre_operation_update_step()
+        => await Verify.VerifyAnalyzerAsync(
+            InPlugin("RegisterStep().OnUpdate().PreOperation().Sync().Handle({|#0:OnGood|});"),
+            Expected("OnGood", "Update pre-operation", "IUpdatePreContext"));
+
+    [Fact]
+    public async Task Does_not_flag_a_pre_context_on_a_pre_validation_update_step()
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnUpdate().PreValidation().Sync().Handle(OnPre);"));
+
+    [Fact]
+    public async Task Flags_an_update_context_bound_to_a_create_post_operation_step()
+        => await Verify.VerifyAnalyzerAsync(
+            InPlugin("RegisterStep().OnCreate().PostOperation().Sync().Handle({|#0:OnGood|});"),
+            Expected("OnGood", "Create post-operation", "ICreatePostContext"));
+
+    [Fact]
+    public async Task Does_not_flag_the_matching_create_post_context()
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnCreate().PostOperation().Sync().Handle(OnWrong);"));
+
+    [Fact]
+    public async Task Flags_an_update_context_bound_to_a_delete_pre_operation_step()
+        => await Verify.VerifyAnalyzerAsync(
+            InPlugin("RegisterStep().OnDelete().PreOperation().Sync().Handle({|#0:OnGood|});"),
+            Expected("OnGood", "Delete pre-operation", "IDeletePreContext"));
+
+    [Fact]
+    public async Task Does_not_flag_the_matching_delete_pre_context()
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnDelete().PreOperation().Sync().Handle(OnDeletePre);"));
+
+    [Fact]
+    public async Task Does_not_flag_a_chain_whose_stage_is_not_set()
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnUpdate().Sync().Handle(OnWrong);"));
+
+    [Fact]
+    public async Task Does_not_flag_a_chain_whose_message_is_not_set()
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().PostOperation().Sync().Handle(OnWrong);"));
+
+    [Fact]
+    public async Task Flags_a_step_started_from_a_field_through_this()
+        => await Verify.VerifyAnalyzerAsync(Harness + @"
+    public sealed class P : EntityPluginBase<Account>
+    {
+        private readonly Vela.Steps.IStepConfig<Account> _step = null!;
+        protected override void RegisterPluginSteps()
+        {
+            this._step.OnUpdate().PostOperation().Handle({|#0:OnWrong|});
+        }
+        private void OnWrong(ICreatePostContext<Account> ctx) { }
+    }
+}
+", Expected("OnWrong"));
+
+    [Fact]
+    public async Task Flags_a_wrong_entity_through_an_intermediate_plugin_base()
+        => await Verify.VerifyAnalyzerAsync(Harness + @"
+    public abstract class AccountPluginBase : EntityPluginBase<Account> { }
+
+    public sealed class P : AccountPluginBase
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Handle({|#0:OnWrongEntity|});
+        }
+        private void OnWrongEntity(IUpdatePostContext<Contact> ctx) { }
+    }
+}
+", Expected("OnWrongEntity"));
+
+    [Fact]
+    public async Task Flags_a_wrong_message_in_a_registration_helper_outside_a_plugin()
+        => await Verify.VerifyAnalyzerAsync(Harness + @"
+    public static class AccountSteps
+    {
+        public static void Register(Vela.Steps.IStepConfig<Account> step)
+        {
+            step.OnUpdate().PostOperation().Handle({|#0:OnWrong|});
+        }
+        private static void OnWrong(ICreatePostContext<Account> ctx) { }
+    }
+}
+", Expected("OnWrong"));
+
+    [Fact]
+    public async Task Does_not_flag_an_entity_mismatch_when_the_plugin_entity_is_unknown()
+        => await Verify.VerifyAnalyzerAsync(Harness + @"
+    public static class AccountSteps
+    {
+        public static void Register(Vela.Steps.IStepConfig<Account> step)
+        {
+            step.OnUpdate().PostOperation().Handle(OnOtherEntity);
+        }
+        private static void OnOtherEntity(IUpdatePostContext<Contact> ctx) { }
+    }
+}
+");
+
+    [Fact]
+    public async Task Does_not_flag_a_handler_whose_context_type_does_not_resolve()
+        => await Verify.VerifyAnalyzerAsync(Harness + @"
+    public sealed class P : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Handle(OnMissing);
+        }
+        private void OnMissing({|CS0246:IUpdatePostContxt<Account>|} ctx) { }
+    }
+}
+");
+
+    [Fact]
+    public async Task Does_not_flag_a_handler_whose_context_entity_does_not_resolve()
+        => await Verify.VerifyAnalyzerAsync(Harness + @"
+    public sealed class P : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Handle(OnTypo);
+        }
+        private void OnTypo(IUpdatePostContext<{|CS0246:Acount|}> ctx) { }
+    }
+}
+");
+
+    [Fact]
+    public async Task Does_not_flag_a_Handle_method_group_on_a_non_Vela_type()
+        => await Verify.VerifyAnalyzerAsync(Harness + @"
+    public sealed class MessageBus
+    {
+        public MessageBus OnUpdate() => this;
+        public MessageBus PostOperation() => this;
+        public void Handle(Delegate handler) { }
+    }
+
+    public sealed class Consumer
+    {
+        public void Wire(MessageBus bus) => bus.OnUpdate().PostOperation().Handle(OnWrong);
+        private void OnWrong(ICreatePostContext<Account> ctx) { }
+    }
+}
+");
+
+    [Fact]
+    public async Task Does_not_flag_anything_when_the_Vela_step_builder_is_not_referenced()
+        => await Verify.VerifyAnalyzerAsync(@"
+using System;
+
+namespace Demo
+{
+    public interface ICreatePostContext { }
+
+    public sealed class Bus
+    {
+        public Bus OnUpdate() => this;
+        public Bus PostOperation() => this;
+        public void Handle(Delegate handler) { }
+    }
+
+    public sealed class Consumer
+    {
+        public void Wire(Bus bus) => bus.OnUpdate().PostOperation().Handle(OnCreated);
+        private void OnCreated(ICreatePostContext ctx) { }
+    }
+}
+");
 }

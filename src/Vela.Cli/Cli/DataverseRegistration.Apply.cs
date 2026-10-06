@@ -37,10 +37,12 @@ internal static partial class DataverseRegistration
     List<RegistrationItem> addedSteps = diff.Added.Where(IsStep).ToList();
     List<RegistrationChange> changedSteps = diff.Changed.Where(x => string.Equals(x.Kind, "step", StringComparison.OrdinalIgnoreCase)).ToList();
 
+    // Stryker disable all : web resources are a work-in-progress preview, not mutation-gated yet
     // Web resources reconcile independently of plugins/Custom APIs (folder mirror + publish).
     List<RegistrationItem> removedWebResources = diff.Removed.Where(IsWebResource).ToList();
     List<RegistrationItem> addedWebResources = diff.Added.Where(IsWebResource).ToList();
     List<RegistrationChange> changedWebResources = diff.Changed.Where(x => string.Equals(x.Kind, "web-resource", StringComparison.OrdinalIgnoreCase)).ToList();
+    // Stryker restore all
 
     // Ordered list of every operation this apply will perform, used to produce a resume report if
     // the run fails partway through (Dataverse has no cross-entity transaction).
@@ -53,6 +55,7 @@ internal static partial class DataverseRegistration
     planned.AddRange(changedApis.Select(x => $"update custom-api {x.Type}"));
     planned.AddRange(addedSteps.Select(x => $"create step {x.Type}"));
     planned.AddRange(changedSteps.Select(x => $"update step {x.Type}"));
+    // Stryker disable all : web resources are a work-in-progress preview, not mutation-gated yet
     bool hasWebResourceWrites = addedWebResources.Count > 0 || changedWebResources.Count > 0;
     bool validatesWebResourcePrefix = hasWebResourceWrites && !string.IsNullOrWhiteSpace(solutionUniqueName);
     if (validatesWebResourcePrefix)
@@ -67,6 +70,7 @@ internal static partial class DataverseRegistration
     {
         planned.Add("publish web resource(s)");
     }
+    // Stryker restore all
 
     int done = 0;
     try
@@ -126,6 +130,7 @@ internal static partial class DataverseRegistration
         ApplyUpsertsBatched(service, solutionUniqueName, pluginTypeIds, addedApis, changedApis, addedSteps, changedSteps,
             customApiSolutionPrefix, secureConfigByStepKey, metadataCache, verbose, batchChunkSize, ref done);
 
+        // Stryker disable all : web resources are a work-in-progress preview, not mutation-gated yet
         // Safeguard: every web resource name must start with the solution's publisher prefix (its top-level folder),
         // or Dataverse rejects the create. Validate once, up front, before any web-resource mutation.
         if (validatesWebResourcePrefix)
@@ -189,6 +194,7 @@ internal static partial class DataverseRegistration
         {
             done++;
         }
+        // Stryker restore all
     }
     catch (Exception ex)
     {

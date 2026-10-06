@@ -95,6 +95,17 @@ public class OwnershipScopeTests
         DataverseRegistration.EnsureCustomApiNotOwnedElsewhere(Service(Guid.NewGuid(), owner: null), Guid.NewGuid(), "zava_Score", mine); // type gone (rename)
     }
 
+    // A classic workflow activity in the same assembly (matched by base-type name, like the scan does).
+    private class CodeActivity { }
+    private sealed class LegacyActivity : CodeActivity { }
+
+    [Fact]
+    public void A_classic_workflow_activity_is_unmanaged_too()
+    {
+        Assert.True(PackageScanner.IsUnmanagedPluginType(typeof(LegacyActivity)));
+        Assert.False(PackageScanner.IsUnmanagedPluginType(typeof(CodeActivity))); // the base itself is not a step type
+    }
+
     // A type whose interfaces fail to load (a missing dependency).
     private sealed class UnloadableType : System.Reflection.TypeDelegator
     {
@@ -122,5 +133,35 @@ public class OwnershipScopeTests
         using var none = new System.IO.StringWriter();
         OutputWriter.WriteUnmanaged([], none, color: false);
         Assert.Equal(string.Empty, none.ToString());
+    }
+
+    // An assembly some of whose types fail to load (a dependency missing from the package).
+    private sealed class PartiallyLoadableAssembly(Exception?[] loaderExceptions) : System.Reflection.Assembly
+    {
+        public override Type[] GetTypes() =>
+            throw new System.Reflection.ReflectionTypeLoadException(new Type?[] { typeof(int), null, null }, loaderExceptions);
+
+        public override System.Reflection.AssemblyName GetName() => new("Zava.Plugins");
+    }
+
+    [Fact]
+    public void A_partially_loadable_assembly_aborts_the_scan_with_the_first_loader_error()
+    {
+        // Continuing with the types that loaded would diff the missing plugin types as removed and delete them.
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            PackageScanner.GetLoadableTypes(new PartiallyLoadableAssembly([null, new System.IO.FileNotFoundException("Could not load Zava.Shared")])).ToList());
+
+        Assert.StartsWith("Failed to load 2 type(s) from assembly 'Zava.Plugins'. This usually means a dependency ", ex.Message);
+        Assert.Contains("Aborting the scan so existing registrations are not mistakenly deleted.", ex.Message);
+        Assert.EndsWith(" First loader error: Could not load Zava.Shared", ex.Message);
+    }
+
+    [Fact]
+    public void A_partially_loadable_assembly_without_loader_details_still_aborts()
+    {
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            PackageScanner.GetLoadableTypes(new PartiallyLoadableAssembly([])).ToList());
+
+        Assert.EndsWith("registrations are not mistakenly deleted.", ex.Message);
     }
 }

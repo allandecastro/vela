@@ -221,6 +221,10 @@ public class DataverseRegistrationHelperTests
                 () => DataverseRegistration.ReadPackageBytesForImport(path, "MyPackage", "zava_MyPackage"));
             Assert.Contains("signed", ex.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("zava_MyPackage", ex.Message);
+            // The actionable parts: why it fails (the platform error) and the two ways out.
+            Assert.Contains("to 'zava_MyPackage' (to add the publisher prefix)", ex.Message);
+            Assert.Contains("rejected by Dataverse (0x80040265)", ex.Message);
+            Assert.Contains("or apply without --solution.", ex.Message);
         }
         finally
         {
@@ -275,6 +279,13 @@ public class DataverseRegistrationHelperTests
     [InlineData("Microsoft.Xrm.Sdk.OptionSetValue", 9)] // OptionSet
     [InlineData("Picklist", 9)]
     [InlineData("System.Guid", 12)]
+    [InlineData("guid", 12)]               // the C# spellings a caller may pass
+    [InlineData("bool", 0)]
+    [InlineData("decimal", 2)]
+    [InlineData("System.Decimal", 2)]
+    [InlineData("double", 6)]
+    [InlineData("Double", 6)]
+    [InlineData("string", 10)]
     [InlineData("System.String", 10)]
     public void ResolveCustomApiTypeCode_scalar_mapping(string typeName, int expected)
     {
@@ -339,7 +350,11 @@ public class DataverseRegistrationHelperTests
     public void ResolveCustomApiTypeCode_rejects_a_type_with_no_custom_api_equivalent(string typeName, bool isCollection)
     {
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.ResolveCustomApiTypeCode(typeName, isCollection));
-        Assert.Contains(typeName, ex.Message);
+        bool reportedAsCollection = isCollection || typeName.EndsWith("[]", StringComparison.Ordinal);
+        Assert.StartsWith($"Custom API parameter type '{typeName}'{(reportedAsCollection ? " (collection)" : string.Empty)} has no Dataverse Custom API type. ", ex.Message);
+        // It lists what is supported and how to fix an older package.
+        Assert.Contains("Supported: Boolean, Integer (int), Decimal, Float (double), DateTime, Guid, String, StringArray (string[]), Money, Picklist (OptionSetValue), EntityReference, Entity, EntityCollection. ", ex.Message);
+        Assert.EndsWith("Rebuild the plugin with a current Vela.Plugins, which rejects other types when the step is built.", ex.Message);
     }
 
     [Fact]

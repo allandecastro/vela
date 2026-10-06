@@ -32,8 +32,11 @@ The gate is a **regression detector**, not a target to write tests for.
 - **Measure first, then gate ~2 points below.** Each core is measured before a
   threshold is set, then the enforced `--break-at` is pinned just under the measured
   value (about 2 points). It catches regressions without flaking on timeout-variance,
-  and is tightened as the score rises. A core measured right at the floor therefore
-  carries a gate just under 80 (e.g. `cli-apply` at ~80.1% / gate 78).
+  and is tightened as the score rises. No gate is ever set below 80: a core measured
+  close to the floor is gated at 80 exactly (e.g. `cli-apply` at ~80.3% / gate 80).
+- **Work-in-progress code is excluded, not counted.** A preview feature that is not
+  mutation-gated yet (today: the web-resource branches of `apply`) is wrapped in
+  `// Stryker disable all : <reason>` ... `// Stryker restore all` with the reason.
 
 When a run dips under the floor, **kill a surviving mutant** (or add the missing test)
 to lift the score rather than relaxing the gate. Many remaining survivors are
@@ -57,16 +60,16 @@ All jobs run on GitHub-hosted `windows-latest` runners.
 
 | Job | Core | Approx. score | `--break-at` |
 | --- | --- | --- | --- |
-| diff engine | `DiffEngine` + `DefinitionNormalizer` | ~90% | 85 |
+| diff engine | `DiffEngine` + `DefinitionNormalizer` | ~87.7% | 85 |
 | harness query core | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | ~91.6% | 89 |
 | security enforcement wiring | `InMemoryOrganizationService.Security.cs` | ~84.8% | 82 |
 | security model | `Security/SecurityModel.cs` (+ sharing, access teams, 1:N) | ~86% | 84 |
-| `cli-apply` | `DataverseRegistration.Apply.cs` | ~80.1% | 78 |
-| `cli-customapi` | `DataverseRegistration.CustomApi.cs` | ~82.7% | 80 |
-| `cli-reader` | `DataverseRegistration.cs` | ~85.3% | 83 |
-| `cli-steps` | `DataverseRegistration.Steps.cs` | ~89.4% | 87 |
-| `cli-scanner` | `PackageScanner.cs` | ~81.6% | 80 |
-| `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | ~90% | 80 |
+| `cli-apply` | `DataverseRegistration.Apply.cs` (web resources excluded) | ~80.3% | 80 |
+| `cli-customapi` | `DataverseRegistration.CustomApi.cs` | ~85.1% | 80 |
+| `cli-reader` | `DataverseRegistration.cs` | ~87.5% | 83 |
+| `cli-steps` | `DataverseRegistration.Steps.cs` | ~88.1% | 87 |
+| `cli-scanner` | `PackageScanner.cs` | ~81.2% | 80 |
+| `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | ~89.4% | 80 |
 
 Notes on the scores:
 

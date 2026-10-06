@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Cli;
 using Xunit;
@@ -263,6 +264,35 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void ReadPackageBytesForImport_writes_the_nuspec_as_bomless_utf8_with_two_space_indent_and_lf()
+    {
+        // Read the raw entry bytes (a StreamReader would silently strip a BOM): the rewritten nuspec must be byte-for-
+        // byte the same on every platform, so the encoding, indentation and newline settings are all pinned.
+        string nupkg = BuildNupkg("Old.Name", nuspecId: "Old.Name");
+
+        byte[] result = DataverseRegistration.ReadPackageBytesForImport(nupkg, "Old.Name", "new_Old.Name");
+
+        using ZipArchive archive = new ZipArchive(new MemoryStream(result));
+        using MemoryStream raw = new MemoryStream();
+        using (Stream entry = archive.GetEntry("new_Old.Name.nuspec")!.Open())
+        {
+            entry.CopyTo(raw);
+        }
+
+        byte[] bytes = raw.ToArray();
+        Assert.False(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, "nuspec must not carry a UTF-8 BOM");
+        string expected =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+            "<package xmlns=\"http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd\">\n" +
+            "  <metadata>\n" +
+            "    <id>new_Old.Name</id>\n" +
+            "    <version>1.0.0</version>\n" +
+            "  </metadata>\n" +
+            "</package>";
+        Assert.Equal(expected, Encoding.UTF8.GetString(bytes));
+    }
+
+    [Fact]
     public void ReadPackageBytesForImport_throws_when_no_nuspec()
     {
         string nupkg = BuildZip(new Dictionary<string, string> { ["readme.txt"] = "hi" });
@@ -495,6 +525,34 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void ComputePackagePublishActions_update_when_only_the_version_differs()
+    {
+        // Same bytes, new version: UpsertPluginPackage updates, so plan must report it too.
+        byte[] bytes = Encoding.UTF8.GetBytes("pkg-same");
+        string path = NewTempFile(bytes);
+        var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0", ["content"] = Convert.ToBase64String(bytes) };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.1", path) }, solutionUniqueName: null, new List<string>()));
+        Assert.False(action.IsCreate);
+    }
+
+    [Fact]
+    public void RepackWithPackageId_keeps_every_other_entry_name_and_content()
+    {
+        // Only the .nuspec changes: the assembly and any other entry keep their path and bytes.
+        string nuspec = "<package xmlns=\"http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd\"><metadata><id>Old.Name</id><version>1.0.0</version></metadata></package>";
+        string nupkg = BuildZip(new Dictionary<string, string> { ["Old.Name.nuspec"] = nuspec, ["readme.txt"] = "payload-bytes" });
+
+        byte[] result = DataverseRegistration.ReadPackageBytesForImport(nupkg, "Old.Name", "new_Old.Name");
+
+        using ZipArchive repacked = new ZipArchive(new MemoryStream(result));
+        Assert.Equal(new[] { "new_Old.Name.nuspec", "readme.txt" }, repacked.Entries.Select(e => e.FullName).OrderBy(n => n, StringComparer.Ordinal));
+        using StreamReader reader = new StreamReader(repacked.GetEntry("readme.txt")!.Open());
+        Assert.Equal("payload-bytes", reader.ReadToEnd());
+    }
+
+    [Fact]
     public void ComputePackagePublishActions_empty_when_version_and_content_identical()
     {
         byte[] bytes = Encoding.UTF8.GetBytes("pkg-same");
@@ -581,6 +639,28 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.False(created.Contains("solutionid"));
     }
 
+    [Fact]
+    public void ApplyDiff_with_a_solution_publishes_the_package_into_that_solution()
+    {
+        // ApplyDiff routes package/assembly writes through the solution-scoped service, so the import lands in the
+        // solution (SolutionUniqueName on the request) instead of only the default solution.
+        string path = BuildNupkg("Pkg", nuspecId: "Pkg");
+        var publisherId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "solution"
+                ? TestSupport.FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["publisherid"] = new EntityReference("publisher", publisherId) })
+                : new EntityCollection(),
+            OnRetrieve = (entity, id, _) => new Entity(entity, id) { ["customizationprefix"] = "new" },
+        };
+        var diff = new RegistrationDiff(["Pkg"], ["Pkg"], [], [], [], [], []);
+
+        DataverseRegistration.ApplyDiff(svc, diff, [], [new PluginPackagePayload("Pkg", "1.0.0", path)], "acme_solution", new List<string>(), verbose: false);
+
+        CreateRequest create = Assert.Single(svc.Executed.OfType<CreateRequest>(), r => r.Target.LogicalName == "pluginpackage");
+        Assert.Equal("acme_solution", create["SolutionUniqueName"]);
+    }
+
     // ---- UpsertPluginAssembly -------------------------------------------------------------------
 
     [Fact]
@@ -648,6 +728,34 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // Identical content + version -> no Update (which would only bump modifiedon).
         Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
+    }
+
+    [Theory]
+    [InlineData(true, false)]   // same content, other version: update
+    [InlineData(false, true)]   // other content, same version: update
+    public void UpsertPluginAssembly_updates_when_only_content_or_only_version_differs(bool sameContent, bool sameVersion)
+    {
+        // The skip needs BOTH to match; either one differing is a real change that must be uploaded.
+        string dll = typeof(System.Xml.Linq.XDocument).Assembly.Location;
+        string content = Convert.ToBase64String(File.ReadAllBytes(dll));
+        string version = ExpectedVersion(dll);
+        var existingId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", existingId)),
+            OnRetrieve = (entity, id, _) => new Entity(entity, id)
+            {
+                ["content"] = sameContent ? content : "b2xk",
+                ["version"] = sameVersion ? version : "0.0.0.1",
+            },
+        };
+
+        DataverseRegistration.UpsertPluginAssembly(svc, new AssemblyPayload("System.Private.Xml.Linq", dll));
+
+        Entity update = Assert.Single(svc.Updated);
+        Assert.Equal(existingId, update.Id);
+        Assert.Equal(content, update.GetAttributeValue<string>("content"));
+        Assert.Equal(version, update.GetAttributeValue<string>("version"));
     }
 
     [Fact]

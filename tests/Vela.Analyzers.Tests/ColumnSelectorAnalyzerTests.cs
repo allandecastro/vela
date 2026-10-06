@@ -72,6 +72,29 @@ namespace Demo
         public override Guid Id { get; set; }
     }
 
+    public abstract class AuditedEntity : Entity
+    {
+        public override Guid Id { get; set; }
+    }
+
+    public class Invoice : AuditedEntity
+    {
+        public override Guid Id { get; set; }
+        public decimal TotalAmount { get; set; }
+    }
+
+    // A non-Dataverse type that merely has the same member names.
+    public class AccountDto
+    {
+        public string LogicalName { get; set; }
+        public string Name { get; set; }
+    }
+
+    public static class Mapper
+    {
+        public static void Map<T>(Expression<Func<T, object>> member) { }
+    }
+
     public static class Steps
     {
         public static void Filtering<TEntity>(params Expression<Func<TEntity, object>>[] columns) where TEntity : Entity { }
@@ -191,5 +214,87 @@ namespace Demo
 }
 ";
         await Verify.VerifyAnalyzerAsync(Harness + extra);
+    }
+
+    private static DiagnosticResult Error(int location, string member) =>
+        new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+            .WithLocation(location)
+            .WithArguments(member);
+
+    [Fact]
+    public async Task Flags_a_base_member_in_a_parenthesized_lambda_with_an_explicit_parameter_type()
+    {
+        string code = InMethod("Steps.Filtering<Account>((Account a) => a.{|#0:LogicalName|}, (a) => a.Name);");
+        await Verify.VerifyAnalyzerAsync(code, Error(0, "LogicalName"));
+    }
+
+    [Fact]
+    public async Task Flags_an_Id_override_inherited_through_an_intermediate_base_without_a_column_name()
+    {
+        // Invoice.Id overrides AuditedEntity.Id which overrides Entity.Id: still the base member.
+        string code = InMethod("Steps.Filtering<Invoice>(x => x.{|#0:Id|}, x => x.TotalAmount);");
+        await Verify.VerifyAnalyzerAsync(code, Error(0, "Id"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_an_expression_selector_over_a_non_entity_type()
+    {
+        string code = InMethod("Mapper.Map<AccountDto>(x => x.LogicalName);");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_selector_whose_body_is_not_a_member_access()
+    {
+        // An indexer or a coalesce is not a simple member selector; the runtime rejects it with its own message.
+        string code = InMethod("Steps.Filtering<Account>(x => x.Name ?? string.Empty);");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_selector_on_an_unresolved_member()
+    {
+        // The compiler already reports the typo; the analyzer stays silent instead of piling on.
+        string code = InMethod("Steps.Filtering<Account>(x => x.{|CS1061:Nmae|});");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_block_bodied_LINQ_lambda_reading_a_base_member()
+    {
+        string extra = @"
+namespace Demo
+{
+    using System.Collections.Generic;
+    using System.Linq;
+
+    public class LinqBlockUse
+    {
+        public List<string> M(IEnumerable<Account> rows) => rows.Select(x => { return x.LogicalName; }).ToList();
+    }
+}
+";
+        await Verify.VerifyAnalyzerAsync(Harness + extra);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_anything_when_the_Dataverse_SDK_is_not_referenced()
+    {
+        string code = @"
+using System;
+using System.Linq.Expressions;
+
+namespace Demo
+{
+    public class Entity { public string LogicalName { get; set; } }
+    public class Account : Entity { }
+    public static class Steps
+    {
+        public static void Filtering<TEntity>(params Expression<Func<TEntity, object>>[] columns) where TEntity : Entity { }
+    }
+    public class Use { public void M() => Steps.Filtering<Account>(x => x.LogicalName); }
+}
+";
+        await Verify.VerifyAnalyzerAsync(code);
     }
 }

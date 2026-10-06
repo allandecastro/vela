@@ -78,7 +78,8 @@ internal sealed class FakeOrgService : IOrganizationService
             ExecuteMultipleRequest batch => RunExecuteMultiple(batch),
             // Fallback path (one-by-one): route CUD requests through the recording methods so Created/Updated/Deleted
             // stay populated exactly as they would for a direct Create/Update/Delete call.
-            CreateRequest create => Response("CreateResponse", "id", Create(create.Target)),
+            // Typed like the SDK, so callers that cast (SolutionScopedOrganizationService) work against the fake.
+            CreateRequest create => new CreateResponse { Results = { ["id"] = Create(create.Target) } },
             UpdateRequest update => Apply(() => Update(update.Target), new UpdateResponse()),
             DeleteRequest delete => Apply(() => Delete(delete.Target.LogicalName, delete.Target.Id), new DeleteResponse()),
             _ => new OrganizationResponse(),

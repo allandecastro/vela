@@ -37,7 +37,7 @@ namespace Vela.Steps
 namespace Demo
 {
     using Vela.Steps;
-    public class Plugin { protected ITrigger RegisterStep() => null!; }
+    public class Plugin { protected ITrigger RegisterStep() => null!; protected ITrigger Step => RegisterStep(); }
 }
 ";
 
@@ -99,6 +99,83 @@ namespace Demo
         // Handler is never registered by a chain in this class -> cannot correlate -> skip.
         string code = InClass(
             "private void OnUpd(ILocalPluginContext ctx) { ctx.HasChanged(x => x); }");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_HasAnyChanged_called_in_static_form()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { if (Changes.{|#0:HasAnyChanged|}(ctx, x => x)) { } }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("HasAnyChanged"));
+    }
+
+    [Fact]
+    public async Task Flags_HasChanged_when_the_step_is_started_from_a_property()
+    {
+        string code = InClass(
+            "public void Reg() { this.Step.OnUpdate().PostOperation().Sync().Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { ctx.{|#0:HasChanged|}(x => x); }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("HasChanged"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_handler_shared_by_two_steps()
+    {
+        // Two chains own the handler: which one runs at the call site is ambiguous, so stay silent.
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); RegisterStep().OnUpdate().PostOperation().Sync().WithPreImage(\"name\").Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { ctx.HasChanged(x => x); }");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_HasChanged_methods_on_non_context_types()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Vela.Context;
+    public sealed class AuditDiff { public bool HasChanged(string column) => false; }
+    public static class ChangeFeed { public static bool HasChanged() => false; }
+    public static class AuditDiffExtensions { public static bool HasAnyChanged(this AuditDiff diff, params string[] columns) => false; }
+
+    public class Use : Plugin
+    {
+        private readonly AuditDiff _diff = new AuditDiff();
+        public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }
+        private void OnUpd(ILocalPluginContext ctx)
+        {
+            bool a = _diff.HasChanged(""name"");
+            bool b = ChangeFeed.HasChanged();
+            bool c = _diff.HasAnyChanged(""name"", ""revenue"");
+        }
+    }
+}
+";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_HasChanged_inside_a_lambda_handler_registered_from_a_constructor()
+    {
+        // Conservative: lambda handlers outside a method cannot be bound to a chain by name.
+        string code = InClass(
+            "public Use() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(ctx => { ctx.HasChanged(x => x); }); }");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_anything_when_Vela_is_not_referenced()
+    {
+        string code = @"
+namespace Demo
+{
+    public sealed class Tracker { public bool HasChanged(string column) => false; }
+    public sealed class Use { public bool Run(Tracker t) => t.HasChanged(""name""); }
+}
+";
         await Verify.VerifyAnalyzerAsync(code);
     }
 }
