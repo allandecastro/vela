@@ -4,7 +4,7 @@ This guide is for people who want to **build, test, or contribute to the Vela fr
 just want to *use* Vela to build Dataverse plugins and Custom APIs, see the [README](README.md) - you do
 not need to clone this repository.
 
-Looking for something to work on? See the [backlog](BACKLOG.md) for planned and candidate work.
+Looking for something to work on? See the [open issues](https://github.com/allandecastro/vela/issues) for planned and candidate work.
 
 ## Solution layout
 

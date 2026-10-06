@@ -5,7 +5,7 @@ just want to *use* Vela to build Dataverse plugins and Custom APIs, start at
 [Getting started](../getting-started/install.md) - you do not need to clone this repository.
 
 Looking for something to work on? See the
-[backlog](https://github.com/allandecastro/vela/blob/main/BACKLOG.md) for planned and candidate work.
+[open issues](https://github.com/allandecastro/vela/issues) for planned and candidate work.
 
 See [Architecture](../advanced/architecture.md) for the solution layout and architecture rules.
 
