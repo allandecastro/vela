@@ -447,11 +447,24 @@ internal static partial class DataverseRegistration
 {
     string simple = SimpleTypeName((parameterTypeName ?? "System.String").Trim());
 
-    // An array type name (older framework packages emitted "System.String[]") is its element type as a collection.
-    if (simple.EndsWith("[]", StringComparison.Ordinal))
+    // Older framework packages emitted "System.String[]" for a string[] parameter: read it as a StringArray. Only
+    // string[] has this compatibility: Dataverse hands an entity collection over as EntityCollection, which an
+    // Entity[] / EntityCollection[] property cannot read, so those array names are rejected below.
+    if (string.Equals(simple, "String[]", StringComparison.OrdinalIgnoreCase))
     {
-        simple = simple.Substring(0, simple.Length - 2);
+        simple = "String";
         isCollection = true;
+    }
+    else if (simple.EndsWith("[]", StringComparison.Ordinal))
+    {
+        throw UnsupportedCustomApiType(parameterTypeName, isCollection: true);
+    }
+
+    // The CLR spellings with no exact Custom API type. The table matches case-insensitively (so the Dataverse label
+    // "Float" and the C# alias "double" both resolve), which would let the C# alias "float" through as Float.
+    if (simple is "float" or "Single")
+    {
+        throw UnsupportedCustomApiType(parameterTypeName, isCollection);
     }
 
     // Only the exact String and Entity element types have a Custom API collection code (StringArray /
@@ -477,7 +490,12 @@ internal static partial class DataverseRegistration
         return code;
     }
 
-    throw new InvalidOperationException(
+    throw UnsupportedCustomApiType(parameterTypeName, isCollection);
+}
+
+    private static InvalidOperationException UnsupportedCustomApiType(string? parameterTypeName, bool isCollection)
+{
+    return new InvalidOperationException(
         $"Custom API parameter type '{parameterTypeName}'{(isCollection ? " (collection)" : string.Empty)} has no Dataverse Custom API type. " +
         "Supported: Boolean, Integer (int), Decimal, Float (double), DateTime, Guid, String, StringArray (string[]), Money, Picklist (OptionSetValue), EntityReference, Entity, EntityCollection. " +
         "Rebuild the plugin with a current Vela.Plugins, which rejects other types when the step is built.");

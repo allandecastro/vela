@@ -333,6 +333,9 @@ public class DataverseRegistrationHelperTests
     [InlineData("System.Int64", false)]       // long: no Custom API type (Integer is 32-bit)
     [InlineData("System.Int16", false)]
     [InlineData("System.Single", false)]
+    [InlineData("float", false)]                      // the C# alias (the Dataverse label "Float" stays valid)
+    [InlineData("Microsoft.Xrm.Sdk.Entity[]", true)]  // Dataverse sends an EntityCollection, not an array
+    [InlineData("Microsoft.Xrm.Sdk.EntityCollection[]", false)]
     [InlineData("System.Int32", true)]        // int[]: only string[] and Entity collections exist
     [InlineData("Microsoft.Xrm.Sdk.EntityReference", true)]
     public void ResolveCustomApiTypeCode_rejects_a_type_with_no_custom_api_equivalent(string typeName, bool isCollection)
@@ -344,6 +347,8 @@ public class DataverseRegistrationHelperTests
     [Fact]
     public void ResolveCustomApiTypeCode_reads_an_array_type_name_as_a_string_array()
     {
+        Assert.Equal(SdkConstants.CustomApiParameterType.Float, DataverseRegistration.ResolveCustomApiTypeCode("Float", isCollection: false)); // the label
+        Assert.Equal(SdkConstants.CustomApiParameterType.EntityCollection, DataverseRegistration.ResolveCustomApiTypeCode("Microsoft.Xrm.Sdk.Entity", isCollection: true));
         // Older framework packages emitted "System.String[]" for a string[] parameter, which used to register as String.
         Assert.Equal(SdkConstants.CustomApiParameterType.StringArray, DataverseRegistration.ResolveCustomApiTypeCode("System.String[]", isCollection: true));
         Assert.Equal(SdkConstants.CustomApiParameterType.StringArray, DataverseRegistration.ResolveCustomApiTypeCode("System.String[]", isCollection: false));
