@@ -31,7 +31,8 @@ internal static class SecureConfigResolver
             string name = eq < 0 ? spec : spec[..eq];
             if (eq <= 0 || !IsName(name))
             {
-                throw new ArgumentException($"Invalid --secure-config '{(eq < 0 ? spec : name + "=...")}': expected NAME=VALUE or NAME=@path, where NAME is the name given to WithSecureConfigFrom.");
+                // Never echo the argument: a mistyped flag (a bare secret, a missing '=') would leak it to stderr/CI logs.
+                throw new ArgumentException("Invalid --secure-config: expected NAME=VALUE or NAME=@path, where NAME is the name given to WithSecureConfigFrom (letters, digits, '_').");
             }
 
             string value = spec[(eq + 1)..];
@@ -70,13 +71,18 @@ internal static class SecureConfigResolver
         JsonSerializerOptions jsonOptions)
     {
         IReadOnlyDictionary<string, string> namesByStepKey = local.SecureConfigNameByStepKey ?? new Dictionary<string, string>();
-        Dictionary<string, string> liveDigestByStepKey = new(StringComparer.Ordinal);
-        foreach (RegistrationItem step in current.Items.Where(DiffEngine.IsStep))
+
+        // The live digest of each local step's live counterpart, paired exactly as the diff pairs them (step key, then
+        // legacy identity), so a keyless or re-keyed step keeps its live digest instead of showing a phantom change.
+        List<RegistrationItem> localSteps = local.Items.Where(DiffEngine.IsStep).ToList();
+        List<RegistrationItem> currentSteps = current.Items.Where(DiffEngine.IsStep).ToList();
+        int[] paired = DiffEngine.PairSteps(localSteps, currentSteps);
+        Dictionary<RegistrationItem, string> liveDigest = new(ReferenceEqualityComparer.Instance);
+        for (int i = 0; i < localSteps.Count; i++)
         {
-            string key = DiffEngine.GetStepKey(step);
-            if (key.Length > 0)
+            if (paired[i] >= 0)
             {
-                liveDigestByStepKey[key] = JsonReader.TryGetString(step.Definition, "secureConfig") ?? string.Empty;
+                liveDigest[localSteps[i]] = JsonReader.TryGetString(currentSteps[paired[i]].Definition, "secureConfig") ?? string.Empty;
             }
         }
 
@@ -91,9 +97,8 @@ internal static class SecureConfigResolver
                 continue;
             }
 
-            string key = DiffEngine.GetStepKey(item);
-            liveDigestByStepKey.TryGetValue(key, out string? liveDigest);
-            string digest = liveDigest ?? string.Empty;
+            string key = DiffEngine.GetSecureConfigKey(item);
+            string digest = liveDigest.TryGetValue(item, out string? live) ? live : string.Empty;
             if (namesByStepKey.TryGetValue(key, out string? name))
             {
                 string? value = suppliedValues.TryGetValue(name, out string? supplied) ? supplied : readEnvironment(EnvironmentVariablePrefix + name);

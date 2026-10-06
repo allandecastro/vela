@@ -97,9 +97,9 @@ internal static class PackageScanner
                     // receive each other's secret.
                     if (raw.TryGetProperty("secureConfigName", out JsonElement nameEl) && nameEl.ValueKind == JsonValueKind.String
                         && nameEl.GetString() is { Length: > 0 } secureConfigName
-                        && DiffEngine.GetStepKey(item) is { Length: > 0 } fullStepKey)
+                        )
                     {
-                        secureConfigNameByStepKey[fullStepKey] = secureConfigName;
+                        secureConfigNameByStepKey[DiffEngine.GetSecureConfigKey(item)] = secureConfigName;
                     }
 
                     items.Add(item);

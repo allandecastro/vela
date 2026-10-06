@@ -95,6 +95,11 @@ internal static class DiffEngine
         return string.IsNullOrWhiteSpace(stepKey) ? string.Empty : $"{pluginType}:stepkey:{stepKey}";
     }
 
+    // The key a step's secure configuration is tracked by between the scan, the resolver and apply: the full step key,
+    // or the legacy identity for a keyless step. Always qualified by the plugin type, so two plugins never share it.
+    internal static string GetSecureConfigKey(RegistrationItem item) =>
+        GetStepKey(item) is { Length: > 0 } key ? key : GetLegacyStepIdentity(item);
+
     public static string GetLegacyStepIdentity(RegistrationItem item)
     {
         string pluginTypeName = TryGetString(item.Definition, "pluginTypeName") ?? item.Type;
@@ -140,43 +145,15 @@ internal static class DiffEngine
         return obj.ToJsonString();
     }
 
-    public static RegistrationDiff BuildDiff(RegistrationState local, RegistrationState current)
+    /// <summary>
+    /// Pairs each local step with its live counterpart, one-to-one: first by step key (case-insensitive), then, for a
+    /// local step whose key has no live match, by legacy identity (plugin type, message, stage, mode, entity) in order.
+    /// Returns, for each local step, the index of its live step, or -1 when it has none. Shared by the diff and by
+    /// SecureConfigResolver, so both see the same pairs.
+    /// </summary>
+    internal static int[] PairSteps(IReadOnlyList<RegistrationItem> localSteps, IReadOnlyList<RegistrationItem> currentSteps)
     {
-        List<RegistrationItem> added = [];
-        List<RegistrationItem> removed = [];
-        List<RegistrationChange> changed = [];
-
-        List<RegistrationItem> localCustomApis = local.Items.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
-        List<RegistrationItem> currentCustomApis = current.Items.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
-        Dictionary<string, RegistrationItem> localCustomApiMap = BuildIdentityMap(localCustomApis, "local Custom API");
-        Dictionary<string, RegistrationItem> currentCustomApiMap = BuildIdentityMap(currentCustomApis, "live Custom API");
-
-        foreach (KeyValuePair<string, RegistrationItem> pair in localCustomApiMap)
-        {
-            if (!currentCustomApiMap.TryGetValue(pair.Key, out RegistrationItem? before))
-            {
-                added.Add(pair.Value);
-                continue;
-            }
-
-            string beforeJson = ComparisonKey(before.Definition);
-            string afterJson = ComparisonKey(pair.Value.Definition);
-            if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
-            {
-                changed.Add(new RegistrationChange(pair.Value.Kind, pair.Value.Type, before.Definition, pair.Value.Definition));
-            }
-        }
-
-        foreach (KeyValuePair<string, RegistrationItem> pair in currentCustomApiMap)
-        {
-            if (!localCustomApiMap.ContainsKey(pair.Key))
-            {
-                removed.Add(pair.Value);
-            }
-        }
-
-        List<RegistrationItem> localSteps = local.Items.Where(IsStep).ToList();
-        List<RegistrationItem> currentSteps = current.Items.Where(IsStep).ToList();
+        int[] pairedCurrent = Enumerable.Repeat(-1, localSteps.Count).ToArray();
         bool[] currentStepMatched = new bool[currentSteps.Count];
 
         // A6: two local steps that share a (non-empty) step key are indistinguishable - the matching below would
@@ -223,13 +200,7 @@ internal static class DiffEngine
             }
 
             currentStepMatched[currentIndex] = true;
-            RegistrationItem currentStep = currentSteps[currentIndex];
-            string beforeJson = ComparisonKey(currentStep.Definition);
-            string afterJson = ComparisonKey(localStep.Definition);
-            if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
-            {
-                changed.Add(new RegistrationChange(localStep.Kind, localStep.Type, currentStep.Definition, localStep.Definition));
-            }
+            pairedCurrent[i] = currentIndex;
         }
 
         Dictionary<string, Queue<int>> currentByLegacyIdentity = new Dictionary<string, Queue<int>>(StringComparer.OrdinalIgnoreCase);
@@ -250,8 +221,9 @@ internal static class DiffEngine
             queue.Enqueue(i);
         }
 
-        foreach (RegistrationItem localStep in localSteps)
+        for (int i = 0; i < localSteps.Count; i++)
         {
+            RegistrationItem localStep = localSteps[i];
             string localStepKey = GetStepKey(localStep);
             if (!string.IsNullOrWhiteSpace(localStepKey) && currentByStepKey.ContainsKey(localStepKey))
             {
@@ -261,13 +233,69 @@ internal static class DiffEngine
             string legacyIdentity = GetLegacyStepIdentity(localStep);
             if (!currentByLegacyIdentity.TryGetValue(legacyIdentity, out Queue<int>? queue) || queue.Count == 0)
             {
-                added.Add(localStep);
                 continue;
             }
 
             int currentIndex = queue.Dequeue();
             currentStepMatched[currentIndex] = true;
-            RegistrationItem currentStep = currentSteps[currentIndex];
+            pairedCurrent[i] = currentIndex;
+        }
+
+
+        return pairedCurrent;
+    }
+
+    public static RegistrationDiff BuildDiff(RegistrationState local, RegistrationState current)
+    {
+        List<RegistrationItem> added = [];
+        List<RegistrationItem> removed = [];
+        List<RegistrationChange> changed = [];
+
+        List<RegistrationItem> localCustomApis = local.Items.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
+        List<RegistrationItem> currentCustomApis = current.Items.Where(x => !IsStep(x) && !IsWebResource(x)).ToList();
+        Dictionary<string, RegistrationItem> localCustomApiMap = BuildIdentityMap(localCustomApis, "local Custom API");
+        Dictionary<string, RegistrationItem> currentCustomApiMap = BuildIdentityMap(currentCustomApis, "live Custom API");
+
+        foreach (KeyValuePair<string, RegistrationItem> pair in localCustomApiMap)
+        {
+            if (!currentCustomApiMap.TryGetValue(pair.Key, out RegistrationItem? before))
+            {
+                added.Add(pair.Value);
+                continue;
+            }
+
+            string beforeJson = ComparisonKey(before.Definition);
+            string afterJson = ComparisonKey(pair.Value.Definition);
+            if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
+            {
+                changed.Add(new RegistrationChange(pair.Value.Kind, pair.Value.Type, before.Definition, pair.Value.Definition));
+            }
+        }
+
+        foreach (KeyValuePair<string, RegistrationItem> pair in currentCustomApiMap)
+        {
+            if (!localCustomApiMap.ContainsKey(pair.Key))
+            {
+                removed.Add(pair.Value);
+            }
+        }
+
+        List<RegistrationItem> localSteps = local.Items.Where(IsStep).ToList();
+        List<RegistrationItem> currentSteps = current.Items.Where(IsStep).ToList();
+        // Pair each local step with its live counterpart (step key first, then legacy identity), then classify.
+        int[] pairedCurrent = PairSteps(localSteps, currentSteps);
+        bool[] currentStepMatched = new bool[currentSteps.Count];
+        for (int i = 0; i < localSteps.Count; i++)
+        {
+            if (pairedCurrent[i] < 0)
+            {
+                added.Add(localSteps[i]);
+                continue;
+            }
+
+            currentStepMatched[pairedCurrent[i]] = true;
+            RegistrationItem localStep = localSteps[i];
+            RegistrationItem currentStep = currentSteps[pairedCurrent[i]];
             string beforeJson = ComparisonKey(currentStep.Definition);
             string afterJson = ComparisonKey(localStep.Definition);
             if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))

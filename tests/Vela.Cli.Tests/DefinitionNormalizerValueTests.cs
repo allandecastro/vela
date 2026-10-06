@@ -58,8 +58,8 @@ public class DefinitionNormalizerValueTests
         Assert.Equal("Acme.MyPlugin - PostOpSync: dv-key1", n.GetProperty("name").GetString());
         Assert.Equal(new[] { "name", "telephone1" }, n.GetProperty("filteringAttributes").EnumerateArray().Select(x => x.GetString()).ToArray());
         Assert.Equal("uns-cfg", n.GetProperty("unsecureConfig").GetString());
-        // Secure config is redacted to a stable hash (never the plaintext) — see the dedicated redaction test.
-        Assert.Equal(DefinitionNormalizer.HashSecret("sec-cfg"), n.GetProperty("secureConfig").GetString());
+        // A raw secure config never enters the shape (SecureConfigResolver sets the digest) - see the redaction test.
+        Assert.Equal(string.Empty, n.GetProperty("secureConfig").GetString());
         Assert.False(n.GetProperty("enabled").GetBoolean());
 
         // Images sorted by alias (ordinal): img-a before img-b.
@@ -148,10 +148,12 @@ public class DefinitionNormalizerValueTests
         Assert.DoesNotContain(secret, JsonSerializer.Serialize(n));
         Assert.DoesNotContain("hunter2", JsonSerializer.Serialize(n));
 
-        // It is replaced by a keyed digest, stable within the run (so local and live compare equal).
-        string digest = n.GetProperty("secureConfig").GetString()!;
+        // A raw value is dropped (SecureConfigResolver supplies the digest), while the keyed digest the live read and
+        // the resolver compute is stable within the run, so local and live compare equal.
+        Assert.Equal(string.Empty, n.GetProperty("secureConfig").GetString());
+        string digest = DefinitionNormalizer.HashSecret(secret);
         Assert.StartsWith("hmac-sha256:", digest);
-        Assert.Equal(DefinitionNormalizer.HashSecret(secret), digest);
+        Assert.Equal(digest, DefinitionNormalizer.HashSecret(secret));
     }
 
     [Fact]
@@ -160,8 +162,9 @@ public class DefinitionNormalizerValueTests
         Assert.Equal(string.Empty, DefinitionNormalizer.HashSecret(null));
         Assert.Equal(string.Empty, DefinitionNormalizer.HashSecret(string.Empty));
         Assert.NotEqual(DefinitionNormalizer.HashSecret("a"), DefinitionNormalizer.HashSecret("b")); // change-detectable
-        // Idempotent: hashing an already-hashed value is a no-op (so re-normalizing a shape is a fixed point).
+        // A raw value is always hashed, even one shaped like a digest (it could be a secret); re-normalizing a shape
+        // keeps its digest instead (see NormalizeStepDefinition).
         string once = DefinitionNormalizer.HashSecret("a");
-        Assert.Equal(once, DefinitionNormalizer.HashSecret(once));
+        Assert.NotEqual(once, DefinitionNormalizer.HashSecret(once));
     }
 }

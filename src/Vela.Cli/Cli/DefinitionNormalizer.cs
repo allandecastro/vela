@@ -38,7 +38,7 @@ internal static class DefinitionNormalizer
         IEnumerable<StepImage> postImages,
         bool enabled,
         string unsecureConfig,
-        string secureConfig,
+        string secureConfigDigest,
         Guid? impersonatingUserId,
         int supportedDeployment,
         JsonSerializerOptions jsonOptions)
@@ -80,7 +80,7 @@ internal static class DefinitionNormalizer
             // a digest, not the value. Same value on both sides -> same digest -> no diff; a changed secret
             // -> different digest -> "changed" (without revealing either value). Apply writes the raw value
             // from RegistrationState.SecureConfigByStepKey (see SecureConfigResolver).
-            secureConfig = HashSecret(secureConfig)
+            secureConfig = secureConfigDigest
         };
 
         return JsonSerializer.SerializeToElement(shape, jsonOptions);
@@ -101,6 +101,12 @@ internal static class DefinitionNormalizer
 
     private static readonly byte[] SecretDigestKey = RandomNumberGenerator.GetBytes(32);
 
+    // A digest this process produced: the prefix followed by exactly 64 lowercase hex characters.
+    internal static bool IsSecretDigest(string value) =>
+        value.Length == SecretDigestPrefix.Length + 64
+        && value.StartsWith(SecretDigestPrefix, StringComparison.Ordinal)
+        && value.Skip(SecretDigestPrefix.Length).All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+
     internal static string HashSecret(string? value)
     {
         if (string.IsNullOrEmpty(value))
@@ -108,13 +114,8 @@ internal static class DefinitionNormalizer
             return string.Empty;
         }
 
-        // Idempotent: re-normalizing an already-normalized shape must be a fixed point, so an existing digest
-        // passes through unchanged instead of being hashed again.
-        if (value.StartsWith(SecretDigestPrefix, StringComparison.Ordinal))
-        {
-            return value;
-        }
-
+        // Always hash a raw value, even one that happens to start with the digest prefix: passing such a value
+        // through would print a secret verbatim in plan/inspect output.
         byte[] hash = HMACSHA256.HashData(SecretDigestKey, Encoding.UTF8.GetBytes(value));
         return SecretDigestPrefix + Convert.ToHexString(hash).ToLowerInvariant();
     }
@@ -187,7 +188,11 @@ internal static class DefinitionNormalizer
         StepImage[] postImages = LowerImageAttributes(TryGetStepImages(raw, "postImages"));
         bool enabled = TryGetBool(raw, "enabled", defaultValue: true);
         string unsecureConfig = TryGetString(raw, "unsecureConfig") ?? string.Empty;
-        string secureConfig = TryGetString(raw, "secureConfig") ?? string.Empty;
+        // A definition carries no secret: code only names its secure configuration, and SecureConfigResolver sets the
+        // digest afterwards. The only value kept here is an existing digest, so re-normalizing an already-normalized
+        // shape is a fixed point; anything else (a literal from an older package) is never trusted into the shape.
+        string rawSecureConfig = TryGetString(raw, "secureConfig") ?? string.Empty;
+        string secureConfig = IsSecretDigest(rawSecureConfig) ? rawSecureConfig : string.Empty;
         // StepDefinition.ImpersonatingUserId serializes as a Guid string (or null); parse leniently so an absent or
         // empty value normalizes to "no impersonation" (Guid.Empty) rather than churning the diff.
         Guid? impersonatingUserId = Guid.TryParse(TryGetString(raw, "impersonatingUserId"), out Guid parsed) ? parsed : null;

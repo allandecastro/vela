@@ -96,7 +96,8 @@ internal static partial class DataverseRegistration
     // definition.SecureConfig is only a digest. The raw value exists only for a secure configuration Vela was given a
     // value for (SecureConfigResolver), keyed by the full step key; every other one belongs to the environment and is
     // left untouched (never written, unlinked or deleted).
-    if (secureConfigByStepKey != null && secureConfigByStepKey.TryGetValue($"{definition.PluginTypeName}:stepkey:{definition.StepKey}", out string? rawSecureConfig))
+    if (secureConfigByStepKey != null
+        && secureConfigByStepKey.TryGetValue(DiffEngine.GetSecureConfigKey(new RegistrationItem("step", definition.PluginTypeName, definitionElement)), out string? rawSecureConfig))
     {
         SyncStepSecureConfig(service, stepId, rawSecureConfig);
     }
