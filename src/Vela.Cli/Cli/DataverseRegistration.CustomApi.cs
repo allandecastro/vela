@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.ServiceModel;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
@@ -33,6 +34,11 @@ internal static partial class DataverseRegistration
     ValidateCustomApiUniqueNamePrefix(definition, solutionPrefix);
 
     Guid? existingApiId = FindCustomApiId(service, definition.UniqueName);
+    if (existingApiId.HasValue)
+    {
+        EnsureCustomApiNotOwnedElsewhere(service, existingApiId.Value, definition.UniqueName, pluginTypeIds);
+    }
+
     Entity api = new Entity("customapi");
     api["uniquename"] = definition.UniqueName;
     api["name"] = definition.UniqueName;
@@ -203,6 +209,37 @@ internal static partial class DataverseRegistration
             }
         }
     }
+
+    // A Custom API unique name is environment-wide. When one already exists, it is ours only if it is implemented by a
+    // plugin type of the assemblies being applied (or by none, or by a type that no longer exists, as after a class
+    // rename). One implemented by another assembly's type is refused rather than silently re-pointed to our plugin,
+    // which would hijack an API another solution owns.
+    internal static void EnsureCustomApiNotOwnedElsewhere(IOrganizationService service, Guid apiId, string uniqueName, IReadOnlyDictionary<string, Guid> ourPluginTypeIds)
+{
+    EntityReference? implementation = service.Retrieve("customapi", apiId, new ColumnSet("plugintypeid"))?.GetAttributeValue<EntityReference>("plugintypeid");
+    if (implementation == null || ourPluginTypeIds.Values.Contains(implementation.Id))
+    {
+        return;
+    }
+
+    Entity? owner;
+    try
+    {
+        owner = service.Retrieve("plugintype", implementation.Id, new ColumnSet("typename", "assemblyname"));
+    }
+    catch (FaultException<OrganizationServiceFault> ex) when (ex.Detail?.ErrorCode == ObjectDoesNotExistErrorCode)
+    {
+        return; // the implementing type is gone: nothing else owns the API
+    }
+
+    if (owner == null)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException(
+        $"Custom API '{uniqueName}' already exists and is implemented by '{owner.GetAttributeValue<string>("typename")}' in assembly '{owner.GetAttributeValue<string>("assemblyname")}', which is not being applied. Vela will not take it over; rename the Custom API, or remove the existing one first.");
+}
 
     internal static Guid? FindCustomApiId(IOrganizationService service, string uniqueName)
 {

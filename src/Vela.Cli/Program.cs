@@ -200,6 +200,7 @@ static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptio
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
+        current = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out string[] unmanaged);
         local = ResolveSecureConfigs(local, current, options, jsonOptions);
 
         var localSteps = local.Items.Where(IsStep)
@@ -228,18 +229,19 @@ static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptio
             environment = options.Environment,
             local = new { assemblies = local.SourceAssemblies, steps = localSteps, customApis = localCustomApis },
             current = new { assemblies = current.SourceAssemblies, steps = currentSteps, customApis = currentCustomApis },
+            unmanaged,
             diagnostics = local.Diagnostics.Concat(current.Diagnostics).ToArray()
         };
 
         if (WantsHumanOutput(options))
         {
-            WriteInspectSummary(local, current, options.Environment, Console.Out, ConsoleTheme.StdoutColor);
+            WriteInspectSummary(local, current, options.Environment, Console.Out, ConsoleTheme.StdoutColor, unmanaged);
             return ExitSuccess;
         }
 
         if (options.Verbose)
         {
-            WriteInspectSummary(local, current, options.Environment, Console.Error, ConsoleTheme.StderrColor);
+            WriteInspectSummary(local, current, options.Environment, Console.Error, ConsoleTheme.StderrColor, unmanaged);
             if (string.IsNullOrWhiteSpace(options.OutPath))
             {
                 return ExitSuccess;
@@ -277,9 +279,10 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
+        current = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out string[] unmanaged);
         local = ResolveSecureConfigs(local, current, options, jsonOptions);
         RegistrationDiff diff = BuildDiff(local, current);
-        PlanPreview preview = BuildPlanPreview("apply-execute-preview", options.Environment, diff, local.Diagnostics, current.Diagnostics);
+        PlanPreview preview = BuildPlanPreview("apply-execute-preview", options.Environment, diff, local.Diagnostics, current.Diagnostics, unmanaged: unmanaged);
         if (options.Strict && preview.Diagnostics.Length > 0)
         {
             WriteDiagnostics(preview.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
@@ -391,8 +394,9 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
         RegistrationState after = ConsoleStatus.Run(
             "Re-reading Dataverse state…",
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
+        after = OwnershipScope.ExcludeUnmanaged(after, local.UnmanagedPluginTypes, out _);
         RegistrationDiff afterDiff = BuildDiff(local, after);
-        PlanPreview result = BuildPlanPreview("apply-execute", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics) with
+        PlanPreview result = BuildPlanPreview("apply-execute", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics, unmanaged: unmanaged) with
         {
             Notes =
             [
@@ -430,8 +434,9 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
             else
             {
                 // A clean apply skips the summary above, but rank collisions are not resolved by applying,
-                // so still surface any diagnostics (WritePlanSummary already includes them when it runs).
+                // so still surface any diagnostics and the unmanaged info (WritePlanSummary includes both when it runs).
                 WriteDiagnostics(result.Diagnostics, Console.Out, ConsoleTheme.StdoutColor);
+                WriteUnmanaged(result.Unmanaged, Console.Out, ConsoleTheme.StdoutColor);
             }
 
             return ExitSuccess;
@@ -502,6 +507,7 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
         RegistrationState current = ConsoleStatus.Run(
             "Connecting to Dataverse and reading current registrations…",
             report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
+        current = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out string[] unmanaged);
         local = ResolveSecureConfigs(local, current, options, jsonOptions);
         RegistrationDiff diff = BuildDiff(local, current);
 
@@ -544,7 +550,7 @@ static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOpt
         string[] planDiagnostics = prefixDiagnostics.Length == 0
             ? local.Diagnostics
             : [.. local.Diagnostics, .. prefixDiagnostics];
-        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, planDiagnostics, current.Diagnostics, packageActions);
+        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, planDiagnostics, current.Diagnostics, packageActions, unmanaged);
         if (options.Strict && plan.Diagnostics.Length > 0)
         {
             WriteDiagnostics(plan.Diagnostics, Console.Error, ConsoleTheme.StderrColor);

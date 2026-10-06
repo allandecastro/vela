@@ -40,6 +40,7 @@ internal static class PackageScanner
     List<AssemblyPayload> sourceAssemblyPayloads = [];
     List<PluginPackagePayload> packagePayloads = [];
     Dictionary<string, string> secureConfigNameByStepKey = new(StringComparer.Ordinal);
+    List<string> unmanagedPluginTypes = [];
 
     // An isolated load context that resolves the package's assemblies (and their siblings) from the temp
     // folders by *bytes*, so no .dll file is ever locked - on Windows Assembly.LoadFrom would hold the file
@@ -66,6 +67,12 @@ internal static class PackageScanner
 
         foreach (Type type in GetLoadableTypes(assembly))
         {
+            if (IsUnmanagedPluginType(type))
+            {
+                unmanagedPluginTypes.Add(type.FullName ?? type.Name);
+                continue;
+            }
+
             if (IsPluginType(type, "EntityPluginBase"))
             {
                 if (!TryGetDefinitions(type, "GetStepDefinitions", out object[]? definitions, out string? error))
@@ -140,7 +147,8 @@ internal static class PackageScanner
         GeneratedAtUtc: DateTime.UtcNow,
         Items: items.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
         Diagnostics: [],
-        SecureConfigNameByStepKey: secureConfigNameByStepKey);
+        SecureConfigNameByStepKey: secureConfigNameByStepKey,
+        UnmanagedPluginTypes: [.. unmanagedPluginTypes.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)]);
     }
     finally
     {
@@ -441,6 +449,30 @@ internal static class PackageScanner
             ex);
     }
 }
+
+    // A registrable class Vela does not own: a concrete IPlugin or CodeActivity that is neither a Vela plugin nor a
+    // Vela Custom API (a classic plugin living in the same assembly). Matched by name, since the package's types are
+    // loaded in an isolated context. Its live registrations are excluded from the diff (OwnershipScope).
+    internal static bool IsUnmanagedPluginType(Type type)
+    {
+        if (!type.IsClass || type.IsAbstract || IsPluginType(type, "EntityPluginBase") || IsPluginType(type, "CustomApiBase"))
+        {
+            return false;
+        }
+
+        try
+        {
+            return type.GetInterfaces().Any(i => i.FullName == "Microsoft.Xrm.Sdk.IPlugin")
+                || IsPluginType(type, "CodeActivity");
+        }
+        catch (Exception ex) when (ex is TypeLoadException or FileNotFoundException or FileLoadException)
+        {
+            // Treating an unclassifiable type as managed would leave its live registrations in the diff, where they
+            // read as "removed" and apply deletes them: abort the scan instead, as GetLoadableTypes does.
+            throw new InvalidOperationException(
+                $"Cannot tell whether '{type.FullName}' is a plugin type: its interfaces fail to load ({ex.Message}). Fix the package's dependencies before planning or applying.", ex);
+        }
+    }
 
     internal static bool IsPluginType(Type type, string baseTypeName)
 {

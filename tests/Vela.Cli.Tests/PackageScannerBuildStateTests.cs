@@ -46,6 +46,8 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         // Only the secure configuration's NAME is scanned, keyed by plugin type + step key; no value exists yet.
         Assert.Equal(new Dictionary<string, string> { ["SamplePluginFixture.SampleAccountPlugin:stepkey:main"] = "SampleApiKey" }, state.SecureConfigNameByStepKey);
         Assert.Null(state.SecureConfigByStepKey);
+        // The classic IPlugin in the same assembly is not scanned for registrations, only reported as unmanaged.
+        Assert.Equal(new[] { "SamplePluginFixture.LegacyPlugin" }, state.UnmanagedPluginTypes);
 
         RegistrationItem api = Assert.Single(state.Items.Where(i => i.Kind == "custom-api"));
         Assert.Equal("SamplePluginFixture.SampleCustomApi", api.Type);

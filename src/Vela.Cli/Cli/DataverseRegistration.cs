@@ -577,7 +577,7 @@ internal static partial class DataverseRegistration
 }
 
     // Dataverse error code returned when deleting a record that no longer exists (0x80040217).
-    private const int ObjectDoesNotExistErrorCode = -2147220969;
+    internal const int ObjectDoesNotExistErrorCode = -2147220969;
 
     /// <summary>
     /// Deletes a record but treats an already-deleted record as success, so a resumed apply that

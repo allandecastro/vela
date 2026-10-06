@@ -66,3 +66,24 @@ namespace SamplePluginFixture
         }
     }
 }
+
+namespace Microsoft.Xrm.Sdk
+{
+    // Look-alike of the SDK's IPlugin (matched by full name by PackageScanner.IsUnmanagedPluginType).
+    public interface IPlugin
+    {
+        void Execute(System.IServiceProvider serviceProvider);
+    }
+}
+
+namespace SamplePluginFixture
+{
+    // A classic plugin living in the same assembly as the Vela plugins (registered with another tool): the scan must
+    // report it as unmanaged so apply leaves its registrations alone.
+    public sealed class LegacyPlugin : Microsoft.Xrm.Sdk.IPlugin
+    {
+        public void Execute(System.IServiceProvider serviceProvider)
+        {
+        }
+    }
+}

@@ -53,11 +53,14 @@ untouched.
   **images**, **Custom APIs** with their request/response parameters, and **web resources** (with
   `--webresources --solution`).
 - **Not managed:** solutions (must already exist - `--solution` only adds components to it), SDK message
-  filters (read-only lookup), step **enabled/disabled** state, secured/unsecured step **configuration**,
-  security roles / field security, environment variables. Assemblies are upserted, never
-  deleted.
-- **Deletion is scoped to the package.** `apply` removes steps/Custom APIs that exist in Dataverse but are
-  absent from the local package's own types - it will not delete unrelated registrations.
+  filters (read-only lookup), security roles / field security, environment variables. Assemblies are upserted,
+  never deleted. A step's secure configuration is managed only when `apply` is given its value (see
+  [Write a plugin](../guides/plugins.md)); otherwise the environment keeps it.
+- **Deletion is scoped to Vela's own plugin types.** `apply` removes the steps/Custom APIs of the package's Vela
+  plugins (and of a Vela plugin class you deleted) that are absent from the code. A classic `IPlugin` /
+  `CodeActivity` class in the same assembly is not a Vela type: its registrations (made with the Plugin
+  Registration Tool, for example) are left untouched and listed under `unmanaged` in the plan. An existing Custom
+  API implemented by another assembly is never taken over: `apply` stops with an error naming its owner.
 - **Custom API parameter types are limited** to Dataverse scalars + SDK types (bool, datetime, decimal,
   float, integer, guid, string, `Entity`, `EntityReference`, `EntityCollection`, `Money`, `OptionSetValue`,
   string array). Multi-select option sets and nested/complex types are not supported (unknown types fall back
