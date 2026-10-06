@@ -272,16 +272,12 @@ public class DataverseRegistrationHelperTests
     [InlineData("Microsoft.Xrm.Sdk.EntityCollection", 4)]
     [InlineData("Microsoft.Xrm.Sdk.Entity", 3)]
     [InlineData("System.Double", 6)]
-    [InlineData("System.Single", 6)]
     [InlineData("System.Int32", 7)]
-    [InlineData("System.Int64", 7)]
-    [InlineData("System.Int16", 7)]
     [InlineData("Microsoft.Xrm.Sdk.Money", 8)]
     [InlineData("Microsoft.Xrm.Sdk.OptionSetValue", 9)] // OptionSet
     [InlineData("Picklist", 9)]
     [InlineData("System.Guid", 12)]
     [InlineData("System.String", 10)]
-    [InlineData("SomethingUnknown", 10)] // default → String
     public void ResolveCustomApiTypeCode_scalar_mapping(string typeName, int expected)
     {
         Assert.Equal(expected, DataverseRegistration.ResolveCustomApiTypeCode(typeName, isCollection: false));
@@ -328,14 +324,34 @@ public class DataverseRegistrationHelperTests
         }
     }
 
-    // M1: the old string.Contains ladder mapped ANY type name containing "int" to Integer (and relied on branch
-    // order for Entity vs EntityReference). The exact simple-name table no longer over-matches.
+    // A type with no exact Custom API equivalent is rejected, never registered as a lookalike (String, Integer, ...)
+    // that would read back as its default value at runtime. The exact simple-name table also never over-matches
+    // (the old string.Contains ladder mapped any name containing "int" to Integer).
     [Theory]
-    [InlineData("MyCompany.PrintJob")]   // contains "int" but is not an integer type
-    [InlineData("System.Uri")]            // unknown scalar
-    public void ResolveCustomApiTypeCode_unknown_type_defaults_to_string_not_integer(string typeName)
+    [InlineData("MyCompany.PrintJob", false)] // contains "int" but is not an integer type
+    [InlineData("System.Uri", false)]
+    [InlineData("System.Int64", false)]       // long: no Custom API type (Integer is 32-bit)
+    [InlineData("System.Int16", false)]
+    [InlineData("System.Single", false)]
+    [InlineData("float", false)]                      // the C# alias (the Dataverse label "Float" stays valid)
+    [InlineData("Microsoft.Xrm.Sdk.Entity[]", true)]  // Dataverse sends an EntityCollection, not an array
+    [InlineData("Microsoft.Xrm.Sdk.EntityCollection[]", false)]
+    [InlineData("System.Int32", true)]        // int[]: only string[] and Entity collections exist
+    [InlineData("Microsoft.Xrm.Sdk.EntityReference", true)]
+    public void ResolveCustomApiTypeCode_rejects_a_type_with_no_custom_api_equivalent(string typeName, bool isCollection)
     {
-        Assert.Equal(SdkConstants.CustomApiParameterType.String, DataverseRegistration.ResolveCustomApiTypeCode(typeName, isCollection: false));
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.ResolveCustomApiTypeCode(typeName, isCollection));
+        Assert.Contains(typeName, ex.Message);
+    }
+
+    [Fact]
+    public void ResolveCustomApiTypeCode_reads_an_array_type_name_as_a_string_array()
+    {
+        Assert.Equal(SdkConstants.CustomApiParameterType.Float, DataverseRegistration.ResolveCustomApiTypeCode("Float", isCollection: false)); // the label
+        Assert.Equal(SdkConstants.CustomApiParameterType.EntityCollection, DataverseRegistration.ResolveCustomApiTypeCode("Microsoft.Xrm.Sdk.Entity", isCollection: true));
+        // Older framework packages emitted "System.String[]" for a string[] parameter, which used to register as String.
+        Assert.Equal(SdkConstants.CustomApiParameterType.StringArray, DataverseRegistration.ResolveCustomApiTypeCode("System.String[]", isCollection: true));
+        Assert.Equal(SdkConstants.CustomApiParameterType.StringArray, DataverseRegistration.ResolveCustomApiTypeCode("System.String[]", isCollection: false));
     }
 
     [Fact]

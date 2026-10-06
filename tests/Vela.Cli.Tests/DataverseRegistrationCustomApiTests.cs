@@ -329,14 +329,17 @@ public sealed class DataverseRegistrationCustomApiTests
     }
 
     [Fact]
-    public void SyncRequestParameters_updates_existing_parameter_by_name()
+    public void SyncRequestParameters_recreates_a_parameter_whose_optional_flag_or_table_changed()
     {
+        // isoptional and logicalentityname are create-only: an in-place update would not converge, so the parameter
+        // is deleted and recreated (like a type change).
         var existingId = Guid.NewGuid();
         var existing = new Entity("customapirequestparameter", existingId)
         {
             ["name"] = "Target",
-            ["uniquename"] = "Target", // already the bare name: no self-heal, this test exercises the update path
-            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.Integer), // matches desired: this test exercises the update path, not a type change
+            ["uniquename"] = "Target",
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.Integer),
+            ["isoptional"] = false,
         };
         var svc = new TestSupport.FakeOrgService
         {
@@ -346,13 +349,75 @@ public sealed class DataverseRegistrationCustomApiTests
 
         DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
 
-        Entity updated = Assert.Single(svc.Updated);
-        Assert.Equal("customapirequestparameter", updated.LogicalName);
-        Assert.Equal(existingId, updated.Id);
-        Assert.True(updated.GetAttributeValue<bool>("isoptional"));
-        Assert.False(updated.Contains("type")); // type is immutable, so it is not written on update
-        Assert.Equal("contact", updated.GetAttributeValue<string>("logicalentityname")); // written when set
+        Assert.Contains(("customapirequestparameter", existingId), svc.Deleted);
+        Entity created = Assert.Single(svc.Created);
+        Assert.True(created.GetAttributeValue<bool>("isoptional"));
+        Assert.Equal("contact", created.GetAttributeValue<string>("logicalentityname"));
+        Assert.Empty(svc.Updated);
+    }
+
+    [Fact]
+    public void SyncRequestParameters_recreates_a_parameter_whose_optional_flag_alone_changed()
+    {
+        // required -> optional with the type, unique name and binding unchanged: the optionality check alone must
+        // force the recreate (isoptional is create-only).
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("customapirequestparameter", existingId)
+        {
+            ["name"] = "Target",
+            ["uniquename"] = "Target",
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.Integer),
+            ["isoptional"] = false,
+        };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var param = new CustomApiParameterApplyDefinition("Target", IsOptional: true, ParameterTypeName: "System.Int32", IsCollection: false, LogicalEntityName: null);
+
+        DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
+
+        Assert.Contains(("customapirequestparameter", existingId), svc.Deleted);
+        Assert.True(Assert.Single(svc.Created).GetAttributeValue<bool>("isoptional"));
+    }
+
+    [Fact]
+    public void SyncRequestParameters_recreates_a_parameter_whose_table_alone_changed()
+    {
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("customapirequestparameter", existingId)
+        {
+            ["name"] = "Target",
+            ["uniquename"] = "Target",
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.EntityReference),
+            ["isoptional"] = true,
+            ["logicalentityname"] = "account",
+        };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var param = new CustomApiParameterApplyDefinition("Target", IsOptional: true, ParameterTypeName: "Microsoft.Xrm.Sdk.EntityReference", IsCollection: false, LogicalEntityName: "contact");
+
+        DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
+
+        Assert.Contains(("customapirequestparameter", existingId), svc.Deleted);
+        Assert.Equal("contact", Assert.Single(svc.Created).GetAttributeValue<string>("logicalentityname"));
+    }
+
+    [Fact]
+    public void SyncRequestParameters_leaves_an_unchanged_parameter_alone()
+    {
+        var existing = new Entity("customapirequestparameter", Guid.NewGuid())
+        {
+            ["name"] = "Target",
+            ["uniquename"] = "Target",
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.EntityReference),
+            ["isoptional"] = true,
+            ["logicalentityname"] = "contact",
+        };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var param = new CustomApiParameterApplyDefinition("Target", IsOptional: true, ParameterTypeName: "Microsoft.Xrm.Sdk.EntityReference", IsCollection: false, LogicalEntityName: "Contact");
+
+        DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
+
+        Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
+        Assert.Empty(svc.Deleted);
     }
 
     [Fact]
@@ -416,7 +481,7 @@ public sealed class DataverseRegistrationCustomApiTests
     }
 
     [Fact]
-    public void SyncRequestParameters_clears_logicalentityname_when_blank_on_update()
+    public void SyncRequestParameters_recreates_without_logicalentityname_when_the_binding_is_removed()
     {
         var existingId = Guid.NewGuid();
         var existing = new Entity("customapirequestparameter", existingId)
@@ -430,15 +495,14 @@ public sealed class DataverseRegistrationCustomApiTests
         {
             OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
         };
-        // Desired parameter has no entity binding: the stale value must be cleared, not left behind (which would
-        // make every subsequent plan/apply report the Custom API as "changed" forever).
+        // Desired parameter has no entity binding: the stale value must go, not be left behind (which would make every
+        // subsequent plan/apply report the Custom API as "changed" forever). The column is create-only: recreate.
         var param = new CustomApiParameterApplyDefinition("Target", IsOptional: false, ParameterTypeName: "System.String", IsCollection: false, LogicalEntityName: null);
 
         DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
 
-        Entity updated = Assert.Single(svc.Updated);
-        Assert.True(updated.Contains("logicalentityname"));                 // the attribute is written ...
-        Assert.Null(updated.GetAttributeValue<string>("logicalentityname")); // ... as null, to clear the stale value
+        Assert.Contains(("customapirequestparameter", existingId), svc.Deleted);
+        Assert.False(Assert.Single(svc.Created).Contains("logicalentityname"));
     }
 
     [Fact]
@@ -532,10 +596,7 @@ public sealed class DataverseRegistrationCustomApiTests
     [InlineData(null, false, SdkConstants.CustomApiParameterType.String)]         // null → "System.String" default
     [InlineData("System.String", true, SdkConstants.CustomApiParameterType.StringArray)]
     [InlineData("Microsoft.Xrm.Sdk.Entity", true, SdkConstants.CustomApiParameterType.EntityCollection)]
-    [InlineData("System.Int32", true, SdkConstants.CustomApiParameterType.Integer)] // collection of a non-string/non-entity scalar falls through to Integer
-    // IList<EntityReference>: the element name CONTAINS "Entity" but is not exactly "Entity", so it must fall
-    // through to the scalar EntityReference code, NOT be mistyped as EntityCollection.
-    [InlineData("Microsoft.Xrm.Sdk.EntityReference", true, SdkConstants.CustomApiParameterType.EntityReference)]
+    [InlineData("Microsoft.Xrm.Sdk.EntityCollection", true, SdkConstants.CustomApiParameterType.EntityCollection)]
     [InlineData("System.Boolean", false, SdkConstants.CustomApiParameterType.Boolean)]
     [InlineData("Microsoft.Xrm.Sdk.EntityReference", false, SdkConstants.CustomApiParameterType.EntityReference)]
     [InlineData("Microsoft.Xrm.Sdk.Entity", false, SdkConstants.CustomApiParameterType.Entity)]

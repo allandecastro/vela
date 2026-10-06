@@ -218,22 +218,18 @@ public sealed class CustomApiBuilder<TRequest, TResponse> : ICustomApiBuilder<TR
                 continue;
             }
 
+            (string typeName, bool isCollection) = CustomApiParameterTypes.Describe(property.PropertyType, property.Name);
             parameters.Add(new CustomApiParameterDefinition
             {
                 Name = property.Name,
-                ParameterTypeName = Nullable.GetUnderlyingType(property.PropertyType)?.FullName ?? property.PropertyType.FullName ?? property.PropertyType.Name,
+                ParameterTypeName = typeName,
                 IsOptional = !isOutput && property.GetCustomAttribute<RequiredAttribute>() == null,
-                IsCollection = IsCollectionType(property.PropertyType),
+                IsCollection = isCollection,
                 Description = property.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty
             });
         }
 
         return parameters.ToArray();
-    }
-
-    private static bool IsCollectionType(Type type)
-    {
-        return type != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(type);
     }
 
     private static string RequireValue(string value, string parameterName)
@@ -272,13 +268,13 @@ public sealed class CustomApiBuilder<TRequest, TResponse> : ICustomApiBuilder<TR
                     $"Custom API parameter '{propertyInfo.Name}' was added more than once. Each request/response parameter must be added exactly once (across all .Request()/.Response() calls).");
             }
 
-            Type propertyType = propertyInfo.PropertyType;
+            (string typeName, bool isCollection) = CustomApiParameterTypes.Describe(propertyInfo.PropertyType, propertyInfo.Name);
             _parameters.Add(new CustomApiParameterDefinition
             {
                 Name = propertyInfo.Name,
-                ParameterTypeName = Nullable.GetUnderlyingType(propertyType)?.FullName ?? propertyType.FullName ?? propertyType.Name,
+                ParameterTypeName = typeName,
                 IsOptional = optional || propertyInfo.GetCustomAttribute<RequiredAttribute>() == null,
-                IsCollection = IsCollectionType(propertyType),
+                IsCollection = isCollection,
                 Description = description ?? propertyInfo.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty
             });
 

@@ -203,10 +203,16 @@ parameters, `ExecutePrivilege`, and `IsPrivate`. `plan` and `apply` diff the req
 **per parameter**, so a change reads as exactly which parameters were added, removed, or retyped rather than the
 whole API showing as one opaque change.
 
-A request parameter's or response property's **type** is fixed at creation (the parameter's `Type` column is
-create-only, and it also encodes collection-ness). When the type changes, `apply` **deletes and recreates that
-one parameter** with the new type - only the affected parameter, leaving the Custom API and its other parameters
-in place. A parameter's optionality (`isOptional`) and entity binding reconcile in place without a recreate.
+A request parameter's or response property's **type**, **optionality** (`isOptional`) and **entity binding** are
+fixed at creation (the `Type` column also encodes collection-ness). When one of them changes, `apply` **deletes
+and recreates that one parameter** - only the affected parameter, leaving the Custom API and its other parameters
+in place. An unchanged parameter is not written at all.
+
+**Parameter types.** A parameter's CLR type must have an exact Custom API type: `bool`, `int`, `decimal`, `double`
+(Float), `DateTime`, `Guid`, `string`, `string[]` (StringArray), `Money`, `OptionSetValue` (Picklist),
+`EntityReference`, `Entity` (or an early-bound entity such as `Account`) and `EntityCollection`. Any other type
+(`long`, `float`, an enum, `byte[]`, `List<string>`, ...) fails when the step is built, with the type to use
+instead: registering it as a lookalike would make the property read back as its default value.
 
 Several **API-level** fields are fixed by Dataverse when the Custom API is first created and cannot be changed
 afterward:

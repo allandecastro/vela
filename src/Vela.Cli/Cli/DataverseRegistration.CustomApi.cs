@@ -241,6 +241,8 @@ internal static partial class DataverseRegistration
         $"Custom API '{uniqueName}' already exists and is implemented by '{owner.GetAttributeValue<string>("typename")}' in assembly '{owner.GetAttributeValue<string>("assemblyname")}', which is not being applied. Vela will not take it over; rename the Custom API, or remove the existing one first.");
 }
 
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
     internal static Guid? FindCustomApiId(IOrganizationService service, string uniqueName)
 {
     QueryExpression query = new QueryExpression("customapi")
@@ -327,27 +329,20 @@ internal static partial class DataverseRegistration
                 // type-change path below - the only way to converge is delete+recreate with the correct bare name.
                 bool uniqueNameMismatch = !string.Equals(
                     existing.GetAttributeValue<string>("uniquename"), parameter.Name, StringComparison.Ordinal);
-                if (existingType == typeCode && !uniqueNameMismatch)
+                // isoptional and logicalentityname are create-only too (Dataverse rejects or ignores an update), so a
+                // change to either is converged the same way as a type change: recreate this one parameter.
+                bool optionalChanged = spec.IncludeIsOptional
+                    && (existing.GetAttributeValue<bool?>("isoptional") ?? false) != parameter.IsOptional;
+                bool entityChanged = !string.Equals(
+                    NullIfBlank(existing.GetAttributeValue<string>("logicalentityname")),
+                    NullIfBlank(parameter.LogicalEntityName),
+                    StringComparison.OrdinalIgnoreCase);
+                if (existingType == typeCode && !uniqueNameMismatch && !optionalChanged && !entityChanged)
                 {
-                    Entity update = new Entity(spec.EntityName)
-                    {
-                        Id = existing.Id
-                    };
-                    if (spec.IncludeIsOptional)
-                    {
-                        update["isoptional"] = parameter.IsOptional;
-                    }
-                    // type is unchanged here (matched above), so it is not written on update.
-                    // Always write logicalentityname (null clears it). Only setting it when non-empty left a stale
-                    // value behind when a parameter's entity binding was removed, so the live read kept surfacing the
-                    // old table and every subsequent plan/apply reported the Custom API as "changed" forever.
-                    update["logicalentityname"] = string.IsNullOrWhiteSpace(parameter.LogicalEntityName) ? null : parameter.LogicalEntityName;
-                    service.Update(update);
-                    LogOperation(spec.LogTag, "update", parameter.Name, details, verbose, indent: true);
-                    continue;
+                    continue; // nothing Vela manages differs: no write
                 }
 
-                // A parameter's type (which also encodes collection-ness) and its uniquename are both create-only:
+                // A parameter's type (which also encodes collection-ness), uniquename, isoptional and logicalentityname are create-only:
                 // Dataverse silently ignores an update to either, so an in-place update would report success but
                 // never converge - every later plan would show the same phantom change (and a dotted uniquename
                 // would keep the API uncallable). Delete this one parameter and recreate it with the correct type
@@ -420,8 +415,9 @@ internal static partial class DataverseRegistration
     // ("Picklist") resolve. Symmetric with ResolveCustomApiTypeName.
     // Keys are simple type names, and cover the three spellings a caller may supply: the SDK type name the reverse
     // resolver emits ("Int32"/"Double"/"OptionSetValue"), the Custom API type label ("Integer"/"Float"/"Picklist"),
-    // and the C# alias ("int"/"long"/"double"). All exact — no substring matching, so an unrelated name that merely
-    // contains "int" no longer resolves to Integer.
+    // and the C# alias ("int"/"double"). All exact - no substring matching, so an unrelated name that merely
+    // contains "int" no longer resolves to Integer. A type with no exact Custom API equivalent (long, float, an
+    // enum, ...) is rejected rather than registered as a lookalike: it would read back as its default value.
     private static readonly Dictionary<string, int> CustomApiScalarTypeCodes = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Boolean"] = SdkConstants.CustomApiParameterType.Boolean,
@@ -434,16 +430,10 @@ internal static partial class DataverseRegistration
         ["EntityReference"] = SdkConstants.CustomApiParameterType.EntityReference,
         ["Float"] = SdkConstants.CustomApiParameterType.Float,
         ["Double"] = SdkConstants.CustomApiParameterType.Float,
-        ["Single"] = SdkConstants.CustomApiParameterType.Float,
         ["double"] = SdkConstants.CustomApiParameterType.Float,
-        ["float"] = SdkConstants.CustomApiParameterType.Float,
         ["Integer"] = SdkConstants.CustomApiParameterType.Integer,
-        ["Int16"] = SdkConstants.CustomApiParameterType.Integer,
         ["Int32"] = SdkConstants.CustomApiParameterType.Integer,
-        ["Int64"] = SdkConstants.CustomApiParameterType.Integer,
         ["int"] = SdkConstants.CustomApiParameterType.Integer,
-        ["long"] = SdkConstants.CustomApiParameterType.Integer,
-        ["short"] = SdkConstants.CustomApiParameterType.Integer,
         ["Money"] = SdkConstants.CustomApiParameterType.Money,
         ["OptionSetValue"] = SdkConstants.CustomApiParameterType.Picklist,
         ["Picklist"] = SdkConstants.CustomApiParameterType.Picklist,
@@ -456,6 +446,26 @@ internal static partial class DataverseRegistration
     internal static int ResolveCustomApiTypeCode(string? parameterTypeName, bool isCollection)
 {
     string simple = SimpleTypeName((parameterTypeName ?? "System.String").Trim());
+
+    // Older framework packages emitted "System.String[]" for a string[] parameter: read it as a StringArray. Only
+    // string[] has this compatibility: Dataverse hands an entity collection over as EntityCollection, which an
+    // Entity[] / EntityCollection[] property cannot read, so those array names are rejected below.
+    if (string.Equals(simple, "String[]", StringComparison.OrdinalIgnoreCase))
+    {
+        simple = "String";
+        isCollection = true;
+    }
+    else if (simple.EndsWith("[]", StringComparison.Ordinal))
+    {
+        throw UnsupportedCustomApiType(parameterTypeName, isCollection: true);
+    }
+
+    // The CLR spellings with no exact Custom API type. The table matches case-insensitively (so the Dataverse label
+    // "Float" and the C# alias "double" both resolve), which would let the C# alias "float" through as Float.
+    if (simple is "float" or "Single")
+    {
+        throw UnsupportedCustomApiType(parameterTypeName, isCollection);
+    }
 
     // Only the exact String and Entity element types have a Custom API collection code (StringArray /
     // EntityCollection). Match on equality, not substring: an element type that merely CONTAINS "Entity" (e.g.
@@ -473,9 +483,22 @@ internal static partial class DataverseRegistration
         }
     }
 
-    return CustomApiScalarTypeCodes.TryGetValue(simple, out int code)
-        ? code
-        : SdkConstants.CustomApiParameterType.String;
+    // EntityCollection is itself a collection type, so it may arrive flagged as one; any other scalar flagged as a
+    // collection (int[], EntityReference[], ...) has no Custom API type.
+    if (CustomApiScalarTypeCodes.TryGetValue(simple, out int code) && (!isCollection || code == SdkConstants.CustomApiParameterType.EntityCollection))
+    {
+        return code;
+    }
+
+    throw UnsupportedCustomApiType(parameterTypeName, isCollection);
+}
+
+    private static InvalidOperationException UnsupportedCustomApiType(string? parameterTypeName, bool isCollection)
+{
+    return new InvalidOperationException(
+        $"Custom API parameter type '{parameterTypeName}'{(isCollection ? " (collection)" : string.Empty)} has no Dataverse Custom API type. " +
+        "Supported: Boolean, Integer (int), Decimal, Float (double), DateTime, Guid, String, StringArray (string[]), Money, Picklist (OptionSetValue), EntityReference, Entity, EntityCollection. " +
+        "Rebuild the plugin with a current Vela.Plugins, which rejects other types when the step is built.");
 }
 
     // The simple (last dotted segment) of a type name; e.g. "System.Int32" -> "Int32", "Picklist" -> "Picklist".

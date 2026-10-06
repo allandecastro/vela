@@ -196,21 +196,17 @@ public sealed class CustomApiLightBuilder : ICustomApiBuilder
 
     private static CustomApiParameterDefinition CreateParameterDefinition(string name, Type parameterType, bool optional, string? description)
     {
-        parameterType = parameterType ?? throw new ArgumentNullException(nameof(parameterType));
+        string parameterName = RequireValue(name, nameof(name));
+        (string typeName, bool isCollection) = CustomApiParameterTypes.Describe(parameterType, parameterName);
 
         return new CustomApiParameterDefinition
         {
-            Name = RequireValue(name, nameof(name)),
-            ParameterTypeName = Nullable.GetUnderlyingType(parameterType)?.FullName ?? parameterType.FullName ?? parameterType.Name,
+            Name = parameterName,
+            ParameterTypeName = typeName,
             IsOptional = optional,
-            IsCollection = IsCollectionType(parameterType),
+            IsCollection = isCollection,
             Description = description ?? string.Empty
         };
-    }
-
-    private static bool IsCollectionType(Type type)
-    {
-        return type != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(type);
     }
 
     private static string RequireValue(string value, string parameterName)

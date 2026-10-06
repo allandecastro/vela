@@ -61,10 +61,10 @@ untouched.
   `CodeActivity` class in the same assembly is not a Vela type: its registrations (made with the Plugin
   Registration Tool, for example) are left untouched and listed under `unmanaged` in the plan. An existing Custom
   API implemented by another assembly is never taken over: `apply` stops with an error naming its owner.
-- **Custom API parameter types are limited** to Dataverse scalars + SDK types (bool, datetime, decimal,
-  float, integer, guid, string, `Entity`, `EntityReference`, `EntityCollection`, `Money`, `OptionSetValue`,
-  string array). Multi-select option sets and nested/complex types are not supported (unknown types fall back
-  to `String`).
+- **Custom API parameter types are limited** to the Dataverse Custom API types: `bool`, `int`, `decimal`,
+  `double`, `DateTime`, `Guid`, `string`, `string[]`, `Money`, `OptionSetValue`, `EntityReference`, `Entity` (or
+  an early-bound entity) and `EntityCollection`. Any other type (long, float, enums, multi-select option sets,
+  nested/complex types) is rejected when the step is built.
 - **Some Custom API fields are create-only.** `IsFunction`, the binding type, the bound entity, the allowed
   custom-processing-step type, and `WorkflowSdkStepEnabled` are fixed when the Custom API is created; Dataverse
   ignores updates to them. `apply` detects such a change and fails fast (delete and recreate the Custom API to

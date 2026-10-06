@@ -16,10 +16,14 @@ namespace Vela.Messages
     /// </summary>
     public abstract class TypedRequest : OrganizationRequest
     {
-        /// <summary>Reads a typed value from <c>Parameters</c> (defaults when absent). Key defaults to the property name.</summary>
+        /// <summary>
+        /// Reads a typed value from <c>Parameters</c> (defaults when absent or null). Key defaults to the property name.
+        /// A base <c>Entity</c> is converted to an early-bound <typeparamref name="T"/>; a value of any other type
+        /// throws instead of silently reading as the default.
+        /// </summary>
         /// <typeparam name="T">The parameter's CLR type.</typeparam>
         /// <param name="name">The parameter key; defaults to the calling property's name.</param>
-        protected virtual T Get<T>([CallerMemberName] string name = "") => Parameters.Contains(name) && Parameters[name] is T typed ? typed : default!;
+        protected virtual T Get<T>([CallerMemberName] string name = "") => TypedValue.Read<T>(Parameters.Contains(name), Parameters.Contains(name) ? Parameters[name] : null, name);
 
         /// <summary>Writes a typed value into <c>Parameters</c>. Key defaults to the property name.</summary>
         /// <typeparam name="T">The parameter's CLR type.</typeparam>
@@ -50,10 +54,14 @@ namespace Vela.Messages
     /// </summary>
     public abstract class TypedResponse : OrganizationResponse
     {
-        /// <summary>Reads a typed value from <c>Results</c> (defaults when absent). Key defaults to the property name.</summary>
+        /// <summary>
+        /// Reads a typed value from <c>Results</c> (defaults when absent or null). Key defaults to the property name.
+        /// A base <c>Entity</c> is converted to an early-bound <typeparamref name="T"/>; a value of any other type
+        /// throws instead of silently reading as the default.
+        /// </summary>
         /// <typeparam name="T">The result's CLR type.</typeparam>
         /// <param name="name">The result key; defaults to the calling property's name.</param>
-        protected virtual T Get<T>([CallerMemberName] string name = "") => Results.Contains(name) && Results[name] is T typed ? typed : default!;
+        protected virtual T Get<T>([CallerMemberName] string name = "") => TypedValue.Read<T>(Results.Contains(name), Results.Contains(name) ? Results[name] : null, name);
 
         /// <summary>Writes a typed value into <c>Results</c>. Key defaults to the property name.</summary>
         /// <typeparam name="T">The result's CLR type.</typeparam>
@@ -167,5 +175,33 @@ namespace Vela.Messages
 
         /// <summary>A reference to the created or updated record.</summary>
         public EntityReference Target { get => Get<EntityReference>(); set => Set(value); }
+    }
+
+    // The shared read behind TypedRequest.Get / TypedResponse.Get.
+    internal static class TypedValue
+    {
+        private static readonly System.Reflection.MethodInfo ToEntity = typeof(Entity).GetMethod(nameof(Entity.ToEntity))!;
+
+        internal static T Read<T>(bool present, object? value, string name)
+        {
+            if (!present || value is null)
+            {
+                return default!;
+            }
+
+            if (value is T typed)
+            {
+                return typed;
+            }
+
+            // Dataverse hands entities over as the base Entity: convert to the declared early-bound type.
+            if (value is Entity entity && typeof(Entity).IsAssignableFrom(typeof(T)))
+            {
+                return (T)ToEntity.MakeGenericMethod(typeof(T)).Invoke(entity, null)!;
+            }
+
+            throw new System.InvalidCastException(
+                $"Parameter '{name}' holds a {value.GetType().FullName}, not the {typeof(T).FullName} its property declares. Declare the property with the type Dataverse sends.");
+        }
     }
 }
