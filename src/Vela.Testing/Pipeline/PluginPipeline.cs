@@ -63,10 +63,11 @@ namespace Vela.Testing
 
         /// <summary>
         /// The user id a plugin execution context carries when it was triggered by a write issued through the SYSTEM
-        /// service (<c>ctx.SystemService</c>). A service created for this id (e.g. <c>ctx.Service</c> in that nested
-        /// plugin) is the unrestricted SYSTEM service, as on a real org.
+        /// service (<c>ctx.SystemService</c>), standing in for the org's SYSTEM user. A service created for this id
+        /// (e.g. <c>ctx.Service</c> in that nested plugin) is the unrestricted SYSTEM service, as on a real org.
+        /// Internal: tests reason about the behaviour (SYSTEM is unrestricted), not about this id.
         /// </summary>
-        public static readonly Guid SystemUserId = new Guid("5e5e5e00-0000-0000-0000-000000000000");
+        internal static readonly Guid SystemUserId = new Guid("5e5e5e00-0000-0000-0000-000000000000");
 
         private PluginPipeline()
         {
