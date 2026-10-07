@@ -79,6 +79,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `RequestParameter` and `ResponseParameter`, or `[LogicalEntityName("contact")]` (`Vela.Messages`) on a model
   property. An early-bound entity parameter (`Account`) uses its own table. Before, the framework had no way to set
   it, so `apply` removed a table set in Dataverse by recreating the parameter.
+- **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase` and
+  `EntityPluginBase<TEntity>` default their `maxDepth` to it instead of repeating the literal.
 
 ### Changed (Framework)
 
@@ -178,6 +180,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   shares a name is no longer treated as a plugin (VELA011, VELA012, VELA019) or a step builder (generator); VELA011
   and VELA019 skip compilations that reference neither the SDK nor Vela. The fluent-chain walk the analyzers and the
   generator each copied is now one shared, tested walker, so every rule sees parentheses and `!` the same way.
+- **A failure while building the execution context or registering services follows the handler failure contract.**
+  `ConfigureServices`, an `[assembly: VelaServiceRegistrar]` and the `LocalPluginContext` constructor ran before
+  the `try` in `PluginBase.Execute`, so their exception escaped unwrapped and untraced, and the resolver was never
+  disposed. Registration now runs inside the `try` (traced, wrapped in an `InvalidPluginExecutionException`, resolver
+  disposed); a context construction failure is traced to the platform tracing service and wrapped too.
 
 ### Added (CLI)
 

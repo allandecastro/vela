@@ -15,9 +15,15 @@ namespace Vela.Plugin
     /// </remarks>
     /// <param name="unsecureConfig">Unsecure JSON configuration.</param>
     /// <param name="secureConfig">Secure JSON configuration.</param>
-    /// <param name="maxDepth">Depth guard threshold.</param>
-    public abstract class PluginBase(string unsecureConfig, string secureConfig, int maxDepth = 8) : IPlugin
+    /// <param name="maxDepth">Depth guard threshold (defaults to <see cref="DefaultMaxDepth"/>).</param>
+    public abstract class PluginBase(string unsecureConfig, string secureConfig, int maxDepth = PluginBase.DefaultMaxDepth) : IPlugin
     {
+        /// <summary>
+        /// The default depth guard threshold shared by every Vela base class: an execution whose
+        /// <see cref="ILocalPluginContext.Depth"/> exceeds it is stopped. It matches the Dataverse default depth limit.
+        /// </summary>
+        public const int DefaultMaxDepth = 8;
+
         /// <summary>
         /// Gets unsecure configuration.
         /// </summary>
@@ -39,27 +45,52 @@ namespace Vela.Plugin
         /// <param name="serviceProvider">Runtime service provider.</param>
         public void Execute(IServiceProvider serviceProvider)
         {
-            LocalPluginContext localContext = new LocalPluginContext(serviceProvider ?? throw new InvalidPluginExecutionException(nameof(serviceProvider)), GetType().FullName);
+            if (serviceProvider == null)
+            {
+                throw new InvalidPluginExecutionException(nameof(serviceProvider));
+            }
 
-            // Assembly-wide shared services first (one [assembly: VelaServiceRegistrar] for all plugins/Custom APIs
-            // in the assembly), then the per-plugin ConfigureServices - so a plugin can still override a shared
-            // registration (the resolver is last-registration-wins).
-            AssemblyServiceRegistrars.Resolve(GetType())?.Register(localContext.Resolver, localContext);
-            ConfigureServices(localContext.Resolver, localContext);
-
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            localContext.Trace(
-                "Executing {0}. Message={1}, Stage={2}, Mode={3}, Depth={4}",
-                GetType().FullName,
-                localContext.MessageName,
-                localContext.Stage,
-                localContext.Mode,
-                localContext.Depth);
-            TraceSnapshotDetail snapshotDetail = AutoSnapshotDetail;
-            localContext.TraceExecutionSnapshot("start", snapshotDetail);
-
+            // Building the context resolves the platform services. A failure here has no context to trace through
+            // yet, so trace it best-effort straight to the platform tracing service and surface it as an
+            // InvalidPluginExecutionException like any other failure (never a raw framework exception).
+            LocalPluginContext localContext;
             try
             {
+                localContext = new LocalPluginContext(serviceProvider, GetType().FullName);
+            }
+            catch (Exception ex)
+            {
+                TryTraceStartupFailure(serviceProvider, ex);
+                if (ex is InvalidPluginExecutionException)
+                {
+                    throw;
+                }
+
+                throw new InvalidPluginExecutionException(
+                    $"Unhandled exception in plugin '{GetType().FullName}' while building the execution context: {ex.GetType().Name}: {ex.Message}", ex);
+            }
+
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            TraceSnapshotDetail snapshotDetail = AutoSnapshotDetail;
+            try
+            {
+                // Service registration runs inside the try, so a throwing registrar or ConfigureServices is traced,
+                // wrapped like a handler failure, and the resolver is still disposed in the finally below.
+                // Assembly-wide shared services first (one [assembly: VelaServiceRegistrar] for all plugins/Custom
+                // APIs in the assembly), then the per-plugin ConfigureServices - so a plugin can still override a
+                // shared registration (the resolver is last-registration-wins).
+                AssemblyServiceRegistrars.Resolve(GetType())?.Register(localContext.Resolver, localContext);
+                ConfigureServices(localContext.Resolver, localContext);
+
+                localContext.Trace(
+                    "Executing {0}. Message={1}, Stage={2}, Mode={3}, Depth={4}",
+                    GetType().FullName,
+                    localContext.MessageName,
+                    localContext.Stage,
+                    localContext.Mode,
+                    localContext.Depth);
+                localContext.TraceExecutionSnapshot("start", snapshotDetail);
+
                 EnforceDepth(localContext);
                 ExecuteDataversePlugin(localContext);
                 localContext.Trace("Execution completed in {0} ms.", stopwatch.ElapsedMilliseconds);
@@ -167,6 +198,21 @@ namespace Vela.Plugin
         /// </summary>
         /// <param name="ctx">Local plugin context.</param>
         protected abstract void ExecuteDataversePlugin(ILocalPluginContext ctx);
+
+        // Best-effort trace of a failure that happened before the context existed. Tracing must never mask the
+        // original failure, so any error while tracing is swallowed.
+        private void TryTraceStartupFailure(IServiceProvider serviceProvider, Exception exception)
+        {
+            try
+            {
+                (serviceProvider.GetService(typeof(ITracingService)) as ITracingService)?.Trace(
+                    "Failed to build the execution context for {0}: {1}", GetType().FullName, exception.ToString());
+            }
+            catch (Exception)
+            {
+                // Ignored: the original exception is what the caller needs to see.
+            }
+        }
 
         private void EnforceDepth(ILocalPluginContext context)
         {

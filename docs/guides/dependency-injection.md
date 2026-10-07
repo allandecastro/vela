@@ -54,6 +54,10 @@ registrar type must be stateless with a public parameterless constructor (the sa
 resolved once per assembly and cached, so the attribute lookup never repeats on the execution path. Only one
 `[assembly: VelaServiceRegistrar]` is read per assembly.
 
+Registration runs under the same failure contract as the handler: an exception thrown by the registrar or by
+`ConfigureServices` is traced, surfaced as an `InvalidPluginExecutionException` (a `PluginBusinessException`
+keeps its own message), and the transient services already created are still disposed.
+
 ## Lifetimes
 
 A plugin runs in a fresh instance per pipeline invocation, so there is **no singleton lifetime** - the two
