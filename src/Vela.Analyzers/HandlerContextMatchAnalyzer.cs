@@ -25,7 +25,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class HandlerContextMatchAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA015";
+        public const string DiagnosticId = DiagnosticIds.HandlerContextMatch;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -36,7 +36,18 @@ namespace Vela.Analyzers
             isEnabledByDefault: true,
             description: "The handler bound with .Handle(...) must take the step's message context, its generated typed step context (a subclass), or the plain ILocalPluginContext. A context for a different message/stage is a mistake the permissive Handle(Delegate) overload cannot catch on its own.");
 
-        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
+        // Same rule, other shape: Handle(Delegate) also accepts a method of any arity or return type, which the
+        // builder rejects when the step is registered (StepBuilder.SetHandler). Reported on every trigger path.
+        private static readonly DiagnosticDescriptor ShapeRule = new DiagnosticDescriptor(
+            id: DiagnosticId,
+            title: "Step handler context must match the step",
+            messageFormat: "Handler '{0}' must be a void method taking exactly one context parameter; it takes {1} parameter(s) and returns '{2}'",
+            category: "Vela.Usage",
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            description: "A step handler bound with .Handle(...) must return void and take exactly one context parameter. The permissive Handle(Delegate) overload compiles any method group, and the step builder then throws when the step is registered.");
+
+        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule, ShapeRule);
 
         public override void Initialize(AnalysisContext context)
         {
@@ -44,27 +55,25 @@ namespace Vela.Analyzers
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             context.RegisterCompilationStartAction(start =>
             {
-                INamedTypeSymbol? fluent = start.Compilation.GetTypeByMetadataName("Vela.Steps.IFluentStep");
+                INamedTypeSymbol? fluent = start.Compilation.GetTypeByMetadataName(FluentStep.FluentStepMetadataName);
                 if (fluent is null)
                 {
                     return;
                 }
 
-                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeHandle(nodeContext, fluent), SyntaxKind.InvocationExpression);
+                INamedTypeSymbol? plainContext = start.Compilation.GetTypeByMetadataName("Vela.Context.ILocalPluginContext");
+                INamedTypeSymbol? entityPluginBase = start.Compilation.GetTypeByMetadataName(PluginTypes.EntityPluginBaseMetadataName);
+                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeHandle(nodeContext, fluent, plainContext, entityPluginBase), SyntaxKind.InvocationExpression);
             });
         }
 
-        private static void AnalyzeHandle(SyntaxNodeAnalysisContext context, INamedTypeSymbol fluent)
+        private static void AnalyzeHandle(SyntaxNodeAnalysisContext context, INamedTypeSymbol fluent, INamedTypeSymbol? plainContext, INamedTypeSymbol? entityPluginBase)
         {
             InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
-            if (invocation.Expression is not MemberAccessExpressionSyntax member ||
-                member.Name.Identifier.ValueText != "Handle" ||
-                invocation.ArgumentList.Arguments.Count != 1)
+            if (!FluentStep.IsHandleCall(invocation, out MemberAccessExpressionSyntax member, out ExpressionSyntax argument))
             {
                 return;
             }
-
-            ExpressionSyntax argument = invocation.ArgumentList.Arguments[0].Expression;
 
             // Only the method-group path is permissive; a lambda binds the specific typed overload and is already
             // checked by the compiler.
@@ -73,8 +82,19 @@ namespace Vela.Analyzers
                 return;
             }
 
-            if (!FluentStep.IsFluentMethod(context.SemanticModel, invocation, fluent, context.CancellationToken))
+            if (!FluentStep.IsFluentMethod(context.SemanticModel, invocation, fluent, context.CancellationToken) ||
+                FluentStep.BoundHandler(context.SemanticModel, argument, context.CancellationToken) is not IMethodSymbol handler)
             {
+                return;
+            }
+
+            // A method of the wrong shape can only have bound Handle(Delegate); the builder throws on it at
+            // registration, whatever the trigger.
+            if (handler.Parameters.Length != 1 || !handler.ReturnsVoid)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ShapeRule, argument.GetLocation(), handler.Name, handler.Parameters.Length,
+                    handler.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
                 return;
             }
 
@@ -86,21 +106,14 @@ namespace Vela.Analyzers
             }
 
             string expectedInterface = "I" + message + (isPost.Value ? "Post" : "Pre") + "Context";
-
-            // The bound handler method's single parameter type.
-            SymbolInfo info = context.SemanticModel.GetSymbolInfo(argument, context.CancellationToken);
-            ISymbol? symbol = info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
-            if (symbol is not IMethodSymbol handler || handler.Parameters.Length != 1)
-            {
-                return;
-            }
+            INamedTypeSymbol? expectedSymbol = context.Compilation.GetTypeByMetadataName($"Vela.Context.{expectedInterface}`1");
 
             ITypeSymbol parameterType = handler.Parameters[0].Type;
 
             // The plugin entity is needed both to validate the context's generic argument and to build the code-fix type.
-            INamedTypeSymbol? entity = ResolveEntity(invocation, context.SemanticModel, context.CancellationToken);
+            INamedTypeSymbol? entity = ResolveEntity(invocation, context.SemanticModel, entityPluginBase, context.CancellationToken);
 
-            if (SatisfiesContext(parameterType, expectedInterface, entity))
+            if (SatisfiesContext(parameterType, expectedInterface, expectedSymbol, plainContext, entity))
             {
                 return;
             }
@@ -118,34 +131,24 @@ namespace Vela.Analyzers
         }
 
         // The TEntity of the enclosing EntityPluginBase<TEntity>, used to build the fully-qualified expected context.
-        private static INamedTypeSymbol? ResolveEntity(SyntaxNode node, SemanticModel model, System.Threading.CancellationToken cancellationToken)
+        private static INamedTypeSymbol? ResolveEntity(SyntaxNode node, SemanticModel model, INamedTypeSymbol? entityPluginBase, System.Threading.CancellationToken cancellationToken)
         {
             ClassDeclarationSyntax? pluginClass = node.FirstAncestorOrSelf<ClassDeclarationSyntax>();
-            if (pluginClass is null || model.GetDeclaredSymbol(pluginClass, cancellationToken) is not INamedTypeSymbol pluginSymbol)
-            {
-                return null;
-            }
-
-            for (INamedTypeSymbol? t = pluginSymbol.BaseType; t is not null; t = t.BaseType)
-            {
-                if (t.Name == "EntityPluginBase" && t.TypeArguments.Length == 1 && t.TypeArguments[0] is INamedTypeSymbol entity)
-                {
-                    return entity;
-                }
-            }
-
-            return null;
+            return pluginClass is null
+                ? null
+                : PluginTypes.EntityOf(model.GetDeclaredSymbol(pluginClass, cancellationToken), entityPluginBase);
         }
 
         // The parameter is valid when it is (or derives from / implements) the expected message-context interface for
-        // the plugin's own entity, or is the plain ILocalPluginContext (permissive untyped handler). Name-based to keep
-        // it robust across the generated subclass and the plain interface without binding to the framework assembly.
-        private static bool SatisfiesContext(ITypeSymbol parameterType, string expectedInterface, INamedTypeSymbol? entity)
+        // the plugin's own entity, or is the plain ILocalPluginContext (permissive untyped handler). Both are compared
+        // by symbol (Vela.Context.ILocalPluginContext, Vela.Context.I{Msg}{Stage}Context`1); the expected interface
+        // falls back to its name only when the compilation does not define it.
+        private static bool SatisfiesContext(ITypeSymbol parameterType, string expectedInterface, INamedTypeSymbol? expectedSymbol, INamedTypeSymbol? plainContext, INamedTypeSymbol? entity)
         {
             // The plain untyped handler (parameter is exactly ILocalPluginContext) is allowed. Note we do NOT accept a
             // type merely because it implements ILocalPluginContext - every message context does, so that would accept
             // a wrong context too.
-            if (parameterType.Name == "ILocalPluginContext")
+            if (plainContext is not null && SymbolEqualityComparer.Default.Equals(parameterType, plainContext))
             {
                 return true;
             }
@@ -162,7 +165,10 @@ namespace Vela.Analyzers
             // must be reported rather than accepted on the name alone.
             foreach (INamedTypeSymbol candidate in SelfAndInterfaces(parameterType))
             {
-                if (candidate.Name != expectedInterface)
+                bool matches = expectedSymbol is not null
+                    ? SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, expectedSymbol)
+                    : candidate.Name == expectedInterface;
+                if (!matches)
                 {
                     continue;
                 }
@@ -212,29 +218,16 @@ namespace Vela.Analyzers
             string? message = null;
             bool? isPost = null;
 
-            for (ExpressionSyntax? current = receiver; current is not null;)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
+                switch (call.MethodName)
                 {
-                    switch (ma.Name.Identifier.ValueText)
-                    {
-                        case "OnCreate": message ??= "Create"; break;
-                        case "OnUpdate": message ??= "Update"; break;
-                        case "OnDelete": message ??= "Delete"; break;
-                        case "PostOperation": isPost ??= true; break;
-                        case "PreOperation":
-                        case "PreValidation": isPost ??= false; break;
-                    }
-
-                    current = ma.Expression;
-                }
-                else if (current is MemberAccessExpressionSyntax bare)
-                {
-                    current = bare.Expression;
-                }
-                else
-                {
-                    break;
+                    case "OnCreate": message ??= "Create"; break;
+                    case "OnUpdate": message ??= "Update"; break;
+                    case "OnDelete": message ??= "Delete"; break;
+                    case "PostOperation": isPost ??= true; break;
+                    case "PreOperation":
+                    case "PreValidation": isPost ??= false; break;
                 }
             }
 

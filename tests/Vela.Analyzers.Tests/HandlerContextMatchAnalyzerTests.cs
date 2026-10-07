@@ -75,6 +75,8 @@ namespace Demo
         private void OnGenerated(GenCtx ctx) { }
         private void OnPre(IUpdatePreContext<Account> ctx) { }
         private void OnDeletePre(IDeletePreContext<Account> ctx) { }
+        private void OnTwo(IUpdatePostContext<Account> ctx, int extra) { }
+        private bool OnReturns(IUpdatePostContext<Account> ctx) => true;
     }
 }
 ";
@@ -82,6 +84,23 @@ namespace Demo
     private static DiagnosticResult Expected(string handler, string step = "Update post-operation", string expected = "IUpdatePostContext") =>
         new DiagnosticResult(Vela.Analyzers.HandlerContextMatchAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
             .WithLocation(0).WithArguments(handler, step, expected);
+
+    private static DiagnosticResult Shape(string handler, int parameters, string returns) =>
+        new DiagnosticResult(Vela.Analyzers.HandlerContextMatchAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments(handler, parameters, returns);
+
+    [Fact]
+    public async Task Flags_a_handler_that_takes_two_parameters()
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnUpdate().PostOperation().Sync().Handle({|#0:OnTwo|});"), Shape("OnTwo", 2, "void"));
+
+    [Fact]
+    public async Task Flags_a_handler_that_returns_a_value_whatever_the_trigger()
+        // No guided message on this chain: the shape is checked anyway, since the builder rejects it on every path.
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().PostOperation().Sync().Handle({|#0:OnReturns|});"), Shape("OnReturns", 1, "bool"));
+
+    [Fact]
+    public async Task Flags_a_wrong_context_on_a_parenthesized_chain()
+        => await Verify.VerifyAnalyzerAsync(InPlugin("(RegisterStep().OnUpdate()).PostOperation().Sync().Handle({|#0:OnWrong|});"), Expected("OnWrong"));
 
     [Fact]
     public async Task Does_not_flag_the_matching_message_context()
