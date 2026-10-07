@@ -15,7 +15,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class StepCompletionAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA002";
+        public const string DiagnosticId = DiagnosticIds.StepCompletion;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,

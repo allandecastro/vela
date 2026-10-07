@@ -192,4 +192,39 @@ namespace Demo
 
         await Verify.VerifyAnalyzerAsync(code);
     }
+
+    [Fact]
+    public async Task Does_not_flag_a_capture_the_generator_cannot_project()
+    {
+        // A-31: the trigger of a chain split across locals is not visible to the generator, so it emits no projection
+        // (and the lambda handler gets no context). Nothing is nested, so partial is not needed.
+        string code = InPlugin(@"
+    public sealed class Split : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            Vela.Steps.IStepConfig<Account> step = RegisterStep().OnUpdate();
+            step.PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_non_partial_struct_that_encloses_a_plugin()
+    {
+        // The generator reopens every enclosing type, whatever its kind, so a struct container must be partial too.
+        string code = InPlugin(@"
+    public struct {|#0:Holder|}
+    {
+        public sealed partial class Audit : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code, At(0, "Holder", "Audit"));
+    }
 }

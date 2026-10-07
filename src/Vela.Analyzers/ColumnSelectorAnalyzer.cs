@@ -18,7 +18,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class ColumnSelectorAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA001";
+        public const string DiagnosticId = DiagnosticIds.ColumnSelector;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -66,7 +66,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            ExpressionSyntax body = UnwrapConversions(lambdaBody);
+            ExpressionSyntax body = FluentStep.UnwrapConversions(lambdaBody);
             if (body is not MemberAccessExpressionSyntax memberAccess)
             {
                 return;
@@ -95,7 +95,7 @@ namespace Vela.Analyzers
             // A nested path (a.ParentAccount.Name, a.PrimaryContactId.Id) names a member of another object, not a
             // column of this entity: the runtime would register the last member's name ("name", "id"), a wrong or
             // nonexistent column. A selector must read a property of the lambda parameter directly.
-            if (!IsLambdaParameter(UnwrapParentheses(memberAccess.Expression), lambda))
+            if (!IsLambdaParameter(FluentStep.UnwrapConversions(memberAccess.Expression), lambda))
             {
                 context.ReportDiagnostic(Diagnostic.Create(Rule, memberAccess.GetLocation(), memberAccess.ToString()));
                 return;
@@ -136,46 +136,8 @@ namespace Vela.Analyzers
 
         private static bool IsLambdaParameter(ExpressionSyntax expression, LambdaExpressionSyntax lambda)
         {
-            string? parameter = lambda switch
-            {
-                SimpleLambdaExpressionSyntax simple => simple.Parameter.Identifier.ValueText,
-                ParenthesizedLambdaExpressionSyntax parenthesized when parenthesized.ParameterList.Parameters.Count == 1
-                    => parenthesized.ParameterList.Parameters[0].Identifier.ValueText,
-                _ => null,
-            };
-
+            string? parameter = FluentStep.SelectorParameter(lambda);
             return parameter is not null && expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == parameter;
-        }
-
-        private static ExpressionSyntax UnwrapParentheses(ExpressionSyntax expression)
-        {
-            while (expression is ParenthesizedExpressionSyntax parenthesized)
-            {
-                expression = parenthesized.Expression;
-            }
-
-            return expression;
-        }
-
-        // Sees through leading conversions on a column-selector body: an explicit cast ((object)a.X), an `as`
-        // (a.X as object), and nesting of the two (double cast). Mirrors ImageProjectionGenerator so the analyzer and
-        // the source generator agree on which bodies are column selectors.
-        private static ExpressionSyntax UnwrapConversions(ExpressionSyntax body)
-        {
-            while (true)
-            {
-                switch (body)
-                {
-                    case CastExpressionSyntax cast:
-                        body = cast.Expression;
-                        continue;
-                    case BinaryExpressionSyntax asExpr when asExpr.IsKind(SyntaxKind.AsExpression):
-                        body = asExpr.Left;
-                        continue;
-                }
-
-                return body;
-            }
         }
 
         private static bool InheritsFrom(INamedTypeSymbol type, INamedTypeSymbol baseType)

@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The shared chain walker (FluentStep) is unit-tested directly. -->
+    <InternalsVisibleTo Include="Vela.Analyzers.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>

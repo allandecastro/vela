@@ -12,4 +12,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- One list of diagnostic IDs, shared with the analyzers (no project reference: both ship side by side). -->
+    <Compile Include="..\Vela.Analyzers\DiagnosticIds.cs" Link="DiagnosticIds.cs" />
+  </ItemGroup>
 </Project>

@@ -18,7 +18,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class DuplicateColumnAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA005";
+        public const string DiagnosticId = DiagnosticIds.DuplicateColumn;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -115,52 +115,13 @@ namespace Vela.Analyzers
         // the selected member name; false for anything that is not such a selector.
         private static bool TryGetSelectedColumn(ExpressionSyntax expression, out string column)
         {
-            column = string.Empty;
-
-            string parameterName;
-            ExpressionSyntax? body;
-            switch (expression)
-            {
-                case SimpleLambdaExpressionSyntax simple:
-                    parameterName = simple.Parameter.Identifier.ValueText;
-                    body = simple.Body as ExpressionSyntax;
-                    break;
-                case ParenthesizedLambdaExpressionSyntax paren when paren.ParameterList.Parameters.Count == 1:
-                    parameterName = paren.ParameterList.Parameters[0].Identifier.ValueText;
-                    body = paren.Body as ExpressionSyntax;
-                    break;
-                default:
-                    return false;
-            }
-
-            // Unwrap a leading cast / `as` (a => (object)a.Name, a => a.Name as object).
-            while (true)
-            {
-                switch (body)
-                {
-                    case CastExpressionSyntax cast:
-                        body = cast.Expression;
-                        continue;
-                    case BinaryExpressionSyntax asExpr when asExpr.IsKind(SyntaxKind.AsExpression):
-                        body = asExpr.Left;
-                        continue;
-                }
-
-                break;
-            }
-
-            // A column selector is a member access DIRECTLY on the lambda parameter (a => a.Name). A nested path
-            // (a => a.Parent.Name) reads a member of a RELATED entity, not a column on this one - comparing by the
-            // leaf name alone would wrongly flag a.Name and a.Parent.Name as the same column (#309 L2).
-            if (body is MemberAccessExpressionSyntax memberAccess
-                && memberAccess.Expression is IdentifierNameSyntax id
-                && id.Identifier.ValueText == parameterName)
-            {
-                column = memberAccess.Name.Identifier.ValueText;
-                return true;
-            }
-
-            return false;
+            // A column selector is a member access DIRECTLY on the lambda parameter (a => a.Name), seen through casts.
+            // A nested path (a => a.Parent.Name) reads a member of a RELATED entity, not a column on this one - comparing
+            // by the leaf name alone would wrongly flag a.Name and a.Parent.Name as the same column (#309 L2).
+            column = expression is LambdaExpressionSyntax lambda && FluentStep.SelectedMember(lambda) is { } member
+                ? member.Name.Identifier.ValueText
+                : string.Empty;
+            return column.Length != 0;
         }
     }
 }

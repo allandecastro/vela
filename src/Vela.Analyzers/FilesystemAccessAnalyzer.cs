@@ -18,7 +18,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class FilesystemAccessAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA019";
+        public const string DiagnosticId = DiagnosticIds.FilesystemAccess;
 
         // Static classes whose every member hits the filesystem - flagged on member access (they are never instantiated).
         private static readonly ImmutableHashSet<string> StaticFilesystemTypes =
@@ -44,11 +44,20 @@ namespace Vela.Analyzers
         {
             context.EnableConcurrentExecution();
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-            context.RegisterSyntaxNodeAction(AnalyzeObjectCreation, SyntaxKind.ObjectCreationExpression);
-            context.RegisterSyntaxNodeAction(AnalyzeMemberAccess, SyntaxKind.SimpleMemberAccessExpression);
+            context.RegisterCompilationStartAction(start =>
+            {
+                PluginTypes? plugins = PluginTypes.From(start.Compilation);
+                if (plugins is null)
+                {
+                    return; // neither the Dataverse SDK nor Vela: no plugin type to analyze
+                }
+
+                start.RegisterSyntaxNodeAction(c => AnalyzeObjectCreation(c, plugins), SyntaxKind.ObjectCreationExpression);
+                start.RegisterSyntaxNodeAction(c => AnalyzeMemberAccess(c, plugins), SyntaxKind.SimpleMemberAccessExpression);
+            });
         }
 
-        private static void AnalyzeObjectCreation(SyntaxNodeAnalysisContext context)
+        private static void AnalyzeObjectCreation(SyntaxNodeAnalysisContext context, PluginTypes plugins)
         {
             var creation = (ObjectCreationExpressionSyntax)context.Node;
             if (context.SemanticModel.GetTypeInfo(creation, context.CancellationToken).Type is not INamedTypeSymbol type)
@@ -56,7 +65,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            if (!IsFilesystemType(type, InstantiableFilesystemTypes) || !InPluginType(context))
+            if (!IsFilesystemType(type, InstantiableFilesystemTypes) || !InPluginType(context, plugins))
             {
                 return;
             }
@@ -64,7 +73,7 @@ namespace Vela.Analyzers
             context.ReportDiagnostic(Diagnostic.Create(Rule, creation.Type.GetLocation(), type.Name));
         }
 
-        private static void AnalyzeMemberAccess(SyntaxNodeAnalysisContext context)
+        private static void AnalyzeMemberAccess(SyntaxNodeAnalysisContext context, PluginTypes plugins)
         {
             var member = (MemberAccessExpressionSyntax)context.Node;
 
@@ -75,7 +84,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            if (!IsFilesystemType(type, StaticFilesystemTypes) || !InPluginType(context))
+            if (!IsFilesystemType(type, StaticFilesystemTypes) || !InPluginType(context, plugins))
             {
                 return;
             }
@@ -86,13 +95,13 @@ namespace Vela.Analyzers
         private static bool IsFilesystemType(INamedTypeSymbol type, ImmutableHashSet<string> names)
             => names.Contains(type.Name) && type.ContainingNamespace?.ToDisplayString() == "System.IO";
 
-        private static bool InPluginType(SyntaxNodeAnalysisContext context)
+        private static bool InPluginType(SyntaxNodeAnalysisContext context, PluginTypes plugins)
         {
             for (SyntaxNode? current = context.Node; current is not null; current = current.Parent)
             {
                 if (current is TypeDeclarationSyntax type)
                 {
-                    return PluginTypes.IsPluginType(context.SemanticModel.GetDeclaredSymbol(type, context.CancellationToken));
+                    return plugins.IsPluginType(context.SemanticModel.GetDeclaredSymbol(type, context.CancellationToken));
                 }
             }
 

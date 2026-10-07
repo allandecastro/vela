@@ -16,7 +16,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class PreferTypedMessageAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA006";
+        public const string DiagnosticId = DiagnosticIds.PreferTypedMessage;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,

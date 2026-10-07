@@ -17,7 +17,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class SingleStepPerTypedContextHandlerAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA016";
+        public const string DiagnosticId = DiagnosticIds.SingleStepPerTypedContextHandler;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -102,26 +102,12 @@ namespace Vela.Analyzers
         // at least one column-selector lambda), i.e. a generated typed context would be emitted for this step.
         private static bool ChainCapturesTypedImage(ExpressionSyntax? receiver)
         {
-            for (ExpressionSyntax? current = receiver; current is not null;)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
+                if ((call.MethodName == "WithPreImage" || call.MethodName == "WithPostImage") &&
+                    call.Arguments.Any(a => a.Expression is LambdaExpressionSyntax))
                 {
-                    string name = ma.Name.Identifier.ValueText;
-                    if ((name == "WithPreImage" || name == "WithPostImage") &&
-                        inv.ArgumentList.Arguments.Any(a => a.Expression is LambdaExpressionSyntax))
-                    {
-                        return true;
-                    }
-
-                    current = ma.Expression;
-                }
-                else if (current is MemberAccessExpressionSyntax bare)
-                {
-                    current = bare.Expression;
-                }
-                else
-                {
-                    break;
+                    return true;
                 }
             }
 

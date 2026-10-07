@@ -18,7 +18,7 @@ namespace Vela.CodeFixes
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(RemoveRedundantCallCodeFix)), Shared]
     public sealed class RemoveRedundantCallCodeFix : CodeFixProvider
     {
-        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("VELA003", "VELA007");
+        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(DiagnosticIds.DuplicateModifier, DiagnosticIds.ImageStage);
 
         // A custom fix-all instead of the BatchFixer: with 3+ duplicate modifiers the reported calls are nested
         // invocation nodes, and the BatchFixer's overlapping ReplaceNode edits drop one. This removes every

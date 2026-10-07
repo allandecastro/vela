@@ -18,7 +18,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class MissingFilterAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA020";
+        public const string DiagnosticId = DiagnosticIds.MissingFilter;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -99,24 +99,12 @@ namespace Vela.Analyzers
         // null when there is none or it is not constant.
         private static string? FindOnMessageName(ExpressionSyntax receiver, SemanticModel model, System.Threading.CancellationToken cancellationToken)
         {
-            for (ExpressionSyntax? current = receiver; current is not null;)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                switch (current)
+                if (call.MethodName == "OnMessage" && call.Arguments.Count >= 1)
                 {
-                    case InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax ma } invocation:
-                        if (ma.Name.Identifier.ValueText == "OnMessage" && invocation.ArgumentList.Arguments.Count >= 1)
-                        {
-                            Optional<object?> value = model.GetConstantValue(invocation.ArgumentList.Arguments[0].Expression, cancellationToken);
-                            return value.HasValue ? value.Value as string : null;
-                        }
-
-                        current = ma.Expression;
-                        break;
-                    case ParenthesizedExpressionSyntax paren:
-                        current = paren.Expression;
-                        break;
-                    default:
-                        return null;
+                    Optional<object?> value = model.GetConstantValue(call.Arguments[0].Expression, cancellationToken);
+                    return value.HasValue ? value.Value as string : null;
                 }
             }
 
@@ -127,32 +115,14 @@ namespace Vela.Analyzers
         // FilterOn(...) was seen on the way.
         private static bool ReachesRegisterStepWithoutFilter(ExpressionSyntax receiver)
         {
-            ExpressionSyntax? current = receiver;
-            while (current is not null)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                switch (current)
+                switch (call.MethodName)
                 {
-                    case InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax ma }:
-                        string name = ma.Name.Identifier.ValueText;
-                        if (name == "FilterOn")
-                        {
-                            return false;
-                        }
-
-                        if (name == "RegisterStep")
-                        {
-                            return true;
-                        }
-
-                        current = ma.Expression;
-                        break;
-                    case InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "RegisterStep" } }:
-                        return true;
-                    case ParenthesizedExpressionSyntax paren:
-                        current = paren.Expression;
-                        break;
-                    default:
+                    case "FilterOn":
                         return false;
+                    case "RegisterStep":
+                        return true;
                 }
             }
 

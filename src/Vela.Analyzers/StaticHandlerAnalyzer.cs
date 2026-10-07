@@ -17,7 +17,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class StaticHandlerAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA004";
+        public const string DiagnosticId = DiagnosticIds.StaticHandler;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,

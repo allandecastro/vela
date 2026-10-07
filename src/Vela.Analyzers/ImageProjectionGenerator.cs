@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -18,19 +20,38 @@ namespace Vela.Analyzers
     /// trigger paths. Each type is emitted as a nested type inside the plugin's own <c>partial</c> class (named
     /// <c>{Handler}_{PreImage|PostImage}</c>, so the handler reads it unqualified), which is why a plugin declaring
     /// typed images must be <c>partial</c> (VELA014). The generator is purely additive (it never rewrites the fluent
-    /// chain) and silently skips anything it cannot resolve statically (the developer keeps the full early-bound
-    /// image in that case).
+    /// chain). When a capture lists columns it cannot read statically it emits no projection (the developer keeps the
+    /// full early-bound image) and reports why (VELA021), unless an analyzer already reports the selector.
     /// </summary>
     [Generator(LanguageNames.CSharp)]
     public sealed class ImageProjectionGenerator : IIncrementalGenerator
     {
+        public const string NotGeneratedDiagnosticId = DiagnosticIds.ImageProjectionNotGenerated;
+
+        // Reported (as a warning, on the image call) when a step lists image columns but no typed projection can be
+        // generated for it, so the developer learns why instead of meeting only a CS0246 on the missing type.
+        internal static readonly DiagnosticDescriptor NotGeneratedRule = new DiagnosticDescriptor(
+            id: NotGeneratedDiagnosticId,
+            title: "Typed image projection not generated",
+            messageFormat: "No typed projection is generated for this {0}(...): {1}; read the full image with ctx.Get{2}<T>() instead, or fix the capture",
+            category: "Vela.Usage",
+            defaultSeverity: DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            description: "The source generator emits a typed projection for a WithPreImage/WithPostImage capture only when it can read the capture statically: a compile-time constant alias, column properties of the entity, and a chain whose message and stage it can read. Otherwise no projection type exists and code that names it fails with CS0246; this warning says why.");
+
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
-            IncrementalValuesProvider<ProjectionModel> models = context.SyntaxProvider.CreateSyntaxProvider(
+            IncrementalValuesProvider<ProjectionResult> results = context.SyntaxProvider.CreateSyntaxProvider(
                     predicate: static (node, _) => IsImageInvocation(node),
-                    transform: static (ctx, _) => Extract(ctx))
-                .Where(static m => m is not null)
-                .Select(static (m, _) => m!.Value);
+                    transform: static (ctx, ct) => ExtractProjection((InvocationExpressionSyntax)ctx.Node, ctx.SemanticModel, ct));
+
+            IncrementalValuesProvider<ProjectionModel> models = results
+                .Where(static r => r.Model is not null)
+                .Select(static (r, _) => r.Model!.Value);
+
+            IncrementalValuesProvider<SkippedProjection> skipped = results
+                .Where(static r => r.Skip is not null)
+                .Select(static (r, _) => r.Skip!.Value);
 
             // A second driver keyed on the terminal .Handle(methodGroup) of every step, so a generated {Handler}Context
             // is emitted for EVERY named entity-bound handler (not only image-capturing ones). When the step also
@@ -39,12 +60,30 @@ namespace Vela.Analyzers
             // the handler signature.
             IncrementalValuesProvider<HandlerModel> handlers = context.SyntaxProvider.CreateSyntaxProvider(
                     predicate: static (node, _) => IsHandleInvocation(node),
-                    transform: static (ctx, _) => ExtractHandler(ctx))
+                    transform: static (ctx, ct) => ExtractHandler((InvocationExpressionSyntax)ctx.Node, ctx.SemanticModel, ct))
                 .Where(static h => h is not null)
                 .Select(static (h, _) => h!.Value);
 
             context.RegisterSourceOutput(models.Collect().Combine(handlers.Collect()),
                 static (spc, pair) => Emit(spc, pair.Left, pair.Right));
+
+            context.RegisterSourceOutput(skipped,
+                static (spc, skip) => spc.ReportDiagnostic(Diagnostic.Create(NotGeneratedRule, skip.ToLocation(), skip.Method, skip.Reason, skip.Method == "WithPreImage" ? "PreImage" : "PostImage")));
+        }
+
+        /// <summary>
+        /// True when the generator emits a nested type (a typed image projection or a {Handler}Context) into the class
+        /// that encloses <paramref name="invocation"/>, which therefore must be partial. Shared with VELA014 so the
+        /// analyzer asks for <c>partial</c> exactly when the generator needs it, never when it would emit nothing.
+        /// </summary>
+        internal static bool EmitsNestedType(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
+        {
+            if (IsImageInvocation(invocation))
+            {
+                return ExtractProjection(invocation, model, cancellationToken).Model is not null;
+            }
+
+            return IsHandleInvocation(invocation) && ExtractHandler(invocation, model, cancellationToken) is not null;
         }
 
         private static bool IsImageInvocation(SyntaxNode node)
@@ -59,65 +98,78 @@ namespace Vela.Analyzers
             return name == "WithPreImage" || name == "WithPostImage";
         }
 
-        private static ProjectionModel? Extract(GeneratorSyntaxContext context)
+        // The enclosing entity plugin of a fluent step call: its class symbol and TEntity. Null when the call is not
+        // Vela's (its declaring type does not implement Vela.Steps.IFluentStep, compared by symbol) or the enclosing
+        // class does not derive from Vela.Plugin.EntityPluginBase<TEntity>.
+        private static (INamedTypeSymbol Plugin, INamedTypeSymbol Entity)? ResolvePlugin(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
         {
-            InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
-            MemberAccessExpressionSyntax member = (MemberAccessExpressionSyntax)invocation.Expression;
-            SemanticModel model = context.SemanticModel;
-
-            // Confirm this is Vela's image method (its declaring type implements the fluent step marker), so a
-            // same-named method on an unrelated type is ignored.
-            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
-                !ImplementsFluentStep(method.ContainingType))
+            INamedTypeSymbol? fluent = model.Compilation.GetTypeByMetadataName(FluentStep.FluentStepMetadataName);
+            if (fluent is null || !FluentStep.IsFluentMethod(model, invocation, fluent, cancellationToken))
             {
                 return null;
             }
 
-            bool isPre = member.Name.Identifier.ValueText == "WithPreImage";
-
-            // Enclosing plugin class -> EntityPluginBase<TEntity>.
             ClassDeclarationSyntax? pluginClass = invocation.FirstAncestorOrSelf<ClassDeclarationSyntax>();
-            if (pluginClass is null || model.GetDeclaredSymbol(pluginClass) is not INamedTypeSymbol pluginSymbol)
+            if (pluginClass is null || model.GetDeclaredSymbol(pluginClass, cancellationToken) is not INamedTypeSymbol pluginSymbol)
             {
                 return null;
             }
 
-            INamedTypeSymbol? entity = ResolveEntityType(pluginSymbol);
-            if (entity is null)
+            INamedTypeSymbol? entity = PluginTypes.EntityOf(pluginSymbol, model.Compilation);
+            return entity is null ? null : (pluginSymbol, entity);
+        }
+
+        private static ProjectionResult ExtractProjection(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
+        {
+            MemberAccessExpressionSyntax member = (MemberAccessExpressionSyntax)invocation.Expression;
+            string method = member.Name.Identifier.ValueText;
+            bool isPre = method == "WithPreImage";
+
+            // Confirm this is Vela's image method inside an entity plugin, so a same-named method on an unrelated
+            // type is ignored.
+            if (ResolvePlugin(invocation, model, cancellationToken) is not { } plugin)
             {
-                return null;
+                return default;
+            }
+
+            // Arguments: optional leading string alias, then the column selector lambdas.
+            (string? alias, bool aliasUnresolved, List<LambdaExpressionSyntax> selectors) = SplitArguments(invocation, model, cancellationToken);
+            if (selectors.Count == 0)
+            {
+                // No explicit columns -> the image carries every column; there is nothing to narrow, so skip.
+                return default;
+            }
+
+            if (aliasUnresolved)
+            {
+                // An alias that is not a compile-time constant: the image's runtime key is unknown here, so a typed
+                // projection could not read it. Generate nothing rather than a context that reads null.
+                return ProjectionResult.Skipped(invocation, method, "its image alias is not a compile-time constant");
             }
 
             // Message + stage from the chain that precedes this call.
             (string? messageLabel, string? stageLabel) = ResolveMessageAndStage(member.Expression);
             if (messageLabel is null || stageLabel is null)
             {
-                return null;
-            }
-
-            // Arguments: optional leading string alias, then the column selector lambdas.
-            (string? alias, bool aliasUnresolved, List<LambdaExpressionSyntax> selectors) = SplitArguments(invocation, model);
-            if (aliasUnresolved)
-            {
-                // An alias that is not a compile-time constant: the image's runtime key is unknown here, so a typed
-                // projection could not read it. Generate nothing rather than a context that reads null.
-                return null;
-            }
-
-            if (selectors.Count == 0)
-            {
-                // No explicit columns -> the image carries every column; there is nothing to narrow, so skip.
-                return null;
+                // A chain split across locals legitimately hides its trigger here, so only a chain that starts at
+                // RegisterStep() in this expression (whose trigger is a non-constant OnMessage(...)) is reported.
+                return FluentStep.SpineHasCall(member.Expression, "RegisterStep")
+                    ? ProjectionResult.Skipped(invocation, method, "the step's message or stage cannot be read from the chain")
+                    : default;
             }
 
             List<ProjectionColumn> columns = new List<ProjectionColumn>();
             foreach (LambdaExpressionSyntax selector in selectors)
             {
-                ProjectionColumn? column = ResolveColumn(selector, model);
+                ProjectionColumn? column = ResolveColumn(selector, model, cancellationToken, out bool reportedElsewhere);
                 if (column is null)
                 {
-                    // Any unresolved column makes the projection incomplete; fall back to no generation.
-                    return null;
+                    // Any unresolved column makes the projection incomplete; fall back to no generation. A nested path,
+                    // an Entity member or a relationship is already an error of VELA001/VELA010, so only the rest is
+                    // reported here.
+                    return reportedElsewhere
+                        ? default
+                        : ProjectionResult.Skipped(invocation, method, $"'{selector}' does not select a column property of the entity");
                 }
 
                 columns.Add(column.Value);
@@ -136,79 +188,35 @@ namespace Vela.Analyzers
                 : Sanitize(handlerName);
             string typeName = $"{baseName}_{role}{aliasSuffix}";
 
-            // The containing type chain (outermost first, ending at the plugin class) so the projection can be
-            // nested inside the plugin's partial class, plus the enclosing namespace.
-            List<string> containingTypes = new List<string>();
-            for (INamedTypeSymbol? t = pluginSymbol; t is not null; t = t.ContainingType)
-            {
-                containingTypes.Insert(0, t.Name);
-            }
-
-            string ns = pluginSymbol.ContainingNamespace.IsGlobalNamespace
-                ? string.Empty
-                : pluginSymbol.ContainingNamespace.ToDisplayString();
-
             // Extra facts used to also emit a generated per-step context (typed step contexts): the handler name keys
             // the context, the message + stage pick its base concrete context, and the entity types its generic arg.
             bool isPost = stageLabel == "PostOp";
-            string entityType = entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            string entityType = plugin.Entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             // For a typed On<TRequest>() step the generated context derives from MessagePre/PostContext<TRequest,
             // TEntity>; capture the request type so the context can name it. null for the guided / string paths.
-            string? requestType = FindTypedRequestType(member.Expression, model);
+            string? requestType = FindTypedRequestType(member.Expression, model, cancellationToken);
 
-            return new ProjectionModel(ns, containingTypes.ToImmutableArray(), typeName, columns.ToImmutableArray(),
-                handlerName, messageLabel, isPost, isPre, entityType, requestType, alias);
+            return new ProjectionResult(new ProjectionModel(NamespaceOf(plugin.Plugin), ContainingDeclarations(plugin.Plugin), typeName,
+                columns.ToImmutableArray(), handlerName, messageLabel, isPost, isPre, entityType, requestType, alias));
         }
 
         private static bool IsHandleInvocation(SyntaxNode node)
         {
-            if (node is not InvocationExpressionSyntax invocation ||
-                invocation.Expression is not MemberAccessExpressionSyntax member ||
-                member.Name.Identifier.ValueText != "Handle" ||
-                invocation.ArgumentList.Arguments.Count != 1)
-            {
-                return false;
-            }
-
             // Only a method-group handler (.Handle(OnX)) gets a named context; a lambda has no name to key off.
-            return invocation.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax or MemberAccessExpressionSyntax;
+            return node is InvocationExpressionSyntax invocation &&
+                FluentStep.IsHandleCall(invocation, out _, out ExpressionSyntax handler) &&
+                FluentStep.MethodGroupName(handler) is not null;
         }
 
         // One HandlerModel per named .Handle(OnX) step, so a {Handler}Context is emitted for every entity-bound
         // modelled handler - with or without a captured image (a bare subclass when imageless, so adding an image
         // later never changes the handler signature). OnMessage("string") / OnMessage<T>() and Custom API handlers
         // are intentionally skipped (no modelled typed context to derive from).
-        private static HandlerModel? ExtractHandler(GeneratorSyntaxContext context)
+        private static HandlerModel? ExtractHandler(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
         {
-            InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
-            MemberAccessExpressionSyntax member = (MemberAccessExpressionSyntax)invocation.Expression;
-            SemanticModel model = context.SemanticModel;
-
-            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
-                !ImplementsFluentStep(method.ContainingType))
-            {
-                return null;
-            }
-
-            string? handlerName = invocation.ArgumentList.Arguments[0].Expression switch
-            {
-                IdentifierNameSyntax id => id.Identifier.ValueText,
-                MemberAccessExpressionSyntax m => m.Name.Identifier.ValueText,
-                _ => null,
-            };
-            if (handlerName is null)
-            {
-                return null;
-            }
-
-            ClassDeclarationSyntax? pluginClass = invocation.FirstAncestorOrSelf<ClassDeclarationSyntax>();
-            if (pluginClass is null || model.GetDeclaredSymbol(pluginClass) is not INamedTypeSymbol pluginSymbol)
-            {
-                return null;
-            }
-
-            INamedTypeSymbol? entity = ResolveEntityType(pluginSymbol);
-            if (entity is null)
+            if (!FluentStep.IsHandleCall(invocation, out MemberAccessExpressionSyntax member, out ExpressionSyntax handler) ||
+                FluentStep.MethodGroupName(handler) is not string handlerName ||
+                ResolvePlugin(invocation, model, cancellationToken) is not { } plugin)
             {
                 return null;
             }
@@ -219,17 +227,7 @@ namespace Vela.Analyzers
                 return null;
             }
 
-            List<string> containingTypes = new List<string>();
-            for (INamedTypeSymbol? t = pluginSymbol; t is not null; t = t.ContainingType)
-            {
-                containingTypes.Insert(0, t.Name);
-            }
-
-            string ns = pluginSymbol.ContainingNamespace.IsGlobalNamespace
-                ? string.Empty
-                : pluginSymbol.ContainingNamespace.ToDisplayString();
-
-            string? requestType = FindTypedRequestType(member.Expression, model);
+            string? requestType = FindTypedRequestType(member.Expression, model, cancellationToken);
             bool isPost = stageLabel == "PostOp";
 
             // Emit only when a real modelled context base exists. The typed On<TRequest>() path always has
@@ -245,9 +243,39 @@ namespace Vela.Analyzers
                 }
             }
 
-            return new HandlerModel(ns, containingTypes.ToImmutableArray(), handlerName, messageLabel,
-                isPost, entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), requestType);
+            return new HandlerModel(NamespaceOf(plugin.Plugin), ContainingDeclarations(plugin.Plugin), handlerName, messageLabel,
+                isPost, plugin.Entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), requestType);
         }
+
+        private static string NamespaceOf(INamedTypeSymbol plugin)
+            => plugin.ContainingNamespace.IsGlobalNamespace ? string.Empty : plugin.ContainingNamespace.ToDisplayString();
+
+        // The containing type chain (outermost first, ending at the plugin class), each as the declaration the
+        // generated partial part reopens: its kind (class, struct, record, record struct, interface) and its type
+        // parameters, so a nested plugin inside a struct or record, or a generic plugin, gets a matching partial
+        // part instead of a new, unrelated 'partial class Name'.
+        private static ImmutableArray<string> ContainingDeclarations(INamedTypeSymbol plugin)
+        {
+            List<string> declarations = new List<string>();
+            for (INamedTypeSymbol? t = plugin; t is not null; t = t.ContainingType)
+            {
+                string keyword = t.TypeKind switch
+                {
+                    TypeKind.Struct => t.IsRecord ? "record struct" : "struct",
+                    TypeKind.Interface => "interface",
+                    _ => t.IsRecord ? "record" : "class",
+                };
+                string typeParameters = t.TypeParameters.Length == 0
+                    ? string.Empty
+                    : "<" + string.Join(",", t.TypeParameters.Select(p => p.Name)) + ">";
+                declarations.Insert(0, keyword + " " + t.Name + typeParameters);
+            }
+
+            return declarations.ToImmutableArray();
+        }
+
+        // The type name of a containing declaration ("record struct Outer" -> "Outer", "class P<T>" -> "P<T>").
+        private static string DeclarationName(string declaration) => declaration.Substring(declaration.LastIndexOf(' ') + 1);
 
         // Message + stage for the context driver. Like ResolveMessageAndStage but recognizes EVERY On{Msg}() trigger
         // (strips the "On" prefix: OnAssign -> Assign, OnGrantAccess -> GrantAccess, OnCreateMultiple ->
@@ -258,86 +286,49 @@ namespace Vela.Analyzers
             string? message = null;
             string? stage = null;
 
-            for (ExpressionSyntax? current = receiver; current is not null;)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
-                {
-                    string name = ma.Name.Identifier.ValueText;
-                    switch (name)
-                    {
-                        case "PreValidation": stage ??= "PreVal"; break;
-                        case "PreOperation": stage ??= "PreOp"; break;
-                        case "PostOperation": stage ??= "PostOp"; break;
-                    }
+                string name = call.MethodName;
+                stage ??= StageLabel(name);
 
-                    if (message is null && name == "On" && ma.Name is GenericNameSyntax generic &&
-                        generic.TypeArgumentList.Arguments.Count == 1)
-                    {
-                        message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
-                    }
-                    else if (message is null && name.Length > 2 && name.StartsWith("On", System.StringComparison.Ordinal) &&
-                        name != "OnMessage" && name != "OnAsyncOnly" && char.IsUpper(name[2]))
-                    {
-                        // Any On{Msg}() trigger -> {Msg}. Whether a context is actually emitted is gated downstream by
-                        // whether a real Vela.Context.{Msg}{Pre|Post}Context type exists (ExtractHandler), which
-                        // excludes generated Custom API On{X} extensions and any non-modelled trigger.
-                        message = name.Substring(2);
-                    }
-
-                    current = ma.Expression;
-                }
-                else if (current is MemberAccessExpressionSyntax bare)
+                if (message is null && name == "On" && call.Name is GenericNameSyntax generic &&
+                    generic.TypeArgumentList.Arguments.Count == 1)
                 {
-                    current = bare.Expression;
+                    message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
                 }
-                else
+                else if (message is null && name.Length > 2 && name.StartsWith("On", System.StringComparison.Ordinal) &&
+                    name != "OnMessage" && name != "OnAsyncOnly" && char.IsUpper(name[2]))
                 {
-                    break;
+                    // Any On{Msg}() trigger -> {Msg}. Whether a context is actually emitted is gated downstream by
+                    // whether a real Vela.Context.{Msg}{Pre|Post}Context type exists (ExtractHandler), which
+                    // excludes generated Custom API On{X} extensions and any non-modelled trigger.
+                    message = name.Substring(2);
                 }
             }
 
             return (message, stage);
         }
 
+        private static string? StageLabel(string methodName) => methodName switch
+        {
+            "PreValidation" => "PreVal",
+            "PreOperation" => "PreOp",
+            "PostOperation" => "PostOp",
+            _ => null,
+        };
+
         // The fully-qualified request type of an On<TRequest>() step in the chain, or null (guided OnCreate()...,
         // permissive OnMessage(...)). Used to build the generic message context base for a typed step.
-        private static string? FindTypedRequestType(ExpressionSyntax? receiver, SemanticModel model)
+        private static string? FindTypedRequestType(ExpressionSyntax? receiver, SemanticModel model, CancellationToken cancellationToken)
         {
-            for (ExpressionSyntax? current = receiver; current is not null;)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
+                if (call.Name is GenericNameSyntax generic && generic.Identifier.ValueText == "On" &&
+                    generic.TypeArgumentList.Arguments.Count == 1)
                 {
-                    if (ma.Name is GenericNameSyntax generic && generic.Identifier.ValueText == "On" &&
-                        generic.TypeArgumentList.Arguments.Count == 1)
-                    {
-                        return model.GetSymbolInfo(generic.TypeArgumentList.Arguments[0]).Symbol is INamedTypeSymbol request
-                            ? request.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                            : null;
-                    }
-
-                    current = ma.Expression;
-                }
-                else if (current is MemberAccessExpressionSyntax bare)
-                {
-                    current = bare.Expression;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            return null;
-        }
-
-        private static INamedTypeSymbol? ResolveEntityType(INamedTypeSymbol pluginSymbol)
-        {
-            for (INamedTypeSymbol? t = pluginSymbol.BaseType; t is not null; t = t.BaseType)
-            {
-                if (t.Name == "EntityPluginBase" && t.TypeArguments.Length == 1 &&
-                    t.TypeArguments[0] is INamedTypeSymbol entity)
-                {
-                    return entity;
+                    return model.GetSymbolInfo(generic.TypeArgumentList.Arguments[0], cancellationToken).Symbol is INamedTypeSymbol request
+                        ? request.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                        : null;
                 }
             }
 
@@ -350,17 +341,9 @@ namespace Vela.Analyzers
         {
             for (SyntaxNode? node = imageInvocation.Parent; node is not null; node = node.Parent)
             {
-                if (node is InvocationExpressionSyntax inv &&
-                    inv.Expression is MemberAccessExpressionSyntax ma &&
-                    ma.Name.Identifier.ValueText == "Handle" &&
-                    inv.ArgumentList.Arguments.Count == 1)
+                if (node is InvocationExpressionSyntax inv && FluentStep.IsHandleCall(inv, out _, out ExpressionSyntax handler))
                 {
-                    return inv.ArgumentList.Arguments[0].Expression switch
-                    {
-                        IdentifierNameSyntax id => id.Identifier.ValueText,
-                        MemberAccessExpressionSyntax m => m.Name.Identifier.ValueText,
-                        _ => null, // lambda or other -> fall back to the plugin/message/stage name
-                    };
+                    return FluentStep.MethodGroupName(handler); // a lambda -> fall back to the message/stage name
                 }
 
                 // Stop at the enclosing member/statement boundary; the terminal Handle is within this chain.
@@ -378,49 +361,34 @@ namespace Vela.Analyzers
             string? message = null;
             string? stage = null;
 
-            for (ExpressionSyntax? current = receiver; current is not null;)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
+                string name = call.MethodName;
+                stage ??= StageLabel(name);
+                switch (name)
                 {
-                    string name = ma.Name.Identifier.ValueText;
-                    switch (name)
-                    {
-                        case "OnCreate": message ??= "Create"; break;
-                        case "OnUpdate": message ??= "Update"; break;
-                        case "OnDelete": message ??= "Delete"; break;
-                        case "OnCreateMultiple": message ??= "CreateMultiple"; break;
-                        case "OnUpdateMultiple": message ??= "UpdateMultiple"; break;
-                        case "PreValidation": stage ??= "PreVal"; break;
-                        case "PreOperation": stage ??= "PreOp"; break;
-                        case "PostOperation": stage ??= "PostOp"; break;
-                    }
-
-                    // Typed path: On<TRequest>() derives the message from the request type name (DeleteRequest ->
-                    // Delete, UpdateRequest<T> -> Update), matching how the runtime maps it.
-                    if (message is null && name == "On" && ma.Name is GenericNameSyntax generic &&
-                        generic.TypeArgumentList.Arguments.Count == 1)
-                    {
-                        message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
-                    }
-
-                    // Permissive path: OnMessage("create") / OnMessage<TMessage>() name the projection from the
-                    // message too, so a string-triggered step gets a typed image like the guided/typed paths do.
-                    // Only a statically resolvable message (string literal or type argument) yields a name; a
-                    // variable message stays null -> graceful fallback (no projection), like any unresolved capture.
-                    if (message is null && name == "OnMessage")
-                    {
-                        message = ResolvePermissiveMessage(inv, ma);
-                    }
-
-                    current = ma.Expression;
+                    case "OnCreate": message ??= "Create"; break;
+                    case "OnUpdate": message ??= "Update"; break;
+                    case "OnDelete": message ??= "Delete"; break;
+                    case "OnCreateMultiple": message ??= "CreateMultiple"; break;
+                    case "OnUpdateMultiple": message ??= "UpdateMultiple"; break;
                 }
-                else if (current is MemberAccessExpressionSyntax bare)
+
+                // Typed path: On<TRequest>() derives the message from the request type name (DeleteRequest ->
+                // Delete, UpdateRequest<T> -> Update), matching how the runtime maps it.
+                if (message is null && name == "On" && call.Name is GenericNameSyntax generic &&
+                    generic.TypeArgumentList.Arguments.Count == 1)
                 {
-                    current = bare.Expression;
+                    message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
                 }
-                else
+
+                // Permissive path: OnMessage("create") / OnMessage<TMessage>() name the projection from the
+                // message too, so a string-triggered step gets a typed image like the guided/typed paths do.
+                // Only a statically resolvable message (string literal or type argument) yields a name; a
+                // variable message stays null -> graceful fallback (no projection), like any unresolved capture.
+                if (message is null && name == "OnMessage")
                 {
-                    break;
+                    message = ResolvePermissiveMessage(call.Invocation, call.Name);
                 }
             }
 
@@ -454,9 +422,9 @@ namespace Vela.Analyzers
         // type-name rule (same as On<TRequest>()); OnMessage("literal") uses the string literal, sanitized and
         // capitalized into a legal, guessable type-name segment (e.g. "create" -> Create). A non-literal argument
         // (a variable/const reference) is not statically resolvable, so it returns null and no projection is emitted.
-        private static string? ResolvePermissiveMessage(InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax member)
+        private static string? ResolvePermissiveMessage(InvocationExpressionSyntax invocation, SimpleNameSyntax name)
         {
-            if (member.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Count == 1)
+            if (name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Count == 1)
             {
                 return DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
             }
@@ -479,7 +447,7 @@ namespace Vela.Analyzers
         // The optional leading alias and the column selectors. The alias may be any compile-time string constant (a
         // literal or a const); an explicit alias that is not constant cannot be known here, so it is reported as
         // unresolved and no projection is generated (a context reading the default alias would read null).
-        private static (string? Alias, bool AliasUnresolved, List<LambdaExpressionSyntax> Selectors) SplitArguments(InvocationExpressionSyntax invocation, SemanticModel model)
+        private static (string? Alias, bool AliasUnresolved, List<LambdaExpressionSyntax> Selectors) SplitArguments(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
         {
             string? alias = null;
             bool unresolved = false;
@@ -493,9 +461,9 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                if (model.GetTypeInfo(argument.Expression).Type?.SpecialType == SpecialType.System_String)
+                if (model.GetTypeInfo(argument.Expression, cancellationToken).Type?.SpecialType == SpecialType.System_String)
                 {
-                    Optional<object?> constant = model.GetConstantValue(argument.Expression);
+                    Optional<object?> constant = model.GetConstantValue(argument.Expression, cancellationToken);
                     if (constant.HasValue && constant.Value is string text)
                     {
                         alias = text;
@@ -510,61 +478,46 @@ namespace Vela.Analyzers
             return (alias, unresolved, selectors);
         }
 
-        private static ProjectionColumn? ResolveColumn(LambdaExpressionSyntax selector, SemanticModel model)
+        // The projected column a selector reads, or null. reportedElsewhere is true when the selector is a mistake an
+        // analyzer already reports (a nested path or an Entity member: VELA001; a relationship: VELA010), so the
+        // generator does not add a second diagnostic on it.
+        private static ProjectionColumn? ResolveColumn(LambdaExpressionSyntax selector, SemanticModel model, CancellationToken cancellationToken, out bool reportedElsewhere)
         {
-            if (selector.Body is not ExpressionSyntax body)
+            reportedElsewhere = false;
+
+            // a => (object)a.Value / a => a.Value as object - see through a leading cast or `as` to the member access,
+            // matching ColumnSelectorAnalyzer. Only a column of the entity itself: a nested path (a.ParentAccount.Name)
+            // is another record's member (VELA001 reports it), so it must not become a column of the projection.
+            MemberAccessExpressionSyntax? memberAccess = FluentStep.SelectedMember(selector);
+            if (memberAccess is null)
+            {
+                reportedElsewhere = selector.Body is ExpressionSyntax body && FluentStep.UnwrapConversions(body) is MemberAccessExpressionSyntax;
+                return null;
+            }
+
+            if (model.GetSymbolInfo(memberAccess, cancellationToken).Symbol is not IPropertySymbol property)
             {
                 return null;
             }
 
-            // a => (object)a.Value / a => a.Value as object — see through a leading cast (CastExpression) or `as`
-            // (an AsExpression BinaryExpression) to the member access, matching ColumnSelectorAnalyzer, so a cast
-            // selector is not silently dropped (which would suppress the whole projection).
-            while (true)
+            if (property.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute"))
             {
-                switch (body)
-                {
-                    case CastExpressionSyntax cast:
-                        body = cast.Expression;
-                        continue;
-                    case BinaryExpressionSyntax asExpr when asExpr.IsKind(SyntaxKind.AsExpression):
-                        body = asExpr.Left;
-                        continue;
-                }
-
-                break;
-            }
-
-            if (body is not MemberAccessExpressionSyntax memberAccess ||
-                model.GetSymbolInfo(memberAccess).Symbol is not IPropertySymbol property)
-            {
-                return null;
-            }
-
-            // Only a column of the entity itself: a nested path (a.ParentAccount.Name) is another record's member
-            // (VELA001 reports it), so it must not become a column of the projection.
-            string? parameterName = selector switch
-            {
-                SimpleLambdaExpressionSyntax simple => simple.Parameter.Identifier.ValueText,
-                ParenthesizedLambdaExpressionSyntax parenthesized when parenthesized.ParameterList.Parameters.Count == 1
-                    => parenthesized.ParameterList.Parameters[0].Identifier.ValueText,
-                _ => null,
-            };
-            ExpressionSyntax receiverExpression = memberAccess.Expression;
-            while (receiverExpression is ParenthesizedExpressionSyntax parenthesized)
-            {
-                receiverExpression = parenthesized.Expression; // (a).Name is a.Name (parentheses vanish from the tree)
-            }
-
-            if (receiverExpression is not IdentifierNameSyntax receiver || receiver.Identifier.ValueText != parameterName)
-            {
+                reportedElsewhere = true; // VELA010
                 return null;
             }
 
             string? logicalName = GetAttributeLogicalName(property);
             if (logicalName is null)
             {
-                return null;
+                // Mirror the runtime (ExpressionHelper.ResolveColumn): a member of Entity itself is not a column
+                // (VELA001 reports it); any other property without [AttributeLogicalName] is the lower-cased name.
+                if (IsEntityMember(property))
+                {
+                    reportedElsewhere = true;
+                    return null;
+                }
+
+                logicalName = property.Name.ToLowerInvariant();
             }
 
             string typeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -582,6 +535,19 @@ namespace Vela.Analyzers
             return new ProjectionColumn(property.Name, typeName, logicalName);
         }
 
+        private static bool IsEntityMember(IPropertySymbol property)
+        {
+            for (IPropertySymbol? p = property; p is not null; p = p.OverriddenProperty)
+            {
+                if (p.ContainingType?.ToDisplayString() == "Microsoft.Xrm.Sdk.Entity")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static string? GetAttributeLogicalName(IPropertySymbol property)
         {
             foreach (AttributeData attribute in property.GetAttributes())
@@ -596,16 +562,6 @@ namespace Vela.Analyzers
             }
 
             return null;
-        }
-
-        private static bool ImplementsFluentStep(INamedTypeSymbol type)
-        {
-            if (type.Name == "IFluentStep")
-            {
-                return true;
-            }
-
-            return type.AllInterfaces.Any(static i => i.Name == "IFluentStep");
         }
 
         private static string Sanitize(string value)
@@ -769,7 +725,7 @@ namespace Vela.Analyzers
 
                 string contextName = Sanitize(handler.HandlerName) + "Context";
                 string prefix = handler.Namespace.Length == 0 ? string.Empty : handler.Namespace + ".";
-                string contextFull = prefix + string.Join(".", handler.ContainingTypes) + "." + contextName;
+                string contextFull = prefix + string.Join(".", handler.ContainingTypes.Select(DeclarationName)) + "." + contextName;
 
                 // A handler reused across steps would key two contexts to the same name; emit once (VELA016 reports
                 // the reuse as an error).
@@ -842,7 +798,7 @@ namespace Vela.Analyzers
 
             foreach (string containingType in model.ContainingTypes)
             {
-                sb.AppendLine($"{Pad(indent)}partial class {containingType}");
+                sb.AppendLine($"{Pad(indent)}partial {containingType}");
                 sb.AppendLine($"{Pad(indent)}{{");
                 indent++;
             }
@@ -888,7 +844,7 @@ namespace Vela.Analyzers
         private static string FullName(ProjectionModel model)
         {
             string prefix = model.Namespace.Length == 0 ? string.Empty : model.Namespace + ".";
-            return prefix + string.Join(".", model.ContainingTypes) + "." + model.TypeName;
+            return prefix + string.Join(".", model.ContainingTypes.Select(DeclarationName)) + "." + model.TypeName;
         }
 
         private static string Render(ProjectionModel model)
@@ -907,11 +863,11 @@ namespace Vela.Analyzers
                 indent++;
             }
 
-            // Reopen the plugin class (and any enclosing types) as partial parts so the projection is a nested type
+            // Reopen the plugin class (and any enclosing types, with their own kind and type parameters) as partial parts so the projection is a nested type
             // the handler can read unqualified. The plugin's own declaration must therefore be partial (VELA014).
             foreach (string containingType in model.ContainingTypes)
             {
-                sb.AppendLine($"{Pad(indent)}partial class {containingType}");
+                sb.AppendLine($"{Pad(indent)}partial {containingType}");
                 sb.AppendLine($"{Pad(indent)}{{");
                 indent++;
             }
@@ -1127,6 +1083,68 @@ namespace Vela.Analyzers
                     return hash;
                 }
             }
+        }
+
+        // The outcome of reading one image capture: a projection to emit, a reason it cannot be emitted (reported as
+        // VELA021), or neither (not a typed capture at all). Value equality so the incremental pipeline caches it.
+        private readonly struct ProjectionResult : System.IEquatable<ProjectionResult>
+        {
+            public ProjectionResult(ProjectionModel model)
+            {
+                Model = model;
+                Skip = null;
+            }
+
+            private ProjectionResult(SkippedProjection skip)
+            {
+                Model = null;
+                Skip = skip;
+            }
+
+            public ProjectionModel? Model { get; }
+            public SkippedProjection? Skip { get; }
+
+            public static ProjectionResult Skipped(InvocationExpressionSyntax invocation, string method, string reason)
+            {
+                SyntaxNode name = ((MemberAccessExpressionSyntax)invocation.Expression).Name;
+                FileLinePositionSpan line = name.GetLocation().GetLineSpan();
+                return new ProjectionResult(new SkippedProjection(line.Path, name.Span, line.Span, method, reason));
+            }
+
+            public bool Equals(ProjectionResult other) => Nullable.Equals(Model, other.Model) && Nullable.Equals(Skip, other.Skip);
+
+            public override bool Equals(object? obj) => obj is ProjectionResult other && Equals(other);
+
+            public override int GetHashCode() => ((Model?.GetHashCode() ?? 0) * 397) ^ (Skip?.GetHashCode() ?? 0);
+        }
+
+        // Where and why a projection was not generated. Holds the location as plain values (not a Location, which
+        // pins a syntax tree) so it stays equatable across incremental runs.
+        private readonly struct SkippedProjection : System.IEquatable<SkippedProjection>
+        {
+            public SkippedProjection(string path, TextSpan span, LinePositionSpan lineSpan, string method, string reason)
+            {
+                Path = path;
+                Span = span;
+                LineSpan = lineSpan;
+                Method = method;
+                Reason = reason;
+            }
+
+            public string Path { get; }
+            public TextSpan Span { get; }
+            public LinePositionSpan LineSpan { get; }
+            public string Method { get; }
+            public string Reason { get; }
+
+            public Location ToLocation() => Location.Create(Path, Span, LineSpan);
+
+            public bool Equals(SkippedProjection other) =>
+                Path == other.Path && Span == other.Span && LineSpan == other.LineSpan && Method == other.Method && Reason == other.Reason;
+
+            public override bool Equals(object? obj) => obj is SkippedProjection other && Equals(other);
+
+            public override int GetHashCode() => (Path?.GetHashCode() ?? 0) ^ Span.GetHashCode() ^ (Reason?.GetHashCode() ?? 0);
         }
     }
 }

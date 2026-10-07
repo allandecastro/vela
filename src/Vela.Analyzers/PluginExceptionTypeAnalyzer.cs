@@ -15,10 +15,9 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class PluginExceptionTypeAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA012";
+        public const string DiagnosticId = DiagnosticIds.PluginExceptionType;
 
         private const string InvalidPluginExecutionExceptionMetadataName = "Microsoft.Xrm.Sdk.InvalidPluginExecutionException";
-        private const string PluginBaseMetadataName = "Vela.Plugin.PluginBase";
         private const string PluginBusinessExceptionDisplayName = "Vela.Plugin.PluginBusinessException";
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
@@ -44,14 +43,19 @@ namespace Vela.Analyzers
                     return; // not a Dataverse plugin project
                 }
 
-                // May be null when the project does not reference Vela.Plugins (then no PluginBusinessException exemption).
-                INamedTypeSymbol? pluginBase = start.Compilation.GetTypeByMetadataName(PluginBaseMetadataName);
+                // Never null here (the SDK's IPlugin sits beside InvalidPluginExecutionException); PluginBase may be
+                // null when the project does not reference Vela.Plugins (then no PluginBusinessException exemption).
+                PluginTypes? plugins = PluginTypes.From(start.Compilation);
+                if (plugins is null)
+                {
+                    return;
+                }
 
-                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeThrow(nodeContext, ipee, pluginBase), SyntaxKind.ThrowStatement, SyntaxKind.ThrowExpression);
+                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeThrow(nodeContext, ipee, plugins), SyntaxKind.ThrowStatement, SyntaxKind.ThrowExpression);
             });
         }
 
-        private static void AnalyzeThrow(SyntaxNodeAnalysisContext context, INamedTypeSymbol ipee, INamedTypeSymbol? pluginBase)
+        private static void AnalyzeThrow(SyntaxNodeAnalysisContext context, INamedTypeSymbol ipee, PluginTypes plugins)
         {
             ExpressionSyntax? thrown = context.Node switch
             {
@@ -77,7 +81,7 @@ namespace Vela.Analyzers
             }
 
             INamedTypeSymbol? enclosing = EnclosingType(context.Node, context.SemanticModel, context.CancellationToken);
-            if (!PluginTypes.IsPluginType(enclosing))
+            if (!plugins.IsPluginType(enclosing))
             {
                 return;
             }
@@ -87,7 +91,7 @@ namespace Vela.Analyzers
             // caller. A type that implements IPlugin directly has no such frame, so a PluginBusinessException thrown
             // there reaches Dataverse as an ordinary exception - keep flagging it for those. It cannot derive from
             // the sealed SDK exception, so it is recognized by name.
-            if (pluginBase != null
+            if (plugins.PluginBase is { } pluginBase
                 && thrownType.ToDisplayString() == PluginBusinessExceptionDisplayName
                 && IsOrDerivesFrom(enclosing!, pluginBase))
             {

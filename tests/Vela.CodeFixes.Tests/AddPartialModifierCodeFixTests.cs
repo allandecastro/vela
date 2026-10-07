@@ -139,4 +139,38 @@ namespace Demo
 
         await Verify.VerifyCodeFixAsync(before, new[] { At(0, "Outer", "Audit"), At(1, "Audit", "Audit") }, after);
     }
+
+    [Fact]
+    public async Task Adds_partial_to_a_record_struct_that_encloses_the_plugin()
+    {
+        string before = Preamble + @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public readonly record struct {|#0:Holder|}
+    {
+        public sealed partial class Audit : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }
+}";
+
+        string after = Preamble + @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public readonly partial record struct Holder
+    {
+        public sealed partial class Audit : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }
+}";
+
+        await Verify.VerifyCodeFixAsync(before, At(0, "Holder", "Audit"), after);
+    }
 }

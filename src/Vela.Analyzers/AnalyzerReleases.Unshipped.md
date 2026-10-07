@@ -12,3 +12,4 @@ VELA017 | Vela.Usage | Error | UncapturedImageAnalyzer
 VELA018 | Vela.Reliability | Warning | AsyncTargetWriteAnalyzer
 VELA019 | Vela.Reliability | Warning | FilesystemAccessAnalyzer
 VELA020 | Vela.Usage | Error | MissingFilterAnalyzer
+VELA021 | Vela.Usage | Warning | ImageProjectionGenerator

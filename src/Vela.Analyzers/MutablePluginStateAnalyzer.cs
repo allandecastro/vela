@@ -13,7 +13,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class MutablePluginStateAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA011";
+        public const string DiagnosticId = DiagnosticIds.MutablePluginState;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -30,10 +30,21 @@ namespace Vela.Analyzers
         {
             context.EnableConcurrentExecution();
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-            context.RegisterSymbolAction(AnalyzeField, SymbolKind.Field);
+            context.RegisterCompilationStartAction(start =>
+            {
+                // Compilation guard: a project that references neither the Dataverse SDK nor Vela has no plugin
+                // type, so no field is inspected at all.
+                PluginTypes? plugins = PluginTypes.From(start.Compilation);
+                if (plugins is null)
+                {
+                    return;
+                }
+
+                start.RegisterSymbolAction(c => AnalyzeField(c, plugins), SymbolKind.Field);
+            });
         }
 
-        private static void AnalyzeField(SymbolAnalysisContext context)
+        private static void AnalyzeField(SymbolAnalysisContext context, PluginTypes plugins)
         {
             IFieldSymbol field = (IFieldSymbol)context.Symbol;
 
@@ -44,7 +55,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            if (!PluginTypes.IsPluginType(field.ContainingType) || field.Locations.Length == 0)
+            if (!plugins.IsPluginType(field.ContainingType) || field.Locations.Length == 0)
             {
                 return;
             }

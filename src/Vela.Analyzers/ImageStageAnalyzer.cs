@@ -17,7 +17,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class ImageStageAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA007";
+        public const string DiagnosticId = DiagnosticIds.ImageStage;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -107,33 +107,16 @@ namespace Vela.Analyzers
         // or a permissive OnMessage("create"|...). Returns the normalized message, or null if undeterminable.
         private static string? ResolveMessage(ExpressionSyntax? receiver)
         {
-            ExpressionSyntax? current = receiver;
-            while (current is not null)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                switch (current)
+                if (TypedTriggerMessage.TryGetValue(call.MethodName, out string? typedMessage))
                 {
-                    case InvocationExpressionSyntax inv when inv.Expression is MemberAccessExpressionSyntax ma:
-                        string called = ma.Name.Identifier.ValueText;
-                        if (TypedTriggerMessage.TryGetValue(called, out string? typedMessage))
-                        {
-                            return typedMessage;
-                        }
+                    return typedMessage;
+                }
 
-                        if (called == "OnMessage" && TryGetLiteralMessage(inv, out string permissiveMessage))
-                        {
-                            return MessageAliases.TryGetValue(permissiveMessage, out string? normalized) ? normalized : null;
-                        }
-
-                        current = ma.Expression;
-                        break;
-                    case MemberAccessExpressionSyntax ma2:
-                        current = ma2.Expression;
-                        break;
-                    case ParenthesizedExpressionSyntax paren:
-                        current = paren.Expression;
-                        break;
-                    default:
-                        return null;
+                if (call.MethodName == "OnMessage" && TryGetLiteralMessage(call.Invocation, out string permissiveMessage))
+                {
+                    return MessageAliases.TryGetValue(permissiveMessage, out string? normalized) ? normalized : null;
                 }
             }
 

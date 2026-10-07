@@ -18,7 +18,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class DuplicateStepTriggerAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA008";
+        public const string DiagnosticId = DiagnosticIds.DuplicateStepTrigger;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -123,43 +123,26 @@ namespace Vela.Analyzers
             location = Location.None;
             display = string.Empty;
 
-            ExpressionSyntax? current = receiver;
-            while (current is not null)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                switch (current)
+                string called = call.MethodName;
+                if (message.Length == 0 && TypedTriggerMessage.TryGetValue(called, out string? typed))
                 {
-                    case InvocationExpressionSyntax inv when inv.Expression is MemberAccessExpressionSyntax ma:
-                        string called = ma.Name.Identifier.ValueText;
-                        if (message.Length == 0 && TypedTriggerMessage.TryGetValue(called, out string? typed))
-                        {
-                            message = typed!;
-                            location = ma.Name.GetLocation();
-                        }
-                        else if (message.Length == 0 && called == "OnMessage" && TryGetLiteralMessage(inv, out string permissive))
-                        {
-                            message = permissive;
-                            location = ma.Name.GetLocation();
-                        }
-                        else if (stage.Length == 0 && StageMethods.TryGetValue(called, out string? stageValue))
-                        {
-                            stage = stageValue!;
-                        }
-                        else if (called == "Async")
-                        {
-                            mode = "async";
-                        }
-
-                        current = ma.Expression;
-                        break;
-                    case MemberAccessExpressionSyntax ma2:
-                        current = ma2.Expression;
-                        break;
-                    case ParenthesizedExpressionSyntax paren:
-                        current = paren.Expression;
-                        break;
-                    default:
-                        current = null;
-                        break;
+                    message = typed!;
+                    location = call.Name.GetLocation();
+                }
+                else if (message.Length == 0 && called == "OnMessage" && TryGetLiteralMessage(call.Invocation, out string permissive))
+                {
+                    message = permissive;
+                    location = call.Name.GetLocation();
+                }
+                else if (stage.Length == 0 && StageMethods.TryGetValue(called, out string? stageValue))
+                {
+                    stage = stageValue!;
+                }
+                else if (called == "Async")
+                {
+                    mode = "async";
                 }
             }
 

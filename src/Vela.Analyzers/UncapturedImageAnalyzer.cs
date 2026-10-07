@@ -22,7 +22,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class UncapturedImageAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA017";
+        public const string DiagnosticId = DiagnosticIds.UncapturedImage;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -151,8 +151,8 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                bool hasPre = SpineHasCall(handleMember.Expression, "WithPreImage");
-                bool hasPost = SpineHasCall(handleMember.Expression, "WithPostImage");
+                bool hasPre = FluentStep.SpineHasCall(handleMember.Expression, "WithPreImage");
+                bool hasPost = FluentStep.SpineHasCall(handleMember.Expression, "WithPostImage");
                 (int Chains, bool HasPreImage, bool HasPostImage) existing = result.TryGetValue(bound, out (int Chains, bool HasPreImage, bool HasPostImage) e) ? e : (0, false, false);
                 result[bound] = (existing.Chains + 1, existing.HasPreImage || hasPre, existing.HasPostImage || hasPost);
             }
@@ -163,35 +163,5 @@ namespace Vela.Analyzers
         private static bool ImplementsContext(ITypeSymbol type, INamedTypeSymbol contextType)
             => SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, contextType)
                 || type.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, contextType));
-
-        private static bool SpineHasCall(ExpressionSyntax? receiver, string methodName)
-        {
-            ExpressionSyntax? current = receiver;
-            while (current is not null)
-            {
-                switch (current)
-                {
-                    case InvocationExpressionSyntax inv when inv.Expression is MemberAccessExpressionSyntax ma:
-                        if (ma.Name.Identifier.ValueText == methodName)
-                        {
-                            return true;
-                        }
-
-                        current = ma.Expression;
-                        break;
-                    case MemberAccessExpressionSyntax ma2:
-                        current = ma2.Expression;
-                        break;
-                    case ParenthesizedExpressionSyntax paren:
-                        current = paren.Expression;
-                        break;
-                    default:
-                        current = null;
-                        break;
-                }
-            }
-
-            return false;
-        }
     }
 }

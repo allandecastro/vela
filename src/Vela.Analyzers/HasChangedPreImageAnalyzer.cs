@@ -21,7 +21,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class HasChangedPreImageAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA009";
+        public const string DiagnosticId = DiagnosticIds.HasChangedPreImage;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -138,7 +138,7 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                bool hasPreImage = SpineHasCall(handleMember.Expression, "WithPreImage");
+                bool hasPreImage = FluentStep.SpineHasCall(handleMember.Expression, "WithPreImage");
                 (int Chains, bool HasPreImage) existing = result.TryGetValue(bound, out (int Chains, bool HasPreImage) e) ? e : (0, false);
                 result[bound] = (existing.Chains + 1, existing.HasPreImage || hasPreImage);
             }
@@ -163,36 +163,6 @@ namespace Vela.Analyzers
             }
 
             return receiver.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, contextType));
-        }
-
-        private static bool SpineHasCall(ExpressionSyntax? receiver, string methodName)
-        {
-            ExpressionSyntax? current = receiver;
-            while (current is not null)
-            {
-                switch (current)
-                {
-                    case InvocationExpressionSyntax inv when inv.Expression is MemberAccessExpressionSyntax ma:
-                        if (ma.Name.Identifier.ValueText == methodName)
-                        {
-                            return true;
-                        }
-
-                        current = ma.Expression;
-                        break;
-                    case MemberAccessExpressionSyntax ma2:
-                        current = ma2.Expression;
-                        break;
-                    case ParenthesizedExpressionSyntax paren:
-                        current = paren.Expression;
-                        break;
-                    default:
-                        current = null;
-                        break;
-                }
-            }
-
-            return false;
         }
     }
 }
