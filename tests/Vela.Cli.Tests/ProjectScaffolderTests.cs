@@ -148,7 +148,9 @@ public class ProjectScaffolderTests
 
             Assert.Equal("// my code", File.ReadAllText(userPlugin));
             Assert.Equal("// my edit", File.ReadAllText(editedSample));
-            Assert.Equal(ScaffoldTemplates.PingCustomApi("Zava"), File.ReadAllText(deletedSample).Replace("\r\n", "\n"));
+            // Compare ignoring line endings: the template's follow the compiled source (CRLF on a Windows checkout),
+            // the written file is LF-normalised.
+            Assert.Equal(ScaffoldTemplates.PingCustomApi("Zava").ReplaceLineEndings("\n"), File.ReadAllText(deletedSample).ReplaceLineEndings("\n"));
 
             // The edit stays recognised as an edit on the next run too (the manifest keeps the hash Vela wrote).
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, force: true)));
@@ -201,6 +203,23 @@ public class ProjectScaffolderTests
             Assert.Contains("customised", File.ReadAllText(csproj));
             Assert.True(File.Exists(integrationsCsproj));
             Assert.True(File.Exists(Path.Combine(root, ProjectScaffolder.ManifestPath)));
+        });
+    }
+
+    [Fact]
+    public void Force_TreatsALineEndingOnlyChange_AsUnedited()   // a git autocrlf checkout must not read as an edit
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+            string sample = Path.Combine(temp, "ZavaSales", "src", "Zava.Plugins", "GlobalCustomApis", "PingCustomApi.cs");
+            File.WriteAllText(sample, File.ReadAllText(sample).ReplaceLineEndings("\r\n"));
+
+            List<ProjectScaffolder.PlannedFile> plan = ProjectScaffolder.Plan(Options(temp, force: true), out _);
+            ProjectScaffolder.WriteOutcome outcome = ProjectScaffolder.WritePlan(Path.Combine(temp, "ZavaSales"), plan);
+
+            Assert.DoesNotContain("src/Zava.Plugins/GlobalCustomApis/PingCustomApi.cs", outcome.Kept);
+            Assert.Equal(ProjectScaffolder.Hash("a\nb\n"), ProjectScaffolder.Hash("a\r\nb\r\n"));
         });
     }
 

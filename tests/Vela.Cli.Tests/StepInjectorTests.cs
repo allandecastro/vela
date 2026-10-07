@@ -8,8 +8,14 @@ public class StepInjectorTests
 {
     private static readonly string[] Name = ["Name"];
 
+    // The fixtures are raw string literals, whose line breaks follow the test file's checkout (CRLF under Windows
+    // autocrlf). The tests edit them with "\n" patterns, so pin them to LF; the CRLF theories below run the same
+    // cases with CRLF input, so a line-ending bug in the injector shows on every OS.
+    private static readonly string HandlerBased = HandlerBasedSource.ReplaceLineEndings("\n");
+    private static readonly string SingleStep = SingleStepSource.ReplaceLineEndings("\n");
+
     // A handler-based plugin (uses .Handle(...)), which is what 'vela add step' targets.
-    private const string HandlerBased = """
+    private const string HandlerBasedSource = """
 namespace Acme.Plugins.Account.Plugins
 {
     using Vela.Constants;
@@ -38,7 +44,7 @@ namespace Acme.Plugins.Account.Plugins
 """;
 
     // A plugin whose step chain never reaches .Handle(...) (no handler-bound step) — must be rejected.
-    private const string SingleStep = """
+    private const string SingleStepSource = """
 namespace Acme.Plugins.Account.Plugins
 {
     using Vela.Constants;
@@ -337,6 +343,60 @@ namespace Acme.Plugins.Account.Plugins
         int existingHandler = result.IndexOf("private void HandleCreate(", StringComparison.Ordinal);
         int newHandler = result.IndexOf("private void HandleUpdate(", StringComparison.Ordinal);
         // The step lands inside RegisterPluginSteps, and its handler right after that method, before HandleCreate.
+        Assert.True(registration > 0 && registration < newHandler && newHandler < existingHandler, result);
+    }
+
+    // ---- The same cases with CRLF input (a Windows checkout / editor) ----
+
+    private static string Crlf(string source) => source.ReplaceLineEndings("\r\n");
+
+    [Fact]
+    public void Crlf_RefusesAnExactDuplicate_AndAllowsASharedTrigger()
+    {
+        string source = Crlf(FilteredCreate());
+
+        Assert.False(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out string unchanged, out string error, out _));
+        Assert.Contains("same filtering columns", error);
+        Assert.Equal(source, unchanged);
+
+        Assert.True(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1"], out _, out string sharedError, out string? note));
+        Assert.True(sharedError.Length == 0, sharedError);
+        Assert.NotNull(note);
+    }
+
+    [Fact]
+    public void Crlf_SeesTheFilterOn_PastASemicolonInsideAString_AndIgnoresCommentsAndRawStrings()
+    {
+        string source = Crlf(FilteredCreate()
+            .Replace("                .FilterOn(a => a.Name)", "                .WithDescription(\"a; b\")\n                .FilterOn(a => a.Name)")
+            .Replace("            RegisterStep().OnCreate()", "            // RegisterStep().OnCreate().PostOperation().Sync().Handle(Old);\n            string doc = \"\"\"\nRegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Telephone1).Handle(Fake);\n\"\"\";\n            RegisterStep().OnCreate()"));
+        Assert.Contains("\r\n", source);
+
+        // Only the live step counts: same filter (Name) is a duplicate, Telephone1 (the raw-string fake's) is not.
+        Assert.False(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out _));
+        Assert.Contains("same filtering columns", error);
+        Assert.True(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1"], out _, out string sharedError, out _));
+        Assert.True(sharedError.Length == 0, sharedError);
+    }
+
+    [Theory]
+    [InlineData("@")]
+    [InlineData("$@")]
+    [InlineData("@$")]
+    public void Crlf_InjectsInsideRegisterPluginSteps_PastVerbatimAndRawStrings(string prefix)
+    {
+        string open = prefix.Contains('$') ? "{{" : "{";
+        string source = Crlf(HandlerBased
+            .Replace("        private void HandleCreate(ILocalPluginContext ctx)\n        {\n        }",
+                "        private void HandleCreate(ILocalPluginContext ctx)\n        {\n            string a = " + prefix + "\"\"\"quoted\"\" text " + open + " \";\n            string r = \"\"\"\n{ raw\n\"\"\";\n        }"));
+        Assert.Contains("\r\n", source);
+
+        bool ok = StepInjector.TryInject(source, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
+
+        Assert.True(ok, error);
+        int registration = result.IndexOf("RegisterStep().OnUpdate()", StringComparison.Ordinal);
+        int newHandler = result.IndexOf("private void HandleUpdate(", StringComparison.Ordinal);
+        int existingHandler = result.IndexOf("private void HandleCreate(", StringComparison.Ordinal);
         Assert.True(registration > 0 && registration < newHandler && newHandler < existingHandler, result);
     }
 }
