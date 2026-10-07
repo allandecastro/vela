@@ -198,6 +198,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`RetryPolicy` honours `Retry-After`.** A service-protection fault's `ErrorDetails["Retry-After"]` was ignored, so the
   jittered backoff retried too early and was rejected again. The policy now waits that long, and rethrows at once when
   the wait exceeds `RetryPolicy.MaxDelay` (30 s).
+- **Typed query values reach Dataverse in the shape it compares.** `ToFetchXml()` wrote a `DateTime` without
+  milliseconds or zone (a UTC instant was read in the user's time zone) and an enum as its member name
+  (`value="Active"`). A UTC `DateTime` is now written as `yyyy-MM-ddTHH:mm:ss.fffZ` (a local one converted to UTC,
+  an `Unspecified` one zone-less), a `DateTimeOffset` keeps its offset, and an enum is written as its integer. The
+  typed condition helpers (`Where`, `WhereIn`, `WhereLink`, `Condition`, the `QueryExpression` extensions) also turn
+  an enum value into its integer, which a `QueryExpression` needs.
+- **A second `WhereRelated` no longer replaces the first.** Every call wrote the single
+  `Criteria.AnyAllFilterLinkEntity` slot, so only the last related-record filter applied. Each call now adds its own
+  child filter, and the filters combine with AND.
 
 ### Added (CLI)
 

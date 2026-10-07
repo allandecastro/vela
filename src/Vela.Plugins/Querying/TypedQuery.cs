@@ -42,7 +42,7 @@ public sealed class TypedQuery<TEntity>
     /// <summary>Adds a condition to the root criteria.</summary>
     public TypedQuery<TEntity> Where(Expression<Func<TEntity, object?>> column, ConditionOperator conditionOperator, params object[] values)
     {
-        Expression.Criteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), conditionOperator, values ?? Array.Empty<object>()));
+        Expression.Criteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), conditionOperator, TypedQueryValues.Normalize(values)));
         return this;
     }
 
@@ -170,11 +170,14 @@ public sealed class TypedQuery<TEntity>
     public TypedQuery<TEntity> WhereLink<TLinked>(string alias, Expression<Func<TLinked, object?>> column, ConditionOperator conditionOperator, params object[] values)
         where TLinked : Entity
     {
-        Expression.Criteria.AddCondition(alias, TypedQueryNames.GetAttributeLogicalName(column), conditionOperator, values ?? Array.Empty<object>());
+        Expression.Criteria.AddCondition(alias, TypedQueryNames.GetAttributeLogicalName(column), conditionOperator, TypedQueryValues.Normalize(values));
         return this;
     }
 
-    /// <summary>Filters on the existence of related records (Any/All/NotAny/NotAll) without returning them.</summary>
+    /// <summary>
+    /// Filters on the existence of related records (Any/All/NotAny/NotAll) without returning them. Several calls
+    /// combine with AND.
+    /// </summary>
     public TypedQuery<TEntity> WhereRelated<TTo>(
         Expression<Func<TEntity, object?>> fromAttribute,
         Expression<Func<TTo, object?>> toAttribute,
@@ -189,7 +192,10 @@ public sealed class TypedQuery<TEntity>
             TypedQueryNames.GetAttributeLogicalName(toAttribute),
             anyAllOperator);
         configure?.Invoke(new TypedLink<TTo>(link));
-        Expression.Criteria.AnyAllFilterLinkEntity = link;
+
+        // A FilterExpression holds a single AnyAllFilterLinkEntity, so each related-record filter gets its own child
+        // filter: a second WhereRelated adds to the first instead of replacing it.
+        Expression.Criteria.AddFilter(new FilterExpression(LogicalOperator.And) { AnyAllFilterLinkEntity = link });
         return this;
     }
 
@@ -358,7 +364,6 @@ public sealed class TypedLink<TTo>
         return this;
     }
 
-    /// <summary>Adds a condition to the link criteria (filters the linked rows).</summary>
     /// <summary>Adds an <c>In</c> condition on the linked entity whose values come from a sequence (see <see cref="TypedQuery{TEntity}.WhereIn{TValue}"/>).</summary>
     public TypedLink<TTo> WhereIn<TValue>(Expression<Func<TTo, object?>> column, IEnumerable<TValue> values)
     {
@@ -373,9 +378,10 @@ public sealed class TypedLink<TTo>
         return this;
     }
 
+    /// <summary>Adds a condition to the link criteria (filters the linked rows).</summary>
     public TypedLink<TTo> Where(Expression<Func<TTo, object?>> column, ConditionOperator conditionOperator, params object[] values)
     {
-        Definition.LinkCriteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), conditionOperator, values ?? Array.Empty<object>()));
+        Definition.LinkCriteria.AddCondition(new ConditionExpression(TypedQueryNames.GetAttributeLogicalName(column), conditionOperator, TypedQueryValues.Normalize(values)));
         return this;
     }
 
@@ -430,5 +436,26 @@ internal static class TypedQueryValues
     // Expands a typed sequence into the object[] a ConditionExpression expects, so In/NotIn get one value per
     // element instead of a single nested array (the params object[] trap for a value-typed array like Guid[]).
     public static object[] Materialize<TValue>(IEnumerable<TValue> values)
-        => (values ?? Enumerable.Empty<TValue>()).Select(value => (object)value!).ToArray();
+        => (values ?? Enumerable.Empty<TValue>()).Select(value => NormalizeValue(value)!).ToArray();
+
+    // Condition values as Dataverse compares them: an early-bound choice enum becomes its integer value (a
+    // QueryExpression cannot carry an enum, and FetchXML would otherwise get the member name).
+    public static object[] Normalize(object[]? values)
+    {
+        if (values == null || values.Length == 0)
+        {
+            return Array.Empty<object>();
+        }
+
+        object[] normalized = new object[values.Length];
+        for (int i = 0; i < values.Length; i++)
+        {
+            normalized[i] = NormalizeValue(values[i])!;
+        }
+
+        return normalized;
+    }
+
+    public static object? NormalizeValue(object? value) =>
+        value is Enum choice ? Convert.ToInt32(choice, System.Globalization.CultureInfo.InvariantCulture) : value;
 }

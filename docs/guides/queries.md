@@ -45,7 +45,7 @@ QueryExpression query = Query.For<Account>()
 
 Also available on the builder: `Distinct()`, `Page(n, count)`, `WithTotalRecordCount()`, `WhereColumns(a, op, b)`
 (compare two columns), `WhereLink<TLinked>(alias, …)` (conditions on a join, e.g. records-not-in-a-set),
-`WhereRelated<TTo>(…, JoinOperator.Any/All/NotAny/NotAll, …)`, and aggregates
+`WhereRelated<TTo>(…, JoinOperator.Any/All/NotAny/NotAll, …)` (several calls combine with AND), and aggregates
 `GroupBy(…)/Count/Sum/Average/Min/Max(…, alias)`.
 
 Need **FetchXML** (for the messages/tools that require the string - Rollup, saved queries, pasting from FetchXML
@@ -70,7 +70,9 @@ the `QueryExpression`, so both return the same rows; the FetchXML it supports (a
 
 Condition values that are Dataverse types (`OptionSetValue`, `Money`, `EntityReference`) emit their underlying
 value - the choice integer, the money decimal, the lookup GUID - and a query's `NoLock` is carried through as
-`no-lock='true'`.
+`no-lock='true'`. An early-bound choice enum passed to a typed `Where`/`WhereIn`/`Condition` becomes its integer
+in the `QueryExpression` too. A UTC `DateTime` is written with milliseconds and a `Z` (a local one is converted
+to UTC first); an `Unspecified` one carries no zone, so Dataverse reads it in the user's time zone.
 
 ## Running a typed query
 

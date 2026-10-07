@@ -379,7 +379,12 @@ public static class FetchXmlWriter
     {
         null => string.Empty,
         bool b => b ? "true" : "false",
-        DateTime dt => dt.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture),
+        // Keep the milliseconds, and mark a UTC (or local, converted) instant with 'Z' so Dataverse does not read it
+        // in the user's time zone. An Unspecified DateTime has no zone to state, so it stays zone-less.
+        DateTime dt => FormatDateTime(dt),
+        DateTimeOffset offset => offset.ToString("yyyy-MM-ddTHH:mm:ss.fffzzz", CultureInfo.InvariantCulture),
+        // An early-bound choice enum compares by its integer value, never by its member name.
+        Enum choice => Convert.ToInt64(choice, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture),
         // Dataverse value types carry their comparable value in a property, not in ToString() (which yields the
         // type name). FetchXML expects the underlying scalar: the choice's integer, the money's decimal, the
         // reference's GUID.
@@ -388,6 +393,13 @@ public static class FetchXmlWriter
         EntityReference reference => reference.Id.ToString(),
         IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
         _ => value.ToString() ?? string.Empty
+    };
+
+    private static string FormatDateTime(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value.ToString("yyyy-MM-ddTHH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
+        DateTimeKind.Local => value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
+        _ => value.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture),
     };
 
     private static string? LinkType(JoinOperator op) => op switch
