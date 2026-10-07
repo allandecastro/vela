@@ -187,4 +187,12 @@ public sealed class ExecutePipelineTests
             () => above.Execute(new PluginContextBuilder().Depth(PluginBase.DefaultMaxDepth + 1).BuildServiceProvider()));
         Assert.False(above.Ran);
     }
+
+    [Fact]
+    public void The_orphan_PluginBase_of_TConfig_is_gone()
+    {
+        // Removed in the breaking release: it was neither detected by the package scanner nor combinable with
+        // EntityPluginBase / CustomApiBase, so a plugin deriving from it could never be registered.
+        Assert.Null(typeof(PluginBase).Assembly.GetType("Vela.Plugin.PluginBase`1"));
+    }
 }

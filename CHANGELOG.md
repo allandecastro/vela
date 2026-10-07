@@ -63,6 +63,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `CustomApiPropertyChange`) and `CustomApiDefinitionReader`. Nothing in Vela used them, and the comparer did not
   match what `vela plan` compares. Read the definitions with `FrameworkManifestScanner.Scan(assembly)`, and diff
   them against an environment with `vela plan`.
+- **`PluginBase<TConfig>` is removed.** It derived from `PluginBase` directly, so it could not be combined with
+  `EntityPluginBase<TEntity>` or `CustomApiBase`, and the package scanner never detected a plugin built on it: such a
+  plugin was never registered. Read the step's unsecure / secure configuration through `UnsecureConfig` /
+  `SecureConfig` on the Vela base class instead.
 
 ### Added (Framework)
 

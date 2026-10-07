@@ -487,7 +487,9 @@ modelled: update `statecode` / `statuscode` with `OnUpdate()` instead.
 (kill-switch or phased rollout); `apply` sets the step's state accordingly and `plan` shows the transition. Re-enabling
 is just removing the `Disabled()` marker.
 
-**Step configuration** - both strings reach the plugin constructor `(string unsecureConfig, string secureConfig)`.
+**Step configuration** - both strings reach the plugin constructor `(string unsecureConfig, string secureConfig)`,
+and the base class exposes them as the protected `UnsecureConfig` / `SecureConfig` properties (never null). Parse
+them yourself (for example with Newtonsoft.Json) when the step carries structured settings.
 
 - `WithUnsecureConfig("...")` holds non-sensitive settings. It is compiled into the assembly, stored unencrypted
   by Dataverse and printed verbatim in `plan`/`inspect` output.
