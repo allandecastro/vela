@@ -85,15 +85,15 @@ public sealed class CustomApiBuildersCoverageTests
         CustomApiDefinition definition = Typed()
             .UniqueName("vela_Sample")
             .Description(null!)        // null -> empty
-            .AsFunction()
+            .AsAction()
             .BoundTo<TestAccount>()    // [EntityLogicalName] -> "account"
             .Private()
             .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.AsyncOnly)
-            .WorkflowSdkStep(true)
+            .WorkflowSdkStep(false)      // workflow-enabled APIs cannot take the string[] Tags
             .Build();
 
         Assert.Equal("vela_Sample", definition.DisplayName); // defaults to unique name
-        Assert.True(definition.IsFunction);
+        Assert.False(definition.IsFunction);
         Assert.Equal("account", definition.BoundEntityLogicalName);
 
         CustomApiParameterDefinition name = definition.InputParameters.Single(p => p.Name == "Name");

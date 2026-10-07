@@ -26,6 +26,12 @@ public sealed class CustomApiParameterDefinition
     public bool IsCollection { get; set; }
 
     /// <summary>
+    /// Gets or sets the table of an Entity, EntityReference or EntityCollection parameter (its
+    /// <c>logicalentityname</c>), or null when the parameter is not tied to a table.
+    /// </summary>
+    public string? LogicalEntityName { get; set; }
+
+    /// <summary>
     /// Gets or sets the parameter description.
     /// </summary>
     public string Description { get; set; } = string.Empty;
