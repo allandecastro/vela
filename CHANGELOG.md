@@ -207,6 +207,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **The package scan no longer runs package code in the process that holds your credentials.** Reading a
+  package's steps instantiates its plugin types, so a package could read the client secret, the connection string,
+  secure-config values, the access token or CI credentials from the `vela` process. `plan`/`apply`/`inspect` and
+  `vela models --package` now scan in a child `vela` process started with an allowlisted environment (system paths,
+  locale, .NET variables; no `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*` or CI tokens), no stdin and no
+  credentials; its output goes to stderr. It still runs as your OS user, so only scan packages you trust.
+  `VELA_SCAN_IN_PROCESS=1` restores the in-process scan.
 - **`--solution` now also holds the components that did not change.** A create or update lands in the solution,
   but a step, Custom API, plugin assembly or package deployed earlier (without `--solution`, or into another
   solution) was never written again and so never added: the solution exported without it. `plan --solution` lists

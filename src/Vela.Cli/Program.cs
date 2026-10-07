@@ -12,6 +12,13 @@ JsonSerializerOptions jsonOptions = new JsonSerializerOptions
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 };
 
+// The isolated package scan re-runs this executable as a child (IsolatedPackageScan): handled before anything else,
+// so the child never prompts, opens the menu or checks for updates.
+if (args.Length > 0 && args[0] == IsolatedPackageScan.ChildCommand)
+{
+    return IsolatedPackageScan.RunChild(args[1..]);
+}
+
 string[] effectiveArgs = args;
 
 // A bare `vela` (or explicit `vela menu`) launches the interactive Spectre menu when attached to a real

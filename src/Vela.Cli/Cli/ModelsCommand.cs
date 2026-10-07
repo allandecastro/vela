@@ -214,7 +214,7 @@ internal static class ModelsCommand
                 // Web defaults (camelCase) so the normalized definition exposes "uniqueName" — matching how
                 // NormalizeCustomApiDefinition emits it and how PackageScannerBuildStateTests reads it.
                 JsonSerializerOptions scanJson = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-                RegistrationState scanned = PackageScanner.BuildLocalStateFromPackages(scanOptions, scanJson, tempDirectories);
+                RegistrationState scanned = IsolatedPackageScan.Scan(scanOptions, scanJson, tempDirectories);
                 authoredCustomApis = CustomApiReader.AuthoredCustomApiUniqueNames(scanned);
             }
             catch (Exception ex)
