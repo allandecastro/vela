@@ -9,7 +9,7 @@ public sealed class DataverseConnectionException : Exception
     public DataverseConnectionException(string message) : base(message) { }
     public DataverseConnectionException(string message, Exception innerException) : base(message, innerException) { }
 }
-public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null);
+public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null, bool DetailedExitCode = false);
 public sealed record ExtractedPackage(string PackagePath, string TempDirectory, string PrimaryAssemblyPath, string[] RegistrableAssemblyPaths);
 public sealed record AssemblyPayload(string AssemblyName, string AssemblyPath);
 public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath);
@@ -19,7 +19,7 @@ public sealed record RegistrationItem(string Kind, string Type, JsonElement Defi
 // SecureConfigByStepKey is the RAW value SecureConfigResolver resolved for it from --secure-config or the environment.
 // Step definitions in Items only ever carry a digest, so a secret never lands in plan/inspect output; apply writes
 // the raw value, and only for the steps present here (every other secure configuration is left untouched).
-public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null, string[]? UnmanagedPluginTypes = null);
+public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null, string[]? UnmanagedPluginTypes = null, string[]? Info = null);
 public sealed record RegistrationDiff(string[] LocalAssemblies, string[] CurrentAssemblies, RegistrationItem[] Added, RegistrationItem[] Removed, RegistrationChange[] Changed, RegistrationItem[] LocalItems, RegistrationItem[] CurrentItems)
 {
     public DiffSummary Summary { get; init; } = new DiffSummary(Added.Length, Removed.Length, Changed.Length);
@@ -27,7 +27,23 @@ public sealed record RegistrationDiff(string[] LocalAssemblies, string[] Current
 
 public sealed record RegistrationChange(string Kind, string Type, JsonElement Before, JsonElement After);
 public sealed record DiffSummary(int Added, int Removed, int Changed);
-public sealed record PlanPreview(string Mode, string? Environment, bool HasChanges, DiffSummary Summary, ApplyOperation[] Operations, RegistrationDiff Diff, string[] Diagnostics, string[] Notes, ExecutedCounts? Executed = null, string[]? Unmanaged = null);
+/// <summary>
+/// The plan/apply JSON document (see docs/reference/machine-readable-output.md). <see cref="SchemaVersion"/> is
+/// serialized first; it changes only when an existing field changes meaning or shape, never for an added field.
+/// <c>diagnostics</c> are warnings (<c>--strict</c> fails on them); <c>info</c> and <c>unmanaged</c> are information.
+/// </summary>
+public sealed record PlanPreview(string Mode, string? Environment, bool HasChanges, DiffSummary Summary, ApplyOperation[] Operations, RegistrationDiff Diff, string[] Diagnostics, string[] Notes, ExecutedCounts? Executed = null, string[]? Unmanaged = null, string[]? Info = null)
+{
+    [System.Text.Json.Serialization.JsonPropertyOrder(-1)]
+    public int SchemaVersion { get; init; } = MachineOutput.SchemaVersion;
+}
+
+/// <summary>The versioned machine-readable output contract of plan/apply/inspect.</summary>
+public static class MachineOutput
+{
+    /// <summary>Bumped only on a breaking change to an existing field; added fields keep the version.</summary>
+    public const int SchemaVersion = 1;
+}
 
 /// <summary>
 /// What an <c>apply</c> actually DID, taken from the pre-apply diff - distinct from <see cref="PlanPreview.Summary"/>,

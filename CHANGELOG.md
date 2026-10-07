@@ -191,6 +191,14 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **A versioned JSON contract for `plan` / `apply` / `inspect`.** Every document starts with `"schemaVersion": 1`,
+  bumped only when an existing field changes meaning or shape. The new
+  [Machine-readable output](docs/reference/machine-readable-output.md) page documents the fields and the exit codes.
+  Information that is not a warning (an assembly not yet in Dataverse, for example) is listed under a new `info`
+  array, alongside `diagnostics` (warnings, which `--strict` fails on) and `unmanaged`.
+- **`vela plan --detailed-exitcode`** exits `8` when the plan found changes to apply (including a package republish)
+  and `0` when there is nothing to do, so a pipeline can branch on the plan without parsing it.
+
 - **`--secure-config NAME=VALUE|NAME=@file`** (repeatable) on `plan`/`apply`/`inspect`, with the
   `VELA_SECURE_CONFIG_<NAME>` environment variable as a fallback. A package built with an older framework that still
   compiles a `WithSecureConfig` literal no longer has that value deployed: the environment keeps its current value.
@@ -199,6 +207,18 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **`--strict` no longer fails the first deployment.** "Plugin assembly ... not found in Dataverse" (and "no plugin
+  types found") were warnings, so `plan --strict` failed on every empty environment. They are now `info`; rank
+  collisions, missing secure-config values and publisher-prefix mismatches are still warnings.
+- **`--verbose` no longer drops the JSON.** With `--verbose` (piped or `--json`), `plan`/`apply`/`inspect` printed
+  the human summary on stderr and then returned without writing the JSON document. The JSON is now always written;
+  the summary stays on stderr. `--out <file>` reports "Plan written: ..." on stderr, so stdout stays empty.
+- **`vela init --json` writes only JSON to stdout.** The "Scaffolding against Vela.Plugins ..." notice now goes to
+  stderr.
+- **`apply` reports a package-only change like `plan`.** The apply preview listed the package publish neither in
+  `operations` nor in the JSON of a failed run, and an unprefixed package without `--solution` failed mid-run
+  (exit 7) after the deletes; it now fails before anything is written (exit 4), as `plan` does. `plan`, `apply` and
+  `inspect` share one orchestration path and one Dataverse connection per run (instead of up to four).
 - **`vela models` names the `Id` override's column** (`[AttributeLogicalName("accountid")]`, as the SDK generator
   does), so `a => a.Id` selects the primary key column.
 - **A second `apply --solution` no longer re-imports an unchanged plugin package.** Adding the publisher prefix

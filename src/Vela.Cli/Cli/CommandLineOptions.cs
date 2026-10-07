@@ -42,6 +42,7 @@ internal static class CommandLineOptions
     private static readonly HashSet<string> SharedFlagOptions = new(ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
     {
         "--interactive", "-i", "--auto-approve", "--yes", "--strict", "--verbose", "-v", "--json", "--help", "-h",
+        "--detailed-exitcode",
     };
 
     // The tokens that request usage on any command; handled (print usage, exit success) before the option guard.
@@ -333,7 +334,8 @@ internal static class CommandLineOptions
             Json: args.Any(x => string.Equals(x, "--json", StringComparison.OrdinalIgnoreCase)),
             TimeoutMinutes: timeoutMinutes,
             BatchChunkSize: batchChunkSize,
-            SecureConfigs: [.. ReadMultiOption(args, "--secure-config")]);
+            SecureConfigs: [.. ReadMultiOption(args, "--secure-config")],
+            DetailedExitCode: HasFlag(args, "--detailed-exitcode"));
         return true;
     }
 

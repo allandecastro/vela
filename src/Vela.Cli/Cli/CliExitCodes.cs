@@ -26,4 +26,9 @@ internal static class CliExitCodes
     /// re-run apply to reconcile" apart from a bad-args/strict failure (4) or a connection problem (6). The failure
     /// path also emits a machine-readable result (mode <c>apply-failed</c>) for <c>--json</c>/<c>--out</c> callers.</summary>
     public const int ExitPartialApply = 7;
+
+    /// <summary><c>vela plan --detailed-exitcode</c> only: the plan succeeded and found changes to apply (including a
+    /// package republish or a solution-membership fix). Without the flag a successful plan always exits 0. Like
+    /// Terraform's <c>-detailed-exitcode</c>, but with its own value because 2 already means invalid arguments.</summary>
+    public const int ExitChangesPending = 8;
 }

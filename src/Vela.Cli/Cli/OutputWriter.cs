@@ -33,7 +33,8 @@ internal static class OutputWriter
         string outputPath = Path.GetFullPath(outPath);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
         File.WriteAllText(outputPath, output);
-        Console.WriteLine($"Plan written: {outputPath}");
+        // A notice, not output: stderr, so stdout carries nothing but the machine-readable document (or nothing).
+        Console.Error.WriteLine($"Plan written: {outputPath}");
     }
 
     /// <summary>
@@ -50,6 +51,7 @@ internal static class OutputWriter
         writer.WriteLine($"{ConsoleTheme.Muted("summary:", color)} {added} {removed} {changed}");
 
         WriteUnmanaged(preview.Unmanaged, writer, color);
+        WriteInfo(preview.Info, writer, color);
 
         if (preview.Operations.Length > 0)
         {
@@ -263,6 +265,22 @@ internal static class OutputWriter
         }
     }
 
+    // Informational notices (for example an assembly not yet in Dataverse on a first deployment): never a warning,
+    // so --strict does not fail on them.
+    public static void WriteInfo(IReadOnlyList<string>? info, TextWriter writer, bool color)
+    {
+        if (info is not { Count: > 0 })
+        {
+            return;
+        }
+
+        writer.WriteLine(ConsoleTheme.Muted("info:", color));
+        foreach (string line in info)
+        {
+            writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {line}", color));
+        }
+    }
+
     public static void WriteStateSummary(string label, RegistrationState state, TextWriter writer, bool color)
     {
         writer.WriteLine($"{ConsoleTheme.Accent(label, color)} assemblies: {string.Join(", ", state.SourceAssemblies)}");
@@ -334,7 +352,7 @@ internal static class OutputWriter
         return baseName;
     }
 
-    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null)
+    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null, string[]? info = null)
     {
         List<ApplyOperation> operations = [];
         operations.AddRange(diff.Added.Select(item => new ApplyOperation("create", item.Kind, item.Type, "Exists locally but not in Dataverse.")));
@@ -368,7 +386,8 @@ internal static class OutputWriter
                 "Compared local .nupkg plugin metadata with live Dataverse state.",
                 "This is a preview; nothing was written to Dataverse."
             ],
-            Unmanaged: unmanaged ?? []);
+            Unmanaged: unmanaged ?? [],
+            Info: info ?? []);
     }
 
     // Top-level `vela --help`. Section headers and command names are rendered through Spectre so a real

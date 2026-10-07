@@ -48,7 +48,8 @@ public class DataverseRegistrationReaderTests
 
         // It must NOT appear in the current assemblies while also being reported not found (the G#4b contradiction).
         Assert.Empty(result.FoundAssemblies);
-        Assert.Contains(result.Diagnostics, d => d.Contains("Zava.Plugins") && d.Contains("not found"));
+        Assert.Contains(result.Info, d => d.Contains("Zava.Plugins") && d.Contains("not found"));
+        Assert.Empty(result.Diagnostics); // expected on a first deployment: info, so --strict does not fail on it
     }
 
     [Fact]
@@ -61,7 +62,8 @@ public class DataverseRegistrationReaderTests
             DataverseRegistration.ReadAssembliesState(mock.Object, ["Zava.Plugins"], new JsonSerializerOptions());
 
         Assert.Equal(["Zava.Plugins"], result.FoundAssemblies);
-        Assert.Contains(result.Diagnostics, d => d.Contains("No plugin types"));
+        Assert.Contains(result.Info, d => d.Contains("No plugin types") && d.Contains("Zava.Plugins"));
+        Assert.Empty(result.Diagnostics);
     }
 
     [Fact]
@@ -88,7 +90,8 @@ public class DataverseRegistrationReaderTests
             DataverseRegistration.ReadAssembliesState(mock.Object, ["Found.Plugins", "Missing.Plugins"], new JsonSerializerOptions());
 
         Assert.Equal(["Found.Plugins"], result.FoundAssemblies);
-        Assert.Contains(result.Diagnostics, d => d.Contains("Missing.Plugins") && d.Contains("not found"));
+        Assert.Contains(result.Info, d => d.Contains("Missing.Plugins") && d.Contains("not found"));
+        Assert.DoesNotContain(result.Info, d => d.Contains("'Found.Plugins' not found"));
     }
 
     // --- GetPluginAssembly ---------------------------------------------------------------------
