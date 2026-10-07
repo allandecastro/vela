@@ -5,6 +5,8 @@ using Xunit;
 
 namespace Vela.Cli.Tests;
 
+// Sets the process-global VELA_CONFIG_DIR, so it runs in the non-parallel ConfigDir collection.
+[Collection("ConfigDir")]
 public sealed class ConfigDirPermissionsTests
 {
     [Fact]
