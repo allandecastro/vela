@@ -31,6 +31,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA018](#vela018) | Vela.Reliability | Warning | An asynchronous step's handler writes to the Target (the change is lost) |
 | [VELA019](#vela019) | Vela.Reliability | Warning | A plugin accesses the filesystem (`System.IO.File` / `FileStream` / ...), which the sandbox denies |
 | [VELA020](#vela020) | Vela.Usage | Error | A Create/Update (or bulk) step reaches `Handle(...)` without `FilterOn(...)` |
+| [VELA021](#vela021) | Vela.Usage | Warning | An image capture lists columns but no typed projection can be generated for it |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
 VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
@@ -54,7 +55,8 @@ column itself, `a => a.PrimaryContactId`). The runtime rejects both too, instead
 
 **A `RegisterStep()` chain must end with `.Handle(...)`.** The redesigned builder puts `Handle` last (it returns
 `void`), so a step that stops earlier never binds a handler and would have nothing to run. Any discarded
-`RegisterStep()....;` statement whose value is still a fluent builder is flagged.
+`RegisterStep()....;` statement, or expression body of a void member (`RegisterPluginSteps() => RegisterStep()...;`),
+whose value is still a fluent builder is flagged.
 
 **Fix:** end the chain with `.Handle(handler)`. (Chains captured in a local to be completed later are not flagged.)
 
@@ -67,6 +69,8 @@ second call is flagged. `Disabled()` is exempt (it is an idempotent flag toggle)
 second call as well, so a chain split across locals is still caught at registration.
 
 **Fix:** call the modifier once (combine the arguments if needed, for example a single `FilterOn(a => a.A, a => a.B)`).
+The code fix removes a duplicate `With...` call and, for a duplicate `FilterOn(...)`, moves its columns into the
+first `FilterOn(...)` so no filtering attribute is lost.
 
 ## VELA004
 
@@ -146,7 +150,9 @@ If the two really are unrelated, move one to a different stage/mode, or put it i
 and throw at runtime when none is registered. This is flagged only in the unambiguous case: the handler is an
 instance method bound to exactly one `RegisterStep()` chain in the same class, that chain has no `WithPreImage(...)`,
 and the call uses the default pre-image alias. Lambda handlers, handlers shared across steps, and custom aliases are
-left alone to avoid false positives.
+left alone to avoid false positives. When that chain's `WithPreImage(...)` lists its columns as selectors, a
+compared column missing from the list is flagged as well: its previous value reads as `null`, so it looks changed
+whenever the Target carries it.
 
 **Fix:** add `WithPreImage(...)` (the columns you compare) to the step, or remove the change check.
 
@@ -167,7 +173,8 @@ or load related records with a deep insert / relationship-aware read rather than
 **Mutable plugin state.** A writable field on a plugin / Custom API type is shared state: the Dataverse sandbox
 caches and reuses plugin instances across executions and calls them concurrently, so a mutable field leaks data
 between unrelated operations and races. Only writable fields are flagged; `const`, `readonly` and `static readonly`
-(immutable configuration) are fine.
+(immutable configuration) are fine. Plugin types are recognised by symbol (`Microsoft.Xrm.Sdk.IPlugin`,
+`Vela.Plugin.PluginBase`, `EntityPluginBase<T>`, `Vela.CustomApi.CustomApiBase`), never by a look-alike name.
 
 **Fix:** keep per-execution state in locals or on the execution context; make constants `const` / `readonly`.
 
@@ -207,8 +214,10 @@ Request only the columns you use (the explicit `SelectAll()` on a typed query st
 **Plugin must be `partial`.** The source generator emits types **nested inside the plugin's own class** - a
 `{Handler}Context` for every named handler on a modelled message (any message, any stage), and a
 projection for every explicit image capture (`WithPreImage(a => a.X, ...)` / `WithPostImage(...)`). A nested type needs a second
-`partial` declaration of the class (and of every class that encloses it), so the rule reports a missing `partial`
-up front instead of leaving the build to fail with an obscure `CS0260`.
+`partial` declaration of the class (and of every type that encloses it, whether a class, struct or record), so the
+rule reports a missing `partial` up front instead of leaving the build to fail with an obscure `CS0260`. The rule asks
+the generator itself whether it emits a nested type, so a capture the generator cannot project (see
+[VELA021](#vela021)) does not require `partial`.
 
 **Fix:** add the `partial` modifier to the plugin class (the code fix does this). `vela init` / `vela add` scaffold
 plugins `partial` already. A plugin whose only handlers are lambdas (no generated context) and that captures no
@@ -221,16 +230,20 @@ context (for example `IUpdatePostContext<T>`), its generated typed step context 
 `ILocalPluginContext`. The `Handle(Delegate)` overload (which lets a method group bind the generated context via its
 natural type) is permissive at compile time, so this restores the guarantee the specific
 `Handle(Action<IXxxContext>)` overload gave: a context for a different message or stage (or an unrelated type) is
-reported. Scoped to the guided `Create` / `Update` / `Delete` path.
+reported. Scoped to the guided `Create` / `Update` / `Delete` path. On every path, a handler that does not take
+exactly one parameter or does not return `void` is reported too: `Handle(Delegate)` compiles it, and the step builder
+rejects it at registration.
 
-**Fix:** give the handler the step's context (or its generated `{Handler}Context`); the code fix corrects the type.
+**Fix:** give the handler the step's context (or its generated `{Handler}Context`); the code fix corrects the type
+(written as short as the file's `using`s allow).
 
 ## VELA016
 
 **Typed-context handler must bind a single step.** The generated typed step context is named after the handler
 (`{Handler}Context`), so binding one handler on two image-capturing steps would need two contexts under the same
 name. Use a distinct handler per image-capturing step (or read images via `ctx.PostImageAs<T>()` on the plain
-context if you must share a handler).
+context if you must share a handler). Only a class's own steps are compared: two nested plugins in one container
+class may each have a handler with the same name.
 
 ## VELA017
 
@@ -274,6 +287,18 @@ messages) reaching `.Handle(...)`: the permissive `OnMessage` path offers no `Fi
 `OnCreate()` / `OnUpdate()` / ... trigger instead. A chain split across a local variable is not analyzed (it may
 have been filtered before the split).
 
+## VELA021
+
+**Typed image projection not generated.** Reported by the generator (a warning, on the `WithPreImage` /
+`WithPostImage` call) when a capture lists columns but no projection can be emitted for it: the image alias is not a
+compile-time constant, a selector does not read a column property of the entity (`a => a.GetHashCode()`), or the
+trigger of a chain that starts at `RegisterStep()` is not constant (`OnMessage(variable)`). Without it the only symptom
+is a `CS0246` on the missing `{Handler}_{Pre|Post}Image` type. Nested paths, `Entity` members and relationships are
+already errors of VELA001 / VELA010 and are not reported again; a chain split across locals is not reported.
+
+**Fix:** use a constant alias and column selectors, or read the full image with `ctx.GetPreImage<T>()` /
+`ctx.GetPostImage<T>()`.
+
 ## Typed image projection generator
 
 The same bundled `Vela.Analyzers` assembly also contains an incremental **source generator**
@@ -300,8 +325,11 @@ Key points:
   permissive `OnMessage("...")` / `OnMessage<TMarker>()` (a literal message is capitalized into the segment; a
   non-literal message is not statically known, so the step is skipped).
 - **Opt-in and additive.** A capture with no explicit columns (`WithPreImage()`) keeps the full early-bound
-  entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it and
-  you keep the untyped image.
+  entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it, you
+  keep the untyped image, and [VELA021](#vela021) says why. A column property without `[AttributeLogicalName]` is
+  projected under its lower-cased name, as the runtime resolves it.
+- **Any containing type.** The generated part repeats each containing type's kind and type parameters, so a generic
+  plugin or a plugin nested in a `struct` / `record` works (each must be `partial`).
 - **Explicit widening to the entity.** Each projection also carries an **explicit** cast to its entity
   (`(Account)ctx.PreImage`) for the case where a service needs the whole image. It is lossless (the projection
   retains the source image, so `Id`, logical name and every attribute survive) and equivalent to
