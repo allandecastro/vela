@@ -66,7 +66,7 @@ internal sealed record StepConfig(
     public static StepConfig ForMessage(Message message, Stage stage) => new(
         ConfigType(message.Name, stage),
         " where TEntity : Entity",
-        $"Config for a {message.Name} step at {stage}. Handle(...) is last; With* modifiers are order-free.",
+        $"Config for the {message.Name} step at {stage}. Handle(...) is last; With* modifiers are order-free.",
         message.FilterOn,
         message.HasPreImage(stage),
         message.HasPostImage(stage),
