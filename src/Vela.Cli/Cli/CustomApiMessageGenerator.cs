@@ -16,8 +16,8 @@ public sealed record CustomApiParameter(string Name, int FieldType, bool IsOptio
 /// <summary>
 /// A Custom API message to generate typed Request/Response classes for. <paramref name="AllowedStepType"/>,
 /// <paramref name="IsPrivate"/> and <paramref name="BoundEntityLogicalName"/> drive the Phase 3c compile-time
-/// registrability of the generated <c>On&lt;Message&gt;()</c> step extension (see
-/// <c>.context/phase3c-customapi-registrability.md</c>). They default to a permissive, global shape so callers
+/// registrability of the generated <c>On&lt;Message&gt;()</c> step extension (which stages/modes it offers, which
+/// entity it applies to, or whether it is emitted at all). They default to a permissive, global shape so callers
 /// that do not care keep working.
 /// </summary>
 /// <param name="UniqueName">The Custom API unique name (its message name).</param>
@@ -171,8 +171,7 @@ public static class CustomApiMessageGenerator
         return sb.ToString();
     }
 
-    // Phase 3c: emit a registrability-gated On<Message>() step extension for the Custom API (see
-    // .context/phase3c-customapi-registrability.md). A bound API (boundentitylogicalname set) constrains the
+    // Phase 3c: emit a registrability-gated On<Message>() step extension for the Custom API. A bound API (boundentitylogicalname set) constrains the
     // extension to Vela.Steps.IStepTrigger<BoundEntity> for compile-time entity applicability; a global one emits a generic
     // On<Message><TEntity>(). An AsyncOnly API (allowedcustomprocessingsteptype == 1) returns an async-only stage
     // (no .Sync()); a None (0) or private API emits no extension at all (only a comment), so the blessed path does

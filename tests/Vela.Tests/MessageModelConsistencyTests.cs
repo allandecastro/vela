@@ -18,7 +18,8 @@ namespace Vela.Tests
     /// step interface, the <c>On{Msg}()</c> builder method, and — critically — the <c>BuildTypedContext</c> arm.
     /// Adding a message but forgetting one arm previously degraded silently (the handler received the plain
     /// <see cref="ILocalPluginContext"/> instead of its typed context, with no compile error); these tests turn
-    /// that silent divergence into a red test. See <c>.context/review/message-model.md</c>.
+    /// that silent divergence into a red test. The step-builder part (<c>StepApi.cs</c>, <c>StepBuilder.Impl.cs</c>)
+    /// is generated from <c>tools/codegen/Vela.StepApiGen/MessageModel.cs</c>; the other lists are hand-written.
     /// </summary>
     public sealed class MessageModelConsistencyTests
     {

@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Vela.Tests
 {
-    // Typed-requests design (.context/typed-requests-design.md): a Vela-owned generic request
+    // Typed-requests design: a Vela-owned generic request
     // (Vela.Messages.CreateRequest<TEntity>) exposes an early-bound ctx.Request.Target end-to-end through the
     // in-memory pipeline - the single typed accessor for the primary record. It rides the existing
     // OnMessage(...).Handler<TRequest>() path.

@@ -26,10 +26,18 @@ these, in this order:
    `I<Message>Stages<TEntity>` stage selector, the stage/mode/config interfaces and their `StepBuilder<TEntity>`
    implementations (including the terminal `Handle(Action<I<Message>PreContext/PostContext<TEntity>>)` and the
    registrar delegation) are **generated** into `src/Vela.Plugins/Steps/StepApi.cs` and
-   `src/Vela.Plugins/Steps/StepBuilder.Impl.cs` (both committed). Add the message to the step-builder code
-   generator's message list along with its filtering and image rules (which stages allow a pre/post image) and
-   regenerate the two files. The generator lives under `.context/` (maintainer tooling; only its emitted `.cs` is
-   committed). Do not hand-edit the generated files - they are overwritten on the next run.
+   `src/Vela.Plugins/Steps/StepBuilder.Impl.cs` (both committed). Add **one line** to the generator's model,
+   `tools/codegen/Vela.StepApiGen/MessageModel.cs`, stating whether the message supports `FilterOn(...)` and which
+   images it allows (`Images.Pre`, `Images.Post`, `Images.PreAndPost`; pre-images are offered at PreOperation and
+   PostOperation, post-images at PostOperation only, never at PreValidation), for example
+   `new("QualifyLead"),` or `new("Update", FilterOn: true, Images: Images.PreAndPost),`. Then regenerate:
+
+   ```bash
+   dotnet run --project tools/codegen/Vela.StepApiGen
+   ```
+
+   Do not hand-edit the generated files - they are overwritten on the next run, and CI runs the generator with
+   `-- --check`, which fails the build when the committed files differ from its output.
 3. **`src/Vela.Plugins/Plugin/PluginBaseOfTEntity.cs`** - a `case` in `BuildTypedContext(message, stage, ctx)` that
    builds `<Message>PostContext` for a PostOperation step and `<Message>PreContext` otherwise, so the runtime hands
    the handler the stage-correct typed argument.
@@ -49,6 +57,6 @@ these, in this order:
 
 ## Deprecated messages are intentionally not modelled
 
-`SetState`, `SetStateDynamicEntity` and `Assign` are deprecated by the platform. They deliberately get **no** typed
+`SetState` and `SetStateDynamicEntity` are deprecated by the platform. They deliberately get **no** typed
 method: they are not in `KnownMessages` and have no `I<Message>Pre`/`PostContext`, so they render `OnMessage("...")`. Update
-`statecode` / `statuscode` (or `ownerid`) through an `Update` instead. Do not add typed support for them.
+`statecode` / `statuscode` through an `Update` instead. (`Assign` is supported: use `OnAssign()`.) Do not add typed support for them.
