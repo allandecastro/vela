@@ -1,0 +1,139 @@
+{
+  "$comment": "The CLI/framework contract, pinned on tests/ContractPluginFixture. Vela.Tests checks that the framework declares exactly this (FrameworkManifestScanner and the typed definitions); Vela.Cli.Tests checks that the CLI scanner reads exactly this from the packed fixture. Values are what gets deployed: stage 10 PreValidation, 20 PreOperation, 40 PostOperation; mode 0 Sync, 1 Async; supportedDeployment 0 ServerOnly, 2 Both; bindingType 0 Global, 1 Entity; allowedCustomProcessingStepType 2 SyncAndAsync; parameter types are Dataverse Custom API type labels. Attribute lists are sorted; images and parameters are sorted by alias/name.",
+  "steps": [
+    {
+      "pluginType": "ContractPluginFixture.AccountContractPlugin",
+      "stepKey": "account-guard-delete",
+      "message": "Delete",
+      "entity": "account",
+      "stage": 10,
+      "mode": 0,
+      "rank": 1,
+      "filteringAttributes": [],
+      "preImages": [],
+      "postImages": [],
+      "impersonatingUserId": "",
+      "enabled": true,
+      "unsecureConfig": "",
+      "secureConfigName": "",
+      "supportedDeployment": 0
+    },
+    {
+      "pluginType": "ContractPluginFixture.AccountContractPlugin",
+      "stepKey": "account-normalize",
+      "message": "Update",
+      "entity": "account",
+      "stage": 20,
+      "mode": 0,
+      "rank": 5,
+      "filteringAttributes": [ "name", "telephone1" ],
+      "preImages": [ { "alias": "PreImage", "attributes": [ "name" ] } ],
+      "postImages": [],
+      "impersonatingUserId": "",
+      "enabled": true,
+      "unsecureConfig": "",
+      "secureConfigName": "",
+      "supportedDeployment": 0
+    },
+    {
+      "pluginType": "ContractPluginFixture.AccountContractPlugin",
+      "stepKey": "account-sync",
+      "message": "Update",
+      "entity": "account",
+      "stage": 40,
+      "mode": 1,
+      "rank": 1,
+      "filteringAttributes": [ "revenue" ],
+      "preImages": [ { "alias": "Before", "attributes": [ "name", "revenue" ] } ],
+      "postImages": [ { "alias": "After", "attributes": [ "revenue" ] } ],
+      "impersonatingUserId": "6f1c2a52-0d3b-4f5e-9a41-2b7c8d9e0f11",
+      "enabled": true,
+      "unsecureConfig": "{\"endpoint\":\"https://erp.example\"}",
+      "secureConfigName": "ContractErpKey",
+      "supportedDeployment": 0
+    },
+    {
+      "pluginType": "ContractPluginFixture.AccountContractPlugin",
+      "stepKey": "dv-54e8605bbf31",
+      "message": "Create",
+      "entity": "account",
+      "stage": 40,
+      "mode": 0,
+      "rank": 1,
+      "filteringAttributes": [ "name" ],
+      "preImages": [],
+      "postImages": [ { "alias": "PostImage", "attributes": [ "name", "telephone1" ] } ],
+      "impersonatingUserId": "",
+      "enabled": false,
+      "unsecureConfig": "",
+      "secureConfigName": "",
+      "supportedDeployment": 2
+    },
+    {
+      "pluginType": "ContractPluginFixture.ContactContractPlugin",
+      "stepKey": "contact-associate",
+      "message": "Associate",
+      "entity": "",
+      "stage": 40,
+      "mode": 0,
+      "rank": 2,
+      "filteringAttributes": [],
+      "preImages": [],
+      "postImages": [],
+      "impersonatingUserId": "",
+      "enabled": true,
+      "unsecureConfig": "",
+      "secureConfigName": "",
+      "supportedDeployment": 0
+    }
+  ],
+  "customApis": [
+    {
+      "pluginType": "ContractPluginFixture.ExportContactsApi",
+      "uniqueName": "contract_ExportContacts",
+      "isFunction": true,
+      "bindingType": 0,
+      "boundEntity": "",
+      "isPrivate": true,
+      "executePrivilegeName": "prvReadContact",
+      "allowedCustomProcessingStepType": 0,
+      "workflowSdkStepEnabled": false,
+      "requestParameters": [
+        { "name": "Owner", "type": "EntityReference", "isOptional": false, "logicalEntityName": "systemuser" },
+        { "name": "Ratio", "type": "Float", "isOptional": true, "logicalEntityName": "" },
+        { "name": "Seed", "type": "EntityCollection", "isOptional": true, "logicalEntityName": "contact" },
+        { "name": "Tags", "type": "StringArray", "isOptional": true, "logicalEntityName": "" }
+      ],
+      "responseProperties": [
+        { "name": "First", "type": "Entity", "logicalEntityName": "contact" },
+        { "name": "Rows", "type": "EntityCollection", "logicalEntityName": "" },
+        { "name": "Warnings", "type": "StringArray", "logicalEntityName": "" }
+      ]
+    },
+    {
+      "pluginType": "ContractPluginFixture.ScoreAccountApi",
+      "uniqueName": "contract_ScoreAccount",
+      "isFunction": false,
+      "bindingType": 1,
+      "boundEntity": "account",
+      "isPrivate": false,
+      "executePrivilegeName": "",
+      "allowedCustomProcessingStepType": 2,
+      "workflowSdkStepEnabled": true,
+      "requestParameters": [
+        { "name": "AsOf", "type": "DateTime", "isOptional": true, "logicalEntityName": "" },
+        { "name": "Budget", "type": "Money", "isOptional": false, "logicalEntityName": "" },
+        { "name": "CorrelationKey", "type": "Guid", "isOptional": false, "logicalEntityName": "" },
+        { "name": "Factor", "type": "Decimal", "isOptional": false, "logicalEntityName": "" },
+        { "name": "Reason", "type": "String", "isOptional": false, "logicalEntityName": "" },
+        { "name": "Strict", "type": "Boolean", "isOptional": false, "logicalEntityName": "" },
+        { "name": "Tier", "type": "Picklist", "isOptional": false, "logicalEntityName": "" },
+        { "name": "Weight", "type": "Integer", "isOptional": false, "logicalEntityName": "" }
+      ],
+      "responseProperties": [
+        { "name": "Explanation", "type": "String", "logicalEntityName": "" },
+        { "name": "Score", "type": "Integer", "logicalEntityName": "" }
+      ]
+    }
+  ]
+}
