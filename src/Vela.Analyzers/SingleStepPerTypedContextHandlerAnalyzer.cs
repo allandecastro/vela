@@ -17,7 +17,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class SingleStepPerTypedContextHandlerAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA016";
+        public const string DiagnosticId = DiagnosticIds.SingleStepPerTypedContextHandler;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -54,20 +54,16 @@ namespace Vela.Analyzers
             Dictionary<string, List<ExpressionSyntax>> byHandler = new Dictionary<string, List<ExpressionSyntax>>(System.StringComparer.Ordinal);
             foreach (InvocationExpressionSyntax invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (invocation.Expression is not MemberAccessExpressionSyntax member ||
-                    member.Name.Identifier.ValueText != "Handle" ||
-                    invocation.ArgumentList.Arguments.Count != 1)
+                // Only this class's own steps: the generated context nests in the class that registers the step, so a
+                // nested plugin's handlers live in a different scope and never collide with this one's (a container
+                // class holding two plugins that both use OnUpdate is fine).
+                if (!FluentStep.IsHandleCall(invocation, out MemberAccessExpressionSyntax member, out ExpressionSyntax argument) ||
+                    invocation.FirstAncestorOrSelf<ClassDeclarationSyntax>() != declaration)
                 {
                     continue;
                 }
 
-                ExpressionSyntax argument = invocation.ArgumentList.Arguments[0].Expression;
-                string? handlerName = argument switch
-                {
-                    IdentifierNameSyntax id => id.Identifier.ValueText,
-                    MemberAccessExpressionSyntax ma => ma.Name.Identifier.ValueText,
-                    _ => null, // lambda -> no generated context
-                };
+                string? handlerName = FluentStep.MethodGroupName(argument); // a lambda -> no generated context
 
                 if (handlerName is null || !ChainCapturesTypedImage(member.Expression) ||
                     !FluentStep.IsFluentMethod(context.SemanticModel, invocation, fluent, context.CancellationToken))
@@ -102,26 +98,12 @@ namespace Vela.Analyzers
         // at least one column-selector lambda), i.e. a generated typed context would be emitted for this step.
         private static bool ChainCapturesTypedImage(ExpressionSyntax? receiver)
         {
-            for (ExpressionSyntax? current = receiver; current is not null;)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
+                if ((call.MethodName == "WithPreImage" || call.MethodName == "WithPostImage") &&
+                    call.Arguments.Any(a => a.Expression is LambdaExpressionSyntax))
                 {
-                    string name = ma.Name.Identifier.ValueText;
-                    if ((name == "WithPreImage" || name == "WithPostImage") &&
-                        inv.ArgumentList.Arguments.Any(a => a.Expression is LambdaExpressionSyntax))
-                    {
-                        return true;
-                    }
-
-                    current = ma.Expression;
-                }
-                else if (current is MemberAccessExpressionSyntax bare)
-                {
-                    current = bare.Expression;
-                }
-                else
-                {
-                    break;
+                    return true;
                 }
             }
 

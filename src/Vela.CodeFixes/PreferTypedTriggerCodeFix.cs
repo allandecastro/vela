@@ -33,7 +33,7 @@ namespace Vela.CodeFixes
             ["merge"] = "OnMerge",
         };
 
-        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("VELA006");
+        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(DiagnosticIds.PreferTypedMessage);
 
         public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 

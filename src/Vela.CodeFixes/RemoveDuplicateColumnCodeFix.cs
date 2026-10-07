@@ -14,7 +14,7 @@ namespace Vela.CodeFixes
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(RemoveDuplicateColumnCodeFix)), Shared]
     public sealed class RemoveDuplicateColumnCodeFix : CodeFixProvider
     {
-        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("VELA005");
+        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(DiagnosticIds.DuplicateColumn);
 
         public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 

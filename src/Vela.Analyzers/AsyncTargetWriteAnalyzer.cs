@@ -21,7 +21,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class AsyncTargetWriteAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA018";
+        public const string DiagnosticId = DiagnosticIds.AsyncTargetWrite;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -163,42 +163,12 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                bool isAsync = SpineHasCall(handleMember.Expression, "Async");
+                bool isAsync = FluentStep.SpineHasCall(handleMember.Expression, "Async");
                 (int Chains, bool IsAsync) existing = result.TryGetValue(bound, out (int Chains, bool IsAsync) e) ? e : (0, false);
                 result[bound] = (existing.Chains + 1, existing.IsAsync || isAsync);
             }
 
             return result;
-        }
-
-        private static bool SpineHasCall(ExpressionSyntax? receiver, string methodName)
-        {
-            ExpressionSyntax? current = receiver;
-            while (current is not null)
-            {
-                switch (current)
-                {
-                    case InvocationExpressionSyntax inv when inv.Expression is MemberAccessExpressionSyntax ma:
-                        if (ma.Name.Identifier.ValueText == methodName)
-                        {
-                            return true;
-                        }
-
-                        current = ma.Expression;
-                        break;
-                    case MemberAccessExpressionSyntax ma2:
-                        current = ma2.Expression;
-                        break;
-                    case ParenthesizedExpressionSyntax paren:
-                        current = paren.Expression;
-                        break;
-                    default:
-                        current = null;
-                        break;
-                }
-            }
-
-            return false;
         }
     }
 }

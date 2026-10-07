@@ -20,6 +20,8 @@ namespace Vela.Steps
     public interface IFakeStep : IFluentStep
     {
         IFakeStep WithExecutionOrder(int order);
+        IFakeStep FilterOn(params string[] columns);
+        IFakeStep FilterOn(params System.Func<Demo.Account, object>[] columns);
         void Handle();
     }
 }
@@ -27,6 +29,7 @@ namespace Demo
 {
     using Vela.Steps;
     public class Plugin { protected IFakeStep RegisterStep() => null!; }
+    public class Account { public string Name { get; set; } public string Email { get; set; } }
     public class Use : Plugin { public void M() { BODY } }
 }";
 
@@ -82,5 +85,60 @@ namespace Demo
         DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.ImageStageAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
             .WithLocation(0).WithArguments("A pre-image", "Create", "there is no prior row state before a create");
         await VerifyImage.VerifyCodeFixAsync(before, expected, after);
+    }
+
+    [Fact]
+    public async Task Merges_a_duplicate_FilterOn_into_the_first_instead_of_dropping_its_columns_VELA003()
+    {
+        // A-31: dropping the second FilterOn lost its columns; they move into the first one (a repeat is skipped).
+        string before = DupHarness.Replace("BODY", "RegisterStep().FilterOn(\"name\").WithExecutionOrder(1).{|#0:FilterOn|}(\"email\", \"name\").Handle();");
+        string after = DupHarness.Replace("BODY", "RegisterStep().FilterOn(\"name\", \"email\").WithExecutionOrder(1).Handle();");
+        DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments("FilterOn");
+        await VerifyDup.VerifyCodeFixAsync(before, expected, after);
+    }
+
+    [Fact]
+    public async Task Merges_every_duplicate_FilterOn_in_source_order_VELA003()
+    {
+        string before = DupHarness.Replace("BODY", "RegisterStep().FilterOn(\"a\").{|#0:FilterOn|}(\"b\").{|#1:FilterOn|}(\"c\").Handle();");
+        string after = DupHarness.Replace("BODY", "RegisterStep().FilterOn(\"a\", \"b\", \"c\").Handle();");
+        DiagnosticResult first = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments("FilterOn");
+        DiagnosticResult second = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(1).WithArguments("FilterOn");
+        await VerifyDup.VerifyCodeFixAsync(before, new[] { first, second }, after);
+    }
+
+    [Fact]
+    public async Task Does_not_merge_a_column_already_selected_under_another_spelling_VELA003()
+    {
+        // a => a.Name and x => (object)x.Name select the same column; keeping both would introduce VELA005.
+        string before = DupHarness.Replace("BODY", "RegisterStep().FilterOn(a => a.Name).{|#0:FilterOn|}(x => (object)x.Name, x => x.Email).Handle();");
+        string after = DupHarness.Replace("BODY", "RegisterStep().FilterOn(a => a.Name, x => x.Email).Handle();");
+        DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments("FilterOn");
+        await VerifyDup.VerifyCodeFixAsync(before, expected, after);
+    }
+
+    [Fact]
+    public async Task Does_not_merge_a_constant_equal_to_an_already_listed_column_VELA003()
+    {
+        string before = DupHarness.Replace("BODY", "const string Column = \"name\"; RegisterStep().FilterOn(\"name\").{|#0:FilterOn|}(Column).Handle();");
+        string after = DupHarness.Replace("BODY", "const string Column = \"name\"; RegisterStep().FilterOn(\"name\").Handle();");
+        DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments("FilterOn");
+        await VerifyDup.VerifyCodeFixAsync(before, expected, after);
+    }
+
+    [Fact]
+    public async Task Compares_selector_columns_through_casts_and_parentheses_when_merging_VELA003()
+    {
+        // (y) => (y.Email) and z => z.Email as object are Email; a => a.Name.Length is not a plain column, kept by text.
+        string before = DupHarness.Replace("BODY", "RegisterStep().FilterOn((y) => (y.Email)).{|#0:FilterOn|}(z => z.Email as object, a => a.Name.Length, a => a.Name.Length).Handle();");
+        string after = DupHarness.Replace("BODY", "RegisterStep().FilterOn((y) => (y.Email), a => a.Name.Length).Handle();");
+        DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments("FilterOn");
+        await VerifyDup.VerifyCodeFixAsync(before, expected, after);
     }
 }

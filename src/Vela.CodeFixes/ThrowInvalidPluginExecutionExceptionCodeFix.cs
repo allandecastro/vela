@@ -15,7 +15,7 @@ namespace Vela.CodeFixes
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(ThrowInvalidPluginExecutionExceptionCodeFix)), Shared]
     public sealed class ThrowInvalidPluginExecutionExceptionCodeFix : CodeFixProvider
     {
-        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("VELA012");
+        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(DiagnosticIds.PluginExceptionType);
 
         public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 

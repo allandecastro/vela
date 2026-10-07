@@ -18,7 +18,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class RelationshipColumnSelectorAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA010";
+        public const string DiagnosticId = DiagnosticIds.RelationshipColumnSelector;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -97,31 +97,7 @@ namespace Vela.Analyzers
         }
 
         private static ExpressionSyntax? UnwrapLambdaBody(LambdaExpressionSyntax lambda)
-        {
-            if (lambda.Body is not ExpressionSyntax body)
-            {
-                return null;
-            }
-
-            // a => (object)a.Nav / a => a.Nav as X — see through a leading cast (CastExpression) or `as`
-            // (an AsExpression BinaryExpression) to the member access.
-            while (true)
-            {
-                switch (body)
-                {
-                    case CastExpressionSyntax cast:
-                        body = cast.Expression;
-                        continue;
-                    case BinaryExpressionSyntax asExpr when asExpr.IsKind(SyntaxKind.AsExpression):
-                        body = asExpr.Left;
-                        continue;
-                }
-
-                break;
-            }
-
-            return body;
-        }
+            => lambda.Body is ExpressionSyntax body ? FluentStep.UnwrapConversions(body) : null;
 
         private static bool IsRelationshipNav(IPropertySymbol property) =>
             property.GetAttributes().Any(a => a.AttributeClass?.Name == "RelationshipSchemaNameAttribute");

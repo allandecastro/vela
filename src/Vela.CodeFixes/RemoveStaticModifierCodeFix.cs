@@ -16,7 +16,7 @@ namespace Vela.CodeFixes
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(RemoveStaticModifierCodeFix)), Shared]
     public sealed class RemoveStaticModifierCodeFix : CodeFixProvider
     {
-        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("VELA004");
+        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(DiagnosticIds.StaticHandler);
 
         public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 

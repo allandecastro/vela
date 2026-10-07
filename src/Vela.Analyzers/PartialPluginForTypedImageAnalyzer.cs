@@ -8,17 +8,17 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Vela.Analyzers
 {
     /// <summary>
-    /// Flags an entity plugin that declares a typed image capture (<c>WithPreImage(...)</c> / <c>WithPostImage(...)</c>
-    /// with column selectors) but whose class is not <c>partial</c>. The source generator emits the projection type as
-    /// a nested type inside the plugin's own class (so the handler can read it unqualified via
-    /// <c>ctx.PostImageAs&lt;OnAccountUpdated_PostImage&gt;()</c>), which needs a second <c>partial</c> declaration of
-    /// the class. Without <c>partial</c> the build fails with an obscure CS0260; this reports it up front, and the
-    /// code fix adds the modifier.
+    /// Flags an entity plugin into which the source generator nests a type (a <c>{Handler}Context</c> for a named
+    /// handler, or a typed image projection for a <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c> capture) but
+    /// whose class - or a type enclosing it - is not <c>partial</c>. The generated part reopens each of those types,
+    /// so without <c>partial</c> the build fails with an obscure CS0260; this reports it up front, and the code fix
+    /// adds the modifier. The decision is the generator's own (<see cref="ImageProjectionGenerator.EmitsNestedType"/>),
+    /// so <c>partial</c> is asked for exactly when something is generated.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class PartialPluginForTypedImageAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA014";
+        public const string DiagnosticId = DiagnosticIds.PartialPluginForTypedImage;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -37,32 +37,37 @@ namespace Vela.Analyzers
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             context.RegisterCompilationStartAction(start =>
             {
-                INamedTypeSymbol? fluent = start.Compilation.GetTypeByMetadataName("Vela.Steps.IFluentStep");
-                if (fluent is null)
+                if (start.Compilation.GetTypeByMetadataName(FluentStep.FluentStepMetadataName) is null)
                 {
                     return;
                 }
 
-                start.RegisterSyntaxNodeAction(nodeContext => AnalyzeClass(nodeContext, fluent), SyntaxKind.ClassDeclaration);
+                // A plugin is a class, but the types enclosing it can be any kind the generator reopens.
+                start.RegisterSyntaxNodeAction(
+                    AnalyzeType,
+                    SyntaxKind.ClassDeclaration,
+                    SyntaxKind.StructDeclaration,
+                    SyntaxKind.RecordDeclaration,
+                    SyntaxKind.RecordStructDeclaration,
+                    SyntaxKind.InterfaceDeclaration);
             });
         }
 
-        private static void AnalyzeClass(SyntaxNodeAnalysisContext context, INamedTypeSymbol fluent)
+        private static void AnalyzeType(SyntaxNodeAnalysisContext context)
         {
-            ClassDeclarationSyntax declaration = (ClassDeclarationSyntax)context.Node;
+            TypeDeclarationSyntax declaration = (TypeDeclarationSyntax)context.Node;
 
-            // Already partial -> the generator's nested part compiles fine against this class, nothing to report here.
+            // Already partial -> the generator's nested part compiles fine against this type, nothing to report here.
             if (declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
             {
                 return;
             }
 
-            // The generated projection nests inside the plugin class AND every enclosing class, so each of them must
-            // be 'partial'. Report on THIS class when it is the plugin that captures a typed image, or when it
-            // (lexically) encloses one - so every class in the chain is flagged, each on its own node (a local
-            // diagnostic, which the fix can act on). Reporting only the plugin class would leave a non-partial outer
-            // class failing the build with an obscure CS0260.
-            string? plugin = FindTypedImagePlugin(declaration, context.SemanticModel, fluent, context.CancellationToken);
+            // The generated part nests inside the plugin class AND every enclosing type, so each of them must be
+            // 'partial'. Report on THIS type when it is the plugin the generator emits into, or when it (lexically)
+            // encloses one - so every type in the chain is flagged, each on its own node (a local diagnostic, which
+            // the fix can act on).
+            string? plugin = FindGeneratedPlugin(declaration, context.SemanticModel, context.CancellationToken);
             if (plugin is null)
             {
                 return;
@@ -71,161 +76,20 @@ namespace Vela.Analyzers
             context.ReportDiagnostic(Diagnostic.Create(Rule, declaration.Identifier.GetLocation(), declaration.Identifier.ValueText, plugin));
         }
 
-        // The name of the plugin whose generated projection nests inside this class: the class itself when it is a
-        // typed-image plugin, otherwise the first nested (any depth) typed-image plugin it encloses. null when none,
-        // so this class does not need to be partial.
-        private static string? FindTypedImagePlugin(ClassDeclarationSyntax declaration, SemanticModel model, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
+        // The name of the plugin class (this type or one it encloses, at any depth) that the generator emits a nested
+        // type into, or null when it emits none, so this type does not need to be partial.
+        private static string? FindGeneratedPlugin(TypeDeclarationSyntax declaration, SemanticModel model, System.Threading.CancellationToken cancellationToken)
         {
-            if (model.GetDeclaredSymbol(declaration, cancellationToken) is INamedTypeSymbol self &&
-                DerivesFromEntityPluginBase(self) &&
-                GeneratesNestedType(declaration, model, fluent, cancellationToken))
+            foreach (InvocationExpressionSyntax invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                return self.Name;
-            }
-
-            foreach (ClassDeclarationSyntax nested in declaration.DescendantNodes().OfType<ClassDeclarationSyntax>())
-            {
-                if (model.GetDeclaredSymbol(nested, cancellationToken) is INamedTypeSymbol nestedSymbol &&
-                    DerivesFromEntityPluginBase(nestedSymbol) &&
-                    GeneratesNestedType(nested, model, fluent, cancellationToken))
+                if (ImageProjectionGenerator.EmitsNestedType(invocation, model, cancellationToken) &&
+                    invocation.FirstAncestorOrSelf<ClassDeclarationSyntax>() is { } plugin)
                 {
-                    return nestedSymbol.Name;
+                    return plugin.Identifier.ValueText;
                 }
             }
 
             return null;
-        }
-
-        // The generator nests a type inside the plugin class - a {Handler}Context for any named handler on a modelled
-        // trigger, and a projection for any typed image capture - so either forces the plugin to be partial.
-        private static bool GeneratesNestedType(ClassDeclarationSyntax declaration, SemanticModel model, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
-            => DeclaresTypedImageCapture(declaration, model, fluent, cancellationToken)
-                || DeclaresNamedHandlerContext(declaration, model, fluent, cancellationToken);
-
-        // A named .Handle(OnX) on a step whose trigger the generator maps to a modelled message (On{Msg}() or
-        // On<TRequest>(), but not the permissive OnMessage(...)) produces a nested {Handler}Context. Mirrors the
-        // generator's ExtractHandler conditions.
-        private static bool DeclaresNamedHandlerContext(ClassDeclarationSyntax declaration, SemanticModel model, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
-        {
-            foreach (InvocationExpressionSyntax invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
-            {
-                if (invocation.Expression is not MemberAccessExpressionSyntax member ||
-                    member.Name.Identifier.ValueText != "Handle" ||
-                    invocation.ArgumentList.Arguments.Count != 1)
-                {
-                    continue;
-                }
-
-                // Method group only (a lambda has no name, so no context is generated).
-                if (invocation.ArgumentList.Arguments[0].Expression is not (IdentifierNameSyntax or MemberAccessExpressionSyntax))
-                {
-                    continue;
-                }
-
-                if (FluentStep.IsFluentMethod(model, invocation, fluent, cancellationToken) &&
-                    ChainGeneratesContext(member.Expression, model))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        // Mirrors the generator: a context is generated for a named handler on the typed On&lt;TRequest&gt;() path, or on
-        // any On{Msg}() whose modelled Vela.Context.{Msg}{Pre|Post}Context type exists. The permissive OnMessage(...)
-        // and generated On{X} Custom API extensions (no matching context type) never generate one.
-        private static bool ChainGeneratesContext(ExpressionSyntax? receiver, SemanticModel model)
-        {
-            string? message = null;
-            bool typed = false, postOperation = false;
-            for (ExpressionSyntax? current = receiver; current is not null;)
-            {
-                if (current is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax ma)
-                {
-                    string name = ma.Name.Identifier.ValueText;
-                    if (name == "On" && ma.Name is GenericNameSyntax)
-                    {
-                        typed = true;
-                    }
-                    else if (name == "PostOperation")
-                    {
-                        postOperation = true;
-                    }
-                    else if (message is null && name.Length > 2 && name.StartsWith("On", System.StringComparison.Ordinal) &&
-                        name != "OnMessage" && name != "OnAsyncOnly" && char.IsUpper(name[2]))
-                    {
-                        message = name.Substring(2);
-                    }
-
-                    current = ma.Expression;
-                }
-                else if (current is MemberAccessExpressionSyntax bare)
-                {
-                    current = bare.Expression;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            if (typed)
-            {
-                return true; // MessagePre/PostContext always exist.
-            }
-
-            if (message is null)
-            {
-                return false;
-            }
-
-            string suffix = postOperation ? "Post" : "Pre";
-            return model.Compilation.GetTypeByMetadataName($"Vela.Context.{message}{suffix}Context`1") is not null;
-        }
-
-        private static bool DerivesFromEntityPluginBase(INamedTypeSymbol symbol)
-        {
-            for (INamedTypeSymbol? t = symbol.BaseType; t is not null; t = t.BaseType)
-            {
-                if (t.Name == "EntityPluginBase")
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool DeclaresTypedImageCapture(ClassDeclarationSyntax declaration, SemanticModel model, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
-        {
-            foreach (InvocationExpressionSyntax invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
-            {
-                if (invocation.Expression is not MemberAccessExpressionSyntax member)
-                {
-                    continue;
-                }
-
-                string name = member.Name.Identifier.ValueText;
-                if (name != "WithPreImage" && name != "WithPostImage")
-                {
-                    continue;
-                }
-
-                // A column-selector lambda is what triggers a generated projection; a capture with no selectors keeps
-                // the full entity and generates nothing (so it does not force partial).
-                if (!invocation.ArgumentList.Arguments.Any(a => a.Expression is LambdaExpressionSyntax))
-                {
-                    continue;
-                }
-
-                if (FluentStep.IsFluentMethod(model, invocation, fluent, cancellationToken))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
     }
 }

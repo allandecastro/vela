@@ -60,7 +60,7 @@ namespace Demo
 ";
 
     [Fact]
-    public async Task Replaces_a_wrong_context_with_the_step_message_context()
+    public async Task Replaces_a_wrong_context_with_the_simplified_step_message_context()
     {
         string before = Harness + @"
     public sealed class P : EntityPluginBase<Account>
@@ -77,7 +77,7 @@ namespace Demo
     {
         protected override void RegisterPluginSteps()
             => RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnWrong);
-        private void OnWrong(global::Vela.Context.IUpdatePostContext<global::Demo.Account> ctx) { }
+        private void OnWrong(IUpdatePostContext<Account> ctx) { }
     }
 }
 ";
@@ -124,7 +124,7 @@ namespace Demo
     using Vela.Context;
     public sealed partial class P
     {
-        private void OnWrong(global::Vela.Context.IUpdatePostContext<global::Demo.Account> ctx) { }
+        private void OnWrong(IUpdatePostContext<Account> ctx) { }
     }
 }
 ";

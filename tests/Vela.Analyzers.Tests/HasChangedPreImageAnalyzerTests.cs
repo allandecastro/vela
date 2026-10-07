@@ -19,6 +19,8 @@ namespace Vela.Context
     {
         public static bool HasChanged(this ILocalPluginContext ctx, Func<object, object> attribute, string preImageAlias = ""PreImage"") => false;
         public static bool HasAnyChanged(this ILocalPluginContext ctx, params Func<object, object>[] attributes) => false;
+        public static bool HasChanged<T>(this ILocalPluginContext ctx, Func<T, object> attribute, string preImageAlias = ""PreImage"") => false;
+        public static bool HasAnyChanged<T>(this ILocalPluginContext ctx, params Func<T, object>[] attributes) => false;
     }
 }
 
@@ -31,6 +33,7 @@ namespace Vela.Steps
     public interface IConfig : IFluentStep
     {
         IConfig WithPreImage(params string[] columns);
+        IConfig WithPreImage(params Func<Demo.Account, object>[] columns);
         void Handle(Action<Vela.Context.ILocalPluginContext> handler);
         void Handle(Delegate handler);
     }
@@ -40,6 +43,7 @@ namespace Demo
 {
     using Vela.Steps;
     public class Plugin { protected ITrigger RegisterStep() => null!; protected ITrigger Step => RegisterStep(); }
+    public class Account { public string Name { get; set; } public string Email { get; set; } }
 }
 ";
 
@@ -206,6 +210,41 @@ namespace Demo
         string code = InClass(
             "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }\n" +
             "        private void OnUpd(ILocalPluginContext ctx) { Changes.HasChanged(ctx, x => x, \"custom\"); }");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    private static DiagnosticResult MissingColumn(string method, string column) =>
+        new DiagnosticResult(Vela.Analyzers.HasChangedPreImageAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0)
+            .WithArguments(method, column);
+
+    [Fact]
+    public async Task Flags_HasChanged_on_a_column_the_pre_image_does_not_capture()
+    {
+        // A-30: the pre-image lists Email only, so Name's previous value reads as null and always looks changed.
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPreImage(a => a.Email).Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { ctx.HasChanged<Account>({|#0:a => a.Name|}); }");
+        await Verify.VerifyAnalyzerAsync(code, MissingColumn("HasChanged", "Name"));
+    }
+
+    [Fact]
+    public async Task Flags_each_HasAnyChanged_column_the_pre_image_does_not_capture()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPreImage(a => a.Email).Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { ctx.HasAnyChanged<Account>(a => a.Email, {|#0:a => a.Name|}); }");
+        await Verify.VerifyAnalyzerAsync(code, MissingColumn("HasAnyChanged", "Name"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_captured_column_or_a_pre_image_whose_columns_are_not_listed_as_selectors()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPreImage(a => a.Name).Handle(OnUpd);\n" +
+            "            RegisterStep().OnUpdate().PostOperation().Sync().WithPreImage(\"email\").Handle(OnAll); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { ctx.HasChanged<Account>(a => a.Name); }\n" +
+            "        private void OnAll(ILocalPluginContext ctx) { ctx.HasChanged<Account>(a => a.Email); }");
         await Verify.VerifyAnalyzerAsync(code);
     }
 }

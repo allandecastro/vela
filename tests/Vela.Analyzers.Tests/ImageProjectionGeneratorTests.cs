@@ -423,9 +423,9 @@ namespace Demo
     }
 
     [Fact]
-    public void Emits_nothing_for_a_non_literal_message()
+    public void Emits_nothing_for_a_non_constant_message()
     {
-        // A message passed as a variable/const is not statically resolvable, so no projection is generated
+        // A message passed as a non-constant field is not statically resolvable, so no projection is generated
         // (the developer keeps the full early-bound image), consistent with the unresolved-capture fallback.
         string output = RunAndConcat(@"
 namespace Demo
@@ -433,7 +433,7 @@ namespace Demo
     using Vela.Plugin;
     public sealed class DynamicMessageAudit : EntityPluginBase<Account>
     {
-        private const string Msg = ""update"";
+        private static readonly string Msg = ""update"";
         protected override void RegisterPluginSteps()
             => RegisterStep().OnMessage(Msg).PostOperation().Sync()
                 .WithPostImage(a => a.Name)
@@ -1039,6 +1039,246 @@ namespace Demo
 ");
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error && d.Id == "CS0246");
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Fact]
+    public void Generated_parts_compile_for_a_generic_plugin_nested_in_a_record_struct()
+    {
+        // A-77: the generator reopened every containing type as 'partial class Name', which for a struct / record
+        // container or a generic plugin declares a different type (CS0261 / CS0260 / a missing type parameter).
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public partial record struct Outer
+    {
+        public sealed partial class Audit<TMarker> : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(OnUpdated);
+            private void OnUpdated() { }
+            private static string Read(OnUpdatedContext ctx) => ctx.PostImage.Name;
+        }
+    }
+}
+");
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Fact]
+    public void Projects_a_column_without_AttributeLogicalName_under_its_lowercased_name()
+    {
+        // The runtime resolves such a property to its lower-cased name, so the generator does the same rather than
+        // silently generating nothing.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountPlain : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Parent).Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.Contains("class OnUpdated_PostImage", output);
+        Assert.Contains("AttributeLogicalName(\"parent\")", output);
+    }
+
+    [Fact]
+    public void Reports_VELA021_when_a_non_constant_alias_prevents_the_projection()
+    {
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountDyn : EntityPluginBase<Account>
+    {
+        private static readonly string Dynamic = ""dyn"";
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnDelete().PreOperation().Sync().WithPreImage(Dynamic, a => a.Name).Handle(OnDeleted);
+        private void OnDeleted() { }
+    }
+}
+");
+
+        Diagnostic warning = Assert.Single(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+        Assert.Equal(DiagnosticSeverity.Warning, warning.Severity);
+        Assert.Contains("alias is not a compile-time constant", warning.GetMessage());
+        Assert.Contains("GetPreImage", warning.GetMessage());
+    }
+
+    [Fact]
+    public void Reports_VELA021_when_a_selector_is_not_a_column_property()
+    {
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountCall : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name, a => a.GetHashCode()).Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Diagnostic warning = Assert.Single(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+        Assert.Contains("a => a.GetHashCode()", warning.GetMessage());
+    }
+
+    [Fact]
+    public void Reports_VELA021_when_the_message_of_a_RegisterStep_chain_is_not_constant()
+    {
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountVar : EntityPluginBase<Account>
+    {
+        private static readonly string Message = ""update"";
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage(Message).PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+    }
+}
+");
+
+        Diagnostic warning = Assert.Single(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+        Assert.Contains("message or stage", warning.GetMessage());
+    }
+
+    [Fact]
+    public void Does_not_report_VELA021_for_a_selector_an_analyzer_already_reports()
+    {
+        // A nested path is VELA001's error; the generator skips it without a second diagnostic. A chain split
+        // across locals (trigger not visible here) is not reported either.
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    using Vela.Steps;
+    public sealed partial class AccountNested : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Parent.Name).Handle(() => { });
+            IStepConfig<Account> split = RegisterStep().OnUpdate();
+            split.PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        }
+    }
+}
+");
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+    }
+
+    [Fact]
+    public void Ignores_a_same_named_fluent_marker_outside_Vela_Steps()
+    {
+        // A-77: the fluent marker is matched by symbol (Vela.Steps.IFluentStep), not by its simple name.
+        string output = RunAndConcat(@"
+namespace Other
+{
+    public interface IFluentStep { }
+    public interface IOtherStep : IFluentStep
+    {
+        IOtherStep OnUpdate();
+        IOtherStep PostOperation();
+        IOtherStep WithPostImage(params System.Linq.Expressions.Expression<System.Func<Demo.Account, object>>[] a);
+        void Handle(System.Action handler);
+    }
+}
+
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class Lookalike : EntityPluginBase<Account>
+    {
+        private Other.IOtherStep Other() => null;
+        protected override void RegisterPluginSteps()
+            => Other().OnUpdate().PostOperation().WithPostImage(a => a.Name).Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Assert.DoesNotContain("OnUpdated_PostImage", output);
+        Assert.DoesNotContain("OnUpdatedContext", output);
+    }
+
+    [Fact]
+    public void Generated_parts_keep_the_variance_of_a_generic_interface_container()
+    {
+        // A partial interface must repeat its type parameters' variance (CS1067 otherwise). C# itself forbids a class
+        // inside a variant interface (CS8427, the user's own error), but the generated part must not add CS1067.
+        string source = @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public partial interface IBox<out TItem, in TKey>
+    {
+        public sealed partial class Audit : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(OnUpdated);
+            private void OnUpdated() { }
+        }
+    }
+}
+";
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(source);
+
+        Assert.Contains("partial interface IBox<out TItem,in TKey>", RunAndConcat(source));
+        Assert.DoesNotContain(diagnostics, d => d.Id == "CS1067");
+    }
+
+    [Fact]
+    public void Reports_VELA021_for_a_column_selector_held_in_a_variable()
+    {
+        // Not an inline lambda: the captured columns are unknown, which is not a capture-all image.
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using System;
+    using System.Linq.Expressions;
+    using Vela.Plugin;
+    public sealed partial class AccountVarColumn : EntityPluginBase<Account>
+    {
+        private static readonly Expression<Func<Account, object>> Column = a => a.Name;
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(Column).Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Diagnostic warning = Assert.Single(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+        Assert.Contains("not an inline selector lambda", warning.GetMessage());
+    }
+
+    [Fact]
+    public void Emits_a_projection_for_a_constant_OnMessage_name_without_VELA021()
+    {
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountConstMessage : EntityPluginBase<Account>
+    {
+        private const string Message = ""update"";
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage(Message).PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        private static string Read(UpdatePostOp_PostImage image) => image.Name;
+    }
+}
+");
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 

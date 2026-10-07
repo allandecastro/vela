@@ -66,6 +66,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **VELA021 warns when a typed image projection cannot be generated.** A `WithPreImage(...)` / `WithPostImage(...)`
+  that lists columns but cannot be projected (a non-constant alias, a selector that is not a column property, or a
+  `RegisterStep()` chain whose message or stage is not constant) used to generate nothing silently, leaving only a
+  `CS0246` on the missing `{Handler}_{Pre|Post}Image` type. The generator now says why, on the capture. Selectors that
+  VELA001/VELA010 already report are not reported twice.
+
 - **VELA020: a Create/Update step without `FilterOn(...)` is a build error.** These steps already had to declare a
   filtering attribute, but only building the step at runtime enforced it, so a chain without one compiled and then
   failed in `vela plan` or at execution. The rule makes the documented compile-time guarantee real.
@@ -148,6 +154,30 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   from the outermost request, so a plugin's own write with `BypassCustomPluginExecution` (the usual way to avoid
   re-entering itself) re-fired the plugin, and `ExecuteMultiple`/`ExecuteTransaction` children's own parameters were
   ignored. The effective bypass is now the inherited bypass plus the request's own, at any depth.
+- **VELA002 flags an expression-bodied registration that never calls `Handle(...)`.** `RegisterPluginSteps() =>
+  RegisterStep()...;` (the form most samples use) was missed; void expression bodies are now checked like statements.
+- **VELA015 flags a handler of the wrong shape and reads parenthesized chains.** A method group with more or fewer
+  than one parameter, or a non-void return, compiled through `Handle(Delegate)` and only failed at registration; it is
+  now an error on every trigger path. The message/stage is read through parentheses, and the code fix writes the
+  simplified type (`IUpdatePostContext<Account>`) instead of a fully qualified `global::` name.
+- **VELA009 flags `HasChanged` on a column the pre-image does not capture.** When the step's `WithPreImage(...)` lists
+  its columns, a compared column missing from the list reads its previous value as `null` and always looks changed.
+- **VELA016 no longer flags a container class.** Two nested plugins that both name a handler `OnUpdate` were reported
+  on the enclosing class; only a class's own steps are compared now.
+- **The VELA003 fix keeps the columns of a duplicate `FilterOn(...)`.** It merged nothing and dropped the second call;
+  it now moves its columns into the first `FilterOn(...)`.
+- **VELA014 asks for `partial` only when something is generated, and covers every enclosing type.** It now shares the
+  generator's own decision (so a capture the generator cannot project no longer forces `partial`), and a `struct` or
+  `record` enclosing a plugin is reported too (the code fix handles any type kind).
+- **The image projection generator handles generic plugins and struct/record containers.** It reopened every
+  containing type as `partial class Name`, which broke a generic plugin or a plugin nested in a struct or record; it
+  now repeats each type's kind and type parameters. A column property without `[AttributeLogicalName]` is projected
+  under its lower-cased name, as the runtime resolves it, instead of suppressing the projection.
+- **Vela types are recognised by symbol, not by simple name.** `PluginBase`, `EntityPluginBase<T>`, `CustomApiBase`,
+  `IPlugin`, `ILocalPluginContext` and `IFluentStep` are resolved from the compilation, so an unrelated type that
+  shares a name is no longer treated as a plugin (VELA011, VELA012, VELA019) or a step builder (generator); VELA011
+  and VELA019 skip compilations that reference neither the SDK nor Vela. The fluent-chain walk the analyzers and the
+  generator each copied is now one shared, tested walker, so every rule sees parentheses and `!` the same way.
 
 ### Added (CLI)
 

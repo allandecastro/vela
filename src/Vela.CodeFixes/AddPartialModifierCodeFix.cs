@@ -10,11 +10,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Vela.CodeFixes
 {
-    /// <summary>Declares a plugin class <c>partial</c> so the generated typed-image projection can nest in it - the VELA014 fix.</summary>
+    /// <summary>Declares a plugin class (or a type enclosing it) <c>partial</c> so the generated nested types fit - the VELA014 fix.</summary>
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(AddPartialModifierCodeFix)), Shared]
     public sealed class AddPartialModifierCodeFix : CodeFixProvider
     {
-        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("VELA014");
+        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(DiagnosticIds.PartialPluginForTypedImage);
 
         public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -28,14 +28,14 @@ namespace Vela.CodeFixes
 
             foreach (Diagnostic diagnostic in context.Diagnostics)
             {
-                ClassDeclarationSyntax? declaration = root.FindNode(diagnostic.Location.SourceSpan)
-                    .FirstAncestorOrSelf<ClassDeclarationSyntax>();
+                TypeDeclarationSyntax? declaration = root.FindNode(diagnostic.Location.SourceSpan)
+                    .FirstAncestorOrSelf<TypeDeclarationSyntax>();
                 if (declaration == null || declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
                 {
                     continue;
                 }
 
-                ClassDeclarationSyntax target = declaration;
+                TypeDeclarationSyntax target = declaration;
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         "Make the plugin class partial",
@@ -45,7 +45,7 @@ namespace Vela.CodeFixes
             }
         }
 
-        private static ClassDeclarationSyntax AddPartial(ClassDeclarationSyntax declaration)
+        private static TypeDeclarationSyntax AddPartial(TypeDeclarationSyntax declaration)
         {
             SyntaxToken partial = SyntaxFactory.Token(SyntaxKind.PartialKeyword).WithTrailingTrivia(SyntaxFactory.Space);
 
@@ -55,11 +55,11 @@ namespace Vela.CodeFixes
                 // declaration keeps its position instead of collapsing onto the previous line.
                 SyntaxToken keyword = declaration.Keyword;
                 return declaration
-                    .WithModifiers(SyntaxFactory.TokenList(partial.WithLeadingTrivia(keyword.LeadingTrivia)))
-                    .WithKeyword(keyword.WithLeadingTrivia());
+                    .WithKeyword(keyword.WithLeadingTrivia())
+                    .WithModifiers(SyntaxFactory.TokenList(partial.WithLeadingTrivia(keyword.LeadingTrivia)));
             }
 
-            // partial must sit immediately before 'class', after any access/sealed modifiers.
+            // partial must sit immediately before the type keyword ('class', 'struct', 'record'), after any other modifiers.
             return declaration.AddModifiers(partial);
         }
     }

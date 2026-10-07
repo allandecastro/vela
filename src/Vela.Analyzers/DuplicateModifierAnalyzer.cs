@@ -17,7 +17,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class DuplicateModifierAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA003";
+        public const string DiagnosticId = DiagnosticIds.DuplicateModifier;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
@@ -89,27 +89,11 @@ namespace Vela.Analyzers
 
         private static bool HasEarlierCall(ExpressionSyntax? receiver, string name, SemanticModel model, INamedTypeSymbol fluent, System.Threading.CancellationToken cancellationToken)
         {
-            ExpressionSyntax? current = receiver;
-            while (current is not null)
+            foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                switch (current)
+                if (call.MethodName == name && FluentStep.IsFluentMethod(model, call.Invocation, fluent, cancellationToken))
                 {
-                    case InvocationExpressionSyntax inv when inv.Expression is MemberAccessExpressionSyntax ma:
-                        if (ma.Name.Identifier.ValueText == name && FluentStep.IsFluentMethod(model, inv, fluent, cancellationToken))
-                        {
-                            return true;
-                        }
-
-                        current = ma.Expression;
-                        break;
-                    case MemberAccessExpressionSyntax ma2:
-                        current = ma2.Expression;
-                        break;
-                    case ParenthesizedExpressionSyntax paren:
-                        current = paren.Expression;
-                        break;
-                    default:
-                        return false;
+                    return true;
                 }
             }
 

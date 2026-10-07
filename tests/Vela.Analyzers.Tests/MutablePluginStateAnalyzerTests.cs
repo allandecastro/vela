@@ -115,4 +115,36 @@ namespace Demo
 }";
         await Verify.VerifyAnalyzerAsync(code);
     }
+
+    [Fact]
+    public async Task Does_not_flag_a_type_deriving_from_a_same_named_PluginBase_outside_Vela()
+    {
+        // A-77: the Vela bases are matched by symbol, not by simple name.
+        string code = Harness + @"
+namespace Other { public abstract class PluginBase { } }
+namespace Demo
+{
+    public class Worker : Other.PluginBase
+    {
+        private int _count;
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_anything_when_neither_the_SDK_nor_Vela_is_referenced()
+    {
+        // Compilation guard: no IPlugin and no Vela base in the compilation -> nothing to analyze.
+        string code = @"
+namespace Vela.Lookalike { public abstract class EntityPluginBase<T> { } }
+namespace Demo
+{
+    public class Worker : Vela.Lookalike.EntityPluginBase<int>
+    {
+        private int _count;
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
 }

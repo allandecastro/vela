@@ -8,6 +8,7 @@ using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Simplification;
 
 namespace Vela.CodeFixes
 {
@@ -15,7 +16,7 @@ namespace Vela.CodeFixes
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(UseStepContextTypeCodeFix)), Shared]
     public sealed class UseStepContextTypeCodeFix : CodeFixProvider
     {
-        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("VELA015");
+        public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(DiagnosticIds.HandlerContextMatch);
 
         public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -83,7 +84,11 @@ namespace Vela.CodeFixes
 
             SyntaxNode oldRoot = await method.SyntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
             ParameterSyntax parameter = method.ParameterList.Parameters[0];
-            TypeSyntax newType = SyntaxFactory.ParseTypeName(expectedType).WithTriviaFrom(parameter.Type!);
+            // The diagnostic carries the fully-qualified type; the simplifier annotation lets the code action's cleanup
+            // reduce it to what the file's usings allow (IUpdatePostContext<Account>), keeping global:: only when needed.
+            TypeSyntax newType = SyntaxFactory.ParseTypeName(expectedType)
+                .WithTriviaFrom(parameter.Type!)
+                .WithAdditionalAnnotations(Simplifier.Annotation);
             return solution.WithDocumentSyntaxRoot(documentId, oldRoot.ReplaceNode(parameter.Type!, newType));
         }
     }

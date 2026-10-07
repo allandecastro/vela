@@ -14,7 +14,7 @@ namespace Vela.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class RetrieveAllColumnsAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "VELA013";
+        public const string DiagnosticId = DiagnosticIds.RetrieveAllColumns;
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
