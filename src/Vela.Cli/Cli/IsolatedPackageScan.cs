@@ -10,20 +10,19 @@ using System.Threading.Tasks;
 namespace Vela.Cli;
 
 /// <summary>
-/// Runs the package scan in a child <c>vela</c> process, so the package's code never runs inside the process that
-/// holds the credentials.
+/// Runs the package scan in a child <c>vela</c> process.
 /// <para>
 /// Reading a package's steps and Custom APIs instantiates its plugin types and calls their definition methods
-/// (<see cref="PackageScanner"/>): the scan runs code from the package. In-process, that code could read the client
-/// secret (<c>--client-secret</c>, <c>DATAVERSE_CLIENT_SECRET</c>), the connection string, secure-config values
-/// (<c>VELA_SECURE_CONFIG_*</c>), the access token in memory, or any CI credential in the environment. The child
-/// process gets none of them: it starts with an allowlisted environment (system paths, locale, the .NET runtime
-/// variables), no stdin, and only the package paths. Its stdout is forwarded to stderr, so package output can never
-/// corrupt the JSON on stdout.
+/// (<see cref="PackageScanner"/>): the scan runs code from the package. In the CLI process, that code would share the
+/// CLI's memory: the open Dataverse connection, the access token, the resolved client secret and secure-config values.
+/// The child process keeps package code out of that state: it starts with an allowlisted environment (system paths,
+/// locale, the .NET runtime variables, so no credential is inherited by accident), no stdin, and only the package
+/// paths. Its stdout is forwarded to stderr, so package output can never corrupt the JSON on stdout.
 /// </para>
 /// <para>
-/// What it does NOT isolate: the child runs as the same OS user, so package code can still read that user's files,
-/// including the interactive token cache (<c>~/.vela</c>, DPAPI-protected on Windows) and network access. Only scan
+/// This is NOT a sandbox. The child runs with the user's OS rights: hostile package code can still read the parent's
+/// command line and environment (<c>ps</c>, <c>/proc/&lt;pid&gt;/cmdline</c> and <c>/proc/&lt;pid&gt;/environ</c> on
+/// Linux), the user's files (including the interactive token cache under <c>~/.vela</c>) and the network. Only scan
 /// packages you build or trust. <c>VELA_SCAN_IN_PROCESS=1</c> restores the in-process scan (for debugging).
 /// </para>
 /// </summary>
@@ -37,7 +36,8 @@ internal static class IsolatedPackageScan
     private const int ChildTimeoutMinutes = 10;
 
     // Environment variables passed to the child, by exact name (case-insensitive) or prefix. Everything else, in
-    // particular DATAVERSE_*, VELA_SECURE_CONFIG_*, AZURE_*, IDENTITY_*/MSI_* and CI tokens, is dropped.
+    // particular DATAVERSE_*, VELA_SECURE_CONFIG_*, AZURE_*, IDENTITY_*/MSI_* and CI tokens, is not inherited (the
+    // child could still read them from the parent through the OS; see the class remarks: not a sandbox).
     private static readonly string[] AllowedVariables =
     [
         "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TMP", "TEMP", "LANG", "TERM", "TZ",

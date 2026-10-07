@@ -86,6 +86,21 @@ public class BatchReportingTests
     }
 
     [Fact]
+    public void The_fake_rejects_a_duplicate_id_only_within_one_table()
+    {
+        // Record ids are unique per table: the same id in another table is a different record.
+        var svc = new FakeOrgService();
+        Guid id = Guid.NewGuid();
+        svc.Create(new Entity("sdkmessageprocessingstep", id));
+
+        svc.Create(new Entity("sdkmessageprocessingstepimage", id));
+        var fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Create(new Entity("sdkmessageprocessingstep", id)));
+
+        Assert.Equal(DataverseRegistration.DuplicateRecordErrorCode, fault.Detail.ErrorCode);
+        Assert.Equal(2, svc.Created.Count);
+    }
+
+    [Fact]
     public void A_duplicate_key_from_a_normal_batch_is_still_a_failure()
     {
         // Only a replayed create is forgiven: a duplicate inside a batch that ran normally is a real failure.

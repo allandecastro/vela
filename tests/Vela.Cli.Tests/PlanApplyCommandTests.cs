@@ -377,6 +377,72 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Equal(1, StdoutJson().GetProperty("executed").GetProperty("addedToSolution").GetInt32());
     }
 
+    [Fact]
+    public void Adding_an_unchanged_package_to_the_solution_is_not_a_package_republish()
+    {
+        // The package is deployed, identical, but outside the solution: the only operation is its add-to-solution.
+        // That must neither flag a republish nor label the confirmation as a code change.
+        string package = WritePackage("zava_Plugins");
+        string content = Convert.ToBase64String(File.ReadAllBytes(package));
+        Guid packageId = Guid.NewGuid();
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        org.OnRetrieveMultiple = q => q.EntityName switch
+        {
+            "pluginpackage" => FakeOrgService.Collection(new Entity("pluginpackage", packageId) { ["name"] = "zava_Plugins", ["version"] = "1.0.0", ["content"] = content }),
+            "solution" => FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["publisherid"] = new EntityReference("publisher", Guid.NewGuid()) }),
+            "solutioncomponentdefinition" => FakeOrgService.Collection(new Entity("solutioncomponentdefinition", Guid.NewGuid()) { ["primaryentityname"] = "pluginpackage", ["solutioncomponenttype"] = 10_090 }),
+            _ => inner(q),
+        };
+        org.OnRetrieve = (e, id, _) => new Entity(e, id) { ["customizationprefix"] = "zava" };
+        RegistrationState local = Local(packages: [new PluginPackagePayload("zava_Plugins", "1.0.0", package)]);
+
+        int exit = Run("apply", Options(solution: "ZavaSales"), Host(org, local, inputRedirected: false, answer: "yes"));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        Assert.Contains("Apply 0 to create / 0 to update / 0 to delete against", _error.ToString());
+        Assert.DoesNotContain("plugin package (code change)", _error.ToString());
+        Assert.DoesNotContain(org.Created, e => e.LogicalName == "pluginpackage");
+        Assert.Empty(org.Updated);
+        JsonElement executed = StdoutJson().GetProperty("executed");
+        Assert.False(executed.GetProperty("packageRepublished").GetBoolean());
+        Assert.Contains(org.Executed.OfType<Microsoft.Crm.Sdk.Messages.AddSolutionComponentRequest>(), r => r.ComponentId == packageId);
+    }
+
+    [Fact]
+    public void OnlyUnwritten_drops_the_components_apply_writes_or_deletes()
+    {
+        static JsonElement J(object o) => JsonSerializer.SerializeToElement(o);
+        var diff = new RegistrationDiff([], [],
+            Added: [],
+            Removed:
+            [
+                new RegistrationItem("step", Plugin, J(new { name = "Removed step" })),
+                new RegistrationItem("custom-api", "T", J(new { uniqueName = "zava_Removed" })),
+            ],
+            Changed:
+            [
+                new RegistrationChange("step", Plugin, J(new { name = "Changed step" }), J(new { name = "Changed step (new name)" })),
+                new RegistrationChange("custom-api", "T", J(new { uniqueName = "zava_Changed" }), J(new { uniqueName = "zava_Changed" })),
+            ],
+            LocalItems: [], CurrentItems: []);
+        SolutionMembershipAction A(string kind, string name, string? parent = null) => new(kind, name, 1, Guid.NewGuid(), parent);
+        SolutionMembershipAction[] actions =
+        [
+            A("step", "Removed step"), A("step", "Changed step"), A("step", "Unchanged step"),
+            A("custom-api", "zava_Removed"), A("custom-api", "zava_Changed"), A("custom-api", "zava_Same"),
+            A("custom-api-parameter", "zava_Removed.In", "zava_Removed"), A("custom-api-parameter", "zava_Changed.In", "zava_Changed"),
+            A("custom-api-response-property", "Out", null), A("package", "zava_Plugins"), A("assembly", "Zava.Plugins"),
+        ];
+
+        string[] kept = PlanApplyCommand.OnlyUnwritten(actions, diff, packageWritten: true).Select(a => a.Name).ToArray();
+        string[] keptWithoutPublish = PlanApplyCommand.OnlyUnwritten(actions, diff, packageWritten: false).Select(a => a.Name).ToArray();
+
+        Assert.Equal(["Unchanged step", "zava_Same", "zava_Changed.In", "Out", "Zava.Plugins"], kept);
+        Assert.Contains("zava_Plugins", keptWithoutPublish);
+        Assert.Empty(PlanApplyCommand.OnlyUnwritten([], diff, packageWritten: false));
+    }
+
     // ---- failures ----------------------------------------------------------------------------------------------
 
     [Fact]

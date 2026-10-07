@@ -12,7 +12,7 @@ JsonSerializerOptions jsonOptions = new JsonSerializerOptions
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 };
 
-// The isolated package scan re-runs this executable as a child (IsolatedPackageScan): handled before anything else,
+// The package scan re-runs this executable as a child (IsolatedPackageScan): handled before anything else,
 // so the child never prompts, opens the menu or checks for updates.
 if (args.Length > 0 && args[0] == IsolatedPackageScan.ChildCommand)
 {

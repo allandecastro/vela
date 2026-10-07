@@ -10,7 +10,8 @@ namespace Vela.Cli;
 /// <summary>
 /// A Vela-owned component that exists in Dataverse but is not part of the <c>--solution</c> being applied to.
 /// </summary>
-public sealed record SolutionMembershipAction(string Kind, string Name, int ComponentType, Guid ComponentId);
+/// <param name="Parent">For a Custom API parameter or response property: its Custom API's unique name.</param>
+public sealed record SolutionMembershipAction(string Kind, string Name, int ComponentType, Guid ComponentId, string? Parent = null);
 
 /// <summary>
 /// Reconciles <c>--solution</c> membership. A create or update made by <c>apply</c> carries the
@@ -47,11 +48,11 @@ internal static partial class DataverseRegistration
         HashSet<string> unmanaged = new(unmanagedPluginTypes ?? [], StringComparer.OrdinalIgnoreCase);
         HashSet<string> unresolved = new(StringComparer.Ordinal);
 
-        void AddTable(string entity, string kind, string name, Guid id)
+        void AddTable(string entity, string kind, string name, Guid id, string? parent = null)
         {
             if (tableTypes.TryGetValue(entity, out int componentType))
             {
-                candidates.Add(new SolutionMembershipAction(kind, name, componentType, id));
+                candidates.Add(new SolutionMembershipAction(kind, name, componentType, id, parent));
             }
             else
             {
@@ -110,14 +111,16 @@ internal static partial class DataverseRegistration
             if (apiRows.Count > 0)
             {
                 object[] apiIds = apiRows.Select(a => (object)a.Id).ToArray();
+                Dictionary<Guid, string> apiNames = apiRows.ToDictionary(a => a.Id, a => a.GetAttributeValue<string>("uniquename") ?? a.Id.ToString());
                 foreach ((string entity, string kind) in new[] { ("customapirequestparameter", "custom-api-parameter"), ("customapiresponseproperty", "custom-api-response-property") })
                 {
-                    QueryExpression children = new(entity) { ColumnSet = new ColumnSet("uniquename", "name") };
+                    QueryExpression children = new(entity) { ColumnSet = new ColumnSet("uniquename", "name", "customapiid") };
                     children.Criteria.AddCondition("customapiid", ConditionOperator.In, apiIds);
                     foreach (Entity child in service.RetrieveAll(children))
                     {
                         string name = child.GetAttributeValue<string>("uniquename") ?? child.GetAttributeValue<string>("name") ?? child.Id.ToString();
-                        AddTable(entity, kind, name, child.Id);
+                        Guid parentId = child.GetAttributeValue<EntityReference>("customapiid")?.Id ?? Guid.Empty;
+                        AddTable(entity, kind, name, child.Id, apiNames.TryGetValue(parentId, out string? parent) ? parent : null);
                     }
                 }
             }

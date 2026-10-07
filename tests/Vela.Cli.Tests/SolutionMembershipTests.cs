@@ -59,7 +59,7 @@ public sealed class SolutionMembershipTests : IDisposable
                     new Entity("sdkmessageprocessingstep", _stepId) { ["name"] = "Account step", ["stage"] = new OptionSetValue(40) },
                     new Entity("sdkmessageprocessingstep", _mainOperationStepId) { ["name"] = "CustomApi main", ["stage"] = new OptionSetValue(30) }),
                 "customapi" => FakeOrgService.Collection(new Entity("customapi", _apiId) { ["uniquename"] = "zava_DoThing" }),
-                "customapirequestparameter" => FakeOrgService.Collection(new Entity("customapirequestparameter", _parameterId) { ["uniquename"] = "zava_DoThing.In" }),
+                "customapirequestparameter" => FakeOrgService.Collection(new Entity("customapirequestparameter", _parameterId) { ["uniquename"] = "zava_DoThing.In", ["customapiid"] = new EntityReference("customapi", _apiId) }),
                 "customapiresponseproperty" => FakeOrgService.Collection(new Entity("customapiresponseproperty", _responseId) { ["name"] = "Out" }),
                 "pluginpackage" => FakeOrgService.Collection(new Entity("pluginpackage", _packageId) { ["name"] = "zava_Plugins" }),
                 "solution" => FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["publisherid"] = new EntityReference("publisher", Guid.NewGuid()) }),
@@ -102,7 +102,8 @@ public sealed class SolutionMembershipTests : IDisposable
         Assert.Contains(actions, a => a is { Kind: "assembly", Name: "Zava.Plugins", ComponentType: DataverseRegistration.PluginAssemblyComponentType } && a.ComponentId == _assemblyId);
         Assert.Contains(actions, a => a is { Kind: "step", Name: "Account step", ComponentType: DataverseRegistration.SdkMessageProcessingStepComponentType } && a.ComponentId == _stepId);
         Assert.Contains(actions, a => a is { Kind: "custom-api", Name: "zava_DoThing", ComponentType: CustomApiType } && a.ComponentId == _apiId);
-        Assert.Contains(actions, a => a is { Kind: "custom-api-parameter", Name: "zava_DoThing.In", ComponentType: ParameterType } && a.ComponentId == _parameterId);
+        Assert.Contains(actions, a => a is { Kind: "custom-api-parameter", Name: "zava_DoThing.In", ComponentType: ParameterType, Parent: "zava_DoThing" } && a.ComponentId == _parameterId);
+        Assert.Contains(actions, a => a is { Kind: "custom-api-response-property", Parent: null }); // no parent reference read
         Assert.Contains(actions, a => a is { Kind: "custom-api-response-property", Name: "Out", ComponentType: ResponseType } && a.ComponentId == _responseId);
         Assert.DoesNotContain(actions, a => a.ComponentId == _mainOperationStepId); // platform-managed, not ours
         Assert.Equal(6, actions.Count); // the assembly listed twice under different casing is read once

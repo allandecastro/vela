@@ -221,18 +221,22 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 - **Every command has its own `--help`.** `vela init --help`, `sign --help`, `logout --help`, `plan`/`apply`/
   `inspect --help` printed the global usage; they now print the command's usage, options, notes and examples.
-- **The package scan no longer runs package code in the process that holds your credentials.** Reading a
-  package's steps instantiates its plugin types, so a package could read the client secret, the connection string,
-  secure-config values, the access token or CI credentials from the `vela` process. `plan`/`apply`/`inspect` and
-  `vela models --package` now scan in a child `vela` process started with an allowlisted environment (system paths,
-  locale, .NET variables; no `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*` or CI tokens), no stdin and no
-  credentials; its output goes to stderr. It still runs as your OS user, so only scan packages you trust.
-  `VELA_SCAN_IN_PROCESS=1` restores the in-process scan.
+- **The package scan runs in a separate process.** Reading a package's steps instantiates its plugin types, so the
+  package's code ran inside the `vela` process, next to its connection, access token, client secret and
+  secure-config values. `plan`/`apply`/`inspect` and `vela models --package` now scan in a child `vela` process that
+  holds none of that state and starts with an allowlisted environment (system paths, locale, .NET variables; no
+  `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*` or CI tokens inherited by accident), no stdin, and its output on
+  stderr. It is not a sandbox: package code runs with your OS rights and can still read the parent's command line
+  and environment, your files and the network, so only scan packages you trust, and keep secrets off the command
+  line (`DATAVERSE_CLIENT_SECRET`, `--client-secret-stdin`, `--interactive`). `VELA_SCAN_IN_PROCESS=1` restores the
+  in-process scan.
 - **`--solution` now also holds the components that did not change.** A create or update lands in the solution,
   but a step, Custom API, plugin assembly or package deployed earlier (without `--solution`, or into another
   solution) was never written again and so never added: the solution exported without it. `plan --solution` lists
   each such component as an `add-to-solution` operation, and `apply` adds it (`AddSolutionComponent`, without
-  required components); `executed.addedToSolution` counts them.
+  required components); `executed.addedToSolution` counts them. Only unchanged components are listed: a changed one
+  joins through its solution-scoped update and a removed one is deleted. Adding an unchanged package to the
+  solution is not reported as a package republish.
 - **`--packages-dir` with several versions of one package scans only the newest.** Both versions were scanned, so
   every step appeared twice (failing with a misleading "Duplicate local step key"), and the published package was
   whichever the disk listed first. The highest version (NuGet ordering) is kept and each skipped file is named on

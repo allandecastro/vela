@@ -86,9 +86,14 @@ Custom API, or remove the existing one first.
 without a value the environment keeps its own. Deleting a step also deletes its secure-configuration row. See
 the step configuration section of [Write a plugin](plugins.md).
 
-### Package code runs in an isolated process
+### Package code runs in a separate process (not a sandbox)
 
-Reading a package's steps and Custom APIs instantiates its plugin types and calls their definition methods, so the scan runs code from the package. `plan`, `apply`, `inspect` and `vela models --package` run the scan in a child `vela` process that has none of your credentials: it starts with an allowlisted environment (system paths, locale, .NET runtime variables; no `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*`, managed-identity or CI token variables), no stdin, no connection string, client secret or access token, and its output is forwarded to stderr. It still runs as your OS user, so it can read that user's files (including the interactive token cache under `~/.vela`, DPAPI-protected on Windows) and reach the network: scan only packages you build or trust. Set `VELA_SCAN_IN_PROCESS=1` to scan in-process (debugging).
+Reading a package's steps and Custom APIs instantiates its plugin types and calls their definition methods, so the scan runs code from the package. `plan`, `apply`, `inspect` and `vela models --package` run the scan in a child `vela` process. That keeps package code away from the CLI's own memory: the open Dataverse connection, the access token, the resolved client secret and secure-config values. The child also starts with an allowlisted environment (system paths, locale, .NET runtime variables), so `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*`, managed-identity and CI token variables are not handed to it by accident, and its output goes to stderr.
+
+> [!WARNING]
+> This is **not** a sandbox. The child runs with your OS user's rights, so hostile package code can still read the parent process's command line and environment (`ps`, and `/proc/<pid>/cmdline` and `/proc/<pid>/environ` on Linux), your files (including the interactive token cache under `~/.vela`) and the network. Scan only packages you build or trust.
+
+Keep secrets off the command line, where every process on the machine can see them: prefer `DATAVERSE_CLIENT_SECRET` or `--client-secret-stdin` to `--client-secret`, `DATAVERSE_CONNECTION_STRING` to `--connection-string`, `VELA_SECURE_CONFIG_<NAME>` or `--secure-config NAME=@file` to an inline value, or no secret at all with `--interactive` (cached token) or the ambient Azure credential (`--url` alone: `az login`, managed identity). Set `VELA_SCAN_IN_PROCESS=1` to scan in-process (debugging).
 
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 

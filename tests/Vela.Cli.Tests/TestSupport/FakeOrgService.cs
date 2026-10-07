@@ -54,8 +54,9 @@ internal sealed class FakeOrgService : IOrganizationService
 
     public Guid Create(Entity entity)
     {
-        // Like the platform, a create whose (caller-supplied) id already exists fails with "duplicate key".
-        if (entity.Id != Guid.Empty && Created.Exists(e => e.Id == entity.Id))
+        // Like the platform, a create whose (caller-supplied) id already exists in the same table fails with
+        // "duplicate key"; ids are unique per table, not across tables.
+        if (entity.Id != Guid.Empty && Created.Exists(e => e.Id == entity.Id && string.Equals(e.LogicalName, entity.LogicalName, StringComparison.Ordinal)))
         {
             throw new FaultException<OrganizationServiceFault>(
                 new OrganizationServiceFault { ErrorCode = unchecked((int)0x80040237), Message = "Cannot insert duplicate key." },

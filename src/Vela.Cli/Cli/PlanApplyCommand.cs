@@ -25,8 +25,8 @@ internal sealed class OrganizationConnection(IOrganizationService service, IDisp
 internal sealed class PlanApplyHost
 {
     public static PlanApplyHost Default { get; } = new();
-
-    /// <summary>Builds the local state from the plugin packages: the package scan, in a child process that holds no
+    /// <summary>Builds the local state from the plugin packages: the package scan, in a child process that does not
+    /// share the CLI's connection, token or secrets (IsolatedPackageScan; not a sandbox).</summary>
     /// credentials (IsolatedPackageScan).</summary>
     public Func<SharedOptions, JsonSerializerOptions, List<string>, RegistrationState> ScanLocal { get; init; } =
         IsolatedPackageScan.Scan;
@@ -155,7 +155,7 @@ internal static class PlanApplyCommand
         }
 
         List<string> info = [.. local.Info ?? [], .. current.Info ?? []];
-        IReadOnlyList<SolutionMembershipAction> membership = MissingFromSolution(service, local, options, info);
+        IReadOnlyList<SolutionMembershipAction> membership = OnlyUnwritten(MissingFromSolution(service, local, options, info), diff, packageActions.Count > 0);
         return BuildPlanPreview(mode, options.Environment, diff, diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership);
     }
 
@@ -165,6 +165,39 @@ internal static class PlanApplyCommand
         string.IsNullOrWhiteSpace(options.SolutionUniqueName)
             ? []
             : DataverseRegistration.ComputeSolutionMembershipActions(service, options.SolutionUniqueName!, local.SourceAssemblies, local.PackagePayloads, local.UnmanagedPluginTypes, info);
+
+    // Keeps the add-to-solution actions for components apply does not otherwise write: a changed step or Custom API
+    // joins the solution through its solution-scoped update, a removed one (and its parameters) is deleted, and a
+    // published package is imported into the solution. Listing those too would advertise a duplicate write.
+    internal static IReadOnlyList<SolutionMembershipAction> OnlyUnwritten(IReadOnlyList<SolutionMembershipAction> actions, RegistrationDiff diff, bool packageWritten)
+    {
+        if (actions.Count == 0)
+        {
+            return actions;
+        }
+
+        HashSet<string> writtenSteps = new(
+            diff.Removed.Where(IsStep).Select(i => JsonReader.TryGetString(i.Definition, "name"))
+                .Concat(diff.Changed.Where(c => c.Kind == "step").Select(c => JsonReader.TryGetString(c.Before, "name")))
+                .Where(n => !string.IsNullOrWhiteSpace(n))!,
+            StringComparer.Ordinal);
+        HashSet<string> removedApis = new(
+            diff.Removed.Where(i => i.Kind == "custom-api").Select(i => JsonReader.TryGetString(i.Definition, "uniqueName") ?? i.Type),
+            StringComparer.OrdinalIgnoreCase);
+        HashSet<string> writtenApis = new(
+            diff.Changed.Where(c => c.Kind == "custom-api").Select(c => JsonReader.TryGetString(c.Before, "uniqueName") ?? c.Type),
+            StringComparer.OrdinalIgnoreCase);
+        writtenApis.UnionWith(removedApis);
+
+        return actions.Where(action => action.Kind switch
+        {
+            "step" => !writtenSteps.Contains(action.Name),
+            "custom-api" => !writtenApis.Contains(action.Name),
+            "custom-api-parameter" or "custom-api-response-property" => action.Parent == null || !removedApis.Contains(action.Parent),
+            "package" => !packageWritten,
+            _ => true,
+        }).ToArray();
+    }
 
     private static int RunPlan(IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host, List<string> tempDirectories)
     {
@@ -186,7 +219,8 @@ internal static class PlanApplyCommand
             return strictExit;
         }
 
-        bool packageNeedsPublish = preview.Operations.Any(o => o.Kind == "package");
+        // Only a package create/update republishes it; an add-to-solution of the package is not a publish.
+        bool packageNeedsPublish = preview.Operations.Any(o => o.Kind == "package" && o.Action is "create" or "update");
         if (!preview.HasChanges)
         {
             const string nothing = "No changes detected; nothing executed.";
@@ -242,7 +276,7 @@ internal static class PlanApplyCommand
 
             // Recomputed after the writes: what apply created or updated is already in the solution, a deleted
             // component is gone, and what remains is the unchanged components to add.
-            IReadOnlyList<SolutionMembershipAction> missing = MissingFromSolution(service, local, options, []);
+            IReadOnlyList<SolutionMembershipAction> missing = OnlyUnwritten(MissingFromSolution(service, local, options, []), diff, packageNeedsPublish);
             if (missing.Count > 0)
             {
                 DataverseRegistration.AddComponentsToSolution(service, options.SolutionUniqueName!, missing, options.Verbose);
