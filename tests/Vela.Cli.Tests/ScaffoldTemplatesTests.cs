@@ -390,6 +390,29 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
+    public void RootReadme_Samples_TellsTheTruthAboutTheSamples()   // A-50, A-78
+    {
+        string readme = ScaffoldTemplates.RootReadme(Options());
+
+        // Replacing the stub models needs --overwrite (vela models refuses to overwrite otherwise).
+        Assert.Contains("  --namespace Zava.Shared.Models.Generated `\n  --overwrite\n", readme.Replace("\r\n", "\n"));
+        // The related-contacts sample runs a QueryExpression (Build()), not FetchXML.
+        Assert.DoesNotContain("typed FetchXML builder", readme);
+        Assert.Contains("`Query.For<Contact>()...Build()`", readme);
+        // The pipeline example passes secrets by variable name, not on the command line.
+        string signed = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = true });
+        Assert.Contains("--pfx-base64-env CODE_SIGN_PFX_BASE64 --pfx-password-env CODE_SIGN_PFX_PASSWORD", signed);
+        Assert.DoesNotContain("--pfx-password $env:", signed);
+    }
+
+    [Fact]
+    public void Samples_DescribeHandle_NotHandler()   // A-78
+    {
+        Assert.DoesNotContain("Handler(", ScaffoldTemplates.ContactRouterPlugin("Zava"));
+        Assert.DoesNotContain("fetchxml", ScaffoldTemplates.AccountRelatedContactsPluginTests("Zava"), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void RootReadme_SigningSection_ReflectsManagedIdentityFlag()
     {
         string signed = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = true });

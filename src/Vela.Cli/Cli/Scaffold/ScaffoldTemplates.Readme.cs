@@ -307,14 +307,15 @@ returns `null` instead.
 
 `{{prefix}}.Shared/Models/Generated` ships hand-written `Account` and `Contact` stubs (namespace
 `{{prefix}}.Shared.Models.Generated`) so the solution builds with no Dataverse connection. Running `vela models`
-into the same folder/namespace **replaces them in place** with the full set - one copy, no duplicates. It reuses
+into the same folder/namespace with `--overwrite` **replaces them in place** with the full set - one copy, no duplicates (without it, `vela models` refuses to overwrite existing files). It reuses
 the same connection options as `vela plan`/`apply`:
 
 ```powershell
 vela models `
   --solution {{prefix}} `
   --out ./src/{{prefix}}.Shared/Models/Generated `
-  --namespace {{prefix}}.Shared.Models.Generated
+  --namespace {{prefix}}.Shared.Models.Generated `
+  --overwrite
 ```
 
 `vela models` emits `partial` classes with option-set enums, multi-select choices, alternate-key factories and
