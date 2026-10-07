@@ -18,7 +18,8 @@ disk), `--pfx <file>` with a password or `--pfx-credential` (a Windows Credentia
 Pass secrets by **environment-variable name**: `--pfx-base64-env <VAR>` and `--pfx-password-env <VAR>` read the
 value from that variable, so it never appears on a command line, where other users of a shared host can read it
 (`ps`, `/proc`). The literal `--pfx-base64 <content>` / `--pfx-password <pw>` still work but warn. `dotnet nuget
-sign` itself only takes the password as an argument, so prefer `--fingerprint` on a shared host.
+sign` only accepts a PFX password as a command-line argument, so `vela sign` never gives it one: it opens the PFX
+itself and passes the tool a passwordless copy in an owner-only temporary file, deleted once signing ends.
 
 `vela init --samples --managed-identity` wires this into the build of the **Integrations** project: a `SignPluginPackage`
 MSBuild target runs after `Pack`, **inert until a certificate source is configured** and **skipped inside CI**

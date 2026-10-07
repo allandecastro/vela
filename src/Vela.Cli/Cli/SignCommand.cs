@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using static Vela.Cli.CliExitCodes;
 using static Vela.Cli.CommandLineOptions;
 using static Vela.Cli.OutputWriter;
@@ -149,8 +151,8 @@ internal static class SignCommand
             return Fail($"Package to sign not found: {options.PackagePath}", ExitFileNotFound, includeUsage: false);
         }
 
-        // A base64 certificate (pipeline case) is decoded to a temp .pfx, used, then deleted in the finally
-        // so the secret never lingers on disk.
+        // A PFX (file or base64) is re-exported without its password to an owner-only temp .pfx, used, then deleted
+        // in the finally so the key never lingers on disk.
         string? tempPfx = null;
         try
         {
@@ -175,25 +177,17 @@ internal static class SignCommand
             }
             else
             {
-                string pfxFile;
+                byte[] pfxBytes;
                 if (!string.IsNullOrWhiteSpace(options.PfxBase64))
                 {
                     try
                     {
-                        byte[] bytes = Convert.FromBase64String(options.PfxBase64!.Trim());
-                        tempPfx = Path.Combine(Path.GetTempPath(), $"vela-sign-{Guid.NewGuid():N}.pfx");
-                        // The decoded PFX carries the private key: create it owner-only from the start.
-                        WriteOwnerOnlyFile(tempPfx, bytes);
-                        // Wipe the decoded certificate from the managed heap once it's on disk — it's no longer
-                        // needed in memory and shouldn't linger until GC.
-                        Array.Clear(bytes, 0, bytes.Length);
+                        pfxBytes = Convert.FromBase64String(options.PfxBase64!.Trim());
                     }
                     catch (FormatException)
                     {
                         return Fail("--pfx-base64 is not valid base64.", ExitInvalidArguments, includeUsage: false);
                     }
-
-                    pfxFile = tempPfx;
                 }
                 else
                 {
@@ -202,7 +196,7 @@ internal static class SignCommand
                         return Fail($"PFX file not found: {options.PfxPath}", ExitFileNotFound, includeUsage: false);
                     }
 
-                    pfxFile = options.PfxPath!;
+                    pfxBytes = File.ReadAllBytes(options.PfxPath!);
                 }
 
                 string? password = options.PfxPassword;
@@ -233,16 +227,38 @@ internal static class SignCommand
                     return Fail("When signing with a .pfx, provide --pfx-password-env <VAR>, --pfx-password or --pfx-credential.", ExitInvalidArguments, includeUsage: false);
                 }
 
-                string source = tempPfx is null ? $"'{pfxFile}'" : "--pfx-base64";
+                // 'dotnet nuget sign' only takes a PFX password as a command-line argument, which other users of a
+                // shared host can read (ps / /proc). So vela opens the PFX itself and hands the tool a passwordless
+                // copy in an owner-only temp file, deleted in the finally: no password ever reaches its argv.
+                byte[] unprotected;
+                try
+                {
+                    unprotected = ToPasswordlessPfx(pfxBytes, password!);
+                }
+                catch (CryptographicException ex)
+                {
+                    return Fail($"Could not open the PFX (wrong password, or not a PKCS#12 file): {ex.Message}", ExitInvalidArguments, includeUsage: false);
+                }
+                finally
+                {
+                    Array.Clear(pfxBytes, 0, pfxBytes.Length);
+                }
+
+                tempPfx = Path.Combine(Path.GetTempPath(), $"vela-sign-{Guid.NewGuid():N}.pfx");
+                try
+                {
+                    WriteOwnerOnlyFile(tempPfx, unprotected);
+                }
+                finally
+                {
+                    // Wipe the decoded key material from the managed heap once it's on disk.
+                    Array.Clear(unprotected, 0, unprotected.Length);
+                }
+
+                string source = string.IsNullOrWhiteSpace(options.PfxBase64) ? $"'{options.PfxPath}'" : "--pfx-base64";
                 if (!options.Json) { Console.WriteLine($"Signing '{options.PackagePath}' with PFX {source} ..."); }
                 psi.ArgumentList.Add("--certificate-path");
-                psi.ArgumentList.Add(pfxFile);
-                // 'dotnet nuget sign' accepts the PFX password ONLY as this argv argument — there is no env-var or
-                // stdin alternative. On a multi-user host the value is visible to other users via 'ps'/proc for the
-                // duration of the child process. This cannot be remediated without replacing the signing mechanism;
-                // callers sharing a host should prefer --certificate-fingerprint (an installed cert) over --pfx-password.
-                psi.ArgumentList.Add("--certificate-password");
-                psi.ArgumentList.Add(password!);
+                psi.ArgumentList.Add(tempPfx);
             }
 
             // RFC-3161 timestamp so the signature stays valid after the certificate expires; --overwrite lets
@@ -298,6 +314,28 @@ internal static class SignCommand
                 {
                     // Best-effort cleanup of the decoded certificate; a leaked temp file is non-fatal.
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens a password-protected PKCS#12 and re-exports the same certificates and keys without a password, so the
+    /// signing tool can load it with no password argument. The caller keeps the result off disk except in an
+    /// owner-only temp file. Throws <see cref="CryptographicException"/> on a wrong password or invalid content.
+    /// </summary>
+    internal static byte[] ToPasswordlessPfx(byte[] pfx, string password)
+    {
+        X509Certificate2Collection certificates = X509CertificateLoader.LoadPkcs12Collection(pfx, password, X509KeyStorageFlags.Exportable);
+        try
+        {
+            return certificates.Export(X509ContentType.Pkcs12)
+                ?? throw new CryptographicException("The PFX contains no certificate to export.");
+        }
+        finally
+        {
+            foreach (X509Certificate2 certificate in certificates)
+            {
+                certificate.Dispose();
             }
         }
     }

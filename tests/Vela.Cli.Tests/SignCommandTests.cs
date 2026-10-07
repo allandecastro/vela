@@ -213,6 +213,46 @@ public class SignCommandTests
     }
 
     [Fact]
+    public void ToPasswordlessPfx_KeepsTheCertificateAndKey_WithoutAPassword()   // A-65: no password in nuget sign argv
+    {
+        using System.Security.Cryptography.RSA rsa = System.Security.Cryptography.RSA.Create(2048);
+        System.Security.Cryptography.X509Certificates.CertificateRequest request = new(
+            "CN=vela-sign-test", rsa, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        using System.Security.Cryptography.X509Certificates.X509Certificate2 original =
+            request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddDays(1));
+        byte[] protectedPfx = original.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12, "s3cret");
+
+        byte[] unprotected = SignCommand.ToPasswordlessPfx(protectedPfx, "s3cret");
+
+        // Loads with no password, same certificate, private key included - what `dotnet nuget sign --certificate-path`
+        // needs without a --certificate-password argument.
+        using System.Security.Cryptography.X509Certificates.X509Certificate2 reloaded =
+            System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(unprotected, null);
+        Assert.Equal(original.Thumbprint, reloaded.Thumbprint);
+        Assert.True(reloaded.HasPrivateKey);
+
+        // The password still guards the input: a wrong one fails instead of producing a file.
+        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => SignCommand.ToPasswordlessPfx(protectedPfx, "wrong"));
+    }
+
+    [Fact]
+    public void Execute_NeverPassesAPasswordToNugetSign()
+    {
+        // Source-level guard: the only PFX argument handed to `dotnet nuget sign` is the (passwordless) path.
+        string? dir = AppContext.BaseDirectory;
+        string? source = null;
+        for (int i = 0; i < 12 && dir is not null && source is null; i++)
+        {
+            string candidate = Path.Combine(dir, "src", "Vela.Cli", "Cli", "SignCommand.cs");
+            source = File.Exists(candidate) ? candidate : null;
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        Assert.NotNull(source);
+        Assert.DoesNotContain("\"--certificate-password\"", File.ReadAllText(source!));
+    }
+
+    [Fact]
     public void WriteOwnerOnlyFile_CreatesANewFile_ReadableOnlyByItsOwner()   // A-65: no write-then-chmod window
     {
         string path = Path.Combine(Path.GetTempPath(), $"vela-sign-test-{Guid.NewGuid():N}.pfx");
