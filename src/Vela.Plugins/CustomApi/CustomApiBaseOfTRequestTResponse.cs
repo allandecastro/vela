@@ -95,13 +95,7 @@ namespace Vela.CustomApi
 
             var definition = builder.Build();
             definition.PluginTypeName = GetType().FullName ?? GetType().Name;
-            definition.PluginStep = new StepDefinition
-            {
-                PluginTypeName = definition.PluginTypeName,
-                Message = definition.UniqueName,
-                Stage = PluginStages.MainOperation,
-                Mode = ExecutionMode.Synchronous
-            };
+            definition.PluginStep = definition.CreatePluginStep();
             return definition;
         }
 

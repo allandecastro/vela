@@ -26,6 +26,10 @@ internal sealed class FakeOrgService : IOrganizationService
     public List<(string Entity, Guid Id)> Deleted { get; } = new();
     public List<OrganizationRequest> Executed { get; } = new();
 
+    /// <summary>Every write in the order it happened, as "create:entity", "update:entity" or "delete:entity" -
+    /// assert ordering across entity types here.</summary>
+    public List<string> Writes { get; } = new();
+
     /// <summary>Every <see cref="ExecuteMultipleRequest"/> issued, in order — assert chunking and tier ordering here.</summary>
     public List<ExecuteMultipleRequest> Batches { get; } = new();
 
@@ -47,10 +51,15 @@ internal sealed class FakeOrgService : IOrganizationService
     public Guid Create(Entity entity)
     {
         Created.Add(entity);
+        Writes.Add("create:" + entity.LogicalName);
         return OnCreate(entity);
     }
 
-    public void Update(Entity entity) => Updated.Add(entity);
+    public void Update(Entity entity)
+    {
+        Updated.Add(entity);
+        Writes.Add("update:" + entity.LogicalName);
+    }
 
     /// <summary>Called before a delete is recorded; throw from it to fault that delete.</summary>
     public Action<string, Guid>? OnDelete { get; set; }
@@ -59,6 +68,7 @@ internal sealed class FakeOrgService : IOrganizationService
     {
         OnDelete?.Invoke(entityName, id);
         Deleted.Add((entityName, id));
+        Writes.Add("delete:" + entityName);
     }
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet) => OnRetrieve(entityName, id, columnSet);

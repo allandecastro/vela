@@ -102,6 +102,25 @@ public class ModelsCommandTests
         Assert.Contains("isoptional", Assert.Single(svc.Queries).ColumnSet.Columns);
     }
 
+    [Theory]
+    [InlineData("customapirequestparameter")]
+    [InlineData("customapiresponseproperty")]
+    public void ReadCustomApiParameters_reads_the_parameter_table(string entity)
+    {
+        Entity withTable = new Entity(entity, Guid.NewGuid()) { ["name"] = "Owner", ["type"] = new OptionSetValue(5), ["logicalentityname"] = "systemuser" };
+        Entity blank = new Entity(entity, Guid.NewGuid()) { ["name"] = "Record", ["type"] = new OptionSetValue(5), ["logicalentityname"] = " " };
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(withTable, blank),
+        };
+
+        var result = CustomApiReader.ReadCustomApiParameters(svc, entity, Guid.NewGuid());
+
+        Assert.Equal("systemuser", result.Single(p => p.Name == "Owner").LogicalEntityName);
+        Assert.Null(result.Single(p => p.Name == "Record").LogicalEntityName);
+        Assert.Contains("logicalentityname", Assert.Single(svc.Queries).ColumnSet.Columns);
+    }
+
     [Fact]
     public void ReadCustomApiParameters_never_requests_isoptional_for_response_properties()
     {

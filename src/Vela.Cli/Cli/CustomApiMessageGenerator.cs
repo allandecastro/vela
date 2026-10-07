@@ -10,8 +10,10 @@ namespace Vela.Cli;
 /// only applies to request parameters (Dataverse <c>customapirequestparameter.isoptional</c>); response properties are
 /// always present, so it stays false for them. When true it suppresses the generated <c>[Required]</c> attribute so a
 /// round-trip (generate the model, rebuild the manifest, re-apply) preserves the parameter's optionality.
+/// <paramref name="LogicalEntityName"/> is the parameter's table (<c>logicalentityname</c>); when set it is emitted as
+/// <c>[LogicalEntityName("...")]</c> so the round-trip keeps it too.
 /// </summary>
-public sealed record CustomApiParameter(string Name, int FieldType, bool IsOptional = false);
+public sealed record CustomApiParameter(string Name, int FieldType, bool IsOptional = false, string? LogicalEntityName = null);
 
 /// <summary>
 /// A Custom API message to generate typed Request/Response classes for. <paramref name="AllowedStepType"/>,
@@ -294,6 +296,13 @@ public static class CustomApiMessageGenerator
         (string member, string key) = CSharpIdentifier.Member(parameter.Name);
         string setArgs = key.Length > 0 ? "value, " + key : "value";
         sb.AppendLine();
+        // The parameter's table (logicalentityname), read back by the typed builder so a model rebuilt from this
+        // generated type registers the same table (a missing one would make apply recreate the parameter).
+        if (!string.IsNullOrWhiteSpace(parameter.LogicalEntityName))
+        {
+            sb.AppendLine($"        [Vela.Messages.LogicalEntityName(\"{parameter.LogicalEntityName}\")]");
+        }
+
         if (readOnly)
         {
             sb.AppendLine($"        public {type} {member} => Get<{type}>({key});");

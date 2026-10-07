@@ -1,128 +1,77 @@
 using System;
-using Microsoft.Xrm.Sdk;
+using Vela.Context;
 
 namespace Vela.CustomApi;
 
 /// <summary>
-/// Fluent builder for Custom API metadata.
+/// Fluent builder for Custom API metadata without dedicated request/response CLR models.
 /// </summary>
-/// <typeparam name="TRequest">The request model type.</typeparam>
-/// <typeparam name="TResponse">The response model type.</typeparam>
-public interface ICustomApiBuilder<TRequest, TResponse>
-    where TRequest : OrganizationRequest, new()
-    where TResponse : OrganizationResponse, new()
+public interface ICustomApiBuilder : ICustomApiMetadata<ICustomApiBuilder>
 {
     /// <summary>
-    /// Sets the unique name.
+    /// Sets the instance method that should execute the Custom API.
     /// </summary>
-    /// <param name="uniqueName">The unique name.</param>
+    /// <param name="methodName">The handler method name.</param>
     /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> UniqueName(string uniqueName);
+    ICustomApiBuilder Handler(string methodName);
 
     /// <summary>
-    /// Sets the display name.
+    /// Sets the instance method that should execute the Custom API.
     /// </summary>
-    /// <param name="displayName">The display name.</param>
+    /// <param name="handler">The handler delegate.</param>
     /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> DisplayName(string displayName);
+    ICustomApiBuilder Handler(Action<ILocalPluginContext> handler);
 
     /// <summary>
-    /// Sets the description.
+    /// Adds a request parameter. It is required unless <paramref name="optional"/> is true.
     /// </summary>
-    /// <param name="description">The description.</param>
+    /// <typeparam name="TParameter">Parameter CLR type.</typeparam>
+    /// <param name="name">Parameter name: letters, digits and underscores, unique within the request.</param>
+    /// <param name="optional">Whether the parameter is optional.</param>
+    /// <param name="description">Optional description.</param>
+    /// <param name="logicalEntityName">The table of an Entity, EntityReference or EntityCollection parameter.
+    /// Defaults to the early-bound entity's logical name when <typeparamref name="TParameter"/> is one.</param>
     /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> Description(string description);
+    ICustomApiBuilder RequestParameter<TParameter>(string name, bool optional = false, string? description = null, string? logicalEntityName = null);
 
     /// <summary>
-    /// Marks the API as a function.
+    /// Adds a request parameter. It is required unless <paramref name="optional"/> is true.
     /// </summary>
+    /// <param name="name">Parameter name: letters, digits and underscores, unique within the request.</param>
+    /// <param name="parameterType">Parameter CLR type.</param>
+    /// <param name="optional">Whether the parameter is optional.</param>
+    /// <param name="description">Optional description.</param>
+    /// <param name="logicalEntityName">The table of an Entity, EntityReference or EntityCollection parameter.
+    /// Defaults to the early-bound entity's logical name when <paramref name="parameterType"/> is one.</param>
     /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> AsFunction();
+    ICustomApiBuilder RequestParameter(string name, Type parameterType, bool optional = false, string? description = null, string? logicalEntityName = null);
 
     /// <summary>
-    /// Marks the API as an action.
+    /// Adds a response parameter.
     /// </summary>
+    /// <typeparam name="TParameter">Parameter CLR type.</typeparam>
+    /// <param name="name">Parameter name: letters, digits and underscores, unique within the response.</param>
+    /// <param name="description">Optional description.</param>
+    /// <param name="logicalEntityName">The table of an Entity or EntityReference property. Defaults to the
+    /// early-bound entity's logical name when <typeparamref name="TParameter"/> is one.</param>
     /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> AsAction();
+    ICustomApiBuilder ResponseParameter<TParameter>(string name, string? description = null, string? logicalEntityName = null);
 
     /// <summary>
-    /// Marks the API as bound to the specified entity.
+    /// Adds a response parameter.
     /// </summary>
-    /// <typeparam name="TEntity">The entity type.</typeparam>
+    /// <param name="name">Parameter name: letters, digits and underscores, unique within the response.</param>
+    /// <param name="parameterType">Parameter CLR type.</param>
+    /// <param name="description">Optional description.</param>
+    /// <param name="logicalEntityName">The table of an Entity or EntityReference property. Defaults to the
+    /// early-bound entity's logical name when <paramref name="parameterType"/> is one.</param>
     /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> BoundTo<TEntity>() where TEntity : Entity;
+    ICustomApiBuilder ResponseParameter(string name, Type parameterType, string? description = null, string? logicalEntityName = null);
 
     /// <summary>
-    /// Marks the API as bound to an entity logical name.
-    /// </summary>
-    /// <param name="entityLogicalName">The entity logical name.</param>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> BoundTo(string entityLogicalName);
-
-    /// <summary>
-    /// Marks the API as bound to an entity collection.
-    /// </summary>
-    /// <typeparam name="TEntity">The entity type.</typeparam>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> BoundToCollection<TEntity>() where TEntity : Entity;
-
-    /// <summary>
-    /// Marks the API as bound to an entity collection logical name.
-    /// </summary>
-    /// <param name="entityLogicalName">The entity logical name.</param>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> BoundToCollection(string entityLogicalName);
-
-    /// <summary>
-    /// Sets the execution privilege name.
-    /// </summary>
-    /// <param name="privilegeName">The privilege name.</param>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> ExecutePrivilege(string privilegeName);
-
-    /// <summary>
-    /// Marks the API as private.
-    /// </summary>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> Private();
-
-    /// <summary>
-    /// Marks the API as public.
-    /// </summary>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> Public();
-
-    /// <summary>
-    /// Sets allowed custom processing step type.
-    /// </summary>
-    /// <param name="stepType">Allowed step type.</param>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType stepType);
-
-    /// <summary>
-    /// Enables or disables workflow SDK step support.
-    /// </summary>
-    /// <param name="enabled">True to enable workflow SDK step support.</param>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> WorkflowSdkStep(bool enabled);
-
-    /// <summary>
-    /// Configures request parameters.
-    /// </summary>
-    /// <param name="configure">The request parameter configuration.</param>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> Request(Action<ICustomApiParameterBuilder<TRequest>> configure);
-
-    /// <summary>
-    /// Configures response parameters.
-    /// </summary>
-    /// <param name="configure">The response parameter configuration.</param>
-    /// <returns>The builder.</returns>
-    ICustomApiBuilder<TRequest, TResponse> Response(Action<ICustomApiParameterBuilder<TResponse>> configure);
-
-    /// <summary>
-    /// Builds the definition.
+    /// Validates and builds the definition.
     /// </summary>
     /// <returns>The custom API definition.</returns>
+    /// <exception cref="InvalidOperationException">The definition breaks a Dataverse Custom API rule.</exception>
     CustomApiDefinition Build();
 }

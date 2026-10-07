@@ -74,6 +74,28 @@ public class CustomApiMessageGeneratorTests
         Assert.DoesNotContain($"[System.ComponentModel.DataAnnotations.Required]{nl}        public DateTime AsOfDate", code);
     }
 
+    // A parameter's table (logicalentityname) round-trips through [LogicalEntityName], which the typed builder reads.
+    [Fact]
+    public void Parameter_with_a_table_EmitsLogicalEntityNameAttribute()
+    {
+        CustomApiMessage message = new CustomApiMessage(
+            "zava_Assign",
+            IsBoundToEntity: false,
+            RequestParameters: new[]
+            {
+                new CustomApiParameter("Owner", 5, LogicalEntityName: "systemuser"),   // EntityReference with a table
+                new CustomApiParameter("Record", 5),                                  // EntityReference, any table
+            },
+            ResponseProperties: new[] { new CustomApiParameter("Created", 5, LogicalEntityName: "contact") });
+
+        string code = Generate(message);
+        string nl = Environment.NewLine;
+
+        Assert.Contains($"[Vela.Messages.LogicalEntityName(\"systemuser\")]{nl}        [System.ComponentModel.DataAnnotations.Required]{nl}        public EntityReference Owner", code);
+        Assert.Contains($"[Vela.Messages.LogicalEntityName(\"contact\")]{nl}        public EntityReference Created", code);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(code, "LogicalEntityName\\(").Count);
+    }
+
     [Fact]
     public void ResponseProperty_NeverEmitsRequiredAttribute()
     {

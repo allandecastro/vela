@@ -174,7 +174,8 @@ namespace Vela.Testing.Tests
     {
         public EchoApi(string u, string s) : base(u, s) { }
 
-        protected override void RegisterCustomApi() => RegisterCustomApi("vela_Echo", nameof(Handle)).AsFunction();
+        protected override void RegisterCustomApi() => RegisterCustomApi("vela_Echo", nameof(Handle)).AsFunction()
+            .RequestParameter<string>("Text").ResponseParameter<string>("Echo");
 
         private void Handle(ILocalPluginContext ctx)
             => ctx.SetOutputParameter("Echo", $"echo:{ctx.GetInputParameter<string>("Text")}");

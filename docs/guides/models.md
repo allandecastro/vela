@@ -202,7 +202,8 @@ var response = service.Execute(new zava_RecalculateRequest { AccountId = id })
 Each also gets a **registrability-gated `On<Message>()` step extension**: bound to the API's entity when it has
 one (compile-time entity applicability), async-only when the API's `allowedcustomprocessingsteptype` is AsyncOnly
 (only `.Async()` compiles), and omitted for a None/private API. A required request parameter (`isoptional = false`)
-carries a `[Required]` attribute so rebuilding the manifest preserves its optionality; response properties are
+carries a `[Required]` attribute so rebuilding the manifest preserves its optionality, and a parameter with a table
+(`logicalentityname`) carries `[LogicalEntityName("...")]` so the table is preserved too; response properties are
 always present. See [Write a Custom API](custom-apis.md).
 
 **Scoping.** With **no value**, `--custom-apis` generates *every* Custom API in the environment (the platform's own

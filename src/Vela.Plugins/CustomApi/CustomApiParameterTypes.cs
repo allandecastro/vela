@@ -31,6 +31,30 @@ namespace Vela.CustomApi
         internal const string Supported =
             "bool, int, decimal, double, DateTime, Guid, string, string[], Money, OptionSetValue, EntityReference, Entity (or an early-bound entity), EntityCollection";
 
+        /// <summary>The Dataverse Custom API type label of a described parameter (Entity, StringArray, Integer...).</summary>
+        internal static string Label(string typeName, bool isCollection)
+        {
+            if (isCollection)
+            {
+                return typeName == typeof(string).FullName ? "StringArray" : "EntityCollection";
+            }
+
+            if (typeName == typeof(Entity).FullName) return "Entity";
+            if (typeName == typeof(EntityCollection).FullName) return "EntityCollection";
+            if (typeName == typeof(EntityReference).FullName) return "EntityReference";
+            int dot = typeName.LastIndexOf('.');
+            return dot >= 0 ? typeName.Substring(dot + 1) : typeName;
+        }
+
+        /// <summary>The logical name of an early-bound entity type (its <c>[EntityLogicalName]</c>), else null.</summary>
+        internal static string? EarlyBoundLogicalName(Type clrType)
+        {
+            Type type = Nullable.GetUnderlyingType(clrType) ?? clrType;
+            return type != typeof(Entity) && typeof(Entity).IsAssignableFrom(type)
+                ? System.Reflection.CustomAttributeExtensions.GetCustomAttribute<Microsoft.Xrm.Sdk.Client.EntityLogicalNameAttribute>(type)?.LogicalName
+                : null;
+        }
+
         /// <summary>Returns the registered type name and collection flag for <paramref name="clrType"/>, or throws.</summary>
         internal static (string TypeName, bool IsCollection) Describe(Type clrType, string parameterName)
         {

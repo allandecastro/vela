@@ -245,6 +245,165 @@ public class ApplyEngineTests
         Assert.Contains(("sdkmessageprocessingstep", stepId), svc.Deleted);
     }
 
+    // A Custom API whose implementing class was renamed: same uniqueName, the live row implemented by the old type.
+    private static readonly Guid OldTypeId = Guid.NewGuid();
+    private static readonly Guid NewTypeId = Guid.NewGuid();
+    private static readonly Guid ForeignTypeId = Guid.NewGuid();
+    private static readonly Guid DeletedTypeId = Guid.NewGuid();
+
+    // The live Custom API starts implemented by liveImplementation; a customapi update that writes plugintypeid
+    // changes it, so later reads (the ownership check of the re-point) see the detach.
+    private static (TestSupport.FakeOrgService Svc, Guid ApiId, Guid NewTypeId) RenamedCustomApiService(Guid? liveImplementation = null)
+    {
+        Guid apiId = Guid.NewGuid();
+        Guid? initial = liveImplementation == Guid.Empty ? null : liveImplementation ?? OldTypeId; // Guid.Empty: implemented by nothing
+        TestSupport.FakeOrgService svc = null!;
+        svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                // After the upload only the new type exists (the old one was removed with the package update).
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", NewTypeId) { ["typename"] = "Zava.Plugins.ScoreApiV2" }),
+                "customapi" => TestSupport.FakeOrgService.Collection(new Entity("customapi", apiId)),
+                _ => new EntityCollection(), // no package yet, no parameters
+            },
+            OnRetrieve = (entity, id, _) =>
+            {
+                if (entity == "customapi")
+                {
+                    Entity? written = svc.Updated.LastOrDefault(e => e.LogicalName == "customapi" && e.Contains("plugintypeid"));
+                    EntityReference? current = written != null
+                        ? written["plugintypeid"] as EntityReference
+                        : initial is Guid typeId ? new EntityReference("plugintype", typeId) : null;
+                    return new Entity("customapi", id) { ["plugintypeid"] = current };
+                }
+
+                if (entity == "plugintype" && id == DeletedTypeId)
+                {
+                    throw new FaultException<OrganizationServiceFault>(
+                        new OrganizationServiceFault { ErrorCode = DataverseRegistration.ObjectDoesNotExistErrorCode }, "plugintype does not exist");
+                }
+
+                if (entity == "plugintype")
+                {
+                    string typeName = id == OldTypeId ? "Zava.Plugins.ScoreApi" : id == NewTypeId ? "Zava.Plugins.ScoreApiV2" : "Other.Solution.ScoreApi";
+                    return new Entity("plugintype", id) { ["typename"] = typeName, ["assemblyname"] = id == ForeignTypeId ? "Other.Solution" : "Zava.Plugins" };
+                }
+
+                return new Entity(entity, id);
+            },
+        };
+        return (svc, apiId, NewTypeId);
+    }
+
+    private static RegistrationChange CustomApiChange(string beforeType, string afterType, bool beforePrivate = false)
+        => new RegistrationChange("custom-api", afterType,
+            Json(new { pluginTypeName = beforeType, uniqueName = "zava_Score", isPrivate = beforePrivate }),
+            Json(new { pluginTypeName = afterType, uniqueName = "zava_Score", isPrivate = false }));
+
+    private static RegistrationDiff ChangedApiDiff(RegistrationChange change) => new RegistrationDiff(
+        LocalAssemblies: ["Zava.Plugins"],
+        CurrentAssemblies: ["Zava.Plugins"],
+        Added: [],
+        Removed: [],
+        Changed: [change],
+        LocalItems: [],
+        CurrentItems: []);
+
+    [Fact]
+    public void ApplyDiff_detaches_a_renamed_custom_api_before_the_package_upload_then_repoints_it()   // A-41
+    {
+        (TestSupport.FakeOrgService svc, Guid apiId, Guid newTypeId) = RenamedCustomApiService();
+        string package = Path.Combine(Path.GetTempPath(), $"vela-a41-{Guid.NewGuid():N}.nupkg");
+        File.WriteAllBytes(package, [1, 2, 3]);
+        try
+        {
+            DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
+                [], [new PluginPackagePayload("zava_Plugins", "1.0.0", package)], null, [], verbose: false);
+        }
+        finally
+        {
+            File.Delete(package);
+        }
+
+        // Detach (customapi update), then the upload (pluginpackage create), then the re-point (customapi update).
+        Assert.Equal(["update:customapi", "create:pluginpackage", "update:customapi"], svc.Writes);
+        Entity detach = svc.Updated[0];
+        Assert.Equal(apiId, detach.Id);
+        Assert.True(detach.Contains("plugintypeid"));
+        Assert.Null(detach["plugintypeid"]);
+        Entity repoint = svc.Updated[1];
+        Assert.Equal(apiId, repoint.Id);
+        Assert.Equal(newTypeId, repoint.GetAttributeValue<EntityReference>("plugintypeid").Id);
+    }
+
+    [Fact]
+    public void ApplyDiff_refuses_to_detach_a_custom_api_now_implemented_by_another_type()   // A-41, PR #428 review
+    {
+        // Between plan and apply, another solution took over the unique name: the live API no longer points at the
+        // old type the plan saw, so it must not be detached (nor anything uploaded).
+        (TestSupport.FakeOrgService svc, _, _) = RenamedCustomApiService(liveImplementation: ForeignTypeId);
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
+                [], [], null, [], verbose: false));
+
+        Assert.Equal(
+            "Custom API 'zava_Score' is now implemented by 'Other.Solution.ScoreApi', not by 'Zava.Plugins.ScoreApi' as when the plan was computed. " +
+            "Vela will not detach it; re-run plan/apply against the current environment.",
+            ex.Message);
+        Assert.Empty(svc.Writes);
+    }
+
+    [Fact]
+    public void ApplyDiff_detaches_a_custom_api_whose_implementing_type_no_longer_exists()   // A-41
+    {
+        // A dangling plugintypeid (the type is gone) is owned by nothing, so the detach goes ahead.
+        (TestSupport.FakeOrgService svc, Guid apiId, _) = RenamedCustomApiService(liveImplementation: DeletedTypeId);
+
+        DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
+            [], [], null, [], verbose: false);
+
+        Assert.Equal(2, svc.Updated.Count);
+        Assert.Equal(apiId, svc.Updated[0].Id);
+        Assert.Null(svc.Updated[0]["plugintypeid"]);
+    }
+
+    [Fact]
+    public void ApplyDiff_skips_the_detach_of_a_custom_api_already_implemented_by_nothing()   // A-41
+    {
+        (TestSupport.FakeOrgService svc, Guid apiId, Guid newTypeId) = RenamedCustomApiService(liveImplementation: Guid.Empty);
+
+        DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
+            [], [], null, [], verbose: false);
+
+        Entity repoint = Assert.Single(svc.Updated); // only the re-point, no detach
+        Assert.Equal(apiId, repoint.Id);
+        Assert.Equal(newTypeId, repoint.GetAttributeValue<EntityReference>("plugintypeid").Id);
+    }
+
+    [Fact]
+    public void ApplyDiff_does_not_detach_a_custom_api_whose_plugin_type_is_unchanged()   // A-41
+    {
+        (TestSupport.FakeOrgService svc, Guid apiId, Guid newTypeId) = RenamedCustomApiService(liveImplementation: NewTypeId);
+
+        DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApiV2", "Zava.Plugins.ScoreApiV2", beforePrivate: true)),
+            [], [], null, [], verbose: false);
+
+        Entity update = Assert.Single(svc.Updated);
+        Assert.Equal(apiId, update.Id);
+        Assert.Equal(newTypeId, update.GetAttributeValue<EntityReference>("plugintypeid").Id);
+    }
+
+    [Theory]
+    [InlineData("Zava.Plugins.Old", "Zava.Plugins.New", true)]
+    [InlineData("Zava.Plugins.Same", "Zava.Plugins.Same", false)]
+    [InlineData("Zava.Plugins.same", "Zava.Plugins.Same", true)]   // type names are case-sensitive
+    [InlineData("", "Zava.Plugins.New", false)]                    // not implemented by anything yet: nothing to detach
+    public void IsCustomApiImplementationChange_compares_the_plugin_type_names(string before, string after, bool expected)
+        => Assert.Equal(expected, DataverseRegistration.IsCustomApiImplementationChange(CustomApiChange(before, after)));
+
     private static SetStateRequest? FindBatchedSetState(TestSupport.FakeOrgService svc)
     {
         foreach (ExecuteMultipleRequest batch in svc.Batches)

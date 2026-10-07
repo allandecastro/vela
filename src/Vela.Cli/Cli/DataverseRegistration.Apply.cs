@@ -50,6 +50,12 @@ internal static partial class DataverseRegistration
     List<string> planned = [];
     planned.AddRange(removedSteps.Select(x => $"delete step {TryGetString(x.Definition, "stepKey") ?? x.Type}"));
     planned.AddRange(removedApis.Select(x => $"delete custom-api {TryGetString(x.Definition, "uniqueName") ?? x.Type}"));
+    // A Custom API whose implementing class was renamed (same uniqueName, another plugin type) still references the
+    // old plugin type, which the package upload removes. Dataverse refuses to delete a plugin type that a Custom API
+    // references, so these APIs are detached before the upload; their update after the upload points them at the
+    // new type.
+    List<RegistrationChange> reimplementedApis = changedApis.Where(IsCustomApiImplementationChange).ToList();
+    planned.AddRange(reimplementedApis.Select(x => $"detach custom-api {TryGetString(x.After, "uniqueName") ?? x.Type} from {TryGetString(x.Before, "pluginTypeName")}"));
     planned.Add(publishOperation);
     planned.AddRange(addedApis.Select(x => $"create custom-api {x.Type}"));
     planned.AddRange(changedApis.Select(x => $"update custom-api {x.Type}"));
@@ -80,6 +86,12 @@ internal static partial class DataverseRegistration
         // so we must clear them first. Deletes are batched in reverse dependency order
         // (custom-API parameters/response-properties first, then steps and custom APIs).
         ApplyDeletesBatched(service, solutionUniqueName, removedSteps, removedApis, verbose, batchChunkSize, ref done);
+
+        foreach (RegistrationChange change in reimplementedApis)
+        {
+            DetachCustomApiImplementation(service, change, verbose);
+            done++;
+        }
 
         EnsurePluginPackages(svc, packagePayloads, solutionUniqueName, tempDirectories, verbose);
 
@@ -209,6 +221,59 @@ internal static partial class DataverseRegistration
         throw;
     }
 }
+
+    // True when a changed Custom API keeps its uniqueName but is now implemented by another plugin type (its class
+    // was renamed or moved): its live row still points at the old type until it is detached.
+    internal static bool IsCustomApiImplementationChange(RegistrationChange change)
+    {
+        string? before = TryGetString(change.Before, "pluginTypeName");
+        return !string.IsNullOrWhiteSpace(before)
+            && !string.Equals(before, TryGetString(change.After, "pluginTypeName"), StringComparison.Ordinal);
+    }
+
+    // Clears the Custom API's plugintypeid so the package upload can remove the old plugin type. If the apply stops
+    // between this and the re-point, the API is left with no implementation; the next apply finds it by uniqueName,
+    // sees that nothing implements it (EnsureCustomApiNotOwnedElsewhere allows that) and points it at the new type.
+    internal static void DetachCustomApiImplementation(IOrganizationService service, RegistrationChange change, bool verbose)
+    {
+        string uniqueName = TryGetString(change.After, "uniqueName") ?? change.Type;
+        Guid? apiId = FindCustomApiId(service, uniqueName);
+        if (!apiId.HasValue)
+        {
+            return;
+        }
+
+        // The environment may have changed since the diff was computed: detach only an API still implemented by the
+        // old type the plan saw, never one another solution now owns.
+        string expectedType = TryGetString(change.Before, "pluginTypeName") ?? string.Empty;
+        EntityReference? implementation = service.Retrieve("customapi", apiId.Value, new ColumnSet("plugintypeid"))?.GetAttributeValue<EntityReference>("plugintypeid");
+        if (implementation == null)
+        {
+            return; // already implemented by nothing: nothing to detach
+        }
+
+        string? liveType;
+        try
+        {
+            liveType = service.Retrieve("plugintype", implementation.Id, new ColumnSet("typename"))?.GetAttributeValue<string>("typename");
+        }
+        catch (FaultException<OrganizationServiceFault> ex) when (ex.Detail?.ErrorCode == ObjectDoesNotExistErrorCode)
+        {
+            liveType = null; // the implementing type is gone: nothing else owns the API
+        }
+
+        if (liveType != null && !string.Equals(liveType, expectedType, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Custom API '{uniqueName}' is now implemented by '{liveType}', not by '{expectedType}' as when the plan was computed. " +
+                "Vela will not detach it; re-run plan/apply against the current environment.");
+        }
+
+        Entity detach = new Entity("customapi", apiId.Value);
+        detach["plugintypeid"] = null;
+        service.Update(detach);
+        LogOperation("custom-api", "detach", uniqueName, $"from {expectedType}", verbose);
+    }
 
     // Dataverse error code for the "Invalid plug-in registration stage" validation (captured live: the Web API
     // returns error code 0x80044184 for a step create/update at MainOperation). Matching on the code is

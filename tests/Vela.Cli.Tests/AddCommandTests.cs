@@ -564,6 +564,31 @@ public class AddCommandTests
         });
     }
 
+    // A function must declare at least one response property or Build() rejects it (and Dataverse would not expose
+    // it): the generated function carries a placeholder Result, an action does not. The build smoke test
+    // (ProjectScaffolderTests.Generate_ThenDotnetBuild_Succeeds) compiles and scans both function forms.
+    [Fact]
+    public void Add_CustomApi_Function_DeclaresAPlaceholderResponseProperty()
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Ping", "--global", "--function", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "DoThing", "--global", "--project", project]));
+
+            string bound = File.ReadAllText(Path.Combine(dir, "Account", "CustomApis", "GetScore.cs"));
+            Assert.Contains("        public string Result\n        {\n            get => Get<string>();\n            set => Set(value);\n        }", bound.Replace("\r\n", "\n"));
+
+            string global = File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "Ping.cs")).Replace("\r\n", "\n");
+            Assert.Contains(".AsFunction()\n                .ResponseParameter<string>(\"Result\", \"TODO: rename or replace; a function must return at least one value.\");", global);
+            Assert.Contains("ctx.SetOutputParameter(\"Result\", string.Empty);", global);
+
+            string action = File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "DoThing.cs"));
+            Assert.DoesNotContain("Result", action);
+            Assert.Contains(".AsAction();", action);
+        });
+    }
+
     [Fact]
     public void Add_CustomApi_DefaultsToAction()
     {

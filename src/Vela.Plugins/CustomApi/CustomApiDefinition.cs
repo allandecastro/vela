@@ -96,4 +96,15 @@ public sealed class CustomApiDefinition
     /// Gets or sets the handler method used to execute the Custom API.
     /// </summary>
     public string HandlerMethodName { get; set; } = string.Empty;
+
+    // The main-operation step that runs the Custom API, derived from the definition's plugin type, unique name and
+    // handler. The one place it is built (builders and both Custom API bases).
+    internal StepDefinition CreatePluginStep() => new StepDefinition
+    {
+        PluginTypeName = PluginTypeName,
+        Message = UniqueName,
+        Stage = Constants.PluginStages.MainOperation,
+        Mode = ExecutionMode.Synchronous,
+        HandlerMethodName = HandlerMethodName
+    };
 }

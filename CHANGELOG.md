@@ -42,12 +42,37 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected
   `Func<Guid?, IOrganizationService>` factory are removed. Migrate `ctx.UserService` to `ctx.Service`,
   `ctx.AsSystem()` to `ctx.SystemService`, and `ctx.AsInitiatingUser()` to `ctx.AsUser(ctx.InitiatingUserId)`.
+- **A Custom API request parameter you declare is required unless you say otherwise.** `Add(x => x.Foo)` and
+  `Add(x => x.Foo, optional: false)` registered an optional parameter unless the property carried `[Required]`,
+  contrary to the documentation, so the handler read a default value when a caller left it out. They are now
+  required (as `RequestParameter<T>(...)` already was); pass `optional: true` to keep a parameter optional.
+  Parameters inferred from the model (no `Request(...)` call) keep their rule: optional unless `[Required]`. The next
+  `apply` recreates each parameter whose optionality changes.
+- **`Build()` rejects Custom API shapes Dataverse does not accept**, with a message naming the API and the
+  parameter: a function without a response property, a workflow-enabled function, a workflow-enabled API with an
+  `Entity`, `EntityCollection` or `string[]` parameter or with an `EntityReference` while not bound to a table, a
+  parameter name with characters other than letters, digits and underscores, and (in the lightweight builder too
+  now) the same parameter name twice.
+- **The Custom API builders share one core.** The metadata methods moved to `ICustomApiMetadata<TSelf>`, which
+  `ICustomApiBuilder` and `ICustomApiBuilder<TRequest, TResponse>` extend, and both builders derive from
+  `CustomApiBuilderBase<TSelf>`. Calling code compiles unchanged; a class that implements these interfaces itself
+  must follow, and `RequestParameter`, `ResponseParameter` and the typed `Add(property, optional, description)` gain
+  an optional `logicalEntityName` parameter (recompile against the new version).
+- **The unused Custom API manifest stack is removed:** `CustomApiManifest`, `CustomApiManifestWriter`,
+  `CustomApiManifestComparer` / `CustomApiManifestDiff` (with `CustomApiDefinitionChange` and
+  `CustomApiPropertyChange`) and `CustomApiDefinitionReader`. Nothing in Vela used them, and the comparer did not
+  match what `vela plan` compares. Read the definitions with `FrameworkManifestScanner.Scan(assembly)`, and diff
+  them against an environment with `vela plan`.
 
 ### Added (Framework)
 
 - **VELA020: a Create/Update step without `FilterOn(...)` is a build error.** These steps already had to declare a
   filtering attribute, but only building the step at runtime enforced it, so a chain without one compiled and then
   failed in `vela plan` or at execution. The rule makes the documented compile-time guarantee real.
+- **A Custom API parameter can name its table** (`logicalentityname`): the `logicalEntityName` argument of `Add`,
+  `RequestParameter` and `ResponseParameter`, or `[LogicalEntityName("contact")]` (`Vela.Messages`) on a model
+  property. An early-bound entity parameter (`Account`) uses its own table. Before, the framework had no way to set
+  it, so `apply` removed a table set in Dataverse by recreating the parameter.
 
 ### Changed (Framework)
 
@@ -129,6 +154,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`--secure-config NAME=VALUE|NAME=@file`** (repeatable) on `plan`/`apply`/`inspect`, with the
   `VELA_SECURE_CONFIG_<NAME>` environment variable as a fallback. A package built with an older framework that still
   compiles a `WithSecureConfig` literal no longer has that value deployed: the environment keeps its current value.
+- **`vela models --custom-apis` keeps a parameter's table.** A parameter with a `logicalentityname` gets
+  `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
 
 ### Fixed (CLI)
 
@@ -164,6 +191,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **The secure-config digest in plan output can no longer be brute-forced.** It was a plain SHA-256 of the secret; it
   is now an HMAC keyed per run.
 - **Deleting a step also deletes its secure configuration row**, which Dataverse does not cascade.
+- **`vela add customapi --function` generates a function that builds.** It had no response property, which the
+  framework now rejects (Dataverse does not expose such a function); it gets a placeholder `Result` to rename.
+- **Renaming a Custom API's plugin class no longer blocks the package upload.** With the same unique name, the Custom
+  API was re-pointed to the new class only after the upload, which had to remove the old plugin type while the Custom
+  API still referenced it. `apply` now detaches the Custom API before the upload and points it at the new type after.
 
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

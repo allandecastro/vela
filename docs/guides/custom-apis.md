@@ -90,12 +90,44 @@ early-bound type such as `Account`.
 > you. A hand-written request that derives from the plain `TypedRequest` would key by the short name and silently
 > read `null` on a real environment, so derive custom API requests/responses from `CustomApiRequest`/`CustomApiResponse`.
 
-**Optional request parameters.** Request parameters are required by default. Mark one optional with the
-`Add(x => x.AsOfDate, optional: true, "...")` overload (the third argument sets the parameter description). By
-default, when parameters are inferred from the model rather than declared explicitly, a property is treated as
-optional unless it carries `[Required]`. Optionality applies to **request parameters only**: response
-properties are always present in the response type, so they have no optional flag (this mirrors Dataverse,
-where `customapiresponseproperty` has no `isoptional`).
+**Optional request parameters.** A request parameter you declare is **required** (`isoptional = false`, as in
+Dataverse): a caller that omits it gets an error from the platform instead of your handler reading a default
+value. That holds for `Add(x => x.AccountId)` and for the lightweight `RequestParameter<T>("Name")`, whether or
+not the property carries `[Required]`. Mark one optional with `Add(x => x.AsOfDate, optional: true, "...")` (the
+third argument sets the description) or `RequestParameter<T>("Name", optional: true)`. When you call neither
+`Request(...)` nor `Response(...)`, the parameters are inferred from the model's properties, and an inferred
+request parameter is optional unless the property carries `[Required]`. Optionality applies to **request
+parameters only**: response properties have no optional flag (Dataverse's `customapiresponseproperty` has no
+`isoptional`), so `optional: true` on a response property is ignored.
+
+**The table of an entity parameter.** An `EntityReference`, `Entity` or `EntityCollection` parameter can name its
+table (the Dataverse `logicalentityname`). An early-bound entity property (`Account`) uses its own table. Otherwise
+declare it with the `logicalEntityName` argument, or with `[LogicalEntityName("contact")]` (in `Vela.Messages`) on the model property
+(which also applies to inferred parameters); the argument wins over the attribute:
+
+```csharp
+.Request(r => r
+    .Add(x => x.Owner, optional: false, logicalEntityName: "systemuser")
+    .Add(x => x.Contact))                     // [LogicalEntityName("contact")] on the property
+// lightweight
+.RequestParameter<EntityReference>("Owner", logicalEntityName: "systemuser")
+.ResponseParameter<EntityReference>("Created", logicalEntityName: "contact")
+```
+
+A table on any other type fails, and so does one on an `EntityCollection` response property, which Dataverse does
+not allow. `apply` registers the table and, because `logicalentityname` is fixed at creation, recreates the
+parameter when it changes.
+
+**Rules checked when the definition is built.** `Build()` (run when `vela plan` scans the package and when the
+plugin first runs) rejects, with a message naming the API and the parameter, the shapes Dataverse documents as
+invalid:
+
+- a function (`AsFunction()`) without a response property (Dataverse does not expose it, so calls get a 404);
+- a workflow-enabled API (`WorkflowSdkStep(true)`) that is a function, that uses an `Entity`, `EntityCollection`
+  or `string[]` parameter, or that uses an `EntityReference` without being bound to a table (`BoundTo<T>()`);
+- a parameter name with anything other than letters, digits and underscores;
+- the same parameter name twice in the request (or twice in the response), ignoring case. A request parameter and
+  a response property may share a name.
 
 `CustomApiBase<TRequest, TResponse>` constrains `TRequest : OrganizationRequest` and
 `TResponse : OrganizationResponse` (the same constraint on `Register.RegisterCustomApi<TRequest, TResponse>()`

@@ -67,8 +67,8 @@ public sealed class CoverageFinishingTests
             .Request(b => b.Add(r => r.Name).Add(r => r.Note))
             .Build();
         Assert.Equal("plain", bound.BoundEntityLogicalName);
-        Assert.False(bound.InputParameters.Single(p => p.Name == "Name").IsOptional); // [Required]
-        Assert.True(bound.InputParameters.Single(p => p.Name == "Note").IsOptional);  // no [Required]
+        Assert.False(bound.InputParameters.Single(p => p.Name == "Name").IsOptional); // added: required
+        Assert.False(bound.InputParameters.Single(p => p.Name == "Note").IsOptional); // added: required, [Required] or not
 
         CustomApiDefinition collection = new CustomApiBuilder<Req, Resp>()
             .UniqueName("vela_BoundColl")

@@ -42,6 +42,31 @@ public sealed class ModelsCustomApiBulkTests
         ["customapiid"] = new EntityReference("customapi", apiId),
     };
 
+    [Fact]
+    public void ReadAllCustomApis_reads_the_parameter_tables()
+    {
+        Guid api = Guid.NewGuid();
+        Entity request = ReqParamRow(api, "Owner", type: 5, isOptional: false);
+        request["logicalentityname"] = "systemuser";
+        Entity response = RespPropRow(api, "Created", type: 5);
+        response["logicalentityname"] = "contact";
+        var svc = new FakeOrgService();
+        svc.RouteRetrieveMultiple(entity => entity switch
+        {
+            "customapi" => FakeOrgService.Collection(ApiRow(api, "zava_Assign", bindingType: 0, boundEntity: null, allowedStep: 2, isPrivate: false)),
+            "customapirequestparameter" => FakeOrgService.Collection(request, ReqParamRow(api, "Note", type: 10, isOptional: true)),
+            "customapiresponseproperty" => FakeOrgService.Collection(response),
+            _ => new EntityCollection(),
+        });
+
+        CustomApiMessage message = Assert.Single(CustomApiReader.ReadAllCustomApis(svc));
+
+        Assert.Equal("systemuser", message.RequestParameters.Single(p => p.Name == "Owner").LogicalEntityName);
+        Assert.Null(message.RequestParameters.Single(p => p.Name == "Note").LogicalEntityName);
+        Assert.Equal("contact", Assert.Single(message.ResponseProperties).LogicalEntityName);
+        Assert.All(svc.Queries.Where(q => q.EntityName != "customapi"), q => Assert.Contains("logicalentityname", q.ColumnSet.Columns));
+    }
+
     // #211: bare --custom-apis read every API in a fixed number of queries (one per table), not one-plus-two per
     // API, so it no longer times out on large environments.
     [Fact]
