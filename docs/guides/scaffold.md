@@ -1,70 +1,101 @@
 # Scaffold a new solution (vela init)
 
-Generate a complete, build-ready plugin solution in one step:
+Generate a build-ready plugin solution in one step:
 
 ```powershell
-vela init --name ZavaSales --prefix Zava --output .
+vela init --name ZavaSales --prefix Zava --publisher-prefix zava --output .
 # or run the wizard:
 vela init --interactive
 ```
 
-This creates `ZavaSales/` with the `.sln` at the root and sibling `src/` and `tests/` folders:
+By default the scaffold is **minimal**: the structure and nothing to delete. It creates `ZavaSales/` with the
+`.sln` at the root and sibling `src/` and `tests/` folders:
 
 ```text
 ZavaSales/
   ZavaSales.sln
   src/
-    Zava.Shared/            # early-bound Account/Contact models + shared services (net462;net10.0)
-    Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg
+    Zava.Shared/            # early-bound models + shared services (net462;net10.0); empty until `vela models`
+    Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; empty until `vela add`
+    Zava.WebResources/      # opt-in TypeScript form scripts / web resources (add with --web-resources)
+  tests/
+    Zava.Plugins.Tests/     # xunit + Vela.Testing, no connection (omit with --no-tests); empty until `vela add test`
+  .vela/scaffold-manifest.json  # what init wrote, so `--force` never touches your code (commit it)
+  Directory.Build.props        # shared build settings for src/ and tests/
+```
+
+The minimal solution builds, tests and plans unedited: the package registers nothing, so `vela plan` reports no
+changes, and no demo step is ever deployed. Fill it in:
+
+```powershell
+vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated
+vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins
+vela add test AccountValidator --entity Account --project tests/Zava.Plugins.Tests
+dotnet build ZavaSales.sln -c Release
+dotnet test tests/Zava.Plugins.Tests -c Release
+vela plan --packages-dir artifacts --interactive
+```
+
+### Samples (`--samples`)
+
+Pass **`--samples`** to see every pattern working instead. It adds, to the same layout:
+
+```text
+  src/
+    Zava.Shared/            # + hand-written Account/Contact models, a cross-table GreetingService
+    Zava.Plugins/
       Account/                 #   organised by table: Plugins/ Services/ CustomApis/
       Contact/
       GlobalCustomApis/        #   unbound Custom APIs
     Zava.Integrations/      # second plugin package (omit with --no-integrations)
     Zava.ConsoleApp/        # .NET 10 interactive browser login (omit with --no-console)
-    Zava.WebResources/      # opt-in TypeScript form scripts / web resources (add with --web-resources)
   tests/
-    Zava.Plugins.Tests/      # xunit tests using Vela.Testing - no connection (omit with --no-tests)
+    Zava.Plugins.Tests/      # + tests for every sample
     Zava.Integrations.Tests/ # xunit tests for the Integrations package
-  Directory.Build.props        # shared build settings for src/ and tests/
 ```
 
-The tree comments label each project. Two carry detail beyond that:
+`Zava.Plugins` then ships working examples: a single-step plugin (schedules a follow-up task), a multi-step router
+plugin, table-**bound** and **global** Custom APIs, a cross-table shared service, two **table-scoped** services (one
+write, one read) and `AccountMessageReference`, a cheat-sheet with one disabled step per typed message (it deploys
+15 disabled steps, so delete it before a real deployment). `Zava.Plugins.Tests` runs those plugins and Custom APIs
+with [`Vela.Testing`](testing.md), no Dataverse connection: `dotnet test tests/Zava.Plugins.Tests`. Each file's
+namespace matches its folder. Generate a samples solution next to your real one to copy from it.
 
-- `Zava.Plugins` builds a Dataverse plugin package `.nupkg` via the `Microsoft.PowerApps.MSBuild.Plugin`
-  SDK. Code is organised **by table**, with each file's namespace matching its folder, and is seeded with
-  working examples: a single-step plugin (schedules a follow-up task), a multi-step router plugin,
-  table-**bound** and **global** Custom APIs, a cross-table shared service, and two **table-scoped**
-  services (one write, one read).
-- `Zava.Plugins.Tests` runs those plugins and Custom APIs with [`Vela.Testing`](testing.md), no Dataverse
-  connection. Run them with `dotnet test tests/Zava.Plugins.Tests`.
+### Flags
 
-Flags: `--prefix` (default: derived from name), `--output` (default: `.`), `--minimal` (alias `--no-demos`;
-see below), `--core-version`
-(the `Vela.Plugins` / `Vela.Testing` version the generated projects reference; default: the latest published
-framework version, resolved from nuget.org), `--no-integrations`, `--no-tests`, `--no-console`,
-`--managed-identity` / `--mi`
-(wire an opt-in package-signing step into the Integrations project - see [Sign the plugin package](signing.md)),
-`--web-resources` (also scaffold the TypeScript web-resources project, see below; `--web-resources-namespace`
-and `--web-resources-folder` set its global name and build folder),
-`--force` (overwrite an existing folder). The generated solution references `Vela.Plugins` as
-a NuGet package, then follows the `dotnet build -c Release` → `vela plan` → `vela apply` loop from the [Quickstart](../getting-started/quickstart.md).
+- `--prefix` (default: derived from the name) - the .NET namespace / assembly prefix.
+- `--publisher-prefix` - the Dataverse publisher prefix of your solution (2-8 characters, letter first,
+  alphanumeric). It names the Custom APIs (`<publisherprefix>_<Name>`) and is recorded in the projects as
+  `VelaPublisherPrefix`, which `vela add customapi` uses. Without it, the prefix is derived from `--prefix`; with
+  `--samples` a derived value that is not a valid publisher prefix is refused.
+- `--samples` - add the demo code and the Integrations / ConsoleApp projects (see above). `--minimal` /
+  `--no-demos` are accepted aliases of the default.
+- `--output` (default: `.`), `--no-tests`; with `--samples`: `--no-integrations`, `--no-console`, and
+  `--managed-identity` / `--mi` (wire an opt-in package-signing step into the Integrations project - see
+  [Sign the plugin package](signing.md)).
+- `--core-version` (also `--core-version=X`) - the `Vela.Plugins` / `Vela.Testing` version the projects reference;
+  default: the latest published framework version, resolved from nuget.org.
+- `--web-resources` - also scaffold the TypeScript web-resources project (see below); `--web-resources-namespace`
+  and `--web-resources-folder` set its global name and build folder (they warn and are ignored without
+  `--web-resources`).
+- `--force` - regenerate into an existing folder (see below). `--verbose` prints a failure's details, `--json` a
+  machine-readable report.
 
-### Minimal (demo-free) scaffold
+The generated solution references `Vela.Plugins` as a NuGet package, then follows the `dotnet build -c Release` →
+`vela plan` → `vela apply` loop from the [Quickstart](../getting-started/quickstart.md).
 
-By default the scaffold ships a rich set of examples (sample models, a service, example plugins and Custom APIs,
-and the Integrations / Tests / ConsoleApp projects) so you can see every pattern working. Pass **`--minimal`**
-(alias **`--no-demos`**) when you want a bare starting point instead:
+### Regenerate with `--force`
 
-```bash
-vela init --name Acme.Crm --prefix acme --minimal
-```
+`vela init` records every file it writes, with a content hash, in `.vela/scaffold-manifest.json`. Run it again with
+`--force` (for example to add `--samples` or `--web-resources`, or to change `--core-version`) and it:
 
-This writes only the `Shared` and `Plugins` projects - no sample models, services, plugins or Custom APIs - plus
-the structural files (`.sln`, the `.csproj` files, `Directory.*.props`, `README`, `.gitignore`). The demo-only
-Integrations, Tests and ConsoleApp projects are skipped; an explicit `--web-resources` is still honored. The empty
-solution builds and packs unedited, so you go straight to `vela models` and `vela add plugin`/`vela add customapi`
-to fill it with your own code. This is the clean canvas to start a real migration from - and the frictionless
-starting point when a script or agent drives the CLI, with no demo content to delete first.
+- writes the files that are missing and overwrites only the ones you have **not edited** since it wrote them;
+- removes a file it generated earlier that the new options no longer include (a dropped project), again only if
+  unedited, and prunes the folders this empties;
+- **keeps** everything else: your own plugins and tests, edited samples, and every existing file when the folder
+  has no manifest (a scaffold from an older CLI). It lists them; delete a kept file to have it regenerated.
+
+Commit the manifest, so a `--force` on another clone knows which files are generated.
 
 `Vela.Plugins` and `Vela.Testing` resolve from **nuget.org** (the default package source), so the generated
 solution restores and builds out of the box with no `nuget.config`. Add your own only if you use a private feed.
