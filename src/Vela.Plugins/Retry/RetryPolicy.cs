@@ -28,7 +28,7 @@ namespace Vela.Retry
     /// </para>
     /// <para>
     /// <b>Backoff.</b> A service-protection fault carries a <c>Retry-After</c> duration in
-    /// <see cref="OrganizationServiceFault.ErrorDetails"/>; the policy waits exactly that long, because an earlier
+    /// <c>OrganizationServiceFault.ErrorDetails</c>; the policy waits exactly that long, because an earlier
     /// retry is rejected again. When the requested wait is longer than <see cref="MaxDelay"/>, the fault is rethrown
     /// instead: a plugin cannot wait that long inside the sandbox time limit. Without a <c>Retry-After</c>, backoff
     /// is exponential with full jitter (<c>initialDelayMs * 2^(attempt-1)</c>, then a random point in
