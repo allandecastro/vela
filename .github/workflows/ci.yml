@@ -38,6 +38,10 @@ jobs:
         run: dotnet restore Vela.sln
       - name: Build
         run: dotnet build Vela.sln -c Release --no-restore
+      # StepApi.cs / StepBuilder.Impl.cs are generated from tools/codegen/Vela.StepApiGen/MessageModel.cs. Fail
+      # when the committed files differ from the generator output (a hand edit, or a model change not regenerated).
+      - name: Generated step API is up to date
+        run: dotnet run --project tools/codegen/Vela.StepApiGen -c Release --no-build -- --check
       - name: Test
         run: dotnet test Vela.sln -c Release --no-build
 
