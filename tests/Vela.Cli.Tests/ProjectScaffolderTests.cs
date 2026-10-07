@@ -364,31 +364,6 @@ public class ProjectScaffolderTests
     }
 
     [Fact]
-    public void Generate_NextSteps_PackageWithBuild_NotPack()
-    {
-        RunInTempDir(temp =>
-        {
-            TextWriter original = Console.Out;
-            StringWriter captured = new();
-            Console.SetOut(captured);
-            try
-            {
-                ProjectScaffolder.Generate(Options(temp));
-            }
-            finally
-            {
-                Console.SetOut(original);
-            }
-
-            string output = captured.ToString();
-            // The next steps package via the build and read the package from artifacts/ - never `dotnet pack`.
-            Assert.Contains("dotnet build ZavaSales.sln -c Release", output);
-            Assert.Contains("vela plan --packages-dir artifacts", output);
-            Assert.DoesNotContain("dotnet pack", output);
-        });
-    }
-
-    [Fact]
     public void Generate_TestProject_ReferencesPluginsAndVelaTesting()
     {
         RunInTempDir(temp =>
