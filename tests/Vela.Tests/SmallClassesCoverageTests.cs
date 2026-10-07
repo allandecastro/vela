@@ -17,20 +17,23 @@ namespace Vela.Tests;
 // entry points, the TypedFilterBuilder null guards, and a couple of EntityAttributeExtensions edges.
 public sealed class SmallClassesCoverageTests
 {
+    // A context outside any transaction: the policy retries normally.
+    private static readonly ILocalPluginContext Ctx = new Moq.Mock<ILocalPluginContext>().Object;
+
     // ---- RetryPolicy ---------------------------------------------------------------------------------
 
     [Fact]
     public void Retry_returns_on_success_and_rejects_a_null_operation()
     {
-        Assert.Throws<ArgumentNullException>(() => RetryPolicy.Execute<int>(null!));
-        Assert.Equal(42, RetryPolicy.Execute(() => 42));
+        Assert.Throws<ArgumentNullException>(() => RetryPolicy.Execute<int>(Ctx, null!));
+        Assert.Equal(42, RetryPolicy.Execute(Ctx, () => 42));
     }
 
     [Fact]
     public void Retry_recovers_from_a_transient_fault_then_succeeds()
     {
         int calls = 0;
-        int result = RetryPolicy.Execute(() =>
+        int result = RetryPolicy.Execute(Ctx, () =>
         {
             calls++;
             if (calls == 1)
@@ -49,7 +52,7 @@ public sealed class SmallClassesCoverageTests
     public void Retry_rethrows_a_non_transient_fault_immediately()
     {
         int calls = 0;
-        Assert.Throws<InvalidOperationException>(() => RetryPolicy.Execute<int>(() =>
+        Assert.Throws<InvalidOperationException>(() => RetryPolicy.Execute<int>(Ctx, () =>
         {
             calls++;
             throw new InvalidOperationException("boom"); // not transient
@@ -61,7 +64,7 @@ public sealed class SmallClassesCoverageTests
     public void Retry_exhausts_attempts_on_a_persistent_transient_fault()
     {
         int calls = 0;
-        Assert.Throws<FaultException<OrganizationServiceFault>>(() => RetryPolicy.Execute<int>(() =>
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() => RetryPolicy.Execute<int>(Ctx, () =>
         {
             calls++;
             throw new FaultException<OrganizationServiceFault>(

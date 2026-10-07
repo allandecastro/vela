@@ -169,34 +169,10 @@ namespace Vela.Plugin
         }
 
         /// <summary>
-        /// Optional sandbox-safe retry wrapper for organization service operations. Retries only safe-to-replay
-        /// throttling faults; timeouts are not retried (a timed-out write may already have committed). See
-        /// <see cref="RetryPolicy"/> for the idempotency contract.
-        /// </summary>
-        /// <typeparam name="T">Result type.</typeparam>
-        /// <param name="operation">Operation to execute.</param>
-        /// <returns>Operation result.</returns>
-        protected static T ExecuteWithRetry<T>(Func<T> operation)
-        {
-            return RetryPolicy.Execute(operation);
-        }
-
-        /// <summary>
-        /// Retry wrapper that also retries timeouts. Use only for an idempotent operation (a read, or a write that
-        /// is safe to replay); a non-idempotent write may already have committed before a timeout surfaced.
-        /// </summary>
-        /// <typeparam name="T">Result type.</typeparam>
-        /// <param name="operation">Idempotent operation to execute.</param>
-        /// <returns>Operation result.</returns>
-        protected static T ExecuteIdempotentWithRetry<T>(Func<T> operation)
-        {
-            return RetryPolicy.Execute(operation, retryOnTimeout: true);
-        }
-
-        /// <summary>
-        /// Transaction-aware retry wrapper: retries safe-to-replay throttling faults, except inside a database
+        /// Sandbox-safe retry wrapper for organization service operations: retries only safe-to-replay throttling
+        /// faults (timeouts are not retried, a timed-out write may already have committed), except inside a database
         /// transaction (a synchronous pre/post-operation step), where a failed call aborts the transaction and the
-        /// operation therefore runs once. Prefer this overload in a plugin.
+        /// operation therefore runs once. See <see cref="RetryPolicy"/> for the idempotency contract.
         /// </summary>
         /// <typeparam name="T">Result type.</typeparam>
         /// <param name="context">The plugin context.</param>
@@ -208,7 +184,8 @@ namespace Vela.Plugin
         }
 
         /// <summary>
-        /// Transaction-aware retry wrapper that also retries timeouts. Use only for an idempotent operation.
+        /// Transaction-aware retry wrapper that also retries timeouts. Use only for an idempotent operation (a read, or
+        /// a write that is safe to replay); a non-idempotent write may already have committed before a timeout surfaced.
         /// </summary>
         /// <typeparam name="T">Result type.</typeparam>
         /// <param name="context">The plugin context.</param>

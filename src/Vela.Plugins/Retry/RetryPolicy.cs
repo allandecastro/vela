@@ -36,9 +36,9 @@ namespace Vela.Retry
     /// </para>
     /// <para>
     /// <b>Transactions.</b> Inside a database transaction (a synchronous pre/post-operation step), a failed
-    /// organization service call aborts the whole transaction, so replaying the call cannot succeed. Pass the context
-    /// (<see cref="Execute{T}(ILocalPluginContext, Func{T}, bool, int, int)"/>): when
-    /// <see cref="ILocalPluginContext.IsInTransaction"/> is true the operation runs once and its failure propagates.
+    /// organization service call aborts the whole transaction, so replaying the call cannot succeed. The policy therefore
+    /// always takes the plugin context: when <see cref="ILocalPluginContext.IsInTransaction"/> is true the operation
+    /// runs once and its failure propagates.
     /// </para>
     /// </remarks>
     public static class RetryPolicy
@@ -62,33 +62,9 @@ namespace Vela.Retry
         /// <summary>The longest the policy waits between two attempts (30 seconds).</summary>
         public static TimeSpan MaxDelay { get; } = TimeSpan.FromMilliseconds(MaxBackoffMs);
 
-        /// <summary>
-        /// Executes an operation, retrying only safe-to-replay throttling faults.
-        /// </summary>
-        /// <typeparam name="T">Result type.</typeparam>
-        /// <param name="operation">Operation to execute. Must be idempotent to be safe under retry.</param>
-        /// <param name="maxAttempts">Maximum attempts (must be at least 1).</param>
-        /// <param name="initialDelayMs">Base backoff delay in milliseconds (must be non-negative).</param>
-        /// <returns>Operation result.</returns>
-        public static T Execute<T>(Func<T> operation, int maxAttempts = 3, int initialDelayMs = 100)
-        {
-            return Execute(operation, retryOnTimeout: false, maxAttempts, initialDelayMs);
-        }
-
-        /// <summary>
-        /// Executes an operation with retries. Throttling faults are always retried; timeouts are retried only when
-        /// <paramref name="retryOnTimeout"/> is set, which the caller must do only for an idempotent operation.
-        /// </summary>
-        /// <typeparam name="T">Result type.</typeparam>
-        /// <param name="operation">Operation to execute.</param>
-        /// <param name="retryOnTimeout">
-        /// When true, also retries timeouts. Only pass true for an idempotent operation (a read, or a write that is
-        /// safe to replay); a non-idempotent write may already have committed before the timeout surfaced.
-        /// </param>
-        /// <param name="maxAttempts">Maximum attempts (must be at least 1).</param>
-        /// <param name="initialDelayMs">Base backoff delay in milliseconds (must be non-negative).</param>
-        /// <returns>Operation result.</returns>
-        public static T Execute<T>(Func<T> operation, bool retryOnTimeout, int maxAttempts = 3, int initialDelayMs = 100)
+        // The retry loop. Private: every public entry point takes the context, so the transaction check cannot be
+        // skipped by accident.
+        private static T ExecuteCore<T>(Func<T> operation, bool retryOnTimeout, int maxAttempts, int initialDelayMs)
         {
             operation = operation ?? throw new ArgumentNullException(nameof(operation));
             if (maxAttempts < 1)
@@ -121,13 +97,17 @@ namespace Vela.Retry
         }
 
         /// <summary>
-        /// Executes an operation with retries, unless the execution runs inside a database transaction: there a failed
-        /// call aborts the transaction, so a replay cannot succeed and the operation runs exactly once.
+        /// Executes an operation, retrying safe-to-replay throttling faults (and timeouts when
+        /// <paramref name="retryOnTimeout"/> is set), unless the execution runs inside a database transaction: there a
+        /// failed call aborts the transaction, so a replay cannot succeed and the operation runs exactly once.
         /// </summary>
         /// <typeparam name="T">Result type.</typeparam>
         /// <param name="context">The plugin context, used to detect a transaction.</param>
         /// <param name="operation">Operation to execute.</param>
-        /// <param name="retryOnTimeout">When true, also retries timeouts (idempotent operations only).</param>
+        /// <param name="retryOnTimeout">
+        /// When true, also retries timeouts. Only pass true for an idempotent operation (a read, or a write that is
+        /// safe to replay); a non-idempotent write may already have committed before the timeout surfaced.
+        /// </param>
         /// <param name="maxAttempts">Maximum attempts outside a transaction (must be at least 1).</param>
         /// <param name="initialDelayMs">Base backoff delay in milliseconds (must be non-negative).</param>
         /// <returns>Operation result.</returns>
@@ -145,7 +125,7 @@ namespace Vela.Retry
                 maxAttempts = 1;
             }
 
-            return Execute(operation, retryOnTimeout, maxAttempts, initialDelayMs);
+            return ExecuteCore(operation, retryOnTimeout, maxAttempts, initialDelayMs);
         }
 
         private static bool ShouldRetry(Exception exception, bool retryOnTimeout)

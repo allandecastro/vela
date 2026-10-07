@@ -79,6 +79,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   (or a user with no language setting) went straight to the hard-coded `DefaultLanguageCode` (1033). The chain is now
   user language, then `organization.languagecode` (read only when needed), then `DefaultLanguageCode`.
   `IMessageService.ResolveOrganizationLanguageCode(cacheFor)` exposes the organization language (a new interface member).
+- **Retry always takes the plugin context, and skips retrying inside a transaction.** The context-free
+  `RetryPolicy.Execute(operation, ...)` overloads and `PluginBase.ExecuteWithRetry(operation)` /
+  `ExecuteIdempotentWithRetry(operation)` are removed. Use `RetryPolicy.Execute(ctx, operation, ...)` and
+  `ExecuteWithRetry(ctx, operation)` / `ExecuteIdempotentWithRetry(ctx, operation)`: when `ctx.IsInTransaction` is
+  true the operation runs once, because a failed call aborts the transaction and a replay cannot succeed.
 
 ### Added (Framework)
 
@@ -97,9 +102,6 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   it, so `apply` removed a table set in Dataverse by recreating the parameter.
 - **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase` and
   `EntityPluginBase<TEntity>` default their `maxDepth` to it instead of repeating the literal.
-- **Transaction-aware retry.** `RetryPolicy.Execute(ctx, operation, ...)` and the `ExecuteWithRetry(ctx, ...)` /
-  `ExecuteIdempotentWithRetry(ctx, ...)` helpers on `PluginBase` run the operation once when
-  `ctx.IsInTransaction` is true: a failed call aborts the transaction, so a replay cannot succeed.
 
 ### Changed (Framework)
 

@@ -48,9 +48,9 @@ change.
   whose message mentions `timeout`) are retried only with `retryOnTimeout: true`, for idempotent operations. The
   classification isn't pluggable.
 - **No retry inside a transaction.** A failed call in a synchronous pre/post-operation step aborts the database
-  transaction, so a replay cannot succeed. Pass the context (`RetryPolicy.Execute(ctx, ...)`, or
-  `ExecuteWithRetry(ctx, ...)` on the Vela base): inside a transaction the operation runs once. The context-free
-  overloads cannot tell and still retry.
+  transaction, so a replay cannot succeed. Every retry entry point therefore takes the context
+  (`RetryPolicy.Execute(ctx, ...)`, or `ExecuteWithRetry(ctx, ...)` / `ExecuteIdempotentWithRetry(ctx, ...)` on the
+  Vela base): inside a transaction the operation runs once.
 
 ## Vela.Cli
 
