@@ -2,6 +2,7 @@ using Microsoft.Xrm.Sdk;
 using Vela.Context;
 using Vela.CustomApi;
 using Vela.Messages;
+using Vela.Plugin;
 using Vela.Testing;
 using Xunit;
 
@@ -106,6 +107,61 @@ namespace Vela.Tests
                 () => api.Execute(context.ServiceProvider));
             Assert.Contains("AccountId", ex.Message);
             Assert.Contains("auto-property", ex.Message);
+        }
+    }
+
+    // The auto-property guard is computed once per request type, then checked per execution against the inputs.
+    public sealed class CustomApiRequestBindingCacheTests
+    {
+        private sealed class DepthProbeApi : CustomApiBase<CustomApiMappingTests.AutoPropRequest, CustomApiMappingTests.EmptyResponse>
+        {
+            public DepthProbeApi() : base(string.Empty, string.Empty)
+            {
+            }
+
+            public int ObservedMaxDepth => MaxDepth;
+
+            public int Calls { get; private set; }
+
+            protected override CustomApiMappingTests.EmptyResponse Execute(ILocalPluginContext ctx, CustomApiMappingTests.AutoPropRequest request)
+            {
+                Calls++;
+                return new CustomApiMappingTests.EmptyResponse();
+            }
+        }
+
+        [Fact]
+        public void The_guard_keeps_failing_on_every_execution_once_cached()
+        {
+            DepthProbeApi api = new DepthProbeApi();
+            for (int run = 0; run < 3; run++)
+            {
+                LocalPluginContext context = PluginContext.ForMessage("zava_Legacy").Build();
+                context.PluginExecutionContext.InputParameters["AccountId"] = 7;
+
+                InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => api.Execute(context.ServiceProvider));
+                Assert.Contains("AccountId", ex.Message);
+            }
+
+            Assert.Equal(0, api.Calls);
+        }
+
+        [Fact]
+        public void An_input_that_matches_no_auto_property_runs_the_handler()
+        {
+            DepthProbeApi api = new DepthProbeApi();
+            LocalPluginContext context = PluginContext.ForMessage("zava_Legacy").Build();
+            context.PluginExecutionContext.InputParameters["SomethingElse"] = 7;
+
+            api.Execute(context.ServiceProvider);
+
+            Assert.Equal(1, api.Calls);
+        }
+
+        [Fact]
+        public void Custom_API_bases_default_to_the_shared_depth_constant()
+        {
+            Assert.Equal(PluginBase.DefaultMaxDepth, new DepthProbeApi().ObservedMaxDepth);
         }
     }
 }

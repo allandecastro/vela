@@ -100,8 +100,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `RequestParameter` and `ResponseParameter`, or `[LogicalEntityName("contact")]` (`Vela.Messages`) on a model
   property. An early-bound entity parameter (`Account`) uses its own table. Before, the framework had no way to set
   it, so `apply` removed a table set in Dataverse by recreating the parameter.
-- **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase` and
-  `EntityPluginBase<TEntity>` default their `maxDepth` to it instead of repeating the literal.
+- **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase`,
+  `EntityPluginBase<TEntity>`, `CustomApiBase` and `CustomApiBase<TRequest, TResponse>` default their `maxDepth` to it
+  instead of repeating the literal.
 
 ### Changed (Framework)
 
@@ -115,7 +116,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   then `Dataverse.Update ok 42 ms`) instead of an 11-line block per call, which filled the ~10 KB trace log.
 - **Less work per execution.** `ctx.Service`, `ctx.SystemService` and `ctx.NotificationService` are created on first
   use instead of for every execution, and the reflection the context does on every run (context interface types,
-  context properties read by name, the telemetry logger and `LogMetric` lookups) is resolved once per process.
+  context properties read by name, the telemetry logger and `LogMetric` lookups) is resolved once per process. A typed
+  Custom API finds its request type's auto-properties once per type instead of reflecting over every input parameter
+  on every execution.
 
 ### Fixed (Framework)
 
@@ -230,6 +233,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **File helpers cap the block size at 4 MB.** `UploadFile` / `DownloadFile` passed a larger `blockSize` straight to
   Dataverse, which rejects blocks above 4 MB; it is now capped (`FileColumnExtensions.MaxBlockSize`). `DownloadFile`
   also assembles the content in one buffer instead of a `List<byte>`.
+- **`CustomApiResponse` uses its API unique name.** The constructor ignored its `apiUniqueName` argument, so a typed
+  Custom API response had no `ResponseName`. It now sets `ResponseName`, as `CustomApiRequest` sets `RequestName`.
 
 ### Added (CLI)
 

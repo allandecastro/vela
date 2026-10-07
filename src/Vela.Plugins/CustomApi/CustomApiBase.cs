@@ -18,7 +18,7 @@ namespace Vela.CustomApi
     /// <param name="unsecureConfig">Unsecure JSON configuration.</param>
     /// <param name="secureConfig">Secure JSON configuration.</param>
     /// <param name="maxDepth">Depth guard threshold.</param>
-    public abstract class CustomApiBase(string unsecureConfig, string secureConfig, int maxDepth = 8) : PluginBase(unsecureConfig, secureConfig, maxDepth)
+    public abstract class CustomApiBase(string unsecureConfig, string secureConfig, int maxDepth = PluginBase.DefaultMaxDepth) : PluginBase(unsecureConfig, secureConfig, maxDepth)
     {
         private volatile CustomApiDefinition? _customApiDefinition;
         private ICustomApiBuilder? _activeBuilder;

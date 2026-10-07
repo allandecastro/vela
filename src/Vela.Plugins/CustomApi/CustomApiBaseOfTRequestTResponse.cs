@@ -26,7 +26,7 @@ namespace Vela.CustomApi
     /// <param name="unsecureConfig">Unsecure JSON configuration.</param>
     /// <param name="secureConfig">Secure JSON configuration.</param>
     /// <param name="maxDepth">Depth guard threshold.</param>
-    public abstract class CustomApiBase<TRequest, TResponse>(string unsecureConfig, string secureConfig, int maxDepth = 8) : CustomApiBase(unsecureConfig, secureConfig, maxDepth)
+    public abstract class CustomApiBase<TRequest, TResponse>(string unsecureConfig, string secureConfig, int maxDepth = Vela.Plugin.PluginBase.DefaultMaxDepth) : CustomApiBase(unsecureConfig, secureConfig, maxDepth)
         where TRequest : OrganizationRequest, new()
         where TResponse : OrganizationResponse, new()
     {
@@ -124,20 +124,46 @@ namespace Vela.CustomApi
         /// </summary>
         private static void VerifyRequestBindsToParameters(TRequest request, ParameterCollection inputParameters)
         {
+            // The auto-properties of a request type never change, so they are found once per type (the cache below);
+            // a well-formed request has none and the per-execution check is a single emptiness test.
             Type type = request.GetType();
+            Dictionary<string, PropertyInfo> autoProperties = type == typeof(TRequest) ? RequestAutoProperties : FindAutoProperties(type);
+            if (autoProperties.Count == 0)
+            {
+                return;
+            }
+
             foreach (KeyValuePair<string, object> input in inputParameters)
             {
-                PropertyInfo? property = type.GetProperty(input.Key, BindingFlags.Public | BindingFlags.Instance);
-                MethodInfo? getter = property?.GetGetMethod();
-                if (getter != null && getter.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+                if (autoProperties.TryGetValue(input.Key, out PropertyInfo? property))
                 {
                     throw new InvalidPluginExecutionException(
-                        $"Custom API request '{type.FullName}' declares '{property!.Name}' as a plain auto-property, so the " +
+                        $"Custom API request '{type.FullName}' declares '{property.Name}' as a plain auto-property, so the " +
                         $"input parameter '{input.Key}' would silently bind to its default. Back the property with the " +
                         $"Parameters bag instead (e.g. 'get => Get<{property.PropertyType.Name}>(); set => Set(value);') " +
                         "or derive the request from Vela.Messages.TypedRequest, then regenerate with the current CLI.");
                 }
             }
+        }
+
+        // The public instance properties of TRequest whose getter is compiler-generated (plain auto-properties),
+        // keyed by name exactly as Type.GetProperty matches them. Computed once per closed generic type.
+        private static readonly Dictionary<string, PropertyInfo> RequestAutoProperties = FindAutoProperties(typeof(TRequest));
+
+        private static Dictionary<string, PropertyInfo> FindAutoProperties(Type type)
+        {
+            Dictionary<string, PropertyInfo> autoProperties = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+            foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                MethodInfo? getter = property.GetGetMethod();
+                if (getter != null && getter.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false)
+                    && !autoProperties.ContainsKey(property.Name))
+                {
+                    autoProperties[property.Name] = property;
+                }
+            }
+
+            return autoProperties;
         }
 
         /// <summary>
