@@ -477,8 +477,8 @@ RegisterStep().OnAssociate().PostOperation().Sync().Handle(ctx =>
 The `TEntity` on `EntityPluginBase<TEntity>` is irrelevant for these two messages (it does not scope them); pick any
 and filter on `ctx.Request.Relationship`.
 
-The scaffold generates an `AccountMessageReference.cs` cheat-sheet with one dormant (`Disabled()`) handler per
-row, so you can copy the exact shape for the message you need. `OnAssign()` is entity-bound (unlike
+`vela init --samples` generates an `AccountMessageReference.cs` cheat-sheet with one handler per row, so you can copy
+the exact shape for the message you need. It is an `abstract` class, so it compiles but is never deployed. `OnAssign()` is entity-bound (unlike
 Associate / Disassociate): it keeps its primary entity and fires on reassignment, with `ctx.Request.Assignee`
 holding the new owner. The deprecated `SetState` / `SetStateDynamicEntity` messages are intentionally not
 modelled: update `statecode` / `statuscode` with `OnUpdate()` instead.

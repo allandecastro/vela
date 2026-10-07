@@ -362,13 +362,14 @@ namespace {{prefix}}.Plugins.Account.Plugins
 
     /// <summary>
     /// REFERENCE / CHEAT-SHEET - one handler per typed message Vela models, showing the strongly-typed context
-    /// each receives. Every step is registered <c>.Disabled()</c>, so this class is safe to deploy: nothing fires
-    /// until you enable a step. Copy the handler for the message you need into a real plugin, then delete this
-    /// file. Each handler infers its request/response from the message (no cast); the primary record is read via
+    /// each receives. The class is <c>abstract</c>, so it compiles (the analyzers check it) but is never deployed:
+    /// neither <c>vela plan</c>/<c>apply</c> nor Dataverse registers an abstract plugin type. Its steps are also
+    /// <c>.Disabled()</c>, in case you copy them as they are. Copy the handler for the message you need into a real
+    /// (sealed) plugin. Each handler infers its request/response from the message (no cast); the primary record is read via
     /// <c>ctx.Request.Target</c> (Create / Update, an early-bound entity) / <c>ctx.Request.Targets</c> (the
     /// SDK-typed <c>EntityReference</c> / <c>EntityCollection</c> for the rest).
     /// </summary>
-    public sealed partial class AccountMessageReference(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+    public abstract partial class AccountMessageReference(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
         protected override void RegisterPluginSteps()
         {

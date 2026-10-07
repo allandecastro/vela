@@ -496,7 +496,10 @@ public class ProjectScaffolderTests
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--prefix", "zava", "--project", pluginsProject]));
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Lookup", "--global", "--function", "--prefix", "zava", "--project", pluginsProject]));
 
-            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_AccountEstimateValue", "zava_GetScore", "zava_Lookup"], minimumSteps: 20);
+            // Exactly the sample steps: AccountRelatedContacts 1, AccountPostCreate 1, ContactRouter 2, ContactSync 1,
+            // AccountSyncRouter 2. The abstract AccountMessageReference cheat-sheet (16 steps) is never deployed.
+            RegistrationItem[] items = BuildTestAndScan(temp, root, expectedCustomApis: ["zava_AccountEstimateValue", "zava_GetScore", "zava_Lookup"], minimumSteps: 7, maximumSteps: 7);
+            Assert.DoesNotContain(items, item => item.Type.EndsWith(".AccountMessageReference", StringComparison.Ordinal));
         });
     }
 
@@ -553,7 +556,7 @@ public class ProjectScaffolderTests
 
     // Packs the repo's current Vela packages into a local feed, restores and builds the generated solution (failing on
     // any Vela analyzer warning), runs its generated tests, and scans its packages as `vela plan` does.
-    private static void BuildTestAndScan(string temp, string root, string[] expectedCustomApis, int minimumSteps, int maximumSteps = int.MaxValue, bool runTests = true)
+    private static RegistrationItem[] BuildTestAndScan(string temp, string root, string[] expectedCustomApis, int minimumSteps, int maximumSteps = int.MaxValue, bool runTests = true)
     {
         string? coreProject = FindRepoProject("Vela.Plugins");
         string? testingProject = FindRepoProject("Vela.Testing");
@@ -613,6 +616,7 @@ public class ProjectScaffolderTests
 
             int steps = items.Count(item => item.Kind == "step");
             Assert.InRange(steps, minimumSteps, maximumSteps);
+            return items;
         }
         finally
         {

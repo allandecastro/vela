@@ -56,8 +56,8 @@ Pass **`--samples`** to see every pattern working instead. It adds, to the same 
 
 `Zava.Plugins` then ships working examples: a single-step plugin (schedules a follow-up task), a multi-step router
 plugin, table-**bound** and **global** Custom APIs, a cross-table shared service, two **table-scoped** services (one
-write, one read) and `AccountMessageReference`, a cheat-sheet with one disabled step per typed message (it deploys
-15 disabled steps, so delete it before a real deployment). `Zava.Plugins.Tests` runs those plugins and Custom APIs
+write, one read) and `AccountMessageReference`, a cheat-sheet with one step per typed message. The cheat-sheet is an
+`abstract` class: it compiles, but neither `vela apply` nor Dataverse registers it, so it is never deployed. `Zava.Plugins.Tests` runs those plugins and Custom APIs
 with [`Vela.Testing`](testing.md), no Dataverse connection: `dotnet test tests/Zava.Plugins.Tests`. Each file's
 namespace matches its folder. Generate a samples solution next to your real one to copy from it.
 

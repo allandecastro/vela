@@ -152,6 +152,9 @@ public class ScaffoldTemplatesTests
     {
         string code = ScaffoldTemplates.AccountMessageReference("Zava");
 
+        // Abstract: it compiles but neither vela nor Dataverse registers it, so its steps are never deployed.
+        Assert.Contains("public abstract partial class AccountMessageReference(", code);
+
         // One typed handler per modelled message shown on account (CRUD/bulk, relationships, merge, sharing,
         // and the account-valid sharing reads).
         string[] contexts =
