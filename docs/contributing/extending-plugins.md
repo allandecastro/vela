@@ -57,6 +57,6 @@ these, in this order:
 
 ## Deprecated messages are intentionally not modelled
 
-`SetState`, `SetStateDynamicEntity` and `Assign` are deprecated by the platform. They deliberately get **no** typed
+`SetState` and `SetStateDynamicEntity` are deprecated by the platform. They deliberately get **no** typed
 method: they are not in `KnownMessages` and have no `I<Message>Pre`/`PostContext`, so they render `OnMessage("...")`. Update
-`statecode` / `statuscode` (or `ownerid`) through an `Update` instead. Do not add typed support for them.
+`statecode` / `statuscode` through an `Update` instead. (`Assign` is supported: use `OnAssign()`.) Do not add typed support for them.
