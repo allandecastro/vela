@@ -164,6 +164,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **The secure-config digest in plan output can no longer be brute-forced.** It was a plain SHA-256 of the secret; it
   is now an HMAC keyed per run.
 - **Deleting a step also deletes its secure configuration row**, which Dataverse does not cascade.
+- **Renaming a Custom API's plugin class no longer blocks the package upload.** With the same unique name, the Custom
+  API was re-pointed to the new class only after the upload, which had to remove the old plugin type while the Custom
+  API still referenced it. `apply` now detaches the Custom API before the upload and points it at the new type after.
 
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
