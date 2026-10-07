@@ -152,4 +152,86 @@ public class SignCommandTests
         Assert.True(ok);
         Assert.Equal("MyCert", options.PfxCredentialTarget);
     }
+
+    [Fact]
+    public void TryParseOptions_ReadsBothSecrets_FromNamedEnvironmentVariables()   // A-65
+    {
+        string base64Var = "VELA_TEST_PFX_B64_" + Guid.NewGuid().ToString("N");
+        string passwordVar = "VELA_TEST_PFX_PW_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(base64Var, "QkFTRTY0");
+        Environment.SetEnvironmentVariable(passwordVar, "s3cret;with;semicolons");
+        try
+        {
+            Assert.True(SignCommand.TryParseOptions(
+                ["--package", "a.nupkg", "--pfx-base64-env", base64Var, "--pfx-password-env", passwordVar],
+                out SignOptions options,
+                out _));
+
+            Assert.Equal("QkFTRTY0", options.PfxBase64);
+            Assert.Equal("s3cret;with;semicolons", options.PfxPassword);
+            Assert.False(options.SecretsOnCommandLine);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(base64Var, null);
+            Environment.SetEnvironmentVariable(passwordVar, null);
+        }
+    }
+
+    [Fact]
+    public void TryParseOptions_FlagsLiteralSecretsOnTheCommandLine()
+    {
+        Assert.True(SignCommand.TryParseOptions(["--package", "a.nupkg", "--pfx", "c.pfx", "--pfx-password", "pw"], out SignOptions options, out _));
+        Assert.True(options.SecretsOnCommandLine);
+    }
+
+    [Fact]
+    public void TryParseOptions_Fails_WhenTheNamedVariableIsUnset()
+    {
+        string unset = "VELA_TEST_UNSET_" + Guid.NewGuid().ToString("N");
+        Assert.False(SignCommand.TryParseOptions(["--package", "a.nupkg", "--pfx", "c.pfx", "--pfx-password-env", unset], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParseOptions_Fails_WhenASecretIsGivenBothWays()
+    {
+        string variable = "VELA_TEST_PW_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(variable, "pw");
+        try
+        {
+            Assert.False(SignCommand.TryParseOptions(
+                ["--package", "a.nupkg", "--pfx", "c.pfx", "--pfx-password", "pw", "--pfx-password-env", variable],
+                out _,
+                out int exitCode));
+            Assert.Equal(ExitInvalidArguments, exitCode);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
+    }
+
+    [Fact]
+    public void WriteOwnerOnlyFile_CreatesANewFile_ReadableOnlyByItsOwner()   // A-65: no write-then-chmod window
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"vela-sign-test-{Guid.NewGuid():N}.pfx");
+        try
+        {
+            SignCommand.WriteOwnerOnlyFile(path, [1, 2, 3]);
+
+            Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(path));
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+            }
+
+            // CreateNew: an existing file (e.g. one planted to be read back) is never reused.
+            Assert.Throws<IOException>(() => SignCommand.WriteOwnerOnlyFile(path, [4]));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
