@@ -229,4 +229,79 @@ public sealed class ExecutePipelineTests
 
         Assert.Equal(expectedCalls, plugin.Calls);
     }
+
+    // ---- Failure diagnostics are best-effort ---------------------------------------------------------
+
+    private sealed class ThrowingTracer : ITracingService
+    {
+        public int Calls { get; private set; }
+
+        public void Trace(string format, params object[] args)
+        {
+            Calls++;
+            throw new FormatException("tracer down");
+        }
+    }
+
+    [Fact]
+    public void A_ConfigureServices_failure_survives_a_throwing_tracer()
+    {
+        ThrowingTracer tracer = new ThrowingTracer();
+        IServiceProvider provider = new PluginContextBuilder().WithTracingService(tracer).BuildServiceProvider();
+        ThrowingConfigurePlugin plugin = new ThrowingConfigurePlugin(new InvalidOperationException("registration boom"));
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
+
+        Assert.Contains("InvalidOperationException: registration boom", ex.Message);
+        Assert.IsType<InvalidOperationException>(ex.InnerException);
+        Assert.True(tracer.Calls > 0); // the handlers did try to trace
+        Assert.True(plugin.Probe!.Disposed);
+    }
+
+    [Fact]
+    public void A_business_exception_keeps_its_message_with_a_throwing_tracer()
+    {
+        IServiceProvider provider = new PluginContextBuilder().WithTracingService(new ThrowingTracer()).BuildServiceProvider();
+        ThrowingConfigurePlugin plugin = new ThrowingConfigurePlugin(new PluginBusinessException("Configure says no."));
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
+
+        Assert.Equal("Configure says no.", ex.Message);
+    }
+
+    [Fact]
+    public void An_InvalidPluginExecutionException_is_rethrown_unchanged_with_a_throwing_tracer()
+    {
+        IServiceProvider provider = new PluginContextBuilder().WithTracingService(new ThrowingTracer()).BuildServiceProvider();
+        InvalidPluginExecutionException original = new InvalidPluginExecutionException("clean failure");
+        ThrowingConfigurePlugin plugin = new ThrowingConfigurePlugin(original);
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
+
+        Assert.Same(original, ex);
+    }
+
+    [Theory]
+    [InlineData("boom", "InvalidOperationException: registrar boom")]
+    [InlineData("business", "Registrar says no.")]
+    public void An_assembly_registrar_failure_survives_a_throwing_tracer(string mode, string expectedMessage)
+    {
+        var builder = new PluginContextBuilder().WithTracingService(new ThrowingTracer());
+        builder.WithSharedVariable(TestAssemblyRegistrar.ThrowSwitch, mode);
+        NoopPlugin plugin = new NoopPlugin();
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(builder.BuildServiceProvider()));
+
+        if (mode == "business")
+        {
+            Assert.Equal(expectedMessage, ex.Message);
+        }
+        else
+        {
+            Assert.Contains(expectedMessage, ex.Message);
+            Assert.IsType<InvalidOperationException>(ex.InnerException);
+        }
+
+        Assert.False(plugin.Ran);
+    }
 }

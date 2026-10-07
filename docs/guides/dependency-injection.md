@@ -56,7 +56,8 @@ resolved once per assembly and cached, so the attribute lookup never repeats on 
 
 Registration runs under the same failure contract as the handler: an exception thrown by the registrar or by
 `ConfigureServices` is traced, surfaced as an `InvalidPluginExecutionException` (a `PluginBusinessException`
-keeps its own message), and the transient services already created are still disposed.
+keeps its own message), and the transient services already created are still disposed. Tracing the failure is
+best-effort: a tracing service that throws never replaces the original error.
 
 ## Lifetimes
 

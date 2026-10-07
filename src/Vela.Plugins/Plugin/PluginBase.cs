@@ -100,21 +100,23 @@ namespace Vela.Plugin
                     localContext.TraceExecutionSnapshot("success", snapshotDetail);
                 }
             }
+            // The diagnostics in the failure handlers are best-effort: a tracing service that fails too must never
+            // replace the original failure (or a business exception's message) with its own exception.
             catch (InvalidPluginExecutionException)
             {
-                localContext.TraceExecutionSnapshot("invalid-plugin-exception", snapshotDetail);
+                TryDiagnose(() => localContext.TraceExecutionSnapshot("invalid-plugin-exception", snapshotDetail));
                 throw;
             }
             catch (PluginBusinessException businessException)
             {
-                localContext.Trace("Business exception: {0}", businessException.Message);
-                localContext.TraceExecutionSnapshot("business-exception", snapshotDetail);
+                TryDiagnose(() => localContext.Trace("Business exception: {0}", businessException.Message));
+                TryDiagnose(() => localContext.TraceExecutionSnapshot("business-exception", snapshotDetail));
                 throw new InvalidPluginExecutionException(businessException.Message);
             }
             catch (Exception ex)
             {
-                localContext.Trace("Unhandled exception: {0}", ex);
-                localContext.TraceExecutionSnapshot("unhandled-exception", snapshotDetail);
+                TryDiagnose(() => localContext.Trace("Unhandled exception: {0}", ex));
+                TryDiagnose(() => localContext.TraceExecutionSnapshot("unhandled-exception", snapshotDetail));
                 // Surface the real cause (type + message) to the caller instead of a generic "an error occurred":
                 // the caller only ever sees the InvalidPluginExecutionException message, and a generic one hides
                 // the actual failure (for example a SerializationException from passing an early-bound entity to a
@@ -201,6 +203,20 @@ namespace Vela.Plugin
         /// </summary>
         /// <param name="ctx">Local plugin context.</param>
         protected abstract void ExecuteDataversePlugin(ILocalPluginContext ctx);
+
+        // Runs one diagnostic step of a failure handler; any exception it throws is swallowed so the failure being
+        // handled is the one that surfaces.
+        private static void TryDiagnose(Action diagnostic)
+        {
+            try
+            {
+                diagnostic();
+            }
+            catch (Exception)
+            {
+                // Ignored: diagnostics must never mask the original failure.
+            }
+        }
 
         // Best-effort trace of a failure that happened before the context existed. Tracing must never mask the
         // original failure, so any error while tracing is swallowed.
