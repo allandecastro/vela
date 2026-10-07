@@ -89,7 +89,10 @@ namespace Vela.Files
         /// <param name="service">The organization service.</param>
         /// <param name="target">The record that owns the column.</param>
         /// <param name="fileAttributeName">The File/Image column's logical name.</param>
-        /// <param name="blockSize">The block size in bytes (default 4 MB, the platform maximum; larger values are capped).</param>
+        /// <param name="blockSize">
+        /// The block size in bytes for a chunked download (default 4 MB, the platform maximum; larger values are capped).
+        /// When the platform reports <c>IsChunkingSupported = false</c>, the whole file is read in one block instead.
+        /// </param>
         /// <returns>The file bytes.</returns>
         public static byte[] DownloadFile(
             this IOrganizationService service,
@@ -113,12 +116,17 @@ namespace Vela.Files
             string token = (string)initialized["FileContinuationToken"];
             long size = Convert.ToInt64(initialized["FileSizeInBytes"]);
 
+            // Without chunking support Dataverse serves the file only as one block covering the whole file, so the
+            // 4 MB cap applies to chunked downloads only. An absent flag means chunking is supported.
+            bool chunked = !initialized.Contains("IsChunkingSupported") || !(initialized["IsChunkingSupported"] is bool supported) || supported;
+            long blockLength = chunked ? blockSize : Math.Max(size, 1);
+
             // Collect into a stream sized to the announced length: one buffer copy per block instead of a List<byte>
             // filled byte by byte.
             using MemoryStream content = new MemoryStream(size > 0 && size < int.MaxValue ? (int)size : 0);
             for (long offset = 0; offset < size;)
             {
-                long length = Math.Min(blockSize, size - offset);
+                long length = Math.Min(blockLength, size - offset);
                 OrganizationRequest download = new OrganizationRequest("DownloadBlock");
                 download["FileContinuationToken"] = token;
                 download["Offset"] = offset;

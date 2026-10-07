@@ -211,7 +211,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ConfigureServices`, an `[assembly: VelaServiceRegistrar]` and the `LocalPluginContext` constructor ran before
   the `try` in `PluginBase.Execute`, so their exception escaped unwrapped and untraced, and the resolver was never
   disposed. Registration now runs inside the `try` (traced, wrapped in an `InvalidPluginExecutionException`, resolver
-  disposed); a context construction failure is traced to the platform tracing service and wrapped too.
+  disposed); a context construction failure is traced to the platform tracing service and wrapped too. Tracing in the
+  failure handlers is best-effort: a tracing service that throws no longer replaces the original failure (or a
+  `PluginBusinessException`'s message).
 - **`RetryPolicy` honours `Retry-After`.** A service-protection fault's `ErrorDetails["Retry-After"]` was ignored, so the
   jittered backoff retried too early and was rejected again. The policy now waits that long, and rethrows at once when
   the wait exceeds `RetryPolicy.MaxDelay` (30 s).
@@ -231,8 +233,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`RetrieveAll` / `ToList` no longer leave the query on its last page.** Paging overwrote the query's `PageInfo`,
   so a reused `TypedQuery` kept the last page number and cookie. The caller's `PageInfo` is restored afterwards.
 - **File helpers cap the block size at 4 MB.** `UploadFile` / `DownloadFile` passed a larger `blockSize` straight to
-  Dataverse, which rejects blocks above 4 MB; it is now capped (`FileColumnExtensions.MaxBlockSize`). `DownloadFile`
-  also assembles the content in one buffer instead of a `List<byte>`.
+  Dataverse, which rejects blocks above 4 MB; it is now capped (`FileColumnExtensions.MaxBlockSize`). When
+  `InitializeFileBlocksDownload` reports `IsChunkingSupported = false`, `DownloadFile` reads the whole file in one
+  block, as Dataverse requires. `DownloadFile` also assembles the content in one buffer instead of a `List<byte>`.
 - **`CustomApiResponse` uses its API unique name.** The constructor ignored its `apiUniqueName` argument, so a typed
   Custom API response had no `ResponseName`. It now sets `ResponseName`, as `CustomApiRequest` sets `RequestName`.
 

@@ -85,6 +85,9 @@ public sealed class RuntimePerfTests
 
         public long FileSize { get; set; }
 
+        // Null leaves IsChunkingSupported out of the initialize response.
+        public bool? ChunkingSupported { get; set; }
+
         public OrganizationResponse Execute(OrganizationRequest request)
         {
             OrganizationResponse response = new OrganizationResponse();
@@ -102,6 +105,10 @@ public sealed class RuntimePerfTests
                 case "InitializeFileBlocksDownload":
                     response.Results["FileContinuationToken"] = "token";
                     response.Results["FileSizeInBytes"] = FileSize;
+                    if (ChunkingSupported.HasValue)
+                    {
+                        response.Results["IsChunkingSupported"] = ChunkingSupported.Value;
+                    }
                     break;
                 case "DownloadBlock":
                     long length = (long)request["BlockLength"];
@@ -142,5 +149,27 @@ public sealed class RuntimePerfTests
         Assert.Equal(new[] { (long)FileColumnExtensions.MaxBlockSize, 10L }, service.RequestedDownloadLengths);
         Assert.Equal(FileColumnExtensions.MaxBlockSize + 10, downloaded.Length);
         Assert.All(downloaded.Take(16), b => Assert.Equal(7, b));
+    }
+
+    [Fact]
+    public void Without_chunking_support_the_whole_file_is_downloaded_in_one_block_even_above_4_MB()
+    {
+        long size = FileColumnExtensions.MaxBlockSize + 1024L;
+        BlockRecordingService service = new BlockRecordingService { FileSize = size, ChunkingSupported = false };
+
+        byte[] downloaded = service.DownloadFile(new EntityReference("account", Guid.NewGuid()), "new_file");
+
+        Assert.Equal(new[] { size }, service.RequestedDownloadLengths); // one block covering the file
+        Assert.Equal(size, downloaded.LongLength);
+    }
+
+    [Fact]
+    public void With_chunking_reported_explicitly_the_4_MB_cap_still_applies()
+    {
+        BlockRecordingService service = new BlockRecordingService { FileSize = FileColumnExtensions.MaxBlockSize + 1L, ChunkingSupported = true };
+
+        service.DownloadFile(new EntityReference("account", Guid.NewGuid()), "new_file", blockSize: int.MaxValue);
+
+        Assert.Equal(new[] { (long)FileColumnExtensions.MaxBlockSize, 1L }, service.RequestedDownloadLengths);
     }
 }
