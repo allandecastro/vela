@@ -1,11 +1,12 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Xrm.Sdk;
 using Vela.Context;
 using Vela.CustomApi;
 using Vela.Messages;
+using Vela.Tests.TestSupport;
 using Xunit;
 
 namespace Vela.Tests;
@@ -23,21 +24,8 @@ public sealed class CustomApiDefinitionConcurrencyTests
 
         const int threadCount = 32;
         CustomApiDefinition?[] results = new CustomApiDefinition?[threadCount];
-        ConcurrentBag<Exception> failures = new ConcurrentBag<Exception>();
-        using Barrier gate = new Barrier(threadCount);
-
-        Parallel.For(0, threadCount, i =>
-        {
-            try
-            {
-                gate.SignalAndWait(); // release all threads together to maximize the race on the first build
-                results[i] = api.GetCustomApiDefinition();
-            }
-            catch (Exception ex)
-            {
-                failures.Add(ex);
-            }
-        });
+        // Dedicated threads released together (maximizes the race on the first build); fails rather than hangs.
+        IReadOnlyCollection<Exception> failures = ConcurrentStart.Run(threadCount, i => results[i] = api.GetCustomApiDefinition(), TimeSpan.FromSeconds(30));
 
         Assert.Empty(failures);
 
