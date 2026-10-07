@@ -133,10 +133,17 @@ namespace Vela.Analyzers
             }
 
             // Arguments: optional leading string alias, then the column selector lambdas.
-            (string? alias, bool aliasUnresolved, List<LambdaExpressionSyntax> selectors) = SplitArguments(invocation, model, cancellationToken);
+            (string? alias, bool aliasUnresolved, List<LambdaExpressionSyntax> selectors, bool opaqueColumns) = SplitArguments(invocation, model, cancellationToken);
+            if (opaqueColumns)
+            {
+                // A column argument that is not an inline lambda (a selector held in a variable, an array): the
+                // captured columns are not known here, so a projection would be wrong or incomplete.
+                return ProjectionResult.Skipped(invocation, method, "a column argument is not an inline selector lambda");
+            }
+
             if (selectors.Count == 0)
             {
-                // No explicit columns -> the image carries every column; there is nothing to narrow, so skip.
+                // No explicit columns (only an alias, or nothing) -> the image carries every column; nothing to narrow.
                 return default;
             }
 
@@ -148,7 +155,7 @@ namespace Vela.Analyzers
             }
 
             // Message + stage from the chain that precedes this call.
-            (string? messageLabel, string? stageLabel) = ResolveMessageAndStage(member.Expression);
+            (string? messageLabel, string? stageLabel) = ResolveMessageAndStage(member.Expression, model, cancellationToken);
             if (messageLabel is null || stageLabel is null)
             {
                 // A chain split across locals legitimately hides its trigger here, so only a chain that starts at
@@ -267,7 +274,7 @@ namespace Vela.Analyzers
                 };
                 string typeParameters = t.TypeParameters.Length == 0
                     ? string.Empty
-                    : "<" + string.Join(",", t.TypeParameters.Select(p => p.Name)) + ">";
+                    : "<" + string.Join(",", t.TypeParameters.Select(VariantName)) + ">";
                 declarations.Insert(0, keyword + " " + t.Name + typeParameters);
             }
 
@@ -275,7 +282,25 @@ namespace Vela.Analyzers
         }
 
         // The type name of a containing declaration ("record struct Outer" -> "Outer", "class P<T>" -> "P<T>").
-        private static string DeclarationName(string declaration) => declaration.Substring(declaration.LastIndexOf(' ') + 1);
+        // Variance (in/out) is kept: a partial interface must repeat it (CS1067).
+        private static string VariantName(ITypeParameterSymbol parameter) => parameter.Variance switch
+        {
+            VarianceKind.Out => "out " + parameter.Name,
+            VarianceKind.In => "in " + parameter.Name,
+            _ => parameter.Name,
+        };
+
+        // The type name of a containing declaration, without its kind or any variance, for full names and file names
+        // ("record struct Outer" -> "Outer", "interface Box<out T>" -> "Box<T>").
+        private static string DeclarationName(string declaration)
+        {
+            int typeParameters = declaration.IndexOf('<');
+            string head = typeParameters < 0 ? declaration : declaration.Substring(0, typeParameters);
+            string name = head.Substring(head.LastIndexOf(' ') + 1);
+            return typeParameters < 0
+                ? name
+                : name + declaration.Substring(typeParameters).Replace("out ", string.Empty).Replace("in ", string.Empty);
+        }
 
         // Message + stage for the context driver. Like ResolveMessageAndStage but recognizes EVERY On{Msg}() trigger
         // (strips the "On" prefix: OnAssign -> Assign, OnGrantAccess -> GrantAccess, OnCreateMultiple ->
@@ -356,7 +381,7 @@ namespace Vela.Analyzers
             return null;
         }
 
-        private static (string? Message, string? Stage) ResolveMessageAndStage(ExpressionSyntax? receiver)
+        private static (string? Message, string? Stage) ResolveMessageAndStage(ExpressionSyntax? receiver, SemanticModel model, CancellationToken cancellationToken)
         {
             string? message = null;
             string? stage = null;
@@ -388,7 +413,7 @@ namespace Vela.Analyzers
                 // variable message stays null -> graceful fallback (no projection), like any unresolved capture.
                 if (message is null && name == "OnMessage")
                 {
-                    message = ResolvePermissiveMessage(call.Invocation, call.Name);
+                    message = ResolvePermissiveMessage(call.Invocation, call.Name, model, cancellationToken);
                 }
             }
 
@@ -419,10 +444,11 @@ namespace Vela.Analyzers
         }
 
         // The message label for a permissive OnMessage(...) step. OnMessage<TMessage>() reuses the request/marker
-        // type-name rule (same as On<TRequest>()); OnMessage("literal") uses the string literal, sanitized and
-        // capitalized into a legal, guessable type-name segment (e.g. "create" -> Create). A non-literal argument
-        // (a variable/const reference) is not statically resolvable, so it returns null and no projection is emitted.
-        private static string? ResolvePermissiveMessage(InvocationExpressionSyntax invocation, SimpleNameSyntax name)
+        // type-name rule (same as On<TRequest>()); OnMessage("literal") - or any compile-time constant, such as a const
+        // field - uses the string, sanitized and capitalized into a legal, guessable type-name segment (e.g. "create"
+        // -> Create). A non-constant argument (a variable) is not statically resolvable, so it returns null and no
+        // projection is emitted.
+        private static string? ResolvePermissiveMessage(InvocationExpressionSyntax invocation, SimpleNameSyntax name, SemanticModel model, CancellationToken cancellationToken)
         {
             if (name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Count == 1)
             {
@@ -431,11 +457,10 @@ namespace Vela.Analyzers
 
             SeparatedSyntaxList<ArgumentSyntax> arguments = invocation.ArgumentList.Arguments;
             if (arguments.Count == 1 &&
-                arguments[0].Expression is LiteralExpressionSyntax literal &&
-                literal.IsKind(SyntaxKind.StringLiteralExpression))
+                model.GetConstantValue(arguments[0].Expression, cancellationToken) is { HasValue: true, Value: string text })
             {
-                string raw = literal.Token.ValueText.Trim();
-                return string.IsNullOrEmpty(raw) ? null : Capitalize(Sanitize(raw));
+                string raw = text.Trim();
+                return raw.Length == 0 ? null : Capitalize(Sanitize(raw));
             }
 
             return null;
@@ -447,10 +472,12 @@ namespace Vela.Analyzers
         // The optional leading alias and the column selectors. The alias may be any compile-time string constant (a
         // literal or a const); an explicit alias that is not constant cannot be known here, so it is reported as
         // unresolved and no projection is generated (a context reading the default alias would read null).
-        private static (string? Alias, bool AliasUnresolved, List<LambdaExpressionSyntax> Selectors) SplitArguments(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
+        // Any other argument (a selector in a variable, an explicit array) is an opaque column list.
+        private static (string? Alias, bool AliasUnresolved, List<LambdaExpressionSyntax> Selectors, bool OpaqueColumns) SplitArguments(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
         {
             string? alias = null;
             bool unresolved = false;
+            bool opaque = false;
             List<LambdaExpressionSyntax> selectors = new List<LambdaExpressionSyntax>();
 
             foreach (ArgumentSyntax argument in invocation.ArgumentList.Arguments)
@@ -473,9 +500,13 @@ namespace Vela.Analyzers
                         unresolved = true;
                     }
                 }
+                else
+                {
+                    opaque = true;
+                }
             }
 
-            return (alias, unresolved, selectors);
+            return (alias, unresolved, selectors, opaque);
         }
 
         // The projected column a selector reads, or null. reportedElsewhere is true when the selector is a mistake an

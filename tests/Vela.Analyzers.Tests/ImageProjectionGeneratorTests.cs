@@ -423,9 +423,9 @@ namespace Demo
     }
 
     [Fact]
-    public void Emits_nothing_for_a_non_literal_message()
+    public void Emits_nothing_for_a_non_constant_message()
     {
-        // A message passed as a variable/const is not statically resolvable, so no projection is generated
+        // A message passed as a non-constant field is not statically resolvable, so no projection is generated
         // (the developer keeps the full early-bound image), consistent with the unresolved-capture fallback.
         string output = RunAndConcat(@"
 namespace Demo
@@ -433,7 +433,7 @@ namespace Demo
     using Vela.Plugin;
     public sealed class DynamicMessageAudit : EntityPluginBase<Account>
     {
-        private const string Msg = ""update"";
+        private static readonly string Msg = ""update"";
         protected override void RegisterPluginSteps()
             => RegisterStep().OnMessage(Msg).PostOperation().Sync()
                 .WithPostImage(a => a.Name)
@@ -1209,6 +1209,77 @@ namespace Demo
 
         Assert.DoesNotContain("OnUpdated_PostImage", output);
         Assert.DoesNotContain("OnUpdatedContext", output);
+    }
+
+    [Fact]
+    public void Generated_parts_keep_the_variance_of_a_generic_interface_container()
+    {
+        // A partial interface must repeat its type parameters' variance (CS1067 otherwise). C# itself forbids a class
+        // inside a variant interface (CS8427, the user's own error), but the generated part must not add CS1067.
+        string source = @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public partial interface IBox<out TItem, in TKey>
+    {
+        public sealed partial class Audit : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(a => a.Name).Handle(OnUpdated);
+            private void OnUpdated() { }
+        }
+    }
+}
+";
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(source);
+
+        Assert.Contains("partial interface IBox<out TItem,in TKey>", RunAndConcat(source));
+        Assert.DoesNotContain(diagnostics, d => d.Id == "CS1067");
+    }
+
+    [Fact]
+    public void Reports_VELA021_for_a_column_selector_held_in_a_variable()
+    {
+        // Not an inline lambda: the captured columns are unknown, which is not a capture-all image.
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using System;
+    using System.Linq.Expressions;
+    using Vela.Plugin;
+    public sealed partial class AccountVarColumn : EntityPluginBase<Account>
+    {
+        private static readonly Expression<Func<Account, object>> Column = a => a.Name;
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(Column).Handle(OnUpdated);
+        private void OnUpdated() { }
+    }
+}
+");
+
+        Diagnostic warning = Assert.Single(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+        Assert.Contains("not an inline selector lambda", warning.GetMessage());
+    }
+
+    [Fact]
+    public void Emits_a_projection_for_a_constant_OnMessage_name_without_VELA021()
+    {
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountConstMessage : EntityPluginBase<Account>
+    {
+        private const string Message = ""update"";
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage(Message).PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+        private static string Read(UpdatePostOp_PostImage image) => image.Name;
+    }
+}
+");
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 
     private static ImmutableArray<Diagnostic> CompileDiagnostics(string pluginSource)

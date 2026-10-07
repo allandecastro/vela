@@ -32,7 +32,8 @@ namespace Vela.CodeFixes
         public override async Task RegisterCodeFixesAsync(CodeFixContext context)
         {
             SyntaxNode? root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-            if (root == null)
+            SemanticModel? model = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
+            if (root == null || model == null)
             {
                 return;
             }
@@ -49,15 +50,16 @@ namespace Vela.CodeFixes
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         merges ? "Merge the columns into the first FilterOn(...)" : "Remove this call",
-                        _ => Task.FromResult(context.Document.WithSyntaxRoot(Rewrite(root, new[] { call }, diagnostic.Id == DiagnosticIds.DuplicateModifier))),
+                        _ => Task.FromResult(context.Document.WithSyntaxRoot(Rewrite(root, model, new[] { call }, diagnostic.Id == DiagnosticIds.DuplicateModifier))),
                         equivalenceKey: "RemoveRedundantCall"),
                     diagnostic);
             }
         }
 
         // Drops every call in `calls` from its chain. For a duplicate modifier, a dropped FilterOn(...) hands its
-        // arguments to the first FilterOn(...) of the same chain (skipping a column that is already listed there).
-        private static SyntaxNode Rewrite(SyntaxNode root, IReadOnlyCollection<InvocationExpressionSyntax> calls, bool mergeFilters)
+        // arguments to the first FilterOn(...) of the same chain (skipping a column that is already listed there, so
+        // the merge never introduces a VELA005 duplicate).
+        private static SyntaxNode Rewrite(SyntaxNode root, SemanticModel model, IReadOnlyCollection<InvocationExpressionSyntax> calls, bool mergeFilters)
         {
             Dictionary<InvocationExpressionSyntax, List<ArgumentSyntax>> merged = new Dictionary<InvocationExpressionSyntax, List<ArgumentSyntax>>();
             if (mergeFilters)
@@ -92,12 +94,74 @@ namespace Vela.CodeFixes
                     }
 
                     InvocationExpressionSyntax target = rewritten;
-                    HashSet<string> listed = new HashSet<string>(target.ArgumentList.Arguments.Select(a => a.Expression.ToString()), System.StringComparer.Ordinal);
+                    HashSet<string> listed = new HashSet<string>(original.ArgumentList.Arguments.Select(a => ColumnKey(a.Expression, model)), System.StringComparer.Ordinal);
                     IEnumerable<ArgumentSyntax> extra = merged[original]
-                        .Where(a => listed.Add(a.Expression.ToString()))
+                        .Where(a => listed.Add(ColumnKey(a.Expression, model)))
                         .Select(a => a.WithoutTrivia());
                     return target.WithArgumentList(target.ArgumentList.AddArguments(extra.ToArray()));
                 });
+        }
+
+        // What a FilterOn argument selects, independent of how it is written: the member a selector lambda reads on its
+        // parameter (a => a.Name and x => (object)x.Name are the same column), or the value of a constant string;
+        // anything else by its text.
+        private static string ColumnKey(ExpressionSyntax argument, SemanticModel model)
+        {
+            if (argument is LambdaExpressionSyntax lambda && SelectedColumn(lambda) is string column)
+            {
+                return "column:" + column;
+            }
+
+            if (model.GetConstantValue(argument) is { HasValue: true, Value: string text })
+            {
+                return "string:" + text;
+            }
+
+            return "text:" + argument;
+        }
+
+        private static string? SelectedColumn(LambdaExpressionSyntax lambda)
+        {
+            string? parameter = lambda switch
+            {
+                SimpleLambdaExpressionSyntax simple => simple.Parameter.Identifier.ValueText,
+                ParenthesizedLambdaExpressionSyntax parenthesized when parenthesized.ParameterList.Parameters.Count == 1
+                    => parenthesized.ParameterList.Parameters[0].Identifier.ValueText,
+                _ => null,
+            };
+
+            if (parameter is null || lambda.Body is not ExpressionSyntax body)
+            {
+                return null;
+            }
+
+            body = Unwrap(body);
+            return body is MemberAccessExpressionSyntax member &&
+                Unwrap(member.Expression) is IdentifierNameSyntax receiver &&
+                receiver.Identifier.ValueText == parameter
+                    ? member.Name.Identifier.ValueText
+                    : null;
+        }
+
+        private static ExpressionSyntax Unwrap(ExpressionSyntax expression)
+        {
+            while (true)
+            {
+                switch (expression)
+                {
+                    case CastExpressionSyntax cast:
+                        expression = cast.Expression;
+                        continue;
+                    case BinaryExpressionSyntax asExpression when asExpression.IsKind(SyntaxKind.AsExpression):
+                        expression = asExpression.Left;
+                        continue;
+                    case ParenthesizedExpressionSyntax parenthesized:
+                        expression = parenthesized.Expression;
+                        continue;
+                    default:
+                        return expression;
+                }
+            }
         }
 
         // The first FilterOn(...) on the chain before a duplicate FilterOn(...) call, or null when the call is not a
@@ -142,7 +206,8 @@ namespace Vela.CodeFixes
             protected override async Task<Document?> FixAllAsync(FixAllContext context, Document document, ImmutableArray<Diagnostic> diagnostics)
             {
                 SyntaxNode? root = await document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-                if (root == null)
+                SemanticModel? model = await document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
+                if (root == null || model == null)
                 {
                     return document;
                 }
@@ -160,7 +225,7 @@ namespace Vela.CodeFixes
 
                 // The fix-all runs per diagnostic ID; only VELA003 merges FilterOn columns.
                 bool mergeFilters = diagnostics.Any(d => d.Id == DiagnosticIds.DuplicateModifier);
-                return document.WithSyntaxRoot(Rewrite(root, calls, mergeFilters));
+                return document.WithSyntaxRoot(Rewrite(root, model, calls, mergeFilters));
             }
         }
     }
