@@ -26,11 +26,14 @@ internal static class UpdateCommand
     {
         if (IsHelpRequested(args))
         {
-            Console.WriteLine("Usage: vela update [--version <x.y.z>]");
-            Console.WriteLine();
-            Console.WriteLine("Updates the vela global tool to the latest published version (or the given --version)");
-            Console.WriteLine("by running 'dotnet tool update --global Vela.Cli'.");
+            CliCommands.PrintCommandHelp("update");
             return ExitSuccess;
+        }
+
+        // Only --version is accepted: an unknown option fails instead of being ignored.
+        if (!TryTokenize(args, CliCommands.ValueOptions("update"), CliCommands.FlagOptions("update"), out args, out int optExit))
+        {
+            return optExit;
         }
 
         string? version = TryReadOption(args, "--version");

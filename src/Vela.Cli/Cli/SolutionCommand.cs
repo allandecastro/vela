@@ -17,14 +17,9 @@ namespace Vela.Cli;
 /// </summary>
 internal static class SolutionCommand
 {
-    private static readonly HashSet<string> ValueOptions =
-        new(CommandLineOptions.ConnectionValueOptions, StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> ValueOptions = CliCommands.ValueOptions("solution");
 
-    private static readonly HashSet<string> FlagOptions =
-        new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
-        {
-            "--interactive", "-i", "--json", "--verbose", "-v",
-        };
+    private static readonly HashSet<string> FlagOptions = CliCommands.FlagOptions("solution");
 
     public static int Run(string[] args)
     {
@@ -109,15 +104,5 @@ internal static class SolutionCommand
         }
     }
 
-    private static void PrintUsage()
-    {
-        Console.WriteLine("vela solution show <uniquename>");
-        Console.WriteLine("  Print a solution's publisher customization prefix (read-only).");
-        Console.WriteLine();
-        Console.WriteLine("  Connect with -i (interactive) or the --connection-string / client-secret flags.");
-        Console.WriteLine("  Add --json for machine-readable output: {\"solution\":\"...\",\"publisherPrefix\":\"...\"}.");
-        Console.WriteLine();
-        Console.WriteLine("  Use it to align a scaffold's prefix with the target solution, e.g. in automation:");
-        Console.WriteLine("    vela init MySolution --prefix \"$(vela solution show mysolution_unique -i)\"");
-    }
+    private static void PrintUsage() => CliCommands.PrintCommandHelp("solution");
 }

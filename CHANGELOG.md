@@ -181,6 +181,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (CLI, breaking)
 
+- **`plan`, `apply` and `inspect` each accept only their own options.** They shared one allowlist, so
+  `plan --auto-approve` or `inspect --strict` was accepted and ignored; it is now `Unknown option` (exit 2).
+  `--detailed-exitcode` is `plan` only; `--auto-approve`/`--yes` and `--batch-size` are `apply` only; `--strict` is
+  `plan`/`apply` only. `vela update` rejects an unknown option instead of ignoring it.
 - **The legacy direct-assembly registration path is removed.** `apply` used to upload a bare plugin assembly and
   create its plugin types itself when no plugin package was given. Every scanned input is a plugin package, so the
   path was unreachable; the platform materializes the plugin types from the package. A plugin type that does not
@@ -191,6 +195,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **`vela help <command>` and `vela help --json`.** The help is generated from one command table that is also the
+  option allowlist of `plan`, `apply`, `inspect`, `sign`, `logout`, `update`, `solution`, `logs` and `models`, so it
+  lists every command (`solution` was missing) and every option a command accepts. `vela help --json` describes the
+  commands, options and exit codes for agents and completion scripts.
 - **A versioned JSON contract for `plan` / `apply` / `inspect`.** Every document starts with `"schemaVersion": 1`,
   bumped only when an existing field changes meaning or shape. The new
   [Machine-readable output](docs/reference/machine-readable-output.md) page documents the fields and the exit codes.
@@ -207,6 +215,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **Every command has its own `--help`.** `vela init --help`, `sign --help`, `logout --help`, `plan`/`apply`/
+  `inspect --help` printed the global usage; they now print the command's usage, options, notes and examples.
 - **The package scan no longer runs package code in the process that holds your credentials.** Reading a
   package's steps instantiates its plugin types, so a package could read the client secret, the connection string,
   secure-config values, the access token or CI credentials from the `vela` process. `plan`/`apply`/`inspect` and

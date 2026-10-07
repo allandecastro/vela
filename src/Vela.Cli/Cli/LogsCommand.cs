@@ -24,17 +24,9 @@ internal static class LogsCommand
     private const int DefaultTop = 20;
     private const int MaxTop = 200;
 
-    private static readonly HashSet<string> ValueOptions =
-        new(CommandLineOptions.ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
-        {
-            "--top", "--since", "--type", "--message", "--entity", "--correlation",
-        };
+    private static readonly HashSet<string> ValueOptions = CliCommands.ValueOptions("logs");
 
-    private static readonly HashSet<string> FlagOptions =
-        new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
-        {
-            "--interactive", "-i", "--json", "--verbose", "-v", "--errors", "--jobs", "--all-statuses", "--full",
-        };
+    private static readonly HashSet<string> FlagOptions = CliCommands.FlagOptions("logs");
 
     public static int Run(string[] args)
     {
@@ -351,24 +343,5 @@ internal static class LogsCommand
         return true;
     }
 
-    private static void PrintUsage()
-    {
-        Console.WriteLine("vela logs            (alias: vela trace)");
-        Console.WriteLine("  Read a Dataverse environment's execution diagnostics (read-only).");
-        Console.WriteLine();
-        Console.WriteLine("  Default source: the Plug-in Trace Log (plugintracelog).");
-        Console.WriteLine("  --jobs           read failed system jobs (asyncoperation) instead - where an async step's");
-        Console.WriteLine("                   failure is recorded even when plug-in tracing is off (--all-statuses for every status)");
-        Console.WriteLine("  --errors         (trace log) only entries that carry an exception");
-        Console.WriteLine("  --top <n>        max entries, newest first (1-200, default 20)");
-        Console.WriteLine("  --since <when>   only entries since a duration (30m / 2h / 3d) or a date");
-        Console.WriteLine("  --type <name>    filter by plugin type name (substring); --message <m>, --entity <logical>, --correlation <guid>");
-        Console.WriteLine("  --full           do not truncate the trace/exception text");
-        Console.WriteLine("  --json           machine-readable output: { mode, count, logs: [...] }");
-        Console.WriteLine();
-        Console.WriteLine("  Connect with -i (interactive) or the --connection-string / client-secret flags.");
-        Console.WriteLine("  Examples:");
-        Console.WriteLine("    vela logs --errors --since 1h -i");
-        Console.WriteLine("    vela logs --jobs --since 1d --json");
-    }
+    private static void PrintUsage() => CliCommands.PrintCommandHelp("logs");
 }

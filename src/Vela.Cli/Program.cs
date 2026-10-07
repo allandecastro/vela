@@ -43,11 +43,17 @@ if (wantsMenu)
 
 string command = effectiveArgs[0].ToLowerInvariant();
 
-// `vela help`, `vela --help`, `vela -h` all print usage and succeed.
-if (command is "help" or "--help" or "-h" or "-?" or "/?")
+// `vela --help` / `-h` print the overview; `vela help [<command>] [--json]` the overview, one command, or the
+// whole command table as JSON (all generated from CliCommands).
+if (command is "--help" or "-h" or "-?" or "/?")
 {
     PrintUsage();
     return ExitSuccess;
+}
+
+if (command is "help")
+{
+    return CliCommands.RunHelp(effectiveArgs.Skip(1).ToArray(), jsonOptions);
 }
 
 // `vela version` / `vela --version` print the tool version (plain, script-friendly).
@@ -85,7 +91,7 @@ static int RunNew(string[] args)
 {
     if (IsHelpRequested(args))
     {
-        PrintUsage();
+        CliCommands.PrintCommandHelp("init");
         return ExitSuccess;
     }
 
@@ -128,11 +134,12 @@ static int RunPlanApplyInspect(string command, string[] args, JsonSerializerOpti
 {
     if (IsHelpRequested(args))
     {
-        PrintUsage();
+        CliCommands.PrintCommandHelp(command);
         return ExitSuccess;
     }
 
-    if (!TryParseSharedOptions(args, out SharedOptions options, out int exitCode))
+    // Each command has its own allowlist: `plan --auto-approve` is an error, not silently ignored.
+    if (!TryParseSharedOptions(command, args, out SharedOptions options, out int exitCode))
     {
         return exitCode;
     }

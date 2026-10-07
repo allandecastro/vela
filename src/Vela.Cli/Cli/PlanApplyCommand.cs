@@ -65,6 +65,7 @@ internal static class PlanApplyCommand
     public static int Run(string command, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost? host = null)
     {
         host ??= PlanApplyHost.Default;
+        // The command-specific parser already rejects it; this guards a caller that built the options itself.
         if (options.DetailedExitCode && command != PlanMode)
         {
             return Fail("--detailed-exitcode applies to 'vela plan' only.", ExitInvalidArguments, includeUsage: false);
