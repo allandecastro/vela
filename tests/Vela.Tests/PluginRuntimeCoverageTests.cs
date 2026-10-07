@@ -19,8 +19,8 @@ using Xunit;
 
 namespace Vela.Tests;
 
-// Covers the standalone Vela.Plugins utility classes that had no direct tests: the manifest readers/comparer/
-// writer, the step-definition collection helper, and the Microsoft.Extensions.DependencyInjection registration.
+// Covers the standalone Vela.Plugins utility classes that had no direct tests: the step-definition reader,
+// the step-definition collection helper, and the Microsoft.Extensions.DependencyInjection registration.
 public sealed class PluginRuntimeCoverageTests
 {
     // ---- doubles -------------------------------------------------------------------------------------
@@ -70,111 +70,6 @@ public sealed class PluginRuntimeCoverageTests
         IEnumerable<StepDefinition> all = StepDefinitionReader.GetStepDefinitions(typeof(PluginRuntimeCoverageTests).Assembly);
 
         Assert.Contains(all, s => s.Message == PluginMessages.Update && s.Stage == PluginStages.PostOperation);
-    }
-
-    // ---- CustomApiDefinitionReader -------------------------------------------------------------------
-
-    private sealed class SampleApi(string unsecure, string secure) : CustomApiBase(unsecure, secure)
-    {
-        public const string Name = "vela_RuntimeCoverageSample";
-
-        protected override void RegisterCustomApi() => RegisterCustomApi(Name, nameof(Handle));
-
-        private void Handle(ILocalPluginContext ctx) { }
-    }
-
-    [Fact]
-    public void CustomApiDefinitionReader_rejects_a_null_assembly()
-    {
-        Assert.Throws<ArgumentNullException>(() => CustomApiDefinitionReader.GetCustomApiDefinitions(null!));
-    }
-
-    [Fact]
-    public void CustomApiDefinitionReader_discovers_custom_apis_in_an_assembly()
-    {
-        IReadOnlyList<CustomApiDefinition> apis = CustomApiDefinitionReader.GetCustomApiDefinitions(typeof(PluginRuntimeCoverageTests).Assembly);
-
-        Assert.Contains(apis, a => a.UniqueName == SampleApi.Name);
-    }
-
-    // ---- CustomApiManifestComparer -------------------------------------------------------------------
-
-    private static CustomApiDefinition Api(string name, string display = "D", bool isFunction = false)
-        => new CustomApiDefinition { UniqueName = name, DisplayName = display, IsFunction = isFunction };
-
-    [Fact]
-    public void CustomApiManifestComparer_rejects_null_inputs()
-    {
-        Assert.Throws<ArgumentNullException>(() => CustomApiManifestComparer.Compare(null!, Array.Empty<CustomApiDefinition>()));
-        Assert.Throws<ArgumentNullException>(() => CustomApiManifestComparer.Compare(Array.Empty<CustomApiDefinition>(), null!));
-    }
-
-    [Fact]
-    public void CustomApiManifestComparer_classifies_added_removed_and_changed()
-    {
-        CustomApiDefinition[] desired =
-        {
-            Api("vela_keep"),
-            Api("vela_added"),
-            Api("vela_changed", display: "New"),
-        };
-        CustomApiDefinition[] current =
-        {
-            Api("vela_keep"),
-            Api("vela_removed"),
-            Api("vela_changed", display: "Old"),
-        };
-
-        CustomApiManifestDiff diff = CustomApiManifestComparer.Compare(desired, current);
-
-        Assert.Equal("vela_added", Assert.Single(diff.Added).UniqueName);
-        Assert.Equal("vela_removed", Assert.Single(diff.Removed).UniqueName);
-        CustomApiDefinitionChange change = Assert.Single(diff.Changed);
-        Assert.Equal("vela_changed", change.UniqueName);
-        CustomApiPropertyChange prop = Assert.Single(change.PropertyChanges);
-        Assert.Equal(nameof(CustomApiDefinition.DisplayName), prop.PropertyName);
-        Assert.Equal("Old", prop.Before);
-        Assert.Equal("New", prop.After);
-    }
-
-    [Fact]
-    public void CustomApiManifestComparer_detects_non_string_and_parameter_changes()
-    {
-        CustomApiDefinition desired = Api("vela_api", isFunction: true);
-        desired.InputParameters = new[] { new CustomApiParameterDefinition { Name = "Amount", ParameterTypeName = "Integer" } };
-        CustomApiDefinition current = Api("vela_api", isFunction: false);
-
-        CustomApiDefinitionChange change = Assert.Single(CustomApiManifestComparer.Compare(new[] { desired }, new[] { current }).Changed);
-
-        Assert.Contains(change.PropertyChanges, p => p.PropertyName == nameof(CustomApiDefinition.IsFunction));
-        Assert.Contains(change.PropertyChanges, p => p.PropertyName == nameof(CustomApiDefinition.InputParameters));
-    }
-
-    [Fact]
-    public void CustomApiManifestComparer_reports_no_changes_for_identical_definitions()
-    {
-        CustomApiManifestDiff diff = CustomApiManifestComparer.Compare(new[] { Api("vela_same") }, new[] { Api("vela_same") });
-
-        Assert.Empty(diff.Added);
-        Assert.Empty(diff.Removed);
-        Assert.Empty(diff.Changed);
-    }
-
-    // ---- CustomApiManifestWriter ---------------------------------------------------------------------
-
-    [Fact]
-    public void CustomApiManifestWriter_serializes_and_rejects_null()
-    {
-        Assert.Throws<ArgumentNullException>(() => CustomApiManifestWriter.ToJson(null!));
-
-        string json = CustomApiManifestWriter.ToJson(new CustomApiManifest
-        {
-            SourceAssemblyName = "Vela.Sample",
-            CustomApis = new[] { Api("vela_api") },
-        });
-
-        Assert.Contains("vela_api", json);
-        Assert.Contains("Vela.Sample", json);
     }
 
     // ---- StepDefinitionCollectionExtensions ----------------------------------------------------------

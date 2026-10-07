@@ -42,6 +42,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected
   `Func<Guid?, IOrganizationService>` factory are removed. Migrate `ctx.UserService` to `ctx.Service`,
   `ctx.AsSystem()` to `ctx.SystemService`, and `ctx.AsInitiatingUser()` to `ctx.AsUser(ctx.InitiatingUserId)`.
+- **The unused Custom API manifest stack is removed:** `CustomApiManifest`, `CustomApiManifestWriter`,
+  `CustomApiManifestComparer` / `CustomApiManifestDiff` (with `CustomApiDefinitionChange` and
+  `CustomApiPropertyChange`) and `CustomApiDefinitionReader`. Nothing in Vela used them, and the comparer did not
+  match what `vela plan` compares. Read the definitions with `FrameworkManifestScanner.Scan(assembly)`, and diff
+  them against an environment with `vela plan`.
 
 ### Added (Framework)
 
