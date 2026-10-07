@@ -20,6 +20,7 @@ namespace Vela.Steps
     public interface IFakeStep : IFluentStep
     {
         IFakeStep WithExecutionOrder(int order);
+        IFakeStep FilterOn(params string[] columns);
         void Handle();
     }
 }
@@ -82,5 +83,28 @@ namespace Demo
         DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.ImageStageAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
             .WithLocation(0).WithArguments("A pre-image", "Create", "there is no prior row state before a create");
         await VerifyImage.VerifyCodeFixAsync(before, expected, after);
+    }
+
+    [Fact]
+    public async Task Merges_a_duplicate_FilterOn_into_the_first_instead_of_dropping_its_columns_VELA003()
+    {
+        // A-31: dropping the second FilterOn lost its columns; they move into the first one (a repeat is skipped).
+        string before = DupHarness.Replace("BODY", "RegisterStep().FilterOn(\"name\").WithExecutionOrder(1).{|#0:FilterOn|}(\"email\", \"name\").Handle();");
+        string after = DupHarness.Replace("BODY", "RegisterStep().FilterOn(\"name\", \"email\").WithExecutionOrder(1).Handle();");
+        DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments("FilterOn");
+        await VerifyDup.VerifyCodeFixAsync(before, expected, after);
+    }
+
+    [Fact]
+    public async Task Merges_every_duplicate_FilterOn_in_source_order_VELA003()
+    {
+        string before = DupHarness.Replace("BODY", "RegisterStep().FilterOn(\"a\").{|#0:FilterOn|}(\"b\").{|#1:FilterOn|}(\"c\").Handle();");
+        string after = DupHarness.Replace("BODY", "RegisterStep().FilterOn(\"a\", \"b\", \"c\").Handle();");
+        DiagnosticResult first = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(0).WithArguments("FilterOn");
+        DiagnosticResult second = new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(1).WithArguments("FilterOn");
+        await VerifyDup.VerifyCodeFixAsync(before, new[] { first, second }, after);
     }
 }
