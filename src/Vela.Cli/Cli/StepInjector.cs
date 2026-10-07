@@ -91,7 +91,7 @@ internal static class StepInjector
         // an exact duplicate - indistinguishable, refused - when an existing step on the same trigger has the same
         // filter columns and none of the other distinguishing modifiers. The add-step defaults (Create /
         // PostOperation / Sync) are exactly what `vela add plugin` registers, so this is the common case.
-        TriggerMatch match = FindDuplicateTrigger(MaskComments(body), registrationCall, stageCall, modeCall, explicitFilterAttributes ?? []);
+        TriggerMatch match = FindDuplicateTrigger(body, registrationCall, stageCall, modeCall, explicitFilterAttributes ?? []);
         if (match.Kind == TriggerMatchKind.ExactDuplicate)
         {
             error = $"This plugin already registers a {match.Trigger} step with the same filtering columns, so the two could not be told apart. Pass different --filtering-attributes, another --message, --stage or --mode, or add the columns to the existing step and branch in its handler.";
@@ -171,20 +171,24 @@ internal static class StepInjector
     // step with the same trigger (messages compare case-insensitively, so OnMessage("create") is the Create trigger),
     // the same filter columns and no other distinguishing modifier; a SharedTrigger is any other step on that trigger.
     // A chain whose stage cannot be read is skipped, so this never refuses on a guess.
+    // The chains are found in a copy with comments and literal contents blanked (offsets kept), so a registration
+    // inside a string or comment is not read, and a ';' or a ".FilterOn(" inside a literal neither ends nor alters a
+    // chain. An OnMessage("...") argument is then read from the original text at the same offsets.
     internal static TriggerMatch FindDuplicateTrigger(string body, string registrationCall, string stageCall, string modeCall, string[] filterAttributes)
     {
-        Match added = Registration.Match("RegisterStep()." + registrationCall + stageCall + modeCall + ";");
+        string addedSource = "RegisterStep()." + registrationCall + stageCall + modeCall + ";";
+        Match added = Registration.Match(MaskCommentsAndLiterals(addedSource));
         if (!added.Success)
         {
             return new TriggerMatch(TriggerMatchKind.None, null);
         }
 
-        (string message, string? stage, bool isAsync) wanted = Trigger(added);
+        (string message, string? stage, bool isAsync) wanted = Trigger(added, addedSource);
         HashSet<string> wantedFilter = new(filterAttributes, StringComparer.Ordinal);
         TriggerMatch result = new(TriggerMatchKind.None, null);
-        foreach (Match existing in Registration.Matches(body))
+        foreach (Match existing in Registration.Matches(MaskCommentsAndLiterals(body)))
         {
-            (string message, string? stage, bool isAsync) found = Trigger(existing);
+            (string message, string? stage, bool isAsync) found = Trigger(existing, body);
             if (found.stage is null
                 || !string.Equals(found.message, wanted.message, StringComparison.OrdinalIgnoreCase)
                 || found.stage != wanted.stage
@@ -233,18 +237,21 @@ internal static class StepInjector
         return columns;
     }
 
-    private static (string Message, string? Stage, bool IsAsync) Trigger(Match registration)
+    // <paramref name="registration"/> matched the masked text; <paramref name="original"/> supplies the literal text.
+    private static (string Message, string? Stage, bool IsAsync) Trigger(Match registration, string original)
     {
+        Group custom = registration.Groups["custom"];
         string message = registration.Groups["typed"].Success && registration.Groups["typed"].Value != "Message"
             ? registration.Groups["typed"].Value
-            : registration.Groups["custom"].Value;
+            : original.Substring(custom.Index, custom.Length);
         string rest = registration.Groups["rest"].Value;
         Match stage = StageCall.Match(rest);
         return (message, stage.Success ? stage.Groups["stage"].Value : null, AsyncCall.IsMatch(rest));
     }
 
-    // Blanks out comments (keeping string literals and offsets), so a commented-out registration is not read as live.
-    internal static string MaskComments(string source)
+    // Blanks out comments and the contents of string and char literals (keeping their delimiters, line breaks and
+    // every offset), so only live code is searched.
+    internal static string MaskCommentsAndLiterals(string source)
     {
         char[] masked = source.ToCharArray();
         for (int i = 0; i < source.Length; i++)
@@ -267,24 +274,20 @@ internal static class StepInjector
                 continue;
             }
 
-            if (c == '"')
+            if (c == '"' || c == '\'')
             {
-                int close = SkipString(source, i);
+                int close = c == '"' ? SkipString(source, i) : SkipCharLiteral(source, i);
                 if (close < 0)
                 {
                     break;
                 }
 
-                i = close;
-                continue;
-            }
-
-            if (c == '\'')
-            {
-                int close = SkipCharLiteral(source, i);
-                if (close < 0)
+                for (int j = i + 1; j < close; j++)
                 {
-                    break;
+                    if (masked[j] != '\n')
+                    {
+                        masked[j] = ' ';
+                    }
                 }
 
                 i = close;
@@ -370,13 +373,21 @@ internal static class StepInjector
     // (@"", $@"", @$"") and raw ("""...""", $$"""...""") string literals; braces inside any of them are content.
     private static int SkipString(string s, int i)
     {
+        // The prefix decides the kind first: a verbatim string (@"", $@"", @$"") may open with an escaped quote
+        // (@"""quoted"" text"), which would otherwise look like a raw string's """ fence.
+        bool verbatim = false;
+        for (int back = i - 1; back >= 0 && back >= i - 3 && (s[back] == '@' || s[back] == '$'); back--)
+        {
+            verbatim |= s[back] == '@';
+        }
+
         int quotes = 0;
         while (i + quotes < s.Length && s[i + quotes] == '"')
         {
             quotes++;
         }
 
-        if (quotes >= 3)
+        if (!verbatim && quotes >= 3)
         {
             // Raw string literal: it ends at the next run of (at least) the same number of quotes.
             string fence = new('"', quotes);
@@ -393,12 +404,6 @@ internal static class StepInjector
             }
 
             return last;
-        }
-
-        bool verbatim = false;
-        for (int back = i - 1; back >= 0 && back >= i - 3 && (s[back] == '@' || s[back] == '$'); back--)
-        {
-            verbatim |= s[back] == '@';
         }
 
         i++;

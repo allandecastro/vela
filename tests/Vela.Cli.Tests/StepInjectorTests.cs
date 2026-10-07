@@ -270,4 +270,73 @@ namespace Acme.Plugins.Account.Plugins
         int existingHandler = result.IndexOf("private void HandleCreate(", StringComparison.Ordinal);
         Assert.True(registration > 0 && registration < existingHandler && existingHandler > handler, result);
     }
+
+    [Fact]
+    public void TryInject_IgnoresARegistrationInsideARawString()   // review: discovery must be string-aware
+    {
+        // The live Create step filters on Name; a raw string holds a fake Create registration filtered on Telephone1.
+        string source = FilteredCreate().Replace(
+            "            RegisterStep().OnCreate()",
+            "            string doc = \"\"\"RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Telephone1).Handle(Fake);\"\"\";\n            RegisterStep().OnCreate()");
+        Assert.NotEqual(FilteredCreate(), source);
+
+        // A Create on Telephone1 duplicates only the fake: it is allowed (a shared trigger with the live step).
+        bool ok = StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1"], out _, out string error, out string? note);
+
+        Assert.True(ok, error);
+        Assert.NotNull(note);
+    }
+
+    [Fact]
+    public void TryInject_SeesTheFilterOn_PastASemicolonInsideAString()   // review: WithDescription("a; b")
+    {
+        string source = FilteredCreate().Replace(
+            "                .FilterOn(a => a.Name)",
+            "                .WithDescription(\"a; b\")\n                .FilterOn(a => a.Name)");
+        Assert.NotEqual(FilteredCreate(), source);
+
+        // The chain does not end at the ';' in the description, so its FilterOn(a => a.Name) is read: exact duplicate.
+        bool ok = StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out _);
+
+        Assert.False(ok);
+        Assert.Contains("same filtering columns", error);
+    }
+
+    [Fact]
+    public void TryInject_ReadsTheRealOnMessageArgument_FromTheMaskedSource()
+    {
+        string source = HandlerBased.Replace("RegisterStep().OnCreate()", "RegisterStep().OnMessage(\"new_Recalc\")");
+        Assert.NotEqual(HandlerBased, source);
+
+        Assert.False(StepInjector.TryInject(source, "Account", "new_recalc", "OnMessage(\"new_recalc\")", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, null, out _, out string error, out _));
+        Assert.Contains("new_Recalc PostOperation Sync", error);
+    }
+
+    [Theory]
+    [InlineData("@")]
+    [InlineData("$@")]
+    [InlineData("@$")]
+    public void TryInject_AVerbatimStringOpeningWithAnEscapedQuote_IsNotARawString(string prefix)   // review
+    {
+        // @"""quoted"" text { " starts with an escaped quote, not a raw-string fence; the '{' inside is content
+        // (doubled in the interpolated forms, where a single brace would open a hole).
+        string open = prefix.Contains('$') ? "{{" : "{";
+        string close = prefix.Contains('$') ? "}}" : "}";
+        string source = HandlerBased.Replace(
+            "        private void HandleCreate(ILocalPluginContext ctx)\n        {\n        }",
+            "        private void HandleCreate(ILocalPluginContext ctx)\n        {\n            string a = " + prefix + "\"\"\"quoted\"\" text " + open + " \";\n        }");
+        Assert.NotEqual(HandlerBased, source);
+        source = source.Replace(
+            "            RegisterStep().OnCreate()",
+            "            string b = " + prefix + "\"\"\"x\"\" " + close + " \";\n            RegisterStep().OnCreate()");
+
+        bool ok = StepInjector.TryInject(source, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
+
+        Assert.True(ok, error);
+        int registration = result.IndexOf("RegisterStep().OnUpdate()", StringComparison.Ordinal);
+        int existingHandler = result.IndexOf("private void HandleCreate(", StringComparison.Ordinal);
+        int newHandler = result.IndexOf("private void HandleUpdate(", StringComparison.Ordinal);
+        // The step lands inside RegisterPluginSteps, and its handler right after that method, before HandleCreate.
+        Assert.True(registration > 0 && registration < newHandler && newHandler < existingHandler, result);
+    }
 }
