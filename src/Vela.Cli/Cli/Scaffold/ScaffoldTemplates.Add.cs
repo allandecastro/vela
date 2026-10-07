@@ -78,17 +78,16 @@ namespace {{ns}}
         // A *Multiple plugin reads ctx.Request.Targets (an EntityCollection), so the test must seed Targets via
         // WithTargets(...); a single-record plugin uses WithTarget(...). Emitting the wrong one leaves
         // ctx.Request.Targets null and the handler throws.
-        string targetMethod = multiple ? "WithTargets" : "WithTarget";
-        string targetComment = multiple
-            ? "a *Multiple plugin reads ctx.Request.Targets; seed it with WithTargets(...)."
-            : "a single-step plugin auto-derives its trigger (message/stage/mode) from its own";
+        string arrange = multiple
+            ? $"EntityCollection targets = new EntityCollection(new Entity[] {{ new {entityType} {{ Id = Guid.NewGuid() }} }});"
+            : $"{entityType} target = new {entityType} {{ Id = Guid.NewGuid() }};";
+        string targetCall = multiple ? ".WithTargets(targets)" : ".WithTarget(target)";
         return
 $$"""
 namespace {{ns}}
 {
     using System;
     using Microsoft.Xrm.Sdk;
-    using Microsoft.Xrm.Sdk.Query;
     using Vela.Testing;
     using Xunit;
     using {{pluginNamespace}};
@@ -101,23 +100,22 @@ namespace {{ns}}
     public sealed class {{testClass}}
     {
         [Fact]
-        public void Executes()
+        public void Runs_Its_Handler()
         {
-            // Arrange: an in-memory Dataverse the plugin's injected IOrganizationService writes to.
+            // Arrange: an in-memory Dataverse the plugin's injected IOrganizationService reads and writes.
             InMemoryOrganizationService crm = new InMemoryOrganizationService();
-            {{entityType}} target = new {{entityType}} { Id = Guid.NewGuid() };
+            {{arrange}}
 
-            // Act: {{targetComment}}
-            // For a multi-step plugin, state the trigger: .OnUpdate().Stage(...).Mode(...).
-            PluginContext.For<{{entityType}}>()
-                .{{targetMethod}}(target)
-                .WithOrganizationService(crm)
-                .Execute(new {{pluginType}}(string.Empty, string.Empty));
+            // Act: a single-step plugin derives its trigger (message/stage/mode) from its own registration. For a
+            // multi-step plugin, select the step under test: .OnUpdate().Stage(PluginStages.PostOperation).Sync().
+            PluginContextBuilder<{{entityType}}> builder = PluginContext.For<{{entityType}}>()
+                {{targetCall}}
+                .WithOrganizationService(crm);
+            builder.Execute(new {{pluginType}}(string.Empty, string.Empty));
 
-            // Assert: retrieve the affected record(s) and check their fields (not just the count). For example:
-            // EntityCollection rows = crm.RetrieveMultiple(new QueryExpression("task") { ColumnSet = new ColumnSet(true) });
-            // Entity row = Assert.Single(rows.Entities);
-            // Assert.Equal("expected", row.GetAttributeValue<string>("subject"));
+            // Assert: the handler ran (the scaffolded one traces this line). Replace it with assertions on what your
+            // plugin does, e.g. retrieve the rows it writes from `crm` and check their columns.
+            Assert.Contains("{{pluginType}} executed", builder.TraceCapture.Output);
         }
     }
 }
@@ -129,7 +127,7 @@ $$"""
 namespace {{ns}}
 {
     using System;
-    using Vela.Context;
+    using Vela.CustomApi;
     using Vela.Testing;
     using Xunit;
     using {{apiNamespace}};
@@ -141,18 +139,32 @@ namespace {{ns}}
     public sealed class {{testClass}}
     {
         [Fact]
-        public void Executes()
+        public void Registers_Under_Its_Unique_Name()
+        {
+            // Building the definition runs the same validation `vela plan` does (e.g. a function needs a response).
+            CustomApiDefinition definition = new {{apiType}}(string.Empty, string.Empty).GetCustomApiDefinition();
+
+            Assert.Equal("{{uniqueName}}", definition.UniqueName);
+        }
+
+        [Fact]
+        public void Sets_Every_Declared_Output()
         {
             {{apiType}} api = new {{apiType}}(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{uniqueName}}").Build();
+            CustomApiDefinition definition = api.GetCustomApiDefinition();
 
-            // TODO: set the input parameters this Custom API reads, e.g.:
-            // context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
+            // Arrange: supply the input parameters the Custom API reads, e.g.
+            //   .WithInputParameter("AccountId", Guid.NewGuid())
+            PluginContextBuilder builder = PluginContext.ForMessage("{{uniqueName}}");
 
-            api.Execute(context.ServiceProvider);
+            builder.Execute(api);
 
-            // TODO: assert the output parameters it writes, e.g.:
-            // Assert.Equal(1000m, context.PluginExecutionContext.OutputParameters["EstimatedValue"]);
+            // Assert: every declared response parameter was written. Then assert their values, e.g.
+            //   Assert.Equal(1000m, builder.Context.OutputParameters["EstimatedValue"]);
+            foreach (CustomApiParameterDefinition output in definition.OutputParameters)
+            {
+                Assert.True(builder.Context.OutputParameters.Contains(output.Name), $"Output '{output.Name}' was not set.");
+            }
         }
     }
 }
@@ -226,7 +238,7 @@ namespace {{ns}}
         {
             // TODO: implement your logic. Add typed properties (over Parameters/Results) to the request/response
             // classes below and map them with .Request(r => r.Add(x => x.Foo)) / .Response(r => r.Add(x => x.Bar)).
-            return new {{className}}Response();
+            return new {{className}}Response(){{(IsFunctionOperation(operation) ? " { Result = string.Empty }" : "")}};
         }
     }
 

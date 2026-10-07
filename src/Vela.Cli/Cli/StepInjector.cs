@@ -79,6 +79,16 @@ internal static class StepInjector
             return false;
         }
 
+        // Dataverse (and analyzer VELA008) allow one step per trigger - message + stage + mode - in a plugin, and the
+        // add-step defaults (Create / PostOperation / Sync) are exactly what `vela add plugin` registers. Refuse a
+        // duplicate up front instead of writing code that fails the build.
+        string? duplicate = FindDuplicateTrigger(MaskComments(body), registrationCall, stageCall, modeCall);
+        if (duplicate is not null)
+        {
+            error = $"This plugin already registers a {duplicate} step; Dataverse allows one step per message, stage and mode (VELA008). Pass a different --message, --stage or --mode, or add the columns to the existing step's FilterOn and branch in its handler.";
+            return false;
+        }
+
         string filtering = explicitFilterAttributes is { Length: > 0 }
             ? $"                .FilterOn({string.Join(", ", System.Array.ConvertAll(explicitFilterAttributes, a => $"e => e.{a}"))})\n"
             : string.Empty;
@@ -119,6 +129,102 @@ internal static class StepInjector
             + handler
             + source.Substring(closeBrace + 1);
         return true;
+    }
+
+    // One registration chain: RegisterStep().On<Message>() or OnMessage("name"), then everything up to its ';'.
+    private static readonly Regex Registration = new(
+        @"RegisterStep\s*\(\s*\)\s*\.\s*(?:On(?<typed>[A-Za-z]\w*)\s*\(\s*\)|OnMessage\s*\(\s*""(?<custom>[^""]*)""\s*\))(?<rest>[^;]*);",
+        RegexOptions.Compiled);
+
+    private static readonly Regex StageCall = new(@"\.\s*(?<stage>PreValidation|PreOperation|PostOperation)\s*\(\s*\)", RegexOptions.Compiled);
+    private static readonly Regex AsyncCall = new(@"\.\s*Async\s*\(\s*\)", RegexOptions.Compiled);
+
+    // Returns "<Message> <Stage> <Mode>" of an existing registration in <paramref name="body"/> with the same trigger as
+    // the step being added, or null. Messages compare case-insensitively (OnMessage("create") is the Create trigger).
+    // A chain whose stage cannot be read is skipped, so this never refuses on a guess.
+    internal static string? FindDuplicateTrigger(string body, string registrationCall, string stageCall, string modeCall)
+    {
+        Match added = Registration.Match("RegisterStep()." + registrationCall + stageCall + modeCall + ";");
+        if (!added.Success)
+        {
+            return null;
+        }
+
+        (string message, string? stage, bool isAsync) wanted = Trigger(added);
+        foreach (Match existing in Registration.Matches(body))
+        {
+            (string message, string? stage, bool isAsync) found = Trigger(existing);
+            if (found.stage is not null
+                && string.Equals(found.message, wanted.message, StringComparison.OrdinalIgnoreCase)
+                && found.stage == wanted.stage
+                && found.isAsync == wanted.isAsync)
+            {
+                return $"{found.message} {found.stage} {(found.isAsync ? "Async" : "Sync")}";
+            }
+        }
+
+        return null;
+    }
+
+    private static (string Message, string? Stage, bool IsAsync) Trigger(Match registration)
+    {
+        string message = registration.Groups["typed"].Success && registration.Groups["typed"].Value != "Message"
+            ? registration.Groups["typed"].Value
+            : registration.Groups["custom"].Value;
+        string rest = registration.Groups["rest"].Value;
+        Match stage = StageCall.Match(rest);
+        return (message, stage.Success ? stage.Groups["stage"].Value : null, AsyncCall.IsMatch(rest));
+    }
+
+    // Blanks out comments (keeping string literals and offsets), so a commented-out registration is not read as live.
+    internal static string MaskComments(string source)
+    {
+        char[] masked = source.ToCharArray();
+        for (int i = 0; i < source.Length; i++)
+        {
+            char c = source[i];
+            if (c == '/' && i + 1 < source.Length && (source[i + 1] == '/' || source[i + 1] == '*'))
+            {
+                int end = source[i + 1] == '/'
+                    ? source.IndexOf('\n', i) is int nl and >= 0 ? nl - 1 : source.Length - 1
+                    : source.IndexOf("*/", i + 2, StringComparison.Ordinal) is int close and >= 0 ? close + 1 : source.Length - 1;
+                for (int j = i; j <= end; j++)
+                {
+                    if (masked[j] != '\n')
+                    {
+                        masked[j] = ' ';
+                    }
+                }
+
+                i = end;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                int close = SkipString(source, i);
+                if (close < 0)
+                {
+                    break;
+                }
+
+                i = close;
+                continue;
+            }
+
+            if (c == '\'')
+            {
+                int close = SkipCharLiteral(source, i);
+                if (close < 0)
+                {
+                    break;
+                }
+
+                i = close;
+            }
+        }
+
+        return new string(masked);
     }
 
     // Returns the index of the '}' matching the '{' at openIndex, skipping braces inside comments,
@@ -193,10 +299,41 @@ internal static class StepInjector
         return -1;
     }
 
-    // Given the index of the opening quote, returns the index of the closing quote.
+    // Given the index of the opening quote, returns the index of the closing quote. Handles regular, verbatim
+    // (@"", $@"", @$"") and raw ("""...""", $$"""...""") string literals; braces inside any of them are content.
     private static int SkipString(string s, int i)
     {
-        bool verbatim = i > 0 && s[i - 1] == '@';
+        int quotes = 0;
+        while (i + quotes < s.Length && s[i + quotes] == '"')
+        {
+            quotes++;
+        }
+
+        if (quotes >= 3)
+        {
+            // Raw string literal: it ends at the next run of (at least) the same number of quotes.
+            string fence = new('"', quotes);
+            int close = s.IndexOf(fence, i + quotes, StringComparison.Ordinal);
+            if (close < 0)
+            {
+                return -1;
+            }
+
+            int last = close + quotes - 1;
+            while (last + 1 < s.Length && s[last + 1] == '"')
+            {
+                last++;
+            }
+
+            return last;
+        }
+
+        bool verbatim = false;
+        for (int back = i - 1; back >= 0 && back >= i - 3 && (s[back] == '@' || s[back] == '$'); back--)
+        {
+            verbatim |= s[back] == '@';
+        }
+
         i++;
         while (i < s.Length)
         {
