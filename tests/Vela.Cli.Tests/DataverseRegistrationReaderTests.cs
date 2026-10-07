@@ -171,23 +171,6 @@ public class DataverseRegistrationReaderTests
         Assert.False(result.ContainsKey(blank));
     }
 
-    // --- GetAllPluginTypeIdsByName -------------------------------------------------------------
-
-    [Fact]
-    public void GetAllPluginTypeIdsByName_keeps_first_id_for_duplicate_names()
-    {
-        Guid first = Guid.NewGuid();
-        Guid second = Guid.NewGuid();
-        Mock<IOrganizationService> mock = ServiceReturning("plugintype",
-            new Entity("plugintype", first) { ["typename"] = "Zava.Plugins.A" },
-            new Entity("plugintype", second) { ["typename"] = "Zava.Plugins.A" });
-
-        Dictionary<string, Guid> result = DataverseRegistration.GetAllPluginTypeIdsByName(mock.Object);
-
-        Assert.Single(result);
-        Assert.Equal(first, result["Zava.Plugins.A"]);
-    }
-
     // --- GetStepImages -------------------------------------------------------------------------
 
     [Fact]
@@ -295,24 +278,7 @@ public class DataverseRegistrationReaderTests
         Assert.True(param.IsCollection);
     }
 
-    // --- FindStepByName / FindCustomApiId / FindStepId -----------------------------------------
-
-    [Fact]
-    public void FindStepByName_returns_id_when_found()
-    {
-        Guid id = Guid.NewGuid();
-        Mock<IOrganizationService> mock = ServiceReturning("sdkmessageprocessingstep",
-            new Entity("sdkmessageprocessingstep", id));
-
-        Assert.Equal(id, DataverseRegistration.FindStepByName(mock.Object, "MyStep"));
-    }
-
-    [Fact]
-    public void FindStepByName_returns_null_when_absent()
-    {
-        Mock<IOrganizationService> mock = ServiceReturning("sdkmessageprocessingstep");
-        Assert.Null(DataverseRegistration.FindStepByName(mock.Object, "MyStep"));
-    }
+    // --- FindCustomApiId / FindStepId -----------------------------------------
 
     [Fact]
     public void FindCustomApiId_returns_id_when_found_else_null()
@@ -978,52 +944,72 @@ public class DataverseRegistrationReaderTests
     // --- DeleteStepByDefinition / DeleteCustomApi ----------------------------------------------
 
     [Fact]
-    public void DeleteStepByDefinition_deletes_by_stored_name_when_found()
+    public void DeleteStepByDefinition_deletes_by_stored_name_scoped_to_our_plugin_type()
     {
+        // The step key does not resolve (FindStepId finds no row) but the stored name does - scoped to the type.
+        Guid pluginTypeId = Guid.NewGuid();
         Guid stepId = Guid.NewGuid();
+        List<QueryExpression> queries = [];
         var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
         mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
             .Returns((QueryBase q) =>
-                (q as QueryExpression)?.EntityName == "sdkmessageprocessingstep"
+            {
+                var qe = (QueryExpression)q;
+                queries.Add(qe);
+                bool byName = qe.Criteria.Conditions.Any(c => c.AttributeName == "name");
+                return qe.EntityName == "sdkmessageprocessingstep" && byName
                     ? Collection(new Entity("sdkmessageprocessingstep", stepId))
-                    : new EntityCollection());
+                    : new EntityCollection();
+            });
 
         JsonElement def = Json(new { pluginTypeName = "Zava.Plugins.AccountPlugin", name = "MyStep", message = "Update", stage = 40, mode = 0, stepKey = "k" });
 
-        DataverseRegistration.DeleteStepByDefinition(mock.Object, def);
+        DataverseRegistration.DeleteStepByDefinition(mock.Object, def, new Dictionary<string, Guid> { ["Zava.Plugins.AccountPlugin"] = pluginTypeId });
 
         mock.Verify(s => s.Delete("sdkmessageprocessingstep", stepId), Times.Once);
+        QueryExpression nameQuery = Assert.Single(queries, q => q.Criteria.Conditions.Any(c => c.AttributeName == "name"));
+        Assert.Contains(nameQuery.Criteria.Conditions, c => c.AttributeName == "eventhandler" && Equals(c.Values[0], pluginTypeId));
+        Assert.DoesNotContain(queries, q => q.EntityName == "plugintype"); // never an environment-wide type lookup
     }
 
     [Fact]
-    public void DeleteStepByDefinition_falls_back_to_plugin_type_lookup_when_name_missing()
+    public void DeleteStepByDefinition_resolves_the_step_by_key_under_our_plugin_type()
     {
-        // No "name" in the definition → resolve plugin type, then find step by key.
         Guid pluginTypeId = Guid.NewGuid();
         Guid stepId = Guid.NewGuid();
         var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
         mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
             .Returns((QueryBase q) =>
-            {
-                string? entity = (q as QueryExpression)?.EntityName;
-                return entity switch
-                {
-                    "plugintype" => Collection(new Entity("plugintype", pluginTypeId) { ["typename"] = "Zava.Plugins.AccountPlugin" }),
-                    "sdkmessageprocessingstep" => Collection(new Entity("sdkmessageprocessingstep", stepId)
+                (q as QueryExpression)?.EntityName == "sdkmessageprocessingstep"
+                    ? Collection(new Entity("sdkmessageprocessingstep", stepId)
                     {
                         ["name"] = "Zava.Plugins.AccountPlugin - PostOpSync: k",
                         ["stage"] = Opt(40),
                         ["mode"] = Opt(0),
-                    }),
-                    _ => new EntityCollection(),
-                };
-            });
+                    })
+                    : new EntityCollection());
 
         JsonElement def = Json(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "Update", stage = 40, mode = 0, stepKey = "k" });
 
-        DataverseRegistration.DeleteStepByDefinition(mock.Object, def);
+        DataverseRegistration.DeleteStepByDefinition(mock.Object, def, new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase) { ["Zava.Plugins.AccountPlugin"] = pluginTypeId });
 
         mock.Verify(s => s.Delete("sdkmessageprocessingstep", stepId), Times.Once);
+    }
+
+    [Fact]
+    public void DeleteStepByDefinition_never_deletes_a_step_whose_type_is_not_in_the_applied_assemblies()
+    {
+        // A same-named step exists in the environment, but its plugin type is not one of ours: no lookup, no delete.
+        var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
+        mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
+            .Returns(Collection(new Entity("sdkmessageprocessingstep", Guid.NewGuid())));
+
+        JsonElement def = Json(new { pluginTypeName = "Other.Plugins.AccountPlugin", name = "MyStep", message = "Update", stage = 40, mode = 0, stepKey = "k" });
+
+        DataverseRegistration.DeleteStepByDefinition(mock.Object, def, new Dictionary<string, Guid> { ["Zava.Plugins.AccountPlugin"] = Guid.NewGuid() });
+
+        mock.Verify(s => s.Delete(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
+        mock.Verify(s => s.RetrieveMultiple(It.IsAny<QueryBase>()), Times.Never);
     }
 
     [Fact]

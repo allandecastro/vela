@@ -163,41 +163,32 @@ internal static partial class DataverseRegistration
     }
 }
 
-    internal static void DeleteStepByDefinition(IOrganizationService service, JsonElement definitionElement)
+    // Deletes a removed step, resolved ONLY within the plugin types of the assemblies being applied
+    // (ourPluginTypeIds, see GetPluginTypeIdByNameForAssemblies). A removed step always comes from the live read of
+    // those assemblies, so its type is in the map; a type that is not (renamed or already gone) is not ours to touch
+    // and nothing is deleted. There is no environment-wide name fallback: a same-named type or step in another
+    // assembly is never matched.
+    internal static void DeleteStepByDefinition(IOrganizationService service, JsonElement definitionElement, IReadOnlyDictionary<string, Guid> ourPluginTypeIds)
 {
     StepApplyDefinition definition = ParseStepDefinition(definitionElement);
-    string? stepName = TryGetString(definitionElement, "name");
-    Dictionary<string, Guid> allTypes = GetAllPluginTypeIdsByName(service);
-
-    // Preferred: resolve the step scoped to its plugin type. FindStepId matches on the stable step key (or
-    // message/entity/stage/mode), and the name fallback is scoped to the same plugin type - so a step of an
-    // unrelated plugin type that happens to share the display name is never deleted by mistake.
-    if (allTypes.TryGetValue(definition.PluginTypeName, out Guid pluginTypeId))
+    if (!ourPluginTypeIds.TryGetValue(definition.PluginTypeName, out Guid pluginTypeId))
     {
-        Guid? stepId = FindStepId(service, pluginTypeId, definition);
-        if (stepId.HasValue)
-        {
-            DeleteStep(service, stepId.Value);
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(stepName))
-        {
-            Guid? byName = FindStepByName(service, stepName, pluginTypeId);
-            if (byName.HasValue)
-            {
-                DeleteStep(service, byName.Value);
-            }
-        }
-
         return;
     }
 
-    // The plugin type no longer resolves by name (renamed or already removed). As a last resort, match by the
-    // stored step name alone - unscoped, so only used when there is no plugin type to scope to.
+    // FindStepId matches on the stable step key (or message/entity/stage/mode); the name fallback is scoped to the
+    // same plugin type, so a step of an unrelated plugin type sharing the display name is never deleted.
+    Guid? stepId = FindStepId(service, pluginTypeId, definition);
+    if (stepId.HasValue)
+    {
+        DeleteStep(service, stepId.Value);
+        return;
+    }
+
+    string? stepName = TryGetString(definitionElement, "name");
     if (!string.IsNullOrWhiteSpace(stepName))
     {
-        Guid? byName = FindStepByName(service, stepName);
+        Guid? byName = FindStepByName(service, stepName, pluginTypeId);
         if (byName.HasValue)
         {
             DeleteStep(service, byName.Value);
@@ -227,20 +218,6 @@ internal static partial class DataverseRegistration
     }
 }
 
-    // Unscoped name lookup - a last resort when the step's plugin type cannot be resolved. Prefer the scoped
-    // overload below whenever a plugin type id is available, since step display names are not unique across
-    // plugin types/assemblies.
-    internal static Guid? FindStepByName(IOrganizationService service, string stepName)
-{
-    QueryExpression query = new QueryExpression("sdkmessageprocessingstep")
-    {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid"),
-        TopCount = 1
-    };
-    query.Criteria.AddCondition("name", ConditionOperator.Equal, stepName);
-    return service.RetrieveMultiple(query).Entities.FirstOrDefault()?.Id;
-}
-
     // Name lookup scoped to a plugin type (eventhandler), so a same-named step of a different plugin type is
     // never matched.
     internal static Guid? FindStepByName(IOrganizationService service, string stepName, Guid pluginTypeId)
@@ -253,26 +230,6 @@ internal static partial class DataverseRegistration
     query.Criteria.AddCondition("name", ConditionOperator.Equal, stepName);
     query.Criteria.AddCondition("eventhandler", ConditionOperator.Equal, pluginTypeId);
     return service.RetrieveMultiple(query).Entities.FirstOrDefault()?.Id;
-}
-
-    internal static Dictionary<string, Guid> GetAllPluginTypeIdsByName(IOrganizationService service)
-{
-    QueryExpression query = new QueryExpression("plugintype")
-    {
-        ColumnSet = new ColumnSet("plugintypeid", "typename")
-    };
-
-    Dictionary<string, Guid> result = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-    foreach (Entity type in service.RetrieveAll(query))
-    {
-        string typeName = type.GetAttributeValue<string>("typename") ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(typeName) && !result.ContainsKey(typeName))
-        {
-            result[typeName] = type.Id;
-        }
-    }
-
-    return result;
 }
 
     internal static Guid? FindStepId(IOrganizationService service, Guid pluginTypeId, StepApplyDefinition definition)
@@ -534,7 +491,6 @@ internal static partial class DataverseRegistration
 {
     return executionOrder <= 0 ? 1 : executionOrder;
 }
-
 
     internal static string BuildStepName(StepApplyDefinition definition)
 {

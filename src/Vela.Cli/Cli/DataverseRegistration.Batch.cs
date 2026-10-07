@@ -31,12 +31,19 @@ internal static partial class DataverseRegistration
         string? solutionUniqueName,
         List<RegistrationItem> removedSteps,
         List<RegistrationItem> removedApis,
+        string[] currentAssemblies,
         bool verbose,
         int chunkSize,
         ref int done)
     {
         BatchCapturingService capturing = new BatchCapturingService(service, solutionUniqueName);
         int seq = 0;
+
+        // A removed step is resolved only among the plugin types of the assemblies read for this run (the ones the
+        // diff's live side came from), queried once for the whole delete phase rather than environment-wide per step.
+        IReadOnlyDictionary<string, Guid> ourPluginTypeIds = removedSteps.Count == 0
+            ? new Dictionary<string, Guid>()
+            : GetPluginTypeIdByNameForAssemblies(service, currentAssemblies);
 
         // Nothing is written to Dataverse during capture; the recorded operations flush only at ExecuteBatchTier
         // below. So the resume boundary (done) must not advance here - a synchronous validation throw mid-capture
@@ -54,7 +61,7 @@ internal static partial class DataverseRegistration
             {
                 LogOperation("step", "delete", stepKey, verbose: verbose);
                 capturing.BeginOwner(owner);
-                DeleteStepByDefinition(capturing, item.Definition);
+                DeleteStepByDefinition(capturing, item.Definition, ourPluginTypeIds);
             }
             catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
             {

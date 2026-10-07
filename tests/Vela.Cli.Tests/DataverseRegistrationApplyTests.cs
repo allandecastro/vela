@@ -867,9 +867,13 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // registration stage" fault. Apply must warn and carry on, not abort the whole run.
         var svc = new TestSupport.FakeOrgService
         {
-            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep"
-                ? throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Invalid plug-in registration stage.")
-                : new EntityCollection(),
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessageprocessingstep" => throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Invalid plug-in registration stage."),
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Zava.Plugins.AccountPlugin" }),
+                _ => new EntityCollection(),
+            },
         };
         JsonElement removed = Json(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "ManagedStep" });
         var diff = new RegistrationDiff(

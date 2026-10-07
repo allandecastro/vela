@@ -85,7 +85,7 @@ internal static partial class DataverseRegistration
         // Dataverse refuses to replace plugin types that still have steps registered,
         // so we must clear them first. Deletes are batched in reverse dependency order
         // (custom-API parameters/response-properties first, then steps and custom APIs).
-        ApplyDeletesBatched(service, solutionUniqueName, removedSteps, removedApis, verbose, batchChunkSize, ref done);
+        ApplyDeletesBatched(service, solutionUniqueName, removedSteps, removedApis, diff.CurrentAssemblies, verbose, batchChunkSize, ref done);
 
         foreach (RegistrationChange change in reimplementedApis)
         {

@@ -236,6 +236,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **Renaming a Custom API's plugin class no longer blocks the package upload.** With the same unique name, the Custom
   API was re-pointed to the new class only after the upload, which had to remove the old plugin type while the Custom
   API still referenced it. `apply` now detaches the Custom API before the upload and points it at the new type after.
+- **A removed step is deleted only within the assemblies being applied.** The delete re-read every plugin type of
+  the environment for each step and, when the type did not resolve, fell back to an environment-wide match on the
+  step name, which could delete a same-named step of another assembly. The plugin types are now read once, from the
+  applied assemblies only, and there is no unscoped fallback.
 
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

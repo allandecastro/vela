@@ -106,7 +106,8 @@ public class SecureConfigResolverTests
             .Returns(new Entity("sdkmessageprocessingstep", stepId) { ["sdkmessageprocessingstepsecureconfigid"] = new EntityReference("sdkmessageprocessingstepsecureconfig", configId) });
 
         DataverseRegistration.DeleteStepByDefinition(mock.Object,
-            JsonSerializer.SerializeToElement(new { pluginTypeName = PluginA, name = "MyStep", message = "Update", stage = 40, mode = 0, stepKey = "k" }, Web));
+            JsonSerializer.SerializeToElement(new { pluginTypeName = PluginA, name = "MyStep", message = "Update", stage = 40, mode = 0, stepKey = "k" }, Web),
+            new Dictionary<string, Guid> { [PluginA] = Guid.NewGuid() });
 
         mock.Verify(s => s.Delete("sdkmessageprocessingstep", stepId), Times.Once);
         mock.Verify(s => s.Delete("sdkmessageprocessingstepsecureconfig", configId), Times.Once);
@@ -172,6 +173,7 @@ public class SecureConfigResolverTests
         {
             OnRetrieveMultiple = q => q.EntityName switch
             {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
                 "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", pluginTypeId) { ["typename"] = PluginA }),
                 "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", stepId)),
                 _ => new EntityCollection(),
