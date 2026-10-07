@@ -18,6 +18,36 @@ namespace Vela.Testing
     // Store configuration forwarders: each declares part of the scenario on the in-memory store the pipeline drives.
     public sealed partial class PluginPipeline
     {
+        /// <summary>
+        /// Opts into strict security (see <c>InMemoryOrganizationService.WithStrictSecurity</c>): an operation run without
+        /// a configured security model throws instead of silently granting full access.
+        /// </summary>
+        public PluginPipeline WithStrictSecurity()
+        {
+            _store.WithStrictSecurity();
+            return this;
+        }
+
+        /// <summary>
+        /// Registers an access-team template and the rights it grants (see
+        /// <c>InMemoryOrganizationService.WithAccessTeamTemplate</c>). Enforced once <see cref="WithSecurity"/> is set.
+        /// </summary>
+        public PluginPipeline WithAccessTeamTemplate(Guid templateId, Microsoft.Crm.Sdk.Messages.AccessRights rights)
+        {
+            _store.WithAccessTeamTemplate(templateId, rights);
+            return this;
+        }
+
+        /// <summary>
+        /// Pre-shares a record with a user or team (see <c>InMemoryOrganizationService.WithSharedRecord</c>), without
+        /// going through GrantAccess. Takes effect once <see cref="WithSecurity"/> is set.
+        /// </summary>
+        public PluginPipeline WithSharedRecord(EntityReference target, EntityReference principal, Microsoft.Crm.Sdk.Messages.AccessRights rights)
+        {
+            _store.WithSharedRecord(target, principal, rights);
+            return this;
+        }
+
         /// <summary>Declares an alternate key on the in-memory store (duplicate-key throws).</summary>
         public PluginPipeline WithAlternateKey(string entityLogicalName, params string[] keyAttributes)
         {

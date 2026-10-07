@@ -197,6 +197,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase`,
   `EntityPluginBase<TEntity>`, `CustomApiBase` and `CustomApiBase<TRequest, TResponse>` default their `maxDepth` to it
   instead of repeating the literal.
+- **`PluginPipeline.WithStrictSecurity()`, `WithAccessTeamTemplate(...)` and `WithSharedRecord(...)`.** The
+  pipeline forwards the in-memory store's configuration by hand, and these three were missing, so a pipeline
+  scenario could not opt into strict security, register an access-team template or pre-share a record. A test now
+  fails if any store configuration method has no pipeline counterpart.
 
 ### Changed (Framework)
 

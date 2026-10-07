@@ -130,7 +130,9 @@ untouched.
 ## Vela.Testing
 
 The in-memory CRM (`InMemoryOrganizationService`) and `PluginPipeline` are a faithful-but-partial model. For
-anything below, inject your own `IOrganizationService` via `WithOrganizationService(...)`.
+anything below, a single-plugin test can inject its own `IOrganizationService` with the context builder's
+`WithOrganizationService(...)`. `PluginPipeline` has no such fallback: it always drives its own in-memory store
+(configure it with the pipeline's `With*`/`As*` methods, which mirror every store configuration method).
 
 - **`Execute` covers a common set:** `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`,
   `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`SetState`/`Associate`/`Disassociate`, the metadata reads
