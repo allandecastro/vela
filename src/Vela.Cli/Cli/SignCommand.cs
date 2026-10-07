@@ -154,6 +154,7 @@ internal static class SignCommand
         // A PFX (file or base64) is re-exported without its password to an owner-only temp .pfx, used, then deleted
         // in the finally so the key never lingers on disk.
         string? tempPfx = null;
+        string? tempDirectory = null;
         try
         {
             ProcessStartInfo psi = new()
@@ -244,7 +245,10 @@ internal static class SignCommand
                     Array.Clear(pfxBytes, 0, pfxBytes.Length);
                 }
 
-                tempPfx = Path.Combine(Path.GetTempPath(), $"vela-sign-{Guid.NewGuid():N}.pfx");
+                // A private directory first: on Windows a file inherits its folder's ACL, and the shared temp folder's
+                // may grant other principals access; on Unix it keeps the file out of a world-listable folder.
+                tempDirectory = CreatePrivateTempDirectory();
+                tempPfx = Path.Combine(tempDirectory, "signing.pfx");
                 try
                 {
                     WriteOwnerOnlyFile(tempPfx, unprotected);
@@ -304,17 +308,7 @@ internal static class SignCommand
         }
         finally
         {
-            if (tempPfx is not null)
-            {
-                try
-                {
-                    File.Delete(tempPfx);
-                }
-                catch
-                {
-                    // Best-effort cleanup of the decoded certificate; a leaked temp file is non-fatal.
-                }
-            }
+            DeletePrivateTempDirectory(tempDirectory);
         }
     }
 
@@ -341,9 +335,64 @@ internal static class SignCommand
     }
 
     /// <summary>
+    /// Creates a new, uniquely named directory under the temp folder that only the current user can access: mode 0700
+    /// on Unix (set at creation), and on Windows an ACL granting the current user full control with inheritance from
+    /// the parent disabled, so nothing written inside inherits the shared temp folder's permissions.
+    /// </summary>
+    internal static string CreatePrivateTempDirectory()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"vela-sign-{Guid.NewGuid():N}");
+        if (OperatingSystem.IsWindows())
+        {
+            CreateWindowsPrivateDirectory(path);
+        }
+        else
+        {
+            Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        return path;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void CreateWindowsPrivateDirectory(string path)
+    {
+        System.Security.Principal.SecurityIdentifier user = System.Security.Principal.WindowsIdentity.GetCurrent().User
+            ?? throw new InvalidOperationException("Cannot resolve the current Windows user to secure the temporary certificate folder.");
+        System.Security.AccessControl.DirectorySecurity security = new();
+        security.SetOwner(user);
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+            user,
+            System.Security.AccessControl.FileSystemRights.FullControl,
+            System.Security.AccessControl.InheritanceFlags.ContainerInherit | System.Security.AccessControl.InheritanceFlags.ObjectInherit,
+            System.Security.AccessControl.PropagationFlags.None,
+            System.Security.AccessControl.AccessControlType.Allow));
+        new DirectoryInfo(path).Create(security);
+    }
+
+    // Best-effort removal of the private directory and the decoded certificate inside it; a leak is non-fatal.
+    internal static void DeletePrivateTempDirectory(string? path)
+    {
+        if (path is null || !Directory.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Leave it: the folder is private to the user and the temp folder is cleaned eventually.
+        }
+    }
+
+    /// <summary>
     /// Writes <paramref name="bytes"/> to a NEW file readable only by its owner. On Unix the mode is set at creation
     /// (no window where the decoded private key is world-readable, unlike write-then-chmod); on Windows the file
-    /// lands under the per-user temp folder, whose ACL already restricts it to the user. Fails if the file exists.
+    /// takes the ACL of its folder, so write it inside <see cref="CreatePrivateTempDirectory"/>. Fails if the file exists.
     /// </summary>
     internal static void WriteOwnerOnlyFile(string path, byte[] bytes)
     {

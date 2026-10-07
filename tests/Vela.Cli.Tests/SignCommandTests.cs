@@ -253,6 +253,53 @@ public class SignCommandTests
     }
 
     [Fact]
+    public void CreatePrivateTempDirectory_IsAccessibleOnlyByTheCurrentUser()   // review: the PFX inherited the temp ACL
+    {
+        string dir = SignCommand.CreatePrivateTempDirectory();
+        try
+        {
+            string pfx = Path.Combine(dir, "signing.pfx");
+            SignCommand.WriteOwnerOnlyFile(pfx, [1, 2, 3]);
+
+            if (OperatingSystem.IsWindows())
+            {
+                AssertWindowsAclGrantsOnlyTheCurrentUser(dir, pfx);
+            }
+            else
+            {
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(dir));
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(pfx));
+            }
+        }
+        finally
+        {
+            SignCommand.DeletePrivateTempDirectory(dir);
+        }
+
+        // The cleanup removes the directory and the certificate inside it.
+        Assert.False(Directory.Exists(dir));
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static void AssertWindowsAclGrantsOnlyTheCurrentUser(string dir, string file)
+    {
+        System.Security.Principal.SecurityIdentifier user = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+
+        System.Security.AccessControl.DirectorySecurity security = new DirectoryInfo(dir).GetAccessControl();
+        Assert.True(security.AreAccessRulesProtected, "the directory must not inherit the temp folder's ACL");
+        System.Security.AccessControl.FileSystemAccessRule rule = Assert.Single(
+            security.GetAccessRules(true, true, typeof(System.Security.Principal.SecurityIdentifier)).Cast<System.Security.AccessControl.FileSystemAccessRule>());
+        Assert.Equal(user, rule.IdentityReference);
+        Assert.Equal(System.Security.AccessControl.AccessControlType.Allow, rule.AccessControlType);
+
+        // The file inherits only that rule.
+        System.Security.AccessControl.FileSecurity fileSecurity = new FileInfo(file).GetAccessControl();
+        Assert.All(
+            fileSecurity.GetAccessRules(true, true, typeof(System.Security.Principal.SecurityIdentifier)).Cast<System.Security.AccessControl.FileSystemAccessRule>(),
+            r => Assert.Equal(user, r.IdentityReference));
+    }
+
+    [Fact]
     public void WriteOwnerOnlyFile_CreatesANewFile_ReadableOnlyByItsOwner()   // A-65: no write-then-chmod window
     {
         string path = Path.Combine(Path.GetTempPath(), $"vela-sign-test-{Guid.NewGuid():N}.pfx");
