@@ -259,7 +259,11 @@ public sealed class PluginCacheServiceTests
         IPluginCacheService first = SimpleServiceResolver.CreateDefault(firstContext).GetRequiredService<IPluginCacheService>();
         IPluginCacheService second = SimpleServiceResolver.CreateDefault(secondContext).GetRequiredService<IPluginCacheService>();
 
-        Assert.Same(first, second);
+        // Each execution gets its own organization-scoped view, backed by the one process-wide store: an entry made
+        // in one execution is seen by the next one in the same organization.
+        string key = "global:" + Guid.NewGuid().ToString("N");
+        first.GetOrCreate(key, TimeSpan.FromMinutes(1), () => 7);
+        Assert.Equal(7, second.GetOrCreate(key, TimeSpan.FromMinutes(1), () => 8));
     }
 
     [Fact]

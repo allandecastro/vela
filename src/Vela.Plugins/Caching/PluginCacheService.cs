@@ -148,6 +148,22 @@ namespace Vela.Caching
             _cache.Clear();
         }
 
+        // Removes every entry whose key starts with the prefix (one organization's scope). Each slot is removed only
+        // while it is still the one enumerated, so a fresher slot installed concurrently survives.
+        internal int RemoveByPrefix(string prefix)
+        {
+            int removed = 0;
+            foreach (KeyValuePair<string, Slot> pair in _cache)
+            {
+                if (pair.Key.StartsWith(prefix, StringComparison.Ordinal) && RemoveSlot(pair.Key, pair.Value))
+                {
+                    removed++;
+                }
+            }
+
+            return removed;
+        }
+
         private Slot NewSlot<T>(TimeSpan ttl, Func<T> factory)
         {
             long sequence = Interlocked.Increment(ref _sequence);

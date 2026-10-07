@@ -70,6 +70,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`RetryPolicy` recognises throttling by error code only.** A fault whose message merely contained "throttle",
   "temporar" or "too many requests" was replayed, including a business error that said "temporarily unavailable".
   Only the three service-protection error codes are retried now.
+- **The injected `IPluginCacheService` is scoped to the executing organization.** The framework's own entries were
+  keyed by organization id, but user keys were stored raw in the process-wide cache, so the same key could serve one
+  organization's value to another should a worker be shared. Every key now carries the organization scope, and
+  `Clear()` drops only that organization's entries instead of the whole process cache. A `PluginCacheService` you
+  create yourself is unchanged.
 
 ### Added (Framework)
 
