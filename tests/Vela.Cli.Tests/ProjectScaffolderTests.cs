@@ -224,6 +224,21 @@ public class ProjectScaffolderTests
     }
 
     [Fact]
+    public void SmokeReportReaders_CountFromTheXml_NotTheLocalizedConsole()
+    {
+        RunInTempDir(temp =>
+        {
+            string trx = Path.Combine(temp, "r.trx");
+            File.WriteAllText(trx, "<TestRun xmlns=\"http://microsoft.com/schemas/VisualStudio/TeamTest/2010\"><ResultSummary outcome=\"Completed\"><Counters total=\"3\" executed=\"3\" passed=\"3\" failed=\"0\" error=\"0\" /></ResultSummary></TestRun>");
+            Assert.Equal((3, 0), ReadTrxCounts(trx));
+
+            string xml = Path.Combine(temp, "r.xml");
+            File.WriteAllText(xml, "<assemblies><assembly name=\"a.dll\" total=\"4\" passed=\"3\" failed=\"1\" skipped=\"0\" errors=\"0\" /></assemblies>");
+            Assert.Equal((3, 1), ReadXunitCounts(xml));
+        });
+    }
+
+    [Fact]
     public void Generate_WritesAManifestOfEveryGeneratedFile()
     {
         RunInTempDir(temp =>
@@ -609,7 +624,11 @@ public class ProjectScaffolderTests
         // folder, and a parallel build can race on the pack output ("used by another process").
         (int build, string buildOutput) = RunDotnet($"build \"{sln}\" -c Release --no-restore -m:1", temp);
         Assert.True(build == 0, buildOutput);
-        string[] velaWarnings = buildOutput.Split('\n').Where(line => line.Contains("warning VELA", StringComparison.Ordinal)).Distinct().ToArray();
+        // Match the diagnostic id, not the word "warning", which MSBuild localizes ("avertissement" on a French host).
+        string[] velaWarnings = buildOutput.Split('\n')
+            .Where(line => System.Text.RegularExpressions.Regex.IsMatch(line, @"\bVELA\d{3}\s*:"))
+            .Distinct()
+            .ToArray();
         Assert.True(velaWarnings.Length == 0, "Generated code raised Vela analyzer warnings:\n" + string.Join("\n", velaWarnings));
 
         if (runTests)
@@ -656,13 +675,38 @@ public class ProjectScaffolderTests
         foreach (string assembly in assemblies)
         {
             Assert.True(File.Exists(assembly), $"Test assembly not built: {assembly}");
+
+            // The counts come from the runner's XML report, never its console text, which is localized (a French
+            // runner prints "réussite : N"): a TRX file from `dotnet test`, the xunit XML from the console runner.
+            string report = Path.Combine(root, Path.GetFileNameWithoutExtension(assembly) + (OperatingSystem.IsWindows() ? ".trx" : ".xunit.xml"));
             (int exit, string output) = OperatingSystem.IsWindows()
-                ? RunProcess("dotnet", $"test \"{assembly}\"", root)
-                : RunProcess("mono", $"\"{FindXunitConsole()}\" \"{assembly}\" -noshadow", root);
+                ? RunProcess("dotnet", $"test \"{assembly}\" --logger \"trx;LogFileName={report}\"", root)
+                : RunProcess("mono", $"\"{FindXunitConsole()}\" \"{assembly}\" -noshadow -xml \"{report}\"", root);
             Assert.True(exit == 0, output);
+            Assert.True(File.Exists(report), $"The test runner wrote no report at {report}.\n{output}");
+
+            (int passed, int failed) = OperatingSystem.IsWindows() ? ReadTrxCounts(report) : ReadXunitCounts(report);
+            Assert.True(failed == 0, output);
             // A runner that discovers nothing also exits 0: require that tests actually ran.
-            Assert.Matches(OperatingSystem.IsWindows() ? @"Passed:\s*[1-9]" : @"Total: [1-9]", output);
+            Assert.True(passed > 0, $"No generated test ran in {assembly}.\n{output}");
         }
+    }
+
+    // TRX: <TestRun><ResultSummary><Counters passed="N" failed="N" .../></ResultSummary></TestRun> (namespaced).
+    internal static (int Passed, int Failed) ReadTrxCounts(string trxPath)
+    {
+        System.Xml.Linq.XElement counters = System.Xml.Linq.XDocument.Load(trxPath).Descendants()
+            .First(element => element.Name.LocalName == "Counters");
+        return ((int?)counters.Attribute("passed") ?? 0, ((int?)counters.Attribute("failed") ?? 0) + ((int?)counters.Attribute("error") ?? 0));
+    }
+
+    // xunit v2 XML: <assemblies><assembly total="N" passed="N" failed="N" errors="N" .../></assemblies>.
+    internal static (int Passed, int Failed) ReadXunitCounts(string xmlPath)
+    {
+        System.Xml.Linq.XElement[] assemblies = System.Xml.Linq.XDocument.Load(xmlPath).Descendants("assembly").ToArray();
+        return (
+            assemblies.Sum(a => (int?)a.Attribute("passed") ?? 0),
+            assemblies.Sum(a => ((int?)a.Attribute("failed") ?? 0) + ((int?)a.Attribute("errors") ?? 0)));
     }
 
     private static string FindXunitConsole()
@@ -710,6 +754,11 @@ public class ProjectScaffolderTests
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+
+        // Belt and braces: ask the .NET CLI / MSBuild / VSTest for English output (nothing above parses console
+        // text for results, but failure messages read better and stay greppable).
+        psi.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
+        psi.Environment["VSLANG"] = "1033";
 
         using Process? process = Process.Start(psi);
         Assert.NotNull(process);
