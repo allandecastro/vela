@@ -111,6 +111,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ctx.TraceExecutionSnapshot(phase)` still traces values (`TraceSnapshotDetail.Metadata` for names only).
 - **Dataverse call tracing is one line per event** (`Dataverse.Update start scope=User depth=1 entity=account; id=...`
   then `Dataverse.Update ok 42 ms`) instead of an 11-line block per call, which filled the ~10 KB trace log.
+- **Less work per execution.** `ctx.Service`, `ctx.SystemService` and `ctx.NotificationService` are created on first
+  use instead of for every execution, and the reflection the context does on every run (context interface types,
+  context properties read by name, the telemetry logger and `LogMetric` lookups) is resolved once per process.
 
 ### Fixed (Framework)
 
@@ -220,6 +223,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   served templates from inactive rows, and its cross-execution snapshot was keyed by table only, so two sources over the
   same table with different columns shared one snapshot. Rows whose `statecode` is not 0 are skipped, and the cache key
   includes the key, language and value column names.
+- **`RetrieveAll` / `ToList` no longer leave the query on its last page.** Paging overwrote the query's `PageInfo`,
+  so a reused `TypedQuery` kept the last page number and cookie. The caller's `PageInfo` is restored afterwards.
+- **File helpers cap the block size at 4 MB.** `UploadFile` / `DownloadFile` passed a larger `blockSize` straight to
+  Dataverse, which rejects blocks above 4 MB; it is now capped (`FileColumnExtensions.MaxBlockSize`). `DownloadFile`
+  also assembles the content in one buffer instead of a `List<byte>`.
 
 ### Added (CLI)
 

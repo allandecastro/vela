@@ -92,7 +92,8 @@ List<Account> same = service.RetrieveAll(Query.For<Account>().SelectAll());
 ```
 
 All three return the early-bound `TEntity` (via `ToEntity<T>()`); you never touch `.Build()` or `AliasedValue`
-for a plain read.
+for a plain read. None of them leaves the query changed: `ToList`/`RetrieveAll` page with their own paging and restore
+the query's `PageInfo`, and `FirstOrDefault` restores its `TopCount`, so the same `TypedQuery` can be run again.
 
 **Scalar aggregates** run and read back in one typed call - no alias string to repeat, no `AliasedValue` to
 unwrap:

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
@@ -17,6 +18,9 @@ namespace Vela.Files
         // Dataverse caps a single block at 4 MB; upload/download in blocks of this size by default.
         private const int DefaultBlockSize = 4 * 1024 * 1024;
 
+        /// <summary>The largest block Dataverse accepts (4 MB); a larger requested block size is capped to it.</summary>
+        public const int MaxBlockSize = DefaultBlockSize;
+
         /// <summary>
         /// Uploads <paramref name="content"/> into a File column in one call (initialize, upload blocks, commit)
         /// and returns the new file id (the value the column then stores).
@@ -27,7 +31,7 @@ namespace Vela.Files
         /// <param name="fileName">The file name to store.</param>
         /// <param name="content">The file bytes.</param>
         /// <param name="mimeType">The content MIME type (default <c>application/octet-stream</c>).</param>
-        /// <param name="blockSize">The block size in bytes (default 4 MB, the platform maximum).</param>
+        /// <param name="blockSize">The block size in bytes (default 4 MB, the platform maximum; larger values are capped).</param>
         /// <returns>The committed file id.</returns>
         public static Guid UploadFile(
             this IOrganizationService service,
@@ -46,10 +50,7 @@ namespace Vela.Files
                 throw new ArgumentNullException(nameof(fileAttributeName));
             }
 
-            if (blockSize <= 0)
-            {
-                blockSize = DefaultBlockSize;
-            }
+            blockSize = NormalizeBlockSize(blockSize);
 
             OrganizationRequest init = new OrganizationRequest("InitializeFileBlocksUpload");
             init["Target"] = target;
@@ -88,7 +89,7 @@ namespace Vela.Files
         /// <param name="service">The organization service.</param>
         /// <param name="target">The record that owns the column.</param>
         /// <param name="fileAttributeName">The File/Image column's logical name.</param>
-        /// <param name="blockSize">The block size in bytes (default 4 MB).</param>
+        /// <param name="blockSize">The block size in bytes (default 4 MB, the platform maximum; larger values are capped).</param>
         /// <returns>The file bytes.</returns>
         public static byte[] DownloadFile(
             this IOrganizationService service,
@@ -103,10 +104,7 @@ namespace Vela.Files
                 throw new ArgumentNullException(nameof(fileAttributeName));
             }
 
-            if (blockSize <= 0)
-            {
-                blockSize = DefaultBlockSize;
-            }
+            blockSize = NormalizeBlockSize(blockSize);
 
             OrganizationRequest init = new OrganizationRequest("InitializeFileBlocksDownload");
             init["Target"] = target;
@@ -115,7 +113,9 @@ namespace Vela.Files
             string token = (string)initialized["FileContinuationToken"];
             long size = Convert.ToInt64(initialized["FileSizeInBytes"]);
 
-            List<byte> content = new List<byte>(size > 0 && size < int.MaxValue ? (int)size : 0);
+            // Collect into a stream sized to the announced length: one buffer copy per block instead of a List<byte>
+            // filled byte by byte.
+            using MemoryStream content = new MemoryStream(size > 0 && size < int.MaxValue ? (int)size : 0);
             for (long offset = 0; offset < size;)
             {
                 long length = Math.Min(blockSize, size - offset);
@@ -129,12 +129,17 @@ namespace Vela.Files
                     break;
                 }
 
-                content.AddRange(data);
+                content.Write(data, 0, data.Length);
                 offset += data.Length;
             }
 
             return content.ToArray();
         }
+
+        // A non-positive size means "use the default"; anything above the platform maximum is capped, because
+        // Dataverse rejects a block larger than 4 MB.
+        private static int NormalizeBlockSize(int blockSize) =>
+            blockSize <= 0 || blockSize > MaxBlockSize ? MaxBlockSize : blockSize;
 
         /// <summary>Deletes a stored file by its file id.</summary>
         /// <param name="service">The organization service.</param>

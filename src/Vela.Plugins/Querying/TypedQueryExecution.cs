@@ -55,22 +55,39 @@ namespace Vela.Querying
                 return results;
             }
 
-            expression.PageInfo = new PagingInfo { PageNumber = 1, Count = pageSize, PagingCookie = null };
-            while (true)
+            // Page with a private PagingInfo and restore the caller's afterwards, so running the query never leaves a
+            // reusable TypedQuery on its last page (a later ToList / FirstOrDefault must see the original paging).
+            PagingInfo? originalPaging = expression.PageInfo;
+            PagingInfo paging = new PagingInfo
             {
-                EntityCollection page = service.RetrieveMultiple(expression);
-                foreach (Entity entity in page.Entities)
+                PageNumber = 1,
+                Count = pageSize,
+                PagingCookie = null,
+                ReturnTotalRecordCount = originalPaging?.ReturnTotalRecordCount ?? false,
+            };
+            expression.PageInfo = paging;
+            try
+            {
+                while (true)
                 {
-                    results.Add(entity.ToEntity<TEntity>());
-                }
+                    EntityCollection page = service.RetrieveMultiple(expression);
+                    foreach (Entity entity in page.Entities)
+                    {
+                        results.Add(entity.ToEntity<TEntity>());
+                    }
 
-                if (!page.MoreRecords)
-                {
-                    break;
-                }
+                    if (!page.MoreRecords)
+                    {
+                        break;
+                    }
 
-                expression.PageInfo.PageNumber++;
-                expression.PageInfo.PagingCookie = page.PagingCookie;
+                    paging.PageNumber++;
+                    paging.PagingCookie = page.PagingCookie;
+                }
+            }
+            finally
+            {
+                expression.PageInfo = originalPaging;
             }
 
             return results;
