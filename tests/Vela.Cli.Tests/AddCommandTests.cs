@@ -859,7 +859,7 @@ namespace Acme.Plugins.Account.Plugins
     }
 
     [Fact]
-    public void Add_Step_RefusesTheTriggerTheDefaultPluginAlreadyRegisters()   // A-50: VELA008 duplicate trigger
+    public void Add_Step_RefusesOnlyAnExactDuplicateOfAnExistingStep()   // A-50, A-25 rule
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
@@ -867,10 +867,12 @@ namespace Acme.Plugins.Account.Plugins
             string file = Path.Combine(dir, "Account", "Plugins", "AccountRouter.cs");
             string before = File.ReadAllText(file);
 
-            // Same defaults (Create / PostOperation / Sync) as `add plugin`: refused, file untouched.
+            // Same defaults (Create / PostOperation / Sync) and the same filter column as `add plugin`: refused.
             Assert.Equal(ExitInvalidArguments, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--filtering-attributes", "Name", "--project", project]));
             Assert.Equal(before, File.ReadAllText(file));
 
+            // Same trigger, other filter column: allowed (several steps per trigger, told apart by their filters).
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--handler", "OnPhone", "--filtering-attributes", "Telephone1", "--project", project]));
             // A different stage is a different trigger.
             Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--stage", "PreOperation", "--filtering-attributes", "Name", "--project", project]));
         });

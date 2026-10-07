@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 namespace Vela.Cli;
@@ -14,14 +15,20 @@ internal static class StepInjector
 {
     // Convenience overload: default to a PostOperation + Sync step (the historical behaviour), no explicit filter.
     public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string[]? explicitFilterAttributes, out string result, out string error)
-        => TryInject(source, entityType, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", true, explicitFilterAttributes, out result, out error);
+        => TryInject(source, entityType, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", true, explicitFilterAttributes, out result, out error, out _);
+
+    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, string[]? explicitFilterAttributes, out string result, out string error)
+        => TryInject(source, entityType, message, registrationCall, handlerName, stageCall, modeCall, postStage, explicitFilterAttributes, out result, out error, out _);
 
     // <paramref name="explicitFilterAttributes"/>: the resolved property name(s) to emit as a FilterOn selector.
     // Required for the messages AddCommand.RequiresFilter names; null or empty for any other message.
-    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, string[]? explicitFilterAttributes, out string result, out string error)
+    // <paramref name="note"/>: set (and the step still added) when the plugin already has a step on the same trigger
+    // that this one is told apart from; null otherwise.
+    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, string[]? explicitFilterAttributes, out string result, out string error, out string? note)
     {
         result = source;
         error = string.Empty;
+        note = null;
 
         // Anchor on the method declaration (return type + name + empty parens), not the first textual mention:
         // a doc-comment, a base.RegisterPluginSteps() call, or a string reference would otherwise mis-anchor the
@@ -79,14 +86,21 @@ internal static class StepInjector
             return false;
         }
 
-        // Dataverse (and analyzer VELA008) allow one step per trigger - message + stage + mode - in a plugin, and the
-        // add-step defaults (Create / PostOperation / Sync) are exactly what `vela add plugin` registers. Refuse a
-        // duplicate up front instead of writing code that fails the build.
-        string? duplicate = FindDuplicateTrigger(MaskComments(body), registrationCall, stageCall, modeCall);
-        if (duplicate is not null)
+        // Several steps may share a trigger (message + stage + mode) when they are told apart by their filtering
+        // columns, images, WithStepKey or ForRelationship (A-25). The step written here has only its FilterOn, so it is
+        // an exact duplicate - indistinguishable, refused - when an existing step on the same trigger has the same
+        // filter columns and none of the other distinguishing modifiers. The add-step defaults (Create /
+        // PostOperation / Sync) are exactly what `vela add plugin` registers, so this is the common case.
+        TriggerMatch match = FindDuplicateTrigger(MaskComments(body), registrationCall, stageCall, modeCall, explicitFilterAttributes ?? []);
+        if (match.Kind == TriggerMatchKind.ExactDuplicate)
         {
-            error = $"This plugin already registers a {duplicate} step; Dataverse allows one step per message, stage and mode (VELA008). Pass a different --message, --stage or --mode, or add the columns to the existing step's FilterOn and branch in its handler.";
+            error = $"This plugin already registers a {match.Trigger} step with the same filtering columns, so the two could not be told apart. Pass different --filtering-attributes, another --message, --stage or --mode, or add the columns to the existing step and branch in its handler.";
             return false;
+        }
+
+        if (match.Kind == TriggerMatchKind.SharedTrigger)
+        {
+            note = $"This plugin already registers a {match.Trigger} step; the new one is told apart by its filtering columns, which is allowed. Consider naming both with .WithStepKey(\"...\") for clarity.";
         }
 
         string filtering = explicitFilterAttributes is { Length: > 0 }
@@ -139,31 +153,84 @@ internal static class StepInjector
     private static readonly Regex StageCall = new(@"\.\s*(?<stage>PreValidation|PreOperation|PostOperation)\s*\(\s*\)", RegexOptions.Compiled);
     private static readonly Regex AsyncCall = new(@"\.\s*Async\s*\(\s*\)", RegexOptions.Compiled);
 
-    // Returns "<Message> <Stage> <Mode>" of an existing registration in <paramref name="body"/> with the same trigger as
-    // the step being added, or null. Messages compare case-insensitively (OnMessage("create") is the Create trigger).
+    // Modifiers that tell two steps on the same trigger apart besides their filter columns (A-25).
+    private static readonly Regex Distinguishing = new(@"\.\s*(?:WithStepKey|WithPreImage|WithPostImage|ForRelationship)\s*[<(]", RegexOptions.Compiled);
+    private static readonly Regex FilterOnCall = new(@"\.\s*FilterOn\s*\(", RegexOptions.Compiled);
+    private static readonly Regex SelectedMember = new(@"=>\s*\w+\s*\.\s*(?<member>\w+)", RegexOptions.Compiled);
+
+    internal enum TriggerMatchKind
+    {
+        None,
+        SharedTrigger,
+        ExactDuplicate,
+    }
+
+    internal readonly record struct TriggerMatch(TriggerMatchKind Kind, string? Trigger);
+
+    // Compares the step being added with the registrations in <paramref name="body"/>: an ExactDuplicate is an existing
+    // step with the same trigger (messages compare case-insensitively, so OnMessage("create") is the Create trigger),
+    // the same filter columns and no other distinguishing modifier; a SharedTrigger is any other step on that trigger.
     // A chain whose stage cannot be read is skipped, so this never refuses on a guess.
-    internal static string? FindDuplicateTrigger(string body, string registrationCall, string stageCall, string modeCall)
+    internal static TriggerMatch FindDuplicateTrigger(string body, string registrationCall, string stageCall, string modeCall, string[] filterAttributes)
     {
         Match added = Registration.Match("RegisterStep()." + registrationCall + stageCall + modeCall + ";");
         if (!added.Success)
         {
-            return null;
+            return new TriggerMatch(TriggerMatchKind.None, null);
         }
 
         (string message, string? stage, bool isAsync) wanted = Trigger(added);
+        HashSet<string> wantedFilter = new(filterAttributes, StringComparer.Ordinal);
+        TriggerMatch result = new(TriggerMatchKind.None, null);
         foreach (Match existing in Registration.Matches(body))
         {
             (string message, string? stage, bool isAsync) found = Trigger(existing);
-            if (found.stage is not null
-                && string.Equals(found.message, wanted.message, StringComparison.OrdinalIgnoreCase)
-                && found.stage == wanted.stage
-                && found.isAsync == wanted.isAsync)
+            if (found.stage is null
+                || !string.Equals(found.message, wanted.message, StringComparison.OrdinalIgnoreCase)
+                || found.stage != wanted.stage
+                || found.isAsync != wanted.isAsync)
             {
-                return $"{found.message} {found.stage} {(found.isAsync ? "Async" : "Sync")}";
+                continue;
             }
+
+            string trigger = $"{found.message} {found.stage} {(found.isAsync ? "Async" : "Sync")}";
+            string rest = existing.Groups["rest"].Value;
+            if (!Distinguishing.IsMatch(rest) && FilterColumns(rest).SetEquals(wantedFilter))
+            {
+                return new TriggerMatch(TriggerMatchKind.ExactDuplicate, trigger);
+            }
+
+            result = new TriggerMatch(TriggerMatchKind.SharedTrigger, trigger);
         }
 
-        return null;
+        return result;
+    }
+
+    // The member names selected by a chain's FilterOn(...) call (e => e.Name, c => c.Telephone1, ...).
+    private static HashSet<string> FilterColumns(string chain)
+    {
+        HashSet<string> columns = new(StringComparer.Ordinal);
+        Match call = FilterOnCall.Match(chain);
+        if (!call.Success)
+        {
+            return columns;
+        }
+
+        int start = call.Index + call.Length;
+        int depth = 1;
+        int end = start;
+        while (end < chain.Length && depth > 0)
+        {
+            depth += chain[end] == '(' ? 1 : chain[end] == ')' ? -1 : 0;
+            end++;
+        }
+
+        foreach (Match member in SelectedMember.Matches(chain.Substring(start, Math.Max(0, end - start - 1))))
+        {
+            columns.Add(member.Groups["member"].Value);
+        }
+
+        return columns;
     }
 
     private static (string Message, string? Stage, bool IsAsync) Trigger(Match registration)

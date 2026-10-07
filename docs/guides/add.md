@@ -84,10 +84,12 @@ vela add --interactive
   accepts the same `--stage`/`--mode` and `--filtering-attributes` options as `add plugin`: pass
   `--filtering-attributes <Col1,Col2>` to emit `FilterOn(e => e.Col1, e => e.Col2)` (identifiers validated and
   wrong casing corrected against the model, as above). As for `add plugin`, the option is required on a
-  `Create`/`Update` (or `*Multiple`) step and rejected on any other message. Dataverse allows one step per
-  message, stage and mode in a plugin (analyzer VELA008), so `add step` refuses a trigger the plugin already
-  registers - notably its defaults (`Create`, `PostOperation`, `Sync`), which are what `add plugin` emits: pass
-  another `--message`, `--stage` or `--mode`, or add the columns to the existing step's `FilterOn`. The handler body's TODO
+  `Create`/`Update` (or `*Multiple`) step and rejected on any other message. A plugin may have several
+  steps on one trigger (message, stage and mode) when they are told apart by their `FilterOn` columns, images,
+  `WithStepKey` or `ForRelationship`. `add step` refuses only an exact duplicate - an existing step on the same
+  trigger with the same filtering columns and nothing else to tell them apart (the add-step defaults `Create`,
+  `PostOperation`, `Sync` are what `add plugin` emits). A step that shares a trigger but filters on other columns
+  is added, with a note suggesting `.WithStepKey("...")` to name both. The handler body's TODO
   points at the typed access for the message (`ctx.Request.Target`, or `ctx.Request.Targets` for a `*Multiple`
   step).
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +

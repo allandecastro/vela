@@ -174,21 +174,66 @@ namespace Acme.Plugins.Account.Plugins
         Assert.DoesNotContain("// TODO: add .FilterOn", result);
     }
 
-    [Theory]
-    [InlineData("OnCreate()", ".PostOperation()", ".Sync()", false)]          // the existing step's exact trigger
-    [InlineData("OnMessage(\"create\")", ".PostOperation()", ".Sync()", false)] // same message, string form
-    [InlineData("OnCreate()", ".PreOperation()", ".Sync()", true)]            // other stage
-    [InlineData("OnCreate()", ".PostOperation()", ".Async()", true)]          // other mode
-    public void TryInject_RefusesADuplicateTrigger(string registrationCall, string stageCall, string modeCall, bool allowed)   // A-50
-    {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Create", registrationCall, "HandleOther", stageCall, modeCall, postStage: stageCall == ".PostOperation()", explicitFilterAttributes: Name, out string result, out string error);
+    // HandlerBased with its Create step filtered on Name (and optionally another modifier).
+    private static string FilteredCreate(string extra = "") => HandlerBased.Replace(
+        "            RegisterStep().OnCreate()\n                .PostOperation()\n                .Sync()\n                .Handle(HandleCreate);",
+        "            RegisterStep().OnCreate()\n                .PostOperation()\n                .Sync()\n                .FilterOn(a => a.Name)" + extra + "\n                .Handle(HandleCreate);");
 
-        Assert.Equal(allowed, ok);
-        if (!allowed)
-        {
-            Assert.Contains("already registers a Create PostOperation Sync step", error);
-            Assert.Equal(HandlerBased, result);
-        }
+    [Theory]
+    [InlineData("OnCreate()", ".PostOperation()", ".Sync()")]
+    [InlineData("OnMessage(\"create\")", ".PostOperation()", ".Sync()")]   // same message, string form
+    public void TryInject_RefusesAnExactDuplicate_SameTriggerAndFilterColumns(string registrationCall, string stageCall, string modeCall)   // A-25 rule
+    {
+        string source = FilteredCreate();
+        Assert.NotEqual(HandlerBased, source);
+
+        bool ok = StepInjector.TryInject(source, "Account", "Create", registrationCall, "HandleOther", stageCall, modeCall, postStage: true, Name, out string result, out string error, out _);
+
+        Assert.False(ok);
+        Assert.Contains("already registers a Create PostOperation Sync step with the same filtering columns", error);
+        Assert.Equal(source, result);
+    }
+
+    [Fact]
+    public void TryInject_AllowsASharedTrigger_ToldApartByItsFilterColumns_AndSuggestsAStepKey()
+    {
+        bool ok = StepInjector.TryInject(FilteredCreate(), "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1"], out string result, out string error, out string? note);
+
+        Assert.True(ok, error);
+        Assert.Contains(".FilterOn(e => e.Telephone1)", result);
+        Assert.NotNull(note);
+        Assert.Contains("WithStepKey", note);
+    }
+
+    [Theory]
+    [InlineData("\n                .WithStepKey(\"main\")")]
+    [InlineData("\n                .WithPostImage(a => a.Name)")]
+    [InlineData("\n                .WithPreImage(a => a.Name)")]
+    public void TryInject_AllowsTheSameFilterColumns_WhenTheExistingStepIsToldApartOtherwise(string modifier)
+    {
+        bool ok = StepInjector.TryInject(FilteredCreate(modifier), "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out string? note);
+
+        Assert.True(ok, error);
+        Assert.NotNull(note);
+    }
+
+    [Theory]
+    [InlineData(".PreOperation()", ".Sync()")]   // other stage
+    [InlineData(".PostOperation()", ".Async()")] // other mode
+    public void TryInject_OtherTrigger_IsNeitherRefusedNorNoted(string stageCall, string modeCall)
+    {
+        bool ok = StepInjector.TryInject(FilteredCreate(), "Account", "Create", "OnCreate()", "HandleOther", stageCall, modeCall, postStage: stageCall == ".PostOperation()", Name, out _, out string error, out string? note);
+
+        Assert.True(ok, error);
+        Assert.Null(note);
+    }
+
+    [Fact]
+    public void TryInject_FilterColumnOrderDoesNotMatter()
+    {
+        string source = FilteredCreate().Replace(".FilterOn(a => a.Name)", ".FilterOn(a => a.Name, a => a.Telephone1)");
+
+        Assert.False(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1", "Name"], out _, out _, out _));
     }
 
     [Fact]
@@ -199,9 +244,10 @@ namespace Acme.Plugins.Account.Plugins
             "            RegisterStep().OnUpdate()\n                .PostOperation()\n                .Sync()\n                .FilterOn(e => e.Name)\n                .Handle(HandleCreate);\n            // RegisterStep().OnCreate().PostOperation().Sync().Handle(Old);");
         Assert.NotEqual(HandlerBased, source);
 
-        bool ok = StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleNew", Name, out _, out string error);
+        bool ok = StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleNew", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out string? note);
 
         Assert.True(ok, error);
+        Assert.Null(note);
     }
 
     [Fact]

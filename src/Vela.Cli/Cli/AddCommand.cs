@@ -418,9 +418,15 @@ internal static class AddCommand
             return Fail($"{filePath} does not look like an EntityPluginBase<{entity}> plugin.", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, stageCall, modeCall, postStage, filterAttributes, out string updated, out string error))
+        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, stageCall, modeCall, postStage, filterAttributes, out string updated, out string error, out string? note))
         {
             return Fail(error, ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (note is not null)
+        {
+            // stderr, so it never pollutes the --json report on stdout.
+            Console.Error.WriteLine("Note: " + note);
         }
 
         File.WriteAllText(filePath, NormalizeNewlines(updated));
