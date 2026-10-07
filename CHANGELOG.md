@@ -181,6 +181,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (CLI, breaking)
 
+- **Steps deployed by very old Vela versions (named `df:<plugin type>:<step key>`) are no longer recognised by
+  their step key.** The live read no longer parses that name format. Such a step is matched like a keyless step
+  (plugin type, message, stage, mode and table) and renamed on the next `apply`; when it cannot be matched that way,
+  it is deleted and recreated.
 - **`plan`, `apply` and `inspect` each accept only their own options.** They shared one allowlist, so
   `plan --auto-approve` or `inspect --strict` was accepted and ignored; it is now `Unknown option` (exit 2).
   `--detailed-exitcode` is `plan` only; `--auto-approve`/`--yes` and `--batch-size` are `apply` only; `--strict` is

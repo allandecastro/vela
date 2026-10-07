@@ -176,13 +176,6 @@ internal static class DefinitionParser
             }
         }
 
-        // Legacy backward-compat: "df:{pluginTypeName}:{stepKey}"
-        string legacyPrefix = $"df:{pluginTypeName}:";
-        if (value.StartsWith(legacyPrefix, StringComparison.Ordinal))
-        {
-            return value.Substring(legacyPrefix.Length);
-        }
-
         return string.Empty;
     }
 }
