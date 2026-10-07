@@ -49,7 +49,10 @@ internal static class PackageScanner
     PluginLoadContext loadContext = new(tempDirectories);
     try
     {
-    foreach (string packagePath in options.PackagePaths)
+    // --packages-dir can hold several builds of the same package (1.0.0 and 1.0.1 side by side). Scanning both
+    // produced two copies of every step ("Duplicate local step key") and kept whichever version the disk listed first;
+    // only the highest version of each package id is scanned, and the others are named on stderr.
+    foreach (string packagePath in SelectLatestPackageVersions(options.PackagePaths, Console.Error.WriteLine))
     {
         packagePayloads.Add(ReadPluginPackagePayload(packagePath));
         ExtractedPackage package = ExtractPackage(packagePath, options.PackageAssembly, tempDirectories);
@@ -158,6 +161,89 @@ internal static class PackageScanner
         loadContext.Unload();
     }
 }
+
+    /// <summary>
+    /// Keeps one package per package id: the highest version (NuGet ordering: numeric release segments, then a release
+    /// above its prereleases). Each skipped package is reported through <paramref name="warn"/>. Order of the kept
+    /// packages follows the input.
+    /// </summary>
+    internal static string[] SelectLatestPackageVersions(IReadOnlyList<string> packagePaths, Action<string> warn)
+    {
+        List<(string Path, PluginPackagePayload Payload)> packages = packagePaths.Select(p => (p, ReadPluginPackagePayload(p))).ToList();
+        HashSet<string> kept = new(StringComparer.OrdinalIgnoreCase);
+        foreach (IGrouping<string, (string Path, PluginPackagePayload Payload)> group in packages.GroupBy(p => p.Payload.PackageName, StringComparer.OrdinalIgnoreCase))
+        {
+            (string Path, PluginPackagePayload Payload) latest = group
+                .OrderByDescending(p => p.Payload.Version, PackageVersionComparer.Instance)
+                .ThenBy(p => p.Path, StringComparer.Ordinal)
+                .First();
+            kept.Add(latest.Path);
+            foreach ((string Path, PluginPackagePayload Payload) skipped in group.Where(p => !string.Equals(p.Path, latest.Path, StringComparison.Ordinal)))
+            {
+                warn($"Warning: ignoring '{Path.GetFileName(skipped.Path)}' ({skipped.Payload.PackageName} {skipped.Payload.Version}): " +
+                    $"'{Path.GetFileName(latest.Path)}' is a newer version ({latest.Payload.Version}) of the same package.");
+            }
+        }
+
+        return packagePaths.Where(kept.Contains).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    /// <summary>Orders NuGet version strings: release segments numerically, a release above its prereleases,
+    /// prerelease labels by dot-separated identifier (numeric ones numerically); build metadata is ignored.</summary>
+    internal sealed class PackageVersionComparer : IComparer<string>
+    {
+        public static readonly PackageVersionComparer Instance = new();
+
+        public int Compare(string? x, string? y)
+        {
+            (string xRelease, string? xPre) = Split(x);
+            (string yRelease, string? yPre) = Split(y);
+            int release = CompareIdentifiers(xRelease, yRelease, numericOnly: true);
+            if (release != 0)
+            {
+                return release;
+            }
+
+            if (xPre == null || yPre == null)
+            {
+                return (xPre == null ? 1 : 0) - (yPre == null ? 1 : 0);
+            }
+
+            return CompareIdentifiers(xPre, yPre, numericOnly: false);
+        }
+
+        private static (string Release, string? Prerelease) Split(string? version)
+        {
+            string value = (version ?? string.Empty).Split('+')[0];
+            int dash = value.IndexOf('-');
+            return dash < 0 ? (value, null) : (value.Substring(0, dash), value.Substring(dash + 1));
+        }
+
+        private static int CompareIdentifiers(string x, string y, bool numericOnly)
+        {
+            string[] xs = x.Split('.');
+            string[] ys = y.Split('.');
+            for (int i = 0; i < Math.Max(xs.Length, ys.Length); i++)
+            {
+                string a = i < xs.Length ? xs[i] : numericOnly ? "0" : string.Empty;
+                string b = i < ys.Length ? ys[i] : numericOnly ? "0" : string.Empty;
+                int result = (long.TryParse(a, NumberStyles.None, CultureInfo.InvariantCulture, out long na), long.TryParse(b, NumberStyles.None, CultureInfo.InvariantCulture, out long nb)) switch
+                {
+                    (true, true) => na.CompareTo(nb),
+                    _ when a.Length == 0 || b.Length == 0 => a.Length.CompareTo(b.Length), // fewer prerelease identifiers sort first
+                    (true, false) => -1, // numeric identifiers sort below alphanumeric ones
+                    (false, true) => 1,
+                    _ => string.Compare(a, b, StringComparison.OrdinalIgnoreCase),
+                };
+                if (result != 0)
+                {
+                    return Math.Sign(result);
+                }
+            }
+
+            return 0;
+        }
+    }
 
     // Best-effort cleanup of the temp directories created while extracting/transforming packages (see
     // ExtractPackage / DataverseRegistration.ReadPackageBytesForImport). Failures are surfaced to stderr rather
@@ -533,18 +619,21 @@ internal static class PackageScanner
         return false;
     }
 
-    if (result is System.Array arr)
+    // EntityPluginBase.GetStepDefinitions returns StepDefinition[]. A non-array result is not a Vela plugin (the
+    // former single-object fallback served a pre-array framework shape that no longer exists), so fail loudly.
+    if (result is not System.Array arr)
     {
-        definitions = arr.Cast<object>().ToArray();
-        if (definitions.Length == 0)
-        {
-            error = $"Method '{methodName}' returned an empty array.";
-            return false;
-        }
-        return true;
+        error = $"Method '{methodName}' must return an array of step definitions, but returned '{result.GetType().Name}'.";
+        return false;
     }
 
-    definitions = [result];
+    definitions = arr.Cast<object>().ToArray();
+    if (definitions.Length == 0)
+    {
+        error = $"Method '{methodName}' returned an empty array.";
+        return false;
+    }
+
     return true;
 }
 

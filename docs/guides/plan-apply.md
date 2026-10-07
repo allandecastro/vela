@@ -39,7 +39,7 @@ vela apply `
 # 4) Interactive local mode (wizard prompts)
 vela plan --interactive
 
-# 5) CI strict mode (fail if scanner/metadata diagnostics exist)
+# 5) CI strict mode (fail on any warning; info such as "assembly not found" on a first deployment never fails)
 vela plan `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `
@@ -49,7 +49,13 @@ vela plan `
   --strict
 ```
 
-`plan` compares local plugin/custom-api metadata extracted from `.nupkg` against Dataverse and returns a preview of the ordered `create` / `update` / `delete` operations plus a detailed diff. At a terminal this is a colorized human summary; piped, redirected, or with `--json`, it is JSON with `hasChanges`, `summary`, `operations`, and `diff` fields.
+`plan` compares local plugin/custom-api metadata extracted from `.nupkg` against Dataverse and returns a preview of the ordered `create` / `update` / `delete` / `add-to-solution` operations plus a detailed diff. At a terminal this is a colorized human summary; piped, redirected, or with `--json`, it is a versioned JSON document (`schemaVersion`, `hasChanges`, `summary`, `operations`, `diff`, `diagnostics`, `info`, ...) documented in [Machine-readable output](../reference/machine-readable-output.md). Notices and the `--verbose` summary go to stderr, so `--verbose --json` still writes the JSON. With `--detailed-exitcode`, `plan` exits `8` when there are changes to apply and `0` when there is nothing to do.
+
+> **`--strict` and the first deployment.** `diagnostics` holds warnings (rank collisions, a secure configuration without a value, a Custom API name without the publisher prefix) and `--strict` fails on them. A plugin assembly that is not in Dataverse yet is expected on a first deployment: it is reported under `info`, which never fails `--strict`.
+
+> **One version per package.** `--packages-dir` may hold several builds of the same package (`Zava.Plugins.1.0.0.nupkg` and `Zava.Plugins.1.0.1.nupkg`). Only the highest version of each package id is scanned; the others are named on stderr.
+
+> **Solution membership.** With `--solution`, a component that did not change (deployed earlier without `--solution`, or into another solution) would never be written, so it would never join the solution. `plan` lists each Vela component missing from the solution (package, assembly, steps, Custom APIs and their parameters) as an `add-to-solution` operation, and `apply` adds it with `AddSolutionComponent` (without required components).
 
 > **Code-only rebuilds show up too.** A rebuild that changes no step or custom-API definition but recompiles the assembly leaves the registration diff empty, yet `apply` still republishes the plugin package. `plan` surfaces this as a `package` operation (`create` when the package is new, `update` when its stored version or content differs) and sets `hasChanges: true`, so a rebuild is never reported as "no changes". The numeric `summary` stays the non-package registration diff (steps and custom APIs, plus web resources on a `--webresources` run), matching the apply JSON where `packageRepublished` is a field separate from the counts; the package operation is listed under `operations`.
 
@@ -57,13 +63,13 @@ vela plan `
 
 `apply` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff (human summary at a terminal, JSON when piped or with `--json`). It writes by default: on a terminal it shows the plan and asks you to type `yes`; in a non-interactive session (no stdin TTY) it refuses unless you pass `--auto-approve` (alias `--yes`), so a script never writes unattended by accident. Use `vela plan` to preview without writing.
 
-> **Reading the apply JSON (scripts/agents).** `summary` on a successful apply is the **post-apply remaining** diff, so it is `{added:0,changed:0,removed:0}` even though work was done. Read the separate **`executed`** block for what actually happened: `{ "created": N, "updated": M, "deleted": K, "packageRepublished": bool, "byKind": [ { "kind": "step", "created": .., "updated": .., "deleted": .. }, ... ] }`, taken from the pre-apply diff (`byKind` breaks the totals down per component: `step` / `custom-api` / `web-resource`). `executed` is present only on `apply` (mode `apply-execute`), not on `plan`/`inspect`. Do not parse the free-text `notes`.
+> **Reading the apply JSON (scripts/agents).** `summary` on a successful apply is the **post-apply remaining** diff, so it is `{added:0,changed:0,removed:0}` even though work was done. Read the separate **`executed`** block for what actually happened: `{ "created": N, "updated": M, "deleted": K, "packageRepublished": bool, "addedToSolution": S, "byKind": [ { "kind": "step", "created": .., "updated": .., "deleted": .. }, ... ] }`, taken from the pre-apply diff (`byKind` breaks the totals down per component: `step` / `custom-api` / `web-resource`). `executed` is present only on `apply` (mode `apply-execute`), not on `plan`/`inspect`. Do not parse the free-text `notes`. See [Machine-readable output](../reference/machine-readable-output.md).
 
 `plan`, `apply` and `inspect` are safe to run under redirected or piped stdin (CI, agents): they never block waiting on a prompt. The optional "package assembly name" prompt only appears on a real terminal, and interactive OAuth prompts are terminal-only too, so a scripted run that supplies its inputs on the command line runs to completion (or fails with a clear message) without hanging.
 
 ### Batched writes
 
-`apply` sends its writes in **batches** rather than one request per record: the create/update/delete operations are grouped into dependency tiers (the step and custom API rows first, then their images, parameters, secure config and state) and each tier is flushed in chunked `ExecuteMultiple` requests. This collapses hundreds of round-trips into a handful, so `apply` is much faster on a large environment and far less likely to hit the connection timeout. Deletes run in the reverse order (children before parents). The output is unchanged: results are still reported **per plugin and per custom API**. If a whole batch cannot run on a given environment (for example `ExecuteMultiple` is unavailable, or a request times out), that chunk automatically falls back to one-by-one execution, so batching never makes `apply` less reliable. Each `ExecuteMultiple` carries up to 100 requests; tune it with `--batch-size <1-1000>`. See [connection timeout](../configuration/authentication.md#connection-timeout) to raise the per-request budget on a very large org.
+`apply` sends its writes in **batches** rather than one request per record: the create/update/delete operations are grouped into dependency tiers (the step and custom API rows first, then their images, parameters, secure config and state) and each tier is flushed in chunked `ExecuteMultiple` requests. Each `ExecuteMultiple` carries up to 100 requests; tune it with `--batch-size <1-1000>`. This collapses hundreds of round-trips into a handful, so `apply` is much faster on a large environment and far less likely to hit the connection timeout. Deletes run in the reverse order (children before parents). The output is unchanged: results are still reported **per plugin and per custom API**, and the `--verbose` progress lines (`[step] create ...`) are printed once the batch has run, a failed one ending with `(not applied)`. If a whole batch cannot run on a given environment (for example `ExecuteMultiple` is unavailable, or a request times out), that chunk automatically falls back to one-by-one execution, so batching never makes `apply` less reliable. When the batch had in fact run before the call failed (a timeout after the server executed it), a replayed create whose id already exists is counted as applied, not as a failure. See [connection timeout](../configuration/authentication.md#connection-timeout) to raise the per-request budget on a very large org.
 
 **Unmanaged registrations.** An assembly can mix Vela plugins with classic `IPlugin` / `CodeActivity` classes
 registered by other tools. Those classes are not Vela types, so `plan` and `apply` leave their steps and Custom APIs
@@ -79,6 +85,15 @@ Custom API, or remove the existing one first.
 `--secure-config NAME=VALUE` / `NAME=@file` (or `VELA_SECURE_CONFIG_<NAME>`), never compiled into the package;
 without a value the environment keeps its own. Deleting a step also deletes its secure-configuration row. See
 the step configuration section of [Write a plugin](plugins.md).
+
+### Package code runs in a separate process (not a sandbox)
+
+Reading a package's steps and Custom APIs instantiates its plugin types and calls their definition methods, so the scan runs code from the package. `plan`, `apply`, `inspect` and `vela models --package` run the scan in a child `vela` process. That keeps package code away from the CLI's own memory: the open Dataverse connection, the access token, the resolved client secret and secure-config values. The child also starts with an allowlisted environment (system paths, locale, .NET runtime variables), so `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*`, managed-identity and CI token variables are not handed to it by accident, and its output goes to stderr.
+
+> [!WARNING]
+> This is **not** a sandbox. The child runs with your OS user's rights, so hostile package code can still read the parent process's command line and environment (`ps`, and `/proc/<pid>/cmdline` and `/proc/<pid>/environ` on Linux), your files (including the interactive token cache under `~/.vela`) and the network. Scan only packages you build or trust.
+
+Keep secrets off the command line, where every process on the machine can see them: prefer `DATAVERSE_CLIENT_SECRET` or `--client-secret-stdin` to `--client-secret`, `DATAVERSE_CONNECTION_STRING` to `--connection-string`, `VELA_SECURE_CONFIG_<NAME>` or `--secure-config NAME=@file` to an inline value, or no secret at all with `--interactive` (cached token) or the ambient Azure credential (`--url` alone: `az login`, managed identity). Set `VELA_SCAN_IN_PROCESS=1` to scan in-process (debugging).
 
 By default the plugin assembly is inferred from the package. If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
@@ -127,7 +142,7 @@ clear message otherwise. Generate the TypeScript form models the scripts build o
 
 ## Resuming a failed apply
 
-`apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. Batching does not change this: each chunk runs with continue-on-error, so a single failed item does not abort the rest, and a tier-2 child (image, parameter) whose tier-1 row failed is skipped and reported rather than orphaned. The output is a per-owner report listing, for each plugin and custom API, what was applied and what failed and why. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply` (add `--auto-approve` in CI): the operations that already succeeded become no-ops and the failed ones are reconciled, converging to a clean `plan`.
+`apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. Batching does not change this: each chunk runs with continue-on-error, so a single failed item does not abort the rest, and a tier-2 child (image, parameter) whose tier-1 row failed is skipped and reported rather than orphaned. The output is a per-owner report listing, for each plugin and custom API, what was applied and what failed and why, followed by the resume report: every planned operation under exactly one of `completed`, `failed` and `not applied` (a step is named with its step key). Since a batch continues past a failure, a step planned after the failed one can still be listed as completed. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply` (add `--auto-approve` in CI): the operations that already succeeded become no-ops and the failed ones are reconciled, converging to a clean `plan`.
 
 ## Registration manifest
 

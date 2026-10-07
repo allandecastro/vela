@@ -107,7 +107,7 @@ public class ApplyEngineTests
 
         RegistrationDiff diff = DiffWithAddedSteps("dv-a", "dv-b", "dv-c");
 
-        DataverseRegistration.ApplyDiff(mock.Object, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(mock.Object, diff, [], null, [], verbose: false);
 
         Assert.Equal(1, sdkMessageQueries);
     }
@@ -160,7 +160,7 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false,
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false,
             secureConfigByStepKey: new Dictionary<string, string> { [PluginType + ":stepkey:dv-x"] = "s-cfg" });
 
         // Unsecure config is written directly onto the step entity.
@@ -209,7 +209,7 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
 
         // The batch was attempted (and threw), then the step was created through the one-by-one fallback.
         Assert.NotEmpty(svc.Batches);
@@ -220,13 +220,19 @@ public class ApplyEngineTests
     public void ApplyDiff_deletes_removed_step_through_the_service_seam()
     {
         // Demonstrates the apply orchestration is fully drivable through the IOrganizationService seam
-        // (no live org): a removed step is located by name and deleted via a batched DeleteRequest.
+        // (no live org): a removed step is located under its plugin type (resolved from the applied assembly only)
+        // and deleted via a batched DeleteRequest.
         Guid stepId = Guid.NewGuid();
+        Guid assemblyId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService
         {
-            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep"
-                ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", stepId))
-                : new EntityCollection(), // no plugin assemblies/types needed for a remove-only diff
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", assemblyId)),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType }),
+                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", stepId)),
+                _ => new EntityCollection(),
+            },
         };
 
         var removed = new RegistrationItem("step", PluginType,
@@ -240,9 +246,36 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
 
         Assert.Contains(("sdkmessageprocessingstep", stepId), svc.Deleted);
+        // Every plugin-type lookup is scoped to the applied assembly; none is environment-wide.
+        Assert.All(svc.Queries.Where(q => q.EntityName == "plugintype"),
+            q => Assert.Contains(q.Criteria.Conditions, c => c.AttributeName == "pluginassemblyid" && Equals(c.Values[0], assemblyId)));
+    }
+
+    [Fact]
+    public void ApplyDiff_does_not_delete_a_removed_step_of_a_type_outside_the_applied_assemblies()
+    {
+        // The removed step's plugin type is not in the assembly being applied (it lives elsewhere in the environment):
+        // apply must not hunt for it environment-wide, so nothing is deleted.
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Zava.Plugins.Other" }),
+                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", Guid.NewGuid())),
+                _ => new EntityCollection(),
+            },
+        };
+        var removed = new RegistrationItem("step", PluginType,
+            Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "MyStep" }));
+        var diff = new RegistrationDiff(["Zava.Plugins"], ["Zava.Plugins"], [], [removed], [], [], []);
+
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
+
+        Assert.Empty(svc.Deleted);
     }
 
     // A Custom API whose implementing class was renamed: same uniqueName, the live row implemented by the old type.
@@ -320,7 +353,7 @@ public class ApplyEngineTests
         try
         {
             DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
-                [], [new PluginPackagePayload("zava_Plugins", "1.0.0", package)], null, [], verbose: false);
+                [new PluginPackagePayload("zava_Plugins", "1.0.0", package)], null, [], verbose: false);
         }
         finally
         {
@@ -347,7 +380,7 @@ public class ApplyEngineTests
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
             DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
-                [], [], null, [], verbose: false));
+                [], null, [], verbose: false));
 
         Assert.Equal(
             "Custom API 'zava_Score' is now implemented by 'Other.Solution.ScoreApi', not by 'Zava.Plugins.ScoreApi' as when the plan was computed. " +
@@ -363,7 +396,7 @@ public class ApplyEngineTests
         (TestSupport.FakeOrgService svc, Guid apiId, _) = RenamedCustomApiService(liveImplementation: DeletedTypeId);
 
         DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
-            [], [], null, [], verbose: false);
+            [], null, [], verbose: false);
 
         Assert.Equal(2, svc.Updated.Count);
         Assert.Equal(apiId, svc.Updated[0].Id);
@@ -376,7 +409,7 @@ public class ApplyEngineTests
         (TestSupport.FakeOrgService svc, Guid apiId, Guid newTypeId) = RenamedCustomApiService(liveImplementation: Guid.Empty);
 
         DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
-            [], [], null, [], verbose: false);
+            [], null, [], verbose: false);
 
         Entity repoint = Assert.Single(svc.Updated); // only the re-point, no detach
         Assert.Equal(apiId, repoint.Id);
@@ -389,7 +422,7 @@ public class ApplyEngineTests
         (TestSupport.FakeOrgService svc, Guid apiId, Guid newTypeId) = RenamedCustomApiService(liveImplementation: NewTypeId);
 
         DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApiV2", "Zava.Plugins.ScoreApiV2", beforePrivate: true)),
-            [], [], null, [], verbose: false);
+            [], null, [], verbose: false);
 
         Entity update = Assert.Single(svc.Updated);
         Assert.Equal(apiId, update.Id);
@@ -432,7 +465,7 @@ public class ApplyEngineTests
         try
         {
             Exception ex = Assert.ThrowsAny<Exception>(() =>
-                DataverseRegistration.ApplyDiff(mock.Object, diff, [], [], null, [], verbose: false));
+                DataverseRegistration.ApplyDiff(mock.Object, diff, [], null, [], verbose: false));
             Assert.Contains("simulated dataverse failure", ex.Message);
         }
         finally
@@ -502,7 +535,7 @@ public class ApplyEngineTests
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {
@@ -513,8 +546,10 @@ public class ApplyEngineTests
         Assert.Contains("apply failed mid-run", stderr);
         // The un-flushed first step must not be listed as completed (the bug: done advanced during capture).
         Assert.DoesNotContain($"+ update step {accountPlugin}", stderr);
-        // The boundary sits at the first upsert; only the publish/resolve phase completed.
-        Assert.Contains($"failed at: update step {accountPlugin}", stderr);
+        // Only the publish/resolve phase completed.
+        // The report names the step whose capture threw; the earlier, un-flushed one is "not applied".
+        Assert.Contains($"failed at: update step {contactPlugin} (con-x)", stderr);
+        Assert.Contains($"- update step {accountPlugin} (acc-x)", stderr);
         Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
     }
 
@@ -546,7 +581,7 @@ public class ApplyEngineTests
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {

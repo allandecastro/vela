@@ -33,7 +33,8 @@ internal static class OutputWriter
         string outputPath = Path.GetFullPath(outPath);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
         File.WriteAllText(outputPath, output);
-        Console.WriteLine($"Plan written: {outputPath}");
+        // A notice, not output: stderr, so stdout carries nothing but the machine-readable document (or nothing).
+        Console.Error.WriteLine($"Plan written: {outputPath}");
     }
 
     /// <summary>
@@ -50,6 +51,7 @@ internal static class OutputWriter
         writer.WriteLine($"{ConsoleTheme.Muted("summary:", color)} {added} {removed} {changed}");
 
         WriteUnmanaged(preview.Unmanaged, writer, color);
+        WriteInfo(preview.Info, writer, color);
 
         if (preview.Operations.Length > 0)
         {
@@ -263,6 +265,22 @@ internal static class OutputWriter
         }
     }
 
+    // Informational notices (for example an assembly not yet in Dataverse on a first deployment): never a warning,
+    // so --strict does not fail on them.
+    public static void WriteInfo(IReadOnlyList<string>? info, TextWriter writer, bool color)
+    {
+        if (info is not { Count: > 0 })
+        {
+            return;
+        }
+
+        writer.WriteLine(ConsoleTheme.Muted("info:", color));
+        foreach (string line in info)
+        {
+            writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {line}", color));
+        }
+    }
+
     public static void WriteStateSummary(string label, RegistrationState state, TextWriter writer, bool color)
     {
         writer.WriteLine($"{ConsoleTheme.Accent(label, color)} assemblies: {string.Join(", ", state.SourceAssemblies)}");
@@ -334,7 +352,7 @@ internal static class OutputWriter
         return baseName;
     }
 
-    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null)
+    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null, string[]? info = null, IReadOnlyList<SolutionMembershipAction>? membership = null)
     {
         List<ApplyOperation> operations = [];
         operations.AddRange(diff.Added.Select(item => new ApplyOperation("create", item.Kind, item.Type, "Exists locally but not in Dataverse.")));
@@ -355,10 +373,15 @@ internal static class OutputWriter
                 ? "Plugin package is not in Dataverse; apply will create it."
                 : "Plugin package version or content differs from Dataverse; apply will republish it.")));
 
+        // Unchanged components that are not yet in --solution (SolutionMembershipAction): apply adds them.
+        IReadOnlyList<SolutionMembershipAction> missingFromSolution = membership ?? [];
+        operations.AddRange(missingFromSolution.Select(action => new ApplyOperation(
+            "add-to-solution", action.Kind, action.Name, "Exists in Dataverse but is not in the target solution; apply will add it.")));
+
         return new PlanPreview(
             Mode: mode,
             Environment: environment,
-            HasChanges: diff.Summary.Added > 0 || diff.Summary.Removed > 0 || diff.Summary.Changed > 0 || packages.Count > 0,
+            HasChanges: diff.Summary.Added > 0 || diff.Summary.Removed > 0 || diff.Summary.Changed > 0 || packages.Count > 0 || missingFromSolution.Count > 0,
             Summary: diff.Summary,
             Operations: operations.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
             Diff: diff,
@@ -368,86 +391,12 @@ internal static class OutputWriter
                 "Compared local .nupkg plugin metadata with live Dataverse state.",
                 "This is a preview; nothing was written to Dataverse."
             ],
-            Unmanaged: unmanaged ?? []);
+            Unmanaged: unmanaged ?? [],
+            Info: info ?? []);
     }
 
-    // Top-level `vela --help`. Section headers and command names are rendered through Spectre so a real
-    // terminal gets the teal branding used by the interactive menu, while the dense, bracket-heavy option
-    // and example lines are written with plain Console.WriteLine — Spectre would otherwise treat their
-    // '[' / ']' as markup and reflow them to the detected console width. When stdout is redirected
-    // (pipes, CI) Spectre strips the styling automatically, so scripts still see clean plain text.
-    public static void PrintUsage()
-    {
-        IAnsiConsole console = AnsiConsole.Console;
-
-        console.MarkupLine($"[bold #6366f1]{Markup.Escape(ToolInfo.ProductName)}[/]  [#22d3ee]v{Markup.Escape(ToolInfo.Version)}[/]");
-        console.MarkupLine("[grey]Register Dataverse plugins and Custom APIs from your build packages.[/]");
-        console.WriteLine();
-        console.MarkupLine("[bold]Usage:[/] vela <command> [[options]]");
-        console.WriteLine();
-
-        console.MarkupLine("[bold]Commands:[/]");
-        WriteCommand(console, "plan", "Preview registration changes; never writes to Dataverse.");
-        Console.WriteLine("      [--package <plugin.nupkg>]... [--packages-dir <folder>] [--package-assembly <name.dll>] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [connection options] [--timeout <minutes>] [--environment <label>] [--out <file>] [--secure-config <NAME=VALUE|NAME=@file>]... [--interactive] [--strict] [--verbose] [--json]");
-        WriteCommand(console, "apply", "Same inputs as plan; writes the changes (prompts for confirmation).");
-        Console.WriteLine("      [same args as plan] [--solution <solutionUniqueName>] [--webresources <folder> (preview)] [--auto-approve|--yes] [--batch-size <1-1000>] [--strict] [--verbose] [--json]");
-        WriteCommand(console, "inspect", "Compare local packages with the live environment.");
-        Console.WriteLine("      [same args as plan] [--verbose] [--json]");
-        WriteCommand(console, "init", "Scaffold a new solution on disk (aliases: new).");
-        Console.WriteLine("      --name <SolutionName> [--prefix <Prefix>] [--minimal|--no-demos] [--output <dir>] [--no-integrations] [--no-tests] [--no-console] [--core-version <ver>] [--managed-identity] [--web-resources (preview) [--web-resources-namespace <name>] [--web-resources-folder <dir>]] [--json] [--force] [--interactive]");
-        WriteCommand(console, "add", "Add a plugin, service, Custom API, test, or step to a project.");
-        Console.WriteLine("      (plugin|service|customapi|test|step) <Name> [...]   run 'vela add --help' for the full options");
-        WriteCommand(console, "models", "Generate early-bound model classes (C#) or TypeScript (preview).");
-        Console.WriteLine("      scope: --solution <uniquename> | --entities <a,b,c> | --custom-apis [<a,b,c>] | --messages [<a,b,c>] | --roles <a,b,c> | --solution-roles (combinable)");
-        Console.WriteLine("      [--namespace <ns>] [--out <dir>] [--no-annotations] [--overwrite] [--lang csharp|ts] [--forms and/or --tables (preview, TypeScript)] [connection options] [--timeout <minutes>]");
-        Console.WriteLine("      run 'vela models --help' for the full scope/option reference");
-        WriteCommand(console, "logs", "Read the plug-in trace log or failed system jobs (read-only; alias: trace).");
-        Console.WriteLine("      [--jobs [--all-statuses]] [--errors] [--top <n>] [--since 30m|2h|3d|<date>] [--type <name>] [--message <m>] [--entity <logical>] [--correlation <guid>] [--full] [connection options] [--json]");
-        WriteCommand(console, "sign", "Sign a plugin package.");
-        Console.WriteLine("      --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64 <content>) (--pfx-password <pw> | --pfx-credential <target>)) [--timestamp <url>] [--json]");
-        WriteCommand(console, "logout", "Clear the cached interactive-login token and remembered Dataverse URL.");
-        WriteCommand(console, "update", "Update the vela global tool to the latest version (or --version <x.y.z>).");
-        WriteCommand(console, "menu", "Launch the interactive menu (default with no args).");
-        WriteCommand(console, "version", "Print the tool version.");
-        console.WriteLine();
-
-        console.MarkupLine("[bold]Output:[/]");
-        Console.WriteLine("  plan/apply/inspect print a styled human summary on a terminal, and JSON when piped/redirected.");
-        Console.WriteLine("  Force JSON on a terminal with --json (or --out <file>); NO_COLOR / VELA_NO_COLOR disable colors.");
-        console.WriteLine();
-
-        console.MarkupLine("[bold]Auth options:[/]");
-        Console.WriteLine("  Client secret resolution order: --client-secret <value> (warned), --client-secret-stdin, DATAVERSE_CLIENT_SECRET env var.");
-        Console.WriteLine("  --interactive persists the login token (cross-platform cache under ~/.vela) so repeat runs are silent; --fresh-login forces a new prompt, 'vela logout' clears it.");
-        Console.WriteLine("  --auth-client-id <appId>   Override the MSAL public client id used for --interactive browser login.");
-        Console.WriteLine("  --authority <url>          Override the MSAL authority (e.g. for sovereign clouds).");
-        Console.WriteLine("  --timeout <minutes>        Max Dataverse connection timeout in minutes (1-60, default 10; raise for very large orgs).");
-        Console.WriteLine("  --verbose also prints full exception stack traces on failure.");
-        console.WriteLine();
-
-        console.MarkupLine("[bold]Examples:[/]");
-        Console.WriteLine("  vela plan --package .\\bin\\Release\\Zava.Plugins.Package.1.0.0.nupkg --url https://zava.crm.dynamics.com --tenant-id <tenantId> --client-id <appId> --client-secret <secret>");
-        Console.WriteLine("  vela plan --packages-dir .\\artifacts\\packages --connection-string \"$env:DATAVERSE_CONNECTION_STRING\"");
-        Console.WriteLine("  vela plan --interactive");
-        Console.WriteLine("  vela init --name ZavaSales --prefix Zava --output .");
-        console.WriteLine();
-
-        console.MarkupLine("[bold]Exit codes:[/]");
-        Console.WriteLine("  0: Success");
-        Console.WriteLine("  2: Invalid arguments");
-        Console.WriteLine("  3: File not found");
-        Console.WriteLine("  4: Parse/read error");
-        Console.WriteLine("  5: Drift detected (vela models --verify)");
-        Console.WriteLine("  6: Dataverse connection failure");
-        Console.WriteLine("  7: Partial apply (re-run apply to reconcile)");
-    }
-
-    // Renders one command row: a colored, aligned name followed by a short summary. Names are padded to a
-    // fixed width so summaries line up; the padding is applied before markup so styling doesn't skew it.
-    private static void WriteCommand(IAnsiConsole console, string name, string summary)
-    {
-        console.MarkupLine($"  [#22d3ee]{name.PadRight(9)}[/] [grey]{Markup.Escape(summary)}[/]");
-    }
+    // Top-level `vela --help`, generated from the command table (CliCommands) so it lists every command.
+    public static void PrintUsage() => CliCommands.PrintOverview();
 
     // Scrubs credential values out of any text before it reaches stderr / CI logs. A connection string embeds
     // ClientSecret=... / Password=... (see CommandLineOptions.BuildClientSecretConnectionString) and the SDK / its

@@ -15,10 +15,24 @@ public class DefinitionParserTests
     }
 
     [Fact]
-    public void ParseStepKey_LegacyFormat_ReturnsKeyAfterPrefix()
+    public void ParseStepKey_no_longer_reads_the_legacy_df_name()
     {
-        string key = DefinitionParser.ParseStepKey("df:Zava.MyPlugin:provision", "Zava.MyPlugin");
-        Assert.Equal("provision", key);
+        // "df:{plugin}:{key}" was the step name of very old Vela versions; it is no longer recognised as a key.
+        Assert.Equal(string.Empty, DefinitionParser.ParseStepKey("df:Zava.MyPlugin:provision", "Zava.MyPlugin"));
+        Assert.Equal(string.Empty, DefinitionParser.ResolveStepKey(null, "df:Zava.MyPlugin:provision", "Zava.MyPlugin"));
+    }
+
+    [Fact]
+    public void A_live_df_step_is_paired_like_a_keyless_step()
+    {
+        // Without its key, an old df: step falls back to the identity pairing (plugin type, message, stage, mode,
+        // entity): the keyed local step updates it (renaming it) instead of creating a duplicate next to it.
+        RegistrationItem local = Step(new { pluginTypeName = "Zava.MyPlugin", message = "Update", entityLogicalName = "account", stage = 40, mode = 0, stepKey = "provision" }, "Zava.MyPlugin");
+        RegistrationItem live = Step(new { pluginTypeName = "Zava.MyPlugin", message = "Update", entityLogicalName = "account", stage = 40, mode = 0, stepKey = "", name = "df:Zava.MyPlugin:provision" }, "Zava.MyPlugin");
+
+        int[] pairs = Vela.Cli.DiffEngine.PairSteps([local], [live]);
+
+        Assert.Equal([0], pairs);
     }
 
     [Fact]

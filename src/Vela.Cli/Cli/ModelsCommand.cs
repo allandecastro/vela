@@ -22,30 +22,13 @@ namespace Vela.Cli;
 /// </summary>
 internal static class ModelsCommand
 {
-    // The models allowlist: its own options plus the shared connection options (models authenticates to
-    // Dataverse via TryResolveConnection). Value options consume the next token; flags stand alone.
-    private static readonly HashSet<string> ValueOptions = new(CommandLineOptions.ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
-    {
-        "--solution", "--entities", "--custom-apis", "--messages", "--roles", "--out", "--lang",
-        "--namespace", "--project", "--from-solution",
-        // Optional plugin package inputs (same shape as plan/apply): when provided, ALL-mode --custom-apis excludes
-        // the Custom APIs authored in these package(s) so the developer's own classes are not regenerated. `-p` is
-        // the shared short alias for --package (as in plan/apply), NOT --project.
-        "--package", "-p", "--packages-dir", "--package-assembly",
-    };
+    // The models allowlist, from the command table (CliCommands): its own options plus the shared connection options.
+    // --messages / --custom-apis may appear bare (present with no value = "all").
+    private static readonly HashSet<string> ValueOptions = CliCommands.ValueOptions("models");
 
-    private static readonly HashSet<string> FlagOptions = new(CommandLineOptions.ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
-    {
-        "--solution-roles", "--forms", "--tables", "--no-annotations", "--overwrite", "--verbose", "-v", "--json",
-        "--interactive", "-i", "--help", "-h", "--verify", "--intersect",
-    };
+    private static readonly HashSet<string> FlagOptions = CliCommands.FlagOptions("models");
 
-    // Value options that may appear bare (present with no value = "all"): --messages / --custom-apis. Every other
-    // value option requires a value.
-    private static readonly HashSet<string> OptionalValueOptions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "--messages", "--custom-apis",
-    };
+    private static readonly HashSet<string> OptionalValueOptions = CliCommands.OptionalValueOptions("models");
 
     public static int Run(string[] args)
     {
@@ -214,7 +197,7 @@ internal static class ModelsCommand
                 // Web defaults (camelCase) so the normalized definition exposes "uniqueName" — matching how
                 // NormalizeCustomApiDefinition emits it and how PackageScannerBuildStateTests reads it.
                 JsonSerializerOptions scanJson = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-                RegistrationState scanned = PackageScanner.BuildLocalStateFromPackages(scanOptions, scanJson, tempDirectories);
+                RegistrationState scanned = IsolatedPackageScan.Scan(scanOptions, scanJson, tempDirectories);
                 authoredCustomApis = CustomApiReader.AuthoredCustomApiUniqueNames(scanned);
             }
             catch (Exception ex)
@@ -891,45 +874,5 @@ internal static class ModelsCommand
             },
             new JsonSerializerOptions { WriteIndented = true });
 
-    private static void PrintModelsUsage()
-    {
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  vela models --solution <uniquename> [connection options]");
-        Console.WriteLine("  vela models --entities account,contact [connection options]");
-        Console.WriteLine("  vela models --custom-apis zava_DoThing [connection options]");
-        Console.WriteLine("  vela models --custom-apis [connection options]   (no value: every Custom API in the environment)");
-        Console.WriteLine("  vela models --custom-apis --package bin/Zava.Plugins.nupkg [connection options]   (no value, minus your authored Custom APIs)");
-        Console.WriteLine("  vela models --messages QualifyLead,AddToQueue [connection options]");
-        Console.WriteLine("  vela models --messages [connection options]   (no value: all consumable messages, filtered)");
-        Console.WriteLine("  vela models --roles \"Salesperson,Sales Manager\" [connection options]");
-        Console.WriteLine("  vela models --forms --entities account,contact [connection options]   (preview)");
-        Console.WriteLine("  vela models --tables --entities account,contact [connection options]  (preview)");
-        Console.WriteLine("  vela models --forms --tables --entities account,contact [connection options]  (preview, both + one barrel)");
-        Console.WriteLine("  vela models --from-solution ./MySolution.zip --namespace Acme.Shared.Models   (offline, no connection)");
-        Console.WriteLine();
-        Console.WriteLine("Generates early-bound classes for the scoped tables/Custom APIs over your Dataverse connection.");
-        Console.WriteLine("  --from-solution <zip>     offline: generate C# entity models + option-set enums from an exported (unmanaged) solution zip, with no connection");
-        Console.WriteLine("  --solution <uniquename>   tables taken from the solution's components");
-        Console.WriteLine("  --entities <a,b,c>        explicit table logical names (combinable with --solution)");
-        Console.WriteLine("  --intersect               also generate the N:N join (intersect) tables of the scoped tables, so typed queries can target them (live only)");
-        Console.WriteLine("  --custom-apis <a,b,c>     Custom API unique names → typed Request/Response classes (into Messages/)");
-        Console.WriteLine("  --messages [a,b,c]        SDK message names → typed Request/Response classes into Messages/ (any sdkmessage; pairs with OnMessage<TRequest>())");
-        Console.WriteLine("                            with no value: generate ALL consumable messages, skipping internal/private, Custom-API-backed, and messages that already have an SDK request class");
-        Console.WriteLine("  --package <file.nupkg>    (optional, repeatable) built plugin package(s); with no-value --custom-apis, excludes the Custom APIs you authored in code");
-        Console.WriteLine("  --packages-dir <folder>   (optional) a folder of .nupkg packages, used the same way as --package");
-        Console.WriteLine("  --package-assembly <name> (optional) the primary assembly name inside the package(s)");
-        Console.WriteLine("  --roles <a,b,c>           security role names → a dependency-light Roles class (root role id + privileges)");
-        Console.WriteLine("  --solution-roles          also generate every security role in --solution");
-        Console.WriteLine("  --forms                   (preview) emit vela-client TypeScript FormModel files for the scoped tables' Main/QuickCreate forms");
-        Console.WriteLine("  --tables                  (preview) emit vela-client TypeScript Web API record interfaces (tables/<name>.ts) for the scoped tables");
-        Console.WriteLine("                            (--forms and --tables can be combined: one run emits both plus a shared option-sets/ folder and one index.ts barrel)");
-        Console.WriteLine("  --namespace <ns>          output namespace (default: <prefix>.Shared.Models.Generated, inferred from the project)");
-        Console.WriteLine("  --out <dir>               output directory (default: current directory)");
-        Console.WriteLine("  --verify                  do not write: check the generated entity model on disk against the live schema and report drift (exit 5 on drift; ideal for CI)");
-        Console.WriteLine("  --json                    print a JSON report of the generated files (for scripts/agents)");
-        Console.WriteLine("  --no-annotations          omit DataAnnotations ([StringLength]/[Range])");
-        Console.WriteLine("  --overwrite               overwrite existing files");
-        Console.WriteLine("  connection: --connection-string | --url + --tenant-id + --client-id + --client-secret | --interactive");
-        Console.WriteLine("  --timeout <minutes>       max Dataverse connection timeout in minutes (1-60, default 10; raise for very large orgs)");
-    }
+    private static void PrintModelsUsage() => CliCommands.PrintCommandHelp("models");
 }

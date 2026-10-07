@@ -31,35 +31,37 @@ internal static partial class DataverseRegistration
         string? solutionUniqueName,
         List<RegistrationItem> removedSteps,
         List<RegistrationItem> removedApis,
+        string[] currentAssemblies,
         bool verbose,
         int chunkSize,
-        ref int done)
+        ApplyProgress progress)
     {
         BatchCapturingService capturing = new BatchCapturingService(service, solutionUniqueName);
+        List<CapturedOwner> owners = [];
         int seq = 0;
 
+        // A removed step is resolved only among the plugin types of the assemblies read for this run (the ones the
+        // diff's live side came from), queried once for the whole delete phase rather than environment-wide per step.
+        IReadOnlyDictionary<string, Guid> ourPluginTypeIds = removedSteps.Count == 0
+            ? new Dictionary<string, Guid>()
+            : GetPluginTypeIdByNameForAssemblies(service, currentAssemblies);
+
         // Nothing is written to Dataverse during capture; the recorded operations flush only at ExecuteBatchTier
-        // below. So the resume boundary (done) must not advance here - a synchronous validation throw mid-capture
-        // would otherwise report already-"completed" owners that were in fact never applied (#305). Track the planned
-        // index locally and commit it to done only after a successful flush; on a batched failure ThrowIfBatchFailed
-        // sets done to the earliest failed owner instead.
-        int planned = done;
+        // below. So no owner is recorded as completed here - a synchronous validation throw mid-capture would
+        // otherwise report owners that were in fact never applied (#305). Each owner's outcome is recorded after
+        // the flush (RecordOutcomes).
+        int planned = progress.Cursor;
 
         foreach (RegistrationItem item in removedSteps)
         {
             string stepKey = TryGetString(item.Definition, "stepKey") ?? item.Type;
             BatchOwner owner = new BatchOwner($"del-step:{seq}:{stepKey}", $"Plugin {item.Type}", "step", planned,
                 $"skipping step delete for '{item.Type}' (managed by custom API)");
-            try
+            CaptureOwner(capturing, owner, owners, progress, () =>
             {
                 LogOperation("step", "delete", stepKey, verbose: verbose);
-                capturing.BeginOwner(owner);
-                DeleteStepByDefinition(capturing, item.Definition);
-            }
-            catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
-            {
-                Console.Error.WriteLine($"Warning: skipping step delete for '{item.Type}' (managed by custom API): {ex.Message}");
-            }
+                DeleteStepByDefinition(capturing, item.Definition, ourPluginTypeIds);
+            });
 
             planned++;
             seq++;
@@ -70,41 +72,33 @@ internal static partial class DataverseRegistration
             string uniqueName = TryGetString(item.Definition, "uniqueName") ?? item.Type;
             BatchOwner owner = new BatchOwner($"del-api:{seq}:{uniqueName}", uniqueName, "custom-api", planned,
                 $"skipping custom API delete for '{item.Type}'");
-            try
+            CaptureOwner(capturing, owner, owners, progress, () =>
             {
                 LogOperation("custom-api", "delete", uniqueName, verbose: verbose);
-                capturing.BeginOwner(owner);
                 DeleteCustomApi(capturing, item.Definition);
-            }
-            catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
-            {
-                Console.Error.WriteLine($"Warning: skipping custom API delete for '{item.Type}': {ex.Message}");
-            }
+            });
 
             planned++;
             seq++;
         }
 
-        if (capturing.Operations.Count == 0)
+        BatchApplyReport report = new BatchApplyReport();
+        if (capturing.Operations.Count > 0)
         {
-            done = planned;
-            return;
+            HashSet<string> skip = new HashSet<string>();
+            // Children first, then the step/API rows, then a step's secure-config row. The secure config goes last, in
+            // its own tier, so it is deleted only once its step's delete succeeded: an owner whose step delete failed or
+            // was ignored is in `skip`, and its secure config is kept for the step that survives.
+            List<CapturedOperation> children = capturing.Operations.Where(IsChildDelete).ToList();
+            List<CapturedOperation> secureConfigs = capturing.Operations.Where(o => o.Category == "secure-config").ToList();
+            List<CapturedOperation> parents = capturing.Operations.Where(o => !IsChildDelete(o) && o.Category != "secure-config").ToList();
+            ExecuteBatchTier(service, children, chunkSize, report, skip);
+            ExecuteBatchTier(service, parents, chunkSize, report, skip);
+            ExecuteBatchTier(service, secureConfigs, chunkSize, report, skip);
+            RenderBatchReport(report);
         }
 
-        BatchApplyReport report = new BatchApplyReport();
-        HashSet<string> skip = new HashSet<string>();
-        // Children first, then the step/API rows, then a step's secure-config row. The secure config goes last, in its
-        // own tier, so it is deleted only once its step's delete succeeded: an owner whose step delete failed or was
-        // ignored is in `skip`, and its secure config is kept for the step that survives.
-        List<CapturedOperation> children = capturing.Operations.Where(IsChildDelete).ToList();
-        List<CapturedOperation> secureConfigs = capturing.Operations.Where(o => o.Category == "secure-config").ToList();
-        List<CapturedOperation> parents = capturing.Operations.Where(o => !IsChildDelete(o) && o.Category != "secure-config").ToList();
-        ExecuteBatchTier(service, children, chunkSize, report, skip);
-        ExecuteBatchTier(service, parents, chunkSize, report, skip);
-        ExecuteBatchTier(service, secureConfigs, chunkSize, report, skip);
-        RenderBatchReport(report);
-        ThrowIfBatchFailed(report, ref done);
-        done = planned;
+        RecordOutcomes(owners, report, progress, planned);
     }
 
     private static bool IsChildDelete(CapturedOperation op)
@@ -125,81 +119,122 @@ internal static partial class DataverseRegistration
         StepMetadataCache metadataCache,
         bool verbose,
         int chunkSize,
-        ref int done)
+        ApplyProgress progress)
     {
         BatchCapturingService capturing = new BatchCapturingService(service, solutionUniqueName);
+        List<CapturedOwner> owners = [];
 
-        // Nothing is written during capture (see ApplyDeletesBatched): the resume boundary must not advance until a
-        // successful flush, or a synchronous validation throw mid-capture would over-report earlier owners as
-        // completed while nothing was applied (#305). Track the planned index locally; commit to done after the flush.
-        int planned = done;
+        // Nothing is written during capture (see ApplyDeletesBatched): outcomes are recorded only after the flush.
+        int planned = progress.Cursor;
 
         foreach (RegistrationItem item in addedApis)
         {
             string uniqueName = TryGetString(item.Definition, "uniqueName") ?? item.Type;
-            capturing.BeginOwner(new BatchOwner($"api-add:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
-                $"skipping custom API upsert for '{item.Type}'"));
-            try
-            {
-                UpsertCustomApi(capturing, pluginTypeIds, item.Definition, verbose, customApiSolutionPrefix);
-            }
-            catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
-            {
-                Console.Error.WriteLine($"Warning: skipping custom API upsert for '{item.Type}': {ex.Message}");
-            }
-
+            CaptureOwner(capturing, new BatchOwner($"api-add:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
+                $"skipping custom API upsert for '{item.Type}'"), owners, progress,
+                () => UpsertCustomApi(capturing, pluginTypeIds, item.Definition, verbose, customApiSolutionPrefix));
             planned++;
         }
 
         foreach (RegistrationChange change in changedApis)
         {
             string uniqueName = TryGetString(change.After, "uniqueName") ?? change.Type;
-            capturing.BeginOwner(new BatchOwner($"api-chg:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
-                $"skipping custom API update for '{change.Type}'"));
-            try
-            {
-                UpsertCustomApi(capturing, pluginTypeIds, change.After, verbose, customApiSolutionPrefix);
-            }
-            catch (Exception ex) when (IsIgnorableCustomApiStageException(ex))
-            {
-                Console.Error.WriteLine($"Warning: skipping custom API update for '{change.Type}': {ex.Message}");
-            }
-
+            CaptureOwner(capturing, new BatchOwner($"api-chg:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
+                $"skipping custom API update for '{change.Type}'"), owners, progress,
+                () => UpsertCustomApi(capturing, pluginTypeIds, change.After, verbose, customApiSolutionPrefix));
             planned++;
         }
 
         foreach (RegistrationItem item in addedSteps)
         {
-            capturing.BeginOwner(new BatchOwner($"step:{planned}", $"Plugin {item.Type}", "step", planned, ignorableWarning: null));
-            UpsertStep(capturing, pluginTypeIds, item.Definition, verbose, metadataCache, secureConfigByStepKey);
+            CaptureOwner(capturing, new BatchOwner($"step:{planned}", $"Plugin {item.Type}", "step", planned, ignorableWarning: null), owners, progress,
+                () => UpsertStep(capturing, pluginTypeIds, item.Definition, verbose, metadataCache, secureConfigByStepKey));
             planned++;
         }
 
         foreach (RegistrationChange change in changedSteps)
         {
-            capturing.BeginOwner(new BatchOwner($"step:{planned}", $"Plugin {change.Type}", "step", planned, ignorableWarning: null));
-            UpsertStep(capturing, pluginTypeIds, change.After, verbose, metadataCache, secureConfigByStepKey);
+            CaptureOwner(capturing, new BatchOwner($"step:{planned}", $"Plugin {change.Type}", "step", planned, ignorableWarning: null), owners, progress,
+                () => UpsertStep(capturing, pluginTypeIds, change.After, verbose, metadataCache, secureConfigByStepKey));
             planned++;
         }
 
-        if (capturing.Operations.Count == 0)
+        BatchApplyReport report = new BatchApplyReport();
+        if (capturing.Operations.Count > 0)
         {
-            done = planned;
-            return;
+            HashSet<string> skip = new HashSet<string>();
+            // Tier 1 is the row itself (the first write captured for each owner); tier 2 (images, parameters, secure
+            // config, state) references the row's id, so it runs only after tier 1 and is skipped for any owner whose
+            // tier-1 row failed.
+            List<CapturedOperation> tier1 = capturing.Operations.Where(o => o.SeqInOwner == 0).ToList();
+            List<CapturedOperation> tier2 = capturing.Operations.Where(o => o.SeqInOwner > 0).ToList();
+            ExecuteBatchTier(service, tier1, chunkSize, report, skip);
+            ExecuteBatchTier(service, tier2, chunkSize, report, skip);
+            RenderBatchReport(report);
         }
 
-        BatchApplyReport report = new BatchApplyReport();
-        HashSet<string> skip = new HashSet<string>();
-        // Tier 1 is the row itself (the first write captured for each owner); tier 2 (images, parameters, secure
-        // config, state) references the row's id, so it runs only after tier 1 and is skipped for any owner whose
-        // tier-1 row failed.
-        List<CapturedOperation> tier1 = capturing.Operations.Where(o => o.SeqInOwner == 0).ToList();
-        List<CapturedOperation> tier2 = capturing.Operations.Where(o => o.SeqInOwner > 0).ToList();
-        ExecuteBatchTier(service, tier1, chunkSize, report, skip);
-        ExecuteBatchTier(service, tier2, chunkSize, report, skip);
-        RenderBatchReport(report);
-        ThrowIfBatchFailed(report, ref done);
-        done = planned;
+        RecordOutcomes(owners, report, progress, planned);
+    }
+
+    // One owner captured in a batched phase, with the progress lines it logged during capture.
+    private sealed record CapturedOwner(BatchOwner Owner, List<string> Log);
+
+    // Captures one owner's writes. The progress lines the helpers log (LogOperation) are buffered rather than printed:
+    // nothing has run yet, so "[step] create X" would claim a write that may never land. RecordOutcomes prints them
+    // once the owner's outcome is known. An ignorable platform-stage fault is warned and skipped; any other throw
+    // fails this owner (and the run) before anything of the phase was flushed.
+    private static void CaptureOwner(BatchCapturingService capturing, BatchOwner owner, List<CapturedOwner> owners, ApplyProgress progress, Action capture)
+    {
+        CapturedOwner captured = new(owner, []);
+        owners.Add(captured);
+        capturing.BeginOwner(owner);
+        Action<string>? previous = LogSink;
+        LogSink = captured.Log.Add;
+        try
+        {
+            capture();
+        }
+        catch (Exception ex) when (owner.IgnorableWarning != null && IsIgnorableCustomApiStageException(ex))
+        {
+            Console.Error.WriteLine($"Warning: {owner.IgnorableWarning}: {ex.Message}");
+        }
+        catch
+        {
+            progress.Fail(owner.PlannedIndex);
+            throw;
+        }
+        finally
+        {
+            LogSink = previous;
+        }
+    }
+
+    // Records every owner of a flushed phase as completed or failed (a continue-on-error batch can fail an early owner
+    // and still apply later ones), prints the buffered progress lines with their real outcome, moves the cursor past
+    // the phase and, if any owner failed, throws the earliest failure for the resume report.
+    private static void RecordOutcomes(List<CapturedOwner> owners, BatchApplyReport report, ApplyProgress progress, int phaseEnd)
+    {
+        HashSet<string> failedOwners = new(report.Failures.Select(f => f.Op.Owner.Id), StringComparer.Ordinal);
+        foreach (CapturedOwner captured in owners)
+        {
+            bool failed = failedOwners.Contains(captured.Owner.Id);
+            if (failed)
+            {
+                progress.Fail(captured.Owner.PlannedIndex);
+            }
+            else
+            {
+                progress.Complete(captured.Owner.PlannedIndex);
+            }
+
+            foreach (string line in captured.Log)
+            {
+                Console.Error.WriteLine(failed ? $"{line} (not applied)" : line);
+            }
+        }
+
+        progress.MoveTo(phaseEnd);
+        ThrowIfBatchFailed(report);
     }
 
     // ---- Executor -----------------------------------------------------------------------------------------------
@@ -314,19 +349,32 @@ internal static partial class DataverseRegistration
             }
             catch (Exception ex)
             {
-                HandleBatchFault(op, ExtractFault(ex), report, skipOwners);
+                HandleBatchFault(op, ExtractFault(ex), report, skipOwners, replayed: true);
             }
         }
     }
+
+    // Dataverse "Cannot insert duplicate key" (0x80040237): a create whose id already exists.
+    internal const int DuplicateRecordErrorCode = unchecked((int)0x80040237);
 
     private static void HandleBatchFault(
         CapturedOperation op,
         OrganizationServiceFault fault,
         BatchApplyReport report,
-        HashSet<string> skipOwners)
+        HashSet<string> skipOwners,
+        bool replayed = false)
     {
         // A delete of an already-absent record is a success: apply stays idempotent on re-run.
         if (op.IsDelete && fault.ErrorCode == ObjectDoesNotExistErrorCode)
+        {
+            report.RecordOk(op);
+            return;
+        }
+
+        // A create replayed by the one-by-one fallback whose client-assigned id already exists: the whole-batch call
+        // threw (a timeout, a dropped connection) after the server had run it, so this row already landed. Counting
+        // it as a failure would report a write that succeeded, and abort the owner's dependent writes.
+        if (replayed && op.HasClientAssignedId && fault.ErrorCode == DuplicateRecordErrorCode)
         {
             report.RecordOk(op);
             return;
@@ -418,20 +466,19 @@ internal static partial class DataverseRegistration
         }
     }
 
-    // On any batched failure, surface the earliest-planned failed operation through the same resume-report path used
-    // by synchronous failures: set the completed/pending boundary to that operation and rethrow so apply exits with
-    // an accurate report. Already-applied writes are idempotent, so a re-run reconciles the rest.
-    private static void ThrowIfBatchFailed(BatchApplyReport report, ref int done)
+    // On any batched failure, rethrow the earliest-planned failure so apply exits through the resume report (every
+    // owner's outcome is already recorded in the progress). Already-applied writes are idempotent, so a re-run
+    // reconciles the rest.
+    private static void ThrowIfBatchFailed(BatchApplyReport report)
     {
         if (report.Failures.Count == 0)
         {
             return;
         }
 
-        (CapturedOperation op, OrganizationServiceFault fault) = report.Failures
+        (CapturedOperation _, OrganizationServiceFault fault) = report.Failures
             .OrderBy(f => f.Op.Owner.PlannedIndex)
             .First();
-        done = op.Owner.PlannedIndex;
         throw new InvalidOperationException(
             string.IsNullOrEmpty(fault.Message) ? "batched apply operation failed" : fault.Message);
     }
@@ -443,13 +490,14 @@ internal static partial class DataverseRegistration
 /// </summary>
 internal sealed class CapturedOperation
 {
-    public CapturedOperation(OrganizationRequest request, BatchOwner owner, int seqInOwner, string category, bool isDelete)
+    public CapturedOperation(OrganizationRequest request, BatchOwner owner, int seqInOwner, string category, bool isDelete, bool hasClientAssignedId = false)
     {
         Request = request;
         Owner = owner;
         SeqInOwner = seqInOwner;
         Category = category;
         IsDelete = isDelete;
+        HasClientAssignedId = hasClientAssignedId;
     }
 
     public OrganizationRequest Request { get; }
@@ -457,6 +505,9 @@ internal sealed class CapturedOperation
     public int SeqInOwner { get; }
     public string Category { get; }
     public bool IsDelete { get; }
+
+    /// <summary> A create whose id the capturing service assigned (a fresh GUID), so a duplicate can only be itself. </summary>
+    public bool HasClientAssignedId { get; }
 }
 
 /// <summary> The plugin step or Custom API a batch of writes belongs to, for correlation and reporting. </summary>
@@ -571,12 +622,13 @@ internal sealed class BatchCapturingService : IOrganizationService
 
     public Guid Create(Entity entity)
     {
-        Guid id = entity.Id == Guid.Empty ? Guid.NewGuid() : entity.Id;
+        bool clientAssigned = entity.Id == Guid.Empty;
+        Guid id = clientAssigned ? Guid.NewGuid() : entity.Id;
         entity.Id = id;
         _capturedCreatedIds.Add(id);
         CreateRequest request = new CreateRequest { Target = entity };
         ApplySolution(request);
-        Capture(request, entity.LogicalName, "create", isDelete: false);
+        Capture(request, entity.LogicalName, "create", isDelete: false, clientAssigned);
         return id;
     }
 
@@ -631,12 +683,12 @@ internal sealed class BatchCapturingService : IOrganizationService
         }
     }
 
-    private void Capture(OrganizationRequest request, string targetEntity, string verb, bool isDelete)
+    private void Capture(OrganizationRequest request, string targetEntity, string verb, bool isDelete, bool hasClientAssignedId = false)
     {
         BatchOwner owner = _owner ?? throw new InvalidOperationException("BatchCapturingService: no owner set before a write.");
         int seq = _seqByOwner.TryGetValue(owner.Id, out int current) ? current : 0;
         _seqByOwner[owner.Id] = seq + 1;
-        Operations.Add(new CapturedOperation(request, owner, seq, Categorize(targetEntity, verb, seq, owner.Kind), isDelete));
+        Operations.Add(new CapturedOperation(request, owner, seq, Categorize(targetEntity, verb, seq, owner.Kind), isDelete, hasClientAssignedId));
     }
 
     private static string Categorize(string targetEntity, string verb, int seq, string ownerKind)

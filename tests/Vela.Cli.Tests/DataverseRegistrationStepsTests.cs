@@ -26,7 +26,7 @@ public sealed class DataverseRegistrationStepsTests
     private static StepApplyDefinition Def(
         string message = "Update", string entity = "account", string stepKey = "", int stage = 40, int mode = 0,
         int order = 1, string[]? filtering = null, ImageApplyDefinition[]? pre = null, ImageApplyDefinition[]? post = null)
-        => new(Plugin, message, entity, stepKey, "Execute", stage, mode, order,
+        => new(Plugin, message, entity, stepKey, stage, mode, order,
             filtering ?? Array.Empty<string>(), pre ?? Array.Empty<ImageApplyDefinition>(), post ?? Array.Empty<ImageApplyDefinition>(),
             Enabled: true, UnsecureConfig: "", SecureConfig: "");
 
@@ -209,50 +209,6 @@ public sealed class DataverseRegistrationStepsTests
     [Fact]
     public void ResolveMessageFilterId_returns_null_when_no_filter_row()
         => Assert.Null(DataverseRegistration.ResolveMessageFilterId(new TestSupport.FakeOrgService(), Guid.NewGuid(), "account"));
-
-    // ---- FindStepByName / GetAllPluginTypeIdsByName -----------------------------------------------
-
-    [Fact]
-    public void FindStepByName_queries_by_name_top_one()
-    {
-        var id = Guid.NewGuid();
-        QueryExpression? captured = null;
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q => { captured = q; return TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", id)); },
-        };
-
-        Assert.Equal(id, DataverseRegistration.FindStepByName(svc, "MyStep"));
-        Assert.Equal("sdkmessageprocessingstep", captured!.EntityName);
-        Assert.Contains("sdkmessageprocessingstepid", captured.ColumnSet.Columns);
-        Assert.Equal(1, captured.TopCount);
-        Assert.Equal("name", captured.Criteria.Conditions.Single().AttributeName);
-        Assert.Equal("MyStep", captured.Criteria.Conditions.Single().Values.Single());
-    }
-
-    [Fact]
-    public void GetAllPluginTypeIdsByName_keeps_first_id_and_skips_blank()
-    {
-        var first = Guid.NewGuid();
-        QueryExpression? captured = null;
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q =>
-            {
-                captured = q;
-                return TestSupport.FakeOrgService.Collection(
-                    new Entity("plugintype", first) { ["typename"] = "Zava.Plugins.A" },
-                    new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Zava.Plugins.A" }, // duplicate → ignored
-                    new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "  " });             // blank → skipped
-            },
-        };
-
-        var map = DataverseRegistration.GetAllPluginTypeIdsByName(svc);
-        Assert.Equal(first, map["Zava.Plugins.A"]);
-        Assert.Single(map);
-        Assert.Equal("plugintype", captured!.EntityName);
-        Assert.Equal(new[] { "plugintypeid", "typename" }, captured.ColumnSet.Columns);
-    }
 
     // ---- SyncStepState -----------------------------------------------------------------------------
 

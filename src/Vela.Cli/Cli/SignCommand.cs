@@ -16,23 +16,17 @@ namespace Vela.Cli;
 /// </summary>
 internal static class SignCommand
 {
-    // The `vela sign` allowlist (NOT the args forwarded to `dotnet nuget sign`, e.g. --certificate-* / --overwrite,
-    // which are internal). Value options consume the next token; --json stands alone.
-    private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "--package", "--fingerprint", "--pfx", "--pfx-base64", "--pfx-password", "--pfx-credential", "--timestamp",
-    };
+    // The `vela sign` allowlist, from the command table (NOT the args forwarded to `dotnet nuget sign`, e.g.
+    // --certificate-* / --overwrite, which are internal).
+    private static readonly HashSet<string> ValueOptions = CliCommands.ValueOptions("sign");
 
-    private static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "--json", "--help", "-h",
-    };
+    private static readonly HashSet<string> FlagOptions = CliCommands.FlagOptions("sign");
 
     public static int Run(string[] args)
     {
         if (IsHelpRequested(args))
         {
-            PrintUsage();
+            CliCommands.PrintCommandHelp("sign");
             return ExitSuccess;
         }
 

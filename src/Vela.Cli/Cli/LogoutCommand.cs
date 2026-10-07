@@ -13,14 +13,14 @@ namespace Vela.Cli;
 internal static class LogoutCommand
 {
     // logout takes no options; only help is accepted so an unknown flag fails fast like the other commands.
-    private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase) { "--help", "-h" };
+    private static readonly HashSet<string> ValueOptions = CliCommands.ValueOptions("logout");
+    private static readonly HashSet<string> FlagOptions = CliCommands.FlagOptions("logout");
 
     public static int Run(string[] args)
     {
         if (IsHelpRequested(args))
         {
-            PrintUsage();
+            CliCommands.PrintCommandHelp("logout");
             return ExitSuccess;
         }
 

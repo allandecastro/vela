@@ -1,22 +1,9 @@
-using System.IO.Compression;
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading;
-using System.Xml.Linq;
 using Vela.Cli;
-using Microsoft.Crm.Sdk.Messages;
-using Microsoft.PowerPlatform.Dataverse.Client;
-using Microsoft.Xrm.Sdk;
-using Microsoft.Xrm.Sdk.Query;
 using static Vela.Cli.CliExitCodes;
-using static Vela.Cli.JsonReader;
-using static Vela.Cli.DefinitionNormalizer;
-using static Vela.Cli.DiffEngine;
 using static Vela.Cli.OutputWriter;
 using static Vela.Cli.CommandLineOptions;
-using static Vela.Cli.PackageScanner;
-using static Vela.Cli.DataverseRegistration;
 
 JsonSerializerOptions jsonOptions = new JsonSerializerOptions
 {
@@ -24,6 +11,13 @@ JsonSerializerOptions jsonOptions = new JsonSerializerOptions
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 };
+
+// The package scan re-runs this executable as a child (IsolatedPackageScan): handled before anything else,
+// so the child never prompts, opens the menu or checks for updates.
+if (args.Length > 0 && args[0] == IsolatedPackageScan.ChildCommand)
+{
+    return IsolatedPackageScan.RunChild(args[1..]);
+}
 
 string[] effectiveArgs = args;
 
@@ -49,11 +43,17 @@ if (wantsMenu)
 
 string command = effectiveArgs[0].ToLowerInvariant();
 
-// `vela help`, `vela --help`, `vela -h` all print usage and succeed.
-if (command is "help" or "--help" or "-h" or "-?" or "/?")
+// `vela --help` / `-h` print the overview; `vela help [<command>] [--json]` the overview, one command, or the
+// whole command table as JSON (all generated from CliCommands).
+if (command is "--help" or "-h" or "-?" or "/?")
 {
     PrintUsage();
     return ExitSuccess;
+}
+
+if (command is "help")
+{
+    return CliCommands.RunHelp(effectiveArgs.Skip(1).ToArray(), jsonOptions);
 }
 
 // `vela version` / `vela --version` print the tool version (plain, script-friendly).
@@ -67,9 +67,7 @@ string[] commandArgs = effectiveArgs.Skip(1).ToArray();
 
 int exitCode = command switch
 {
-    "plan" => RunPlan(commandArgs, jsonOptions),
-    "apply" => RunApply(commandArgs, jsonOptions),
-    "inspect" => RunInspect(commandArgs, jsonOptions),
+    "plan" or "apply" or "inspect" => RunPlanApplyInspect(command, commandArgs, jsonOptions),
     "init" or "new" => RunNew(commandArgs),
     "add" => AddCommand.Run(commandArgs),
     "models" => ModelsCommand.Run(commandArgs),
@@ -93,7 +91,7 @@ static int RunNew(string[] args)
 {
     if (IsHelpRequested(args))
     {
-        PrintUsage();
+        CliCommands.PrintCommandHelp("init");
         return ExitSuccess;
     }
 
@@ -111,11 +109,12 @@ static int RunNew(string[] args)
         if (latest != null)
         {
             options = options with { CoreVersion = latest };
-            Console.WriteLine($"Scaffolding against Vela.Plugins {latest} (latest on nuget.org; override with --core-version).");
+            // A notice, not output: stderr, so `vela init --json` writes nothing but the JSON document to stdout.
+            Console.Error.WriteLine($"Scaffolding against Vela.Plugins {latest} (latest on nuget.org; override with --core-version).");
         }
         else
         {
-            Console.WriteLine($"Could not reach nuget.org; scaffolding against Vela.Plugins {options.CoreVersion} (built-in default). Override with --core-version.");
+            Console.Error.WriteLine($"Could not reach nuget.org; scaffolding against Vela.Plugins {options.CoreVersion} (built-in default). Override with --core-version.");
         }
     }
 
@@ -130,481 +129,26 @@ static int RunNew(string[] args)
     }
 }
 
-static int RunPlan(string[] args, JsonSerializerOptions jsonOptions)
+// plan / apply / inspect share one parser and one orchestration path (PlanApplyCommand).
+static int RunPlanApplyInspect(string command, string[] args, JsonSerializerOptions jsonOptions)
 {
     if (IsHelpRequested(args))
     {
-        PrintUsage();
+        CliCommands.PrintCommandHelp(command);
         return ExitSuccess;
     }
 
-    if (!TryParseSharedOptions(args, out SharedOptions options, out int exitCode))
+    // Each command has its own allowlist: `plan --auto-approve` is an error, not silently ignored.
+    if (!TryParseSharedOptions(command, args, out SharedOptions options, out int exitCode))
     {
         return exitCode;
     }
 
-    return ExecutePlanLike("plan", options, jsonOptions);
+    // apply executes by default; its confirmation gate (interactive prompt / --auto-approve in a non-interactive
+    // session) runs after the plan is computed. Use `vela plan` to preview.
+    return PlanApplyCommand.Run(command, options, jsonOptions);
 }
 
-static int RunApply(string[] args, JsonSerializerOptions jsonOptions)
-{
-    if (IsHelpRequested(args))
-    {
-        PrintUsage();
-        return ExitSuccess;
-    }
-
-    if (!TryParseSharedOptions(args, out SharedOptions options, out int exitCode))
-    {
-        return exitCode;
-    }
-
-    // apply executes by default. The confirmation gate (interactive prompt / --auto-approve requirement in a
-    // non-interactive session) lives in ExecuteApply, after the plan is computed. Use `vela plan` to preview.
-    return ExecuteApply(options, jsonOptions);
-}
-
-static int RunInspect(string[] args, JsonSerializerOptions jsonOptions)
-{
-    if (IsHelpRequested(args))
-    {
-        PrintUsage();
-        return ExitSuccess;
-    }
-
-    if (!TryParseSharedOptions(args, out SharedOptions options, out int exitCode))
-    {
-        return exitCode;
-    }
-
-    return ExecuteInspect(options, jsonOptions);
-}
-
-// Code only names a step's secure configuration; its value comes from --secure-config or VELA_SECURE_CONFIG_<NAME>.
-// Resolved against the live state so a configuration Vela was given no value for keeps its live digest (no diff, never
-// written). See SecureConfigResolver.
-static RegistrationState ResolveSecureConfigs(RegistrationState local, RegistrationState current, SharedOptions options, JsonSerializerOptions jsonOptions) =>
-    SecureConfigResolver.Resolve(
-        local,
-        current,
-        SecureConfigResolver.ParseSpecs(options.SecureConfigs ?? [], File.ReadAllText),
-        Environment.GetEnvironmentVariable,
-        jsonOptions);
-
-static int ExecuteInspect(SharedOptions options, JsonSerializerOptions jsonOptions)
-{
-    List<string> tempDirectories = [];
-    try
-    {
-        RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
-        RegistrationState current = ConsoleStatus.Run(
-            "Connecting to Dataverse and reading current registrations…",
-            report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
-        current = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out string[] unmanaged);
-        local = ResolveSecureConfigs(local, current, options, jsonOptions);
-
-        var localSteps = local.Items.Where(IsStep)
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .Select(x => new { x.Kind, x.Type, definition = x.Definition })
-            .ToArray();
-
-        var currentSteps = current.Items.Where(IsStep)
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .Select(x => new { x.Kind, x.Type, definition = x.Definition })
-            .ToArray();
-
-        var localCustomApis = local.Items.Where(x => !IsStep(x) && !IsWebResource(x))
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .Select(x => new { x.Kind, x.Type, definition = x.Definition })
-            .ToArray();
-
-        var currentCustomApis = current.Items.Where(x => !IsStep(x) && !IsWebResource(x))
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .Select(x => new { x.Kind, x.Type, definition = x.Definition })
-            .ToArray();
-
-        var output = new
-        {
-            mode = "inspect",
-            environment = options.Environment,
-            local = new { assemblies = local.SourceAssemblies, steps = localSteps, customApis = localCustomApis },
-            current = new { assemblies = current.SourceAssemblies, steps = currentSteps, customApis = currentCustomApis },
-            unmanaged,
-            diagnostics = local.Diagnostics.Concat(current.Diagnostics).ToArray()
-        };
-
-        if (WantsHumanOutput(options))
-        {
-            WriteInspectSummary(local, current, options.Environment, Console.Out, ConsoleTheme.StdoutColor, unmanaged);
-            return ExitSuccess;
-        }
-
-        if (options.Verbose)
-        {
-            WriteInspectSummary(local, current, options.Environment, Console.Error, ConsoleTheme.StderrColor, unmanaged);
-            if (string.IsNullOrWhiteSpace(options.OutPath))
-            {
-                return ExitSuccess;
-            }
-        }
-
-        WriteOutput(options.OutPath, JsonSerializer.Serialize(output, jsonOptions));
-        return ExitSuccess;
-    }
-    catch (DataverseConnectionException ex)
-    {
-        return FailWithException(ex, ExitConnectionFailure, options.Verbose);
-    }
-    catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-    {
-        return FailWithException(ex, ExitFileNotFound, options.Verbose);
-    }
-    catch (Exception ex)
-    {
-        return FailWithException(ex, ExitError, options.Verbose);
-    }
-    finally
-    {
-        CleanupTempDirectories(tempDirectories);
-    }
-}
-
-static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions)
-{
-    List<string> tempDirectories = [];
-
-    try
-    {
-        RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
-        RegistrationState current = ConsoleStatus.Run(
-            "Connecting to Dataverse and reading current registrations…",
-            report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
-        current = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out string[] unmanaged);
-        local = ResolveSecureConfigs(local, current, options, jsonOptions);
-        RegistrationDiff diff = BuildDiff(local, current);
-        PlanPreview preview = BuildPlanPreview("apply-execute-preview", options.Environment, diff, local.Diagnostics, current.Diagnostics, unmanaged: unmanaged);
-        if (options.Strict && preview.Diagnostics.Length > 0)
-        {
-            WriteDiagnostics(preview.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
-            return Fail($"Strict mode failed with {preview.Diagnostics.Length} diagnostic(s).", ExitError, includeUsage: false);
-        }
-
-        using ServiceClient client = CreateDataverseClient(options);
-        IOrganizationService service = client;
-
-        // A code-only change (unchanged step/custom-API definitions but a rebuilt assembly) is invisible to the
-        // registration diff, so also check whether the plugin package content differs from what is deployed - the
-        // assembly must still be re-published even when the step/custom-API diff is empty.
-        bool packageNeedsPublish = PluginPackagesNeedPublish(service, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
-
-        if (!preview.HasChanges && !packageNeedsPublish)
-        {
-            if (WantsHumanOutput(options))
-            {
-                WritePlanSummary(preview with { Mode = "apply-execute" }, Console.Out, ConsoleTheme.StdoutColor);
-                Console.Out.WriteLine(ConsoleTheme.Success("No changes detected; nothing executed.", ConsoleTheme.StdoutColor));
-                return ExitSuccess;
-            }
-
-            if (options.Verbose)
-            {
-                WritePlanSummary(preview with
-                {
-                    Mode = "apply-execute"
-                }, Console.Error, ConsoleTheme.StderrColor);
-                Console.Error.WriteLine("no changes detected");
-                if (string.IsNullOrWhiteSpace(options.OutPath))
-                {
-                    return ExitSuccess;
-                }
-            }
-
-            string unchanged = JsonSerializer.Serialize(preview with
-            {
-                Mode = "apply-execute",
-                Notes = [.. preview.Notes, "No changes detected; nothing executed."],
-                Executed = ExecutedCounts.FromDiff(diff, packageRepublished: false)
-            }, jsonOptions);
-            WriteOutput(options.OutPath, unchanged);
-            return ExitSuccess;
-        }
-
-        // Warn about a cross-solution assembly overwrite BEFORE the confirmation gate, so an interactive user can
-        // decline knowing the risk (and an auto-approved / non-interactive run still gets the heads-up). The
-        // registered assembly name is the DLL's (unique per org), so two projects that build the same-named
-        // assembly collide; if one already exists outside the target solution, applying rewrites its content there.
-        if (!string.IsNullOrWhiteSpace(options.SolutionUniqueName) && local.SourceAssemblyPayloads.Length > 0)
-        {
-            foreach (string name in DataverseRegistration.FindCrossSolutionAssemblyCollisions(service, local.SourceAssemblyPayloads, options.SolutionUniqueName!))
-            {
-                Console.Error.WriteLine(
-                    $"Warning: plugin assembly '{name}' already exists in this org and is not part of solution '{options.SolutionUniqueName}'. " +
-                    "Applying overwrites its content, modifying an assembly owned by another solution. " +
-                    "Set a unique <AssemblyName> in the plugins project (for example prefix it with the solution name) to avoid the collision.");
-            }
-        }
-
-        // Confirmation gate: apply writes by default. In a terminal, show the plan and require a typed "yes".
-        // In a non-interactive session (no stdin TTY) refuse unless --auto-approve/--yes was passed, so a
-        // script can never write unattended by accident. The decision is a pure, unit-tested helper; the prompt
-        // side effects live in the closure, which only runs in the interactive case.
-        switch (ApplyConfirmation.Decide(options.AutoApprove, Console.IsInputRedirected, () =>
-        {
-            WritePlanSummary(preview with { Mode = "apply" }, Console.Error, ConsoleTheme.StderrColor);
-            // Surface a code-only republish (changed assembly with an otherwise-empty diff) so the prompt is not
-            // a misleading "0 to create / 0 to update / 0 to delete".
-            string packageNote = packageNeedsPublish ? " + plugin package (code change)" : string.Empty;
-            Console.Error.Write(
-                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete{packageNote} against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
-            return Console.ReadLine();
-        }))
-        {
-            case ApplyDecision.RefuseNonInteractive:
-                return Fail(
-                    "Refusing to apply without confirmation in a non-interactive session. Re-run with --auto-approve (or --yes), or use 'vela plan' to preview.",
-                    ExitError, includeUsage: false);
-            case ApplyDecision.Cancel:
-                Console.Error.WriteLine("Apply cancelled.");
-                return ExitSuccess;
-        }
-
-        try
-        {
-            ApplyDiff(service, diff, local.SourceAssemblyPayloads, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize);
-        }
-        catch (Exception applyEx) when (applyEx is not DataverseConnectionException)
-        {
-            // Dataverse has no cross-entity transaction, so a mid-run failure may leave the org partially updated.
-            // ApplyDiff already wrote the human-readable resume report to stderr; add a machine-readable result (for
-            // --json / --out callers) and a distinct exit code so a partial apply is not confused with a bad-args or
-            // connection failure. Already-applied writes are idempotent, so a re-run reconciles the rest.
-            PlanPreview failure = preview with
-            {
-                Mode = "apply-failed",
-                Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", applyEx.Message]
-            };
-            if (!WantsHumanOutput(options) || !string.IsNullOrWhiteSpace(options.OutPath))
-            {
-                WriteOutput(options.OutPath, JsonSerializer.Serialize(failure, jsonOptions));
-            }
-
-            return Fail($"Apply failed mid-run; Dataverse may be partially updated: {applyEx.Message}", ExitPartialApply, includeUsage: false);
-        }
-
-        RegistrationState after = ConsoleStatus.Run(
-            "Re-reading Dataverse state…",
-            report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
-        after = OwnershipScope.ExcludeUnmanaged(after, local.UnmanagedPluginTypes, out _);
-        RegistrationDiff afterDiff = BuildDiff(local, after);
-        PlanPreview result = BuildPlanPreview("apply-execute", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics, unmanaged: unmanaged) with
-        {
-            Notes =
-            [
-                "Compared local .nupkg plugin metadata with live Dataverse state.",
-                "Dataverse changes were executed.",
-                $"Executed operations: create={diff.Added.Length}, update={diff.Changed.Length}, delete={diff.Removed.Length}"
-            ],
-            // Structured executed counts (totals + per-kind) from the PRE-apply diff (Summary above is the
-            // post-apply remaining = 0 on success), so an agent reads what was done without parsing Notes.
-            Executed = ExecutedCounts.FromDiff(diff, packageNeedsPublish)
-        };
-
-        if (options.Strict && result.Diagnostics.Length > 0)
-        {
-            WriteDiagnostics(result.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
-            return Fail($"Strict mode failed with {result.Diagnostics.Length} diagnostic(s) after apply.", ExitError, includeUsage: false);
-        }
-
-        if (WantsHumanOutput(options))
-        {
-            Console.Out.WriteLine(ConsoleTheme.Success("Apply complete.", ConsoleTheme.StdoutColor));
-            // Report what was EXECUTED (from the pre-apply diff), not the post-apply re-plan - that re-plan is
-            // "+0 -0 ~0" precisely because the apply succeeded, which read as "nothing happened".
-            string executed =
-                $"Executed against {options.Environment ?? "Dataverse"}: {diff.Added.Length} created, " +
-                $"{diff.Changed.Length} updated, {diff.Removed.Length} deleted" +
-                (packageNeedsPublish ? ", plugin package re-published" : string.Empty) + ".";
-            Console.Out.WriteLine(executed);
-            if (result.HasChanges)
-            {
-                // Unexpected: the environment still differs after a successful apply - surface it.
-                Console.Out.WriteLine("Note: the environment still shows differences after apply:");
-                WritePlanSummary(result, Console.Out, ConsoleTheme.StdoutColor);
-            }
-            else
-            {
-                // A clean apply skips the summary above, but rank collisions are not resolved by applying,
-                // so still surface any diagnostics and the unmanaged info (WritePlanSummary includes both when it runs).
-                WriteDiagnostics(result.Diagnostics, Console.Out, ConsoleTheme.StdoutColor);
-                WriteUnmanaged(result.Unmanaged, Console.Out, ConsoleTheme.StdoutColor);
-            }
-
-            return ExitSuccess;
-        }
-
-        if (options.Verbose)
-        {
-            Console.Error.WriteLine();
-            Console.Error.WriteLine("Apply complete.");
-            WritePlanSummary(result, Console.Error, ConsoleTheme.StderrColor);
-            if (string.IsNullOrWhiteSpace(options.OutPath))
-            {
-                return ExitSuccess;
-            }
-        }
-
-        string output = JsonSerializer.Serialize(result, jsonOptions);
-        WriteOutput(options.OutPath, output);
-        return ExitSuccess;
-    }
-    catch (DataverseConnectionException ex)
-    {
-        return FailWithException(ex, ExitConnectionFailure, options.Verbose);
-    }
-    catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-    {
-        return FailWithException(ex, ExitFileNotFound, options.Verbose);
-    }
-    catch (Exception ex)
-    {
-        return FailWithException(ex, ExitError, options.Verbose);
-    }
-    finally
-    {
-        CleanupTempDirectories(tempDirectories);
-    }
-}
-
-// The unique names of the Custom APIs a plan would create or update (removed ones need no prefix). Read from the
-// diff's local-side definitions so the plan-time publisher-prefix check sees exactly what apply would write.
-static IEnumerable<string> ExtractCustomApiUniqueNames(RegistrationDiff diff)
-{
-    IEnumerable<JsonElement> definitions = diff.Added.Where(item => item.Kind == "custom-api").Select(item => item.Definition)
-        .Concat(diff.Changed.Where(change => change.Kind == "custom-api").Select(change => change.After));
-
-    foreach (JsonElement definition in definitions)
-    {
-        if (definition.ValueKind == JsonValueKind.Object
-            && definition.TryGetProperty("uniqueName", out JsonElement uniqueName)
-            && uniqueName.ValueKind == JsonValueKind.String)
-        {
-            string? value = uniqueName.GetString();
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                yield return value!;
-            }
-        }
-    }
-}
-
-static int ExecutePlanLike(string mode, SharedOptions options, JsonSerializerOptions jsonOptions)
-{
-    List<string> tempDirectories = [];
-
-    try
-    {
-        RegistrationState local = BuildLocalStateFromPackages(options, jsonOptions, tempDirectories);
-        RegistrationState current = ConsoleStatus.Run(
-            "Connecting to Dataverse and reading current registrations…",
-            report => BuildDataverseState(local.SourceAssemblies, options, jsonOptions, ExtractLocalRankSteps(local), report));
-        current = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out string[] unmanaged);
-        local = ResolveSecureConfigs(local, current, options, jsonOptions);
-        RegistrationDiff diff = BuildDiff(local, current);
-
-        // Two live-state checks the registration diff alone cannot express, both run on one short-lived connection:
-        //  1. Package publish: a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) produces no diff
-        //     item, yet apply republishes the package - surface it so plan does not report "no changes". The same
-        //     importable-prefix guard apply uses runs first (local, no connection) so plan fails the same way apply
-        //     would on an unprefixed package without --solution rather than advertising an impossible create.
-        //  2. Custom API publisher prefix: applying into a solution rejects a Custom API unique name without the
-        //     prefix - warn at plan time (and fail under --strict) so it is caught before apply. Resolve the prefix
-        //     only when apply would: a solution is targeted AND a Custom API is being created or updated (removed
-        //     APIs need no prefix), so a step-only or delete-only plan neither pays for nor can fail on the lookup.
-        IReadOnlyList<PackagePublishAction> packageActions = [];
-        string[] prefixDiagnostics = [];
-        bool checksPackages = local.PackagePayloads.Length > 0;
-        string[] customApiNames = string.IsNullOrWhiteSpace(options.SolutionUniqueName)
-            ? []
-            : ExtractCustomApiUniqueNames(diff).ToArray();
-        bool checksCustomApiPrefix = customApiNames.Length > 0;
-        if (checksPackages || checksCustomApiPrefix)
-        {
-            if (checksPackages)
-            {
-                EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
-            }
-
-            using ServiceClient planClient = CreateDataverseClient(options);
-            if (checksPackages)
-            {
-                packageActions = ComputePackagePublishActions(planClient, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
-            }
-
-            if (checksCustomApiPrefix)
-            {
-                string solutionPrefix = ResolveSolutionCustomizationPrefix(planClient, options.SolutionUniqueName!);
-                prefixDiagnostics = ComputeCustomApiPrefixDiagnostics(solutionPrefix, customApiNames).ToArray();
-            }
-        }
-
-        string[] planDiagnostics = prefixDiagnostics.Length == 0
-            ? local.Diagnostics
-            : [.. local.Diagnostics, .. prefixDiagnostics];
-        PlanPreview plan = BuildPlanPreview(mode, options.Environment, diff, planDiagnostics, current.Diagnostics, packageActions, unmanaged);
-        if (options.Strict && plan.Diagnostics.Length > 0)
-        {
-            WriteDiagnostics(plan.Diagnostics, Console.Error, ConsoleTheme.StderrColor);
-            return Fail($"Strict mode failed with {plan.Diagnostics.Length} diagnostic(s).", ExitError, includeUsage: false);
-        }
-
-        // On an interactive terminal (no --out, no --json), the styled human summary is the primary output on
-        // stdout in place of JSON. Piped/redirected/--json/--out runs keep emitting JSON so scripts and agents
-        // are unaffected.
-        if (WantsHumanOutput(options))
-        {
-            WritePlanSummary(plan, Console.Out, ConsoleTheme.StdoutColor);
-            return ExitSuccess;
-        }
-
-        if (options.Verbose)
-        {
-            WritePlanSummary(plan, Console.Error, ConsoleTheme.StderrColor);
-            if (string.IsNullOrWhiteSpace(options.OutPath))
-            {
-                return ExitSuccess;
-            }
-        }
-
-        string output = JsonSerializer.Serialize(plan, jsonOptions);
-        WriteOutput(options.OutPath, output);
-
-        return ExitSuccess;
-    }
-    catch (DataverseConnectionException ex)
-    {
-        return FailWithException(ex, ExitConnectionFailure, options.Verbose);
-    }
-    catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-    {
-        return FailWithException(ex, ExitFileNotFound, options.Verbose);
-    }
-    catch (Exception ex)
-    {
-        return FailWithException(ex, ExitError, options.Verbose);
-    }
-    finally
-    {
-        CleanupTempDirectories(tempDirectories);
-    }
-}
-
-// Whether plan/apply/inspect should print a styled human summary to stdout instead of JSON. True only on a
-// real terminal with neither --json nor --out: piped/redirected runs, --json, and file output all keep JSON so
-// scripts and coding agents parse the same contract they always have.
-static bool WantsHumanOutput(SharedOptions options) =>
-    !options.Json && string.IsNullOrWhiteSpace(options.OutPath) && !Console.IsOutputRedirected;
-
-// This file is the CLI entry point and command orchestration only. The implementation lives in the
-// Vela.Cli namespace: RegistrationModels, CliExitCodes, JsonReader,
-// DefinitionNormalizer, DiffEngine, OutputWriter, ApplyResumeReport, CommandLineOptions,
-// PackageScanner, and DataverseRegistration (Dataverse state reads + apply).
+// This file is the CLI entry point and command dispatch only. The implementation lives in the Vela.Cli namespace:
+// PlanApplyCommand (plan/apply/inspect orchestration), RegistrationModels, CliExitCodes, DiffEngine, OutputWriter,
+// ApplyResumeReport, CommandLineOptions, PackageScanner, and DataverseRegistration (Dataverse reads + apply).

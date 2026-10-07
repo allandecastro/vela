@@ -143,6 +143,62 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         Assert.Single(state.SourceAssemblyPayloads);
     }
 
+    [Fact]
+    public void Two_versions_of_one_package_scan_only_the_newest()
+    {
+        // --packages-dir with 1.0.0 and 1.0.1 side by side: scanning both duplicated every step (and failed on the
+        // "Duplicate local step key"), keeping whichever the disk listed first.
+        string older = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture", "1.0.0");
+        string newer = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture", "1.0.1");
+        RegistrationState single = PackageScanner.BuildLocalStateFromPackages(OptionsFor(newer), Web, _temps);
+
+        RegistrationState state = PackageScanner.BuildLocalStateFromPackages(OptionsFor(older, newer), Web, _temps);
+
+        PluginPackagePayload payload = Assert.Single(state.PackagePayloads);
+        Assert.Equal("1.0.1", payload.Version);
+        Assert.Equal(newer, payload.PackagePath);
+        Assert.Equal(single.Items.Length, state.Items.Length); // steps are not duplicated
+    }
+
+    [Fact]
+    public void SelectLatestPackageVersions_keeps_the_newest_per_id_and_names_the_skipped_ones()
+    {
+        string a100 = BuildNupkg("SamplePluginFixture.dll", "Zava.A", "1.0.0");
+        string a110 = BuildNupkg("SamplePluginFixture.dll", "Zava.A", "1.10.0");
+        string a19 = BuildNupkg("SamplePluginFixture.dll", "Zava.A", "1.9.0");
+        string b = BuildNupkg("SamplePluginFixture.dll", "Zava.B", "2.0.0");
+        List<string> warnings = [];
+
+        string[] kept = PackageScanner.SelectLatestPackageVersions([a100, b, a110, a19, b], warnings.Add);
+
+        Assert.Equal([b, a110], kept); // input order, one per id, the same path once
+        Assert.Equal(2, warnings.Count);
+        Assert.All(warnings, w => Assert.Contains("is a newer version (1.10.0) of the same package", w));
+        Assert.Contains(warnings, w => w.Contains(Path.GetFileName(a100)) && w.Contains("Zava.A 1.0.0"));
+        Assert.Contains(warnings, w => w.Contains(Path.GetFileName(a19)) && w.Contains("Zava.A 1.9.0"));
+        Assert.All(warnings, w => Assert.StartsWith("Warning: ignoring '", w));
+    }
+
+    [Theory]
+    [InlineData("1.0.1", "1.0.0", 1)]
+    [InlineData("1.10.0", "1.9.0", 1)]
+    [InlineData("1.0", "1.0.0", 0)]
+    [InlineData("1.0.0.1", "1.0.0", 1)]
+    [InlineData("2.0.0", "10.0.0", -1)]
+    [InlineData("1.0.0", "1.0.0-beta", 1)]
+    [InlineData("1.0.0-beta", "1.0.0", -1)]
+    [InlineData("1.0.0-beta.2", "1.0.0-beta.10", -1)]
+    [InlineData("1.0.0-beta", "1.0.0-alpha", 1)]
+    [InlineData("1.0.0-BETA", "1.0.0-beta", 0)]
+    [InlineData("1.0.0-alpha.1", "1.0.0-alpha", 1)]
+    [InlineData("1.0.0-alpha", "1.0.0-alpha.1", -1)]
+    [InlineData("1.0.0-1", "1.0.0-alpha", -1)]
+    [InlineData("1.0.0-alpha", "1.0.0-1", 1)]
+    [InlineData("1.0.0+build.5", "1.0.0", 0)]
+    [InlineData("1.0.0", "1.0.0", 0)]
+    public void PackageVersionComparer_orders_like_nuget(string x, string y, int expected)
+        => Assert.Equal(expected, PackageScanner.PackageVersionComparer.Instance.Compare(x, y));
+
     private static SharedOptions OptionsFor(params string[] nupkgs) => new SharedOptions(
         PackagePaths: nupkgs,
         PackageAssembly: null,
@@ -159,7 +215,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
 
     // Zips a compiled fixture DLL (copied next to the test binaries via its project reference) into a minimal
     // plugin .nupkg — a .nuspec plus lib/netstandard2.0/<dll> — that the scanner can read.
-    private string BuildNupkg(string dllFileName, string packageId)
+    private string BuildNupkg(string dllFileName, string packageId, string version = "1.0.0")
     {
         string dll = Path.Combine(AppContext.BaseDirectory, dllFileName);
         Assert.True(File.Exists(dll), $"fixture assembly not found next to the tests: {dll}");
@@ -173,7 +229,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
             using (Stream s = nuspec.Open())
             {
                 byte[] xml = Encoding.UTF8.GetBytes(
-                    $"<?xml version=\"1.0\"?><package><metadata><id>{packageId}</id><version>1.0.0</version></metadata></package>");
+                    $"<?xml version=\"1.0\"?><package><metadata><id>{packageId}</id><version>{version}</version></metadata></package>");
                 s.Write(xml, 0, xml.Length);
             }
 

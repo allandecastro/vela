@@ -598,6 +598,19 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void EnsurePluginPackages_without_packages_does_not_resolve_the_solution_prefix()
+    {
+        // A run that only fixes solution membership (or deploys web resources) has no package: no solution lookup,
+        // so an unknown/irrelevant solution cannot fail the publish phase.
+        var svc = new TestSupport.FakeOrgService();
+
+        DataverseRegistration.EnsurePluginPackages(svc, [], "acme_solution", new List<string>(), verbose: false);
+
+        Assert.Empty(svc.Queries);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
     public void EnsurePluginPackages_without_solution_and_unprefixed_name_throws()
     {
         // An unprefixed package (e.g. the project name "Zava.Plugins") can't import without a --solution to source
@@ -655,272 +668,13 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         };
         var diff = new RegistrationDiff(["Pkg"], ["Pkg"], [], [], [], [], []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [new PluginPackagePayload("Pkg", "1.0.0", path)], "acme_solution", new List<string>(), verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [new PluginPackagePayload("Pkg", "1.0.0", path)], "acme_solution", new List<string>(), verbose: false);
 
         CreateRequest create = Assert.Single(svc.Executed.OfType<CreateRequest>(), r => r.Target.LogicalName == "pluginpackage");
         Assert.Equal("acme_solution", create["SolutionUniqueName"]);
     }
 
-    // ---- UpsertPluginAssembly -------------------------------------------------------------------
-
-    [Fact]
-    public void UpsertPluginAssembly_creates_unsigned_assembly_with_isolation_and_sourcetype()
-    {
-        string dll = typeof(DataverseRegistration).Assembly.Location; // unsigned CLI assembly
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = _ => new EntityCollection(), // no existing → create
-        };
-
-        DataverseRegistration.UpsertPluginAssembly(svc, new AssemblyPayload("Vela.Cli", dll));
-
-        Entity created = Assert.Single(svc.Created);
-        Assert.Equal("pluginassembly", created.LogicalName);
-        Assert.Equal("Vela.Cli", created.GetAttributeValue<string>("name"));
-        Assert.Equal(Convert.ToBase64String(File.ReadAllBytes(dll)), created.GetAttributeValue<string>("content"));
-        Assert.Equal(ExpectedVersion(dll), created.GetAttributeValue<string>("version"));
-        Assert.Equal("neutral", created.GetAttributeValue<string>("culture"));
-        Assert.Equal("null", created.GetAttributeValue<string>("publickeytoken")); // unsigned
-        Assert.Equal(0, created.GetAttributeValue<OptionSetValue>("sourcetype").Value);
-        Assert.Equal(2, created.GetAttributeValue<OptionSetValue>("isolationmode").Value);
-    }
-
-    [Fact]
-    public void UpsertPluginAssembly_updates_existing_and_emits_hex_token_for_signed_assembly()
-    {
-        string dll = typeof(System.Xml.Linq.XDocument).Assembly.Location; // signed framework assembly
-        var existingId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", existingId)),
-        };
-
-        DataverseRegistration.UpsertPluginAssembly(svc, new AssemblyPayload("System.Private.Xml.Linq", dll));
-
-        Entity updated = Assert.Single(svc.Updated);
-        Assert.Equal(existingId, updated.Id);
-        Assert.Equal(Convert.ToBase64String(File.ReadAllBytes(dll)), updated.GetAttributeValue<string>("content"));
-        Assert.Equal(ExpectedVersion(dll), updated.GetAttributeValue<string>("version"));
-        Assert.Equal("neutral", updated.GetAttributeValue<string>("culture"));
-        Assert.Equal(ExpectedToken(dll), updated.GetAttributeValue<string>("publickeytoken"));
-        Assert.NotEqual("null", updated.GetAttributeValue<string>("publickeytoken"));
-        // Update must NOT re-stamp sourcetype/isolationmode (only set on create).
-        Assert.False(updated.Contains("sourcetype"));
-        Assert.False(updated.Contains("isolationmode"));
-        Assert.Empty(svc.Created);
-    }
-
-    [Fact]
-    public void UpsertPluginAssembly_skips_update_when_content_and_version_unchanged()
-    {
-        string dll = typeof(System.Xml.Linq.XDocument).Assembly.Location;
-        string content = Convert.ToBase64String(File.ReadAllBytes(dll));
-        string version = ExpectedVersion(dll);
-        var existingId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", existingId)),
-            OnRetrieve = (entity, id, _) => new Entity(entity, id) { ["content"] = content, ["version"] = version },
-        };
-
-        DataverseRegistration.UpsertPluginAssembly(svc, new AssemblyPayload("System.Private.Xml.Linq", dll));
-
-        // Identical content + version -> no Update (which would only bump modifiedon).
-        Assert.Empty(svc.Updated);
-        Assert.Empty(svc.Created);
-    }
-
-    [Theory]
-    [InlineData(true, false)]   // same content, other version: update
-    [InlineData(false, true)]   // other content, same version: update
-    public void UpsertPluginAssembly_updates_when_only_content_or_only_version_differs(bool sameContent, bool sameVersion)
-    {
-        // The skip needs BOTH to match; either one differing is a real change that must be uploaded.
-        string dll = typeof(System.Xml.Linq.XDocument).Assembly.Location;
-        string content = Convert.ToBase64String(File.ReadAllBytes(dll));
-        string version = ExpectedVersion(dll);
-        var existingId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", existingId)),
-            OnRetrieve = (entity, id, _) => new Entity(entity, id)
-            {
-                ["content"] = sameContent ? content : "b2xk",
-                ["version"] = sameVersion ? version : "0.0.0.1",
-            },
-        };
-
-        DataverseRegistration.UpsertPluginAssembly(svc, new AssemblyPayload("System.Private.Xml.Linq", dll));
-
-        Entity update = Assert.Single(svc.Updated);
-        Assert.Equal(existingId, update.Id);
-        Assert.Equal(content, update.GetAttributeValue<string>("content"));
-        Assert.Equal(version, update.GetAttributeValue<string>("version"));
-    }
-
-    [Fact]
-    public void UpsertPluginAssembly_throws_when_assembly_file_missing()
-    {
-        var svc = new TestSupport.FakeOrgService();
-        string missing = Path.Combine(Path.GetTempPath(), "no-asm-" + Guid.NewGuid().ToString("N") + ".dll");
-        var ex = Assert.Throws<FileNotFoundException>(
-            () => DataverseRegistration.UpsertPluginAssembly(svc, new AssemblyPayload("X", missing)));
-        Assert.Contains("Assembly payload file not found", ex.Message);
-    }
-
-    // ---- GuardAgainstStaleAssemblyVersion -------------------------------------------------------
-
-    [Fact]
-    public void GuardAgainstStaleAssemblyVersion_returns_when_no_new_types()
-    {
-        var svc = new TestSupport.FakeOrgService();
-        string dll = typeof(DataverseRegistration).Assembly.Location;
-        DataverseRegistration.GuardAgainstStaleAssemblyVersion(svc, new AssemblyPayload("Vela.Cli", dll), Array.Empty<string>());
-        Assert.Empty(svc.Queries); // short-circuits before any read
-    }
-
-    [Fact]
-    public void GuardAgainstStaleAssemblyVersion_returns_when_assembly_not_yet_registered()
-    {
-        var svc = new TestSupport.FakeOrgService(); // GetPluginAssembly → empty
-        string dll = typeof(DataverseRegistration).Assembly.Location;
-        DataverseRegistration.GuardAgainstStaleAssemblyVersion(svc, new AssemblyPayload("Vela.Cli", dll), ["Vela.Cli.NewType"]);
-        // no throw: first registration of this assembly
-    }
-
-    [Fact]
-    public void GuardAgainstStaleAssemblyVersion_returns_when_version_bumped()
-    {
-        string dll = typeof(DataverseRegistration).Assembly.Location;
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
-            OnRetrieve = (entity, id, _) => new Entity(entity, id) { ["version"] = "0.0.0.1" }, // differs from live dll
-        };
-        DataverseRegistration.GuardAgainstStaleAssemblyVersion(svc, new AssemblyPayload("Vela.Cli", dll), ["Vela.Cli.NewType"]);
-        // no throw: version differs → Dataverse will load the new assembly
-    }
-
-    [Fact]
-    public void GuardAgainstStaleAssemblyVersion_throws_when_version_unchanged()
-    {
-        string dll = typeof(DataverseRegistration).Assembly.Location;
-        string liveVersion = ExpectedVersion(dll);
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
-            OnRetrieve = (entity, id, cols) =>
-            {
-                Assert.Contains("version", cols.Columns); // the live version is read from the version column
-                return new Entity(entity, id) { ["version"] = liveVersion };
-            },
-        };
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => DataverseRegistration.GuardAgainstStaleAssemblyVersion(svc, new AssemblyPayload("Vela.Cli", dll), ["Vela.Cli.NewType"]));
-        // Each concatenated segment of the guidance message must survive (mutating any one to "" is caught).
-        Assert.Contains("registers new plugin type", ex.Message);
-        Assert.Contains("version is unchanged", ex.Message);
-        Assert.Contains("Vela.Cli.NewType", ex.Message);
-        Assert.Contains("Dataverse caches plugin assemblies by version", ex.Message);
-        Assert.Contains("could not be", ex.Message);
-        Assert.Contains("Bump the assembly version", ex.Message);
-        Assert.Contains("scaffolds an auto-incrementing", ex.Message);
-    }
-
-    // ---- CreatePluginType -----------------------------------------------------------------------
-
-    [Fact]
-    public void CreatePluginType_creates_type_with_friendly_name_from_last_segment()
-    {
-        var svc = new TestSupport.FakeOrgService();
-        var assemblyId = Guid.NewGuid();
-
-        DataverseRegistration.CreatePluginType(svc, assemblyId, "Acme.Plugins.AccountPlugin");
-
-        Entity created = Assert.Single(svc.Created);
-        Assert.Equal("plugintype", created.LogicalName);
-        EntityReference asmRef = created.GetAttributeValue<EntityReference>("pluginassemblyid");
-        Assert.Equal("pluginassembly", asmRef.LogicalName);
-        Assert.Equal(assemblyId, asmRef.Id);
-        Assert.Equal("Acme.Plugins.AccountPlugin", created.GetAttributeValue<string>("typename"));
-        Assert.Equal("Acme.Plugins.AccountPlugin", created.GetAttributeValue<string>("name"));
-        Assert.Equal("AccountPlugin", created.GetAttributeValue<string>("friendlyname"));
-    }
-
-    // ---- EnsurePluginTypesForMissingEntries -----------------------------------------------------
-
-    [Fact]
-    public void EnsurePluginTypesForMissingEntries_creates_missing_types_under_their_assembly()
-    {
-        var assemblyId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName == "pluginassembly"
-                ? TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", assemblyId))
-                : new EntityCollection(), // plugintype → none exist yet
-        };
-
-        DataverseRegistration.EnsurePluginTypesForMissingEntries(
-            svc, [new AssemblyPayload("Acme.Plugins", "unused")], ["Acme.Plugins.AccountPlugin"]);
-
-        Entity created = Assert.Single(svc.Created);
-        Assert.Equal("plugintype", created.LogicalName);
-        Assert.Equal("Acme.Plugins.AccountPlugin", created.GetAttributeValue<string>("typename"));
-        Assert.Equal(assemblyId, created.GetAttributeValue<EntityReference>("pluginassemblyid").Id);
-    }
-
-    [Fact]
-    public void EnsurePluginTypesForMissingEntries_noop_when_all_types_present()
-    {
-        var assemblyId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName == "pluginassembly"
-                ? TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", assemblyId))
-                : TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Acme.Plugins.AccountPlugin" }),
-        };
-
-        DataverseRegistration.EnsurePluginTypesForMissingEntries(
-            svc, [new AssemblyPayload("Acme.Plugins", "unused")], ["Acme.Plugins.AccountPlugin"]);
-
-        Assert.Empty(svc.Created); // already present → nothing created
-    }
-
-    [Fact]
-    public void EnsurePluginTypesForMissingEntries_creates_missing_types_in_ordinal_order()
-    {
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName == "pluginassembly"
-                ? TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid()))
-                : new EntityCollection(),
-        };
-
-        // Passed unsorted; the helper orders missing types ordinally before creating them.
-        DataverseRegistration.EnsurePluginTypesForMissingEntries(
-            svc, [new AssemblyPayload("Acme.Plugins", "unused")], ["Acme.Plugins.Zeta", "Acme.Plugins.Alpha"]);
-
-        Assert.Equal(
-            ["Acme.Plugins.Alpha", "Acme.Plugins.Zeta"],
-            svc.Created.Select(e => e.GetAttributeValue<string>("typename")));
-    }
-
-    // ---- WaitForPluginTypes / WaitForRequiredPluginTypes (success paths) -------------------------
-
-    [Fact]
-    public void WaitForPluginTypes_returns_immediately_when_types_present()
-    {
-        var assemblyId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName == "pluginassembly"
-                ? TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", assemblyId))
-                : TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Acme.Plugins.AccountPlugin" }),
-        };
-
-        // Would Thread.Sleep for 30s on the failure path — completing quickly proves the success path is taken.
-        DataverseRegistration.WaitForPluginTypes(svc, "Acme.Plugins", ["Acme.Plugins.AccountPlugin"]);
-    }
+    // ---- WaitForRequiredPluginTypes (success path) -------------------------
 
     [Fact]
     public void WaitForRequiredPluginTypes_returns_immediately_when_types_present()
@@ -936,78 +690,13 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         DataverseRegistration.WaitForRequiredPluginTypes(svc, ["Acme.Plugins"], ["Acme.Plugins.AccountPlugin"]);
     }
 
-    // ---- EnsurePluginAssembliesForMissingTypes (early returns) -----------------------------------
-
-    [Fact]
-    public void EnsurePluginAssembliesForMissingTypes_noop_when_no_payloads_or_no_required()
-    {
-        var svc = new TestSupport.FakeOrgService();
-        DataverseRegistration.EnsurePluginAssembliesForMissingTypes(svc, Array.Empty<AssemblyPayload>(), ["X"]);
-        DataverseRegistration.EnsurePluginAssembliesForMissingTypes(svc, [new AssemblyPayload("A", "p")], new HashSet<string>());
-        Assert.Empty(svc.Queries);
-        Assert.Empty(svc.Created);
-    }
-
-    [Fact]
-    public void EnsurePluginAssembliesForMissingTypes_noop_when_all_types_already_present()
-    {
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName == "pluginassembly"
-                ? TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid()))
-                : TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Acme.Plugins.AccountPlugin" }),
-        };
-
-        DataverseRegistration.EnsurePluginAssembliesForMissingTypes(
-            svc, [new AssemblyPayload("Acme.Plugins", "unused")], ["Acme.Plugins.AccountPlugin"]);
-
-        // All required types already resolve → no assembly upload attempted.
-        Assert.Empty(svc.Created);
-        Assert.Empty(svc.Updated);
-    }
-
-    [Fact]
-    public void EnsurePluginAssembliesForMissingTypes_guards_uploads_and_waits_for_new_type()
-    {
-        // The full sync path: a required type is initially absent, the assembly version differs from the live
-        // one (guard passes), the assembly is re-uploaded, then the type materializes on the next poll.
-        string dll = typeof(DataverseRegistration).Assembly.Location;
-        int pluginTypeCalls = 0;
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q =>
-            {
-                switch (q.EntityName)
-                {
-                    case "pluginassembly":
-                        return TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid()));
-                    case "plugintype":
-                        // First lookup: type absent (drives the sync). Later polls: type has materialized.
-                        pluginTypeCalls++;
-                        return pluginTypeCalls == 1
-                            ? new EntityCollection()
-                            : TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Zava.Plugins.NewPlugin" });
-                    default:
-                        return new EntityCollection();
-                }
-            },
-            OnRetrieve = (entity, id, _) => new Entity(entity, id) { ["version"] = "0.0.0.1" }, // live version differs → guard passes
-        };
-
-        DataverseRegistration.EnsurePluginAssembliesForMissingTypes(
-            svc, [new AssemblyPayload("Zava.Plugins", dll)], ["Zava.Plugins.NewPlugin"]);
-
-        // The existing assembly is re-uploaded (update path), not created.
-        Assert.Contains(svc.Updated, e => e.LogicalName == "pluginassembly");
-    }
-
-    // ---- ApplyDiff: missing plugin type after sync ----------------------------------------------
+    // ---- ApplyDiff: missing plugin type after publish -------------------------------------------
 
     [Fact]
     public void ApplyDiff_throws_when_required_plugin_type_never_resolves()
     {
-        // Two steps requiring plugin types that no assembly/package provides. With no packages and no source
-        // assemblies, the assembly-sync fallback resolves nothing, so apply must fail listing every missing
+        // Two steps requiring plugin types that no package provides. With no packages there is nothing to wait for
+        // and no direct assembly upload to fall back on, so apply must fail listing every missing
         // type in ordinal order.
         var svc = new TestSupport.FakeOrgService(); // every query returns empty
         JsonElement defA = Json(new { pluginTypeName = "Ghost.Plugins.Missing", message = "Update", stage = 40, mode = 0, stepKey = "dv-a" });
@@ -1026,8 +715,8 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         try
         {
             var ex = Assert.ThrowsAny<Exception>(
-                () => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
-            Assert.Contains("Plugin type not found in Dataverse after assembly sync", ex.Message);
+                () => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+            Assert.Contains("Plugin type not found in Dataverse after the plugin package publish", ex.Message);
             // Ordinal sort: "AnotherMissing" precedes "Missing".
             int a = ex.Message.IndexOf("Ghost.Plugins.AnotherMissing", StringComparison.Ordinal);
             int b = ex.Message.IndexOf("Ghost.Plugins.Missing", StringComparison.Ordinal);
@@ -1076,7 +765,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {
@@ -1127,7 +816,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
 
         // Removed API deleted through the seam.
         Assert.Contains(("customapi", removedApiId), svc.Deleted);
@@ -1170,7 +859,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {
@@ -1191,9 +880,13 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // registration stage" fault. Apply must warn and carry on, not abort the whole run.
         var svc = new TestSupport.FakeOrgService
         {
-            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep"
-                ? throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Invalid plug-in registration stage.")
-                : new EntityCollection(),
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessageprocessingstep" => throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Invalid plug-in registration stage."),
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Zava.Plugins.AccountPlugin" }),
+                _ => new EntityCollection(),
+            },
         };
         JsonElement removed = Json(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "ManagedStep" });
         var diff = new RegistrationDiff(
@@ -1210,7 +903,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false); // must NOT throw
+            DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false); // must NOT throw
         }
         finally
         {
@@ -1245,7 +938,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false); // must NOT throw
+            DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false); // must NOT throw
         }
         finally
         {
@@ -1261,7 +954,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // Removed step (deletes in its own batch, before publish) + two added steps + one changed step whose message
         // does not resolve. The changed step throws during the upsert CAPTURE phase, before the batch is flushed - so
         // the two creates never landed either. The resume report must therefore count only the delete + publish as
-        // completed (not the creates), and put the boundary at the first upsert. Before the fix, done advanced during
+        // completed (not the creates), and name the step that threw as the failure. Before the fix, done advanced during
         // capture and the creates were falsely reported as applied.
         const string plugin = "Zava.Plugins.AccountPlugin";
         var svc = new TestSupport.FakeOrgService
@@ -1301,7 +994,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {
@@ -1314,7 +1007,9 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Contains("+ delete step dv-old", stderr);
         Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
         Assert.DoesNotContain($"+ create step {plugin}", stderr);   // creates never flushed -> not completed
-        Assert.Contains($"failed at: create step {plugin}", stderr); // boundary at the first upsert owner
+        Assert.Contains($"failed at: update step {plugin} (dv-3)", stderr); // the owner whose capture threw
+        Assert.Contains($"- create step {plugin} (dv-1)", stderr);         // captured, never flushed
+        Assert.Contains($"- create step {plugin} (dv-2)", stderr);
     }
 
     [Fact]
@@ -1359,7 +1054,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // EnsurePluginPackages_with_solution_resolves_prefix_and_id).
         var packages = new[] { new PluginPackagePayload("acme_ZavaPlugins", "1.0.0", nupkg) };
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], packages, solutionUniqueName: null, new List<string>(), verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, packages, solutionUniqueName: null, new List<string>(), verbose: false);
 
         // The package was published with its name/version/content...
         Entity pkg = svc.Created.Single(e => e.LogicalName == "pluginpackage");
@@ -1373,61 +1068,11 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
-    public void ApplyDiff_resolves_partially_missing_types_via_assembly_sync()
-    {
-        // Two required types: one resolves up-front, one is initially absent and only materializes after the
-        // assembly sync. Apply must enter the sync block (Any-missing is true), resolve the second type, and
-        // succeed - the branch that skips the sync would leave it unresolved and throw.
-        string dll = typeof(DataverseRegistration).Assembly.Location;
-        const string typeA = "Zava.Plugins.A";
-        const string typeB = "Zava.Plugins.B";
-        TestSupport.FakeOrgService svc = null!;
-        svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q =>
-            {
-                switch (q.EntityName)
-                {
-                    case "pluginassembly": return TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid()));
-                    case "plugintype":
-                        // A is always present; B only materializes once the assembly has actually been re-uploaded
-                        // (so removing the sync step leaves B unresolved and apply throws).
-                        var types = new List<Entity> { new Entity("plugintype", Guid.NewGuid()) { ["typename"] = typeA } };
-                        if (svc.Updated.Any(e => e.LogicalName == "pluginassembly"))
-                        {
-                            types.Add(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = typeB });
-                        }
-                        return TestSupport.FakeOrgService.Collection(types.ToArray());
-                    default: return new EntityCollection(); // customapi lookups empty → create
-                }
-            },
-            OnRetrieve = (e, id, _) => new Entity(e, id) { ["version"] = "9.9.9.9" }, // differs from the dll → stale guard passes
-        };
-
-        JsonElement apiA = Json(new { pluginTypeName = typeA, uniqueName = "zava_A" });
-        JsonElement apiB = Json(new { pluginTypeName = typeB, uniqueName = "zava_B" });
-        var diff = new RegistrationDiff(
-            LocalAssemblies: ["Zava.Plugins"],
-            CurrentAssemblies: ["Zava.Plugins"],
-            Added: [new RegistrationItem("custom-api", typeA, apiA), new RegistrationItem("custom-api", typeB, apiB)],
-            Removed: [],
-            Changed: [],
-            LocalItems: [],
-            CurrentItems: []);
-        var sourceAssemblies = new[] { new AssemblyPayload("Zava.Plugins", dll) };
-
-        DataverseRegistration.ApplyDiff(svc, diff, sourceAssemblies, [], null, new List<string>(), verbose: false); // must NOT throw
-
-        // Both custom APIs were created once their types resolved.
-        Assert.Equal(2, svc.Created.Count(e => e.LogicalName == "customapi"));
-    }
-
-    [Fact]
     public void ApplyDiff_capture_abort_does_not_report_unflushed_custom_api_create_as_completed()   // #305
     {
         // removed api (deletes in its own batch) + added api + changed api whose lookup throws during the upsert
         // capture phase. The added api's create is captured but never flushed (the batch aborts), so only the delete +
-        // publish completed and the boundary sits at the first upsert (the create), not the changed api.
+        // publish completed; the changed api (whose lookup threw) is the failure and the create is "not applied".
         const string apiType = "Zava.Plugins.MyApi";
         var svc = new TestSupport.FakeOrgService
         {
@@ -1464,7 +1109,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {
@@ -1474,15 +1119,16 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string stderr = captured.ToString();
         Assert.Contains("completed (2):", stderr);                    // delete + publish only
         Assert.DoesNotContain($"+ create custom-api {apiType}", stderr);  // captured but never flushed
-        Assert.Contains($"failed at: create custom-api {apiType}", stderr); // boundary at the first upsert owner
+        Assert.Contains($"failed at: update custom-api {apiType}", stderr); // the owner whose capture threw
+        Assert.Contains($"- create custom-api {apiType}", stderr);         // captured, never flushed
     }
 
     [Fact]
     public void ApplyDiff_capture_abort_does_not_report_unflushed_custom_api_update_as_completed()   // #305
     {
         // A changed custom-api is captured, then an added step throws during the same upsert capture phase. Nothing in
-        // the batch flushed, so only the publish completed; the api update is captured-but-unflushed and the boundary
-        // sits at the first upsert owner (the api update), not the step.
+        // the batch flushed, so only the publish completed; the api update is captured-but-unflushed ("not applied")
+        // and the step whose capture threw is the failure.
         const string type = "Zava.Plugins.Thing";
         var svc = new TestSupport.FakeOrgService
         {
@@ -1512,7 +1158,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {
@@ -1522,7 +1168,8 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string stderr = captured.ToString();
         Assert.Contains("completed (1):", stderr);                 // publish only
         Assert.DoesNotContain($"+ update custom-api {type}", stderr);  // captured but never flushed
-        Assert.Contains($"failed at: update custom-api {type}", stderr); // boundary at the first upsert owner
+        Assert.Contains($"failed at: create step {type} (dv-1)", stderr); // the owner whose capture threw
+        Assert.Contains($"- update custom-api {type}", stderr);          // captured, never flushed
     }
 
     [Fact]
@@ -1559,7 +1206,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false); // must NOT throw
+            DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false); // must NOT throw
         }
         finally
         {
@@ -1571,41 +1218,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Contains("skipping custom API update", stderr);   // changed path
     }
 
-    [Fact]
-    public void EnsurePluginAssembliesForMissingTypes_throws_stale_guard_for_matched_types()
-    {
-        // Two missing types match the payload assembly (one exact, one by the "AssemblyName." prefix). Both feed
-        // the stale-version guard, which throws because the live version equals the payload's.
-        string dll = typeof(DataverseRegistration).Assembly.Location;
-        string liveVersion = ExpectedVersion(dll);
-        var svc = new TestSupport.FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName == "pluginassembly"
-                ? TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid()))
-                : new EntityCollection(),   // plugintype empty → both required are missing
-            OnRetrieve = (e, id, _) => new Entity(e, id) { ["version"] = liveVersion },
-        };
-
-        var required = new HashSet<string> { "Zava.Plugins", "Zava.Plugins.Foo" };
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => DataverseRegistration.EnsurePluginAssembliesForMissingTypes(svc, [new AssemblyPayload("Zava.Plugins", dll)], required));
-        Assert.Contains("version is unchanged", ex.Message);
-        // Both matched types are listed (ordinal order), proving the exact + prefix match both landed.
-        int a = ex.Message.IndexOf("Zava.Plugins,", StringComparison.Ordinal);
-        int b = ex.Message.IndexOf("Zava.Plugins.Foo", StringComparison.Ordinal);
-        Assert.True(a >= 0 && b >= 0 && a < b, "both matched types listed in ordinal order");
-    }
-
     // ---- fixtures --------------------------------------------------------------------------------
-
-    private static string ExpectedVersion(string dll)
-        => AssemblyName.GetAssemblyName(dll).Version?.ToString() ?? "1.0.0.0";
-
-    private static string ExpectedToken(string dll)
-    {
-        byte[]? token = AssemblyName.GetAssemblyName(dll).GetPublicKeyToken();
-        return token == null || token.Length == 0 ? "null" : Convert.ToHexString(token).ToLowerInvariant();
-    }
 
     private static void XDocumentAssertId(string nuspecPath, string expectedId)
     {

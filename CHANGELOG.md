@@ -239,7 +239,37 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`CustomApiResponse` uses its API unique name.** The constructor ignored its `apiUniqueName` argument, so a typed
   Custom API response had no `ResponseName`. It now sets `ResponseName`, as `CustomApiRequest` sets `RequestName`.
 
+### Changed (CLI, breaking)
+
+- **Steps deployed by very old Vela versions (named `df:<plugin type>:<step key>`) are no longer recognised by
+  their step key.** The live read no longer parses that name format. Such a step is matched like a keyless step
+  (plugin type, message, stage, mode and table) and renamed on the next `apply`; when it cannot be matched that way,
+  it is deleted and recreated.
+- **`plan`, `apply` and `inspect` each accept only their own options.** They shared one allowlist, so
+  `plan --auto-approve` or `inspect --strict` was accepted and ignored; it is now `Unknown option` (exit 2).
+  `--detailed-exitcode` is `plan` only; `--auto-approve`/`--yes` and `--batch-size` are `apply` only; `--strict` is
+  `plan`/`apply` only. `vela update` rejects an unknown option instead of ignoring it.
+- **The legacy direct-assembly registration path is removed.** `apply` used to upload a bare plugin assembly and
+  create its plugin types itself when no plugin package was given. Every scanned input is a plugin package, so the
+  path was unreachable; the platform materializes the plugin types from the package. A plugin type that does not
+  appear after the package publish fails `apply` with `Plugin type not found in Dataverse after the plugin package
+  publish`.
+- **The scan no longer accepts a non-array `GetStepDefinitions()` result.** A single returned object used to be
+  wrapped into a one-element set (a pre-array framework shape); it now fails the scan with a clear message.
+
 ### Added (CLI)
+
+- **`vela help <command>` and `vela help --json`.** The help is generated from one command table that is also the
+  option allowlist of `plan`, `apply`, `inspect`, `sign`, `logout`, `update`, `solution`, `logs` and `models`, so it
+  lists every command (`solution` was missing) and every option a command accepts. `vela help --json` describes the
+  commands, options and exit codes for agents and completion scripts.
+- **A versioned JSON contract for `plan` / `apply` / `inspect`.** Every document starts with `"schemaVersion": 1`,
+  bumped only when an existing field changes meaning or shape. The new
+  [Machine-readable output](docs/reference/machine-readable-output.md) page documents the fields and the exit codes.
+  Information that is not a warning (an assembly not yet in Dataverse, for example) is listed under a new `info`
+  array, alongside `diagnostics` (warnings, which `--strict` fails on) and `unmanaged`.
+- **`vela plan --detailed-exitcode`** exits `8` when the plan found changes to apply (including a package republish)
+  and `0` when there is nothing to do, so a pipeline can branch on the plan without parsing it.
 
 - **`--secure-config NAME=VALUE|NAME=@file`** (repeatable) on `plan`/`apply`/`inspect`, with the
   `VELA_SECURE_CONFIG_<NAME>` environment variable as a fallback. A package built with an older framework that still
@@ -249,6 +279,40 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **Every command has its own `--help`.** `vela init --help`, `sign --help`, `logout --help`, `plan`/`apply`/
+  `inspect --help` printed the global usage; they now print the command's usage, options, notes and examples.
+- **The package scan runs in a separate process.** Reading a package's steps instantiates its plugin types, so the
+  package's code ran inside the `vela` process, next to its connection, access token, client secret and
+  secure-config values. `plan`/`apply`/`inspect` and `vela models --package` now scan in a child `vela` process that
+  holds none of that state and starts with an allowlisted environment (system paths, locale, .NET variables; no
+  `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*` or CI tokens inherited by accident), no stdin, and its output on
+  stderr. It is not a sandbox: package code runs with your OS rights and can still read the parent's command line
+  and environment, your files and the network, so only scan packages you trust, and keep secrets off the command
+  line (`DATAVERSE_CLIENT_SECRET`, `--client-secret-stdin`, `--interactive`). `VELA_SCAN_IN_PROCESS=1` restores the
+  in-process scan.
+- **`--solution` now also holds the components that did not change.** A create or update lands in the solution,
+  but a step, Custom API, plugin assembly or package deployed earlier (without `--solution`, or into another
+  solution) was never written again and so never added: the solution exported without it. `plan --solution` lists
+  each such component as an `add-to-solution` operation, and `apply` adds it (`AddSolutionComponent`, without
+  required components); `executed.addedToSolution` counts them. Only unchanged components are listed: a changed one
+  joins through its solution-scoped update and a removed one is deleted. Adding an unchanged package to the
+  solution is not reported as a package republish.
+- **`--packages-dir` with several versions of one package scans only the newest.** Both versions were scanned, so
+  every step appeared twice (failing with a misleading "Duplicate local step key"), and the published package was
+  whichever the disk listed first. The highest version (NuGet ordering) is kept and each skipped file is named on
+  stderr.
+- **`--strict` no longer fails the first deployment.** "Plugin assembly ... not found in Dataverse" (and "no plugin
+  types found") were warnings, so `plan --strict` failed on every empty environment. They are now `info`; rank
+  collisions, missing secure-config values and publisher-prefix mismatches are still warnings.
+- **`--verbose` no longer drops the JSON.** With `--verbose` (piped or `--json`), `plan`/`apply`/`inspect` printed
+  the human summary on stderr and then returned without writing the JSON document. The JSON is now always written;
+  the summary stays on stderr. `--out <file>` reports "Plan written: ..." on stderr, so stdout stays empty.
+- **`vela init --json` writes only JSON to stdout.** The "Scaffolding against Vela.Plugins ..." notice now goes to
+  stderr.
+- **`apply` reports a package-only change like `plan`.** The apply preview listed the package publish neither in
+  `operations` nor in the JSON of a failed run, and an unprefixed package without `--solution` failed mid-run
+  (exit 7) after the deletes; it now fails before anything is written (exit 4), as `plan` does. `plan`, `apply` and
+  `inspect` share one orchestration path and one Dataverse connection per run (instead of up to four).
 - **`vela models` names the `Id` override's column** (`[AttributeLogicalName("accountid")]`, as the SDK generator
   does), so `a => a.Id` selects the primary key column.
 - **A second `apply --solution` no longer re-imports an unchanged plugin package.** Adding the publisher prefix
@@ -286,6 +350,18 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **Renaming a Custom API's plugin class no longer blocks the package upload.** With the same unique name, the Custom
   API was re-pointed to the new class only after the upload, which had to remove the old plugin type while the Custom
   API still referenced it. `apply` now detaches the Custom API before the upload and points it at the new type after.
+- **A removed step is deleted only within the assemblies being applied.** The delete re-read every plugin type of
+  the environment for each step and, when the type did not resolve, fell back to an environment-wide match on the
+  step name, which could delete a same-named step of another assembly. The plugin types are now read once, from the
+  applied assemblies only, and there is no unscoped fallback.
+- **The apply report matches what landed.** When a whole `ExecuteMultiple` call failed after the server had run it
+  (a timeout, a dropped connection), the one-by-one fallback replayed its creates, which then failed with "duplicate
+  key" and were reported as failures; a replayed create whose id already exists now counts as applied. The resume
+  report listed everything after the earliest failure as "not applied", including steps that landed in the same
+  continue-on-error batch, and showed only one failure: each operation is now listed under its own outcome
+  (completed / failed / not applied), and a step is named with its step key. `--verbose` progress lines
+  (`[step] create ...`) were printed before the batch ran; they are now printed after it, and a failed one ends with
+  `(not applied)`.
 
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

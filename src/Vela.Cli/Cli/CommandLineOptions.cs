@@ -17,32 +17,21 @@ internal static class CommandLineOptions
     // Connection options every Dataverse-authenticating command reads (the connected commands via
     // TryResolveConnection/ResolveClientSecret, and `vela models`). Kept separate so each command's allowlist
     // composes them without duplicating the list.
-    internal static readonly HashSet<string> ConnectionValueOptions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "--connection-string", "--url", "--tenant-id", "--client-id", "--client-secret",
-        "--auth-client-id", "--authority", "--timeout",
-    };
+    internal static readonly HashSet<string> ConnectionValueOptions = new(
+        CliCommands.ConnectionOptions.Where(o => o.Kind != CliOptionKind.Flag).SelectMany(o => o.Spellings), StringComparer.OrdinalIgnoreCase);
 
-    internal static readonly HashSet<string> ConnectionFlagOptions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "--client-secret-stdin", "--fresh-login",
-    };
+    internal static readonly HashSet<string> ConnectionFlagOptions = new(
+        CliCommands.ConnectionOptions.Where(o => o.Kind == CliOptionKind.Flag).SelectMany(o => o.Spellings), StringComparer.OrdinalIgnoreCase);
 
-    // Every option the shared parser (TryParseSharedOptions) reads: the package/scope options plus the shared
-    // connection options. Kept as an allowlist so an unknown/misspelled option (e.g. --packages-dur) fails fast
-    // with a clear message instead of being silently ignored - a dropped --packages-dir would otherwise leave the
-    // run with no package input and only surface as a confusing "Missing package input" much later. Value options
-    // consume the next token; flags stand alone. Keep these in sync when adding a shared option.
-    private static readonly HashSet<string> SharedValueOptions = new(ConnectionValueOptions, StringComparer.OrdinalIgnoreCase)
-    {
-        "--webresources", "--package", "-p", "--packages-dir", "--solution", "--solution-unique-name",
-        "--package-assembly", "--environment", "--out", "--batch-size", "--secure-config",
-    };
+    // Every option the shared parser (TryParseSharedOptions) reads, from the command table (CliCommands): the union
+    // over plan/apply/inspect. Kept as an allowlist so an unknown/misspelled option (e.g. --packages-dur) fails fast
+    // with a clear message instead of being silently ignored. A command-specific parse (TryParseSharedOptions with a
+    // command name) uses that command's own options, so e.g. `plan --auto-approve` is rejected.
+    private static readonly string[] SharedCommands = ["plan", "apply", "inspect"];
 
-    private static readonly HashSet<string> SharedFlagOptions = new(ConnectionFlagOptions, StringComparer.OrdinalIgnoreCase)
-    {
-        "--interactive", "-i", "--auto-approve", "--yes", "--strict", "--verbose", "-v", "--json", "--help", "-h",
-    };
+    private static readonly HashSet<string> SharedValueOptions = new(SharedCommands.SelectMany(CliCommands.ValueOptions), StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<string> SharedFlagOptions = new(SharedCommands.SelectMany(CliCommands.FlagOptions), StringComparer.OrdinalIgnoreCase);
 
     // The tokens that request usage on any command; handled (print usage, exit success) before the option guard.
     private static readonly HashSet<string> HelpTokens = new(StringComparer.OrdinalIgnoreCase)
@@ -208,13 +197,20 @@ internal static class CommandLineOptions
         return result.ToArray();
     }
 
-    public static bool TryParseSharedOptions(string[] args, out SharedOptions options, out int exitCode)
+    public static bool TryParseSharedOptions(string[] args, out SharedOptions options, out int exitCode) =>
+        TryParseSharedOptions(args, SharedValueOptions, SharedFlagOptions, out options, out exitCode);
+
+    /// <summary>Parses the options of one of plan/apply/inspect against that command's own allowlist.</summary>
+    public static bool TryParseSharedOptions(string command, string[] args, out SharedOptions options, out int exitCode) =>
+        TryParseSharedOptions(args, CliCommands.ValueOptions(command), CliCommands.FlagOptions(command), out options, out exitCode);
+
+    private static bool TryParseSharedOptions(string[] args, HashSet<string> valueOptions, HashSet<string> flagOptions, out SharedOptions options, out int exitCode)
     {
         options = default!;
         exitCode = ExitSuccess;
 
         // Fail fast on a misspelled/unknown option before prompting or reading anything else.
-        if (!TryTokenize(args, SharedValueOptions, SharedFlagOptions, out args, out exitCode))
+        if (!TryTokenize(args, valueOptions, flagOptions, out args, out exitCode))
         {
             return false;
         }
@@ -333,7 +329,8 @@ internal static class CommandLineOptions
             Json: args.Any(x => string.Equals(x, "--json", StringComparison.OrdinalIgnoreCase)),
             TimeoutMinutes: timeoutMinutes,
             BatchChunkSize: batchChunkSize,
-            SecureConfigs: [.. ReadMultiOption(args, "--secure-config")]);
+            SecureConfigs: [.. ReadMultiOption(args, "--secure-config")],
+            DetailedExitCode: HasFlag(args, "--detailed-exitcode"));
         return true;
     }
 

@@ -30,6 +30,21 @@ internal static partial class DataverseRegistration
 
         string prefix = indent ? "  " : string.Empty;
         string suffix = string.IsNullOrEmpty(details) ? string.Empty : $" {details}";
-        Console.Error.WriteLine($"{prefix}[{tag}] {action} {name}{suffix}");
+        string line = $"{prefix}[{tag}] {action} {name}{suffix}";
+        if (LogSink != null)
+        {
+            LogSink(line);
+            return;
+        }
+
+        Console.Error.WriteLine(line);
     }
+
+    /// <summary>
+    /// When set, <see cref="LogOperation"/> hands its line to this sink instead of writing it. The batched apply
+    /// buffers a capture's lines here and prints them once the batch ran, with the real outcome. Thread-static: a
+    /// capture runs on the calling thread, and parallel test runs must not share a buffer.
+    /// </summary>
+    [ThreadStatic]
+    internal static Action<string>? LogSink;
 }
