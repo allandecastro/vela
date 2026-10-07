@@ -941,7 +941,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // Removed step (deletes in its own batch, before publish) + two added steps + one changed step whose message
         // does not resolve. The changed step throws during the upsert CAPTURE phase, before the batch is flushed - so
         // the two creates never landed either. The resume report must therefore count only the delete + publish as
-        // completed (not the creates), and put the boundary at the first upsert. Before the fix, done advanced during
+        // completed (not the creates), and name the step that threw as the failure. Before the fix, done advanced during
         // capture and the creates were falsely reported as applied.
         const string plugin = "Zava.Plugins.AccountPlugin";
         var svc = new TestSupport.FakeOrgService
@@ -994,7 +994,9 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Contains("+ delete step dv-old", stderr);
         Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
         Assert.DoesNotContain($"+ create step {plugin}", stderr);   // creates never flushed -> not completed
-        Assert.Contains($"failed at: create step {plugin}", stderr); // boundary at the first upsert owner
+        Assert.Contains($"failed at: update step {plugin} (dv-3)", stderr); // the owner whose capture threw
+        Assert.Contains($"- create step {plugin} (dv-1)", stderr);         // captured, never flushed
+        Assert.Contains($"- create step {plugin} (dv-2)", stderr);
     }
 
     [Fact]
@@ -1057,7 +1059,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     {
         // removed api (deletes in its own batch) + added api + changed api whose lookup throws during the upsert
         // capture phase. The added api's create is captured but never flushed (the batch aborts), so only the delete +
-        // publish completed and the boundary sits at the first upsert (the create), not the changed api.
+        // publish completed; the changed api (whose lookup threw) is the failure and the create is "not applied".
         const string apiType = "Zava.Plugins.MyApi";
         var svc = new TestSupport.FakeOrgService
         {
@@ -1104,15 +1106,16 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string stderr = captured.ToString();
         Assert.Contains("completed (2):", stderr);                    // delete + publish only
         Assert.DoesNotContain($"+ create custom-api {apiType}", stderr);  // captured but never flushed
-        Assert.Contains($"failed at: create custom-api {apiType}", stderr); // boundary at the first upsert owner
+        Assert.Contains($"failed at: update custom-api {apiType}", stderr); // the owner whose capture threw
+        Assert.Contains($"- create custom-api {apiType}", stderr);         // captured, never flushed
     }
 
     [Fact]
     public void ApplyDiff_capture_abort_does_not_report_unflushed_custom_api_update_as_completed()   // #305
     {
         // A changed custom-api is captured, then an added step throws during the same upsert capture phase. Nothing in
-        // the batch flushed, so only the publish completed; the api update is captured-but-unflushed and the boundary
-        // sits at the first upsert owner (the api update), not the step.
+        // the batch flushed, so only the publish completed; the api update is captured-but-unflushed ("not applied")
+        // and the step whose capture threw is the failure.
         const string type = "Zava.Plugins.Thing";
         var svc = new TestSupport.FakeOrgService
         {
@@ -1152,7 +1155,8 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string stderr = captured.ToString();
         Assert.Contains("completed (1):", stderr);                 // publish only
         Assert.DoesNotContain($"+ update custom-api {type}", stderr);  // captured but never flushed
-        Assert.Contains($"failed at: update custom-api {type}", stderr); // boundary at the first upsert owner
+        Assert.Contains($"failed at: create step {type} (dv-1)", stderr); // the owner whose capture threw
+        Assert.Contains($"- update custom-api {type}", stderr);          // captured, never flushed
     }
 
     [Fact]

@@ -37,6 +37,10 @@ internal sealed class FakeOrgService : IOrganizationService
     /// environment that cannot run the batch (not supported / timeout), forcing the one-by-one fallback.</summary>
     public bool FailWholeBatch { get; set; }
 
+    /// <summary>When true, an <see cref="ExecuteMultipleRequest"/> RUNS and then throws (a timeout or dropped connection
+    /// after the server executed it), so the one-by-one fallback replays writes that already landed.</summary>
+    public bool ThrowAfterBatchRuns { get; set; }
+
     /// <summary>Routes <see cref="RetrieveMultiple"/> by entity name; the default lambda returns an empty page.</summary>
     public void RouteRetrieveMultiple(Func<string, EntityCollection> byEntity)
         => OnRetrieveMultiple = q => byEntity(q.EntityName);
@@ -50,6 +54,14 @@ internal sealed class FakeOrgService : IOrganizationService
 
     public Guid Create(Entity entity)
     {
+        // Like the platform, a create whose (caller-supplied) id already exists fails with "duplicate key".
+        if (entity.Id != Guid.Empty && Created.Exists(e => e.Id == entity.Id))
+        {
+            throw new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { ErrorCode = unchecked((int)0x80040237), Message = "Cannot insert duplicate key." },
+                "Cannot insert duplicate key.");
+        }
+
         Created.Add(entity);
         Writes.Add("create:" + entity.LogicalName);
         return OnCreate(entity);
@@ -130,6 +142,11 @@ internal sealed class FakeOrgService : IOrganizationService
                     break;
                 }
             }
+        }
+
+        if (ThrowAfterBatchRuns)
+        {
+            throw new TimeoutException("The request channel timed out (simulated, after the batch ran).");
         }
 
         ExecuteMultipleResponse response = new ExecuteMultipleResponse();

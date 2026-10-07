@@ -353,7 +353,7 @@ public class ApplyEngineTests
         try
         {
             DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
-                [], [new PluginPackagePayload("zava_Plugins", "1.0.0", package)], null, [], verbose: false);
+                [new PluginPackagePayload("zava_Plugins", "1.0.0", package)], null, [], verbose: false);
         }
         finally
         {
@@ -380,7 +380,7 @@ public class ApplyEngineTests
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
             DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
-                [], [], null, [], verbose: false));
+                [], null, [], verbose: false));
 
         Assert.Equal(
             "Custom API 'zava_Score' is now implemented by 'Other.Solution.ScoreApi', not by 'Zava.Plugins.ScoreApi' as when the plan was computed. " +
@@ -396,7 +396,7 @@ public class ApplyEngineTests
         (TestSupport.FakeOrgService svc, Guid apiId, _) = RenamedCustomApiService(liveImplementation: DeletedTypeId);
 
         DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
-            [], [], null, [], verbose: false);
+            [], null, [], verbose: false);
 
         Assert.Equal(2, svc.Updated.Count);
         Assert.Equal(apiId, svc.Updated[0].Id);
@@ -409,7 +409,7 @@ public class ApplyEngineTests
         (TestSupport.FakeOrgService svc, Guid apiId, Guid newTypeId) = RenamedCustomApiService(liveImplementation: Guid.Empty);
 
         DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApi", "Zava.Plugins.ScoreApiV2")),
-            [], [], null, [], verbose: false);
+            [], null, [], verbose: false);
 
         Entity repoint = Assert.Single(svc.Updated); // only the re-point, no detach
         Assert.Equal(apiId, repoint.Id);
@@ -422,7 +422,7 @@ public class ApplyEngineTests
         (TestSupport.FakeOrgService svc, Guid apiId, Guid newTypeId) = RenamedCustomApiService(liveImplementation: NewTypeId);
 
         DataverseRegistration.ApplyDiff(svc, ChangedApiDiff(CustomApiChange("Zava.Plugins.ScoreApiV2", "Zava.Plugins.ScoreApiV2", beforePrivate: true)),
-            [], [], null, [], verbose: false);
+            [], null, [], verbose: false);
 
         Entity update = Assert.Single(svc.Updated);
         Assert.Equal(apiId, update.Id);
@@ -546,8 +546,10 @@ public class ApplyEngineTests
         Assert.Contains("apply failed mid-run", stderr);
         // The un-flushed first step must not be listed as completed (the bug: done advanced during capture).
         Assert.DoesNotContain($"+ update step {accountPlugin}", stderr);
-        // The boundary sits at the first upsert; only the publish/resolve phase completed.
-        Assert.Contains($"failed at: update step {accountPlugin}", stderr);
+        // Only the publish/resolve phase completed.
+        // The report names the step whose capture threw; the earlier, un-flushed one is "not applied".
+        Assert.Contains($"failed at: update step {contactPlugin} (con-x)", stderr);
+        Assert.Contains($"- update step {accountPlugin} (acc-x)", stderr);
         Assert.Contains("+ publish plugin package(s) and resolve plugin types", stderr);
     }
 

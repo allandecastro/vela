@@ -240,6 +240,14 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   the environment for each step and, when the type did not resolve, fell back to an environment-wide match on the
   step name, which could delete a same-named step of another assembly. The plugin types are now read once, from the
   applied assemblies only, and there is no unscoped fallback.
+- **The apply report matches what landed.** When a whole `ExecuteMultiple` call failed after the server had run it
+  (a timeout, a dropped connection), the one-by-one fallback replayed its creates, which then failed with "duplicate
+  key" and were reported as failures; a replayed create whose id already exists now counts as applied. The resume
+  report listed everything after the earliest failure as "not applied", including steps that landed in the same
+  continue-on-error batch, and showed only one failure: each operation is now listed under its own outcome
+  (completed / failed / not applied), and a step is named with its step key. `--verbose` progress lines
+  (`[step] create ...`) were printed before the batch ran; they are now printed after it, and a failed one ends with
+  `(not applied)`.
 
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

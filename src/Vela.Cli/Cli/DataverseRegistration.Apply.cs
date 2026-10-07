@@ -59,8 +59,9 @@ internal static partial class DataverseRegistration
     planned.Add(publishOperation);
     planned.AddRange(addedApis.Select(x => $"create custom-api {x.Type}"));
     planned.AddRange(changedApis.Select(x => $"update custom-api {x.Type}"));
-    planned.AddRange(addedSteps.Select(x => $"create step {x.Type}"));
-    planned.AddRange(changedSteps.Select(x => $"update step {x.Type}"));
+    // A plugin type can own several steps, so a step is labelled with its key too: the report names the exact step.
+    planned.AddRange(addedSteps.Select(x => $"create step {DescribeStepOperation(x.Type, x.Definition)}"));
+    planned.AddRange(changedSteps.Select(x => $"update step {DescribeStepOperation(x.Type, x.After)}"));
     // Stryker disable all : web resources are a work-in-progress preview, not mutation-gated yet
     bool hasWebResourceWrites = addedWebResources.Count > 0 || changedWebResources.Count > 0;
     bool validatesWebResourcePrefix = hasWebResourceWrites && !string.IsNullOrWhiteSpace(solutionUniqueName);
@@ -78,19 +79,19 @@ internal static partial class DataverseRegistration
     }
     // Stryker restore all
 
-    int done = 0;
+    ApplyProgress progress = new(planned);
     try
     {
         // Delete obsolete steps and custom APIs BEFORE uploading the new package.
         // Dataverse refuses to replace plugin types that still have steps registered,
         // so we must clear them first. Deletes are batched in reverse dependency order
         // (custom-API parameters/response-properties first, then steps and custom APIs).
-        ApplyDeletesBatched(service, solutionUniqueName, removedSteps, removedApis, diff.CurrentAssemblies, verbose, batchChunkSize, ref done);
+        ApplyDeletesBatched(service, solutionUniqueName, removedSteps, removedApis, diff.CurrentAssemblies, verbose, batchChunkSize, progress);
 
         foreach (RegistrationChange change in reimplementedApis)
         {
             DetachCustomApiImplementation(service, change, verbose);
-            done++;
+            progress.CompleteNext();
         }
 
         EnsurePluginPackages(svc, packagePayloads, solutionUniqueName, tempDirectories, verbose);
@@ -112,10 +113,10 @@ internal static partial class DataverseRegistration
             .ToArray();
         if (missingPluginTypes.Length > 0)
         {
-            throw new InvalidOperationException($"Plugin type not found in Dataverse after the plugin package publish:{string.Join(", ", missingPluginTypes)}");
+            throw new InvalidOperationException($"Plugin type not found in Dataverse after the plugin package publish: {string.Join(", ", missingPluginTypes)}");
         }
 
-        done++; // publish + resolve plugin types
+        progress.CompleteNext(); // publish + resolve plugin types
 
         // When applying into a solution, Custom API unique names must carry the publisher prefix. Resolve it once
         // (only when there is a Custom API to write) so UpsertCustomApi can validate the prefix locally.
@@ -130,7 +131,7 @@ internal static partial class DataverseRegistration
         // its just-created parent: tier 1 upserts the step/custom-API rows, tier 2 writes their images, parameters,
         // response properties, secure config and state.
         ApplyUpsertsBatched(service, solutionUniqueName, pluginTypeIds, addedApis, changedApis, addedSteps, changedSteps,
-            customApiSolutionPrefix, secureConfigByStepKey, metadataCache, verbose, batchChunkSize, ref done);
+            customApiSolutionPrefix, secureConfigByStepKey, metadataCache, verbose, batchChunkSize, progress);
 
         // Stryker disable all : web resources are a work-in-progress preview, not mutation-gated yet
         // Safeguard: every web resource name must start with the solution's publisher prefix (its top-level folder),
@@ -148,7 +149,7 @@ internal static partial class DataverseRegistration
                     $"Web resource name(s) must start with the solution publisher prefix '{prefix}_' (the top-level folder is the prefix): {string.Join(", ", wrongPrefix)}");
             }
 
-            done++; // "validate web resource publisher prefix"
+            progress.CompleteNext(); // "validate web resource publisher prefix"
         }
 
         // Web resources: delete removed, upsert added/changed, then publish the writes so they go live. Create/
@@ -156,7 +157,7 @@ internal static partial class DataverseRegistration
         foreach (RegistrationItem item in removedWebResources)
         {
             DeleteWebResourceByName(service, TryGetString(item.Definition, "name") ?? item.Type, verbose);
-            done++;
+            progress.CompleteNext();
         }
 
         List<Guid> webResourcesToPublish = [];
@@ -166,13 +167,13 @@ internal static partial class DataverseRegistration
             foreach (RegistrationItem item in addedWebResources)
             {
                 webResourcesToPublish.Add(UpsertWebResource(svc, item.Definition, verbose));
-                done++;
+                progress.CompleteNext();
             }
 
             foreach (RegistrationChange change in changedWebResources)
             {
                 webResourcesToPublish.Add(UpsertWebResource(svc, change.After, verbose));
-                done++;
+                progress.CompleteNext();
             }
         }
         catch (Exception upsertEx)
@@ -194,16 +195,13 @@ internal static partial class DataverseRegistration
 
         if (hasWebResourceWrites)
         {
-            done++;
+            progress.CompleteNext();
         }
         // Stryker restore all
     }
     catch (Exception ex)
     {
-        string failed = done < planned.Count ? planned[done] : "(unknown operation)";
-        List<string> completed = planned.Take(done).ToList();
-        List<string> remaining = planned.Skip(done + 1).ToList();
-        foreach (string line in ApplyResumeReport.Build(failed, ex.Message, completed, remaining))
+        foreach (string line in progress.BuildReport(ex.Message))
         {
             Console.Error.WriteLine(line);
         }
@@ -264,6 +262,9 @@ internal static partial class DataverseRegistration
         service.Update(detach);
         LogOperation("custom-api", "detach", uniqueName, $"from {expectedType}", verbose);
     }
+    // "Zava.Plugins.AccountPlugin (main)": the plugin type plus the step key, when the step has one.
+    internal static string DescribeStepOperation(string pluginType, JsonElement definition) =>
+        TryGetString(definition, "stepKey") is { Length: > 0 } key ? $"{pluginType} ({key})" : pluginType;
 
     // Dataverse error code for the "Invalid plug-in registration stage" validation (captured live: the Web API
     // returns error code 0x80044184 for a step create/update at MainOperation). Matching on the code is
