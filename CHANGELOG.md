@@ -179,6 +179,16 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   and VELA019 skip compilations that reference neither the SDK nor Vela. The fluent-chain walk the analyzers and the
   generator each copied is now one shared, tested walker, so every rule sees parentheses and `!` the same way.
 
+### Changed (CLI, breaking)
+
+- **The legacy direct-assembly registration path is removed.** `apply` used to upload a bare plugin assembly and
+  create its plugin types itself when no plugin package was given. Every scanned input is a plugin package, so the
+  path was unreachable; the platform materializes the plugin types from the package. A plugin type that does not
+  appear after the package publish fails `apply` with `Plugin type not found in Dataverse after the plugin package
+  publish`.
+- **The scan no longer accepts a non-array `GetStepDefinitions()` result.** A single returned object used to be
+  wrapped into a one-element set (a pre-array framework shape); it now fails the scan with a clear message.
+
 ### Added (CLI)
 
 - **`--secure-config NAME=VALUE|NAME=@file`** (repeatable) on `plan`/`apply`/`inspect`, with the

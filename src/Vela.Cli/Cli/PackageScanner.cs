@@ -533,18 +533,21 @@ internal static class PackageScanner
         return false;
     }
 
-    if (result is System.Array arr)
+    // EntityPluginBase.GetStepDefinitions returns StepDefinition[]. A non-array result is not a Vela plugin (the
+    // former single-object fallback served a pre-array framework shape that no longer exists), so fail loudly.
+    if (result is not System.Array arr)
     {
-        definitions = arr.Cast<object>().ToArray();
-        if (definitions.Length == 0)
-        {
-            error = $"Method '{methodName}' returned an empty array.";
-            return false;
-        }
-        return true;
+        error = $"Method '{methodName}' must return an array of step definitions, but returned '{result.GetType().Name}'.";
+        return false;
     }
 
-    definitions = [result];
+    definitions = arr.Cast<object>().ToArray();
+    if (definitions.Length == 0)
+    {
+        error = $"Method '{methodName}' returned an empty array.";
+        return false;
+    }
+
     return true;
 }
 

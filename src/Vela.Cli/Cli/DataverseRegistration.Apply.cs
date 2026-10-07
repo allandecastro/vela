@@ -22,7 +22,7 @@ namespace Vela.Cli;
 /// <summary> Applies a registration diff: ordering, package/assembly/type sync, resume report. </summary>
 internal static partial class DataverseRegistration
 {
-    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, AssemblyPayload[] sourceAssemblyPayloads, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null, int batchChunkSize = DefaultBatchChunkSize)
+    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null, int batchChunkSize = DefaultBatchChunkSize)
 {
     // When a solution is given, route every create/update through it so all components (package, assembly, types,
     // steps, images, secure config, Custom APIs and their parameters) are added to it — not just the package.
@@ -97,22 +97,12 @@ internal static partial class DataverseRegistration
 
         HashSet<string> requiredPluginTypes = GetRequiredPluginTypeNames(diff);
         Dictionary<string, Guid> pluginTypeIds = GetPluginTypeIdByNameForAssemblies(service, diff.LocalAssemblies);
-        if (requiredPluginTypes.Any(x => !pluginTypeIds.ContainsKey(x)))
+        // The platform materializes plugin types from the published package, asynchronously. Every local input is a
+        // plugin package (the scan reads nothing else), so there is no direct assembly upload to fall back on: wait
+        // for the package's types, then fail below if any is still missing.
+        if (packagePayloads.Length > 0 && requiredPluginTypes.Any(x => !pluginTypeIds.ContainsKey(x)))
         {
-            if (packagePayloads.Length > 0)
-            {
-                WaitForRequiredPluginTypes(service, diff.LocalAssemblies, requiredPluginTypes);
-            }
-            else
-            {
-                EnsurePluginAssembliesForMissingTypes(svc, sourceAssemblyPayloads, requiredPluginTypes);
-                pluginTypeIds = GetPluginTypeIdByNameForAssemblies(service, diff.LocalAssemblies);
-                if (requiredPluginTypes.Any(x => !pluginTypeIds.ContainsKey(x)))
-                {
-                    EnsurePluginTypesForMissingEntries(svc, sourceAssemblyPayloads, requiredPluginTypes);
-                }
-            }
-
+            WaitForRequiredPluginTypes(service, diff.LocalAssemblies, requiredPluginTypes);
             pluginTypeIds = GetPluginTypeIdByNameForAssemblies(service, diff.LocalAssemblies);
         }
 
@@ -122,7 +112,7 @@ internal static partial class DataverseRegistration
             .ToArray();
         if (missingPluginTypes.Length > 0)
         {
-            throw new InvalidOperationException($"Plugin type not found in Dataverse after assembly sync: {string.Join(", ", missingPluginTypes)}");
+            throw new InvalidOperationException($"Plugin type not found in Dataverse after the plugin package publish:{string.Join(", ", missingPluginTypes)}");
         }
 
         done++; // publish + resolve plugin types
@@ -632,55 +622,6 @@ internal static partial class DataverseRegistration
     }
 }
 
-    internal static void EnsurePluginAssembliesForMissingTypes(IOrganizationService service, AssemblyPayload[] sourceAssemblyPayloads, HashSet<string> requiredPluginTypes)
-{
-    if (sourceAssemblyPayloads.Length == 0 || requiredPluginTypes.Count == 0)
-    {
-        return;
-    }
-
-    // Resolve the existing plugin-type ids once, not once per required type: the lookup issues a query pair per
-    // assembly, so calling it inside the Where predicate was O(requiredTypes x assemblies) round-trips.
-    Dictionary<string, Guid> existingTypeIds = GetPluginTypeIdByNameForAssemblies(
-        service, sourceAssemblyPayloads.Select(p => p.AssemblyName).ToArray());
-    HashSet<string> missingPluginTypes = new HashSet<string>(
-        requiredPluginTypes.Where(x => !existingTypeIds.ContainsKey(x)),
-        StringComparer.OrdinalIgnoreCase);
-    if (missingPluginTypes.Count == 0)
-    {
-        return;
-    }
-
-    // Fail fast if a new plugin type is being added under an unchanged assembly version — re-uploading the
-    // same version would leave Dataverse serving the cached (old) assembly, so the type would not be found.
-    foreach (AssemblyPayload payload in sourceAssemblyPayloads)
-    {
-        string[] newForAssembly = missingPluginTypes
-            .Where(t => string.Equals(t, payload.AssemblyName, StringComparison.OrdinalIgnoreCase)
-                || t.StartsWith(payload.AssemblyName + ".", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(t => t, StringComparer.Ordinal)
-            .ToArray();
-        GuardAgainstStaleAssemblyVersion(service, payload, newForAssembly);
-    }
-
-    foreach (AssemblyPayload payload in sourceAssemblyPayloads)
-    {
-        UpsertPluginAssembly(service, payload);
-    }
-
-    foreach (AssemblyPayload payload in sourceAssemblyPayloads)
-    {
-        HashSet<string> requiredForAssembly = new HashSet<string>(
-            missingPluginTypes.Where(typeName =>
-                string.Equals(typeName, payload.AssemblyName, StringComparison.OrdinalIgnoreCase) ||
-                typeName.StartsWith(payload.AssemblyName + ".", StringComparison.OrdinalIgnoreCase)),
-            StringComparer.OrdinalIgnoreCase);
-        if (requiredForAssembly.Count > 0)
-        {
-            WaitForPluginTypes(service, payload.AssemblyName, requiredForAssembly);
-        }
-    }
-}
 
     // Returns the names of source assemblies that already exist in the org but are NOT part of the target solution.
     // The registered pluginassembly name is the DLL's assembly name (unique per org), so two projects that build the
@@ -714,155 +655,9 @@ internal static partial class DataverseRegistration
         return service.RetrieveMultiple(query).Entities.Count > 0;
     }
 
-    internal static void UpsertPluginAssembly(IOrganizationService service, AssemblyPayload payload)
-{
-    if (!File.Exists(payload.AssemblyPath))
-    {
-        throw new FileNotFoundException($"Assembly payload file not found: {payload.AssemblyPath}", payload.AssemblyPath);
-    }
 
-    Entity? existing = GetPluginAssembly(service, payload.AssemblyName);
-    string content = Convert.ToBase64String(File.ReadAllBytes(payload.AssemblyPath));
-    AssemblyName assemblyInfo = AssemblyName.GetAssemblyName(payload.AssemblyPath);
-    string version = assemblyInfo.Version?.ToString() ?? "1.0.0.0";
-    string culture = string.IsNullOrWhiteSpace(assemblyInfo.CultureName) ? "neutral" : assemblyInfo.CultureName;
-    byte[]? tokenBytes = assemblyInfo.GetPublicKeyToken();
-    string publicKeyToken = tokenBytes == null || tokenBytes.Length == 0
-        ? "null"
-        : Convert.ToHexString(tokenBytes).ToLowerInvariant();
-    if (existing == null)
-    {
-        Entity create = new Entity("pluginassembly");
-        create["name"] = payload.AssemblyName;
-        create["content"] = content;
-        create["version"] = version;
-        create["culture"] = culture;
-        create["publickeytoken"] = publicKeyToken;
-        create["sourcetype"] = new OptionSetValue(0);
-        create["isolationmode"] = new OptionSetValue(2);
-        service.Create(create);
-        return;
-    }
 
-    // Skip a pure no-op update: identical content AND version would only bump modifiedon (re-uploading the same
-    // version is also a no-op for type registration, since Dataverse caches assemblies by version). Any real
-    // change to either still updates. The "new type + same version" stale-assembly trap is handled separately by
-    // GuardAgainstStaleAssemblyVersion.
-    Entity current = service.Retrieve("pluginassembly", existing.Id, new ColumnSet("content", "version"));
-    if (string.Equals(current.GetAttributeValue<string>("content") ?? string.Empty, content, StringComparison.Ordinal) &&
-        string.Equals(current.GetAttributeValue<string>("version") ?? string.Empty, version, StringComparison.Ordinal))
-    {
-        return;
-    }
 
-    Entity update = new Entity("pluginassembly")
-    {
-        Id = existing.Id
-    };
-    update["content"] = content;
-    update["version"] = version;
-    update["culture"] = culture;
-    update["publickeytoken"] = publicKeyToken;
-    service.Update(update);
-}
-
-    // Adding a new plugin type but re-uploading the assembly under the SAME version is the classic Dataverse
-    // trap: the platform caches plugin assemblies by version and keeps serving the old one, so the new type
-    // fails at runtime with "The plug-in type could not be found in the plug-in assembly". Catch it at apply.
-    internal static void GuardAgainstStaleAssemblyVersion(IOrganizationService service, AssemblyPayload payload, string[] newPluginTypes)
-{
-    if (newPluginTypes.Length == 0 || !File.Exists(payload.AssemblyPath))
-    {
-        return;
-    }
-
-    Entity? existing = GetPluginAssembly(service, payload.AssemblyName);
-    if (existing == null)
-    {
-        return; // first registration of this assembly — nothing cached to go stale
-    }
-
-    string liveVersion = service.Retrieve("pluginassembly", existing.Id, new ColumnSet("version"))
-        .GetAttributeValue<string>("version") ?? string.Empty;
-    string newVersion = AssemblyName.GetAssemblyName(payload.AssemblyPath).Version?.ToString() ?? string.Empty;
-    if (!string.Equals(liveVersion, newVersion, StringComparison.OrdinalIgnoreCase))
-    {
-        return; // version bumped — Dataverse will load the new assembly
-    }
-
-    throw new InvalidOperationException(
-        $"Assembly '{payload.AssemblyName}' registers new plugin type(s) [{string.Join(", ", newPluginTypes)}] but its " +
-        $"version is unchanged ({newVersion}). Dataverse caches plugin assemblies by version and would keep serving the " +
-        $"previously-registered assembly, so the new type(s) would fail at runtime with \"The plug-in type could not be " +
-        $"found in the plug-in assembly\". Bump the assembly version (AssemblyVersion) and rebuild, then re-run apply. " +
-        $"('vela init' scaffolds an auto-incrementing AssemblyVersion to prevent this.)");
-}
-
-    internal static void WaitForPluginTypes(IOrganizationService service, string assemblyName, HashSet<string> requiredPluginTypes)
-{
-    // Plugin types are materialized asynchronously by the platform after an assembly upload;
-    // poll until they appear or the timeout elapses.
-    const int pluginTypeSyncTimeoutSeconds = 30;
-    const int pollIntervalMs = 2000;
-
-    DateTime deadline = DateTime.UtcNow.AddSeconds(pluginTypeSyncTimeoutSeconds);
-    while (DateTime.UtcNow < deadline)
-    {
-        Entity? pluginAssembly = GetPluginAssembly(service, assemblyName);
-        if (pluginAssembly != null)
-        {
-            HashSet<string> availablePluginTypes = new HashSet<string>(GetPluginTypes(service, pluginAssembly.Id).Values, StringComparer.OrdinalIgnoreCase);
-            if (requiredPluginTypes.All(availablePluginTypes.Contains))
-            {
-                return;
-            }
-        }
-
-        Thread.Sleep(pollIntervalMs);
-    }
-}
-
-    internal static void EnsurePluginTypesForMissingEntries(IOrganizationService service, AssemblyPayload[] sourceAssemblyPayloads, HashSet<string> requiredPluginTypes)
-{
-    Dictionary<string, Guid> availablePluginTypeIds = GetPluginTypeIdByNameForAssemblies(service, sourceAssemblyPayloads.Select(x => x.AssemblyName).ToArray());
-    HashSet<string> missingPluginTypes = new HashSet<string>(
-        requiredPluginTypes.Where(x => !availablePluginTypeIds.ContainsKey(x)),
-        StringComparer.OrdinalIgnoreCase);
-    if (missingPluginTypes.Count == 0)
-    {
-        return;
-    }
-
-    foreach (AssemblyPayload payload in sourceAssemblyPayloads)
-    {
-        string[] assemblyMissingTypes = missingPluginTypes
-            .Where(typeName =>
-                string.Equals(typeName, payload.AssemblyName, StringComparison.OrdinalIgnoreCase) ||
-                typeName.StartsWith(payload.AssemblyName + ".", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(x => x, StringComparer.Ordinal)
-            .ToArray();
-        if (assemblyMissingTypes.Length == 0)
-        {
-            continue;
-        }
-
-        Entity? assembly = GetPluginAssembly(service, payload.AssemblyName);
-        if (assembly == null)
-        {
-            continue;
-        }
-
-        HashSet<string> existingTypeNames = new HashSet<string>(GetPluginTypes(service, assembly.Id).Values, StringComparer.OrdinalIgnoreCase);
-        foreach (string missingTypeName in assemblyMissingTypes)
-        {
-            if (!existingTypeNames.Contains(missingTypeName))
-            {
-                CreatePluginType(service, assembly.Id, missingTypeName);
-                existingTypeNames.Add(missingTypeName);
-            }
-        }
-    }
-}
 
     internal static void WaitForRequiredPluginTypes(IOrganizationService service, string[] localAssemblies, HashSet<string> requiredPluginTypes)
 {
@@ -883,15 +678,6 @@ internal static partial class DataverseRegistration
     }
 }
 
-    internal static void CreatePluginType(IOrganizationService service, Guid pluginAssemblyId, string typeName)
-{
-    Entity pluginType = new Entity("plugintype");
-    pluginType["pluginassemblyid"] = new EntityReference("pluginassembly", pluginAssemblyId);
-    pluginType["typename"] = typeName;
-    pluginType["name"] = typeName;
-    pluginType["friendlyname"] = typeName.Split('.').LastOrDefault() ?? typeName;
-    service.Create(pluginType);
-}
 
     internal static Dictionary<string, Guid> GetPluginTypeIdByNameForAssemblies(IOrganizationService service, string[] sourceAssemblies)
 {

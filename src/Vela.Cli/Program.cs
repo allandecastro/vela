@@ -370,7 +370,7 @@ static int ExecuteApply(SharedOptions options, JsonSerializerOptions jsonOptions
 
         try
         {
-            ApplyDiff(service, diff, local.SourceAssemblyPayloads, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize);
+            ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize);
         }
         catch (Exception applyEx) when (applyEx is not DataverseConnectionException)
         {

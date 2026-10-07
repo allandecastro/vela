@@ -359,7 +359,7 @@ public sealed class PackageScannerScanTests : IDisposable
         Assert.Contains("api-boom", error);
     }
 
-    // A plugin whose definition method returns a single (non-array) object → wrapped into a one-element set.
+    // A plugin whose definition method returns a single (non-array) object: the legacy single-object shape.
     public sealed class SingleDefinitionPlugin : PackageScannerTests.EntityPluginBase
     {
         public SingleDefinitionPlugin(string a, string b) { _ = a; _ = b; }
@@ -367,12 +367,13 @@ public sealed class PackageScannerScanTests : IDisposable
     }
 
     [Fact]
-    public void TryGetDefinitions_wraps_single_non_array_result()
+    public void TryGetDefinitions_rejects_a_single_non_array_result()
     {
         bool ok = PackageScanner.TryGetDefinitions(typeof(SingleDefinitionPlugin), "GetStepDefinitions", out object[]? defs, out string? error);
-        Assert.True(ok);
-        Assert.Null(error);
-        Assert.Single(defs!);
+        Assert.False(ok);
+        Assert.Null(defs);
+        Assert.Contains("must return an array", error);
+        Assert.Contains("GetStepDefinitions", error);
     }
 
     // An abstract subclass of a matching base is still not an instantiable plugin type.

@@ -107,7 +107,7 @@ public class ApplyEngineTests
 
         RegistrationDiff diff = DiffWithAddedSteps("dv-a", "dv-b", "dv-c");
 
-        DataverseRegistration.ApplyDiff(mock.Object, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(mock.Object, diff, [], null, [], verbose: false);
 
         Assert.Equal(1, sdkMessageQueries);
     }
@@ -160,7 +160,7 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false,
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false,
             secureConfigByStepKey: new Dictionary<string, string> { [PluginType + ":stepkey:dv-x"] = "s-cfg" });
 
         // Unsecure config is written directly onto the step entity.
@@ -209,7 +209,7 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
 
         // The batch was attempted (and threw), then the step was created through the one-by-one fallback.
         Assert.NotEmpty(svc.Batches);
@@ -240,7 +240,7 @@ public class ApplyEngineTests
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
 
         Assert.Contains(("sdkmessageprocessingstep", stepId), svc.Deleted);
     }
@@ -432,7 +432,7 @@ public class ApplyEngineTests
         try
         {
             Exception ex = Assert.ThrowsAny<Exception>(() =>
-                DataverseRegistration.ApplyDiff(mock.Object, diff, [], [], null, [], verbose: false));
+                DataverseRegistration.ApplyDiff(mock.Object, diff, [], null, [], verbose: false));
             Assert.Contains("simulated dataverse failure", ex.Message);
         }
         finally
@@ -502,7 +502,7 @@ public class ApplyEngineTests
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {
@@ -546,7 +546,7 @@ public class ApplyEngineTests
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
         }
         finally
         {
