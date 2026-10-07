@@ -1058,23 +1058,6 @@ internal static class AddCommand
         "--force", "--json", "--bound", "--global", "--function", "--action", "--interactive", "-i", "--help", "-h",
     };
 
-    private static void PrintAddUsage()
-    {
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  vela add plugin <Name> --entity <ModelType> [--message <Message>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--filtering-attributes|--filter <Col1,Col2>] [--project <csproj>] [--force] [--json]");
-        Console.WriteLine("  vela add service <Name> --entity <ModelType> [--project <csproj>] [--force] [--json]");
-        Console.WriteLine("  vela add customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--prefix <publisherprefix>] [--project <csproj>] [--force] [--json]");
-        Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--message <Message>] [--prefix <publisherprefix>] [--project <csproj>] [--force] [--json]");
-        Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--filtering-attributes|--filter <Col1,Col2>] [--project <csproj>] [--json]");
-        Console.WriteLine("  vela add form-script <entity> [--project <web-resources dir>] [--force]   (preview)");
-        Console.WriteLine("  vela add ribbon-script <entity> [--project <web-resources dir>] [--force] (preview, ribbon commands)");
-        Console.WriteLine("  vela add --interactive            # guided wizard");
-        Console.WriteLine();
-        Console.WriteLine("Generates a single file into an existing project, inferring namespaces from its RootNamespace.");
-        Console.WriteLine("A service scaffolds a table-scoped interface + implementation; omit --entity on a Custom API for a global (unbound) one.");
-        Console.WriteLine("Create/Update(+Multiple) steps need --filtering-attributes. A Custom API is named <publisherprefix>_<Name>: --prefix, else the");
-        Console.WriteLine("project's VelaPublisherPrefix (vela init --publisher-prefix), else the project prefix.");
-        Console.WriteLine("Run 'vela add test' inside your test project (RootNamespace ending in .Tests); <Name> is the class under test.");
-        Console.WriteLine("'vela add step' edits an existing handler-based (multi-step) plugin, adding a step + handler method.");
-    }
+    // The add help comes from the command table, like every other command's.
+    private static void PrintAddUsage() => CliCommands.PrintCommandHelp("add");
 }
