@@ -349,6 +349,34 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Contains("apply failed mid-run", _error.ToString());
     }
 
+    [Fact]
+    public void Plan_with_a_solution_lists_an_unchanged_component_missing_from_it()
+    {
+        int exit = Run("plan", Options(solution: "ZavaSales", detailedExitCode: true), Host(Org(), Local()));
+
+        Assert.Equal(CliExitCodes.ExitChangesPending, exit);
+        JsonElement json = StdoutJson();
+        Assert.True(json.GetProperty("hasChanges").GetBoolean());
+        JsonElement op = Assert.Single(json.GetProperty("operations").EnumerateArray());
+        Assert.Equal("add-to-solution", op.GetProperty("action").GetString());
+        Assert.Equal("assembly", op.GetProperty("kind").GetString());
+        Assert.Equal("Zava.Plugins", op.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void Apply_with_a_solution_adds_the_unchanged_component_to_it()
+    {
+        FakeOrgService org = Org();
+
+        int exit = Run("apply", Options(solution: "ZavaSales", autoApprove: true), Host(org, Local()));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        var request = Assert.IsType<Microsoft.Crm.Sdk.Messages.AddSolutionComponentRequest>(Assert.Single(org.Executed, r => r is Microsoft.Crm.Sdk.Messages.AddSolutionComponentRequest));
+        Assert.Equal(DataverseRegistration.PluginAssemblyComponentType, request.ComponentType);
+        Assert.Equal("ZavaSales", request.SolutionUniqueName);
+        Assert.Equal(1, StdoutJson().GetProperty("executed").GetProperty("addedToSolution").GetInt32());
+    }
+
     // ---- failures ----------------------------------------------------------------------------------------------
 
     [Fact]

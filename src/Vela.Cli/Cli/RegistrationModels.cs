@@ -50,7 +50,7 @@ public static class MachineOutput
 /// which after a successful apply is the post-apply remaining diff (all zero). Present only on the <c>apply-execute</c>
 /// JSON so a script/agent reads the executed counts directly instead of parsing the free-text notes.
 /// </summary>
-public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool PackageRepublished, ExecutedByKind[] ByKind)
+public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool PackageRepublished, ExecutedByKind[] ByKind, int AddedToSolution = 0)
 {
     /// <summary>Builds the executed counts (totals + per-kind breakdown) from the PRE-apply diff.</summary>
     public static ExecutedCounts FromDiff(RegistrationDiff diff, bool packageRepublished)

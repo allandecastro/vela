@@ -152,9 +152,17 @@ internal static class PlanApplyCommand
             diagnostics = [.. diagnostics, .. DataverseRegistration.ComputeCustomApiPrefixDiagnostics(solutionPrefix, customApiNames)];
         }
 
-        string[] info = [.. local.Info ?? [], .. current.Info ?? []];
-        return BuildPlanPreview(mode, options.Environment, diff, diagnostics, current.Diagnostics, packageActions, unmanaged, info);
+        List<string> info = [.. local.Info ?? [], .. current.Info ?? []];
+        IReadOnlyList<SolutionMembershipAction> membership = MissingFromSolution(service, local, options, info);
+        return BuildPlanPreview(mode, options.Environment, diff, diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership);
     }
+
+    // 3. Solution membership (--solution only): a component that did not change is never written, so it was never
+    //    added to the solution by the SolutionUniqueName request parameter. Listed as add-to-solution operations.
+    private static IReadOnlyList<SolutionMembershipAction> MissingFromSolution(IOrganizationService service, RegistrationState local, SharedOptions options, List<string> info) =>
+        string.IsNullOrWhiteSpace(options.SolutionUniqueName)
+            ? []
+            : DataverseRegistration.ComputeSolutionMembershipActions(service, options.SolutionUniqueName!, local.SourceAssemblies, local.PackagePayloads, local.UnmanagedPluginTypes, info);
 
     private static int RunPlan(IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host, List<string> tempDirectories)
     {
@@ -225,9 +233,20 @@ internal static class PlanApplyCommand
                 return ExitSuccess;
         }
 
+        int addedToSolution;
         try
         {
             DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize);
+
+            // Recomputed after the writes: what apply created or updated is already in the solution, a deleted
+            // component is gone, and what remains is the unchanged components to add.
+            IReadOnlyList<SolutionMembershipAction> missing = MissingFromSolution(service, local, options, []);
+            if (missing.Count > 0)
+            {
+                DataverseRegistration.AddComponentsToSolution(service, options.SolutionUniqueName!, missing, options.Verbose);
+            }
+
+            addedToSolution = missing.Count;
         }
         catch (Exception applyEx) when (applyEx is not DataverseConnectionException)
         {
@@ -258,7 +277,7 @@ internal static class PlanApplyCommand
                 $"Executed operations: create={diff.Added.Length}, update={diff.Changed.Length}, delete={diff.Removed.Length}",
             ],
             // What was DONE, from the pre-apply diff: Summary above is the post-apply remaining diff (0 on success).
-            Executed = ExecutedCounts.FromDiff(diff, packageNeedsPublish),
+            Executed = ExecutedCounts.FromDiff(diff, packageNeedsPublish) with { AddedToSolution = addedToSolution },
         };
 
         if (FailsStrict(options, result.Diagnostics, afterApply: true, out strictExit))
@@ -273,7 +292,8 @@ internal static class PlanApplyCommand
             writer.WriteLine(
                 $"Executed against {options.Environment ?? "Dataverse"}: {diff.Added.Length} created, " +
                 $"{diff.Changed.Length} updated, {diff.Removed.Length} deleted" +
-                (packageNeedsPublish ? ", plugin package re-published" : string.Empty) + ".");
+                (packageNeedsPublish ? ", plugin package re-published" : string.Empty) +
+                (addedToSolution > 0 ? $", {addedToSolution} component(s) added to solution '{options.SolutionUniqueName}'" : string.Empty) + ".");
             if (result.HasChanges)
             {
                 // Unexpected: the environment still differs after a successful apply - surface it.

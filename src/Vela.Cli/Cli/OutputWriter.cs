@@ -352,7 +352,7 @@ internal static class OutputWriter
         return baseName;
     }
 
-    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null, string[]? info = null)
+    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null, string[]? info = null, IReadOnlyList<SolutionMembershipAction>? membership = null)
     {
         List<ApplyOperation> operations = [];
         operations.AddRange(diff.Added.Select(item => new ApplyOperation("create", item.Kind, item.Type, "Exists locally but not in Dataverse.")));
@@ -373,10 +373,15 @@ internal static class OutputWriter
                 ? "Plugin package is not in Dataverse; apply will create it."
                 : "Plugin package version or content differs from Dataverse; apply will republish it.")));
 
+        // Unchanged components that are not yet in --solution (SolutionMembershipAction): apply adds them.
+        IReadOnlyList<SolutionMembershipAction> missingFromSolution = membership ?? [];
+        operations.AddRange(missingFromSolution.Select(action => new ApplyOperation(
+            "add-to-solution", action.Kind, action.Name, "Exists in Dataverse but is not in the target solution; apply will add it.")));
+
         return new PlanPreview(
             Mode: mode,
             Environment: environment,
-            HasChanges: diff.Summary.Added > 0 || diff.Summary.Removed > 0 || diff.Summary.Changed > 0 || packages.Count > 0,
+            HasChanges: diff.Summary.Added > 0 || diff.Summary.Removed > 0 || diff.Summary.Changed > 0 || packages.Count > 0 || missingFromSolution.Count > 0,
             Summary: diff.Summary,
             Operations: operations.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
             Diff: diff,

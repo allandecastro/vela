@@ -318,6 +318,12 @@ internal static partial class DataverseRegistration
 
     internal static void EnsurePluginPackages(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose)
 {
+    // Nothing to publish (a web-resource-only run, or a run that only fixes solution membership): no prefix lookup.
+    if (packagePayloads.Length == 0)
+    {
+        return;
+    }
+
     EnsurePluginPackagesImportable(packagePayloads, solutionUniqueName);
 
     string? solutionPrefix = string.IsNullOrWhiteSpace(solutionUniqueName)

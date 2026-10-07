@@ -598,6 +598,19 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void EnsurePluginPackages_without_packages_does_not_resolve_the_solution_prefix()
+    {
+        // A run that only fixes solution membership (or deploys web resources) has no package: no solution lookup,
+        // so an unknown/irrelevant solution cannot fail the publish phase.
+        var svc = new TestSupport.FakeOrgService();
+
+        DataverseRegistration.EnsurePluginPackages(svc, [], "acme_solution", new List<string>(), verbose: false);
+
+        Assert.Empty(svc.Queries);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
     public void EnsurePluginPackages_without_solution_and_unprefixed_name_throws()
     {
         // An unprefixed package (e.g. the project name "Zava.Plugins") can't import without a --solution to source

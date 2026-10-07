@@ -207,6 +207,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **`--solution` now also holds the components that did not change.** A create or update lands in the solution,
+  but a step, Custom API, plugin assembly or package deployed earlier (without `--solution`, or into another
+  solution) was never written again and so never added: the solution exported without it. `plan --solution` lists
+  each such component as an `add-to-solution` operation, and `apply` adds it (`AddSolutionComponent`, without
+  required components); `executed.addedToSolution` counts them.
+- **`--packages-dir` with several versions of one package scans only the newest.** Both versions were scanned, so
+  every step appeared twice (failing with a misleading "Duplicate local step key"), and the published package was
+  whichever the disk listed first. The highest version (NuGet ordering) is kept and each skipped file is named on
+  stderr.
 - **`--strict` no longer fails the first deployment.** "Plugin assembly ... not found in Dataverse" (and "no plugin
   types found") were warnings, so `plan --strict` failed on every empty environment. They are now `info`; rank
   collisions, missing secure-config values and publisher-prefix mismatches are still warnings.
