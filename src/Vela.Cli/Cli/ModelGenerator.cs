@@ -33,7 +33,6 @@ public static class ModelGenerator
             throw new ArgumentException("A target namespace is required.", nameof(options));
         }
 
-        Dictionary<string, OptionSetMetadata> globals = new Dictionary<string, OptionSetMetadata>(StringComparer.Ordinal);
         HashSet<string> features = new HashSet<string>(StringComparer.Ordinal);
 
         EntityMetadata[] ordered = entities
@@ -45,6 +44,10 @@ public static class ModelGenerator
         // to the target class. A relationship whose target table is not in this batch is skipped (its class would
         // not exist), keeping the generated code compilable.
         Dictionary<string, string> logicalToClass = ordered.ToDictionary(e => e.LogicalName, ClassName, StringComparer.Ordinal);
+
+        // Global enums share the namespace (and the output folder) with the table classes, so a global choice whose
+        // name matches a table class - even only by case, which collides as a file on Windows/macOS - is suffixed.
+        GlobalEnumSet globals = new GlobalEnumSet(logicalToClass.Values);
 
         List<GeneratedModel> files = ordered
             .Select(e => new GeneratedModel($"{ClassName(e)}.cs", GenerateOne(e, options, globals, features, logicalToClass)))
@@ -80,7 +83,7 @@ public static class ModelGenerator
     private const string LookupTargetsFeature = "lookupTargets";
     private const string RelationshipSchemaNameFeature = "relationshipSchemaName";
 
-    private static string GenerateOne(EntityMetadata entity, ModelGenOptions options, IDictionary<string, OptionSetMetadata> globals, ISet<string> features, IReadOnlyDictionary<string, string> logicalToClass)
+    private static string GenerateOne(EntityMetadata entity, ModelGenOptions options, GlobalEnumSet globals, ISet<string> features, IReadOnlyDictionary<string, string> logicalToClass)
     {
         string className = ClassName(entity);
         string logicalName = entity.LogicalName;
@@ -166,7 +169,7 @@ public static class ModelGenerator
         return sb.ToString();
     }
 
-    private static void AppendProperty(StringBuilder sb, AttributeMetadata attribute, string primaryId, ModelGenOptions options, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals, ISet<string> features)
+    private static void AppendProperty(StringBuilder sb, AttributeMetadata attribute, string primaryId, ModelGenOptions options, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, GlobalEnumSet globals, ISet<string> features)
     {
         string logical = attribute.LogicalName;
         string name = UniqueName(PropertyName(attribute), usedNames);
@@ -466,7 +469,7 @@ public static class ModelGenerator
     // Choice attributes (Picklist/State/Status) with an option set become strongly-typed enums: local sets are
     // nested in the table class, global sets are shared standalone enums. Returns the enum type name, or null to
     // fall back to OptionSetValue.
-    private static string? ResolveEnum(AttributeMetadata attribute, string propertyName, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals)
+    private static string? ResolveEnum(AttributeMetadata attribute, string propertyName, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, GlobalEnumSet globals)
     {
         if (attribute.AttributeType is not (AttributeTypeCode.Picklist or AttributeTypeCode.State or AttributeTypeCode.Status))
         {
@@ -483,7 +486,7 @@ public static class ModelGenerator
 
     // Registers an option set as an enum (global → shared/deduped, local → nested) and returns the enum type name.
     // Shared by single choices and multi-select.
-    private static string RegisterEnum(OptionSetMetadata optionSet, string propertyName, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, IDictionary<string, OptionSetMetadata> globals)
+    private static string RegisterEnum(OptionSetMetadata optionSet, string propertyName, HashSet<string> usedNames, List<(string, OptionSetMetadata)> localEnums, GlobalEnumSet globals)
     {
         if (optionSet.IsGlobal == true)
         {
@@ -502,7 +505,7 @@ public static class ModelGenerator
             string baseName = CSharpIdentifier.EscapeKeyword(Pascalize(optionSet.Name ?? propertyName.TrimStart('@')));
             string globalName = baseName;
             int suffix = 2;
-            while (globals.ContainsKey(globalName))
+            while (globals.ContainsKey(globalName) || globals.Reserved.Contains(globalName.TrimStart('@')))
             {
                 globalName = baseName + suffix.ToString(CultureInfo.InvariantCulture);
                 suffix++;
@@ -846,6 +849,20 @@ public static class ModelGenerator
         return constraints.Count == 0
             ? string.Join(" — ", parts)
             : string.Join(" — ", parts) + $" ({string.Join("; ", constraints)})";
+    }
+
+    // The global option sets registered so far (keyed by enum name, case-insensitively, so two names that differ only
+    // by case never become two files that collide on a case-insensitive file system), plus the type names they must
+    // not take: the table classes generated alongside them.
+    private sealed class GlobalEnumSet : Dictionary<string, OptionSetMetadata>
+    {
+        public GlobalEnumSet(IEnumerable<string> reservedTypeNames)
+            : base(StringComparer.OrdinalIgnoreCase)
+        {
+            Reserved = new HashSet<string>(reservedTypeNames.Select(name => name.TrimStart('@')), StringComparer.OrdinalIgnoreCase);
+        }
+
+        public HashSet<string> Reserved { get; }
     }
 
     private static string ClassName(EntityMetadata entity) =>

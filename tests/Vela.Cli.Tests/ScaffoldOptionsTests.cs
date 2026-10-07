@@ -405,4 +405,28 @@ public class ScaffoldOptionsTests
         Assert.Equal(expected, prefix);
         Assert.True(ScaffoldOptions.IsValidPrefix(prefix));
     }
+
+    [Fact]
+    public void DefaultCoreVersion_IsTheLatestReleasedFramework()   // A-78: it had drifted to 0.28.0
+    {
+        // The offline fallback must be a published framework version, and the newest one: the CHANGELOG's latest
+        // framework release heading. Releasing a framework version without bumping the constant fails here.
+        string? dir = System.AppContext.BaseDirectory;
+        string? changelog = null;
+        for (int i = 0; i < 12 && dir is not null && changelog is null; i++)
+        {
+            string candidate = System.IO.Path.Combine(dir, "CHANGELOG.md");
+            changelog = System.IO.File.Exists(candidate) ? candidate : null;
+            dir = System.IO.Path.GetDirectoryName(dir);
+        }
+
+        Assert.NotNull(changelog);
+        System.Text.RegularExpressions.Match latest = System.Text.RegularExpressions.Regex.Match(
+            System.IO.File.ReadAllText(changelog!),
+            @"^## \[(?<v>\d+\.\d+\.\d+)\] - \S+ \([^)]*Vela\.Plugins[^)]*\)",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        Assert.True(latest.Success, "No framework release heading found in CHANGELOG.md.");
+        Assert.Equal(latest.Groups["v"].Value, ScaffoldOptions.DefaultCoreVersion);
+    }
 }

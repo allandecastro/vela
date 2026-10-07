@@ -166,17 +166,9 @@ public class ProjectScaffolderTests
             string userFile = Path.Combine(integrations, "Account", "Plugins", "Mine.cs");
             File.WriteAllText(userFile, "// mine");
 
-            TextWriter original = Console.Out;
-            StringWriter captured = new();
-            Console.SetOut(captured);
-            try
-            {
-                Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, integrations: false, force: true) with { Json = true }));
-            }
-            finally
-            {
-                Console.SetOut(original);
-            }
+            // Drive the write pass directly (no console capture, which would race the parallel tests).
+            List<ProjectScaffolder.PlannedFile> plan = ProjectScaffolder.Plan(Options(temp, integrations: false, force: true), out _);
+            ProjectScaffolder.WriteOutcome outcome = ProjectScaffolder.WritePlan(Path.Combine(temp, "ZavaSales"), plan);
 
             // Generated files are gone (including the csproj), the user's file and its folder survive, and the
             // solution no longer lists the project.
@@ -185,8 +177,7 @@ public class ProjectScaffolderTests
             Assert.Equal("// mine", File.ReadAllText(userFile));
             Assert.DoesNotContain("Zava.Integrations.csproj", File.ReadAllText(Path.Combine(temp, "ZavaSales", "ZavaSales.sln")));
 
-            using System.Text.Json.JsonDocument report = System.Text.Json.JsonDocument.Parse(captured.ToString());
-            string[] removed = report.RootElement.GetProperty("removed").EnumerateArray().Select(e => e.GetString()!).ToArray();
+            string[] removed = outcome.Removed.ToArray();
             Assert.Contains("src/Zava.Integrations/Zava.Integrations.csproj", removed);
             Assert.DoesNotContain(removed, r => r.EndsWith("Mine.cs", StringComparison.Ordinal));
         });
