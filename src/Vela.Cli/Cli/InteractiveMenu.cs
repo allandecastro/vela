@@ -210,20 +210,27 @@ internal static class InteractiveMenu
         string output = AnsiConsole.Prompt(
             new TextPrompt<string>("Output directory:").DefaultValue("."));
 
-        bool integrations = AnsiConsole.Confirm("Generate an Integrations project?", true);
+        // `vela init` is minimal by default; the demo-only Integrations/ConsoleApp projects come with --samples.
+        bool samples = AnsiConsole.Confirm("Include the sample code (demo plugins, Custom APIs, Integrations and ConsoleApp projects)?", false);
+        bool integrations = samples && AnsiConsole.Confirm("Generate an Integrations project?", true);
         bool tests = AnsiConsole.Confirm("Generate a unit-test project (Vela.Testing)?", true);
-        bool console = AnsiConsole.Confirm("Generate a ConsoleApp project?", true);
+        bool console = samples && AnsiConsole.Confirm("Generate a ConsoleApp project?", true);
 
-        return ComposeInitArgs(name, prefix, output, integrations, tests, console);
+        return ComposeInitArgs(name, prefix, output, integrations, tests, console, samples);
     }
 
-    /// <summary>Builds the <c>init</c> argument array from collected inputs. Pure, for testability.</summary>
-    public static string[] ComposeInitArgs(string name, string prefix, string output, bool integrations, bool tests, bool console)
+    /// <summary>Builds the <c>init</c> argument array from collected inputs. Pure, for testability. The Integrations
+    /// and ConsoleApp choices only apply with <paramref name="samples"/> (they are demo-only projects).</summary>
+    public static string[] ComposeInitArgs(string name, string prefix, string output, bool integrations, bool tests, bool console, bool samples = false)
     {
         List<string> args = ["init", "--name", name, "--prefix", prefix, "--output", output];
-        if (!integrations)
+        if (samples)
         {
-            args.Add("--no-integrations");
+            args.Add("--samples");
+            if (!integrations)
+            {
+                args.Add("--no-integrations");
+            }
         }
 
         if (!tests)
@@ -231,7 +238,7 @@ internal static class InteractiveMenu
             args.Add("--no-tests");
         }
 
-        if (!console)
+        if (samples && !console)
         {
             args.Add("--no-console");
         }

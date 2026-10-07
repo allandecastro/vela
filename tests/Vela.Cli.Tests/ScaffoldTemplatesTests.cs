@@ -14,7 +14,8 @@ public class ScaffoldTemplatesTests
         IncludeTests: true,
         CoreVersion: "1.0.0",
         Force: false,
-        Interactive: false);
+        Interactive: false,
+        IncludeSamples: true);
 
     [Fact]
     public void ApiPrefix_IsLowerCasedAndDotless()
@@ -117,9 +118,13 @@ public class ScaffoldTemplatesTests
         Assert.Contains("'$(GITHUB_ACTIONS)' != 'true'", signed);
         Assert.Contains("'$(TF_BUILD)' != 'True'", signed);
         // Both certificate sources are wired: fingerprint (store) and a .pfx file (credential or password).
-        Assert.Contains("--fingerprint $(PluginSigningFingerprint)", signed);
-        Assert.Contains("--pfx-credential $(PluginSigningCredential)", signed);
-        Assert.Contains("--pfx-password $(PluginSigningPassword)", signed);
+        // A-65: every MSBuild property is quoted, and the password reaches vela through an environment variable,
+        // never its command line.
+        Assert.Contains("--fingerprint &quot;$(PluginSigningFingerprint)&quot;", signed);
+        Assert.Contains("--pfx-credential &quot;$(PluginSigningCredential)&quot;", signed);
+        Assert.Contains("EnvironmentVariables=\"VELA_SIGN_PFX_PASSWORD=$([MSBuild]::Escape('$(PluginSigningPassword)'))\"", signed);
+        Assert.Contains("--pfx-password-env VELA_SIGN_PFX_PASSWORD", signed);
+        Assert.DoesNotContain("--pfx-password $(", signed);
 
         // Both must be well-formed XML — guards against, e.g., a '--' sequence inside an XML comment.
         System.Xml.Linq.XDocument.Parse(plain);
@@ -394,7 +399,7 @@ public class ScaffoldTemplatesTests
 
         string unsigned = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = false });
         Assert.Contains("## Signing the plugin package", unsigned);
-        Assert.Contains("vela init <name> --managed-identity", unsigned);
+        Assert.Contains("vela init <name> --samples --managed-identity --force", unsigned);
         Assert.DoesNotContain("SignPluginPackage", unsigned);
     }
 

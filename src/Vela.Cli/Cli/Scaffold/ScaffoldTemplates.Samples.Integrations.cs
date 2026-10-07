@@ -101,7 +101,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
 }
 """;
 
-    public static string ContactExportCustomApi(string prefix) =>
+    public static string ContactExportCustomApi(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Integrations.Contact.CustomApis
 {
@@ -117,7 +117,7 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{ApiPrefix(prefix)}}_ContactExport")
+            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactExport")
                 .DisplayName("Export Contact")
                 .Description("Exports the bound contact to an external system.")
                 .AsAction()
@@ -139,7 +139,7 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     /// <summary>Request parameters for <see cref="ContactExportCustomApi"/>.</summary>
     public sealed class ContactExportRequest : CustomApiRequest
     {
-        public ContactExportRequest() : base("{{ApiPrefix(prefix)}}_ContactExport")
+        public ContactExportRequest() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactExport")
         {
         }
 
@@ -153,7 +153,7 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     /// <summary>Response parameters for <see cref="ContactExportCustomApi"/>.</summary>
     public sealed class ContactExportResponse : CustomApiResponse
     {
-        public ContactExportResponse() : base("{{ApiPrefix(prefix)}}_ContactExport")
+        public ContactExportResponse() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactExport")
         {
         }
 
@@ -166,7 +166,7 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
 }
 """;
 
-    public static string AccountReconcileCustomApi(string prefix) =>
+    public static string AccountReconcileCustomApi(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Integrations.Account.CustomApis
 {
@@ -182,7 +182,7 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{ApiPrefix(prefix)}}_AccountReconcile")
+            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountReconcile")
                 .DisplayName("Reconcile Account")
                 .Description("Reconciles the bound account with an external system.")
                 .AsAction()
@@ -204,7 +204,7 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     /// <summary>Request parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
     public sealed class AccountReconcileRequest : CustomApiRequest
     {
-        public AccountReconcileRequest() : base("{{ApiPrefix(prefix)}}_AccountReconcile")
+        public AccountReconcileRequest() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountReconcile")
         {
         }
 
@@ -218,7 +218,7 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     /// <summary>Response parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
     public sealed class AccountReconcileResponse : CustomApiResponse
     {
-        public AccountReconcileResponse() : base("{{ApiPrefix(prefix)}}_AccountReconcile")
+        public AccountReconcileResponse() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountReconcile")
         {
         }
 
@@ -231,7 +231,7 @@ namespace {{prefix}}.Integrations.Account.CustomApis
 }
 """;
 
-    public static string IntegrationHeartbeatCustomApi(string prefix) =>
+    public static string IntegrationHeartbeatCustomApi(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Integrations.GlobalCustomApis
 {
@@ -243,7 +243,7 @@ namespace {{prefix}}.Integrations.GlobalCustomApis
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{ApiPrefix(prefix)}}_IntegrationHeartbeat", Handle)
+            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_IntegrationHeartbeat", Handle)
                 .DisplayName("Integration Heartbeat")
                 .Description("Returns the integration status.")
                 .AsFunction()

@@ -85,25 +85,123 @@ public class ScaffoldOptionsTests
         Assert.Equal("ZavaSales", options.SolutionName);
         Assert.Equal("ZavaSales", options.Prefix);
         Assert.Equal(".", options.OutputDirectory);
+        // A-53: minimal by default - no samples, no demo-only projects, but the (empty) test project.
+        Assert.False(options.IncludeSamples);
+        Assert.False(options.IncludeConsole);
+        Assert.False(options.IncludeIntegrations);
+        Assert.True(options.IncludeTests);
+        Assert.Equal(ScaffoldOptions.DefaultCoreVersion, options.CoreVersion);
+        Assert.False(options.CoreVersionPinned);
+        Assert.Null(options.PublisherPrefix);
+        Assert.False(options.Force);
+    }
+
+    [Fact]
+    public void TryParse_Samples_EnablesTheDemosAndTheirProjects()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--samples"], out ScaffoldOptions options, out _));
+
+        Assert.True(options.IncludeSamples);
         Assert.True(options.IncludeConsole);
         Assert.True(options.IncludeIntegrations);
-        Assert.True(options.IncludeDemos);
-        Assert.Equal(ScaffoldOptions.DefaultCoreVersion, options.CoreVersion);
-        Assert.False(options.Force);
+        Assert.True(options.IncludeTests);
+    }
+
+    [Fact]
+    public void TryParse_Samples_StillHonorsExplicitExclusions()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--samples", "--no-console", "--no-integrations", "--no-tests"], out ScaffoldOptions options, out _));
+
+        Assert.True(options.IncludeSamples);
+        Assert.False(options.IncludeConsole);
+        Assert.False(options.IncludeIntegrations);
+        Assert.False(options.IncludeTests);
+    }
+
+    [Fact]
+    public void TryParse_Rejects_SamplesWithMinimal()
+    {
+        Assert.False(ScaffoldOptions.TryParse(["ZavaSales", "--samples", "--minimal"], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Theory]
+    [InlineData("--core-version", "0.9.1")]
+    [InlineData("--core-version=0.9.1", null)]
+    public void TryParse_CoreVersion_IsPinned_InBothForms(string first, string? second)   // A-50
+    {
+        string[] args = second is null ? ["ZavaSales", first] : ["ZavaSales", first, second];
+        Assert.True(ScaffoldOptions.TryParse(args, out ScaffoldOptions options, out _));
+
+        Assert.Equal("0.9.1", options.CoreVersion);
+        Assert.True(options.CoreVersionPinned);
+    }
+
+    [Theory]
+    [InlineData("--verbose")]
+    [InlineData("-v")]
+    public void TryParse_AcceptsVerbose(string flag)   // A-50: init used to reject --verbose as unknown
+    {
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", flag], out ScaffoldOptions options, out _));
+        Assert.True(options.Verbose);
+    }
+
+    [Fact]
+    public void TryParse_PublisherPrefix_IsLowerCasedAndRecorded()   // A-50
+    {
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava.Sales", "--publisher-prefix", "ZS"], out ScaffoldOptions options, out _));
+
+        Assert.Equal("zs", options.PublisherPrefix);
+        Assert.Equal("zs", options.EffectivePublisherPrefix);
+    }
+
+    [Fact]
+    public void TryParse_PublisherPrefix_DefaultsToTheDerivedPrefix()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava"], out ScaffoldOptions options, out _));
+
+        Assert.Null(options.PublisherPrefix);
+        Assert.Equal("zava", options.EffectivePublisherPrefix);
+    }
+
+    [Theory]
+    [InlineData("z")]           // too short
+    [InlineData("zavasales")]   // 9 characters: too long
+    [InlineData("1abc")]        // must start with a letter
+    [InlineData("za_va")]       // alphanumeric only
+    [InlineData("mscrmx")]      // reserved
+    public void TryParse_Rejects_AnInvalidPublisherPrefix(string value)
+    {
+        Assert.False(ScaffoldOptions.TryParse(["ZavaSales", "--publisher-prefix", value], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryParse_Samples_RequireAValidPublisherPrefix_WhenTheDerivedOneIsNot()
+    {
+        // "ZavaSales" derives "zavasales" (9 chars), not a valid publisher prefix: the sample Custom APIs would be
+        // unregistrable, so --samples asks for --publisher-prefix instead of guessing...
+        Assert.False(ScaffoldOptions.TryParse(["ZavaSales", "--samples"], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+
+        // ...while the minimal scaffold, which emits no Custom API, does not need it.
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales"], out _, out _));
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--samples", "--publisher-prefix", "zava"], out ScaffoldOptions options, out _));
+        Assert.Equal("zava", options.EffectivePublisherPrefix);
     }
 
     [Theory]
     [InlineData("--minimal")]
     [InlineData("--no-demos")]
-    public void TryParse_Minimal_DisablesDemosAndDemoOnlyProjects(string flag)
+    public void TryParse_Minimal_IsAnAcceptedAliasOfTheDefault(string flag)
     {
         Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", flag], out ScaffoldOptions options, out _));
 
-        Assert.False(options.IncludeDemos);
-        // The demo-only projects are forced off - a bare scaffold has no use for an empty Integrations/Tests/Console.
+        Assert.False(options.IncludeSamples);
+        // The demo-only projects are off; the (empty) test project stays, as in the default.
         Assert.False(options.IncludeConsole);
         Assert.False(options.IncludeIntegrations);
-        Assert.False(options.IncludeTests);
+        Assert.True(options.IncludeTests);
     }
 
     [Fact]
@@ -112,7 +210,7 @@ public class ScaffoldOptionsTests
         // Web resources are a separate (opt-in) project, not demo plugin content, so an explicit request wins.
         Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--minimal", "--web-resources"], out ScaffoldOptions options, out _));
 
-        Assert.False(options.IncludeDemos);
+        Assert.False(options.IncludeSamples);
         Assert.True(options.IncludeWebResources);
     }
 

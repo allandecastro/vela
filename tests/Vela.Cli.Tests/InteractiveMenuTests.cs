@@ -30,17 +30,24 @@ public class InteractiveMenuTests
     [Fact]
     public void ComposeInitArgs_AddsSkipFlags_WhenProjectsDisabled()
     {
+        string[] args = InteractiveMenu.ComposeInitArgs("X", "X", "/tmp", integrations: false, tests: false, console: false, samples: true);
+
+        Assert.Equal(["init", "--name", "X", "--prefix", "X", "--output", "/tmp", "--samples", "--no-integrations", "--no-tests", "--no-console"], args);
+    }
+
+    [Fact]
+    public void ComposeInitArgs_Minimal_OmitsTheDemoOnlyProjectFlags()
+    {
+        // Without samples the Integrations/ConsoleApp projects do not exist, so their flags are never emitted.
         string[] args = InteractiveMenu.ComposeInitArgs("X", "X", "/tmp", integrations: false, tests: false, console: false);
 
-        Assert.Contains("--no-integrations", args);
-        Assert.Contains("--no-tests", args);
-        Assert.Contains("--no-console", args);
+        Assert.Equal(["init", "--name", "X", "--prefix", "X", "--output", "/tmp", "--no-tests"], args);
     }
 
     [Fact]
     public void ComposeInitArgs_RoundTripsThroughScaffoldOptions()
     {
-        string[] args = InteractiveMenu.ComposeInitArgs("ZavaSales", "Zava.CRM", "/tmp/out", integrations: false, tests: false, console: true);
+        string[] args = InteractiveMenu.ComposeInitArgs("ZavaSales", "Zava.CRM", "/tmp/out", integrations: false, tests: false, console: true, samples: true);
 
         bool ok = ScaffoldOptions.TryParse(args[1..], out ScaffoldOptions options, out _);
 
@@ -51,6 +58,7 @@ public class InteractiveMenuTests
         Assert.False(options.IncludeIntegrations);
         Assert.False(options.IncludeTests);
         Assert.True(options.IncludeConsole);
+        Assert.True(options.IncludeSamples);
     }
 
     [Theory]

@@ -20,7 +20,7 @@ public class ProjectScaffolderTests
         CoreVersion: "1.0.0",
         Force: force,
         Interactive: false,
-        IncludeDemos: demos);
+        IncludeSamples: demos);
 
     [Fact]
     public void Generate_Minimal_WritesBareShellWithoutDemoContent()
@@ -58,6 +58,179 @@ public class ProjectScaffolderTests
             // The Plugins project has no source files at all - it is a clean canvas.
             string pluginsDir = Path.Combine(root, "src", "Zava.Plugins");
             Assert.Empty(Directory.GetFiles(pluginsDir, "*.cs", SearchOption.AllDirectories));
+        });
+    }
+
+    [Fact]
+    public void Generate_Default_IsMinimal_WithAnEmptyTestProject()   // A-53
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
+
+            string root = Path.Combine(temp, "ZavaSales");
+            string[] files = Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+                .OrderBy(f => f, StringComparer.Ordinal)
+                .ToArray();
+
+            // Exactly the structural files: no sample code, no Integrations/ConsoleApp, an empty test project.
+            Assert.Equal(
+                [
+                    ".gitignore",
+                    ".vela/scaffold-manifest.json",
+                    "Directory.Build.props",
+                    "Directory.Packages.props",
+                    "README.md",
+                    "ZavaSales.sln",
+                    "src/Zava.Plugins/Zava.Plugins.csproj",
+                    "src/Zava.Shared/Zava.Shared.csproj",
+                    "tests/Zava.Plugins.Tests/Zava.Plugins.Tests.csproj",
+                ],
+                files);
+
+            string readme = File.ReadAllText(Path.Combine(root, "README.md"));
+            Assert.Contains("vela init --samples", readme);
+            Assert.Contains("vela add test MyPlugin --entity Account --project tests/Zava.Plugins.Tests", readme);
+        });
+    }
+
+    [Fact]
+    public void Generate_PublisherPrefix_NamesTheSampleCustomApis_AndIsRecordedInTheProjects()   // A-50
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp) with { PublisherPrefix = "zs" }));
+
+            string root = Path.Combine(temp, "ZavaSales");
+            Assert.Contains("RegisterCustomApi(\"zs_AccountEstimateValue\")", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Account", "CustomApis", "AccountEstimateValueCustomApi.cs")));
+            Assert.Contains("ForMessage(\"zs_Ping\")", File.ReadAllText(Path.Combine(root, "tests", "Zava.Plugins.Tests", "GlobalCustomApis", "PingCustomApiTests.cs")));
+            Assert.Contains("RegisterCustomApi(\"zs_IntegrationHeartbeat\"", File.ReadAllText(Path.Combine(root, "src", "Zava.Integrations", "GlobalCustomApis", "IntegrationHeartbeatCustomApi.cs")));
+            foreach (string csproj in new[] { Path.Combine("src", "Zava.Plugins", "Zava.Plugins.csproj"), Path.Combine("src", "Zava.Integrations", "Zava.Integrations.csproj"), Path.Combine("tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj") })
+            {
+                Assert.Contains("<VelaPublisherPrefix>zs</VelaPublisherPrefix>", File.ReadAllText(Path.Combine(root, csproj)));
+            }
+        });
+    }
+
+    [Fact]
+    public void Generate_WithoutPublisherPrefix_DoesNotRecordADerivedGuess()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+
+            string root = Path.Combine(temp, "ZavaSales");
+            Assert.DoesNotContain("VelaPublisherPrefix", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj")));
+            Assert.Contains("RegisterCustomApi(\"zava_AccountEstimateValue\")", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Account", "CustomApis", "AccountEstimateValueCustomApi.cs")));
+        });
+    }
+
+    [Fact]
+    public void Force_KeepsUserCode_AndEditedSamples_ButRegeneratesUneditedFiles()   // A-52
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+            string root = Path.Combine(temp, "ZavaSales");
+            string plugins = Path.Combine(root, "src", "Zava.Plugins");
+
+            // The user adds a plugin, edits one sample and deletes another.
+            string userPlugin = Path.Combine(plugins, "Account", "Plugins", "MyOwnPlugin.cs");
+            File.WriteAllText(userPlugin, "// my code");
+            string editedSample = Path.Combine(plugins, "Contact", "Plugins", "ContactRouterPlugin.cs");
+            File.WriteAllText(editedSample, "// my edit");
+            string deletedSample = Path.Combine(plugins, "GlobalCustomApis", "PingCustomApi.cs");
+            File.Delete(deletedSample);
+
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, force: true)));
+
+            Assert.Equal("// my code", File.ReadAllText(userPlugin));
+            Assert.Equal("// my edit", File.ReadAllText(editedSample));
+            Assert.Equal(ScaffoldTemplates.PingCustomApi("Zava"), File.ReadAllText(deletedSample).Replace("\r\n", "\n"));
+
+            // The edit stays recognised as an edit on the next run too (the manifest keeps the hash Vela wrote).
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, force: true)));
+            Assert.Equal("// my edit", File.ReadAllText(editedSample));
+        });
+    }
+
+    [Fact]
+    public void Force_DroppingAProject_RemovesItsUneditedFiles_ButKeepsTheUsersOwn()   // A-52
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, integrations: true)));
+            string integrations = Path.Combine(temp, "ZavaSales", "src", "Zava.Integrations");
+            string userFile = Path.Combine(integrations, "Account", "Plugins", "Mine.cs");
+            File.WriteAllText(userFile, "// mine");
+
+            TextWriter original = Console.Out;
+            StringWriter captured = new();
+            Console.SetOut(captured);
+            try
+            {
+                Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, integrations: false, force: true) with { Json = true }));
+            }
+            finally
+            {
+                Console.SetOut(original);
+            }
+
+            // Generated files are gone (including the csproj), the user's file and its folder survive, and the
+            // solution no longer lists the project.
+            Assert.False(File.Exists(Path.Combine(integrations, "Zava.Integrations.csproj")));
+            Assert.False(Directory.Exists(Path.Combine(integrations, "GlobalCustomApis")), "an emptied folder is pruned");
+            Assert.Equal("// mine", File.ReadAllText(userFile));
+            Assert.DoesNotContain("Zava.Integrations.csproj", File.ReadAllText(Path.Combine(temp, "ZavaSales", "ZavaSales.sln")));
+
+            using System.Text.Json.JsonDocument report = System.Text.Json.JsonDocument.Parse(captured.ToString());
+            string[] removed = report.RootElement.GetProperty("removed").EnumerateArray().Select(e => e.GetString()!).ToArray();
+            Assert.Contains("src/Zava.Integrations/Zava.Integrations.csproj", removed);
+            Assert.DoesNotContain(removed, r => r.EndsWith("Mine.cs", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void Force_WithoutAManifest_KeepsEveryExistingFileThatDiffers()   // A-52: a scaffold from an older CLI
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+            string root = Path.Combine(temp, "ZavaSales");
+            File.Delete(Path.Combine(root, ProjectScaffolder.ManifestPath));
+            string csproj = Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj");
+            File.WriteAllText(csproj, "<Project><!-- customised --></Project>");
+            string integrationsCsproj = Path.Combine(root, "src", "Zava.Integrations", "Zava.Integrations.csproj");
+
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, integrations: false, force: true)));
+
+            // Unknown provenance: nothing is overwritten and nothing is deleted.
+            Assert.Contains("customised", File.ReadAllText(csproj));
+            Assert.True(File.Exists(integrationsCsproj));
+            Assert.True(File.Exists(Path.Combine(root, ProjectScaffolder.ManifestPath)));
+        });
+    }
+
+    [Fact]
+    public void Generate_WritesAManifestOfEveryGeneratedFile()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+            string root = Path.Combine(temp, "ZavaSales");
+
+            using System.Text.Json.JsonDocument manifest = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, ProjectScaffolder.ManifestPath)));
+            Dictionary<string, string> files = manifest.RootElement.GetProperty("files").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!);
+
+            string[] onDisk = Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+                .Where(f => f != ".vela/scaffold-manifest.json")
+                .OrderBy(f => f, StringComparer.Ordinal)
+                .ToArray();
+            Assert.Equal(onDisk, files.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
+            Assert.Equal(ProjectScaffolder.Hash(File.ReadAllText(Path.Combine(root, "ZavaSales.sln"))), files["ZavaSales.sln"]);
         });
     }
 

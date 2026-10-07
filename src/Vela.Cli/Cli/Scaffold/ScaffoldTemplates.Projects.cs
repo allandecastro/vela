@@ -50,7 +50,7 @@ $$"""
 
     // ---- Plugin / Integration project file -------------------------------
 
-    public static string PluginCsproj(string projectName, string sharedProjectName, string coreVersion, bool withSigningTarget = false)
+    public static string PluginCsproj(string projectName, string sharedProjectName, string coreVersion, bool withSigningTarget = false, string? publisherPrefix = null)
     {
         string signingTarget = withSigningTarget ? SigningBuildTarget() : string.Empty;
         return
@@ -79,7 +79,7 @@ $$"""
          solution's artifacts folder so vela plan can read it from there. -->
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageOutputPath>$(MSBuildProjectDirectory)\..\..\artifacts</PackageOutputPath>
-    <IsWorkflowActivity>false</IsWorkflowActivity>
+    <IsWorkflowActivity>false</IsWorkflowActivity>{{PublisherPrefixProperty(publisherPrefix)}}
   </PropertyGroup>
 
   <ItemGroup>
@@ -144,19 +144,28 @@ $$"""
     </PropertyGroup>
     <!-- 1) Certificate store, by fingerprint (takes precedence). -->
     <Exec Condition=" '$(PluginSigningFingerprint)' != '' "
-          Command="vela sign --package &quot;$(_SignPackage)&quot; --fingerprint $(PluginSigningFingerprint)" />
+          Command="vela sign --package &quot;$(_SignPackage)&quot; --fingerprint &quot;$(PluginSigningFingerprint)&quot;" />
     <!-- 2) .pfx file + password from Windows Credential Manager. -->
     <Exec Condition=" '$(PluginSigningFingerprint)' == '' and '$(PluginSigningCertificate)' != '' and '$(PluginSigningCredential)' != '' "
-          Command="vela sign --package &quot;$(_SignPackage)&quot; --pfx &quot;$(PluginSigningCertificate)&quot; --pfx-credential $(PluginSigningCredential)" />
-    <!-- 3) .pfx file + password passed directly. -->
+          Command="vela sign --package &quot;$(_SignPackage)&quot; --pfx &quot;$(PluginSigningCertificate)&quot; --pfx-credential &quot;$(PluginSigningCredential)&quot;" />
+    <!-- 3) .pfx file + password passed directly. The password reaches vela through an environment variable, never
+         its command line (which other users can read on a shared host); Escape keeps a ';' in it intact. -->
     <Exec Condition=" '$(PluginSigningFingerprint)' == '' and '$(PluginSigningCertificate)' != '' and '$(PluginSigningCredential)' == '' "
-          Command="vela sign --package &quot;$(_SignPackage)&quot; --pfx &quot;$(PluginSigningCertificate)&quot; --pfx-password $(PluginSigningPassword)" />
+          EnvironmentVariables="VELA_SIGN_PFX_PASSWORD=$([MSBuild]::Escape('$(PluginSigningPassword)'))"
+          Command="vela sign --package &quot;$(_SignPackage)&quot; --pfx &quot;$(PluginSigningCertificate)&quot; --pfx-password-env VELA_SIGN_PFX_PASSWORD" />
   </Target>
 """;
 
+    // The publisher customization prefix recorded by `vela init --publisher-prefix`; `vela add customapi` reads it.
+    // Emitted only when the prefix was given explicitly, so a derived guess is never persisted as if it were known.
+    private static string PublisherPrefixProperty(string? publisherPrefix) =>
+        string.IsNullOrEmpty(publisherPrefix)
+            ? string.Empty
+            : $"\n    <!-- Dataverse publisher prefix for Custom API unique names (read by `vela add customapi`). -->\n    <VelaPublisherPrefix>{publisherPrefix}</VelaPublisherPrefix>";
+
     // ---- Tests project ----------------------------------------------------
 
-    public static string TestsCsproj(string testProjectName, string pluginsProjectName, string sharedProjectName, string coreVersion) =>
+    public static string TestsCsproj(string testProjectName, string pluginsProjectName, string sharedProjectName, string coreVersion, string? publisherPrefix = null) =>
 $$"""
 <Project Sdk="Microsoft.NET.Sdk">
 
@@ -165,7 +174,7 @@ $$"""
     <TargetFramework>net462</TargetFramework>
     <RootNamespace>{{testProjectName}}</RootNamespace>
     <AssemblyName>{{testProjectName}}</AssemblyName>
-    <IsPackable>false</IsPackable>
+    <IsPackable>false</IsPackable>{{PublisherPrefixProperty(publisherPrefix)}}
   </PropertyGroup>
 
   <ItemGroup>

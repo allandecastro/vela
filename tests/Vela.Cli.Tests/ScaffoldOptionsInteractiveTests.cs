@@ -62,13 +62,32 @@ public sealed class ScaffoldOptionsInteractiveTests
     [Fact]
     public void Interactive_Prompts_For_Name_Prefix_And_Output()
     {
-        // No name/prefix/output flags: prompt them (prefix + output empty -> defaults), then decline everything.
-        bool ok = Parse("MySol\n\n\nn\nn\nn\nn\n", ["--interactive"], out ScaffoldOptions options);
+        // No name/prefix/output flags: prompt them (prefix + output empty -> defaults), then decline samples, tests
+        // and web resources.
+        bool ok = Parse("MySol\n\n\nn\nn\nn\n", ["--interactive"], out ScaffoldOptions options);
 
         Assert.True(ok);
         Assert.Equal("MySol", options.SolutionName);
         Assert.Equal(ScaffoldOptions.SuggestPrefix("MySol"), options.Prefix);
         Assert.Equal(".", options.OutputDirectory);
+        Assert.False(options.IncludeWebResources);
+        Assert.False(options.IncludeSamples);
+        Assert.False(options.IncludeTests);
+    }
+
+    [Fact]
+    public void Interactive_DefaultAnswers_AreMinimal_WithTests()   // A-53
+    {
+        // Empty answers take the defaults: samples no (so no Integrations/ConsoleApp prompt), tests yes, web no.
+        bool ok = Parse("\n\n\n",
+            ["--name", "DemoSol", "--prefix", "Demo", "--output", ".", "--interactive"],
+            out ScaffoldOptions options);
+
+        Assert.True(ok);
+        Assert.False(options.IncludeSamples);
+        Assert.False(options.IncludeIntegrations);
+        Assert.False(options.IncludeConsole);
+        Assert.True(options.IncludeTests);
         Assert.False(options.IncludeWebResources);
     }
 
@@ -96,7 +115,7 @@ public sealed class ScaffoldOptionsInteractiveTests
             out ScaffoldOptions options);
 
         Assert.True(ok);
-        Assert.True(options.IncludeDemos);
+        Assert.True(options.IncludeSamples);
         Assert.True(options.IncludeIntegrations);
         Assert.True(options.IncludeConsole);
         Assert.False(options.IncludeTests);

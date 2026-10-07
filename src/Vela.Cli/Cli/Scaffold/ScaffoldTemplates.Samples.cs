@@ -489,7 +489,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
 
     /// <summary>
     /// Multi-step "router" plugin: registers several steps in one class and binds each to a named
-    /// handler method. Every step in a multi-step plugin must declare a <c>Handler(...)</c>. Also shows a
+    /// handler method. Every step in a multi-step plugin must end with <c>Handle(...)</c>. Also shows a
     /// router consuming a table-scoped service (<see cref="IContactDuplicateService"/>) via DI.
     /// </summary>
     // partial: the typed image projections are generated as nested types inside this class (VELA014).
@@ -548,7 +548,7 @@ namespace {{prefix}}.Plugins.Contact.Plugins
 }
 """;
 
-    public static string AccountEstimateValueCustomApi(string prefix) =>
+    public static string AccountEstimateValueCustomApi(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Plugins.Account.CustomApis
 {
@@ -569,7 +569,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{ApiPrefix(prefix)}}_AccountEstimateValue")
+            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue")
                 .DisplayName("Estimate Account Value")
                 .Description("Estimates a value for the bound account.")
                 .AsAction()
@@ -593,7 +593,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     /// <summary>Request parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
     public sealed class EstimateValueRequest : CustomApiRequest
     {
-        public EstimateValueRequest() : base("{{ApiPrefix(prefix)}}_AccountEstimateValue")
+        public EstimateValueRequest() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue")
         {
         }
 
@@ -615,7 +615,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     /// <summary>Response parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
     public sealed class EstimateValueResponse : CustomApiResponse
     {
-        public EstimateValueResponse() : base("{{ApiPrefix(prefix)}}_AccountEstimateValue")
+        public EstimateValueResponse() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue")
         {
         }
 
@@ -628,7 +628,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
 }
 """;
 
-    public static string ContactValidateCustomApi(string prefix) =>
+    public static string ContactValidateCustomApi(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Plugins.Contact.CustomApis
 {
@@ -649,7 +649,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{ApiPrefix(prefix)}}_ContactValidate")
+            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate")
                 .DisplayName("Validate Contact")
                 .Description("Validates the bound contact's email address.")
                 .AsAction()
@@ -671,7 +671,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     /// <summary>Request parameters for <see cref="ContactValidateCustomApi"/>.</summary>
     public sealed class ContactValidateRequest : CustomApiRequest
     {
-        public ContactValidateRequest() : base("{{ApiPrefix(prefix)}}_ContactValidate")
+        public ContactValidateRequest() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate")
         {
         }
 
@@ -685,7 +685,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     /// <summary>Response parameters for <see cref="ContactValidateCustomApi"/>.</summary>
     public sealed class ContactValidateResponse : CustomApiResponse
     {
-        public ContactValidateResponse() : base("{{ApiPrefix(prefix)}}_ContactValidate")
+        public ContactValidateResponse() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate")
         {
         }
 
@@ -698,7 +698,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
 }
 """;
 
-    public static string PingCustomApi(string prefix) =>
+    public static string PingCustomApi(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Plugins.GlobalCustomApis
 {
@@ -713,7 +713,7 @@ namespace {{prefix}}.Plugins.GlobalCustomApis
     {
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{ApiPrefix(prefix)}}_Ping", Handle)
+            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_Ping", Handle)
                 .DisplayName("Ping")
                 .Description("Returns a pong message; useful for connectivity checks.")
                 .AsAction()

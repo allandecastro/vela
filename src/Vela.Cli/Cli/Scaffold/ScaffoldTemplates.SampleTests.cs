@@ -20,13 +20,13 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
 
     /// <summary>
     /// Tests <see cref="AccountRelatedContactsPlugin"/> against an in-memory Dataverse: seeds an account with two
-    /// contacts and asserts the plugin's typed FetchXML query counts them (the query runs through the harness's real
-    /// FetchXML path, so the emitted string is exercised end to end).
+    /// contacts and asserts the plugin's typed query (<c>Query.For&lt;Contact&gt;()...Build()</c>, a QueryExpression)
+    /// counts them; the query runs through the harness's in-memory query engine.
     /// </summary>
     public sealed class AccountRelatedContactsPluginTests
     {
         [Fact]
-        public void Counts_the_related_contacts_via_the_typed_fetchxml_builder()
+        public void Counts_the_related_contacts_via_the_typed_query_builder()
         {
             Guid accountId = Guid.NewGuid();
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
@@ -248,7 +248,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
 }
 """;
 
-    public static string AccountEstimateValueCustomApiTests(string prefix) =>
+    public static string AccountEstimateValueCustomApiTests(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Plugins.Tests.Account.CustomApis
 {
@@ -268,7 +268,7 @@ namespace {{prefix}}.Plugins.Tests.Account.CustomApis
         public void Returns_An_Estimated_Value_For_The_Bound_Account()
         {
             AccountEstimateValueCustomApi api = new AccountEstimateValueCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_AccountEstimateValue").Build();
+            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue").Build();
             context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
 
             api.Execute(context.ServiceProvider);
@@ -279,7 +279,7 @@ namespace {{prefix}}.Plugins.Tests.Account.CustomApis
 }
 """;
 
-    public static string ContactValidateCustomApiTests(string prefix) =>
+    public static string ContactValidateCustomApiTests(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Plugins.Tests.Contact.CustomApis
 {
@@ -299,7 +299,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.CustomApis
         public void Reports_The_Bound_Contact_As_Valid()
         {
             ContactValidateCustomApi api = new ContactValidateCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_ContactValidate").Build();
+            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate").Build();
             context.PluginExecutionContext.InputParameters["ContactId"] = Guid.NewGuid();
 
             api.Execute(context.ServiceProvider);
@@ -310,7 +310,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.CustomApis
 }
 """;
 
-    public static string PingCustomApiTests(string prefix) =>
+    public static string PingCustomApiTests(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
 {
@@ -329,7 +329,7 @@ namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
         public void Returns_Pong_With_The_Supplied_Message()
         {
             PingCustomApi api = new PingCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_Ping").Build();
+            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_Ping").Build();
             context.PluginExecutionContext.InputParameters["Message"] = "hello";
 
             api.Execute(context.ServiceProvider);
@@ -340,7 +340,7 @@ namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
 }
 """;
 
-    public static string AccountReconcileCustomApiTests(string prefix) =>
+    public static string AccountReconcileCustomApiTests(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Integrations.Tests.Account.CustomApis
 {
@@ -357,7 +357,7 @@ namespace {{prefix}}.Integrations.Tests.Account.CustomApis
         public void Returns_A_Reconciled_Status_For_The_Bound_Account()
         {
             AccountReconcileCustomApi api = new AccountReconcileCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_AccountReconcile").Build();
+            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountReconcile").Build();
             context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
 
             api.Execute(context.ServiceProvider);
@@ -368,7 +368,7 @@ namespace {{prefix}}.Integrations.Tests.Account.CustomApis
 }
 """;
 
-    public static string ContactExportCustomApiTests(string prefix) =>
+    public static string ContactExportCustomApiTests(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Integrations.Tests.Contact.CustomApis
 {
@@ -386,7 +386,7 @@ namespace {{prefix}}.Integrations.Tests.Contact.CustomApis
         {
             ContactExportCustomApi api = new ContactExportCustomApi(string.Empty, string.Empty);
             Guid contactId = Guid.NewGuid();
-            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_ContactExport").Build();
+            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactExport").Build();
             context.PluginExecutionContext.InputParameters["ContactId"] = contactId;
 
             api.Execute(context.ServiceProvider);
@@ -397,7 +397,7 @@ namespace {{prefix}}.Integrations.Tests.Contact.CustomApis
 }
 """;
 
-    public static string IntegrationHeartbeatCustomApiTests(string prefix) =>
+    public static string IntegrationHeartbeatCustomApiTests(string prefix, string? apiPrefix = null) =>
 $$"""
 namespace {{prefix}}.Integrations.Tests.GlobalCustomApis
 {
@@ -413,7 +413,7 @@ namespace {{prefix}}.Integrations.Tests.GlobalCustomApis
         public void Reports_A_Healthy_Status()
         {
             IntegrationHeartbeatCustomApi api = new IntegrationHeartbeatCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{ApiPrefix(prefix)}}_IntegrationHeartbeat").Build();
+            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_IntegrationHeartbeat").Build();
 
             api.Execute(context.ServiceProvider);
 
