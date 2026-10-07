@@ -97,7 +97,7 @@ namespace {{prefix}}.Plugins.Tests.Security
                 .WithSecurity(security => Scenario(security));
 
             Guid id = crm.Create(new Entity("account") { ["name"] = "Zava" }); // salesrep grants Create
-            Entity account = crm.Retrieve("account", id, new ColumnSet(true));  // ...and Read
+            Entity account = crm.Retrieve("account", id, new ColumnSet("name"));  // ...and Read
 
             Assert.Equal("Zava", account.GetAttributeValue<string>("name"));
         }
@@ -113,7 +113,7 @@ namespace {{prefix}}.Plugins.Tests.Security
 
             // OutsideUser has no Read privilege on account, so Retrieve throws the platform fault a plugin would see.
             Assert.Throws<FaultException<OrganizationServiceFault>>(
-                () => crm.Retrieve("account", id, new ColumnSet(true)));
+                () => crm.Retrieve("account", id, new ColumnSet("name")));
         }
 
         [Fact]
@@ -133,7 +133,7 @@ namespace {{prefix}}.Plugins.Tests.Security
                     new Entity("account", mine) { ["name"] = "Mine", ["ownerid"] = new EntityReference("systemuser", Salesperson) },
                     new Entity("account", theirs) { ["name"] = "Theirs", ["ownerid"] = new EntityReference("systemuser", OutsideUser) });
 
-            EntityCollection result = crm.RetrieveMultiple(new QueryExpression("account") { ColumnSet = new ColumnSet(true) });
+            EntityCollection result = crm.RetrieveMultiple(new QueryExpression("account") { ColumnSet = new ColumnSet("name") });
 
             Entity onlyMine = Assert.Single(result.Entities); // User-level Read trims the record owned by someone else
             Assert.Equal(mine, onlyMine.Id);
@@ -180,7 +180,7 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
 
             // Assert: retrieve the created task and check its fields (not just the count).
             EntityCollection tasks = crm.RetrieveMultiple(
-                new QueryExpression("task") { ColumnSet = new ColumnSet(true) });
+                new QueryExpression("task") { ColumnSet = new ColumnSet("subject", "regardingobjectid") });
             Entity task = Assert.Single(tasks.Entities);
             Assert.Equal("Follow up with Zava", task.GetAttributeValue<string>("subject"));
 

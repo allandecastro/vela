@@ -482,10 +482,79 @@ public class ProjectScaffolderTests
     [OptInFact("VELA_BUILD_SMOKE=1")]
     public void Generate_ThenDotnetBuild_Succeeds()
     {
-        // Heavy integration test: restores + builds a generated solution end to end, which is the only thing
-        // that actually compiles the generated C#. Opt-in (VELA_BUILD_SMOKE=1) so the default suite stays fast
-        // and offline; needs the .NET SDK plus network/cache for the Microsoft SDK packages.
+        // Heavy integration test: restores + builds a generated --samples solution end to end, which is the only thing
+        // that actually compiles the generated C#, then runs its generated tests and scans the packages as `vela plan`
+        // does. Opt-in (VELA_BUILD_SMOKE=1) so the default suite stays fast and offline; needs the .NET SDK plus
+        // network/cache for the Microsoft SDK packages (and mono to run the net462 tests off Windows).
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp) with { ManagedIdentity = true }));
+            string root = Path.Combine(temp, "ZavaSales");
 
+            // Also compile both `vela add customapi --function` forms (typed bound, lightweight global).
+            string pluginsProject = Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj");
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--prefix", "zava", "--project", pluginsProject]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Lookup", "--global", "--function", "--prefix", "zava", "--project", pluginsProject]));
+
+            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_AccountEstimateValue", "zava_GetScore", "zava_Lookup"], minimumSteps: 20);
+        });
+    }
+
+    [OptInFact("VELA_BUILD_SMOKE=1")]
+    public void Generate_ThenDotnetBuild_Succeeds_Minimal()
+    {
+        // The default (minimal) scaffold must build, test and plan cleanly as generated, and again once filled with
+        // every `vela add` kind - the code an agent or a developer actually starts from.
+        RunInTempDir(temp =>
+        {
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--publisher-prefix", "zava", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
+            string root = Path.Combine(temp, "ZavaSales");
+
+            // As generated: an empty package that registers nothing.
+            BuildTestAndScan(temp, root, expectedCustomApis: [], minimumSteps: 0, maximumSteps: 0, runTests: false);
+
+            // Stand in for `vela models`, then add one of everything.
+            Directory.CreateDirectory(Path.Combine(root, "src", "Zava.Shared", "Models", "Generated"));
+            File.WriteAllText(Path.Combine(root, "src", "Zava.Shared", "Models", "Generated", "Account.cs"), ScaffoldTemplates.AccountModel("Zava"));
+            string plugins = Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj");
+            string tests = Path.Combine(root, "tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj");
+            string[][] adds =
+            [
+                ["plugin", "AccountCreated", "--entity", "Account", "--filtering-attributes", "Name"],
+                ["step", "AccountCreated", "--entity", "Account", "--message", "Update", "--filtering-attributes", "name,Telephone1"],
+                ["plugin", "AccountBulk", "--entity", "Account", "--message", "UpdateMultiple", "--filtering-attributes", "Name"],
+                ["plugin", "AccountAssigned", "--entity", "Account", "--message", "Assign"],
+                ["plugin", "AccountGuard", "--entity", "Account", "--message", "Delete", "--stage", "PreOperation"],
+                ["service", "AccountScoring", "--entity", "Account"],
+                ["customapi", "Recalculate", "--global"],
+                ["customapi", "Score", "--entity", "Account", "--function"],
+            ];
+            foreach (string[] add in adds)
+            {
+                Assert.Equal(ExitSuccess, AddCommand.Run([.. add, "--project", plugins]));
+            }
+
+            string[][] testAdds =
+            [
+                ["test", "AccountAssigned", "--entity", "Account", "--message", "Assign"],
+                ["test", "AccountBulk", "--entity", "Account", "--message", "UpdateMultiple"],
+                ["test", "Recalculate", "--kind", "customapi"],
+                ["test", "Score", "--kind", "customapi", "--entity", "Account"],
+            ];
+            foreach (string[] add in testAdds)
+            {
+                Assert.Equal(ExitSuccess, AddCommand.Run([.. add, "--project", tests]));
+            }
+
+            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Recalculate", "zava_Score"], minimumSteps: 5, maximumSteps: 5);
+        });
+    }
+
+    // Packs the repo's current Vela packages into a local feed, restores and builds the generated solution (failing on
+    // any Vela analyzer warning), runs its generated tests, and scans its packages as `vela plan` does.
+    private static void BuildTestAndScan(string temp, string root, string[] expectedCustomApis, int minimumSteps, int maximumSteps = int.MaxValue, bool runTests = true)
+    {
         string? coreProject = FindRepoProject("Vela.Plugins");
         string? testingProject = FindRepoProject("Vela.Testing");
         string? messagesProject = FindRepoProject("Vela.Messages");
@@ -493,67 +562,98 @@ public class ProjectScaffolderTests
         Assert.True(testingProject is not null, "Could not locate Vela.Testing.csproj from the test directory.");
         Assert.True(messagesProject is not null, "Could not locate Vela.Messages.csproj from the test directory.");
 
-        RunInTempDir(temp =>
+        // The scaffold resolves Vela from nuget.org and emits no nuget.config; here we build against the repo's
+        // *current* Vela.Plugins / Vela.Testing (1.0.0) instead, so the test writes its own local-packages nuget.config
+        // (additive; nuget.org still resolves the Microsoft SDK / test packages) and packs those projects into it.
+        string localFeed = Path.Combine(root, "local-packages");
+        if (!Directory.Exists(localFeed))
         {
-            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp) with { ManagedIdentity = true }));
-
-            string root = Path.Combine(temp, "ZavaSales");
-            string localFeed = Path.Combine(root, "local-packages");
-
-            // Also compile both `vela add customapi --function` forms (typed bound, lightweight global).
-            string pluginsProject = Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj");
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--prefix", "zava", "--project", pluginsProject]));
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Lookup", "--global", "--function", "--prefix", "zava", "--project", pluginsProject]));
-
-            // The scaffold resolves Vela from nuget.org and emits no nuget.config; here we build against the
-            // repo's *current* Vela.Plugins / Vela.Testing (1.0.0) instead, so the test writes its own
-            // local-packages nuget.config (additive; nuget.org still resolves the Microsoft SDK / test packages)
-            // and packs those projects into it. This keeps the build check on local sources, not a published feed.
             Directory.CreateDirectory(localFeed);
             File.WriteAllText(Path.Combine(root, "nuget.config"),
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<configuration>\n  <packageSources>\n" +
                 "    <add key=\"local-packages\" value=\"local-packages\" />\n  </packageSources>\n</configuration>\n");
-            // Vela.Plugins depends on the Vela.Messages package, so it must be in the local feed too, otherwise
-            // the generated project's restore cannot resolve it (Vela.Messages 1.0.0 is not on nuget.org).
-            Assert.Equal(0, RunDotnet($"pack \"{messagesProject}\" -c Release -o \"{localFeed}\"", temp));
-            Assert.Equal(0, RunDotnet($"pack \"{coreProject}\" -c Release -o \"{localFeed}\"", temp));
-            Assert.Equal(0, RunDotnet($"pack \"{testingProject}\" -c Release -o \"{localFeed}\"", temp));
+            // Vela.Plugins depends on the Vela.Messages package, so it must be in the local feed too.
+            Assert.Equal(0, RunDotnet($"pack \"{messagesProject}\" -c Release -o \"{localFeed}\"", temp).ExitCode);
+            Assert.Equal(0, RunDotnet($"pack \"{coreProject}\" -c Release -o \"{localFeed}\"", temp).ExitCode);
+            Assert.Equal(0, RunDotnet($"pack \"{testingProject}\" -c Release -o \"{localFeed}\"", temp).ExitCode);
+        }
 
-            // Restore serially first: the multi-targeted Shared project is referenced by several projects, and a
-            // parallel solution restore can race writing its nuget.g.props ("file already exists"). Then build
-            // without restoring again.
-            string sln = Path.Combine(root, "ZavaSales.sln");
-            Assert.Equal(0, RunDotnet($"restore \"{sln}\" --disable-parallel", temp));
+        // Restore serially first: the multi-targeted Shared project is referenced by several projects, and a parallel
+        // solution restore can race writing its nuget.g.props ("file already exists"). Then build without restoring.
+        string sln = Path.Combine(root, "ZavaSales.sln");
+        Assert.Equal(0, RunDotnet($"restore \"{sln}\" --disable-parallel", temp).ExitCode);
 
-            // Single-process build (-m:1): two plugin projects run GeneratePackageOnBuild into the shared
-            // artifacts/ folder, and a parallel build can race on the pack output ("used by another process").
-            int build = RunDotnet($"build \"{sln}\" -c Release --no-restore -m:1", temp);
-            Assert.Equal(0, build);
+        // Single-process build (-m:1): two plugin projects run GeneratePackageOnBuild into the shared artifacts/
+        // folder, and a parallel build can race on the pack output ("used by another process").
+        (int build, string buildOutput) = RunDotnet($"build \"{sln}\" -c Release --no-restore -m:1", temp);
+        Assert.True(build == 0, buildOutput);
+        string[] velaWarnings = buildOutput.Split('\n').Where(line => line.Contains("warning VELA", StringComparison.Ordinal)).Distinct().ToArray();
+        Assert.True(velaWarnings.Length == 0, "Generated code raised Vela analyzer warnings:\n" + string.Join("\n", velaWarnings));
 
-            // Scan the built packages as `vela plan` does: this runs every Custom API's Build(), so a scaffolded or
-            // generated Custom API that breaks a Dataverse rule (a function without a response property, ...) fails.
-            List<string> scanTemps = [];
-            try
+        if (runTests)
+        {
+            RunGeneratedTests(root);
+        }
+
+        // Scan the built packages as `vela plan` does: this runs every step and Custom API Build(), so generated code
+        // that breaks a registration rule (a function without a response, a Create step without FilterOn, ...) fails.
+        List<string> scanTemps = [];
+        try
+        {
+            RegistrationItem[] items = Directory.GetFiles(Path.Combine(root, "artifacts"), "*.nupkg")
+                .SelectMany(nupkg => PackageScanner.BuildLocalStateFromPackages(
+                    new SharedOptions([nupkg], null, null, null, null, null, null, null, false, false, false, false),
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web), scanTemps).Items)
+                .ToArray();
+            string[] customApis = items.Where(item => item.Kind == "custom-api").Select(item => item.Definition.GetProperty("uniqueName").GetString()!).ToArray();
+            foreach (string expected in expectedCustomApis)
             {
-                string[] customApis = Directory.GetFiles(Path.Combine(root, "artifacts"), "*.nupkg")
-                    .SelectMany(nupkg => PackageScanner.BuildLocalStateFromPackages(
-                        new SharedOptions([nupkg], null, null, null, null, null, null, null, false, false, false, false),
-                        new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web), scanTemps).Items)
-                    .Where(item => item.Kind == "custom-api")
-                    .Select(item => item.Definition.GetProperty("uniqueName").GetString()!)
-                    .ToArray();
-                Assert.Contains("zava_AccountEstimateValue", customApis);
-                Assert.Contains("zava_GetScore", customApis);
-                Assert.Contains("zava_Lookup", customApis);
+                Assert.Contains(expected, customApis);
             }
-            finally
+
+            int steps = items.Count(item => item.Kind == "step");
+            Assert.InRange(steps, minimumSteps, maximumSteps);
+        }
+        finally
+        {
+            foreach (string dir in scanTemps)
             {
-                foreach (string dir in scanTemps)
-                {
-                    try { Directory.Delete(dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-                }
+                try { Directory.Delete(dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
-        });
+        }
+    }
+
+    // Runs every generated net462 test assembly: `dotnet test` on Windows, the xunit console under mono elsewhere.
+    private static void RunGeneratedTests(string root)
+    {
+        string[] assemblies = Directory.GetDirectories(Path.Combine(root, "tests"))
+            .Select(dir => Path.Combine(dir, "bin", "Release", "net462", Path.GetFileName(dir) + ".dll"))
+            .ToArray();
+        Assert.NotEmpty(assemblies);
+        foreach (string assembly in assemblies)
+        {
+            Assert.True(File.Exists(assembly), $"Test assembly not built: {assembly}");
+            (int exit, string output) = OperatingSystem.IsWindows()
+                ? RunProcess("dotnet", $"test \"{assembly}\"", root)
+                : RunProcess("mono", $"\"{FindXunitConsole()}\" \"{assembly}\" -noshadow", root);
+            Assert.True(exit == 0, output);
+            // A runner that discovers nothing also exits 0: require that tests actually ran.
+            Assert.Matches(OperatingSystem.IsWindows() ? @"Passed:\s*[1-9]" : @"Total: [1-9]", output);
+        }
+    }
+
+    private static string FindXunitConsole()
+    {
+        string packages = Environment.GetEnvironmentVariable("NUGET_PACKAGES")
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
+        string? console = Directory.Exists(Path.Combine(packages, "xunit.runner.console"))
+            ? Directory.GetFiles(Path.Combine(packages, "xunit.runner.console"), "xunit.console.exe", SearchOption.AllDirectories)
+                .Where(path => path.Contains($"{Path.DirectorySeparatorChar}net462{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                .OrderByDescending(path => path, StringComparer.Ordinal)
+                .FirstOrDefault()
+            : null;
+        Assert.True(console is not null, "xunit.runner.console (net462 xunit.console.exe) is not in the NuGet cache; restore it to run the generated tests under mono.");
+        return console!;
     }
 
     private static string? FindRepoProject(string projectName)
@@ -573,20 +673,27 @@ public class ProjectScaffolderTests
         return null;
     }
 
-    private static int RunDotnet(string arguments, string workingDirectory)
+    private static (int ExitCode, string Output) RunDotnet(string arguments, string workingDirectory) =>
+        RunProcess("dotnet", arguments, workingDirectory);
+
+    private static (int ExitCode, string Output) RunProcess(string fileName, string arguments, string workingDirectory)
     {
         ProcessStartInfo psi = new()
         {
-            FileName = "dotnet",
+            FileName = fileName,
             Arguments = arguments,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
 
         using Process? process = Process.Start(psi);
         Assert.NotNull(process);
-        process!.WaitForExit();
-        return process.ExitCode;
+        Task<string> stdout = process!.StandardOutput.ReadToEndAsync();
+        Task<string> stderr = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        return (process.ExitCode, stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult());
     }
 
     [Fact]
