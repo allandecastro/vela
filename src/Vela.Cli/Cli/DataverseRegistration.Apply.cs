@@ -243,10 +243,36 @@ internal static partial class DataverseRegistration
             return;
         }
 
+        // The environment may have changed since the diff was computed: detach only an API still implemented by the
+        // old type the plan saw, never one another solution now owns.
+        string expectedType = TryGetString(change.Before, "pluginTypeName") ?? string.Empty;
+        EntityReference? implementation = service.Retrieve("customapi", apiId.Value, new ColumnSet("plugintypeid"))?.GetAttributeValue<EntityReference>("plugintypeid");
+        if (implementation == null)
+        {
+            return; // already implemented by nothing: nothing to detach
+        }
+
+        string? liveType;
+        try
+        {
+            liveType = service.Retrieve("plugintype", implementation.Id, new ColumnSet("typename"))?.GetAttributeValue<string>("typename");
+        }
+        catch (FaultException<OrganizationServiceFault> ex) when (ex.Detail?.ErrorCode == ObjectDoesNotExistErrorCode)
+        {
+            liveType = null; // the implementing type is gone: nothing else owns the API
+        }
+
+        if (liveType != null && !string.Equals(liveType, expectedType, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Custom API '{uniqueName}' is now implemented by '{liveType}', not by '{expectedType}' as when the plan was computed. " +
+                "Vela will not detach it; re-run plan/apply against the current environment.");
+        }
+
         Entity detach = new Entity("customapi", apiId.Value);
         detach["plugintypeid"] = null;
         service.Update(detach);
-        LogOperation("custom-api", "detach", uniqueName, $"from {TryGetString(change.Before, "pluginTypeName")}", verbose);
+        LogOperation("custom-api", "detach", uniqueName, $"from {expectedType}", verbose);
     }
 
     // Dataverse error code for the "Invalid plug-in registration stage" validation (captured live: the Web API

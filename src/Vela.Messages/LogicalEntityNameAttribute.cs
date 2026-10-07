@@ -3,8 +3,9 @@ using System;
 namespace Vela.Messages;
 
 /// <summary>
-/// Declares the table of an Entity, EntityReference or EntityCollection property of a Custom API request or
-/// response model. It is registered as the parameter's <c>logicalentityname</c>.
+/// Declares the table of a Custom API model property, registered as the parameter's <c>logicalentityname</c>.
+/// It applies to Entity and EntityReference properties of a request or response model, and to EntityCollection
+/// properties of a request model only: Dataverse does not allow a table on an EntityCollection response property.
 /// </summary>
 /// <remarks>
 /// An early-bound entity property (such as <c>Account</c>) needs no attribute: its table comes from the type.

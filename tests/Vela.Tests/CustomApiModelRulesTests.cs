@@ -224,6 +224,23 @@ public sealed class CustomApiModelRulesTests
         Assert.Equal("Value", both.OutputParameters.Single().Name);
     }
 
+    private sealed class CaseClashRequest : OrganizationRequest
+    {
+        public string Foo { get => (string)Parameters[nameof(Foo)]; set => Parameters[nameof(Foo)] = value; }
+
+#pragma warning disable IDE1006 // the lower-case name is the point of the test
+        public string foo { get => (string)Parameters[nameof(foo)]; set => Parameters[nameof(foo)] = value; }
+#pragma warning restore IDE1006
+    }
+
+    [Fact]
+    public void Inferred_parameters_differing_only_by_case_fail_like_added_ones()   // PR #428 review
+    {
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            new CustomApiBuilder<CaseClashRequest, Resp>().UniqueName("vela_Api").Build());
+        Assert.StartsWith("Custom API parameter 'foo' was added more than once.", ex.Message);
+    }
+
     [Theory]
     [InlineData("My Param")]
     [InlineData("vela_Api.Name")]

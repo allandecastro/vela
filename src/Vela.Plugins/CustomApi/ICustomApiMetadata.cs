@@ -97,8 +97,9 @@ public interface ICustomApiMetadata<out TSelf>
     TSelf AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType stepType);
 
     /// <summary>
-    /// Enables or disables workflow SDK step support. A workflow-enabled API must be an action and cannot use
-    /// Entity, EntityCollection or StringArray parameters.
+    /// Enables or disables workflow SDK step support. A workflow-enabled API must be an action, cannot use
+    /// Entity, EntityCollection or StringArray parameters, and can use an EntityReference parameter only when it is
+    /// bound to a table (<see cref="BoundTo{TEntity}"/> or <see cref="BoundTo(string)"/>).
     /// </summary>
     /// <param name="enabled">True to enable workflow SDK step support.</param>
     /// <returns>The builder.</returns>

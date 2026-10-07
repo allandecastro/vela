@@ -89,7 +89,8 @@ public sealed class CustomApiBuilder<TRequest, TResponse> : CustomApiBuilderBase
                 continue;
             }
 
-            parameters.Add(FromProperty(property, isOutput, optional: property.GetCustomAttribute<RequiredAttribute>() == null, description: null, logicalEntityName: null));
+            // Through AddParameter, so two properties differing only by case (Foo, foo) fail like two Add calls.
+            AddParameter(parameters, FromProperty(property, isOutput, optional: property.GetCustomAttribute<RequiredAttribute>() == null, description: null, logicalEntityName: null));
         }
 
         return parameters.ToArray();
