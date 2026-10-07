@@ -13,7 +13,7 @@ namespace Vela.Localization
     /// code and a template. The table schema is configurable (its logical name and the key / language / value column
     /// names) so it fits any existing labels table.
     /// <para>
-    /// The whole table is read once and cached as an in-memory snapshot, so a plugin run does not query per message.
+    /// Only active rows (<c>statecode</c> 0) are used. The whole table is read once and cached as an in-memory snapshot, so a plugin run does not query per message.
     /// By default the snapshot is memoized for the execution; pass <c>cacheFor</c> to reuse it across executions for
     /// that duration (mirroring the environment-variable cache). The table is read through the elevated system
     /// service, so lookups do not depend on the calling user's privilege.
@@ -22,6 +22,7 @@ namespace Vela.Localization
     public sealed class DataverseTableMessageSource : IMessageSource
     {
         private const string CacheKeyPrefix = "vela:labels:";
+        private const string StateCodeColumn = "statecode";
 
         private readonly ILocalPluginContext _context;
         private readonly IPluginCacheService _cache;
@@ -75,8 +76,10 @@ namespace Vela.Localization
             if (_cacheFor.HasValue)
             {
                 // Opt-in cross-execution cache. The cache is a process-wide singleton, so scope the key by
-                // organization id (and the table) to prevent labels bleeding across orgs on a shared worker.
-                string cacheKey = CacheKeyPrefix + _context.OrganizationId.ToString("N") + ":" + _table;
+                // organization id, and by the table AND its three columns: two sources over the same table with a
+                // different column mapping hold different snapshots.
+                string cacheKey = CacheKeyPrefix + _context.OrganizationId.ToString("N") + ":" + _table + ":" +
+                    _keyColumn + ":" + _languageColumn + ":" + _valueColumn;
                 return _cache.GetOrCreate(cacheKey, _cacheFor.Value, Load);
             }
 
@@ -90,7 +93,7 @@ namespace Vela.Localization
             IOrganizationService service = _context.SystemService;
             QueryExpression query = new QueryExpression(_table)
             {
-                ColumnSet = new ColumnSet(_keyColumn, _languageColumn, _valueColumn),
+                ColumnSet = new ColumnSet(_keyColumn, _languageColumn, _valueColumn, StateCodeColumn),
                 PageInfo = new PagingInfo { PageNumber = 1, Count = 5000 },
             };
 
@@ -101,7 +104,7 @@ namespace Vela.Localization
                 {
                     string? key = row.GetAttributeValue<string>(_keyColumn);
                     string? value = row.GetAttributeValue<string>(_valueColumn);
-                    if (string.IsNullOrEmpty(key) || value == null)
+                    if (string.IsNullOrEmpty(key) || value == null || IsInactive(row))
                     {
                         continue;
                     }
@@ -142,6 +145,23 @@ namespace Vela.Localization
                 default:
                     return 0;
             }
+        }
+
+        // A deactivated label (statecode other than Active) is ignored. The filter runs on the client so a row without
+        // a statecode (seeded straight into a test store) still counts as active.
+        private static bool IsInactive(Entity row)
+        {
+            if (!row.Contains(StateCodeColumn))
+            {
+                return false;
+            }
+
+            return row[StateCodeColumn] switch
+            {
+                OptionSetValue state => state.Value != 0,
+                int state => state != 0,
+                _ => false,
+            };
         }
 
         private static string Compose(int languageCode, string key) =>

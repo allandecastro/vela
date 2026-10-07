@@ -75,6 +75,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   organization's value to another should a worker be shared. Every key now carries the organization scope, and
   `Clear()` drops only that organization's entries instead of the whole process cache. A `PluginCacheService` you
   create yourself is unchanged.
+- **Localized messages fall back to the organization's base language.** A message missing in the user's language
+  (or a user with no language setting) went straight to the hard-coded `DefaultLanguageCode` (1033). The chain is now
+  user language, then `organization.languagecode` (read only when needed), then `DefaultLanguageCode`.
+  `IMessageService.ResolveOrganizationLanguageCode(cacheFor)` exposes the organization language (a new interface member).
 
 ### Added (Framework)
 
@@ -212,6 +216,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **A second `WhereRelated` no longer replaces the first.** Every call wrote the single
   `Criteria.AnyAllFilterLinkEntity` slot, so only the last related-record filter applied. Each call now adds its own
   child filter, and the filters combine with AND.
+- **The labels table source ignores deactivated rows and keys its cache by column mapping.** `DataverseTableMessageSource`
+  served templates from inactive rows, and its cross-execution snapshot was keyed by table only, so two sources over the
+  same table with different columns shared one snapshot. Rows whose `statecode` is not 0 are skipped, and the cache key
+  includes the key, language and value column names.
 
 ### Added (CLI)
 

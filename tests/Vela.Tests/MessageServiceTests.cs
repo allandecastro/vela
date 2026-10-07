@@ -541,4 +541,99 @@ public sealed class MessageServiceTests
         Assert.False(Service(ctx).TryGetMessage("", out string? message));
         Assert.Null(message);
     }
+
+    // ---- Organization language fallback / labels table scope (A-73) ------------------------------------
+
+    private static Entity Organization(int languageCode) =>
+        new Entity("organization", Org) { ["languagecode"] = languageCode };
+
+    [Fact]
+    public void A_message_missing_in_the_user_language_falls_back_to_the_organization_language_before_the_default()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1031), Organization(1036));
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DictionaryMessageSource().Add(1036, "K", "org").Add(1033, "K", "default"));
+
+        Assert.Equal("org", svc.GetMessage("K"));
+        Assert.True(svc.TryGetMessage("K", out string? message));
+        Assert.Equal("org", message);
+    }
+
+    [Fact]
+    public void The_default_language_still_applies_when_the_organization_language_has_no_template()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1031), Organization(1036));
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DictionaryMessageSource().Add(1033, "K", "default"));
+
+        Assert.Equal("default", svc.GetMessage("K"));
+    }
+
+    [Fact]
+    public void A_user_without_a_language_setting_resolves_to_the_organization_language()
+    {
+        ILocalPluginContext ctx = Context(Organization(1036));
+        MessageService svc = Service(ctx);
+
+        Assert.Equal(1036, svc.ResolveUserLanguageCode());
+        Assert.Equal(1036, svc.ResolveOrganizationLanguageCode());
+        Assert.Equal(1036, Service(ctx).ResolveUserLanguageCode(TimeSpan.FromMinutes(1)));
+        Assert.Equal(1036, Service(ctx).ResolveOrganizationLanguageCode(TimeSpan.FromMinutes(1)));
+    }
+
+    [Fact]
+    public void Without_an_organization_row_the_chain_ends_at_the_default()
+    {
+        ILocalPluginContext ctx = Context();
+        MessageService svc = Service(ctx);
+
+        Assert.Equal(0, svc.ResolveOrganizationLanguageCode());
+        Assert.Equal(1033, svc.ResolveUserLanguageCode());
+    }
+
+    [Fact]
+    public void The_missing_message_error_names_the_organization_language()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1031), Organization(1036));
+        MessageService svc = Service(ctx);
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => svc.GetMessage("NOPE"));
+        Assert.Contains("organization language 1036", ex.Message);
+    }
+
+    [Fact]
+    public void Labels_table_ignores_deactivated_rows()
+    {
+        var active = new Entity("vela_label", Guid.NewGuid()) { ["vela_key"] = "K", ["vela_lcid"] = 1033, ["vela_value"] = "active", ["statecode"] = new OptionSetValue(0) };
+        var inactive = new Entity("vela_label", Guid.NewGuid()) { ["vela_key"] = "OLD", ["vela_lcid"] = 1033, ["vela_value"] = "retired", ["statecode"] = new OptionSetValue(1) };
+        ILocalPluginContext ctx = Context(UserSettings(1033), active, inactive);
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DataverseTableMessageSource(ctx, new PluginCacheService(), "vela_label", "vela_key", "vela_lcid", "vela_value"));
+
+        Assert.Equal("active", svc.GetMessage("K"));
+        Assert.False(svc.TryGetMessage("OLD", out _));
+    }
+
+    [Fact]
+    public void Labels_table_cache_key_includes_the_column_mapping()
+    {
+        // Two sources over the same table, mapped to different value columns, share one cache: each must keep its
+        // own snapshot instead of the second reading the first one's.
+        var row = new Entity("vela_label", Guid.NewGuid())
+        {
+            ["vela_key"] = "K",
+            ["vela_lcid"] = 1033,
+            ["vela_value"] = "short",
+            ["vela_longvalue"] = "long",
+        };
+        ILocalPluginContext ctx = Context(UserSettings(1033), row);
+        var cache = new PluginCacheService();
+        var shortSource = new DataverseTableMessageSource(ctx, cache, "vela_label", "vela_key", "vela_lcid", "vela_value", cacheFor: TimeSpan.FromMinutes(5));
+        var longSource = new DataverseTableMessageSource(ctx, cache, "vela_label", "vela_key", "vela_lcid", "vela_longvalue", cacheFor: TimeSpan.FromMinutes(5));
+
+        Assert.True(shortSource.TryGetTemplate("K", 1033, out string? shortText));
+        Assert.True(longSource.TryGetTemplate("K", 1033, out string? longText));
+        Assert.Equal("short", shortText);
+        Assert.Equal("long", longText);
+    }
 }

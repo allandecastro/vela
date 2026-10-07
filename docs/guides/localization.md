@@ -2,7 +2,7 @@
 
 Surface messages, in particular business error messages, in the current user's language from a plugin handler.
 The message service resolves a template by key in the user's UI language (`usersettings.uilanguageid`), falls back
-to a default language when there is no translation, formats it with `string.Format`, and caches labels so a run
+to the organization's base language and then a default language when there is no translation, formats it with `string.Format`, and caches labels so a run
 does not query per message. It is a standard `IMessageService` resolved from the context, consistent with the rest
 of the framework (services + DI + caching).
 
@@ -57,7 +57,9 @@ context.GetRequiredService<IMessageService>()
 ```
 
 The whole table is read once through the elevated system service (so it works regardless of the calling user's
-privilege) and kept as an in-memory snapshot, so a plugin run does not query per message.
+privilege) and kept as an in-memory snapshot, so a plugin run does not query per message. Deactivated rows
+(`statecode` other than 0) are ignored, and the cross-execution snapshot is keyed by the table and its three
+column names, so two sources mapping the same table differently never share a snapshot.
 
 ### String (RESX) web resources
 
@@ -86,14 +88,15 @@ and treated as empty.
 ## Language resolution
 
 `GetMessage` resolves the **initiating** user's UI language from `usersettings.uilanguageid` - the person who
-triggered the operation, so the message is in their language even when the plugin runs as another user. When there
-is no translation for that language, it falls back to `DefaultLanguageCode` (1033 by default; set it to change the
-fallback). Use `GetMessageIn(lcid, key, args)` to resolve an explicit language.
+triggered the operation, so the message is in their language even when the plugin runs as another user (a user
+with no setting gets the organization's base language). When there is no translation for that language, it falls
+back to the organization's base language (`organization.languagecode`, read only when needed and memoized for the
+execution), then to `DefaultLanguageCode` (1033 by default; set it to change the last-resort language). Use `GetMessageIn(lcid, key, args)` to resolve an explicit language.
 
 ## Handling a missing key
 
 ```csharp
-// 1) Required: throws InvalidPluginExecutionException when no template exists (user language or default).
+// 1) Required: throws InvalidPluginExecutionException when no template exists (user, organization or default language).
 string text = context.GetMessage("ERR_REQUIRED", "name");
 
 // 2) Try: branch on presence.
@@ -108,13 +111,15 @@ if (context.TryGetMessage("ERR_REQUIRED", out string? text, "name"))
 The dictionary source needs no caching. The Dataverse table source reads the table once and, by default, memoizes
 the snapshot for the execution; pass `cacheFor` to reuse it **across executions** for that duration via the built-in
 [`IPluginCacheService`](caching.md). The resolved user language is likewise memoized for the execution, and can be
-cached across executions with `ResolveUserLanguageCode(cacheFor)`. Cross-execution caching is best-effort - it lasts
+cached across executions with `ResolveUserLanguageCode(cacheFor)` (and the organization language with
+`ResolveOrganizationLanguageCode(cacheFor)`). Cross-execution caching is best-effort - it lasts
 only as long as the Dataverse sandbox worker process, so treat it as a performance optimization, not a guarantee.
 
 ## Testing
 
 Sources resolve through the context's system service, so seed the label rows (and a `usersettings` row for the
-user's language) into the in-memory org and read them back:
+user's language, and an `organization` row with a `languagecode` to exercise the organization fallback) into the
+in-memory org and read them back:
 
 ```csharp
 Guid user = Guid.NewGuid();
