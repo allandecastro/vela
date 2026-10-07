@@ -195,4 +195,38 @@ public sealed class ExecutePipelineTests
         // EntityPluginBase / CustomApiBase, so a plugin deriving from it could never be registered.
         Assert.Null(typeof(PluginBase).Assembly.GetType("Vela.Plugin.PluginBase`1"));
     }
+
+    private sealed class RetryingPlugin : PluginBase
+    {
+        public RetryingPlugin()
+            : base(string.Empty, string.Empty)
+        {
+        }
+
+        public int Calls { get; private set; }
+
+        protected override void ExecuteDataversePlugin(ILocalPluginContext ctx)
+        {
+            ExecuteWithRetry<int>(ctx, () =>
+            {
+                Calls++;
+                throw new System.ServiceModel.FaultException<OrganizationServiceFault>(
+                    new OrganizationServiceFault { ErrorCode = -2147015902, Message = "throttled" });
+            });
+        }
+    }
+
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 3)]
+    public void The_context_aware_retry_helper_runs_once_inside_a_transaction(bool inTransaction, int expectedCalls)
+    {
+        PluginContextBuilder builder = new PluginContextBuilder();
+        builder.Context.IsInTransaction = inTransaction;
+        RetryingPlugin plugin = new RetryingPlugin();
+
+        Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(builder.BuildServiceProvider()));
+
+        Assert.Equal(expectedCalls, plugin.Calls);
+    }
 }

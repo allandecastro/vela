@@ -194,6 +194,32 @@ namespace Vela.Plugin
         }
 
         /// <summary>
+        /// Transaction-aware retry wrapper: retries safe-to-replay throttling faults, except inside a database
+        /// transaction (a synchronous pre/post-operation step), where a failed call aborts the transaction and the
+        /// operation therefore runs once. Prefer this overload in a plugin.
+        /// </summary>
+        /// <typeparam name="T">Result type.</typeparam>
+        /// <param name="context">The plugin context.</param>
+        /// <param name="operation">Operation to execute.</param>
+        /// <returns>Operation result.</returns>
+        protected static T ExecuteWithRetry<T>(ILocalPluginContext context, Func<T> operation)
+        {
+            return RetryPolicy.Execute(context, operation);
+        }
+
+        /// <summary>
+        /// Transaction-aware retry wrapper that also retries timeouts. Use only for an idempotent operation.
+        /// </summary>
+        /// <typeparam name="T">Result type.</typeparam>
+        /// <param name="context">The plugin context.</param>
+        /// <param name="operation">Idempotent operation to execute.</param>
+        /// <returns>Operation result.</returns>
+        protected static T ExecuteIdempotentWithRetry<T>(ILocalPluginContext context, Func<T> operation)
+        {
+            return RetryPolicy.Execute(context, operation, retryOnTimeout: true);
+        }
+
+        /// <summary>
         /// Executes plugin business logic.
         /// </summary>
         /// <param name="ctx">Local plugin context.</param>

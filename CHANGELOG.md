@@ -67,6 +67,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `EntityPluginBase<TEntity>` or `CustomApiBase`, and the package scanner never detected a plugin built on it: such a
   plugin was never registered. Read the step's unsecure / secure configuration through `UnsecureConfig` /
   `SecureConfig` on the Vela base class instead.
+- **`RetryPolicy` recognises throttling by error code only.** A fault whose message merely contained "throttle",
+  "temporar" or "too many requests" was replayed, including a business error that said "temporarily unavailable".
+  Only the three service-protection error codes are retried now.
 
 ### Added (Framework)
 
@@ -85,6 +88,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   it, so `apply` removed a table set in Dataverse by recreating the parameter.
 - **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase` and
   `EntityPluginBase<TEntity>` default their `maxDepth` to it instead of repeating the literal.
+- **Transaction-aware retry.** `RetryPolicy.Execute(ctx, operation, ...)` and the `ExecuteWithRetry(ctx, ...)` /
+  `ExecuteIdempotentWithRetry(ctx, ...)` helpers on `PluginBase` run the operation once when
+  `ctx.IsInTransaction` is true: a failed call aborts the transaction, so a replay cannot succeed.
 
 ### Changed (Framework)
 
@@ -189,6 +195,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   the `try` in `PluginBase.Execute`, so their exception escaped unwrapped and untraced, and the resolver was never
   disposed. Registration now runs inside the `try` (traced, wrapped in an `InvalidPluginExecutionException`, resolver
   disposed); a context construction failure is traced to the platform tracing service and wrapped too.
+- **`RetryPolicy` honours `Retry-After`.** A service-protection fault's `ErrorDetails["Retry-After"]` was ignored, so the
+  jittered backoff retried too early and was rejected again. The policy now waits that long, and rethrows at once when
+  the wait exceeds `RetryPolicy.MaxDelay` (30 s).
 
 ### Added (CLI)
 

@@ -1,6 +1,9 @@
 using System;
 using System.Net;
 using System.ServiceModel;
+using System.Diagnostics;
+using Moq;
+using Vela.Context;
 using Vela.Retry;
 using Microsoft.Xrm.Sdk;
 using Xunit;
@@ -35,7 +38,7 @@ public sealed class RetryPolicyTests
                 calls++;
                 if (calls < 3)
                 {
-                    throw Fault("The service is throttled, please try again later.");
+                    throw Fault("The service is throttled, please try again later.", errorCode: -2147015898);
                 }
 
                 return 7;
@@ -128,7 +131,7 @@ public sealed class RetryPolicyTests
 
         Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
             RetryPolicy.Execute<int>(
-                () => { calls++; throw Fault("throttled"); },
+                () => { calls++; throw Fault("throttled", errorCode: -2147015903); },
                 maxAttempts: 3,
                 initialDelayMs: 1));
 
@@ -149,7 +152,7 @@ public sealed class RetryPolicyTests
 
         Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
             RetryPolicy.Execute<int>(
-                () => { calls++; throw Fault("throttled"); },
+                () => { calls++; throw Fault("throttled", errorCode: -2147015903); },
                 maxAttempts: 3,
                 initialDelayMs: 0));
 
@@ -171,12 +174,14 @@ public sealed class RetryPolicyTests
     }
 
     [Theory]
-    [InlineData("The service is throttled", true)]
-    [InlineData("A temporary error occurred", true)]
-    [InlineData("Too many requests", true)]
+    // Classification is by service-protection error code only: a message that merely sounds transient is not
+    // replayed (a business error saying "temporarily unavailable" must surface at once).
+    [InlineData("The service is throttled", false)]
+    [InlineData("A temporary error occurred", false)]
+    [InlineData("Too many requests", false)]
     [InlineData("Request timeout exceeded", false)] // a timeout is not retried by default
     [InlineData("Record does not exist", false)]
-    public void Execute_ClassifiesOrganizationServiceFault_ByMessage(string faultMessage, bool expectedRetried)
+    public void Execute_DoesNotClassifyOrganizationServiceFault_ByMessage(string faultMessage, bool expectedRetried)
     {
         int calls = 0;
 
@@ -202,5 +207,113 @@ public sealed class RetryPolicyTests
                 initialDelayMs: 1));
 
         Assert.Equal(3, calls);
+    }
+
+    // ---- Retry-After ---------------------------------------------------------------------------------
+
+    private static FaultException<OrganizationServiceFault> Throttled(object retryAfter)
+    {
+        OrganizationServiceFault detail = new OrganizationServiceFault { Message = "throttled", ErrorCode = -2147015902 };
+        detail.ErrorDetails["Retry-After"] = retryAfter;
+        return new FaultException<OrganizationServiceFault>(detail, "throttled");
+    }
+
+    [Fact]
+    public void Execute_WaitsTheFaultsRetryAfter_BeforeRetrying()
+    {
+        int calls = 0;
+        Stopwatch watch = Stopwatch.StartNew();
+
+        int result = RetryPolicy.Execute(
+            () =>
+            {
+                calls++;
+                if (calls == 1)
+                {
+                    throw Throttled(TimeSpan.FromMilliseconds(300));
+                }
+
+                return 5;
+            },
+            maxAttempts: 2,
+            initialDelayMs: 0); // jitter alone would not wait at all
+
+        Assert.Equal(5, result);
+        Assert.Equal(2, calls);
+        Assert.True(watch.ElapsedMilliseconds >= 280, $"waited only {watch.ElapsedMilliseconds} ms");
+    }
+
+    [Theory]
+    [InlineData("seconds")]
+    [InlineData("text")]
+    public void Execute_ReadsARetryAfterGivenAsSecondsOrText(string shape)
+    {
+        object retryAfter = shape == "seconds" ? (object)0 : "00:00:00.010";
+        int calls = 0;
+
+        int result = RetryPolicy.Execute(
+            () => { calls++; if (calls == 1) { throw Throttled(retryAfter); } return 1; },
+            maxAttempts: 2,
+            initialDelayMs: 0);
+
+        Assert.Equal(1, result);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public void Execute_DoesNotRetry_WhenRetryAfterExceedsTheCap()
+    {
+        int calls = 0;
+        Stopwatch watch = Stopwatch.StartNew();
+
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+            RetryPolicy.Execute<int>(
+                () => { calls++; throw Throttled(RetryPolicy.MaxDelay + TimeSpan.FromMinutes(1)); },
+                maxAttempts: 3,
+                initialDelayMs: 1));
+
+        Assert.Equal(1, calls); // retrying earlier than asked would only be rejected again
+        Assert.True(watch.ElapsedMilliseconds < 5000);
+    }
+
+    // ---- Transactions --------------------------------------------------------------------------------
+
+    private static ILocalPluginContext ContextInTransaction(bool inTransaction, Mock<ILocalPluginContext>? mock = null)
+    {
+        mock ??= new Mock<ILocalPluginContext>();
+        mock.SetupGet(c => c.IsInTransaction).Returns(inTransaction);
+        return mock.Object;
+    }
+
+    [Fact]
+    public void Execute_WithContext_RunsOnce_InsideATransaction()
+    {
+        Mock<ILocalPluginContext> mock = new Mock<ILocalPluginContext>();
+        ILocalPluginContext ctx = ContextInTransaction(true, mock);
+        int calls = 0;
+
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+            RetryPolicy.Execute<int>(ctx, () => { calls++; throw Fault("throttled", errorCode: -2147015902); }, initialDelayMs: 1));
+
+        Assert.Equal(1, calls); // the failed call aborted the transaction: a replay cannot succeed
+        mock.Verify(c => c.Trace(It.Is<string>(m => m.Contains("transaction")), It.IsAny<object[]>()), Times.Once);
+    }
+
+    [Fact]
+    public void Execute_WithContext_Retries_OutsideATransaction()
+    {
+        ILocalPluginContext ctx = ContextInTransaction(false);
+        int calls = 0;
+
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+            RetryPolicy.Execute<int>(ctx, () => { calls++; throw Fault("throttled", errorCode: -2147015902); }, initialDelayMs: 1));
+
+        Assert.Equal(3, calls);
+    }
+
+    [Fact]
+    public void Execute_WithContext_RejectsANullContext()
+    {
+        Assert.Throws<ArgumentNullException>(() => RetryPolicy.Execute(null!, () => 1));
     }
 }

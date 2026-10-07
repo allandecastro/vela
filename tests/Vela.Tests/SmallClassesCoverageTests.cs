@@ -35,7 +35,7 @@ public sealed class SmallClassesCoverageTests
             calls++;
             if (calls == 1)
             {
-                throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault { Message = "request was throttled" });
+                throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault { Message = "request was throttled", ErrorCode = -2147015902 });
             }
 
             return 7;
@@ -65,7 +65,7 @@ public sealed class SmallClassesCoverageTests
         {
             calls++;
             throw new FaultException<OrganizationServiceFault>(
-                new OrganizationServiceFault { Message = "request was throttled" }); // transient, never recovers
+                new OrganizationServiceFault { Message = "request was throttled", ErrorCode = -2147015902 }); // transient, never recovers
         }, maxAttempts: 2, initialDelayMs: 1));
         Assert.Equal(2, calls);
     }
