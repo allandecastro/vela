@@ -92,7 +92,6 @@ public class DataverseRegistrationHelperTests
             Message: message,
             EntityLogicalName: entityLogicalName,
             StepKey: stepKey,
-            HandlerMethodName: string.Empty,
             Stage: stage,
             Mode: mode,
             ExecutionOrder: 1,

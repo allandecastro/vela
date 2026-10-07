@@ -308,7 +308,7 @@ public class DataverseRegistrationReaderTests
         Mock<IOrganizationService> mock = ServiceReturning("sdkmessageprocessingstep", step);
 
         var definition = new StepApplyDefinition(
-            "Zava.Plugins.AccountPlugin", "Update", "account", "my-key", string.Empty,
+            "Zava.Plugins.AccountPlugin", "Update", "account", "my-key",
             40, 0, 1, [], [], [], true, string.Empty, string.Empty);
 
         Assert.Equal(stepId, DataverseRegistration.FindStepId(mock.Object, pluginTypeId, definition));
@@ -331,7 +331,7 @@ public class DataverseRegistrationReaderTests
 
         // No stepKey → identity match on message/entity/stage/mode.
         var definition = new StepApplyDefinition(
-            "Zava.Plugins.AccountPlugin", "Update", "account", string.Empty, string.Empty,
+            "Zava.Plugins.AccountPlugin", "Update", "account", string.Empty,
             40, 0, 1, [], [], [], true, string.Empty, string.Empty);
 
         Assert.Equal(stepId, DataverseRegistration.FindStepId(mock.Object, pluginTypeId, definition));
@@ -342,7 +342,7 @@ public class DataverseRegistrationReaderTests
     {
         Mock<IOrganizationService> mock = ServiceReturning("sdkmessageprocessingstep");
         var definition = new StepApplyDefinition(
-            "Zava.Plugins.AccountPlugin", "Update", "account", "missing-key", string.Empty,
+            "Zava.Plugins.AccountPlugin", "Update", "account", "missing-key",
             40, 0, 1, [], [], [], true, string.Empty, string.Empty);
 
         Assert.Null(DataverseRegistration.FindStepId(mock.Object, Guid.NewGuid(), definition));

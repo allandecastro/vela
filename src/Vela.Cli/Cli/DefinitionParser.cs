@@ -23,7 +23,6 @@ internal static class DefinitionParser
             Message: TryGetString(definition, "message") ?? string.Empty,
             EntityLogicalName: TryGetString(definition, "entityLogicalName") ?? string.Empty,
             StepKey: TryGetString(definition, "stepKey") ?? string.Empty,
-            HandlerMethodName: TryGetString(definition, "handlerMethodName") ?? string.Empty,
             Stage: TryGetInt(definition, "stage"),
             Mode: TryGetInt(definition, "mode"),
             ExecutionOrder: TryGetInt(definition, "executionOrder", 1),

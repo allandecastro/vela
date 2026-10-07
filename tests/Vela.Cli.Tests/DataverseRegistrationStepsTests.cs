@@ -26,7 +26,7 @@ public sealed class DataverseRegistrationStepsTests
     private static StepApplyDefinition Def(
         string message = "Update", string entity = "account", string stepKey = "", int stage = 40, int mode = 0,
         int order = 1, string[]? filtering = null, ImageApplyDefinition[]? pre = null, ImageApplyDefinition[]? post = null)
-        => new(Plugin, message, entity, stepKey, "Execute", stage, mode, order,
+        => new(Plugin, message, entity, stepKey, stage, mode, order,
             filtering ?? Array.Empty<string>(), pre ?? Array.Empty<ImageApplyDefinition>(), post ?? Array.Empty<ImageApplyDefinition>(),
             Enabled: true, UnsecureConfig: "", SecureConfig: "");
 

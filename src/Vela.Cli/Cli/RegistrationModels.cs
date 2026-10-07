@@ -80,7 +80,7 @@ public sealed record ApplyOperation(string Action, string Kind, string Type, str
 /// Lets <c>plan</c> surface a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) that the
 /// step/custom-API diff alone cannot see.</summary>
 public sealed record PackagePublishAction(string PackageName, bool IsCreate);
-public sealed record StepApplyDefinition(string PluginTypeName, string Message, string EntityLogicalName, string StepKey, string HandlerMethodName, int Stage, int Mode, int ExecutionOrder, string[] FilteringAttributes, ImageApplyDefinition[] PreImages, ImageApplyDefinition[] PostImages, bool Enabled, string UnsecureConfig, string SecureConfig, Guid ImpersonatingUserId = default, int SupportedDeployment = 0);
+public sealed record StepApplyDefinition(string PluginTypeName, string Message, string EntityLogicalName, string StepKey, int Stage, int Mode, int ExecutionOrder, string[] FilteringAttributes, ImageApplyDefinition[] PreImages, ImageApplyDefinition[] PostImages, bool Enabled, string UnsecureConfig, string SecureConfig, Guid ImpersonatingUserId = default, int SupportedDeployment = 0);
 public sealed record ImageApplyDefinition(string Alias, string[] Attributes);
 public sealed record StepImageApplyDefinition(string Alias, string[] Attributes, int ImageType);
 public sealed record CustomApiApplyDefinition(string PluginTypeName, string UniqueName, bool IsFunction, bool IsBound, string? BoundEntityLogicalName, string? ExecutePrivilegeName, bool IsPrivate, int AllowedCustomProcessingStepType, int BindingType, bool WorkflowSdkStepEnabled, CustomApiParameterApplyDefinition[] InputParameters, CustomApiParameterApplyDefinition[] OutputParameters);
