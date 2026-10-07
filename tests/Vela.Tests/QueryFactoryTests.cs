@@ -140,9 +140,9 @@ namespace Vela.Tests
                 .WhereRelated<TestAccount>(c => c.ParentCustomerId, a => a.AccountId, JoinOperator.Any,
                     link => link.Where(a => a.Name, ConditionOperator.Equal, "Zava"));
 
-            Assert.NotNull(query.Criteria.AnyAllFilterLinkEntity);
-            Assert.Equal(JoinOperator.Any, query.Criteria.AnyAllFilterLinkEntity.JoinOperator);
-            Assert.Single(query.Criteria.AnyAllFilterLinkEntity.LinkCriteria.Conditions);
+            Assert.NotNull(query.Criteria.Filters[0].AnyAllFilterLinkEntity);
+            Assert.Equal(JoinOperator.Any, query.Criteria.Filters[0].AnyAllFilterLinkEntity.JoinOperator);
+            Assert.Single(query.Criteria.Filters[0].AnyAllFilterLinkEntity.LinkCriteria.Conditions);
         }
     }
 }

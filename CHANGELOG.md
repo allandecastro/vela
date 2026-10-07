@@ -63,6 +63,27 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `CustomApiPropertyChange`) and `CustomApiDefinitionReader`. Nothing in Vela used them, and the comparer did not
   match what `vela plan` compares. Read the definitions with `FrameworkManifestScanner.Scan(assembly)`, and diff
   them against an environment with `vela plan`.
+- **`PluginBase<TConfig>` is removed.** It derived from `PluginBase` directly, so it could not be combined with
+  `EntityPluginBase<TEntity>` or `CustomApiBase`, and the package scanner never detected a plugin built on it: such a
+  plugin was never registered. Read the step's unsecure / secure configuration through `UnsecureConfig` /
+  `SecureConfig` on the Vela base class instead.
+- **`RetryPolicy` recognises throttling by error code only.** A fault whose message merely contained "throttle",
+  "temporar" or "too many requests" was replayed, including a business error that said "temporarily unavailable".
+  Only the three service-protection error codes are retried now.
+- **The injected `IPluginCacheService` is scoped to the executing organization.** The framework's own entries were
+  keyed by organization id, but user keys were stored raw in the process-wide cache, so the same key could serve one
+  organization's value to another should a worker be shared. Every key now carries the organization scope, and
+  `Clear()` drops only that organization's entries instead of the whole process cache. A `PluginCacheService` you
+  create yourself is unchanged.
+- **Localized messages fall back to the organization's base language.** A message missing in the user's language
+  (or a user with no language setting) went straight to the hard-coded `DefaultLanguageCode` (1033). The chain is now
+  user language, then `organization.languagecode` (read only when needed), then `DefaultLanguageCode`.
+  `IMessageService.ResolveOrganizationLanguageCode(cacheFor)` exposes the organization language (a new interface member).
+- **Retry always takes the plugin context, and skips retrying inside a transaction.** The context-free
+  `RetryPolicy.Execute(operation, ...)` overloads and `PluginBase.ExecuteWithRetry(operation)` /
+  `ExecuteIdempotentWithRetry(operation)` are removed. Use `RetryPolicy.Execute(ctx, operation, ...)` and
+  `ExecuteWithRetry(ctx, operation)` / `ExecuteIdempotentWithRetry(ctx, operation)`: when `ctx.IsInTransaction` is
+  true the operation runs once, because a failed call aborts the transaction and a replay cannot succeed.
 
 ### Added (Framework)
 
@@ -79,6 +100,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `RequestParameter` and `ResponseParameter`, or `[LogicalEntityName("contact")]` (`Vela.Messages`) on a model
   property. An early-bound entity parameter (`Account`) uses its own table. Before, the framework had no way to set
   it, so `apply` removed a table set in Dataverse by recreating the parameter.
+- **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase`,
+  `EntityPluginBase<TEntity>`, `CustomApiBase` and `CustomApiBase<TRequest, TResponse>` default their `maxDepth` to it
+  instead of repeating the literal.
 
 ### Changed (Framework)
 
@@ -90,6 +114,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ctx.TraceExecutionSnapshot(phase)` still traces values (`TraceSnapshotDetail.Metadata` for names only).
 - **Dataverse call tracing is one line per event** (`Dataverse.Update start scope=User depth=1 entity=account; id=...`
   then `Dataverse.Update ok 42 ms`) instead of an 11-line block per call, which filled the ~10 KB trace log.
+- **Less work per execution.** `ctx.Service`, `ctx.SystemService` and `ctx.NotificationService` are created on first
+  use instead of for every execution, and the reflection the context does on every run (context interface types,
+  context properties read by name, the telemetry logger and `LogMetric` lookups) is resolved once per process. A typed
+  Custom API finds its request type's auto-properties once per type instead of reflecting over every input parameter
+  on every execution.
 
 ### Fixed (Framework)
 
@@ -178,6 +207,37 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   shares a name is no longer treated as a plugin (VELA011, VELA012, VELA019) or a step builder (generator); VELA011
   and VELA019 skip compilations that reference neither the SDK nor Vela. The fluent-chain walk the analyzers and the
   generator each copied is now one shared, tested walker, so every rule sees parentheses and `!` the same way.
+- **A failure while building the execution context or registering services follows the handler failure contract.**
+  `ConfigureServices`, an `[assembly: VelaServiceRegistrar]` and the `LocalPluginContext` constructor ran before
+  the `try` in `PluginBase.Execute`, so their exception escaped unwrapped and untraced, and the resolver was never
+  disposed. Registration now runs inside the `try` (traced, wrapped in an `InvalidPluginExecutionException`, resolver
+  disposed); a context construction failure is traced to the platform tracing service and wrapped too. Tracing in the
+  failure handlers is best-effort: a tracing service that throws no longer replaces the original failure (or a
+  `PluginBusinessException`'s message).
+- **`RetryPolicy` honours `Retry-After`.** A service-protection fault's `ErrorDetails["Retry-After"]` was ignored, so the
+  jittered backoff retried too early and was rejected again. The policy now waits that long, and rethrows at once when
+  the wait exceeds `RetryPolicy.MaxDelay` (30 s).
+- **Typed query values reach Dataverse in the shape it compares.** `ToFetchXml()` wrote a `DateTime` without
+  milliseconds or zone (a UTC instant was read in the user's time zone) and an enum as its member name
+  (`value="Active"`). A UTC `DateTime` is now written as `yyyy-MM-ddTHH:mm:ss.fffZ` (a local one converted to UTC,
+  an `Unspecified` one zone-less), a `DateTimeOffset` keeps its offset, and an enum is written as its integer. The
+  typed condition helpers (`Where`, `WhereIn`, `WhereLink`, `Condition`, the `QueryExpression` extensions) also turn
+  an enum value into its integer, which a `QueryExpression` needs.
+- **A second `WhereRelated` no longer replaces the first.** Every call wrote the single
+  `Criteria.AnyAllFilterLinkEntity` slot, so only the last related-record filter applied. Each call now adds its own
+  child filter, and the filters combine with AND.
+- **The labels table source ignores deactivated rows and keys its cache by column mapping.** `DataverseTableMessageSource`
+  served templates from inactive rows, and its cross-execution snapshot was keyed by table only, so two sources over the
+  same table with different columns shared one snapshot. Rows whose `statecode` is not 0 are skipped, and the cache key
+  includes the key, language and value column names.
+- **`RetrieveAll` / `ToList` no longer leave the query on its last page.** Paging overwrote the query's `PageInfo`,
+  so a reused `TypedQuery` kept the last page number and cookie. The caller's `PageInfo` is restored afterwards.
+- **File helpers cap the block size at 4 MB.** `UploadFile` / `DownloadFile` passed a larger `blockSize` straight to
+  Dataverse, which rejects blocks above 4 MB; it is now capped (`FileColumnExtensions.MaxBlockSize`). When
+  `InitializeFileBlocksDownload` reports `IsChunkingSupported = false`, `DownloadFile` reads the whole file in one
+  block, as Dataverse requires. `DownloadFile` also assembles the content in one buffer instead of a `List<byte>`.
+- **`CustomApiResponse` uses its API unique name.** The constructor ignored its `apiUniqueName` argument, so a typed
+  Custom API response had no `ResponseName`. It now sets `ResponseName`, as `CustomApiRequest` sets `RequestName`.
 
 ### Added (CLI)
 

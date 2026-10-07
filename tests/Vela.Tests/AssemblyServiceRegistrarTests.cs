@@ -31,8 +31,24 @@ namespace Vela.Tests
 
     internal sealed class TestAssemblyRegistrar : IServiceRegistrar
     {
+        // Shared variable that makes this registrar fail, for the registration-failure tests ("business" throws a
+        // PluginBusinessException, any other string an InvalidOperationException). Absent everywhere else.
+        public const string ThrowSwitch = "vela.tests.registrar.throw";
+
         public void Register(SimpleServiceResolver services, ILocalPluginContext context)
-            => services.AddScoped<ISentinel>(_ => new Sentinel("assembly"));
+        {
+            if (context.GetSharedVariable(ThrowSwitch) is string mode)
+            {
+                if (mode == "business")
+                {
+                    throw new PluginBusinessException("Registrar says no.");
+                }
+
+                throw new InvalidOperationException("registrar boom");
+            }
+
+            services.AddScoped<ISentinel>(_ => new Sentinel("assembly"));
+        }
     }
 
     // A registrar type that does not implement IServiceRegistrar via a parameterless ctor, for the guard tests.

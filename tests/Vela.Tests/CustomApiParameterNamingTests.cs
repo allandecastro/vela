@@ -47,6 +47,14 @@ public sealed class CustomApiParameterNamingTests
         Assert.Equal("echo:hi", response.Echo);
     }
 
+    [Fact]
+    public void CustomApiResponse_and_request_carry_the_api_unique_name()
+    {
+        // The constructor argument used to be ignored on the response side.
+        Assert.Equal("test_Echo", new EchoResponse().ResponseName);
+        Assert.Equal("test_Echo", new EchoRequest().RequestName);
+    }
+
     private sealed class EchoLightApi : CustomApiBase
     {
         public EchoLightApi() : base(string.Empty, string.Empty) { }

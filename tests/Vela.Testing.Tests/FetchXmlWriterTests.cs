@@ -278,7 +278,7 @@ namespace Vela.Testing.Tests
             string xml = query.ToFetchXml();
             Assert.Contains("operator=\"on-or-after\"", xml);                 // kebab-case fallback for a date operator
             Assert.Contains("entityname=\"acct\"", xml);                       // condition targets a linked alias
-            Assert.Contains("value=\"2024-01-15T00:00:00\"", xml);             // DateTime formatting
+            Assert.Contains("value=\"2024-01-15T00:00:00.000\"", xml);         // Unspecified DateTime: milliseconds, no zone
         }
 
         [Fact]

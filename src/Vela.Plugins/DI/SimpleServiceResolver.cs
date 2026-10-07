@@ -71,9 +71,14 @@ namespace Vela.DI
             yield return Scoped(() => context.Service);
             yield return Scoped(() => context.TracingService);
             yield return Scoped(() => context.Logger ?? NullLogger.Instance);
-            yield return Scoped<IPluginCacheService>(() => GlobalCacheService);
-            yield return Scoped<IEnvironmentVariableReader>(() => new EnvironmentVariableReader(context, GlobalCacheService));
-            yield return Scoped<IMessageService>(() => new MessageService(context, GlobalCacheService));
+            // The injected cache is the organization-scoped view of the process-wide cache: user keys cannot collide
+            // across organizations, and Clear() only drops this organization's entries (the framework's own entries
+            // included, since the built-in services go through the same view).
+            IPluginCacheService? scopedCache = null;
+            IPluginCacheService ScopedCache() => scopedCache ??= new OrganizationScopedCacheService(GlobalCacheService, context.OrganizationId);
+            yield return Scoped<IPluginCacheService>(ScopedCache);
+            yield return Scoped<IEnvironmentVariableReader>(() => new EnvironmentVariableReader(context, ScopedCache()));
+            yield return Scoped<IMessageService>(() => new MessageService(context, ScopedCache()));
             if (context.ManagedIdentityService != null)
             {
                 yield return Scoped(() => context.ManagedIdentityService);

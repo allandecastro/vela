@@ -41,9 +41,16 @@ change.
 - **Typed query builder = typed `QueryExpression`.** `Query.For<T>()` adds type safety and attribute-name
   mapping; it does **not** add capabilities beyond `QueryExpression` (`ToFetchXml()` renders the same query as
   FetchXML, and you can still pass a `FetchExpression` straight to the service).
-- **Retry classifies transients with a fixed rule.** `RetryPolicy` retries `TimeoutException`,
-  `WebException` and `FaultException<OrganizationServiceFault>` matching `timeout`/`throttle`/`temporar`, with
-  attempt-scaled backoff - the classification isn't pluggable.
+- **Retry classifies transients with a fixed rule.** `RetryPolicy` retries only service-protection faults,
+  recognised by their error code (number of requests, combined execution time, concurrent requests), never by
+  message text. It waits the fault's `Retry-After`, and rethrows when that wait exceeds `RetryPolicy.MaxDelay`
+  (30 s); without one it uses jittered exponential backoff. Timeouts (`TimeoutException`, `WebException`, a fault
+  whose message mentions `timeout`) are retried only with `retryOnTimeout: true`, for idempotent operations. The
+  classification isn't pluggable.
+- **No retry inside a transaction.** A failed call in a synchronous pre/post-operation step aborts the database
+  transaction, so a replay cannot succeed. Every retry entry point therefore takes the context
+  (`RetryPolicy.Execute(ctx, ...)`, or `ExecuteWithRetry(ctx, ...)` / `ExecuteIdempotentWithRetry(ctx, ...)` on the
+  Vela base): inside a transaction the operation runs once.
 
 ## Vela.Cli
 

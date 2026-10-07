@@ -95,8 +95,8 @@ namespace Vela.Plugin
     /// </remarks>
     /// <param name="unsecureConfig">Unsecure JSON configuration.</param>
     /// <param name="secureConfig">Secure JSON configuration.</param>
-    /// <param name="maxDepth">Depth guard threshold.</param>
-    public abstract class EntityPluginBase<TEntity>(string unsecureConfig, string secureConfig, int maxDepth = 8) : PluginBase(unsecureConfig, secureConfig, maxDepth) where TEntity : Entity
+    /// <param name="maxDepth">Depth guard threshold (defaults to <see cref="PluginBase.DefaultMaxDepth"/>).</param>
+    public abstract class EntityPluginBase<TEntity>(string unsecureConfig, string secureConfig, int maxDepth = PluginBase.DefaultMaxDepth) : PluginBase(unsecureConfig, secureConfig, maxDepth) where TEntity : Entity
     {
         private volatile StepDefinition[]? _stepDefinitions;
         // Runtime handler delegates keyed by their (reference-identity) StepDefinition, retained so the matched

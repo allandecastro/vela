@@ -79,11 +79,13 @@ namespace Vela.Messages
     /// </summary>
     public abstract class CustomApiResponse : TypedResponse
     {
-        /// <summary>Creates the response bound to the custom API whose response properties it maps.</summary>
+        /// <summary>
+        /// Creates the response bound to the custom API whose response properties it maps, and sets
+        /// <see cref="OrganizationResponse.ResponseName"/> to the API unique name (mirroring
+        /// <see cref="CustomApiRequest"/>'s <see cref="OrganizationRequest.RequestName"/>).
+        /// </summary>
         /// <param name="apiUniqueName">The custom API unique name (for example <c>publisher_MyApi</c>).</param>
-        protected CustomApiResponse(string apiUniqueName)
-        {
-        }
+        protected CustomApiResponse(string apiUniqueName) => ResponseName = apiUniqueName;
     }
 
     /// <summary>A typed Create request whose <c>Target</c> is the early-bound <typeparamref name="TEntity"/>.</summary>

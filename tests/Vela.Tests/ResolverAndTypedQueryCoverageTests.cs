@@ -220,7 +220,7 @@ public sealed class ResolverAndTypedQueryCoverageTests
         QueryExpression related = Query.For<TestAccount>()
             .WhereRelated<TestAccount>(a => a.AccountId, c => c.AccountId, JoinOperator.Any, l => l.Where(c => c.Name, ConditionOperator.NotNull))
             .Build();
-        Assert.NotNull(related.Criteria.AnyAllFilterLinkEntity);
+        Assert.NotNull(related.Criteria.Filters[0].AnyAllFilterLinkEntity);
 
         QueryExpression agg = Query.For<TestAccount>()
             .GroupBy(a => a.Name, "byname")

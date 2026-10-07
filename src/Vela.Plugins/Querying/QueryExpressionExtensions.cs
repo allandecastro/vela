@@ -45,7 +45,7 @@ public static class QueryExpressionExtensions
     {
         query = query ?? throw new ArgumentNullException(nameof(query));
         string logicalName = TypedQueryNames.GetAttributeLogicalName(column);
-        query.Criteria.AddCondition(new ConditionExpression(logicalName, conditionOperator, values ?? Array.Empty<object>()));
+        query.Criteria.AddCondition(new ConditionExpression(logicalName, conditionOperator, TypedQueryValues.Normalize(values)));
         return query;
     }
 
@@ -174,7 +174,7 @@ public sealed class TypedFilterBuilder<TEntity>(FilterExpression filter)
         params object[] values)
     {
         string logicalName = TypedQueryNames.GetAttributeLogicalName(column);
-        _filter.AddCondition(new ConditionExpression(logicalName, conditionOperator, values ?? Array.Empty<object>()));
+        _filter.AddCondition(new ConditionExpression(logicalName, conditionOperator, TypedQueryValues.Normalize(values)));
         return this;
     }
 

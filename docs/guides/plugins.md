@@ -487,7 +487,9 @@ modelled: update `statecode` / `statuscode` with `OnUpdate()` instead.
 (kill-switch or phased rollout); `apply` sets the step's state accordingly and `plan` shows the transition. Re-enabling
 is just removing the `Disabled()` marker.
 
-**Step configuration** - both strings reach the plugin constructor `(string unsecureConfig, string secureConfig)`.
+**Step configuration** - both strings reach the plugin constructor `(string unsecureConfig, string secureConfig)`,
+and the base class exposes them as the protected `UnsecureConfig` / `SecureConfig` properties (never null). Parse
+them yourself (for example with Newtonsoft.Json) when the step carries structured settings.
 
 - `WithUnsecureConfig("...")` holds non-sensitive settings. It is compiled into the assembly, stored unencrypted
   by Dataverse and printed verbatim in `plan`/`inspect` output.
@@ -542,7 +544,7 @@ The rules the chain encodes:
 - `entity.Clone()` - A detached, create-ready copy of a record for the "duplicate a record" pattern (see [Duplicating a record](#duplicating-a-record-clone) below)
 - `ctx.Tag` / `ctx.GetSharedVariable("key")` / `ctx.TryGetSharedVariable<T>("key", out var v)` - Read shared variables: the client-supplied `tag`, a value set by an earlier plugin in the same operation, or one inherited from the parent context of a cascaded operation
 - `ctx.IsApplicationUser`, `ctx.EnvironmentId`, `ctx.TenantId`, `ctx.InitiatingUserAgent`, `ctx.IsPortalsClientCall`, `ctx.PortalsContactId` - Extended execution context helpers with graceful fallback
-- `service.UploadFile(target, "vela_doc", "name.ext", bytes)` / `service.DownloadFile(target, "vela_doc")` / `service.DeleteFile(...)` - One-call File/Image column helpers (`using Vela.Files;`) that drive the block upload/download protocol for you
+- `service.UploadFile(target, "vela_doc", "name.ext", bytes)` / `service.DownloadFile(target, "vela_doc")` / `service.DeleteFile(...)` - One-call File/Image column helpers (`using Vela.Files;`) that drive the block upload/download protocol for you (blocks of at most 4 MB, the platform maximum; a larger `blockSize` is capped; a file the platform serves without chunking is downloaded in one block)
 - `ctx.GetEnvironmentVariable("adc_ApiBaseUrl")` / `ctx.GetEnvironmentVariableAs<int>("adc_MaxRetries")` - Read a Dataverse environment variable (see [Environment variables](#environment-variables) below)
 - `ctx.AcquireManagedIdentityToken(scopes)` - Acquire token via `IManagedIdentityService` when available
 - `ctx.LogInformation(...)` / `ctx.LogWarning(...)` / `ctx.LogError(ex, ...)` / `ctx.LogMetric(...)` - Leveled, structured telemetry to the trace log and Application Insights (see [Telemetry & Application Insights](telemetry.md))

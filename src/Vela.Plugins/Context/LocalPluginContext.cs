@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
 using Vela.DI;
@@ -28,6 +29,20 @@ namespace Vela.Context
         private readonly EntityCollection? _bulkTargets;
         private readonly IReadOnlyList<EntityImageCollection> _bulkPreEntityImagesCollection;
         private readonly IReadOnlyList<EntityImageCollection> _bulkPostEntityImagesCollection;
+        private IOrganizationService? _service;
+        private IOrganizationService? _systemService;
+        private IServiceEndpointNotificationService? _notificationService;
+
+        // Reflection results are the same for every execution of a worker, so resolve them once per process instead
+        // of on every plugin invocation: the context interface types, the telemetry logger type, the context property
+        // accessors read by name, and the LogMetric extension method.
+        private static readonly Type[] PreferredContextTypes = ResolvePreferredContextTypes();
+        private static readonly Type? PluginTelemetryLoggerType =
+            Type.GetType("Microsoft.Xrm.Sdk.PluginTelemetry.ILogger, Microsoft.Xrm.Sdk", throwOnError: false);
+        private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> ContextProperties =
+            new ConcurrentDictionary<(Type, string), PropertyInfo?>();
+        private static readonly ConcurrentDictionary<Type, MethodInfo?> LogMetricMethods =
+            new ConcurrentDictionary<Type, MethodInfo?>();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LocalPluginContext"/> class.
@@ -40,11 +55,8 @@ namespace Vela.Context
             PluginExecutionContext = ResolveExecutionContext(serviceProvider);
             TracingService = serviceProvider.GetService(typeof(ITracingService)) as ITracingService ?? new NullTracingService();
             _safeTracingService = TracingService;
-            NotificationService = serviceProvider.GetService(typeof(IServiceEndpointNotificationService)) as IServiceEndpointNotificationService ?? new NullNotificationService();
             OrganizationServiceFactory = serviceProvider.GetService(typeof(IOrganizationServiceFactory)) as IOrganizationServiceFactory
                 ?? throw new InvalidPluginExecutionException("IOrganizationServiceFactory is unavailable.");
-            Service = new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.UserId), this, "User");
-            SystemService = new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(null), this, "System");
             Logger = serviceProvider.GetService(typeof(ILogger)) as ILogger ?? NullLogger.Instance;
             ManagedIdentityService = serviceProvider.GetService(typeof(IManagedIdentityService)) as IManagedIdentityService;
             _pluginTelemetryLogger = ResolvePluginTelemetryLogger(serviceProvider);
@@ -78,16 +90,22 @@ namespace Vela.Context
         public ITracingService TracingService { get; }
 
         /// <inheritdoc />
-        public IServiceEndpointNotificationService NotificationService { get; }
+        public IServiceEndpointNotificationService NotificationService =>
+            _notificationService ??= ServiceProvider.GetService(typeof(IServiceEndpointNotificationService)) as IServiceEndpointNotificationService
+                ?? new NullNotificationService();
 
         /// <inheritdoc />
         public IOrganizationServiceFactory OrganizationServiceFactory { get; }
 
         /// <inheritdoc />
-        public IOrganizationService Service { get; }
+        /// <remarks>Created on first use: an execution that never calls Dataverse creates no service.</remarks>
+        public IOrganizationService Service =>
+            _service ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.UserId), this, "User");
 
         /// <inheritdoc />
-        public IOrganizationService SystemService { get; }
+        /// <remarks>Created on first use.</remarks>
+        public IOrganizationService SystemService =>
+            _systemService ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(null), this, "System");
 
         /// <inheritdoc />
         public ILogger Logger { get; }
@@ -391,8 +409,7 @@ namespace Vela.Context
 
         private static object? ResolvePluginTelemetryLogger(IServiceProvider serviceProvider)
         {
-            Type? loggerType = Type.GetType("Microsoft.Xrm.Sdk.PluginTelemetry.ILogger, Microsoft.Xrm.Sdk", throwOnError: false);
-            return loggerType == null ? null : serviceProvider.GetService(loggerType);
+            return PluginTelemetryLoggerType == null ? null : serviceProvider.GetService(PluginTelemetryLoggerType);
         }
 
         private static Guid? ResolveContextGuid(object context, string propertyName)
@@ -488,7 +505,9 @@ namespace Vela.Context
                 return false;
             }
 
-            PropertyInfo? property = context.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+            PropertyInfo? property = ContextProperties.GetOrAdd(
+                (context.GetType(), propertyName),
+                static key => key.Item1.GetProperty(key.Item2, BindingFlags.Instance | BindingFlags.Public));
             if (property == null)
             {
                 return false;
@@ -568,39 +587,25 @@ namespace Vela.Context
             try
             {
                 // Application Insights custom metrics are exposed through the static
-                // Microsoft.Xrm.Sdk.PluginTelemetry.LoggerExtensions.LogMetric(ILogger, string, double, ...).
-                Type? extensions = Type.GetType("Microsoft.Xrm.Sdk.PluginTelemetry.LoggerExtensions, Microsoft.Xrm.Sdk", throwOnError: false);
-                if (extensions == null)
+                // Microsoft.Xrm.Sdk.PluginTelemetry.LoggerExtensions.LogMetric(ILogger, string, double, ...). The
+                // matching overload depends only on the logger's type, so it is looked up once per type.
+                MethodInfo? method = LogMetricMethods.GetOrAdd(_pluginTelemetryLogger.GetType(), FindLogMetric);
+                if (method == null)
                 {
                     return;
                 }
 
-                foreach (MethodInfo method in extensions.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                ParameterInfo[] parameters = method.GetParameters();
+                object?[] callArgs = new object?[parameters.Length];
+                callArgs[0] = _pluginTelemetryLogger;
+                callArgs[1] = name;
+                callArgs[2] = value;
+                for (int i = 3; i < parameters.Length; i++)
                 {
-                    if (method.Name != "LogMetric")
-                    {
-                        continue;
-                    }
-
-                    ParameterInfo[] parameters = method.GetParameters();
-                    if (parameters.Length >= 3
-                        && parameters[0].ParameterType.IsInstanceOfType(_pluginTelemetryLogger)
-                        && parameters[1].ParameterType == typeof(string)
-                        && parameters[2].ParameterType == typeof(double))
-                    {
-                        object?[] callArgs = new object?[parameters.Length];
-                        callArgs[0] = _pluginTelemetryLogger;
-                        callArgs[1] = name;
-                        callArgs[2] = value;
-                        for (int i = 3; i < parameters.Length; i++)
-                        {
-                            callArgs[i] = parameters[i].HasDefaultValue ? parameters[i].DefaultValue : null;
-                        }
-
-                        method.Invoke(null, callArgs);
-                        return;
-                    }
+                    callArgs[i] = parameters[i].HasDefaultValue ? parameters[i].DefaultValue : null;
                 }
+
+                method.Invoke(null, callArgs);
             }
             catch (Exception ex)
             {
@@ -608,16 +613,37 @@ namespace Vela.Context
             }
         }
 
-        private static IPluginExecutionContext ResolveExecutionContext(IServiceProvider serviceProvider)
+        private static MethodInfo? FindLogMetric(Type loggerType)
         {
-            // Dataverse exposes successive context interface versions (IPluginExecutionContext2..7), each
-            // adding members. We request the richest one the running platform offers and fall back to
-            // older versions so the framework keeps working across environments. The types are resolved
-            // by name (Type.GetType) because older SDK assemblies may not define the newer interfaces.
-            // All versions derive from IPluginExecutionContext, so the resolved instance is returned as
-            // that common type.
-            object? context = null;
-            string[] preferredContextTypes =
+            Type? extensions = Type.GetType("Microsoft.Xrm.Sdk.PluginTelemetry.LoggerExtensions, Microsoft.Xrm.Sdk", throwOnError: false);
+            if (extensions == null)
+            {
+                return null;
+            }
+
+            foreach (MethodInfo method in extensions.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            {
+                if (method.Name != "LogMetric")
+                {
+                    continue;
+                }
+
+                ParameterInfo[] parameters = method.GetParameters();
+                if (parameters.Length >= 3
+                    && parameters[0].ParameterType.IsAssignableFrom(loggerType)
+                    && parameters[1].ParameterType == typeof(string)
+                    && parameters[2].ParameterType == typeof(double))
+                {
+                    return method;
+                }
+            }
+
+            return null;
+        }
+
+        private static Type[] ResolvePreferredContextTypes()
+        {
+            string[] names =
             {
                 "Microsoft.Xrm.Sdk.IPluginExecutionContext7, Microsoft.Xrm.Sdk",
                 "Microsoft.Xrm.Sdk.IPluginExecutionContext6, Microsoft.Xrm.Sdk",
@@ -628,14 +654,31 @@ namespace Vela.Context
                 "Microsoft.Xrm.Sdk.IPluginExecutionContext, Microsoft.Xrm.Sdk"
             };
 
-            foreach (string typeName in preferredContextTypes)
+            List<Type> types = new List<Type>(names.Length);
+            foreach (string name in names)
             {
-                Type? type = Type.GetType(typeName, throwOnError: false);
-                if (type == null)
+                Type? type = Type.GetType(name, throwOnError: false);
+                if (type != null)
                 {
-                    continue;
+                    types.Add(type);
                 }
+            }
 
+            return types.ToArray();
+        }
+
+        private static IPluginExecutionContext ResolveExecutionContext(IServiceProvider serviceProvider)
+        {
+            // Dataverse exposes successive context interface versions (IPluginExecutionContext2..7), each
+            // adding members. We request the richest one the running platform offers and fall back to
+            // older versions so the framework keeps working across environments. The types are resolved
+            // by name (Type.GetType) because older SDK assemblies may not define the newer interfaces.
+            // All versions derive from IPluginExecutionContext, so the resolved instance is returned as
+            // that common type.
+            // The interface types are resolved by name once per process (PreferredContextTypes).
+            object? context = null;
+            foreach (Type type in PreferredContextTypes)
+            {
                 context = serviceProvider.GetService(type);
                 if (context != null)
                 {
