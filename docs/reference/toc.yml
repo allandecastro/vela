@@ -1,5 +1,7 @@
 - name: CLI cheat sheet
   href: cli-cheatsheet.md
+- name: Machine-readable output
+  href: machine-readable-output.md
 - name: Analyzers and generators
   href: analyzers.md
 - name: Limitations
