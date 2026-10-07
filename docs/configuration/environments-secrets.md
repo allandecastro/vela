@@ -46,10 +46,13 @@ vela apply `
 
 ## CI strict mode
 
-In CI, add `--strict` to make the run fail when scanner/metadata diagnostics exist:
+In CI, add `--strict` to make the run fail (exit 4) when there is any warning in `diagnostics` (rank collisions, a
+secure configuration without a value, a Custom API name without the publisher prefix). Information such as an
+assembly not yet in Dataverse on a first deployment is reported under `info` and never fails it. Add
+`--detailed-exitcode` to `plan` to get exit `8` when there are changes to apply:
 
 ```powershell
-# CI strict mode (fail if scanner/metadata diagnostics exist)
+# CI strict mode (fail on any warning)
 vela plan `
   --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
   --url https://zava.crm.dynamics.com `
@@ -85,7 +88,8 @@ at the keyboard and a machine-readable contract in a pipeline, with no flag chan
 vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
 ```
 
-To force JSON at a terminal (for example, to pipe into `jq` or save it), pass `--json` or `--out <file>`. To
+To force JSON at a terminal (for example, to pipe into `jq` or save it), pass `--json` or `--out <file>`. The
+fields and exit codes are documented in [Machine-readable output](../reference/machine-readable-output.md). To
 turn colors off, set `NO_COLOR` or `VELA_NO_COLOR`.
 
 Add `--verbose` for full exception stack traces on failure (and the human summary on stderr alongside the JSON
