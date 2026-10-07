@@ -1,0 +1,17 @@
+# Mutation area: the harness security model's decision logic (roles, privileges, depth, sharing, access teams,
+# hierarchy, FLS, 1:N cascade configuration). Run from tests/Vela.Testing.Tests.
+# Measured at ~86.2% after killing the real survivors; break is ratcheted to 84 (~2 pts below). The remaining
+# survivors are equivalent (exception-message strings, comparer internals, cycle guards).
+stryker-config:
+  solution: ../../Vela.sln
+  project: Vela.Testing.csproj
+  mutate:
+    - "**/Security/SecurityModel.cs"
+    - "**/Security/SharingTable.cs"
+    - "**/Security/AccessTeamGrants.cs"
+    - "**/Fakes/OneToManyRegistry.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 90
+    low: 84
+    break: 84

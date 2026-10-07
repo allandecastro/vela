@@ -1,0 +1,13 @@
+# Mutation area: the step reconciliation core (DataverseRegistration.Steps): the step entity build, step lookup,
+# message/filter id resolution, secure-config and state reconcile, image reconcile and the stage/rank/name
+# normalizers. Run from tests/Vela.Cli.Tests. Measured at ~89.4%; break is ratcheted to 87. The remaining survivors
+# are equivalent (LogOperation arg strings, aliased-value reads, ternaries whose branches match on the tested inputs).
+stryker-config:
+  project: Vela.Cli.csproj
+  mutate:
+    - "**/DataverseRegistration.Steps.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 94
+    low: 87
+    break: 87

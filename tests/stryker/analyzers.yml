@@ -1,0 +1,11 @@
+# Mutation area: the whole Vela.Analyzers project (the diagnostics shipped in the Vela.Plugins package and the typed
+# image projection generator). Run from tests/Vela.Analyzers.Tests (net10, no solution needed).
+stryker-config:
+  project: Vela.Analyzers.csproj
+  mutate:
+    - "**/*.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 90
+    low: 80
+    break: 80
