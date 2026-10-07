@@ -56,6 +56,36 @@ namespace Vela.Tests
         }
 
         [Fact]
+        public void GetResponse_ReadsRetrieveResultsUnderThePlatformKeys()
+        {
+            // A Retrieve/RetrieveMultiple PostOperation step receives BusinessEntity / BusinessEntityCollection
+            // (verified live), while RetrieveResponse / RetrieveMultipleResponse read Entity / EntityCollection.
+            LocalPluginContext ctx = Ctx();
+            Entity record = new Entity("account", Guid.NewGuid());
+            EntityCollection rows = new EntityCollection();
+            ctx.PluginExecutionContext.OutputParameters["BusinessEntity"] = record;
+            ctx.PluginExecutionContext.OutputParameters["BusinessEntityCollection"] = rows;
+
+            Assert.Same(record, ctx.GetResponse<RetrieveResponse>().Entity);
+            Assert.Same(rows, ctx.GetResponse<RetrieveMultipleResponse>().EntityCollection);
+        }
+
+        [Fact]
+        public void GetResponse_PrefersAnSdkKeyAndIsLiveWhenNoPlatformKeyIsPresent()
+        {
+            LocalPluginContext ctx = Ctx();
+            Entity sdk = new Entity("account", Guid.NewGuid());
+            ctx.PluginExecutionContext.OutputParameters["Entity"] = sdk;
+            ctx.PluginExecutionContext.OutputParameters["BusinessEntity"] = new Entity("account", Guid.NewGuid());
+
+            Assert.Same(sdk, ctx.GetResponse<RetrieveResponse>().Entity);
+
+            LocalPluginContext empty = Ctx();
+            RetrieveMultipleResponse live = empty.GetResponse<RetrieveMultipleResponse>();
+            Assert.Same(empty.PluginExecutionContext.OutputParameters, live.Results);
+        }
+
+        [Fact]
         public void GetRequest_TypesTheTargetEntityViaToEntity()
         {
             LocalPluginContext ctx = Ctx();

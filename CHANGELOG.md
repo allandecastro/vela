@@ -341,6 +341,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   failed). Upsert now resolves the id or alternate key and runs the Create steps (new record) or the Update steps
   (existing record), returning `RecordCreated` and `Target`; Update and Delete by alternate key fire their steps with
   the resolved id.
+- **A Retrieve/RetrieveMultiple Post step's typed `ctx.Response` reads the result.** The platform hands the step
+  the result as `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]` (verified on a live
+  environment), but `RetrieveResponse.Entity` / `RetrieveMultipleResponse.EntityCollection` read `Entity` /
+  `EntityCollection`, so `ctx.Response.Entity` was missing. `GetResponse<T>()` now exposes the platform value under
+  the SDK key.
 - **A nested request's own bypass parameters are honoured by the test pipeline.** Bypass parameters were read only
   from the outermost request, so a plugin's own write with `BypassCustomPluginExecution` (the usual way to avoid
   re-entering itself) re-fired the plugin, and `ExecuteMultiple`/`ExecuteTransaction` children's own parameters were

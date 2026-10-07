@@ -47,7 +47,45 @@ namespace Vela.Context
                 throw new ArgumentNullException(nameof(context));
             }
 
-            return new TResponse { Results = context.PluginExecutionContext.OutputParameters };
+            ParameterCollection outputs = context.PluginExecutionContext.OutputParameters;
+            string? sdkKey = PlatformOutputKey(typeof(TResponse), out string platformKey);
+            if (sdkKey != null && !outputs.Contains(sdkKey) && outputs.TryGetValue(platformKey, out object? value))
+            {
+                // Retrieve / RetrieveMultiple: the platform hands a plugin the result under BusinessEntity /
+                // BusinessEntityCollection, but RetrieveResponse.Entity / RetrieveMultipleResponse.EntityCollection
+                // read "Entity" / "EntityCollection". Expose the value under the SDK key too (the record or collection
+                // itself is the live object; replace it through OutputParameters[platformKey]).
+                ParameterCollection view = new ParameterCollection();
+                foreach (System.Collections.Generic.KeyValuePair<string, object> pair in outputs)
+                {
+                    view[pair.Key] = pair.Value;
+                }
+
+                view[sdkKey] = value;
+                return new TResponse { Results = view };
+            }
+
+            return new TResponse { Results = outputs };
+        }
+
+        // The SDK response key a typed Retrieve/RetrieveMultiple response reads, and the key the platform uses in a
+        // plugin's OutputParameters for it; null for every other response type (same keys on both sides).
+        private static string? PlatformOutputKey(Type responseType, out string platformKey)
+        {
+            if (typeof(Microsoft.Xrm.Sdk.Messages.RetrieveResponse).IsAssignableFrom(responseType))
+            {
+                platformKey = "BusinessEntity";
+                return "Entity";
+            }
+
+            if (typeof(Microsoft.Xrm.Sdk.Messages.RetrieveMultipleResponse).IsAssignableFrom(responseType))
+            {
+                platformKey = "BusinessEntityCollection";
+                return "EntityCollection";
+            }
+
+            platformKey = string.Empty;
+            return null;
         }
 
         /// <summary>
