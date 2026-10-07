@@ -126,8 +126,8 @@ public static class SdkMessageGenerator
     private const int EntityFanoutThreshold = 8;
 
     /// <summary>
-    /// Appends the Phase 3b entity-constrained step extension(s) for the message (see
-    /// <c>.context/phase3b-compile-time-design.md</c>). Because <c>On{Name}()</c> extends
+    /// Appends the Phase 3b entity-constrained step extension(s) for the message (compile-time entity
+    /// applicability). Because <c>On{Name}()</c> extends
     /// <c>Vela.Steps.IStepTrigger&lt;TEntity&gt;</c> for a concrete entity, it is only in scope on a plugin for that
     /// entity, giving compile-time entity-applicability; it delegates to the typed <c>On&lt;{Name}Request&gt;()</c>.
     /// The early-bound entity types are referenced by PascalCase of their logical name and are ASSUMED to be

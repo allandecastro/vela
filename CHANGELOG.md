@@ -1650,7 +1650,7 @@ CLI line (`Vela.Cli`), published as `cli-v0.2.0`.
   emits no extension at all (only an explanatory comment), so the blessed path does not compile. The generic
   `On<XxxRequest>()` escape hatch stays for explicit use, and Dataverse still rejects an invalid registration at
   deploy time. The method name is the unique name minus its publisher prefix, PascalCased
-  (`zava_AccountEstimateValue` -> `OnAccountEstimateValue`). See `.context/phase3c-customapi-registrability.md`.
+  (`zava_AccountEstimateValue` -> `OnAccountEstimateValue`).
 - **CLI: `--option=value` inline form and clearer option errors (shared tokenizer).** Every command now accepts the
   `--option=value` form in addition to `--option value`. A misspelled option is still rejected up front, and a
   value option missing its value (last token, or followed by another known option) now fails with
@@ -1732,8 +1732,7 @@ Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.8.0
   `TEntity`, so a handler reads `ctx.Request.Target` typed instead of the SDK request's base `Entity`. This is
   the single typed target accessor (see the Changed entry below removing `ctx.Target`). Reading
   `ctx.Request.Target` as a base `Entity` still compiles (`TEntity : Entity`). The raw
-  SDK request stays reachable via `ctx.GetRequest<CreateRequest>()`. First step of the typed-requests design
-  (`.context/typed-requests-design.md`).
+  SDK request stays reachable via `ctx.GetRequest<CreateRequest>()`. First step of the typed-requests design.
 - **Framework: `On<TRequest>()` step entry - typed message, no magic string.** Register a step with the message
   derived from the request type: `RegisterSteps().On<CalculateAccountScoreRequest>().PostOperation().Sync().Handler(OnScore)`
   where `void OnScore(IMessagePostContext<CalculateAccountScoreRequest> ctx)`. The message name comes from the
@@ -1757,8 +1756,7 @@ Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.8.0
   `IMessagePostContext<TRequest, TEntity>`. Read the primary record via `ctx.Request.Target` (early-bound `TEntity`
   on Create/Update, where `ctx.Request` is a Vela-owned typed request; the SDK's `Entity` / `EntityReference` for the
   rest). The `ctx.GetTarget<T>()` extension remains as the message-agnostic early-bound accessor (for example on
-  `SendEmailFromTemplate`, whose `ctx.Request.Target` is the base SDK `Entity`). Part of the typed-requests design
-  (`.context/typed-requests-design.md`).
+  `SendEmailFromTemplate`, whose `ctx.Request.Target` is the base SDK `Entity`). Part of the typed-requests design.
 - **Framework (BREAKING): `CustomApiBase<TRequest, TResponse>` now requires `OrganizationRequest`/`OrganizationResponse`
   types instead of POCOs.** The type constraints move from `where TRequest : class, new()` /
   `where TResponse : class, new()` to `where TRequest : OrganizationRequest, new()` /
@@ -1772,7 +1770,7 @@ Framework line (`Vela.Plugins` + `Vela.Testing`), published as `framework-v0.8.0
   own declared properties become Custom API parameters; the inherited `OrganizationRequest`/`OrganizationResponse`
   members never do. Migration: change each `XxxRequest`/`XxxResponse` to derive from `OrganizationRequest`/`OrganizationResponse`
   and expose properties over `Parameters`/`Results` (set `RequestName` in the constructor), as the scaffold and the
-  [Custom API guide](guides/custom-apis.md) now show. Part of the typed-requests design (`.context/typed-requests-design.md`).
+  [Custom API guide](guides/custom-apis.md) now show. Part of the typed-requests design.
 
 ## [0.1.26] - 2026-09-13
 
