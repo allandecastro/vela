@@ -54,20 +54,16 @@ namespace Vela.Analyzers
             Dictionary<string, List<ExpressionSyntax>> byHandler = new Dictionary<string, List<ExpressionSyntax>>(System.StringComparer.Ordinal);
             foreach (InvocationExpressionSyntax invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (invocation.Expression is not MemberAccessExpressionSyntax member ||
-                    member.Name.Identifier.ValueText != "Handle" ||
-                    invocation.ArgumentList.Arguments.Count != 1)
+                // Only this class's own steps: the generated context nests in the class that registers the step, so a
+                // nested plugin's handlers live in a different scope and never collide with this one's (a container
+                // class holding two plugins that both use OnUpdate is fine).
+                if (!FluentStep.IsHandleCall(invocation, out MemberAccessExpressionSyntax member, out ExpressionSyntax argument) ||
+                    invocation.FirstAncestorOrSelf<ClassDeclarationSyntax>() != declaration)
                 {
                     continue;
                 }
 
-                ExpressionSyntax argument = invocation.ArgumentList.Arguments[0].Expression;
-                string? handlerName = argument switch
-                {
-                    IdentifierNameSyntax id => id.Identifier.ValueText,
-                    MemberAccessExpressionSyntax ma => ma.Name.Identifier.ValueText,
-                    _ => null, // lambda -> no generated context
-                };
+                string? handlerName = FluentStep.MethodGroupName(argument); // a lambda -> no generated context
 
                 if (handlerName is null || !ChainCapturesTypedImage(member.Expression) ||
                     !FluentStep.IsFluentMethod(context.SemanticModel, invocation, fluent, context.CancellationToken))

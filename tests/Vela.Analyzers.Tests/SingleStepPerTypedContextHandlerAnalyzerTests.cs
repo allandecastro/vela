@@ -102,4 +102,32 @@ namespace Demo
 
         await Verify.VerifyAnalyzerAsync(code);
     }
+
+    [Fact]
+    public async Task Does_not_flag_a_container_class_whose_nested_plugins_reuse_a_handler_name()
+    {
+        // A-31: each nested plugin gets its own {Handler}Context scope; the container class itself registers nothing,
+        // so two plugins that both name their handler Shared do not collide.
+        string code = Harness + @"
+    public static class Plugins
+    {
+        public sealed class First : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).WithPostImage(a => a.Name).Handle(Shared);
+            private void Shared(IUpdatePostContext<Account> ctx) { }
+        }
+
+        public sealed class Second : EntityPluginBase<Account>
+        {
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).WithPostImage(a => a.Name).Handle(Shared);
+            private void Shared(IUpdatePostContext<Account> ctx) { }
+        }
+    }
+}
+";
+
+        await Verify.VerifyAnalyzerAsync(code);
+    }
 }
