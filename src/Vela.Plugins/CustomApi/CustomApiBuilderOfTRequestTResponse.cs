@@ -102,7 +102,7 @@ public sealed class CustomApiBuilder<TRequest, TResponse> : CustomApiBuilderBase
             isOutput,
             optional,
             description ?? property.GetCustomAttribute<DescriptionAttribute>()?.Description,
-            logicalEntityName ?? property.GetCustomAttribute<LogicalEntityNameAttribute>()?.LogicalName);
+            logicalEntityName ?? property.GetCustomAttribute<Vela.Messages.LogicalEntityNameAttribute>()?.LogicalName);
 
     private sealed class ParameterBuilder<TModel>(ICollection<CustomApiParameterDefinition> parameters, bool isOutput) : ICustomApiParameterBuilder<TModel>
         where TModel : class

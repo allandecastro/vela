@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.Xrm.Sdk;
 using Vela.Context;
 using Vela.CustomApi;
+using Vela.Messages;
 using Vela.Tests.TestSupport;
 using Xunit;
 

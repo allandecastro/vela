@@ -70,9 +70,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   filtering attribute, but only building the step at runtime enforced it, so a chain without one compiled and then
   failed in `vela plan` or at execution. The rule makes the documented compile-time guarantee real.
 - **A Custom API parameter can name its table** (`logicalentityname`): the `logicalEntityName` argument of `Add`,
-  `RequestParameter` and `ResponseParameter`, or `[LogicalEntityName("contact")]` on a model property. An early-bound
-  entity parameter (`Account`) uses its own table. Before, the framework had no way to set it, so `apply` removed a
-  table set in Dataverse by recreating the parameter.
+  `RequestParameter` and `ResponseParameter`, or `[LogicalEntityName("contact")]` (`Vela.Messages`) on a model
+  property. An early-bound entity parameter (`Account`) uses its own table. Before, the framework had no way to set
+  it, so `apply` removed a table set in Dataverse by recreating the parameter.
 
 ### Changed (Framework)
 
@@ -154,6 +154,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`--secure-config NAME=VALUE|NAME=@file`** (repeatable) on `plan`/`apply`/`inspect`, with the
   `VELA_SECURE_CONFIG_<NAME>` environment variable as a fallback. A package built with an older framework that still
   compiles a `WithSecureConfig` literal no longer has that value deployed: the environment keeps its current value.
+- **`vela models --custom-apis` keeps a parameter's table.** A parameter with a `logicalentityname` gets
+  `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
 
 ### Fixed (CLI)
 
@@ -189,6 +191,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **The secure-config digest in plan output can no longer be brute-forced.** It was a plain SHA-256 of the secret; it
   is now an HMAC keyed per run.
 - **Deleting a step also deletes its secure configuration row**, which Dataverse does not cascade.
+- **`vela add customapi --function` generates a function that builds.** It had no response property, which the
+  framework now rejects (Dataverse does not expose such a function); it gets a placeholder `Result` to rename.
 - **Renaming a Custom API's plugin class no longer blocks the package upload.** With the same unique name, the Custom
   API was re-pointed to the new class only after the upload, which had to remove the old plugin type while the Custom
   API still referenced it. `apply` now detaches the Custom API before the upload and points it at the new type after.

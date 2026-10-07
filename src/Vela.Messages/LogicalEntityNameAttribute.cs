@@ -1,6 +1,6 @@
 using System;
 
-namespace Vela.CustomApi;
+namespace Vela.Messages;
 
 /// <summary>
 /// Declares the table of an Entity, EntityReference or EntityCollection property of a Custom API request or

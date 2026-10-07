@@ -27,7 +27,7 @@ public interface ICustomApiParameterBuilder<TModel>
     /// <param name="optional">Whether the request parameter is optional.</param>
     /// <param name="description">Optional parameter description; defaults to the property's <c>[Description]</c>.</param>
     /// <param name="logicalEntityName">The table of an Entity, EntityReference or EntityCollection parameter;
-    /// defaults to the property's <see cref="LogicalEntityNameAttribute"/>, then to the early-bound entity's
+    /// defaults to the property's <see cref="Vela.Messages.LogicalEntityNameAttribute"/>, then to the early-bound entity's
     /// logical name.</param>
     /// <returns>The builder.</returns>
     ICustomApiParameterBuilder<TModel> Add<TProperty>(Expression<Func<TModel, TProperty>> property, bool optional, string? description = null, string? logicalEntityName = null);

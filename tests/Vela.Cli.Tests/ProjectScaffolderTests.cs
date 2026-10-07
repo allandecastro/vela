@@ -336,6 +336,11 @@ public class ProjectScaffolderTests
             string root = Path.Combine(temp, "ZavaSales");
             string localFeed = Path.Combine(root, "local-packages");
 
+            // Also compile both `vela add customapi --function` forms (typed bound, lightweight global).
+            string pluginsProject = Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj");
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--prefix", "zava", "--project", pluginsProject]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Lookup", "--global", "--function", "--prefix", "zava", "--project", pluginsProject]));
+
             // The scaffold resolves Vela from nuget.org and emits no nuget.config; here we build against the
             // repo's *current* Vela.Plugins / Vela.Testing (1.0.0) instead, so the test writes its own
             // local-packages nuget.config (additive; nuget.org still resolves the Microsoft SDK / test packages)
@@ -360,6 +365,30 @@ public class ProjectScaffolderTests
             // artifacts/ folder, and a parallel build can race on the pack output ("used by another process").
             int build = RunDotnet($"build \"{sln}\" -c Release --no-restore -m:1", temp);
             Assert.Equal(0, build);
+
+            // Scan the built packages as `vela plan` does: this runs every Custom API's Build(), so a scaffolded or
+            // generated Custom API that breaks a Dataverse rule (a function without a response property, ...) fails.
+            List<string> scanTemps = [];
+            try
+            {
+                string[] customApis = Directory.GetFiles(Path.Combine(root, "artifacts"), "*.nupkg")
+                    .SelectMany(nupkg => PackageScanner.BuildLocalStateFromPackages(
+                        new SharedOptions([nupkg], null, null, null, null, null, null, null, false, false, false, false),
+                        new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web), scanTemps).Items)
+                    .Where(item => item.Kind == "custom-api")
+                    .Select(item => item.Definition.GetProperty("uniqueName").GetString()!)
+                    .ToArray();
+                Assert.Contains("zava_AccountEstimateValue", customApis);
+                Assert.Contains("zava_GetScore", customApis);
+                Assert.Contains("zava_Lookup", customApis);
+            }
+            finally
+            {
+                foreach (string dir in scanTemps)
+                {
+                    try { Directory.Delete(dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                }
+            }
         });
     }
 

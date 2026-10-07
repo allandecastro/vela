@@ -102,7 +102,7 @@ parameters only**: response properties have no optional flag (Dataverse's `custo
 
 **The table of an entity parameter.** An `EntityReference`, `Entity` or `EntityCollection` parameter can name its
 table (the Dataverse `logicalentityname`). An early-bound entity property (`Account`) uses its own table. Otherwise
-declare it with the `logicalEntityName` argument, or with `[LogicalEntityName("contact")]` on the model property
+declare it with the `logicalEntityName` argument, or with `[LogicalEntityName("contact")]` (in `Vela.Messages`) on the model property
 (which also applies to inferred parameters); the argument wins over the attribute:
 
 ```csharp

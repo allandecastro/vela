@@ -2419,6 +2419,10 @@ namespace {{ns}}
 }
 """;
 
+    // A function must return at least one response property (Dataverse does not expose one that returns nothing, and
+    // Build() rejects it), so a generated function gets a placeholder "Result" property to rename or replace.
+    private static bool IsFunctionOperation(string operation) => operation.StartsWith("AsFunction", StringComparison.Ordinal);
+
     public static string AddGlobalCustomApiFile(string ns, string className, string uniqueName, string operation) =>
 $$"""
 namespace {{ns}}
@@ -2434,15 +2438,26 @@ namespace {{ns}}
             RegisterCustomApi("{{uniqueName}}", Handle)
                 .DisplayName("{{className}}")
                 .Description("TODO: describe this Custom API.")
-                .{{operation}};
+                .{{operation}}{{(IsFunctionOperation(operation) ? "\n                .ResponseParameter<string>(\"Result\", \"TODO: rename or replace; a function must return at least one value.\")" : "")}};
         }
 
         private void Handle(ILocalPluginContext ctx)
         {
-            // TODO: read inputs with ctx.GetInputParameter<T>(...) and write results with ctx.SetOutputParameter(...).
+            // TODO: read inputs with ctx.GetInputParameter<T>(...) and write results with ctx.SetOutputParameter(...).{{(IsFunctionOperation(operation) ? "\n            ctx.SetOutputParameter(\"Result\", string.Empty);" : "")}}
         }
     }
 }
+""";
+
+    private const string FunctionResultProperty = """
+
+
+        /// <summary>TODO: rename or replace. A function must return at least one response property.</summary>
+        public string Result
+        {
+            get => Get<string>();
+            set => Set(value);
+        }
 """;
 
     public static string AddBoundCustomApiFile(string ns, string className, string uniqueName, string entityType, string modelsNamespace, string operation) =>
@@ -2514,7 +2529,7 @@ namespace {{ns}}
     {
         public {{className}}Response() : base("{{uniqueName}}")
         {
-        }
+        }{{(IsFunctionOperation(operation) ? FunctionResultProperty : "")}}
     }
 }
 """;

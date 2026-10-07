@@ -58,8 +58,8 @@ internal static class CustomApiReader
     private static Dictionary<Guid, List<CustomApiParameter>> GroupCustomApiParameters(IOrganizationService service, string entity, bool isRequest)
     {
         ColumnSet columns = isRequest
-            ? new ColumnSet("name", "type", "isoptional", "customapiid")
-            : new ColumnSet("name", "type", "customapiid");
+            ? new ColumnSet("name", "type", "isoptional", "logicalentityname", "customapiid")
+            : new ColumnSet("name", "type", "logicalentityname", "customapiid");
         QueryExpression query = new QueryExpression(entity) { ColumnSet = columns };
 
         Dictionary<Guid, List<CustomApiParameter>> byApi = new Dictionary<Guid, List<CustomApiParameter>>();
@@ -75,7 +75,8 @@ internal static class CustomApiReader
             CustomApiParameter parameter = new CustomApiParameter(
                 name,
                 e.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10,
-                isRequest && (e.GetAttributeValue<bool?>("isoptional") ?? false));
+                isRequest && (e.GetAttributeValue<bool?>("isoptional") ?? false),
+                NullIfBlank(e.GetAttributeValue<string>("logicalentityname")));
 
             if (!byApi.TryGetValue(apiId, out List<CustomApiParameter>? list))
             {
@@ -93,6 +94,8 @@ internal static class CustomApiReader
 
         return byApi;
     }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     internal static CustomApiMessage ReadCustomApi(IOrganizationService service, string uniqueName)
     {
@@ -129,14 +132,15 @@ internal static class CustomApiReader
         // isoptional exists on customapirequestparameter only; customapiresponseproperty has no such column
         // (response properties are always present), so it is requested and read for request parameters alone.
         bool isRequest = entity == "customapirequestparameter";
-        ColumnSet columns = isRequest ? new ColumnSet("name", "type", "isoptional") : new ColumnSet("name", "type");
+        ColumnSet columns = isRequest ? new ColumnSet("name", "type", "isoptional", "logicalentityname") : new ColumnSet("name", "type", "logicalentityname");
         QueryExpression query = new QueryExpression(entity) { ColumnSet = columns };
         query.Criteria.AddCondition("customapiid", ConditionOperator.Equal, customApiId);
         return service.RetrieveAll(query)
             .Select(e => new CustomApiParameter(
                 e.GetAttributeValue<string>("name") ?? string.Empty,
                 e.GetAttributeValue<OptionSetValue>("type")?.Value ?? 10,
-                isRequest && (e.GetAttributeValue<bool?>("isoptional") ?? false)))
+                isRequest && (e.GetAttributeValue<bool?>("isoptional") ?? false),
+                NullIfBlank(e.GetAttributeValue<string>("logicalentityname"))))
             .Where(p => !string.IsNullOrWhiteSpace(p.Name))
             .OrderBy(p => p.Name, StringComparer.Ordinal)
             .ToList();
