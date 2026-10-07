@@ -270,6 +270,20 @@ internal sealed record ScaffoldOptions(
             return false;
         }
 
+        if (publisherPrefix is null && includeSamples && interactive && !IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix)))
+        {
+            publisherPrefix = Prompt($"Publisher prefix of your solution ('{ScaffoldTemplates.ApiPrefix(prefix)}' is not valid; 2-8 characters, letter first):", allowEmpty: true)?.Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(publisherPrefix))
+            {
+                publisherPrefix = null;
+            }
+            else if (!IsValidPublisherPrefix(publisherPrefix))
+            {
+                exitCode = Fail($"Invalid publisher prefix '{publisherPrefix}'. Use 2-8 characters: a letter, then letters or digits (e.g. 'zava').", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+        }
+
         if (publisherPrefix is null && includeSamples && !IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix)))
         {
             exitCode = Fail($"The sample Custom APIs need a publisher prefix, and '{ScaffoldTemplates.ApiPrefix(prefix)}' (derived from --prefix '{prefix}') is not a valid one (2-8 characters, letter first, alphanumeric). Pass --publisher-prefix <prefix> with your solution publisher's prefix.", ExitInvalidArguments, includeUsage: false);

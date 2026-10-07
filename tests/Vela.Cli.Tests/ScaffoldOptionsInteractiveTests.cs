@@ -76,6 +76,20 @@ public sealed class ScaffoldOptionsInteractiveTests
     }
 
     [Fact]
+    public void Interactive_Samples_PromptsForAPublisherPrefix_WhenTheDerivedOneIsInvalid()   // review
+    {
+        // "ZavaSales" derives "zavasales" (9 characters). Prompts: samples(y), integrations(n), tests(n), console(n),
+        // then the publisher prefix, then web-resources(n).
+        bool ok = Parse("y\nn\nn\nn\nZS\nn\n",
+            ["--name", "ZavaSales", "--prefix", "ZavaSales", "--output", ".", "--interactive"],
+            out ScaffoldOptions options);
+
+        Assert.True(ok);
+        Assert.True(options.IncludeSamples);
+        Assert.Equal("zs", options.PublisherPrefix);
+    }
+
+    [Fact]
     public void Interactive_DefaultAnswers_AreMinimal_WithTests()   // A-53
     {
         // Empty answers take the defaults: samples no (so no Integrations/ConsoleApp prompt), tests yes, web no.
