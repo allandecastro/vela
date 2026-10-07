@@ -57,4 +57,47 @@ namespace Demo
         string code = InMethod("RegisterStep().WithSomething().Handle();");
         await Verify.VerifyAnalyzerAsync(code);
     }
+
+    private static string InClass(string members) => Harness + @"
+namespace Demo
+{
+    public class Use : Plugin
+    {
+        " + members + @"
+    }
+}
+";
+
+    [Fact]
+    public async Task Flags_an_expression_bodied_void_registration_that_never_calls_Handle()
+    {
+        // The form most samples use: RegisterPluginSteps() => RegisterStep()...; discards its value like a statement.
+        string code = InClass("public void M() => {|#0:RegisterStep().WithSomething()|};");
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            new DiagnosticResult(Vela.Analyzers.StepCompletionAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(0));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_an_expression_body_that_returns_the_builder()
+    {
+        // A method or getter returning the builder hands the chain on, to be completed by the caller.
+        string code = InClass(@"public Vela.Steps.IFakeStep Start() => RegisterStep().WithSomething();
+        public Vela.Steps.IFakeStep Current => RegisterStep();
+        public void Done() => RegisterStep().WithSomething().Handle();");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_setter_constructor_and_local_function_expression_body_that_never_calls_Handle()
+    {
+        string code = InClass(@"public int Value { get => 0; set => {|#0:RegisterStep()|}; }
+        public Use() => {|#1:RegisterStep()|};
+        public void M() { void Local() => {|#2:RegisterStep()|}; Local(); }");
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            new DiagnosticResult(Vela.Analyzers.StepCompletionAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(0),
+            new DiagnosticResult(Vela.Analyzers.StepCompletionAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(1),
+            new DiagnosticResult(Vela.Analyzers.StepCompletionAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(2));
+    }
 }
