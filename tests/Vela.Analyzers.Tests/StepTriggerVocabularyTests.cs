@@ -11,6 +11,8 @@ namespace Vela.Analyzers.Tests;
 // The trigger vocabulary the analyzers share with the runtime: every typed On{Message}() maps to its Dataverse
 // message (VELA008 compares a typed trigger with the permissive OnMessage("...") form), every modelled message
 // named through OnMessage("...") is pointed at its typed trigger (VELA006), and every stage method is read.
+// Several steps may share a trigger when something tells them apart (filters, images, relationship or step key;
+// see DuplicateStepTriggerShapeTests); VELA008 flags only steps that nothing tells apart, and the rank is not one.
 public sealed class StepTriggerVocabularyTests
 {
     private const string Harness = @"
@@ -32,6 +34,8 @@ namespace Vela.Steps
         IStep OnAssign();
         IStep OnMerge();
         IStep Named(string name);
+        IStep WithStepKey(string key);
+        IStep WithExecutionOrder(int rank);
         IStep PreValidation();
         IStep PreOperation();
         IStep PostOperation();
@@ -79,6 +83,31 @@ namespace Demo
             "            RegisterStep().{|#0:OnMessage|}(\"" + message.ToUpperInvariant() + "\").PreOperation().Sync().Handle();");
 
         await VerifyDuplicate.VerifyAnalyzerAsync(code, Duplicate($"message '{message}' at preoperation (sync)"));
+    }
+
+    [Theory]
+    [InlineData("OnCreate", "create")]
+    [InlineData("OnUpdate", "update")]
+    [InlineData("OnDelete", "delete")]
+    [InlineData("OnAssociate", "associate")]
+    [InlineData("OnMerge", "merge")]
+    public async Task A_step_key_tells_two_steps_on_the_same_trigger_apart(string typed, string message)
+    {
+        string code = InRegister(
+            "RegisterStep()." + typed + "().PreOperation().Sync().Handle();\n" +
+            "            RegisterStep().OnMessage(\"" + message + "\").PreOperation().Sync().WithStepKey(\"second\").Handle();");
+
+        await VerifyDuplicate.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task A_different_rank_does_not_tell_two_steps_apart()
+    {
+        string code = InRegister(
+            "RegisterStep().OnUpdate().PostOperation().Sync().WithExecutionOrder(1).Handle();\n" +
+            "            RegisterStep().{|#0:OnUpdate|}().PostOperation().Sync().WithExecutionOrder(2).Handle();");
+
+        await VerifyDuplicate.VerifyAnalyzerAsync(code, Duplicate("message 'update' at postoperation (sync)"));
     }
 
     [Theory]

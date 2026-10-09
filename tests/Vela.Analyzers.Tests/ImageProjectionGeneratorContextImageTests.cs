@@ -53,13 +53,14 @@ namespace Demo
     }
 
     [Theory]
-    [InlineData("OnCreateMultiple().PostOperation().Sync().WithPostImage(a => a.Name)", "CreateMultiplePostContext")]
-    [InlineData("OnUpdateMultiple().PreOperation().Sync().WithPreImage(a => a.Name)", "UpdateMultiplePreContext")]
-    public void A_bulk_context_never_exposes_a_single_typed_image(string chain, string baseContext)
+    [InlineData("OnCreateMultiple().PostOperation().Sync().WithPostImage(a => a.Name)", "CreateMultiplePostContext", "OnStep_PostImage", "PostImages", "PostImagesAs")]
+    [InlineData("OnUpdateMultiple().PreOperation().Sync().WithPreImage(a => a.Name)", "UpdateMultiplePreContext", "OnStep_PreImage", "PreImages", "PreImagesAs")]
+    public void A_bulk_context_exposes_its_typed_images_per_record_never_a_single_one(string chain, string baseContext, string projection, string property, string accessor)
     {
-        // Bulk images are per record; the projection is still generated for the developer to use by index.
+        // Bulk images are per record: the context lists them by index, typed by the projection.
         string context = Context(chain);
         Assert.Contains(": global::Vela.Context." + baseContext + "<global::Demo.Account>", context);
+        Assert.Contains($"public global::System.Collections.Generic.IReadOnlyList<{projection}?> {property} => global::Vela.Context.ImageProjectionExtensions.{accessor}<{projection}>(this);", context);
         Assert.DoesNotContain("public new", context);
     }
 

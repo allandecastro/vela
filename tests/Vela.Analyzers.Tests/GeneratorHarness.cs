@@ -99,6 +99,8 @@ namespace Vela.Context
     {
         public static TImage PreImageAs<TImage>(this ILocalPluginContext context, string alias = ""PreImage"") => default!;
         public static TImage PostImageAs<TImage>(this ILocalPluginContext context, string alias = ""PostImage"") => default!;
+        public static System.Collections.Generic.IReadOnlyList<TImage> PreImagesAs<TImage>(this ILocalPluginContext context, string alias = ""PreImage"") => default!;
+        public static System.Collections.Generic.IReadOnlyList<TImage> PostImagesAs<TImage>(this ILocalPluginContext context, string alias = ""PostImage"") => default!;
     }
 }
 
