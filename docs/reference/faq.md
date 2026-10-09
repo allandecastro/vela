@@ -25,7 +25,7 @@ Call `RegisterCustomApi(...)` only from inside the `RegisterCustomApi()` overrid
 A plugin step handler is an instance method taking the **stage-typed** message context, bound by method group -
 `.Handle(OnUpdated)` where `void OnUpdated(IUpdatePostContext<TEntity> ctx)` for a PostOperation step (or
 `IUpdatePreContext<TEntity>` for a PreValidation/PreOperation step, which has `ctx.Request` but no `ctx.Response`;
-or `void OnX(ILocalPluginContext ctx)` for an `OnMessage("...")` step). The context type is checked against the
+or `void OnX(ILocalPluginContext ctx)` for an `OnMessage<TMarker>()` step). The context type is checked against the
 message and stage at compile time, so binding an `OnUpdate()` step to an `ICreatePostContext` handler - or reading
 `ctx.Response` from a pre-stage handler - does not build. A single-step plugin binds the same typed
 `.Handle(...)` (its context is `I{Message}PostContext<T>` / `I{Message}PreContext<T>`) and reads the record

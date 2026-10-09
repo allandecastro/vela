@@ -92,7 +92,7 @@ namespace Vela.Testing.Tests
         public SmPermissiveSend(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage(Vela.Constants.PluginMessages.SendEmail).PostOperation().Sync()
+            => RegisterStep().OnMessage<SendEmailRequest>().PostOperation().Sync()
                 .Handle((ILocalPluginContext ctx) => SmSeen.Calls.Enqueue($"permissive:{ctx.MessageName}"));
     }
 
@@ -112,7 +112,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void OnMessage_with_a_request_name_registers_on_the_sdkmessage()
+        public void OnMessage_with_a_request_type_registers_on_the_sdkmessage()
         {
             SmSeen.Drain();
             PluginPipeline pipeline = PluginPipeline.Empty().Register<SmPermissiveSend>();

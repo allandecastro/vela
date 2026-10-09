@@ -99,7 +99,7 @@ does not compile.
 **Do**
 - Use `RegisterPluginSteps()` + `RegisterStep().On...()` for single-step and multi-step plugins.
 - Use `ctx.GetRequiredService<T>()` for dependency resolution in handlers.
-- Read the primary record via `ctx.Request.Target` on the typed message contexts (already early-bound); `GetTarget<T>()` stays for the message-agnostic `OnMessage(...)` handlers where the request does not type the Target.
+- Read the primary record via `ctx.Request.Target` on the typed message contexts (already early-bound); `GetTarget<T>()` stays for the message-agnostic handlers (an untyped `ILocalPluginContext`) where the request does not type the Target.
 - Read images with `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` instead of the raw `PreEntityImages` / `PostEntityImages` dictionaries.
 - Signal a user-facing failure with `throw new InvalidPluginExecutionException("...")`, or `throw new PluginBusinessException("...")` for a named business error (the Vela base surfaces its message cleanly and records a `business-exception` trace snapshot). Both are clean and neither is flagged by [VELA012](../reference/analyzers.md#vela012) inside a plugin that derives from a Vela base. A `FaultException<OrganizationServiceFault>` from a failed service call is rethrown unchanged, so the caller gets the fault's own error code (a duplicate key stays `0x80040237`). Any other exception type reaches the caller as a generic message with the correlation id (`An unexpected error occurred. Correlation id: ...`). The full exception is traced, so the plug-in trace log keeps it unless the environment's Plugin Trace Log setting is `Off`. That generic message is why VELA012 flags it. Override `FormatUnexpectedErrorMessage(context, exception)` to return a more detailed message.
 - To give a business error a code, use `new PluginBusinessException(message, errorCode)`. Dataverse still reports `0x80040265` to the caller; an SDK caller reads your code from the fault's `ErrorDetails["SubErrorCode"]`, and the Web API does not return it.
@@ -115,11 +115,13 @@ does not compile.
 The fluent builder enforces a specific order:
 
 1. **Message** - `OnCreate()`, `OnUpdate()`, `OnCreateMultiple()`, `OnUpdateMultiple()`, `OnDelete()`,
-   `OnRetrieve()`, `OnRetrieveMultiple()`, `OnAssociate()`, `OnDisassociate()`, or
-   `OnMessage("custom_message")` for any other SDK message. A state change has no typed method: register on
-   `OnUpdate().FilterOn(x => x.StateCode)`, or on `OnMessage(PluginMessages.SetStateDynamicEntity)`, which both
-   a `SetStateRequest` and an Update of `statecode` fire. A step on `SetState` never fires on the platform
-   ([VELA022](../reference/analyzers.md#vela022)).
+   `OnRetrieve()`, `OnRetrieveMultiple()`, `OnAssociate()`, `OnDisassociate()`, ..., or
+   `On<XxxRequest>()` for any other SDK message or Custom API, over its request type (an SDK request class, or one
+   [`vela models --messages` / `--custom-apis`](models.md) generates, which also emits an entity-constrained
+   `On<Message>()` for it). There is no string form: a message is always named by a type. A state change has no
+   curated method: register on `OnUpdate().FilterOn(x => x.StateCode)`, or on `On<SetStateRequest>()`, which
+   registers on `SetStateDynamicEntity` - the message both a `SetStateRequest` and an Update of `statecode` fire. A
+   step on `SetState` itself never fires on the platform ([VELA022](../reference/analyzers.md#vela022)).
 2. **Stage** - `PreValidation()`, `PreOperation()`, or `PostOperation()` (typed methods; the stage you pick
    determines which images the rest of the chain will offer)
 3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only)
@@ -239,11 +241,10 @@ public sealed partial class AccountAudit(string unsecure, string secure) : Entit
 - Additive and opt-in: the existing `ctx.PreImage` / `ctx.PostImage` (full entity) and `ctx.GetPreImage<T>()`
   keep working. It mirrors the early-bound `ctx.GetPreImage<Account>()` accessor, so the read site is familiar;
   pass a custom alias with `ctx.PostImageAs<T>("MyAlias")`.
-- Works on the guided path, the typed `On<TRequest>()` path and the permissive `OnMessage("...")` /
-  `OnMessage<TMarker>()` path alike (it is a context accessor). On the permissive path the projection is named
-  from the message: a string literal is capitalized into the name segment (`OnMessage("update")` with a lambda
-  handler gives `UpdatePostOp_PostImage`, nested in the plugin), and a marker type uses its type name; a message
-  passed as a variable is not statically known, so the generator skips it and you keep the untyped image.
+- Works on the guided path, the typed `On<TRequest>()` path and the permissive `OnMessage<TMarker>()` path alike
+  (it is a context accessor). On the type-stated paths the projection is named from the request or marker type,
+  minus a `Request` suffix (`On<UpdateRequest>()` with a lambda handler gives `UpdatePostOp_PostImage`, nested in the
+  plugin).
 - **Bulk operations:** a `CreateMultiple` step can capture a post-image and an `UpdateMultiple` step a pre- and
   post-image. Dataverse delivers one image per target, so read them with the list accessors
   `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()`, aligned with `ctx.GetTargets()`. On a single
@@ -290,7 +291,7 @@ public sealed partial class AccountAudit(string unsecure, string secure) : Entit
   without** a captured image. On a **Create / Update / Delete** step the context adds `PreImage` / `PostImage` typed
   to exactly what the step captured (a bulk or non-CRUD context is a bare subclass - bulk images are per-record).
   An imageless step gets the same `{Handler}Context`. A **lambda** handler has no name, so it keeps the plain
-  context and `ctx.PreImageAs<T>()`; the permissive `OnMessage("...")` string path and generated Custom API
+  context and `ctx.PreImageAs<T>()`; the permissive `OnMessage<TMarker>()` path and generated Custom API
   `On{X}` extensions (no modelled context type) keep the plain context too.
 - Because the context is a type nested in your plugin, **the plugin class must be `partial`** (and so must any class
   that encloses it) - [VELA014](../reference/analyzers.md#vela014) reports it with a one-click fix, and
@@ -308,7 +309,7 @@ public sealed partial class AccountAudit(string unsecure, string secure) : Entit
 - Works on the typed `On<TRequest>()` path too: there the generated context derives from the generic message context
   (`MessagePreContext<TRequest, TEntity>` / `MessagePostContext<TRequest, TEntity>`), so a handler for a non-CRUD
   message (`On<AssignRequest>()`, ...) reads `ctx.PreImage` / `ctx.PostImage` the same way. The permissive
-  `OnMessage("...")` string path has no request type, so it keeps `ctx.PreImageAs<T>()`.
+  `OnMessage<TMarker>()` path has no request type, so it keeps `ctx.PreImageAs<T>()`.
 
 #### Need the whole entity (for a service)?
 
@@ -405,8 +406,12 @@ two differ, and Dataverse only knows the sdkmessage: `OnSendEmail()` registers o
 `WinOpportunity` / `WinQuote` → `Win`, `LoseOpportunity` → `Lose`, `CloseIncident` → `Close`, `CancelContract` →
 `Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
 `AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`.
-`OnMessage(...)`, the test harness and `PluginContext.For<T>().OnMessage(...)` apply the same translation, so
-`OnMessage(PluginMessages.SendEmail)` also registers on `Send`.
+`On<TRequest>()` / `OnMessage<TMarker>()`, the test harness and `PluginContext.For<T>().OnMessage(...)` /
+`WithRequest(...)` apply the same translation from the framework's table of the 40 request names whose sdkmessage
+differs (read from Dataverse metadata, for example `CloseQuote` → `Close`, `CancelSalesOrder` → `Cancel`,
+`SendFax` → `Send`, `PublishXml` → `Publish`), so `On<CloseQuoteRequest>()` registers on `Close`. A request type
+outside the table states its sdkmessage with `[SdkMessage("...")]` (from `Vela.Messages`), which
+`vela models --messages` emits on a generated request whose name differs from its sdkmessage.
 
 Some request messages accept no custom step at all, so they have no trigger: `ReviseQuote`, `FulfillSalesOrder`,
 `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity` and the three
@@ -417,7 +422,9 @@ Global, entity-less messages (for example `WhoAmI`) are not in this list: they c
 entity-bound plugin step, so there is no `On...()` for them. You can still call them from a handler
 (`service.Execute(new WhoAmIRequest())`) and generate a typed request with `vela models --messages`.
 
-A step registered through `OnMessage("...")` (any other message) can bind its handler three ways:
+A step registered through a marker type, `OnMessage<TMarker>()` (a class marked `[CustomMessage("...")]`), can
+bind its handler three ways. A marker with neither a `RequestName` nor `[CustomMessage]` throws when the step is
+built: the message is never guessed from the type name.
 
 - `.Handle(OnX)` where `void OnX(ILocalPluginContext ctx)` - the plain, untyped context.
 - `.Handle<TRequest>(OnX)` where `void OnX(IMessagePreContext<TRequest> ctx)` (pre-stage) or
@@ -449,8 +456,9 @@ private void OnScore(IMessagePostContext<CalculateAccountScoreRequest> ctx)
 }
 ```
 
-`On<TRequest>()` is permissive like `OnMessage("...")` (images validated at runtime, no filtering). Use the
-untyped `OnMessage("...")` / marker `OnMessage<TMarker>()` when you do not have a request type in hand.
+`On<TRequest>()` is permissive like `OnMessage<TMarker>()` (images validated at runtime, no filtering). Prefer
+generating the request (`vela models --messages <name>` / `--custom-apis <name>`) over a marker: it also types the
+handler and, through the generated `On<Message>()`, checks the entity at compile time.
 
 This is the same typing the curated `On<Message>()` methods give, without a hand-authored per-message context.
 `vela models --messages` extends this to generated messages: it emits an entity-constrained `On<Message>()`
@@ -539,9 +547,10 @@ The rules the chain encodes:
 1. `PreValidation` - only `PreImage`, only for `Update`, `Delete`, `Assign` and `Merge` (and `UpdateMultiple`). See the note below.
 2. `PreOperation` - only `PreImage`, only for `Update`, `Delete`, `Assign` and `Merge`.
 3. `PostOperation` - `PreImage` for `Update`/`Delete`/`Assign`/`Merge`, `PostImage` for `Create`/`Update`/`Assign`/`Merge`.
-4. `OnMessage("...")` - a non-modelled message is **permissive**: both images are offered and validity is left
-   to Dataverse at deploy time (Vela does not know an arbitrary message's image rules). A modelled message
-   reached through `OnMessage(...)` is still validated by the runtime backstop in `Build()`.
+4. `On<TRequest>()` / `OnMessage<TMarker>()` - a non-modelled message is **permissive**: both images are offered
+   and validity is left to Dataverse at deploy time (Vela does not know an arbitrary message's image rules). A
+   modelled message reached this way (`On<CreateRequest>()`) is still validated by the runtime backstop in
+   `Build()`, and at compile time by [VELA007](../reference/analyzers.md#vela007).
 5. `CreateMultiple` / `UpdateMultiple` - the same rules as `Create` / `Update`: a `PostImage` on `CreateMultiple`,
    a `PreImage` (at any stage) and a `PostImage` on `UpdateMultiple`. Dataverse delivers one image per target, only
    in `Pre/PostEntityImagesCollection`; read them with `ctx.GetPreImage(index, alias)` /

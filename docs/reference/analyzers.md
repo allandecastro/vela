@@ -4,8 +4,7 @@ Vela ships a small set of Roslyn **analyzers** and one **source generator** insi
 (they live in the bundled `Vela.Analyzers` assembly). There is **no separate analyzer package or project to
 reference** - they come with `Vela.Plugins` automatically and run in the editor and at build with no extra
 configuration. Rules that catch a build-breaking mistake in the fluent step builder are reported as **errors** so
-they fail fast instead of surfacing as a silent runtime surprise; advisory and best-practice rules (VELA006 usage,
-VELA011 reliability, VELA012 usage, VELA013 performance, VELA018 and VELA019 reliability) are **warnings** and never break a build. Together they
+they fail fast instead of surfacing as a silent runtime surprise; advisory and best-practice rules (VELA011 reliability, VELA012 usage, VELA013 performance, VELA018 and VELA019 reliability) are **warnings** and never break a build. Together they
 let the compiler enforce the framework's rules, so both a human developer and an AI author get told what is valid up
 front. Several rules also ship an IDE **code fix** (see below).
 
@@ -16,7 +15,6 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA003](#vela003) | Vela.Usage | Error | A single-value step modifier is set more than once |
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
 | [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
-| [VELA006](#vela006) | Vela.Usage | Warning | Prefer the typed trigger (`OnCreate()`) over `OnMessage("create")` for a modelled message |
 | [VELA007](#vela007) | Vela.Usage | Error | A pre-image on Create, or a post-image on Delete (the message can never provide it) |
 | [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share the same trigger (message + stage + mode) |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
@@ -35,7 +33,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA022](#vela022) | Vela.Reliability | Warning | A step on the `SetState` message never fires |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
-VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
+VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
 alongside the analyzers.
 
 Plus the [typed image projection generator](#typed-image-projection-generator) that ships in the same assembly.
@@ -95,22 +93,19 @@ selectors are compared, so a leading image alias string is ignored, and the same
 
 ## VELA006
 
-**Prefer the typed step trigger over the permissive `OnMessage(string)` for a message Vela models.** For a modelled
-message there is a typed trigger - `OnCreate()`, `OnUpdate()`, `OnDelete()`, the `*Multiple` variants,
-`OnRetrieve()` / `OnRetrieveMultiple()`, `OnAssociate()` / `OnDisassociate()`, `OnMerge()` - that gives a typed
-handler context and compile-time entity applicability, so `OnMessage("create")` is flagged. Unlike the other
-rules this is a **warning**, not an error: `OnMessage("...")` stays valid and is the right tool for a message Vela
-does not model (only a literal message string with a modelled name is flagged).
-
-**Fix:** switch to the typed trigger, for example `OnCreate()` instead of `OnMessage("create")`.
+**Retired.** VELA006 flagged `OnMessage("create")` for a message Vela models. The string trigger it targeted no
+longer exists: every message is named by a type (a curated `OnCreate()`, a request `On<XxxRequest>()`, or a marker
+`OnMessage<TMarker>()`), so there is nothing left to flag. The id is not reused.
 
 ## VELA007
 
 **Do not register an image the message can never provide.** A **pre-image on a Create** step (there is no prior row
 state before a create) and a **post-image on a Delete** step (the row no longer exists afterwards) are impossible,
 and the runtime rejects them. The typed triggers already prevent this through the builder's type-state, so this
-targets the permissive `OnMessage("create"|"delete")` path where `WithPreImage(...)` / `WithPostImage(...)` are
-exposed unconditionally. The message is read from the chain; a message Vela does not model is left alone.
+targets the type-stated `On<CreateRequest>()` / `OnMessage<TMarker>()` paths where `WithPreImage(...)` /
+`WithPostImage(...)` are exposed unconditionally. The message is read from the type: a `[SdkMessage("...")]` or
+`[CustomMessage("...")]` on it, or an SDK request type (`Microsoft.Xrm.Sdk.Messages.CreateRequest` is `Create`). A
+message Vela does not model, or a type whose message is only set in its constructor, is left alone.
 
 **Fix:** use the image the message supports - a post-image for Create, a pre-image for Delete - or drop the image.
 
@@ -283,9 +278,9 @@ out of the sandbox. See [Respect the sandbox](../guides/plugins.md#respect-the-s
 A `Create`, `Update`, `CreateMultiple` or `UpdateMultiple` step must declare at least one filtering attribute, or
 building the step fails at runtime (the step would otherwise fire on every create/update). VELA020 reports a
 `RegisterStep()` chain that reaches `.Handle(...)` without `.FilterOn(...)`, so the mistake fails in the editor and
-at build instead. Add `.FilterOn(e => e.Column)` before `.Handle(...)`. It also reports `OnMessage("Create")` (and the other three
-messages) reaching `.Handle(...)`: the permissive `OnMessage` path offers no `FilterOn`, so use the typed
-`OnCreate()` / `OnUpdate()` / ... trigger instead. A chain split across a local variable is not analyzed (it may
+at build instead. Add `.FilterOn(e => e.Column)` before `.Handle(...)`. It also reports `On<UpdateRequest>()` (and
+the other three messages, through a request or marker type, as VELA007 reads it) reaching `.Handle(...)`: the
+type-stated triggers offer no `FilterOn`, so use the typed `OnCreate()` / `OnUpdate()` / ... trigger instead. A chain split across a local variable is not analyzed (it may
 have been filtered before the split).
 
 ## VELA021
@@ -293,7 +288,7 @@ have been filtered before the split).
 **Typed image projection not generated.** Reported by the generator (a warning, on the `WithPreImage` /
 `WithPostImage` call) when a capture lists columns but no projection can be emitted for it: the image alias is not a
 compile-time constant, a selector does not read a column property of the entity (`a => a.GetHashCode()`), or the
-trigger of a chain that starts at `RegisterStep()` is not constant (`OnMessage(variable)`). Without it the only symptom
+trigger of a chain that starts at `RegisterStep()` cannot be read from the chain. Without it the only symptom
 is a `CS0246` on the missing `{Handler}_{Pre|Post}Image` type. Nested paths, `Entity` members and relationships are
 already errors of VELA001 / VELA010 and are not reported again; a chain split across locals is not reported.
 
@@ -333,8 +328,7 @@ Key points:
   (`ctx.PostImageAs<OnUpdated_PostImage>()`). This is why a plugin that captures a typed image must be declared
   `partial` ([VELA014](#vela014)). A lambda handler (no name) falls back to `{Message}{Stage}_{Pre|Post}Image`,
   where the message comes from the trigger: the guided `OnCreate()`..., the typed `On<TRequest>()`, or the
-  permissive `OnMessage("...")` / `OnMessage<TMarker>()` (a literal message is capitalized into the segment; a
-  non-literal message is not statically known, so the step is skipped).
+  permissive `OnMessage<TMarker>()` (the request or marker type name, minus a `Request` suffix).
 - **Opt-in and additive.** A capture with no explicit columns (`WithPreImage()`) keeps the full early-bound
   entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it, you
   keep the untyped image, and [VELA021](#vela021) says why. A column property without `[AttributeLogicalName]` is

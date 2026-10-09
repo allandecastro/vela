@@ -70,15 +70,19 @@ public class AddCommandTests
     }
 
     [Fact]
-    public void Add_Plugin_CustomMessage_RendersOnMessageCall()
+    public void Add_Plugin_CustomMessage_RendersRequestTypedTrigger()
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
             int exit = AddCommand.Run(["plugin", "AccountCustom", "--entity", "Account", "--message", "acme_DoThing", "--project", project]);
             Assert.Equal(ExitSuccess, exit);
 
+            // No magic string: the step registers through the request `vela models --custom-apis/--messages`
+            // generates, and the handler gets its request-typed context.
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountCustom.cs"));
-            Assert.Contains("RegisterStep().OnMessage(\"acme_DoThing\")", content);
+            Assert.Contains("RegisterStep().On<acme_DoThingRequest>()", content);
+            Assert.Contains("private void OnExecute(IMessagePostContext<acme_DoThingRequest> ctx)", content);
+            Assert.DoesNotContain("OnMessage(", content);
         });
     }
 
@@ -308,12 +312,14 @@ public class AddCommandTests
     }
 
     // SetState/SetStateDynamicEntity are deprecated by the platform (use an Update of statecode/statuscode),
-    // so the builder no longer exposes a typed On...() method for them. `vela add` treats them as any other
-    // custom message and renders the permissive OnMessage("...") escape hatch.
+    // so the builder exposes no curated On...() method for them. `vela add` registers them like any other
+    // message, through the request type: the SDK class, fully qualified, when one ships (SetStateRequest), else
+    // the request `vela models --messages` generates.
     [Theory]
-    [InlineData("SetState")]
-    [InlineData("SetStateDynamicEntity")]
-    public void Add_Plugin_SetState_RendersOnMessageCall(string message)
+    [InlineData("SetState", "Microsoft.Crm.Sdk.Messages.SetStateRequest")]
+    [InlineData("setstate", "Microsoft.Crm.Sdk.Messages.SetStateRequest")]
+    [InlineData("SetStateDynamicEntity", "SetStateDynamicEntityRequest")]
+    public void Add_Plugin_UnmodelledMessage_RendersRequestTypedTrigger(string message, string requestType)
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
@@ -321,13 +327,15 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
-            Assert.Contains($"RegisterStep().OnMessage(\"{message}\")", content);
+            Assert.Contains($"RegisterStep().On<{requestType}>()", content);
+            Assert.Contains($"IMessagePostContext<{requestType}> ctx", content);
         });
     }
 
     // Every message with a typed builder method (including the Tier-2 Merge / sharing messages) renders the
-    // strongly-typed On...() call rather than the permissive OnMessage("...") escape hatch.
+    // strongly-typed On...() call rather than the generic request-typed On<TRequest>().
     [Theory]
+    [InlineData("Assign")]
     [InlineData("Merge")]
     [InlineData("GrantAccess")]
     [InlineData("ModifyAccess")]
@@ -342,7 +350,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
             Assert.Contains($"RegisterStep().On{message}()", content);
-            Assert.DoesNotContain("OnMessage(", content);
+            Assert.DoesNotContain("On<", content);
         });
     }
 

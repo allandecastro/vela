@@ -19,7 +19,7 @@ namespace Vela.Cli;
 /// <b>non-exhaustive</b> list (the union of the Crm.Sdk-backed messages Vela already curates and the backlog's
 /// candidate typed messages, all verified to ship a <c>*Request</c> class in <c>Microsoft.Crm.Sdk.Proxy</c>); a
 /// Crm.Sdk message not listed here simply generates a harmless duplicate wrapper, which the developer can ignore
-/// in favour of the real SDK type via <c>OnMessage&lt;XxxRequest&gt;()</c>.
+/// in favour of the real SDK type via <c>On&lt;XxxRequest&gt;()</c>.
 /// </remarks>
 internal static class SdkMessageClassResolver
 {
@@ -72,14 +72,34 @@ internal static class SdkMessageClassResolver
     /// the curated <c>Microsoft.Crm.Sdk.Messages</c> supplement (e.g. <c>"QualifyLead"</c>). See the class remarks
     /// for why the supplement exists and why it is non-exhaustive.
     /// </summary>
-    public static bool HasSdkRequestClass(string messageName)
+    public static bool HasSdkRequestClass(string messageName) => TryGetSdkRequestTypeName(messageName, out _);
+
+    /// <summary>
+    /// The fully-qualified SDK request type for <paramref name="messageName"/> (case-insensitive), with the SDK's own
+    /// casing: <c>Microsoft.Xrm.Sdk.Messages.CreateRequest</c> for a core message, else
+    /// <c>Microsoft.Crm.Sdk.Messages.{Name}Request</c> for a listed Sales/business one.
+    /// </summary>
+    public static bool TryGetSdkRequestTypeName(string messageName, out string typeName)
     {
+        typeName = string.Empty;
         if (string.IsNullOrWhiteSpace(messageName))
         {
             return false;
         }
 
-        return SdkAssembly.GetType($"Microsoft.Xrm.Sdk.Messages.{messageName}Request") != null
-            || CrmSdkRequestMessages.Contains(messageName);
+        Type? core = SdkAssembly.GetType($"Microsoft.Xrm.Sdk.Messages.{messageName}Request", throwOnError: false, ignoreCase: true);
+        if (core != null)
+        {
+            typeName = core.FullName!;
+            return true;
+        }
+
+        if (CrmSdkRequestMessages.TryGetValue(messageName, out string? canonical))
+        {
+            typeName = $"Microsoft.Crm.Sdk.Messages.{canonical}Request";
+            return true;
+        }
+
+        return false;
     }
 }

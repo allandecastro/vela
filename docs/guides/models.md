@@ -218,17 +218,26 @@ excluded.
 `--messages a,b,c` generates typed `Request`/`Response` classes for any SDK message (`sdkmessage`), into
 `Messages/`. With **no value** it generates every *registerable* message (Microsoft's "available events":
 non-private messages with a visible, custom-step-allowed `sdkmessagefilter`), skipping messages backed by a
-Custom API and messages that already ship an SDK request class - the core `Microsoft.Xrm.Sdk.Messages.*` types
+Custom API and requests that already ship an SDK request class - the core `Microsoft.Xrm.Sdk.Messages.*` types
 and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (matched against a curated, non-exhaustive supplement;
 an unlisted one just makes a harmless duplicate).
+
+**One class per request, not per sdkmessage.** Several requests can share one sdkmessage, each for its own entity
+and with its own fields: `Close` serves `CloseIncident` (incident, `IncidentResolution`) and `CloseQuote` (quote,
+`QuoteClose`); `Cancel` serves `CancelContract` and `CancelSalesOrder`; `Send` serves `SendEmail`, `SendFax` and
+`SendTemplate`. `--messages Close` therefore generates `CloseIncidentRequest` and `CloseQuoteRequest`, and you can
+also name one request (`--messages CloseQuote`). A class is named after its request (that is what `Execute`
+takes), and when its sdkmessage differs it carries `[SdkMessage("Close")]` (from `Vela.Messages`), so
+`On<CloseQuoteRequest>()` registers the step on `Close` and the test harness runs it there.
 
 Alongside each `XxxRequest`/`XxxResponse`, `--messages` emits an **entity-constrained `On<Message>()` step
 extension** per applicable entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), giving
 **compile-time entity applicability**: a generated `OnMyMessage()` only compiles inside the `EntityPluginBase<T>`
 for the table its `sdkmessagefilter` targets, exactly like the curated `On<Message>()` methods (below). A global
 message (`primaryobjecttypecode` `none`) or one applying to more than eight entities emits a single generic
-`On<Message><TEntity>()` instead. The requests also pair with the permissive `OnMessage(...).Handle<TRequest>()`
-and with `On<TRequest>()` directly.
+`On<Message><TEntity>()` instead. A request that serves one entity of a shared sdkmessage gets that entity only
+(`OnCloseQuote()` compiles on `Quote`). The requests also work with `On<TRequest>()` directly, and with
+`PluginContext.ForRequest(...)` in tests.
 
 ### Using a standard message (`QualifyLead`)
 

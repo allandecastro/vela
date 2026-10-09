@@ -12,7 +12,7 @@ using Xunit;
 namespace Vela.Tests
 {
     // Proves the runtime dispatch builds the right per-message context for every modelled message (each arm of
-    // EntityPluginBase.BuildTypedContext), and that a permissive OnMessage(...) step binds and runs an untyped
+    // EntityPluginBase.BuildTypedContext), and that a permissive OnMessage<TMessage>() step binds and runs an untyped
     // handler. One plugin registers a step for all 13 modelled messages plus a custom message, each bound to a
     // single ILocalPluginContext handler (assignable to every typed context by contravariance); the test runs it
     // once per message and asserts the matching step fired. WinQuote shares the Win sdkmessage with
@@ -22,6 +22,11 @@ namespace Vela.Tests
         private sealed class AllMessagesProbe : EntityPluginBase<TestAccount>
         {
             public const string CustomMessage = "vela_custom";
+
+            [CustomMessage(CustomMessage)]
+            private sealed class CustomMarker
+            {
+            }
 
             public string? Seen { get; private set; }
 
@@ -43,7 +48,7 @@ namespace Vela.Tests
                 RegisterStep().OnModifyAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRevokeAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnMessage<CustomMarker>().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnWinOpportunity().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnLoseOpportunity().PostOperation().Sync().Handle(OnAny);

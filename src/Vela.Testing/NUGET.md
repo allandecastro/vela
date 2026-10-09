@@ -39,7 +39,8 @@ public class AccountPostUpdateTests
 }
 ```
 
-Custom APIs and message-only plugins use `PluginContext.ForMessage("vela_DoThing")`.
+Custom APIs and message-only plugins use `PluginContext.ForRequest(new DoThingRequest { ... })` (message and inputs
+from the typed request), or `PluginContext.ForMessage("vela_DoThing")` for a message with no request type.
 
 ## What you get
 

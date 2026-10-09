@@ -2130,7 +2130,7 @@ namespace Vela.Steps
         ISyncAsyncMode<IMergePostOperationConfig<TEntity>> PostOperation();
     }
 
-    /// <summary>Stage choice for OnMessage(...): a custom / non-modelled message. Universal image rules only.</summary>
+    /// <summary>Stage choice for OnMessage<TMessage>(): a custom / non-modelled message. Universal image rules only.</summary>
     public interface IPermissiveStages<TEntity> : IFluentStep where TEntity : Entity
     {
         ISyncMode<IPermissivePreValidationConfig<TEntity>> PreValidation();
@@ -2138,7 +2138,7 @@ namespace Vela.Steps
         ISyncAsyncMode<IPermissivePostOperationConfig<TEntity>> PostOperation();
     }
 
-    /// <summary>Config for an OnMessage(...) step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    /// <summary>Config for an OnMessage<TMessage>() step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IPermissivePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPermissivePreValidationConfig<TEntity> WithDescription(string description);
@@ -2166,7 +2166,7 @@ namespace Vela.Steps
         void Handle<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) where TRequest : OrganizationRequest, new();
     }
 
-    /// <summary>Config for an OnMessage(...) step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    /// <summary>Config for an OnMessage<TMessage>() step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IPermissivePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPermissivePreOperationConfig<TEntity> WithDescription(string description);
@@ -2184,7 +2184,7 @@ namespace Vela.Steps
         void Handle<TRequest>(Action<IMessagePreContext<TRequest, TEntity>> handler) where TRequest : OrganizationRequest, new();
     }
 
-    /// <summary>Config for an OnMessage(...) step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    /// <summary>Config for an OnMessage<TMessage>() step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IPermissivePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPermissivePostOperationConfig<TEntity> WithDescription(string description);
@@ -2322,9 +2322,7 @@ namespace Vela.Steps
         IWinQuoteStages<TEntity> OnWinQuote();
         IModifyAccessStages<TEntity> OnModifyAccess();
         IMergeStages<TEntity> OnMerge();
-        /// <summary>Trigger on a custom / non-modelled message stated by name. Image validity is enforced at runtime.</summary>
-        IPermissiveStages<TEntity> OnMessage(string messageName);
-        /// <summary>Trigger on a custom / non-modelled message stated by marker type.</summary>
+        /// <summary>Trigger on a custom / non-modelled message stated by a marker type ([CustomMessage("...")]) or a request type. Image validity is enforced at runtime.</summary>
         IPermissiveStages<TEntity> OnMessage<TMessage>() where TMessage : class;
         /// <summary>Trigger on the message named by TRequest (its RequestName); the handler is pre-typed to TRequest.</summary>
         ITypedStages<TEntity, TRequest> On<TRequest>() where TRequest : OrganizationRequest, new();

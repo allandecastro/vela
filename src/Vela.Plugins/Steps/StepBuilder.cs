@@ -7,6 +7,7 @@ using Vela.Context;
 using Vela.Constants;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
+using Vela.Messages;
 
 namespace Vela.Steps;
 
@@ -216,6 +217,18 @@ public sealed partial class StepBuilder<TEntity>
     {
         _definition.RequestName = requestName;
         _definition.Message = SdkMessageNames.ToSdkMessage(requestName);
+    }
+
+    // A trigger stated by type (On<TRequest>(), OnMessage<TMarker>()): the request name comes from the type, and
+    // a [SdkMessage] on it (emitted by `vela models --messages`) names the sdkmessage when the table does not.
+    private void SetMessageFrom<TMessage>() where TMessage : class
+    {
+        SetMessage(ExpressionHelper.GetMessageName<TMessage>());
+        SdkMessageAttribute? declared = typeof(TMessage).GetCustomAttribute<SdkMessageAttribute>(inherit: true);
+        if (declared != null)
+        {
+            _definition.Message = declared.MessageName;
+        }
     }
 
     // Mutation hooks for the generic typed-message adapter (Vela.Steps.TypedStepAdapter<TEntity, TRequest>),

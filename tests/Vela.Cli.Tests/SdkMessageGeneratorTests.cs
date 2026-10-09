@@ -39,6 +39,29 @@ public class SdkMessageGeneratorTests
     }
 
     [Fact]
+    public void Request_OnADifferentSdkMessage_CarriesSdkMessageAttribute()
+    {
+        // CloseQuote is executed under its own name but its steps register on Close (verified live 2026-10-09).
+        string code = Generate(new SdkMessage("CloseQuote", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+        {
+            MessageName = "Close",
+            Entities = new[] { "quote" },
+        });
+
+        Assert.Contains("[Vela.Messages.SdkMessage(\"Close\")]\n    public partial class CloseQuoteRequest : Vela.Messages.TypedRequest", code.Replace("\r\n", "\n"));
+        Assert.Contains("RequestName = \"CloseQuote\";", code);
+        Assert.Contains("public static Vela.Steps.ITypedStages<Quote, CloseQuoteRequest> OnCloseQuote(this Vela.Steps.IStepTrigger<Quote> builder)", code);
+    }
+
+    [Fact]
+    public void Request_OnItsOwnSdkMessage_HasNoSdkMessageAttribute()
+    {
+        string code = Generate(new SdkMessage("QualifyLead", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()));
+
+        Assert.DoesNotContain("SdkMessage(", code);
+    }
+
+    [Fact]
     public void RequestField_IsReadWrite_Over_Parameters()
     {
         string code = Generate(new SdkMessage(

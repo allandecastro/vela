@@ -319,24 +319,21 @@ internal static class ModelsCommand
 
             if (scope.AllMessages)
             {
-                // ALL mode: every non-private, non-Custom-API-backed message (filtered by the reader), minus any
-                // that already has an SDK request class (skipped here to avoid a duplicate/collision with the SDK
-                // type). Because the reader already drops Custom-API-backed messages, the developer's own authored
-                // Custom APIs never reach --messages (they surface only under --custom-apis, filtered above); no
-                // package-based exclusion is needed here. A single unreadable message is skipped with a warning
-                // rather than aborting the batch.
+                // ALL mode: every non-private, non-Custom-API-backed message (filtered by the reader), one contract per
+                // request it serves, minus any request that already has an SDK request class (skipped here to avoid a
+                // duplicate/collision with the SDK type; matched by request name, so the Win message's WinOpportunity
+                // and WinQuote are skipped). Because the reader already drops Custom-API-backed messages, the
+                // developer's own authored Custom APIs never reach --messages (they surface only under --custom-apis,
+                // filtered above); no package-based exclusion is needed here. A single unreadable message is skipped
+                // with a warning rather than aborting the batch.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
                 foreach (GeneratableMessage candidate in SdkMessageReader.ListGeneratableMessages(service))
                 {
                     string name = candidate.Name;
-                    if (SdkMessageClassResolver.HasSdkRequestClass(name))
-                    {
-                        continue;
-                    }
-
                     try
                     {
-                        sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));
+                        sdkMessages.AddRange(SdkMessageReader.ReadSdkMessages(service, name)
+                            .Where(contract => !SdkMessageClassResolver.HasSdkRequestClass(contract.Name)));
                     }
                     catch (Exception ex)
                     {
@@ -348,17 +345,24 @@ internal static class ModelsCommand
             }
             else if (scope.Messages.Length > 0)
             {
-                // Targeted: the user asked for these by name, so generate exactly them — never silently skipped. If
-                // one already has an SDK request class, warn (suggest the SDK type) but still generate the wrapper.
+                // Targeted: the user asked for these by name (an sdkmessage, or one of its requests), so generate
+                // exactly them — never silently skipped. If one already has an SDK request class, warn (suggest the
+                // SDK type) but still generate the wrapper.
+                // A message name and one of its requests can both be listed (Close,CloseQuote): each request is
+                // generated once.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
+                HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (string name in scope.Messages)
                 {
-                    if (SdkMessageClassResolver.HasSdkRequestClass(name))
+                    foreach (SdkMessage contract in SdkMessageReader.ReadSdkMessages(service, name).Where(c => seen.Add(c.Name)))
                     {
-                        Console.Error.WriteLine($"Warning: '{name}' already has an SDK request class (Microsoft.Xrm.Sdk.Messages.{name}Request); generating a duplicate. Prefer the SDK type via OnMessage<{name}Request>().");
-                    }
+                        if (SdkMessageClassResolver.HasSdkRequestClass(contract.Name))
+                        {
+                            Console.Error.WriteLine($"Warning: '{contract.Name}' already has an SDK request class ({contract.Name}Request); generating a duplicate. Prefer the SDK type via On<{contract.Name}Request>().");
+                        }
 
-                    sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));
+                        sdkMessages.Add(contract);
+                    }
                 }
 
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames(), logicalNames));

@@ -8,12 +8,24 @@ namespace Vela.Cli;
 /// <summary>A single SDK message request/response field: its name and the resolved C# type string.</summary>
 public sealed record SdkMessageField(string Name, string CSharpType);
 
-/// <summary>An SDK message (<c>sdkmessage</c>) to generate typed Request/Response classes for.</summary>
+/// <summary>An SDK message request (<c>sdkmessagerequest</c>) to generate typed Request/Response classes for.
+/// <see cref="Name"/> is the request name (what <c>Execute</c> takes, e.g. <c>CloseQuote</c>).</summary>
 public sealed record SdkMessage(
     string Name,
     IReadOnlyList<SdkMessageField> RequestFields,
     IReadOnlyList<SdkMessageField> ResponseFields)
 {
+    private readonly string? _messageName;
+
+    /// <summary>The sdkmessage the request runs on and plugin steps register on (e.g. <c>Close</c> for
+    /// <c>CloseQuote</c>). Defaults to <see cref="Name"/>; when it differs the generated request carries
+    /// <c>[Vela.Messages.SdkMessage("...")]</c> so <c>On&lt;XxxRequest&gt;()</c> registers on it.</summary>
+    public string MessageName
+    {
+        get => string.IsNullOrWhiteSpace(_messageName) ? Name : _messageName!;
+        init => _messageName = value;
+    }
+
     /// <summary>The entity logical names the message applies to (<c>sdkmessagefilter.primaryobjecttypecode</c>).
     /// Drives the generated entity-constrained <c>On&lt;Message&gt;()</c> step extension(s); an empty list (or a
     /// large fan-out) yields a single generic extension instead (see <see cref="SdkMessageGenerator"/>).</summary>
@@ -79,7 +91,15 @@ public static class SdkMessageGenerator
         sb.AppendLine();
 
         // Request
-        sb.AppendLine($"    /// <summary>Typed request for the <c>{message.Name}</c> message.</summary>");
+        bool divergent = !string.Equals(message.MessageName, message.Name, StringComparison.Ordinal);
+        sb.AppendLine(divergent
+            ? $"    /// <summary>Typed request for the <c>{message.Name}</c> request (steps register on the <c>{message.MessageName}</c> message).</summary>"
+            : $"    /// <summary>Typed request for the <c>{message.Name}</c> message.</summary>");
+        if (divergent)
+        {
+            sb.AppendLine($"    [Vela.Messages.SdkMessage(\"{message.MessageName}\")]");
+        }
+
         sb.AppendLine($"    public partial class {request} : Vela.Messages.TypedRequest");
         sb.AppendLine("    {");
         sb.AppendLine($"        public {request}()");
@@ -96,7 +116,7 @@ public static class SdkMessageGenerator
         sb.AppendLine();
 
         // Response
-        sb.AppendLine($"    /// <summary>Typed response for the <c>{message.Name}</c> message.</summary>");
+        sb.AppendLine($"    /// <summary>Typed response for the <c>{message.Name}</c> {(divergent ? "request" : "message")}.</summary>");
         sb.AppendLine($"    public partial class {response} : Vela.Messages.TypedResponse");
         sb.AppendLine("    {");
 

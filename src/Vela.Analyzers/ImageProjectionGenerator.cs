@@ -164,7 +164,7 @@ namespace Vela.Analyzers
             if (messageLabel is null || stageLabel is null)
             {
                 // A chain split across locals legitimately hides its trigger here, so only a chain that starts at
-                // RegisterStep() in this expression (whose trigger is a non-constant OnMessage(...)) is reported.
+                // RegisterStep() in this expression (whose trigger cannot be read) is reported.
                 return FluentStep.SpineHasCall(member.Expression, "RegisterStep")
                     ? ProjectionResult.Skipped(invocation, method, "the step's message or stage cannot be read from the chain")
                     : default;
@@ -309,8 +309,8 @@ namespace Vela.Analyzers
 
         // Message + stage for the context driver. Like ResolveMessageAndStage but recognizes EVERY On{Msg}() trigger
         // (strips the "On" prefix: OnAssign -> Assign, OnGrantAccess -> GrantAccess, OnCreateMultiple ->
-        // CreateMultiple), plus the typed On<TRequest>(). OnMessage(...) stays unmapped (returns null message), so a
-        // string/marker-triggered step gets no {Handler}Context.
+        // CreateMultiple), plus the typed On<TRequest>(). OnMessage<TMessage>() stays unmapped (returns null message), so a
+        // marker-triggered step gets no {Handler}Context.
         private static (string? Message, string? Stage) ResolveMessageAndStageForContext(ExpressionSyntax? receiver)
         {
             string? message = null;
@@ -348,7 +348,7 @@ namespace Vela.Analyzers
         };
 
         // The fully-qualified request type of an On<TRequest>() step in the chain, or null (guided OnCreate()...,
-        // permissive OnMessage(...)). Used to build the generic message context base for a typed step.
+        // permissive OnMessage<TMessage>()). Used to build the generic message context base for a typed step.
         private static string? FindTypedRequestType(ExpressionSyntax? receiver, SemanticModel model, CancellationToken cancellationToken)
         {
             foreach (ChainCall call in FluentStep.Spine(receiver))
@@ -414,13 +414,12 @@ namespace Vela.Analyzers
                     message = DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
                 }
 
-                // Permissive path: OnMessage("create") / OnMessage<TMessage>() name the projection from the
-                // message too, so a string-triggered step gets a typed image like the guided/typed paths do.
-                // Only a statically resolvable message (string literal or type argument) yields a name; a
-                // variable message stays null -> graceful fallback (no projection), like any unresolved capture.
-                if (message is null && name == "OnMessage")
+                // Permissive path: OnMessage<TMessage>() names the projection from the marker/request type, with the
+                // same type-name rule as On<TRequest>(), so it gets a typed image like the guided/typed paths do.
+                if (message is null && name == "OnMessage" && call.Name is GenericNameSyntax marker &&
+                    marker.TypeArgumentList.Arguments.Count == 1)
                 {
-                    message = ResolvePermissiveMessage(call.Invocation, call.Name, model, cancellationToken);
+                    message = DeriveMessageFromRequest(marker.TypeArgumentList.Arguments[0]);
                 }
             }
 
@@ -449,32 +448,6 @@ namespace Vela.Analyzers
                 ? typeName.Substring(0, typeName.Length - suffix.Length)
                 : typeName;
         }
-
-        // The message label for a permissive OnMessage(...) step. OnMessage<TMessage>() reuses the request/marker
-        // type-name rule (same as On<TRequest>()); OnMessage("literal") - or any compile-time constant, such as a const
-        // field - uses the string, sanitized and capitalized into a legal, guessable type-name segment (e.g. "create"
-        // -> Create). A non-constant argument (a variable) is not statically resolvable, so it returns null and no
-        // projection is emitted.
-        private static string? ResolvePermissiveMessage(InvocationExpressionSyntax invocation, SimpleNameSyntax name, SemanticModel model, CancellationToken cancellationToken)
-        {
-            if (name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Count == 1)
-            {
-                return DeriveMessageFromRequest(generic.TypeArgumentList.Arguments[0]);
-            }
-
-            SeparatedSyntaxList<ArgumentSyntax> arguments = invocation.ArgumentList.Arguments;
-            if (arguments.Count == 1 &&
-                model.GetConstantValue(arguments[0].Expression, cancellationToken) is { HasValue: true, Value: string text })
-            {
-                string raw = text.Trim();
-                return raw.Length == 0 ? null : Capitalize(Sanitize(raw));
-            }
-
-            return null;
-        }
-
-        private static string Capitalize(string value)
-            => value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value.Substring(1);
 
         // The optional leading alias and the column selectors. The alias may be any compile-time string constant (a
         // literal or a const); an explicit alias that is not constant cannot be known here, so it is reported as

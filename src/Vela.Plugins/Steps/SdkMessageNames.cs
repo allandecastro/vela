@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using Microsoft.Xrm.Sdk;
+using Vela.Messages;
 
 namespace Vela.Steps
 {
@@ -11,30 +14,60 @@ namespace Vela.Steps
     /// already the sdkmessage; the test harness uses it to run a request's steps under the platform's name.
     /// </summary>
     /// <remarks>
-    /// Verified live on a Dataverse dev environment (2026-10-09): none of the request names below exists as an
-    /// sdkmessage, and each sdkmessage on the right has a filter for the entity in the comment beside it. Several request names
-    /// share one sdkmessage (<c>Win</c> serves both <c>WinOpportunity</c> and <c>WinQuote</c>); the step's entity tells
-    /// them apart, so the runtime keeps the request name to build the right typed context.
+    /// Read live from a Dataverse dev environment's metadata (2026-10-09): every <c>sdkmessagerequest</c> whose name
+    /// differs from its <c>sdkmessage</c>, on a non-private message with a visible filter that allows a custom step.
+    /// None of the request names exists as an sdkmessage, and the comment beside each entry is the request's
+    /// entity (<c>global</c> when it has none). <c>SetState</c> is left out: a request of that name also lives
+    /// under <c>SetStateDynamicEntity</c>, but <c>SetState</c> is itself an sdkmessage. Several request names
+    /// share one sdkmessage (<c>Close</c> serves both <c>CloseIncident</c> and <c>CloseQuote</c>); the step's
+    /// entity tells them apart, so the runtime keeps the request name to build the right typed context. A request
+    /// type outside this table states its sdkmessage with <see cref="Vela.Messages.SdkMessageAttribute"/>, which
+    /// <c>vela models --messages</c> emits.
     /// </remarks>
     internal static class SdkMessageNames
     {
         private static readonly Dictionary<string, string> RequestToMessage = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["SendEmail"] = "Send",                         // email
-            ["SendEmailFromTemplate"] = "SendFromTemplate", // email
-            ["DeliverIncomingEmail"] = "DeliverIncoming",   // email
-            ["DeliverPromoteEmail"] = "DeliverPromote",     // email
-            ["WinOpportunity"] = "Win",                     // opportunity
-            ["WinQuote"] = "Win",                           // quote
-            ["LoseOpportunity"] = "Lose",                   // opportunity
-            ["CloseIncident"] = "Close",                    // incident
-            ["CancelContract"] = "Cancel",                  // contract
-            ["CloneContract"] = "Clone",                    // contract
-            ["AddMembersTeam"] = "AddMembers",              // team
-            ["RemoveMembersTeam"] = "RemoveMembers",        // team
-            ["AddListMembersList"] = "AddListMembers",      // list
-            ["AddMemberList"] = "AddMember",                // list
-            ["RemoveMemberList"] = "RemoveMember",          // list
+            ["AddItemCampaign"] = "AddItem",                              // campaign
+            ["AddItemCampaignActivity"] = "AddItem",                      // campaignactivity
+            ["AddListMembersList"] = "AddListMembers",                    // list
+            ["AddMemberList"] = "AddMember",                              // list
+            ["AddMembersBatchList"] = "AddMembersBatch",                  // list
+            ["AddMembersTeam"] = "AddMembers",                            // team
+            ["AddPrivilegesRole"] = "AddPrivileges",                      // role
+            ["BackgroundSendEmail"] = "BackgroundSend",                   // global
+            ["CancelContract"] = "Cancel",                                // contract
+            ["CancelSalesOrder"] = "Cancel",                              // salesorder
+            ["CheckIncomingEmail"] = "CheckIncoming",                     // email
+            ["CheckPromoteEmail"] = "CheckPromote",                       // email
+            ["CloneContract"] = "Clone",                                  // contract
+            ["CloseIncident"] = "Close",                                  // incident
+            ["CloseQuote"] = "Close",                                     // quote
+            ["DeliverImmediatePromoteEmail"] = "DeliverImmediatePromote", // email
+            ["DeliverIncomingEmail"] = "DeliverIncoming",                 // email
+            ["DeliverPromoteEmail"] = "DeliverPromote",                   // email
+            ["ExecuteByIdSavedQuery"] = "ExecuteById",                    // savedquery
+            ["ExecuteByIdUserQuery"] = "ExecuteById",                     // userquery
+            ["ExecuteFetch"] = "Execute",                                 // global
+            ["LoseOpportunity"] = "Lose",                                 // opportunity
+            ["PublishAllXml"] = "PublishAll",                             // global
+            ["PublishDuplicateRule"] = "Publish",                         // duplicaterule
+            ["PublishXml"] = "Publish",                                   // global
+            ["RemoveItemCampaign"] = "RemoveItem",                        // campaign
+            ["RemoveItemCampaignActivity"] = "RemoveItem",                // campaignactivity
+            ["RemoveListMembersList"] = "RemoveListMembers",              // list
+            ["RemoveMemberList"] = "RemoveMember",                        // list
+            ["RemoveMembersTeam"] = "RemoveMembers",                      // team
+            ["RemovePrivilegeRole"] = "RemovePrivilege",                  // role
+            ["ReplacePrivilegesRole"] = "ReplacePrivileges",              // role
+            ["SendEmail"] = "Send",                                       // email
+            ["SendEmailFromTemplate"] = "SendFromTemplate",               // email
+            ["SendFax"] = "Send",                                         // fax
+            ["SendTemplate"] = "Send",                                    // template
+            ["ValidateSavedQuery"] = "Validate",                          // savedquery
+            ["ValidateUnpublished"] = "Validate",                         // global
+            ["WinOpportunity"] = "Win",                                   // opportunity
+            ["WinQuote"] = "Win",                                         // quote
         };
 
         /// <summary>
@@ -50,6 +83,16 @@ namespace Vela.Steps
 
             string trimmed = requestName.Trim();
             return RequestToMessage.TryGetValue(trimmed, out string? message) ? message : trimmed;
+        }
+
+        /// <summary>
+        /// The sdkmessage <paramref name="request"/> runs on: its type's <see cref="Vela.Messages.SdkMessageAttribute"/>
+        /// when present, else <see cref="ToSdkMessage(string)"/> of its <c>RequestName</c>.
+        /// </summary>
+        internal static string ToSdkMessage(OrganizationRequest request)
+        {
+            SdkMessageAttribute? declared = request.GetType().GetCustomAttribute<SdkMessageAttribute>(inherit: true);
+            return declared != null ? declared.MessageName : ToSdkMessage(request.RequestName);
         }
     }
 }

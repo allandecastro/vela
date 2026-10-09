@@ -117,10 +117,10 @@ internal sealed record StepConfig(
         message.HasSubordinatePreImage(stage),
         message.HasSubordinatePostImage(stage));
 
-    /// <summary>Universal image rules for steps on a message the model does not know (OnMessage / On&lt;TRequest&gt;).</summary>
+    /// <summary>Universal image rules for steps on a message the model does not know (OnMessage&lt;TMessage&gt; / On&lt;TRequest&gt;).</summary>
     private static readonly Message Unmodelled = new("(unmodelled)", Images: Images.PreAndPost);
 
-    /// <summary>The config of a permissive <c>OnMessage(...)</c> step at a stage.</summary>
+    /// <summary>The config of a permissive <c>OnMessage&lt;TMessage&gt;()</c> step at a stage.</summary>
     public static StepConfig ForPermissive(Stage stage)
     {
         string context = $"IMessage{stage.ContextSuffix()}Context";
@@ -129,7 +129,7 @@ internal sealed record StepConfig(
         return new(
             $"IPermissive{stage}Config<TEntity>",
             " where TEntity : Entity",
-            $"Config for an OnMessage(...) step at {stage}. Handle(...) is last; With* modifiers are order-free.",
+            $"Config for an OnMessage<TMessage>() step at {stage}. Handle(...) is last; With* modifiers are order-free.",
             stage,
             FilterOn: false,
             Unmodelled.HasPreImage(stage),

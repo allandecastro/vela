@@ -31,6 +31,16 @@ public class SdkMessageReaderTests
         return e;
     }
 
+    // The single contract behind a message that serves one request.
+    private static SdkMessage ReadSingle(FakeOrgService svc, string name) => Assert.Single(SdkMessageReader.ReadSdkMessages(svc, name));
+
+    // A request row per pair whose id IS the pair id, so a field query on the request tells which pair won.
+    private static Entity RequestOfPair(QueryExpression q) =>
+        new Entity("sdkmessagerequest", (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0]);
+
+    private static Guid PairOfRequest(QueryExpression q) =>
+        (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagerequestid").Values[0];
+
     [Fact]
     public void ReadSdkMessage_MapsRequestAndResponseFields()
     {
@@ -51,7 +61,7 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "QualifyLead");
+        SdkMessage message = ReadSingle(svc, "QualifyLead");
 
         Assert.Equal("QualifyLead", message.Name);
 
@@ -85,16 +95,18 @@ public class SdkMessageReaderTests
                     case "sdkmessagepair":
                         return FakeOrgService.Collection(legacy, xrm, modern);
                     case "sdkmessagerequest":
-                        // Capture which pair id the request query filtered on.
-                        usedPairId = (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0];
-                        return FakeOrgService.Collection(Row("sdkmessagerequest"));
+                        return FakeOrgService.Collection(RequestOfPair(q));
+                    case "sdkmessagerequestfield":
+                        // Capture which pair's request the fields were read from.
+                        usedPairId = PairOfRequest(q);
+                        return new EntityCollection();
                     default:
                         return new EntityCollection();
                 }
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "Whatever");
+        SdkMessage message = ReadSingle(svc, "Whatever");
 
         Assert.Equal("Whatever", message.Name);
         Assert.Equal(modern.Id, usedPairId);
@@ -120,15 +132,18 @@ public class SdkMessageReaderTests
                     case "sdkmessagepair":
                         return FakeOrgService.Collection(legacy, xrm);
                     case "sdkmessagerequest":
-                        usedPairId = (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0];
-                        return FakeOrgService.Collection(Row("sdkmessagerequest"));
+                        return FakeOrgService.Collection(RequestOfPair(q));
+                    case "sdkmessagerequestfield":
+                        // Capture which pair's request the fields were read from.
+                        usedPairId = PairOfRequest(q);
+                        return new EntityCollection();
                     default:
                         return new EntityCollection();
                 }
             },
         };
 
-        SdkMessageReader.ReadSdkMessage(svc, "Whatever");
+        ReadSingle(svc, "Whatever");
 
         Assert.Equal(xrm.Id, usedPairId);
     }
@@ -151,7 +166,7 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
+        SdkMessage message = ReadSingle(svc, "M");
 
         SdkMessageField only = Assert.Single(message.RequestFields);
         Assert.Equal("Dup", only.Name);
@@ -249,7 +264,7 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "QualifyLead");
+        SdkMessage message = ReadSingle(svc, "QualifyLead");
 
         Assert.Equal(new[] { "account", "lead" }, message.Entities.ToArray());
 
@@ -274,7 +289,7 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
+        SdkMessage message = ReadSingle(svc, "M");
 
         Assert.Empty(message.Entities);
     }
@@ -285,7 +300,7 @@ public class SdkMessageReaderTests
         var svc = new FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => SdkMessageReader.ReadSdkMessage(svc, "Nope"));
+            () => SdkMessageReader.ReadSdkMessages(svc, "Nope"));
         Assert.Contains("Nope", ex.Message);
     }
 
@@ -303,9 +318,101 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
+        SdkMessage message = ReadSingle(svc, "M");
 
         Assert.Empty(message.RequestFields);
         Assert.Empty(message.ResponseFields);
+    }
+
+    // Verified live 2026-10-09: the Close sdkmessage has one request per entity, each with its own fields, on its
+    // own pairs (CloseIncident: incident + IncidentResolution; CloseQuote: quote + QuoteClose).
+    private static FakeOrgService SharedCloseMessage()
+    {
+        Guid incident2011 = Guid.NewGuid(), incidentLegacy = Guid.NewGuid(), quote2011 = Guid.NewGuid();
+        return new FakeOrgService
+        {
+            OnRetrieveMultiple = q =>
+            {
+                switch (q.EntityName)
+                {
+                    case "sdkmessage":
+                        // A request-name lookup joins through the pair to the request; both resolve to Close.
+                        bool byName = q.Criteria.Conditions.Any(c => c.AttributeName == "name" && (string)c.Values[0] == "Close");
+                        bool byRequest = q.LinkEntities.Any();
+                        return byName || byRequest ? FakeOrgService.Collection(Row("sdkmessage", ("name", "Close"))) : new EntityCollection();
+                    case "sdkmessagepair":
+                        return FakeOrgService.Collection(
+                            new Entity("sdkmessagepair", incidentLegacy) { ["namespace"] = "http://schemas.microsoft.com/crm/2007/WebServices" },
+                            new Entity("sdkmessagepair", incident2011) { ["namespace"] = "http://schemas.microsoft.com/crm/2011/Contracts" },
+                            new Entity("sdkmessagepair", quote2011) { ["namespace"] = "http://schemas.microsoft.com/crm/2011/Contracts" });
+                    case "sdkmessagerequest":
+                        Entity request = RequestOfPair(q);
+                        bool isQuote = request.Id == quote2011;
+                        request["name"] = isQuote ? "CloseQuote" : "CloseIncident";
+                        request["primaryobjecttypecode"] = request.Id == incidentLegacy ? null : (isQuote ? "quote" : "incident");
+                        return FakeOrgService.Collection(request);
+                    case "sdkmessagerequestfield":
+                        Guid pair = PairOfRequest(q);
+                        return pair == quote2011
+                            ? FakeOrgService.Collection(Row("sdkmessagerequestfield", ("name", "QuoteClose"), ("clrparser", "Microsoft.Xrm.Sdk.Entity" + Asm), ("position", 0)))
+                            : pair == incident2011
+                                ? FakeOrgService.Collection(Row("sdkmessagerequestfield", ("name", "IncidentResolution"), ("clrparser", "Microsoft.Xrm.Sdk.Entity" + Asm), ("position", 0)))
+                                : FakeOrgService.Collection(Row("sdkmessagerequestfield", ("name", "Legacy"), ("clrparser", null!), ("position", 0)));
+                    case "sdkmessagefilter":
+                        return FakeOrgService.Collection(
+                            Row("sdkmessagefilter", ("primaryobjecttypecode", "incident")),
+                            Row("sdkmessagefilter", ("primaryobjecttypecode", "quote")));
+                    default:
+                        return new EntityCollection();
+                }
+            },
+        };
+    }
+
+    [Fact]
+    public void ReadSdkMessages_SharedMessage_YieldsOneContractPerRequest_WithItsOwnFieldsAndEntity()
+    {
+        IReadOnlyList<SdkMessage> contracts = SdkMessageReader.ReadSdkMessages(SharedCloseMessage(), "Close");
+
+        Assert.Equal(new[] { "CloseIncident", "CloseQuote" }, contracts.Select(c => c.Name).ToArray());
+        Assert.All(contracts, c => Assert.Equal("Close", c.MessageName));
+
+        SdkMessage incident = contracts[0];
+        Assert.Equal("IncidentResolution", Assert.Single(incident.RequestFields).Name); // the 2011 pair, not the legacy one
+        Assert.Equal(new[] { "incident" }, incident.Entities.ToArray());
+
+        SdkMessage quote = contracts[1];
+        Assert.Equal("QuoteClose", Assert.Single(quote.RequestFields).Name);
+        Assert.Equal(new[] { "quote" }, quote.Entities.ToArray());
+    }
+
+    [Fact]
+    public void ReadSdkMessages_RequestName_YieldsJustThatRequest_OnItsSdkMessage()
+    {
+        SdkMessage quote = Assert.Single(SdkMessageReader.ReadSdkMessages(SharedCloseMessage(), "CloseQuote"));
+
+        Assert.Equal("CloseQuote", quote.Name);
+        Assert.Equal("Close", quote.MessageName);
+        Assert.Equal("QuoteClose", Assert.Single(quote.RequestFields).Name);
+    }
+
+    [Fact]
+    public void ReadSdkMessages_UnnamedRequest_IsNamedAfterItsMessage()
+    {
+        var svc = new FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "M"))),
+                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
+                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
+                _ => new EntityCollection(),
+            },
+        };
+
+        SdkMessage message = ReadSingle(svc, "M");
+
+        Assert.Equal("M", message.Name);
+        Assert.Equal("M", message.MessageName);
     }
 }

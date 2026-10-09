@@ -36,10 +36,13 @@ vela add --interactive
   `RevokeAccess`, `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`), sales lifecycle (`QualifyLead`,
   `WinOpportunity`, `LoseOpportunity`, the `Convert*`/`Generate*` messages), queues (`AddToQueue`, `RouteTo`, …),
   email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and case/contract messages (see the full
-  list in [Write a plugin](plugins.md)); any other name is
-  registered as a custom SDK message via `OnMessage("...")`. The deprecated `SetState` / `SetStateDynamicEntity`
-  messages have no typed method (update `statecode`/`statuscode` with `Update` instead), and `add` does not
-  emit the typed `OnAssign()` either, so these render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
+  list in [Write a plugin](plugins.md), `Assign` included); any other name is registered through its request
+  type, `On<XxxRequest>()`, with a handler taking `IMessagePostContext<XxxRequest>` (`IMessagePreContext` at a
+  pre-stage). When the SDK ships the request class it is used fully qualified (`--message SetState` renders
+  `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`); otherwise `add` references the request
+  [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`) generates and prints a note to generate it.
+  The deprecated `SetState` / `SetStateDynamicEntity` messages have no curated method (update
+  `statecode`/`statuscode` with `Update` instead). `--project <csproj>` (default: the single `.csproj` in the
   current directory), `--force` (overwrite an existing file).
 - **Filtering attributes on a `Create`/`Update` plugin or step** (also `CreateMultiple`/`UpdateMultiple`):
   these steps require a `FilterOn`, so `--filtering-attributes <Col1,Col2>` is **required** for them. Pass the
@@ -67,8 +70,8 @@ vela add --interactive
   handler reads `ctx.Request.Targets`) instead of `WithTarget(...)`.
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
-  method, e.g. `OnUpdate()`, or `OnMessage("...")` for an unmodelled message, not the generic `On<TRequest>()`
-  overload) and a matching handler method
+  method, e.g. `OnUpdate()`, or `On<XxxRequest>()` for an unmodelled message, as for `add plugin`) and a matching
+  handler method
   (`--message`, optional `--handler <Method>`). It refuses a plugin that has no handler-bound step yet (add a
   step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source. It
   accepts the same `--stage`/`--mode` and `--filtering-attributes` options as `add plugin`: pass

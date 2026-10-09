@@ -2,14 +2,15 @@
 
 Vela models a fixed set of Dataverse messages with a strongly-typed step context - the CRUD/bulk, sharing, sales
 lifecycle, queue, email, membership and case/contract families (the full list is in
-[Write a plugin](../guides/plugins.md)). Any other SDK message is reachable through the permissive `OnMessage("...")`
-escape hatch, which hands the handler a plain `ILocalPluginContext`.
+[Write a plugin](../guides/plugins.md)). Any other SDK message is reachable through its request type,
+`On<XxxRequest>()` (an SDK request, or one `vela models --messages` generates), which hands the handler the
+request-typed `IMessagePre/PostContext<XxxRequest>`. There is no string form.
 
 Contexts are **split by stage**: each message has an `I<Message>PreContext<TEntity>` (pre-stage handler:
 `ctx.Request` + the typed target, no `ctx.Response`) and an `I<Message>PostContext<TEntity>` (post-stage handler:
 `ctx.Request` + `ctx.Response`). Adding a new **modelled** message (so it gets its own `On<Message>()` builder
 method plus those two contexts) is a small but **multi-file** change. Miss one step and the feature is only
-half-wired - most commonly the CLI keeps generating `OnMessage("...")` instead of the typed call. Touch all of
+half-wired - most commonly the CLI keeps generating `On<XxxRequest>()` instead of the typed call. Touch all of
 these, in this order:
 
 1. **`src/Vela.Plugins/Context/MessageContexts.cs`** - add **two** interfaces (`I<Message>PreContext<TEntity>` over
@@ -45,11 +46,12 @@ these, in this order:
 5. **`src/Vela.Cli/Cli/AddCommand.cs` - `KnownMessages`** - the easy-to-forget one. This array is the CLI's list of
    messages that render a typed `On<Message>()` call from `vela add plugin --message <Message>`. **It must stay in
    sync with the framework's typed methods**: leave the message out and the scaffold silently falls back to the
-   permissive `OnMessage("<Message>")` even though the typed builder now exists.
+   generic `On<<Message>Request>()` even though the typed builder now exists.
 6. **Check the sdkmessage on a live environment first.** The trigger is named after the SDK request, but the step
    registers on the sdkmessage, and for some business messages the two differ (`SendEmail` is `Send`, `WinQuote` is
-   `Win`). Query `sdkmessage` / `sdkmessagefilter` for the request name: if it does not exist, add the mapping to
-   `src/Vela.Plugins/Steps/SdkMessageNames.cs`. If the filter for your entity has
+   `Win`). Query `sdkmessagerequest` → `sdkmessagepair` → `sdkmessage` for the request name: if its sdkmessage has
+   another name, the mapping must be in `src/Vela.Plugins/Steps/SdkMessageNames.cs` (it already lists every such
+   step-eligible request read from a live environment's metadata). If the filter for your entity has
    `iscustomprocessingstepallowed = false`, do not model the message at all: Dataverse rejects every custom step on
    it (0x80044187).
 
@@ -64,5 +66,5 @@ these, in this order:
 ## Deprecated messages are intentionally not modelled
 
 `SetState` and `SetStateDynamicEntity` are deprecated by the platform. They deliberately get **no** typed
-method: they are not in `KnownMessages` and have no `I<Message>Pre`/`PostContext`, so they render `OnMessage("...")`. Update
+method: they are not in `KnownMessages` and have no `I<Message>Pre`/`PostContext`, so they render `On<SetStateRequest>()`. Update
 `statecode` / `statuscode` through an `Update` instead. (`Assign` is supported: use `OnAssign()`.) Do not add typed support for them.

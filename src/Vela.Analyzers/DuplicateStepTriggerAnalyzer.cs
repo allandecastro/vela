@@ -96,7 +96,7 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                if (!TryResolveTrigger(member.Expression, out string message, out string stage, out string mode, out Location location, out string display))
+                if (!TryResolveTrigger(member.Expression, context.SemanticModel, context.CancellationToken, out string message, out string stage, out string mode, out Location location, out string display))
                 {
                     continue; // undeterminable trigger - skip rather than guess
                 }
@@ -113,9 +113,10 @@ namespace Vela.Analyzers
             }
         }
 
-        // Walks the receiver spine of a Handle(...) call to read the trigger: message (typed On*/permissive
-        // OnMessage), stage, and mode (Async, else Sync). Returns false when message or stage is undeterminable.
-        private static bool TryResolveTrigger(ExpressionSyntax? receiver, out string message, out string stage, out string mode, out Location location, out string display)
+        // Walks the receiver spine of a Handle(...) call to read the trigger: message (typed On*, or the type of a
+        // type-stated On<TRequest>()/OnMessage<TMessage>()), stage, and mode (Async, else Sync). Returns false when
+        // message or stage is undeterminable.
+        private static bool TryResolveTrigger(ExpressionSyntax? receiver, SemanticModel model, System.Threading.CancellationToken cancellationToken, out string message, out string stage, out string mode, out Location location, out string display)
         {
             message = string.Empty;
             stage = string.Empty;
@@ -131,9 +132,9 @@ namespace Vela.Analyzers
                     message = typed!;
                     location = call.Name.GetLocation();
                 }
-                else if (message.Length == 0 && called == "OnMessage" && TryGetLiteralMessage(call.Invocation, out string permissive))
+                else if (message.Length == 0 && FluentStep.TypeStatedMessage(call, model, cancellationToken) is { } typeStated)
                 {
-                    message = permissive;
+                    message = typeStated.ToLowerInvariant();
                     location = call.Name.GetLocation();
                 }
                 else if (stage.Length == 0 && StageMethods.TryGetValue(called, out string? stageValue))
@@ -147,7 +148,7 @@ namespace Vela.Analyzers
             }
 
             // A trigger is only compared when BOTH its message and stage are resolvable from the chain. The fluent API
-            // ALWAYS requires an explicit stage (every On*/OnMessage path goes through PreValidation/PreOperation/
+            // ALWAYS requires an explicit stage (every On*/OnMessage<T> path goes through PreValidation/PreOperation/
             // PostOperation), so an empty stage here means the chain shape could not be parsed, not that a "default
             // stage" applies - and comparing an unparsed trigger would risk a false positive. Such a step is skipped;
             // a genuine duplicate is still rejected at registration by the framework (#309 M4: documented, not a
@@ -159,19 +160,6 @@ namespace Vela.Analyzers
 
             display = $"message '{message}' at {stage} ({mode})";
             return true;
-        }
-
-        private static bool TryGetLiteralMessage(InvocationExpressionSyntax invocation, out string message)
-        {
-            message = string.Empty;
-            SeparatedSyntaxList<ArgumentSyntax> arguments = invocation.ArgumentList.Arguments;
-            if (arguments.Count != 1 || arguments[0].Expression is not LiteralExpressionSyntax literal || !literal.IsKind(SyntaxKind.StringLiteralExpression))
-            {
-                return false;
-            }
-
-            message = literal.Token.ValueText.Trim().ToLowerInvariant();
-            return message.Length > 0;
         }
     }
 }

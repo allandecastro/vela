@@ -5,7 +5,7 @@
 2. **Step handler not found / wrong signature**
    - Bind the handler by method group (`.Handle(OnUpdated)`), and give it the message-typed context:
      `void OnUpdated(IUpdatePostContext<TEntity> ctx)` (or `void OnX(ILocalPluginContext ctx)` for an
-     `OnMessage("...")` step). The old two-argument `(ILocalPluginContext, TEntity)` signature is no longer used.
+     `OnMessage<TMarker>()` step). The old two-argument `(ILocalPluginContext, TEntity)` signature is no longer used.
 3. **Custom API handler not found / wrong signature**
    - Ensure signature is `void Handler(ILocalPluginContext)` for lightweight mode.
 4. **No changes in `plan`**
