@@ -1009,7 +1009,7 @@ Framework line, published as `framework-v0.28.2`. Second pass of the analyzer/ge
 
 ### Fixed
 
-- **Code fixes for VELA002 (remove `static`) and VELA015 (use the step context type) now edit the file that owns the handler.** When the handler method was declared in a different file from the `.Handle(...)` call (a partial class, or a handler defined elsewhere), the fix operated on the wrong document and threw "node not in tree". Both are now Solution-based and edit the handler's own document.
+- **Code fixes for VELA004 (remove `static`) and VELA015 (use the step context type) now edit the file that owns the handler.** When the handler method was declared in a different file from the `.Handle(...)` call (a partial class, or a handler defined elsewhere), the fix operated on the wrong document and threw "node not in tree". Both are now Solution-based and edit the handler's own document.
 - **A generated image projection on a value-type column is nullable.** A non-nullable value-type column (for example an authored `int` model property) was projected as a non-nullable field, so an absent image column read its default (`0`) - indistinguishable from a real value. Value-type projected members are now `T?` (early-bound models are already nullable, so this only changes an authored non-nullable value-type selector).
 - **On a projection-name collision, the first shape keeps the plain name.** When two steps produced the same projection name with different captured columns, every shape got a hash suffix, making a lambda-handler projection unnameable. The first shape (ordered deterministically) now keeps the plain, guessable name; only later colliding shapes are hash-suffixed.
 
