@@ -237,13 +237,10 @@ public sealed partial class AccountAudit(string unsecure, string secure) : Entit
   from the message: a string literal is capitalized into the name segment (`OnMessage("update")` with a lambda
   handler gives `UpdatePostOp_PostImage`, nested in the plugin), and a marker type uses its type name; a message
   passed as a variable is not statically known, so the generator skips it and you keep the untyped image.
-- **Bulk operations:** Dataverse does not allow entity images on `CreateMultiple` / `UpdateMultiple` steps
-  (a `*Multiple` step that captures a `WithPreImage`/`WithPostImage` is rejected at `vela plan`/`apply`). Capture
-  the image on the single **`OnCreate()` / `OnUpdate()`** step instead: that step also runs for bulk operations,
-  firing per record, so each invocation reads its record's projection with the singular `ctx.PreImageAs<T>()` /
-  `ctx.PostImageAs<T>()`. (The list accessors `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()`, aligned with
-  `ctx.GetTargets()`, exist for a native `*Multiple` batch context and are exercised via the in-memory test
-  harness, where per-record image collections can be supplied.)
+- **Bulk operations:** a `CreateMultiple` step can capture a post-image and an `UpdateMultiple` step a pre- and
+  post-image. Dataverse delivers one image per target, so read them with the list accessors
+  `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()`, aligned with `ctx.GetTargets()`. On a single
+  `OnCreate()` / `OnUpdate()` step, use the singular `ctx.PreImageAs<T>()` / `ctx.PostImageAs<T>()`.
 - Reading a column the step did not capture is a normal C# "no such member" compile error on the projection
   (the column simply is not on the type). The projection is nested in your plugin's `partial` class, so the handler
   reads it unqualified with no `using` to add; a plugin that captures a typed image must therefore be `partial`
@@ -523,12 +520,17 @@ The rules the chain encodes:
 4. `OnMessage("...")` - a non-modelled message is **permissive**: both images are offered and validity is left
    to Dataverse at deploy time (Vela does not know an arbitrary message's image rules). A modelled message
    reached through `OnMessage(...)` is still validated by the runtime backstop in `Build()`.
-5. `CreateMultiple` / `UpdateMultiple` - not deployable with images. Dataverse accepts neither `Target` nor
-   `Targets` as an image property on the bulk messages, so a `*Multiple` step that carries a `PreImage`/`PostImage`
-   is rejected by `plan`/`apply` at scan time (a clear error, before anything is written). Register the image on
-   the single `Create`/`Update` step instead: it also runs for bulk operations, where per-record images are read
-   with `ctx.GetPreImage(index, alias)` / `ctx.GetPostImage(index, alias)`. The in-memory test harness does allow
-   bulk-step images, so you can still unit-test per-record image handling against `ctx.BulkPreEntityImagesCollection`.
+5. `CreateMultiple` / `UpdateMultiple` - the same rules as `Create` / `Update`: a `PostImage` on `CreateMultiple`,
+   a `PreImage` (at any stage) and a `PostImage` on `UpdateMultiple`. Dataverse delivers one image per target, only
+   in `Pre/PostEntityImagesCollection`; read them with `ctx.GetPreImage(index, alias)` /
+   `ctx.GetPostImage(index, alias)`.
+
+`vela plan`/`apply` check the same rules at scan time, before anything is written, so an image Dataverse would
+refuse fails with a clear error rather than a platform error code mid-apply. They also cover the messages Vela
+does not model: a `PostImage` before `PostOperation` and any image on `RouteTo` are rejected. Each image is
+registered against the request property the message expects (`Id` for Create, `Ids` for CreateMultiple, `Targets`
+for UpdateMultiple, `EmailId` for Send/DeliverIncoming/DeliverPromote, `EntityMoniker` for SetState, `Target`
+otherwise).
 
 **A PreValidation pre-image is fine for validation, not for a strictly consistent read.** A top-level PreValidation
 step runs outside the database transaction and its image is read without a lock, so another process can change the
