@@ -94,6 +94,13 @@ namespace Vela.Files
         /// When the platform reports <c>IsChunkingSupported = false</c>, the whole file is read in one block instead.
         /// </param>
         /// <returns>The file bytes.</returns>
+        /// <remarks>
+        /// On an Image column the platform serves the full-size image only, and only when the column stores full
+        /// images (its <c>attributeimageconfig</c> row has <c>canstorefullimage</c> = true) at the time the image is
+        /// set; otherwise it fails with <c>0x80040217</c> ("No FileAttachment records found"). The thumbnail is
+        /// read from the column itself with a Retrieve.
+        /// </remarks>
+        /// <exception cref="InvalidPluginExecutionException">The bytes received differ from the announced size.</exception>
         public static byte[] DownloadFile(
             this IOrganizationService service,
             EntityReference target,
