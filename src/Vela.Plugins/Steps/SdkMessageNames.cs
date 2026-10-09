@@ -17,8 +17,10 @@ namespace Vela.Steps
     /// Read live from a Dataverse dev environment's metadata (2026-10-09): every <c>sdkmessagerequest</c> whose name
     /// differs from its <c>sdkmessage</c>, on a non-private message with a visible filter that allows a custom step.
     /// None of the request names exists as an sdkmessage, and the comment beside each entry is the request's
-    /// entity (<c>global</c> when it has none). <c>SetState</c> is left out: a request of that name also lives
-    /// under <c>SetStateDynamicEntity</c>, but <c>SetState</c> is itself an sdkmessage. Several request names
+    /// entity (<c>global</c> when it has none). <c>SetState</c> is the one request name that is also an sdkmessage:
+    /// its request lives under <c>SetStateDynamicEntity</c>, and a step on the <c>SetState</c> sdkmessage never fires
+    /// (verified live: a <c>SetStateRequest</c> fires the <c>SetStateDynamicEntity</c> steps), so it maps there too;
+    /// only a type pinned with <c>[SdkMessage("SetState")]</c> still lands on it (analyzer VELA022). Several request names
     /// share one sdkmessage (<c>Close</c> serves both <c>CloseIncident</c> and <c>CloseQuote</c>); the step's
     /// entity tells them apart, so the runtime keeps the request name to build the right typed context. A request
     /// type outside this table states its sdkmessage with <see cref="Vela.Messages.SdkMessageAttribute"/>, which
@@ -64,6 +66,7 @@ namespace Vela.Steps
             ["SendEmailFromTemplate"] = "SendFromTemplate",               // email
             ["SendFax"] = "Send",                                         // fax
             ["SendTemplate"] = "Send",                                    // template
+            ["SetState"] = "SetStateDynamicEntity",                       // global; SetState itself never fires (VELA022)
             ["ValidateSavedQuery"] = "Validate",                          // savedquery
             ["ValidateUnpublished"] = "Validate",                         // global
             ["WinOpportunity"] = "Win",                                   // opportunity

@@ -423,8 +423,8 @@ entity-bound plugin step, so there is no `On...()` for them. You can still call 
 (`service.Execute(new WhoAmIRequest())`) and generate a typed request with `vela models --messages`.
 
 A step registered through a marker type, `OnMessage<TMarker>()` (a class marked `[CustomMessage("...")]`), can
-bind its handler three ways. A marker with neither a `RequestName` nor `[CustomMessage]` throws when the step is
-built: the message is never guessed from the type name.
+bind its handler three ways. A marker with no `RequestName`, `[CustomMessage]` or `[SdkMessage]` throws when the
+step is built: the message is never guessed from the type name.
 
 - `.Handle(OnX)` where `void OnX(ILocalPluginContext ctx)` - the plain, untyped context.
 - `.Handle<TRequest>(OnX)` where `void OnX(IMessagePreContext<TRequest> ctx)` (pre-stage) or

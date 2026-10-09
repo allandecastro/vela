@@ -41,7 +41,7 @@ namespace Vela.Tests
         [InlineData("SendTemplate", "Send")]
         [InlineData("PublishXml", "Publish")]
         [InlineData("ValidateSavedQuery", "Validate")]
-        [InlineData("SetState", "SetState")]
+        [InlineData("SetState", "SetStateDynamicEntity")]
         [InlineData("sendemail", "Send")]
         [InlineData("Create", "Create")]
         [InlineData("Win", "Win")]

@@ -297,13 +297,15 @@ already errors of VELA001 / VELA010 and are not reported again; a chain split ac
 
 ## VELA022
 
-**A step on `SetState` never fires.** Reported on `OnMessage("SetState")` / `OnMessage(PluginMessages.SetState)`.
-Dataverse accepts the registration, but never runs the step: a `SetStateRequest` fires the `SetStateDynamicEntity`
+**A step on `SetState` never fires.** Reported on `On<T>()` / `OnMessage<T>()` when `T` pins the message with
+`[SdkMessage("SetState")]`. `On<SetStateRequest>()` and a `[CustomMessage("SetState")]` marker are not reported: the
+builder registers them on `SetStateDynamicEntity`. Dataverse accepts a `SetState` registration, but never runs the step: a `SetStateRequest` fires the `SetStateDynamicEntity`
 steps, and an Update of `statecode` fires the Update steps plus nested `SetStateDynamicEntity` steps (verified live
 on every stage). The step's logic would silently never execute.
 
 **Fix:** register on `OnUpdate().FilterOn(x => x.StateCode)` (fires for both a SetState and an Update of the state),
-or on `OnMessage(PluginMessages.SetStateDynamicEntity)` (inputs `EntityMoniker`, `State`, `Status`).
+or drop the `[SdkMessage("SetState")]` and use `On<SetStateRequest>()`, which registers on `SetStateDynamicEntity`
+(inputs `EntityMoniker`, `State`, `Status`).
 
 ## Typed image projection generator
 

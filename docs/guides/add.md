@@ -39,7 +39,8 @@ vela add --interactive
   list in [Write a plugin](plugins.md), `Assign` included); any other name is registered through its request
   type, `On<XxxRequest>()`, with a handler taking `IMessagePostContext<XxxRequest>` (`IMessagePreContext` at a
   pre-stage). When the SDK ships the request class it is used fully qualified (`--message SetState` renders
-  `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`); otherwise `add` references the request
+  `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a
+  state change fires); otherwise `add` references the request
   [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`) generates and prints a note to generate it.
   The deprecated `SetState` / `SetStateDynamicEntity` messages have no curated method (update
   `statecode`/`statuscode` with `Update` instead). `--project <csproj>` (default: the single `.csproj` in the

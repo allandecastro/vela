@@ -99,7 +99,7 @@ internal static class ExpressionHelper
     /// <see cref="OrganizationRequest"/>-derived type with a public parameterless constructor (an SDK request,
     /// a generated Custom API request, or a <c>TypedRequest</c>), the name is taken from its
     /// <see cref="OrganizationRequest.RequestName"/> - so <c>On&lt;XxxRequest&gt;()</c> needs no magic string. It
-    /// falls back to a <see cref="CustomMessageAttribute"/> marker. A type with neither throws: guessing the name
+    /// falls back to a <see cref="CustomMessageAttribute"/> marker, then a <c>[SdkMessage]</c>. A type with none throws: guessing the name
     /// from the type would register the step on a message that most likely does not exist.
     /// </summary>
     /// <typeparam name="TMessage">The message type (a request type, or a marker type).</typeparam>
@@ -122,8 +122,14 @@ internal static class ExpressionHelper
             return attribute.MessageName;
         }
 
+        var sdkMessage = typeof(TMessage).GetCustomAttribute<Vela.Messages.SdkMessageAttribute>(inherit: true);
+        if (sdkMessage != null)
+        {
+            return sdkMessage.MessageName;
+        }
+
         throw new InvalidOperationException(
-            $"Cannot resolve the message for '{typeof(TMessage).Name}': it is neither an OrganizationRequest with a parameterless constructor that sets RequestName nor a type marked [CustomMessage(\"...\")]. "
+            $"Cannot resolve the message for '{typeof(TMessage).Name}': it is neither an OrganizationRequest with a parameterless constructor that sets RequestName nor a type marked [CustomMessage(\"...\")] or [SdkMessage(\"...\")]. "
             + "Generate a typed request with 'vela models --messages <name>' (or '--custom-apis <name>') and use On<XxxRequest>(), or mark the type with [CustomMessage].");
     }
 
