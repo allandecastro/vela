@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 using Microsoft.Xrm.Sdk;
 using Moq;
 using Vela.Caching;
@@ -151,6 +150,6 @@ public sealed class PluginRuntimeCoverageTests
             .BuildServiceProvider();
 
         Assert.Null(provider.GetService<IManagedIdentityService>());
-        Assert.Same(NullLogger.Instance, provider.GetRequiredService<ILogger>());
+        Assert.Same(NullPluginTelemetryLogger.Instance, provider.GetRequiredService<ILogger>());
     }
 }

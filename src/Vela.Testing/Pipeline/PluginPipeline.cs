@@ -32,6 +32,7 @@ namespace Vela.Testing
         private readonly List<PipelineExecutionEntry> _log = new List<PipelineExecutionEntry>();
         private readonly List<Exception> _asyncStepFailures = new List<Exception>();
         private readonly RecordingTracingService _trace = new RecordingTracingService();
+        private readonly RecordingLogger _logger = new RecordingLogger();
         private readonly PipelineOrganizationService _service;
         private readonly Guid _correlationId = Guid.NewGuid();
         private int _maxDepth = 16;
@@ -377,6 +378,12 @@ namespace Vela.Testing
 
         /// <summary>Captured traces aggregated across the whole cascade.</summary>
         public RecordingTracingService Trace => _trace;
+
+        /// <summary>
+        /// Captured Application Insights entries and metrics (<c>ctx.LogInformation</c>, <c>ctx.LogMetric</c>, ...)
+        /// aggregated across the whole cascade.
+        /// </summary>
+        public RecordingLogger LogCapture => _logger;
 
         /// <summary>Snapshot (clones) of all stored records of a logical name, for assertions.</summary>
         public IReadOnlyList<Entity> GetAll(string logicalName) => _store.GetAll(logicalName);
@@ -1499,7 +1506,8 @@ namespace Vela.Testing
             {
                 [typeof(IPluginExecutionContext)] = context,
                 [typeof(IOrganizationServiceFactory)] = factory,
-                [typeof(ITracingService)] = _trace
+                [typeof(ITracingService)] = _trace,
+                [typeof(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger)] = _logger
             };
 
             return new DictionaryServiceProvider(services);

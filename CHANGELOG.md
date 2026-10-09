@@ -26,6 +26,22 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Application Insights goes through the platform's `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, and
+  `Microsoft.Extensions.Logging` is gone.** The sandbox never serves a `Microsoft.Extensions.Logging.ILogger`, and
+  the reflection bridge to the native logger looked up members that don't exist, so `ctx.Log*`, `ctx.LogMetric` and
+  `ctx.BeginLogScope` reached only the plug-in trace log and Application Insights received nothing. The context now
+  calls the platform logger directly, with no reflection. `ctx.Logger` and the injected `ILogger` are
+  `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, and `ctx.Log` takes `Microsoft.Xrm.Sdk.PluginTelemetry.LogLevel`
+  (same member names, so swap the `using`). `Microsoft.Extensions.Logging.Abstractions` is no longer a dependency,
+  so it and `System.Diagnostics.DiagnosticSource` leave the plugin package.
+- **`ctx.LogMetric` takes a `long` and sends its properties.** The platform's metric API only takes integers.
+  The properties now travel as metric dimensions (invariant strings, on top of the default dimensions), and the
+  metric is no longer duplicated as an Information log entry.
+- **Vela.Testing: `RecordingLogger` implements `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`** (the shape the
+  platform serves), `LogEntry.Level` is a `PluginTelemetry.LogLevel`, and metrics are recorded in
+  `RecordingLogger.Metrics`. `WithLogger(...)` takes a `PluginTelemetry.ILogger`. `PluginPipeline.LogCapture` is
+  new and records the whole cascade.
+
 - **`ctx.EnvironmentId` is a `string?`, and now carries the value.** The platform declares
   `IPluginExecutionContext6.EnvironmentId` as a string, but Vela read it as a `Guid?`, so it was always null and the
   execution snapshot always printed `<none>`. It now returns the platform string (null when missing or empty).
