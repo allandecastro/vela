@@ -54,8 +54,8 @@ namespace Vela.Testing
         // 2026-10-07), so a scope that rolls back drops the steps it queued (see RunAtomically).
         private readonly List<PendingAsyncStep> _pendingAsyncSteps = new List<PendingAsyncStep>();
 
-        // All-or-nothing scopes currently open: operations, ExecuteTransaction, the two passes of a split Update, and a
-        // running async step. Async steps run only once the count drops back to zero.
+        // All-or-nothing scopes currently open: operations, ExecuteTransaction and a running async step. Async steps
+        // run only once the count drops back to zero.
         private int _openScopes;
 
         // Database transactions currently open. Every operation opens one except the non-transactional reads, and so
@@ -118,15 +118,27 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(assembly));
             }
 
-            PluginPipeline pipeline = new PluginPipeline();
-            FrameworkManifest manifest = FrameworkManifestScanner.Scan(assembly);
+            return FromManifest(assembly, FrameworkManifestScanner.Scan(assembly));
+        }
 
+        // Registers a scanned manifest's steps and Custom APIs, resolving each type in the assembly.
+        internal static PluginPipeline FromManifest(Assembly assembly, FrameworkManifest manifest)
+        {
+            PluginPipeline pipeline = new PluginPipeline();
+
+            // A step or Custom API whose type cannot be resolved would never fire, and every test would stay green
+            // without it: fail the setup instead, naming each one.
+            List<string> unresolved = new List<string>();
             foreach (StepDefinition step in manifest.PluginSteps)
             {
                 Type? type = ResolveType(assembly, step.PluginTypeName);
                 if (type != null)
                 {
                     pipeline._registrations.Add(new PipelineRegistration(type, step));
+                }
+                else
+                {
+                    unresolved.Add($"step {step.Message}/{step.Stage} of '{step.PluginTypeName}'");
                 }
             }
 
@@ -137,6 +149,17 @@ namespace Vela.Testing
                 {
                     pipeline._customApis[api.UniqueName] = type;
                 }
+                else
+                {
+                    unresolved.Add($"Custom API '{api.UniqueName}' of '{api.PluginTypeName}'");
+                }
+            }
+
+            if (unresolved.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"PluginPipeline.FromAssembly could not register {unresolved.Count} definition(s) from '{assembly.GetName().Name}', " +
+                    $"so they would never fire: {string.Join("; ", unresolved)}.");
             }
 
             return pipeline;
@@ -172,12 +195,14 @@ namespace Vela.Testing
 
             object instance = constructor.Invoke(new object?[] { null, null });
 
+            bool registered = false;
             MethodInfo? method = pluginType.GetMethod("GetStepDefinitions");
             if (method != null && method.Invoke(instance, null) is StepDefinition[] steps)
             {
                 foreach (StepDefinition step in steps)
                 {
                     _registrations.Add(new PipelineRegistration(pluginType, step));
+                    registered = true;
                 }
             }
 
@@ -187,7 +212,16 @@ namespace Vela.Testing
                 if (definition != null && !string.IsNullOrEmpty(definition.UniqueName))
                 {
                     _customApis[definition.UniqueName] = pluginType;
+                    registered = true;
                 }
+            }
+
+            // A type that yields nothing to register would never fire, and the test would pass without it.
+            if (!registered)
+            {
+                throw new InvalidOperationException(
+                    $"Plugin '{pluginType.FullName}' declares no step and no Custom API, so registering it would add nothing " +
+                    $"that can fire. Declare its steps in RegisterSteps (or its Custom API definition).");
             }
 
             return this;
@@ -220,6 +254,17 @@ namespace Vela.Testing
         public PluginPipeline WithAlternateKey(string entityLogicalName, params string[] keyAttributes)
         {
             _store.WithAlternateKey(entityLogicalName, keyAttributes);
+            return this;
+        }
+
+        /// <summary>
+        /// Declares the default status reason of a state on the in-memory store (see
+        /// <c>InMemoryOrganizationService.WithDefaultStatus</c>): the status a record gets from a SetState with status -1
+        /// or an Update of statecode alone. Undeclared states use state 0 -> status 1, any other state -> status 2.
+        /// </summary>
+        public PluginPipeline WithDefaultStatus(string entityLogicalName, int state, int status)
+        {
+            _store.WithDefaultStatus(entityLogicalName, state, status);
             return this;
         }
 
@@ -431,10 +476,9 @@ namespace Vela.Testing
             return ExecuteCreateMultiple(new[] { entity }, sharedVariables)[0];
         }
 
-        // A single Update is the one-row case of an Update batch (see ExecuteCreate).
-        // Online, an Update that carries owner (ownerid) or state/status (statecode/statuscode) fields ALONGSIDE
-        // standard fields fires the Update step twice: once for the standard fields, then once for the special
-        // (owner/state) fields. Mirror that split so plugins see the same two executions.
+        // A single Update is the one-row case of an Update batch (see ExecuteCreate). It is ONE execution even when
+        // it mixes owner or state fields with standard ones (verified live: one Update per stage, with every field in
+        // its Target, contrary to Microsoft Learn's "Behavior of specialized update operations").
         internal void ExecuteUpdate(Entity entity, ParameterCollection? sharedVariables = null)
         {
             if (entity == null)
@@ -442,27 +486,7 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(entity));
             }
 
-            entity = ResolveKeyedTarget(entity);
-            Entity? standard = ProjectAttributes(entity, special: false);
-            Entity? special = ProjectAttributes(entity, special: true);
-
-            if (standard != null && special != null)
-            {
-                // The two step-firings are one logical Update: run them in a single snapshot scope so a failure in the
-                // second (owner/state) pass rolls back the first (standard) pass too, instead of leaving the record
-                // half-updated. Each ExecuteUpdateMultiple still snapshots internally; this outer scope makes the pair
-                // atomic across passes, and holds back the first pass's async steps until the second pass commits.
-                RunAtomically(() =>
-                {
-                    ExecuteUpdateMultiple(new[] { standard }, sharedVariables);
-                    ExecuteUpdateMultiple(new[] { special }, sharedVariables);
-                    return true;
-                }, transactional: false);
-            }
-            else
-            {
-                ExecuteUpdateMultiple(new[] { entity }, sharedVariables);
-            }
+            ExecuteUpdateMultiple(new[] { entity }, sharedVariables);
         }
 
         // A write target addressed by alternate key (Id empty + KeyAttributes) is resolved to the record's id before
@@ -501,41 +525,122 @@ namespace Vela.Testing
             return clone;
         }
 
-        // The owner / state-status fields the platform processes as a separate Update execution.
-        private static readonly HashSet<string> SpecialUpdateAttributes =
-            new HashSet<string>(new[] { "ownerid", "statecode", "statuscode" }, StringComparer.OrdinalIgnoreCase);
-
-        // Returns a copy of the entity holding only the special (or only the non-special) attributes, or null
-        // when it has none of that kind. The id/logical name are preserved.
-        private static Entity? ProjectAttributes(Entity entity, bool special)
-        {
-            Entity projected = new Entity(entity.LogicalName) { Id = entity.Id };
-            foreach (KeyValuePair<string, object> attribute in entity.Attributes)
-            {
-                if (SpecialUpdateAttributes.Contains(attribute.Key) == special)
-                {
-                    projected[attribute.Key] = attribute.Value;
-                }
-            }
-
-            return projected.Attributes.Count > 0 ? projected : null;
-        }
-
-        // Maps the deprecated SetState messages to a statecode/statuscode Update so the Update pipeline runs
-        // (mirroring how AssignRequest is modelled as an ownerid update). The status defaults from the state when
-        // omitted: state 0 (active) -> status 1, otherwise status 2 — the standard default for most tables.
+        // SetState, as the platform runs it (verified live): the request fires the SetStateDynamicEntity steps (never
+        // the SetState ones), and its main operation is an Update of statecode/statuscode at the same depth that fires
+        // the Update steps at PreOperation and PostOperation only. The SetStateDynamicEntity steps see the Status as
+        // sent (-1 = default); the Update Target carries the resolved status (see WithDefaultStatus).
         internal void ExecuteSetState(EntityReference target, OptionSetValue? state, OptionSetValue? status, ParameterCollection? sharedVariables = null)
         {
-            int stateValue = state?.Value ?? 0;
-            int statusValue = status != null && status.Value >= 0 ? status.Value : (stateValue == 0 ? 1 : 2);
+            RunOperation<object?>(() =>
+            {
+                Entity update = _store.SetStateUpdate(target, state, status);
+                FireSetStateDynamicEntity(
+                    new EntityReference(update.LogicalName, update.Id),
+                    state ?? new OptionSetValue(0),
+                    status ?? new OptionSetValue(-1),
+                    () => UpdateBatch(new[] { update }, platformUpdate: true));
+                return null;
+            }, sharedVariables);
+        }
 
-            ExecuteUpdate(
-                new Entity(target.LogicalName, target.Id)
+        // Assign, as the platform runs it (verified live): Assign PreValidation and PreOperation, then the main
+        // operation, an ownerid Update at the same depth firing the Update steps at PreOperation and PostOperation
+        // only, then Assign PostOperation. (An Update of ownerid, conversely, never fires the Assign steps.)
+        internal void ExecuteAssign(AssignRequest request, ParameterCollection? sharedVariables = null)
+        {
+            RunOperation<object?>(() =>
+            {
+                EntityReference record = new EntityReference(request.Target.LogicalName, _store.ResolveReference(request.Target));
+                _store.TryGet(record.LogicalName, record.Id, out Entity? pre);
+
+                foreach (PluginStages stage in new[] { PluginStages.PreValidation, PluginStages.PreOperation })
                 {
-                    ["statecode"] = new OptionSetValue(stateValue),
-                    ["statuscode"] = new OptionSetValue(statusValue)
-                },
-                sharedVariables);
+                    StageInvocation invocation = GenericInvocation(PluginMessages.Assign, stage, record.LogicalName, record.Id, request.Parameters, null);
+                    invocation.PreState = pre;
+                    FireStage(invocation);
+                }
+
+                UpdateBatch(new[] { new Entity(record.LogicalName, record.Id) { ["ownerid"] = request.Assignee } }, platformUpdate: true);
+
+                _store.TryGet(record.LogicalName, record.Id, out Entity? post);
+                StageInvocation postInvocation = GenericInvocation(PluginMessages.Assign, PluginStages.PostOperation, record.LogicalName, record.Id, request.Parameters, null);
+                postInvocation.PreState = pre;
+                postInvocation.PostState = post;
+                FireStage(postInvocation);
+                return null;
+            }, sharedVariables);
+        }
+
+        // Fires the SetStateDynamicEntity steps around a state change: PreValidation and PreOperation, the main
+        // operation (which writes the state), then PostOperation. Images come from the record before and after it.
+        private void FireSetStateDynamicEntity(EntityReference record, OptionSetValue state, OptionSetValue status, Action mainOperation)
+        {
+            ParameterCollection inputs = new ParameterCollection
+            {
+                ["EntityMoniker"] = record,
+                ["State"] = state,
+                ["Status"] = status,
+            };
+            _store.TryGet(record.LogicalName, record.Id, out Entity? pre);
+
+            foreach (PluginStages stage in new[] { PluginStages.PreValidation, PluginStages.PreOperation })
+            {
+                StageInvocation invocation = GenericInvocation(PluginMessages.SetStateDynamicEntity, stage, record.LogicalName, record.Id, inputs, null);
+                invocation.PreState = pre;
+                FireStage(invocation);
+            }
+
+            mainOperation();
+
+            _store.TryGet(record.LogicalName, record.Id, out Entity? post);
+            StageInvocation postInvocation = GenericInvocation(PluginMessages.SetStateDynamicEntity, PluginStages.PostOperation, record.LogicalName, record.Id, inputs, null);
+            postInvocation.PreState = pre;
+            postInvocation.PostState = post;
+            FireStage(postInvocation);
+        }
+
+        // The main operation of an Update row. A row that changes statecode runs the state change as the platform
+        // does (verified live): the standard fields are written first, then the state, inside a nested
+        // SetStateDynamicEntity operation (its steps at depth + 1, Status -1 when the row sets no statuscode), then
+        // the owner. A platform-generated Update (inside Assign / SetState) is a plain write.
+        private void WriteUpdateRow(Entity row, bool platformUpdate)
+        {
+            if (platformUpdate || row.GetAttributeValue<OptionSetValue>("statecode") is not OptionSetValue state)
+            {
+                _store.Update(row);
+                return;
+            }
+
+            Entity standard = new Entity(row.LogicalName, row.Id);
+            Entity stateChange = new Entity(row.LogicalName, row.Id);
+            Entity owner = new Entity(row.LogicalName, row.Id);
+            foreach (KeyValuePair<string, object> attribute in row.Attributes)
+            {
+                Entity part = attribute.Key.Equals("statecode", StringComparison.OrdinalIgnoreCase) || attribute.Key.Equals("statuscode", StringComparison.OrdinalIgnoreCase)
+                    ? stateChange
+                    : attribute.Key.Equals("ownerid", StringComparison.OrdinalIgnoreCase) ? owner : standard;
+                part[attribute.Key] = attribute.Value;
+            }
+
+            if (standard.Attributes.Count > 0)
+            {
+                _store.Update(standard);
+            }
+
+            RunOperation<object?>(() =>
+            {
+                FireSetStateDynamicEntity(
+                    new EntityReference(row.LogicalName, row.Id),
+                    state,
+                    row.GetAttributeValue<OptionSetValue>("statuscode") ?? new OptionSetValue(-1),
+                    () => _store.Update(stateChange));
+                return null;
+            });
+
+            if (owner.Attributes.Count > 0)
+            {
+                _store.Update(owner);
+            }
         }
 
         // CreateMultiple as one transaction: at each stage both the bulk CreateMultiple steps (once, with the
@@ -598,36 +703,47 @@ namespace Vela.Testing
             entities = entities.Select(entity => CloneTarget(ResolveKeyedTarget(entity))).ToArray();
             RunOperation<object?>(() =>
             {
-                string entityName = entities.Length > 0 ? entities[0].LogicalName : string.Empty;
-                List<BatchItem> items = new List<BatchItem>(entities.Length);
-                foreach (Entity entity in entities)
-                {
-                    _store.TryGet(entity.LogicalName, entity.Id, out Entity? pre);
-                    items.Add(new BatchItem
-                    {
-                        Target = entity,
-                        PreState = pre,
-                        ChangedAttributes = new HashSet<string>(entity.Attributes.Keys, StringComparer.OrdinalIgnoreCase)
-                    });
-                }
-
-                FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreValidation, entityName, items);
-                FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreOperation, entityName, items);
-
-                foreach (Entity entity in entities)
-                {
-                    _store.Update(entity);
-                }
-
-                foreach (BatchItem item in items)
-                {
-                    _store.TryGet(item.Target.LogicalName, item.Target.Id, out Entity? post);
-                    item.PostState = post;
-                }
-
-                FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PostOperation, entityName, items);
+                UpdateBatch(entities, platformUpdate: false);
                 return null;
             }, sharedVariables);
+        }
+
+        // The stages of an Update batch inside the current operation. A platform-generated Update (the main operation
+        // of Assign or SetState) has no PreValidation stage (verified live) and runs at its parent's depth.
+        private void UpdateBatch(Entity[] entities, bool platformUpdate)
+        {
+            string entityName = entities.Length > 0 ? entities[0].LogicalName : string.Empty;
+            List<BatchItem> items = new List<BatchItem>(entities.Length);
+            foreach (Entity entity in entities)
+            {
+                _store.TryGet(entity.LogicalName, entity.Id, out Entity? pre);
+                items.Add(new BatchItem
+                {
+                    Target = entity,
+                    PreState = pre,
+                    ChangedAttributes = new HashSet<string>(entity.Attributes.Keys, StringComparer.OrdinalIgnoreCase)
+                });
+            }
+
+            if (!platformUpdate)
+            {
+                FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreValidation, entityName, items);
+            }
+
+            FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreOperation, entityName, items);
+
+            foreach (Entity entity in entities)
+            {
+                WriteUpdateRow(entity, platformUpdate);
+            }
+
+            foreach (BatchItem item in items)
+            {
+                _store.TryGet(item.Target.LogicalName, item.Target.Id, out Entity? post);
+                item.PostState = post;
+            }
+
+            FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PostOperation, entityName, items);
         }
 
         internal void ExecuteDelete(string entityName, Guid id, ParameterCollection? sharedVariables = null)
@@ -815,6 +931,10 @@ namespace Vela.Testing
                 case SetStateRequest setState:
                     ExecuteSetState(setState.EntityMoniker, setState.State, setState.Status, shared);
                     return new SetStateResponse();
+
+                case AssignRequest assign:
+                    ExecuteAssign(assign, shared);
+                    return new AssignResponse();
 
                 case ExecuteMultipleRequest executeMultiple:
                     return ExecuteMultipleThroughPipeline(executeMultiple);
@@ -1106,18 +1226,15 @@ namespace Vela.Testing
         }
 
         // The store simulates a subset of messages (grant/modify/revoke access, sharing reads, ...). For a message
-        // it does not model it throws "unsupported"; the generic path still fires the steps around a no-op.
+        // it does not model it throws MessageNotModelledException; the generic path still fires the steps around a
+        // no-op. Any other failure (a Merge on a table that cannot merge, a fault, ...) is the operation failing.
         private OrganizationResponse? TryStoreExecute(OrganizationRequest request)
         {
             try
             {
                 return _store.Execute(request);
             }
-            catch (InvalidPluginExecutionException)
-            {
-                return null;
-            }
-            catch (NotSupportedException)
+            catch (MessageNotModelledException)
             {
                 return null;
             }

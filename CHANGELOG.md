@@ -26,6 +26,23 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **An unset `HookOrganizationService` hook throws (#439).** `Create`, `Retrieve`, `Execute`, `RetrieveMultiple`,
+  `Update`, `Delete`, `Associate` and `Disassociate` used to return `Guid.Empty`, `null` or an empty collection, or
+  do nothing, when their `On...` delegate was not set, so the plugin failed later with a `NullReferenceException`
+  (or passed without the write it needed). Each now throws a `NotSupportedException` naming the hook to set. This
+  includes the default services of `PluginContextBuilder`: set the hook, or inject a store with
+  `WithOrganizationService(...)`.
+- **The pipeline fires the steps Dataverse fires for owner and state changes (#439, verified live).** An `Update`
+  that mixes `ownerid` or `statecode`/`statuscode` with other fields is one execution, no longer two (Microsoft Learn
+  describes a split that the platform does not do). An `AssignRequest` fires the `Assign` steps around an `ownerid`
+  Update; it used to fire no Update step at all, and with an `Assign` step registered, ran that step without the
+  Update. A `SetStateRequest`, and an `Update` that sets `statecode`, fire the `SetStateDynamicEntity` steps (nested
+  at depth + 1 for the Update). The Update inside Assign or SetState has no PreValidation stage. Steps on `SetState`
+  never fire, as on the platform.
+- **A pipeline registration that would never fire fails the setup (#439).** `PluginPipeline.FromAssembly` threw away
+  a step or Custom API whose type it could not resolve, and `Register<T>()` / `Register(Type)` added nothing for a
+  type that declares no step and no Custom API. Both now throw an `InvalidOperationException` naming what was
+  skipped.
 - **Removed the 8 typed triggers Dataverse never accepts a custom step on (#461).** `OnReviseQuote()`,
   `OnFulfillSalesOrder()`, `OnConvertQuoteToSalesOrder()`, `OnGenerateSalesOrderFromOpportunity()`,
   `OnGenerateInvoiceFromOpportunity()` and the three `OnGet*ProductsFromOpportunity()` are gone, with their typed
@@ -134,6 +151,18 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **`OnAssign()` steps can capture images (#439).** `WithPreImage(...)` is offered at every stage and
+  `WithPostImage(...)` at PostOperation, as Dataverse accepts them on the Assign `Target` (verified live: the
+  pre-image holds the old owner, the post-image the new one).
+- **VELA022 warns on a step registered on `SetState` (#439).** Dataverse accepts the registration but never runs
+  it: a `SetStateRequest` and an Update of `statecode` fire `SetStateDynamicEntity` (verified live). Register on
+  `OnUpdate().FilterOn(x => x.StateCode)` or `OnMessage(PluginMessages.SetStateDynamicEntity)` instead.
+
+- **`WithDefaultStatus(table, state, status)` on `InMemoryOrganizationService` and `PluginPipeline` (#439).** It
+  sets the status a record gets when a write changes `statecode` without `statuscode`, or a SetState passes status
+  -1; the store now applies that default (state 0 gets status 1, any other state status 2, when undeclared).
+  `InMemoryOrganizationService.Execute` also runs a `SetStateRequest`.
+
 - **PreValidation steps can capture a pre-image (#436).** `WithPreImage(...)` is now offered at PreValidation on
   `OnUpdate()`, `OnDelete()`, `OnUpdateMultiple()`, `OnMessage(...)` and `On<TRequest>()`, as Microsoft Learn
   recommends over an extra Retrieve. A post-image is still not offered before PostOperation, and Create never has
@@ -184,6 +213,19 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `FileSizeInBytes` used to end the loop and return the bytes read so far, with no error. It now throws an
   `InvalidPluginExecutionException` naming the table, record, column, the bytes received and the announced size.
   The same check rejects a download whose total differs from the announced size.
+- **FetchXML condition values compare as the column's type (#439).** A `<value>` was kept as text and compared with
+  the stored value's string form, so `eq` on a date (`2026-10-09`), a money with another scale (`10.50`) or a braced
+  guid matched nothing, and `ne` matched everything. Values (FetchXML, and text values in a `QueryExpression` or
+  `QueryByAttribute`) are now read as the column's type in the invariant culture, and a value that is not valid for
+  it throws. Ordered operators (`gt`, `lt`, `between`, ...) no longer depend on the machine's culture, and no longer
+  throw `InvalidCastException` on a lookup.
+- **A store-side rejection of a modelled message fails the operation (#439).** With a step registered on the
+  message, a failure such as `Merge` on a table that cannot merge was caught as "message not modelled": the call
+  returned an empty response and the PostOperation steps still fired. Only a message the store does not simulate is
+  now treated that way (it throws the new `MessageNotModelledException`, a `NotSupportedException`); every other
+  failure reaches the caller.
+- **`WithStrictSecurity()` protects Delete (#439).** Without `WithSecurity(...)`, Create, Update and RetrieveMultiple
+  failed as documented, but Delete went through.
 - **Typed triggers register on the real sdkmessage (#461).** 15 triggers registered steps on SDK request names that
   do not exist as sdkmessages, so `vela apply` could not deploy them: `OnSendEmail()` now registers on `Send`,
   `OnSendEmailFromTemplate()` on `SendFromTemplate`, `OnDeliverIncomingEmail()` / `OnDeliverPromoteEmail()` on

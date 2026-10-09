@@ -1000,6 +1000,8 @@ namespace Vela.Steps
         void IGrantAccessPostOperationConfig<TEntity>.Handle(Action<IGrantAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
         IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
         IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
@@ -1009,6 +1011,8 @@ namespace Vela.Steps
         IAssignPreValidationConfig<TEntity> IAssignPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAssignPreValidationConfig<TEntity>.Handle(Action<IAssignPreContext<TEntity>> handler) { SetHandler(handler); }
         IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
         IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
@@ -1018,6 +1022,10 @@ namespace Vela.Steps
         IAssignPreOperationConfig<TEntity> IAssignPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IAssignPreOperationConfig<TEntity>.Handle(Action<IAssignPreContext<TEntity>> handler) { SetHandler(handler); }
         IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
+        IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
         IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IAssignPostOperationConfig<TEntity> IAssignPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }

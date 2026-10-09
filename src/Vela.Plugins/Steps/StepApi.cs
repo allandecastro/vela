@@ -534,6 +534,18 @@ namespace Vela.Steps
     public interface IAssignPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssignPreValidationConfig<TEntity> WithDescription(string description);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IAssignPreValidationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IAssignPreValidationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IAssignPreValidationConfig<TEntity> WithExecutionOrder(int order);
         IAssignPreValidationConfig<TEntity> WithStepKey(string key);
         IAssignPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
@@ -548,6 +560,8 @@ namespace Vela.Steps
     public interface IAssignPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssignPreOperationConfig<TEntity> WithDescription(string description);
+        IAssignPreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IAssignPreOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IAssignPreOperationConfig<TEntity> WithExecutionOrder(int order);
         IAssignPreOperationConfig<TEntity> WithStepKey(string key);
         IAssignPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
@@ -562,6 +576,10 @@ namespace Vela.Steps
     public interface IAssignPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IAssignPostOperationConfig<TEntity> WithDescription(string description);
+        IAssignPostOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IAssignPostOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IAssignPostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IAssignPostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IAssignPostOperationConfig<TEntity> WithExecutionOrder(int order);
         IAssignPostOperationConfig<TEntity> WithStepKey(string key);
         IAssignPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);

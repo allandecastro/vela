@@ -18,6 +18,7 @@ namespace Vela.Steps
     /// <c>SubordinateId</c>; Vela always uses <c>Target</c>, see #462). SetState / SetStateDynamicEntity:
     /// <c>EntityMoniker</c>, pre- and post-image (an SDK <c>SetStateRequest</c> on account fires only the
     /// SetStateDynamicEntity step). RouteTo: no image at all (0x80044189).</item>
+    /// <item>Assign: <c>Target</c>, pre- and post-image (the pre-image holds the old owner, the post-image the new).</item>
     /// <item>A post-image before PostOperation fails with 0x8004416E; a pre-image is fine at PreValidation.</item>
     /// </list>
     /// </remarks>
