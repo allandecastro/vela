@@ -336,8 +336,15 @@ internal static class ModelsCommand
 
                     try
                     {
-                        sdkMessages.AddRange(SdkMessageReader.ReadSdkMessages(service, name)
-                            .Where(request => !SdkMessageClassResolver.HasSdkRequestClass(request.Name)));
+                        // The classes are generated per request, under the name Dataverse executes: the Send
+                        // sdkmessage is executed as SendEmail, SendFax and SendTemplate.
+                        foreach (string requestName in SdkMessageReader.ListRequestNames(service, name))
+                        {
+                            if (!SdkMessageClassResolver.HasSdkRequestClass(requestName))
+                            {
+                                sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, requestName));
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -352,25 +359,17 @@ internal static class ModelsCommand
                 // Targeted: the user asked for these by name, so generate exactly them — never silently skipped. If
                 // one already has an SDK request class, warn (suggest the SDK type) but still generate the wrapper.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
-                // One class per request that runs as the message, named after the request (Win gives WinOpportunity
-                // and WinQuote): the request name is the one Dataverse executes.
+                // The names are SDK request names (SendEmail), the ones Dataverse executes; an sdkmessage name whose
+                // requests are named otherwise (Send) is rejected by the reader with the names to use.
                 foreach (string name in scope.Messages)
                 {
-                    foreach (SdkMessage request in SdkMessageReader.ReadSdkMessages(service, name))
+                    SdkMessage request = SdkMessageReader.ReadSdkMessage(service, name);
+                    if (SdkMessageClassResolver.HasSdkRequestClass(request.Name))
                     {
-                        // "Win,WinQuote" names WinQuote twice.
-                        if (sdkMessages.Any(m => string.Equals(m.Name, request.Name, StringComparison.Ordinal)))
-                        {
-                            continue;
-                        }
-
-                        if (SdkMessageClassResolver.HasSdkRequestClass(request.Name))
-                        {
-                            Console.Error.WriteLine($"Warning: '{request.Name}' already has an SDK request class ({request.Name}Request); generating a duplicate. Prefer the SDK type via On<{request.Name}Request>().");
-                        }
-
-                        sdkMessages.Add(request);
+                        Console.Error.WriteLine($"Warning: '{request.Name}' already has an SDK request class ({request.Name}Request); generating a duplicate. Prefer the SDK type via On<{request.Name}Request>().");
                     }
+
+                    sdkMessages.Add(request);
                 }
 
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames(), logicalNames));

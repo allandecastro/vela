@@ -75,99 +75,70 @@ internal static class SdkMessageReader
     }
 
     /// <summary>
-    /// Reads the request/response contract of every request that runs as <paramref name="name"/>: one
-    /// <see cref="SdkMessage"/> per request, named after the request, which is the name Dataverse executes. Most
-    /// messages have one request of the same name, but some differ (the <c>Send</c> sdkmessage is run by
-    /// <c>SendEmail</c>, <c>SendFax</c> and <c>SendTemplate</c>), and executing <c>"Send"</c> fails with "Request not
-    /// supported" (verified live). <paramref name="name"/> can also be a request name (<c>WinQuote</c>), which reads
-    /// that request only.
+    /// Reads the request/response contract of the SDK request <paramref name="requestName"/>, the name Dataverse
+    /// executes (<c>SendEmail</c>, <c>WinQuote</c>). It is not always the name of the <c>sdkmessage</c> the request
+    /// runs as (<c>Send</c>, <c>Win</c>), and executing a request under that name fails with "Request not supported"
+    /// (verified live), so an sdkmessage name is rejected with the request names to use instead.
     /// </summary>
-    internal static IReadOnlyList<SdkMessage> ReadSdkMessages(IOrganizationService service, string name)
+    internal static SdkMessage ReadSdkMessage(IOrganizationService service, string requestName)
     {
-        string? onlyRequest = null;
-        Entity? message = FindMessage(service, name);
-        if (message == null && !string.Equals(Vela.Constants.SdkMessageNames.ForRequest(name), name, StringComparison.OrdinalIgnoreCase))
-        {
-            onlyRequest = name;
-            message = FindMessage(service, Vela.Constants.SdkMessageNames.ForRequest(name));
-        }
-
-        if (message == null)
-        {
-            throw new InvalidOperationException($"SDK message '{name}' was not found.");
-        }
-
-        string messageName = message.GetAttributeValue<string>("name") ?? name;
-
-        // A message has one pair per (request, SOAP contract version), and the field CLR types differ by version:
-        // the legacy 2007/WebServices pairs carry null or pre-Xrm types (e.g. Microsoft.Crm.Sdk.SecurityPrincipal)
+        // Each request has one sdkmessagepair per SOAP contract version, and the field CLR types differ by version:
+        // the legacy 2007/WebServices pair carries null or pre-Xrm types (e.g. Microsoft.Crm.Sdk.SecurityPrincipal)
         // while 2011/Contracts (and xrm/*/Contracts) carry the modern Microsoft.Xrm.Sdk.* types. The pair order is
-        // not stable across environments, so walk the pairs from the preferred version down (2011/Contracts, then any
-        // other Contracts, the legacy pairs last) and keep each request from the first pair that has it. (Validated
-        // live: the Win message has a pair per version for WinOpportunity and another set for WinQuote.)
-        QueryExpression pairQuery = new QueryExpression("sdkmessagepair") { ColumnSet = new ColumnSet("sdkmessagepairid", "namespace") };
-        pairQuery.Criteria.AddCondition("sdkmessageid", ConditionOperator.Equal, message.Id);
-        List<Entity> pairs = service.RetrieveAll(pairQuery);
-        if (pairs.Count == 0)
+        // not stable across environments, so take the request of the preferred version: 2011/Contracts, then any
+        // other Contracts (7.1/...), the legacy pair last. (Validated live against two environments.)
+        QueryExpression requestQuery = new QueryExpression("sdkmessagerequest") { ColumnSet = new ColumnSet("sdkmessagerequestid", "name", "primaryobjecttypecode") };
+        requestQuery.Criteria.AddCondition("name", ConditionOperator.Equal, requestName);
+        LinkEntity pairLink = requestQuery.AddLink("sdkmessagepair", "sdkmessagepairid", "sdkmessagepairid", JoinOperator.Inner);
+        pairLink.EntityAlias = "pair";
+        pairLink.Columns = new ColumnSet("namespace", "sdkmessageid");
+        Entity? request = service.RetrieveAll(requestQuery)
+            .OrderBy(r => PairPreference(Aliased<string>(r, "pair.namespace")))
+            .FirstOrDefault();
+        if (request == null)
         {
-            throw new InvalidOperationException($"SDK message '{messageName}' has no message pair.");
+            IReadOnlyList<string> requestNames = ListRequestNames(service, requestName);
+            throw new InvalidOperationException(requestNames.Count == 0
+                ? $"SDK request '{requestName}' was not found."
+                : $"'{requestName}' is the sdkmessage a step registers on, not a request Dataverse executes. Generate {string.Join(", ", requestNames)} instead.");
         }
 
-        Dictionary<string, Entity> requestsByName = new Dictionary<string, Entity>(StringComparer.Ordinal);
-        foreach (Entity pair in pairs.OrderBy(PairPreference))
+        // A request bound to one table (SendEmail on email, WinQuote on quote) only runs on that table.
+        string? table = request.GetAttributeValue<string>("primaryobjecttypecode");
+        bool bound = !string.IsNullOrWhiteSpace(table) && !string.Equals(table, "none", StringComparison.OrdinalIgnoreCase);
+        Guid? messageId = Aliased<EntityReference>(request, "pair.sdkmessageid")?.Id;
+        return new SdkMessage(
+            request.GetAttributeValue<string>("name") ?? requestName,
+            ReadRequestFields(service, request.Id),
+            ReadResponseFields(service, request.Id))
         {
-            QueryExpression requestQuery = new QueryExpression("sdkmessagerequest") { ColumnSet = new ColumnSet("sdkmessagerequestid", "name", "primaryobjecttypecode") };
-            requestQuery.Criteria.AddCondition("sdkmessagepairid", ConditionOperator.Equal, pair.Id);
-            foreach (Entity row in service.RetrieveAll(requestQuery))
-            {
-                string requestName = RequestName(row, messageName);
-                if ((onlyRequest == null || string.Equals(requestName, onlyRequest, StringComparison.OrdinalIgnoreCase))
-                    && !requestsByName.ContainsKey(requestName))
-                {
-                    requestsByName.Add(requestName, row);
-                }
-            }
-        }
-
-        List<(Entity Row, string Name)> requests = requestsByName
-            .OrderBy(r => r.Key, StringComparer.Ordinal)
-            .Select(r => (Row: r.Value, Name: r.Key))
-            .ToList();
-        if (requests.Count == 0)
-        {
-            throw new InvalidOperationException($"SDK message '{name}' has no request definition.");
-        }
-
-        IReadOnlyList<string> entities = ReadApplicableEntities(service, message.Id);
-        return requests
-            .Select(r =>
-            {
-                // A request bound to one table (SendEmail on email, WinQuote on quote) only runs on that table.
-                string? table = r.Row.GetAttributeValue<string>("primaryobjecttypecode");
-                bool bound = !string.IsNullOrWhiteSpace(table) && !string.Equals(table, "none", StringComparison.OrdinalIgnoreCase);
-                return new SdkMessage(r.Name, ReadRequestFields(service, r.Row.Id), ReadResponseFields(service, r.Row.Id))
-                {
-                    MessageName = messageName,
-                    Entities = bound ? new[] { table! } : entities,
-                };
-            })
-            .ToList();
+            Entities = bound ? new[] { table! } : messageId is Guid id ? ReadApplicableEntities(service, id) : Array.Empty<string>(),
+        };
     }
 
-    private static Entity? FindMessage(IOrganizationService service, string messageName)
+    /// <summary>
+    /// The names of the requests Dataverse executes as the sdkmessage <paramref name="messageName"/>: usually the
+    /// message name itself, but <c>Send</c> is executed as <c>SendEmail</c>, <c>SendFax</c> and <c>SendTemplate</c>.
+    /// A legacy placeholder that is not a valid identifier (<c>SetState{Entity.PrimaryEntityName}</c>) is skipped.
+    /// </summary>
+    internal static IReadOnlyList<string> ListRequestNames(IOrganizationService service, string messageName)
     {
-        QueryExpression messageQuery = new QueryExpression("sdkmessage") { ColumnSet = new ColumnSet("sdkmessageid", "name"), TopCount = 1 };
-        messageQuery.Criteria.AddCondition("name", ConditionOperator.Equal, messageName);
-        return service.RetrieveMultiple(messageQuery).Entities.FirstOrDefault();
+        QueryExpression query = new QueryExpression("sdkmessagerequest") { ColumnSet = new ColumnSet("name") };
+        LinkEntity pair = query.AddLink("sdkmessagepair", "sdkmessagepairid", "sdkmessagepairid", JoinOperator.Inner);
+        LinkEntity message = pair.AddLink("sdkmessage", "sdkmessageid", "sdkmessageid", JoinOperator.Inner);
+        message.LinkCriteria.AddCondition("name", ConditionOperator.Equal, messageName);
+
+        return service.RetrieveAll(query)
+            .Select(r => r.GetAttributeValue<string>("name"))
+            .Where(n => !string.IsNullOrWhiteSpace(n) && n!.All(c => char.IsLetterOrDigit(c) || c == '_'))
+            .Select(n => n!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
     }
 
-    // The request's own name, the one Dataverse executes. Falls back to the message name when the row has none, or a
-    // name that cannot be a C# class name (the legacy "SetState{Entity.PrimaryEntityName}" placeholder).
-    private static string RequestName(Entity request, string messageName)
-    {
-        string? name = request.GetAttributeValue<string>("name");
-        return !string.IsNullOrWhiteSpace(name) && name!.All(c => char.IsLetterOrDigit(c) || c == '_') ? name : messageName;
-    }
+    private static T? Aliased<T>(Entity row, string alias) where T : class
+        => row.GetAttributeValue<AliasedValue>(alias)?.Value as T;
 
     // The entities a message applies to (its step-eligible, visible sdkmessagefilter rows'
     // primaryobjecttypecode), captured so the generator can emit an entity-constrained On<Message>() step
@@ -238,9 +209,9 @@ internal static class SdkMessageReader
 
     // Rank of a pair's contract version, lowest first: 2011/Contracts carries the modern Microsoft.Xrm.Sdk.* field
     // types, then any other *Contracts (e.g. xrm/7.1/Contracts), then anything but the legacy 2007/WebServices.
-    private static int PairPreference(Entity pair)
+    private static int PairPreference(string? pairNamespace)
     {
-        string ns = pair.GetAttributeValue<string>("namespace") ?? string.Empty;
+        string ns = pairNamespace ?? string.Empty;
         bool Has(string token) => ns.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
         return Has("2011/Contracts") ? 0 : Has("Contracts") ? 1 : !Has("2007/WebServices") ? 2 : 3;
     }

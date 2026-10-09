@@ -11,23 +11,6 @@ public class SdkMessageGeneratorTests
         SdkMessageGenerator.Generate(new[] { message }, "Acme.Shared.Models.Generated").Single().Code;
 
     [Fact]
-    public void A_request_running_as_another_sdkmessage_keeps_its_request_name()
-    {
-        SdkMessage message = new SdkMessage("WinQuote", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
-        {
-            MessageName = "Win",
-            Entities = new[] { "quote" },
-        };
-
-        string code = Generate(message);
-
-        Assert.Contains("public partial class WinQuoteRequest : Vela.Messages.TypedRequest", code);
-        Assert.Contains("RequestName = \"WinQuote\";", code);
-        Assert.Contains("runs as the <c>Win</c> message", code);
-        Assert.Contains("OnWinQuote(this Vela.Steps.IStepTrigger<Quote> builder) => builder.On<WinQuoteRequest>()", code);
-    }
-
-    [Fact]
     public void Generates_TypedRequestAndResponse()
     {
         SdkMessage message = new SdkMessage(

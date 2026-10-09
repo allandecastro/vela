@@ -222,11 +222,11 @@ Custom API and messages that already ship an SDK request class - the core `Micro
 and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (matched against a curated, non-exhaustive supplement;
 an unlisted one just makes a harmless duplicate).
 
-A class is generated per **request**, named after the request: that is the name Dataverse executes, which is not
-always the `sdkmessage` name. `--messages Send` generates `SendEmailRequest`, `SendFaxRequest` and
-`SendTemplateRequest` (each bound to its own table), and `--messages Win` generates `WinOpportunityRequest` and
-`WinQuoteRequest`; a request sent as `"Send"` fails with "Request not supported". You can also pass the request
-name (`--messages WinQuote`) to generate that request only.
+The names are **SDK request names**, the names Dataverse executes: `--messages SendEmail` generates
+`SendEmailRequest`. A request name is not always the name of the `sdkmessage` a step registers on (`SendEmail`
+runs as `Send`, `WinQuote` as `Win`), and Dataverse refuses a request sent under the sdkmessage name ("Request not
+supported"). So `--messages Send` fails and lists the requests to generate instead (`SendEmail`, `SendFax`,
+`SendTemplate`). With no value, one class is generated per request.
 
 Alongside each `XxxRequest`/`XxxResponse`, `--messages` emits an **entity-constrained `On<Message>()` step
 extension** per applicable entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), giving
