@@ -87,6 +87,14 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **PreValidation steps can capture a pre-image (#436).** `WithPreImage(...)` is now offered at PreValidation on
+  `OnUpdate()`, `OnDelete()`, `OnUpdateMultiple()`, `OnMessage(...)` and `On<TRequest>()`, as Microsoft Learn
+  recommends over an extra Retrieve. A post-image is still not offered before PostOperation, and Create never has
+  a pre-image (the runtime backstop and VELA007 still reject it). A top-level PreValidation step runs outside the
+  transaction, so its image can be stale by the main operation: use it for validation and keep a strictly
+  consistent read at PreOperation. Verified live: the image arrives at PreValidation for Update and Delete, and once
+  per `Targets` entry for UpdateMultiple.
+
 - **VELA021 warns when a typed image projection cannot be generated.** A `WithPreImage(...)` / `WithPostImage(...)`
   that lists columns but cannot be projected (a non-constant alias, a selector that is not a column property, or a
   `RegisterStep()` chain whose message or stage is not constant) used to generate nothing silently, leaving only a
@@ -121,6 +129,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   on every execution.
 
 ### Fixed (Framework)
+
+- **The harness runs a Delete's PreValidation steps before the cascade.** They used to fire after the cascaded
+  children were already deleted, so a PreValidation step could not see them. On Dataverse they still exist at
+  PreValidation and are gone by PreOperation (verified live), which the harness now matches.
 
 - **VELA009, VELA017 and VELA018 analyze handlers bound through `Handle(Delegate)`.** A handler taking a generated
   typed step context (or any context other than the config's `Handle(Action<...>)` one) binds to that overload, and

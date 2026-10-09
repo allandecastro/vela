@@ -513,11 +513,11 @@ regular plugin step cannot register there.
 
 **Image validity is a compile error, not a runtime surprise.** The stage method you pick returns a builder
 that exposes **only** the images that (message, stage) actually supports, so a wrong image does not compile -
-in the IDE, without the CLI. For example `OnDelete().PostOperation()....WithPostImage()` and
-`OnUpdate().PreValidation()....WithPreImage()` and `OnCreate().PostOperation()....WithPreImage()` all fail to build.
+in the IDE, without the CLI. For example `OnDelete().PostOperation()....WithPostImage()`,
+`OnUpdate().PreValidation()....WithPostImage()` and `OnCreate().PreValidation()....WithPreImage()` all fail to build.
 The rules the chain encodes:
 
-1. `PreValidation` - no images (nothing captured yet).
+1. `PreValidation` - only `PreImage`, only for `Update` and `Delete` (and `UpdateMultiple`). See the note below.
 2. `PreOperation` - only `PreImage`, only for `Update` and `Delete`.
 3. `PostOperation` - `PreImage` for `Update`/`Delete`, `PostImage` for `Create`/`Update`.
 4. `OnMessage("...")` - a non-modelled message is **permissive**: both images are offered and validity is left
@@ -529,6 +529,14 @@ The rules the chain encodes:
    the single `Create`/`Update` step instead: it also runs for bulk operations, where per-record images are read
    with `ctx.GetPreImage(index, alias)` / `ctx.GetPostImage(index, alias)`. The in-memory test harness does allow
    bulk-step images, so you can still unit-test per-record image handling against `ctx.BulkPreEntityImagesCollection`.
+
+**A PreValidation pre-image is fine for validation, not for a strictly consistent read.** A top-level PreValidation
+step runs outside the database transaction and its image is read without a lock, so another process can change the
+row before the main operation. Validation logic can accept that (it is the pattern Microsoft Learn recommends over
+an extra Retrieve); logic that needs the exact state the write applies to belongs at PreOperation. A nested
+PreValidation step (depth > 1) runs inside the parent transaction, and its image includes that transaction's
+uncommitted writes. On a Delete, PreValidation is the only stage that still sees the record's children: the cascade
+deletes them before PreOperation.
 
 ## Context helpers
 

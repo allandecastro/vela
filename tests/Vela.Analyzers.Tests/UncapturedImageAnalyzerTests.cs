@@ -26,8 +26,8 @@ namespace Vela.Context
 namespace Vela.Steps
 {
     public interface IFluentStep { }
-    public interface ITrigger : IFluentStep { IStages OnUpdate(); }
-    public interface IStages : IFluentStep { IMode PostOperation(); }
+    public interface ITrigger : IFluentStep { IStages OnCreate(); IStages OnUpdate(); }
+    public interface IStages : IFluentStep { IMode PreValidation(); IMode PostOperation(); }
     public interface IMode : IFluentStep { IConfig Sync(); }
     public interface IConfig : IFluentStep
     {
@@ -96,6 +96,34 @@ namespace Demo
             "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(\"name\").Handle(OnUpd); }\n" +
             "        private void OnUpd(ILocalPluginContext ctx) { object? x = ctx.PostImage; }");
         await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_PreImage_captured_at_prevalidation()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PreValidation().Sync().WithPreImage(\"name\").Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { object? x = ctx.PreImage; }");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_PreImage_not_captured_at_prevalidation()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PreValidation().Sync().Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { object? x = ctx.{|#0:PreImage|}; }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("pre-image", "PreImage", "WithPreImage"));
+    }
+
+    // Create never has a pre-image (no capture is possible), so reading one at PreValidation is still flagged.
+    [Fact]
+    public async Task Flags_PreImage_on_a_create_prevalidation_step()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnCreate().PreValidation().Sync().Handle(OnCreate); }\n" +
+            "        private void OnCreate(ILocalPluginContext ctx) { object? x = ctx.{|#0:PreImage|}; }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("pre-image", "PreImage", "WithPreImage"));
     }
 
     [Fact]

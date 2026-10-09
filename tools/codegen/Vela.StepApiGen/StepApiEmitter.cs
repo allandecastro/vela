@@ -72,6 +72,10 @@ internal static class StepApiEmitter
         w.Line("    {");
         foreach (var modifier in config.Modifiers())
         {
+            foreach (var doc in modifier.Doc ?? [])
+            {
+                w.Line($"        /// {doc}");
+            }
             w.Line($"        {config.Type} {modifier.Signature};");
         }
         foreach (var handle in config.Handles)

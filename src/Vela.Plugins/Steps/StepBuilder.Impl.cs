@@ -413,6 +413,8 @@ namespace Vela.Steps
         IPermissivePostOperationConfig<TEntity> ISyncAsyncMode<IPermissivePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
 
         IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
         IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IPermissivePreValidationConfig<TEntity> IPermissivePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
@@ -841,6 +843,8 @@ namespace Vela.Steps
 
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IUpdatePreValidationConfig<TEntity> IUpdatePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
@@ -917,6 +921,8 @@ namespace Vela.Steps
 
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IUpdateMultiplePreValidationConfig<TEntity> IUpdateMultiplePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }
@@ -956,6 +962,8 @@ namespace Vela.Steps
         void IUpdateMultiplePostOperationConfig<TEntity>.Handle(Action<IUpdateMultiplePostContext<TEntity>> handler) { SetHandler(handler); }
 
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IDeletePreValidationConfig<TEntity> IDeletePreValidationConfig<TEntity>.WithImpersonation(ImpersonationSource source) { SetImpersonation(source); return this; }

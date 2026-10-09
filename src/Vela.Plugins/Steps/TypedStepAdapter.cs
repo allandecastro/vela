@@ -48,8 +48,10 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Async() { _b.SetModeInternal(ExecutionMode.Asynchronous); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Async() { _b.SetModeInternal(ExecutionMode.Asynchronous); return this; }
 
-        // ---- PreValidation config (no images) ----
+        // ---- PreValidation config (pre-image) ----
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithDescription(string description) { _b.SetDescriptionInternal(description); return this; }
+        ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { _b.AddImageInternal(PluginImageAliases.PreImage, true, attributes); return this; }
+        ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { _b.AddImageInternal(alias, true, attributes); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithExecutionOrder(int order) { _b.SetExecutionOrderInternal(order); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithStepKey(string key) { _b.SetStepKeyInternal(key); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithImpersonation(ImpersonationSource source) { _b.SetImpersonationInternal(source); return this; }

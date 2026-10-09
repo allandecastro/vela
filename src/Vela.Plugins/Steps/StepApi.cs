@@ -97,6 +97,18 @@ namespace Vela.Steps
     {
         IUpdatePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdatePreValidationConfig<TEntity> WithDescription(string description);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IUpdatePreValidationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IUpdatePreValidationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IUpdatePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IUpdatePreValidationConfig<TEntity> WithStepKey(string key);
         IUpdatePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
@@ -201,6 +213,18 @@ namespace Vela.Steps
     {
         IUpdateMultiplePreValidationConfig<TEntity> FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes);
         IUpdateMultiplePreValidationConfig<TEntity> WithDescription(string description);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IUpdateMultiplePreValidationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IUpdateMultiplePreValidationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IUpdateMultiplePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IUpdateMultiplePreValidationConfig<TEntity> WithStepKey(string key);
         IUpdateMultiplePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
@@ -254,6 +278,18 @@ namespace Vela.Steps
     public interface IDeletePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IDeletePreValidationConfig<TEntity> WithDescription(string description);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IDeletePreValidationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IDeletePreValidationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IDeletePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IDeletePreValidationConfig<TEntity> WithStepKey(string key);
         IDeletePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
@@ -2577,6 +2613,18 @@ namespace Vela.Steps
     public interface IPermissivePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IPermissivePreValidationConfig<TEntity> WithDescription(string description);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IPermissivePreValidationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IPermissivePreValidationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IPermissivePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IPermissivePreValidationConfig<TEntity> WithStepKey(string key);
         IPermissivePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
@@ -2650,6 +2698,18 @@ namespace Vela.Steps
     public interface ITypedPreValidationConfig<TEntity, TRequest> : IStepConfig<TEntity> where TEntity : Entity where TRequest : OrganizationRequest, new()
     {
         ITypedPreValidationConfig<TEntity, TRequest> WithDescription(string description);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        ITypedPreValidationConfig<TEntity, TRequest> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        ITypedPreValidationConfig<TEntity, TRequest> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         ITypedPreValidationConfig<TEntity, TRequest> WithExecutionOrder(int order);
         ITypedPreValidationConfig<TEntity, TRequest> WithStepKey(string key);
         ITypedPreValidationConfig<TEntity, TRequest> WithImpersonation(ImpersonationSource source);
