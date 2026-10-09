@@ -93,4 +93,12 @@ public sealed class ImageDefinition
 
     /// <summary>The attributes to include in the image.</summary>
     public string[] Attributes { get; set; } = [];
+
+    /// <summary>
+    /// The request property the image is taken from (Dataverse <c>messagepropertyname</c>), or empty for the message's
+    /// own (the primary record: <c>Target</c>, <c>Id</c> on Create, ...). Set to <c>SubordinateId</c> by
+    /// <c>WithSubordinatePreImage</c> / <c>WithSubordinatePostImage</c> on a Merge step, for an image of the record
+    /// merged away.
+    /// </summary>
+    public string MessagePropertyName { get; set; } = string.Empty;
 }

@@ -17,6 +17,8 @@ namespace Vela.Context
     {
         object? PreImage { get; }
         object? PostImage { get; }
+        object? SubordinatePreImage { get; }
+        object? SubordinatePostImage { get; }
     }
     public interface IUpdatePostContext<TEntity> : ILocalPluginContext { }
     // Stands in for a generated typed step context: the handler binds through Handle(Delegate).
@@ -26,13 +28,15 @@ namespace Vela.Context
 namespace Vela.Steps
 {
     public interface IFluentStep { }
-    public interface ITrigger : IFluentStep { IStages OnCreate(); IStages OnUpdate(); }
+    public interface ITrigger : IFluentStep { IStages OnCreate(); IStages OnUpdate(); IStages OnMerge(); }
     public interface IStages : IFluentStep { IMode PreValidation(); IMode PostOperation(); }
     public interface IMode : IFluentStep { IConfig Sync(); }
     public interface IConfig : IFluentStep
     {
         IConfig WithPreImage(params string[] columns);
         IConfig WithPostImage(params string[] columns);
+        IConfig WithSubordinatePreImage(params string[] columns);
+        IConfig WithSubordinatePostImage(params string[] columns);
         void Handle(Action<Vela.Context.ILocalPluginContext> handler);
         void Handle(Delegate handler);
     }
@@ -69,6 +73,16 @@ namespace Demo
             "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(\"name\").Handle(OnUpd); }\n" +
             "        private void OnUpd(ILocalPluginContext ctx) { object? x = ctx.{|#0:PreImage|}; }");
         await Verify.VerifyAnalyzerAsync(code, Expected("pre-image", "PreImage", "WithPreImage"));
+    }
+
+    [Fact]
+    public async Task Flags_a_subordinate_image_the_merge_step_does_not_capture()   // #462
+    {
+        // The master's pre-image does not populate the subordinate's.
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnMerge().PostOperation().Sync().WithPreImage(\"name\").WithSubordinatePostImage(\"name\").Handle(OnMerged); }\n" +
+            "        private void OnMerged(ILocalPluginContext ctx) { object? a = ctx.PreImage; object? b = ctx.SubordinatePostImage; object? c = ctx.{|#0:SubordinatePreImage|}; }");
+        await Verify.VerifyAnalyzerAsync(code, Expected("subordinate pre-image", "SubordinatePreImage", "WithSubordinatePreImage"));
     }
 
     [Fact]

@@ -94,13 +94,13 @@ namespace Vela.Analyzers
             }
         }
 
-        // True when the fluent chain preceding .Handle(...) captures a typed image (a WithPreImage/WithPostImage with
+        // True when the fluent chain preceding .Handle(...) captures a typed image (a With...Image call with
         // at least one column-selector lambda), i.e. a generated typed context would be emitted for this step.
         private static bool ChainCapturesTypedImage(ExpressionSyntax? receiver)
         {
             foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                if ((call.MethodName == "WithPreImage" || call.MethodName == "WithPostImage") &&
+                if (call.MethodName is "WithPreImage" or "WithPostImage" or "WithSubordinatePreImage" or "WithSubordinatePostImage" &&
                     call.Arguments.Any(a => a.Expression is LambdaExpressionSyntax))
                 {
                     return true;

@@ -53,7 +53,7 @@ internal static class DefinitionParser
                 continue;
             }
 
-            result.Add(new ImageApplyDefinition(alias, TryGetStringArray(image, "attributes")));
+            result.Add(new ImageApplyDefinition(alias, TryGetStringArray(image, "attributes"), TryGetString(image, "messagePropertyName") ?? string.Empty));
         }
 
         return result.OrderBy(x => x.Alias, StringComparer.Ordinal).ToArray();

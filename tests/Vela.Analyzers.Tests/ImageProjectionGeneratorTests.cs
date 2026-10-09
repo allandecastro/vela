@@ -36,6 +36,7 @@ namespace Vela.Steps
         IStepConfig<TEntity> OnCreateMultiple();
         IStepConfig<TEntity> OnUpdateMultiple();
         IStepConfig<TEntity> OnAssign();
+        IStepConfig<TEntity> OnMerge();
         IStepConfig<TEntity> OnRecalc();
         IStepConfig<TEntity> On<TRequest>();
         IStepConfig<TEntity> OnMessage(string messageName);
@@ -49,6 +50,10 @@ namespace Vela.Steps
         IStepConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object>>[] a);
         IStepConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object>>[] a);
         IStepConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object>>[] a);
+        IStepConfig<TEntity> WithSubordinatePreImage(params Expression<Func<TEntity, object>>[] a);
+        IStepConfig<TEntity> WithSubordinatePreImage(string alias, params Expression<Func<TEntity, object>>[] a);
+        IStepConfig<TEntity> WithSubordinatePostImage(params Expression<Func<TEntity, object>>[] a);
+        IStepConfig<TEntity> WithSubordinatePostImage(string alias, params Expression<Func<TEntity, object>>[] a);
         void Handle(Action handler);
     }
 }
@@ -79,6 +84,8 @@ namespace Vela.Context
     public class MessagePostContext<TRequest, TEntity> : ILocalPluginContext where TEntity : Entity { public MessagePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; }
     public class CreatePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public CreatePreContext(ILocalPluginContext inner) { } }
     public class CreateMultiplePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public CreateMultiplePostContext(ILocalPluginContext inner) { } }
+    public class MergePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public MergePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? SubordinatePreImage => default; }
+    public class MergePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public MergePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; public TEntity? SubordinatePreImage => default; public TEntity? SubordinatePostImage => default; }
     public class AssignPostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public AssignPostContext(ILocalPluginContext inner) { } }
     public static class ImageProjectionExtensions
     {
@@ -769,6 +776,46 @@ namespace Demo
 
         Assert.Contains("PostImageAs<OnUpdated_PostImage_snap>(this, \"snap\")", output);
         Assert.DoesNotContain("OnDeleted_PreImage", output); // the runtime alias is unknown: no projection reading null
+    }
+
+    [Fact]
+    public void A_merge_context_exposes_the_master_and_subordinate_projections()   // #462
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountMerge : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnMerge().PostOperation().Sync()
+                .WithPreImage(a => a.Name)
+                .WithPostImage(a => a.Revenue)
+                .WithSubordinatePreImage(a => a.Telephone1)
+                .WithSubordinatePostImage(""dupAfter"", a => a.NumberOfEmployees)
+                .Handle(OnMerged);
+            RegisterStep().OnMerge().PreOperation().Sync()
+                .WithSubordinatePreImage(a => a.Name)
+                .Handle(OnMerging);
+        }
+        private void OnMerged() { }
+        private void OnMerging() { }
+    }
+}
+");
+
+        Assert.Contains("class OnMergedContext : global::Vela.Context.MergePostContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnMerged_PreImage? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<OnMerged_PreImage>(this);", output);
+        Assert.Contains("public new OnMerged_PostImage? PostImage", output);
+        // A subordinate image always names its alias: the accessor's default alias is the master's.
+        Assert.Contains("public new OnMerged_SubordinatePreImage? SubordinatePreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<OnMerged_SubordinatePreImage>(this, \"SubordinatePreImage\");", output);
+        Assert.Contains("public new OnMerged_SubordinatePostImage_dupAfter? SubordinatePostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<OnMerged_SubordinatePostImage_dupAfter>(this, \"dupAfter\");", output);
+        Assert.Contains(" Telephone1 { get; set; }", output);
+
+        Assert.Contains("class OnMergingContext : global::Vela.Context.MergePreContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnMerging_SubordinatePreImage? SubordinatePreImage", output);
+        Assert.DoesNotContain("OnMerging_PreImage", output);
     }
 
     [Fact]

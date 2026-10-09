@@ -424,7 +424,7 @@ public sealed class DataverseRegistrationReadShapeTests
         DataverseRegistration.GetStepImages(svc, new[] { stepId });
 
         Assert.Equal("sdkmessageprocessingstepimage", captured!.EntityName);
-        Assert.Equal(new[] { "sdkmessageprocessingstepid", "imagetype", "entityalias", "attributes" }, captured.ColumnSet.Columns);
+        Assert.Equal(new[] { "sdkmessageprocessingstepid", "imagetype", "entityalias", "attributes", "messagepropertyname" }, captured.ColumnSet.Columns);
         Assert.Equal("sdkmessageprocessingstepid", captured.Criteria.Conditions.Single().AttributeName);
     }
 

@@ -171,6 +171,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   -1; the store now applies that default (state 0 gets status 1, any other state status 2, when undeclared).
   `InMemoryOrganizationService.Execute` also runs a `SetStateRequest`.
 
+- **Merge steps capture images of the master and of the subordinate record (#462).** `OnMerge()` now offers
+  `WithPreImage` / `WithPostImage` (the master, `Target`) and `WithSubordinatePreImage` /
+  `WithSubordinatePostImage` (the record merged away, registered against `SubordinateId`), with typed
+  `ctx.PreImage` / `ctx.PostImage` / `ctx.SubordinatePreImage` / `ctx.SubordinatePostImage` and generated
+  projections. `ImageDefinition.MessagePropertyName` records the request property. The harness delivers both
+  images on a `MergeRequest`, and its Merge now sets the subordinate's `masterid`. Verified live: both kinds on one
+  step at every stage, and the subordinate's post-image is the deactivated record.
 - **PreValidation steps can capture a pre-image (#436).** `WithPreImage(...)` is now offered at PreValidation on
   `OnUpdate()`, `OnDelete()`, `OnUpdateMultiple()`, `OnMessage(...)` and `On<TRequest>()`, as Microsoft Learn
   recommends over an extra Retrieve. A post-image is still not offered before PostOperation, and Create never has
@@ -226,6 +233,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`RetryPolicy` jitter is independent across threads (#450).** Each thread's `Random` was seeded from the tick
   count on .NET Framework, so threads that started retrying in the same tick drew the same backoff. The seeds now come
   from one shared generator.
+- **`DownloadFile` no longer returns a truncated file (#440).** An empty block before the announced
+  `FileSizeInBytes` used to end the loop and return the bytes read so far, with no error. It now throws an
+  `InvalidPluginExecutionException` naming the table, record, column, the bytes received and the announced size.
+  The same check rejects a download whose total differs from the announced size.
 - **FetchXML condition values compare as the column's type (#439).** A `<value>` was kept as text and compared with
   the stored value's string form, so `eq` on a date (`2026-10-09`), a money with another scale (`10.50`) or a braced
   guid matched nothing, and `ne` matched everything. Values (FetchXML, and text values in a `QueryExpression` or
@@ -423,6 +434,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **Image request property in plan and apply (#462).** The step shape compares each image's `messagepropertyname`,
+  so `plan` shows an image moved between the Merge master and subordinate as a change and `apply` recreates it.
+  The scanner rejects `SubordinateId` on any message other than Merge (the platform fails with 0x8004416B).
 - **`vela help <command>` and `vela help --json`.** The help is generated from one command table that is also the
   option allowlist of `plan`, `apply`, `inspect`, `sign`, `logout`, `update`, `solution`, `logs` and `models`, so it
   lists every command (`solution` was missing) and every option a command accepts. `vela help --json` describes the

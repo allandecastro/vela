@@ -81,7 +81,8 @@ public sealed record ApplyOperation(string Action, string Kind, string Type, str
 /// step/custom-API diff alone cannot see.</summary>
 public sealed record PackagePublishAction(string PackageName, bool IsCreate);
 public sealed record StepApplyDefinition(string PluginTypeName, string Message, string EntityLogicalName, string StepKey, int Stage, int Mode, int ExecutionOrder, string[] FilteringAttributes, ImageApplyDefinition[] PreImages, ImageApplyDefinition[] PostImages, bool Enabled, string UnsecureConfig, string SecureConfig, Guid ImpersonatingUserId = default, int SupportedDeployment = 0, string Description = "");
-public sealed record ImageApplyDefinition(string Alias, string[] Attributes);
-public sealed record StepImageApplyDefinition(string Alias, string[] Attributes, int ImageType);
+// MessagePropertyName: the request property the image is taken from; empty means the message's own.
+public sealed record ImageApplyDefinition(string Alias, string[] Attributes, string MessagePropertyName = "");
+public sealed record StepImageApplyDefinition(string Alias, string[] Attributes, int ImageType, string MessagePropertyName = "");
 public sealed record CustomApiApplyDefinition(string PluginTypeName, string UniqueName, bool IsFunction, bool IsBound, string? BoundEntityLogicalName, string? ExecutePrivilegeName, bool IsPrivate, int AllowedCustomProcessingStepType, int BindingType, bool WorkflowSdkStepEnabled, CustomApiParameterApplyDefinition[] InputParameters, CustomApiParameterApplyDefinition[] OutputParameters, string DisplayName = "", string Description = "");
 public sealed record CustomApiParameterApplyDefinition(string Name, bool IsOptional, string? ParameterTypeName, bool IsCollection, string? LogicalEntityName, string UniqueName = "", string Description = "");

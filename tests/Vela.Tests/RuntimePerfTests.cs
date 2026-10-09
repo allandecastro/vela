@@ -88,6 +88,9 @@ public sealed class RuntimePerfTests
         // Null leaves IsChunkingSupported out of the initialize response.
         public bool? ChunkingSupported { get; set; }
 
+        // Overrides the bytes served for a DownloadBlock (offset, requested length); null serves the requested length.
+        public Func<long, long, byte[]?>? ServeBlock { get; set; }
+
         public OrganizationResponse Execute(OrganizationRequest request)
         {
             OrganizationResponse response = new OrganizationResponse();
@@ -113,7 +116,9 @@ public sealed class RuntimePerfTests
                 case "DownloadBlock":
                     long length = (long)request["BlockLength"];
                     RequestedDownloadLengths.Add(length);
-                    response.Results["Data"] = Enumerable.Repeat((byte)7, (int)length).ToArray();
+                    response.Results["Data"] = ServeBlock != null
+                        ? ServeBlock((long)request["Offset"], length)
+                        : Enumerable.Repeat((byte)7, (int)length).ToArray();
                     break;
             }
 
@@ -171,5 +176,76 @@ public sealed class RuntimePerfTests
         service.DownloadFile(new EntityReference("account", Guid.NewGuid()), "new_file", blockSize: int.MaxValue);
 
         Assert.Equal(new[] { (long)FileColumnExtensions.MaxBlockSize, 1L }, service.RequestedDownloadLengths);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_empty_block_before_the_announced_size_fails_instead_of_returning_a_truncated_file(bool chunked)
+    {
+        // Chunked: the second block comes back empty. Single block: the only block comes back empty.
+        BlockRecordingService service = new BlockRecordingService
+        {
+            FileSize = 10,
+            ChunkingSupported = chunked,
+            ServeBlock = (offset, length) => offset == 0 && chunked ? new byte[length] : Array.Empty<byte>(),
+        };
+        EntityReference target = new EntityReference("account", Guid.NewGuid());
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
+            () => service.DownloadFile(target, "new_file", blockSize: 4));
+
+        Assert.Contains("'new_file'", ex.Message);
+        Assert.Contains("'account'", ex.Message);
+        Assert.Contains(target.Id.ToString(), ex.Message);
+        Assert.Contains($"received {(chunked ? 4 : 0)} byte(s)", ex.Message);
+        Assert.Contains("file is 10 byte(s)", ex.Message);
+    }
+
+    [Fact]
+    public void A_null_block_before_the_announced_size_fails()
+    {
+        BlockRecordingService service = new BlockRecordingService { FileSize = 3, ServeBlock = (_, _) => null };
+
+        Assert.Throws<InvalidPluginExecutionException>(
+            () => service.DownloadFile(new EntityReference("account", Guid.NewGuid()), "new_file"));
+    }
+
+    [Fact]
+    public void A_block_longer_than_requested_fails_instead_of_returning_extra_bytes()
+    {
+        BlockRecordingService service = new BlockRecordingService { FileSize = 3, ServeBlock = (_, length) => new byte[length + 2] };
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
+            () => service.DownloadFile(new EntityReference("account", Guid.NewGuid()), "new_file"));
+
+        Assert.Contains("received 5 byte(s)", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_exact_size_download_returns_the_whole_file(bool chunked)
+    {
+        BlockRecordingService service = new BlockRecordingService
+        {
+            FileSize = 10,
+            ChunkingSupported = chunked,
+            ServeBlock = (offset, length) => Enumerable.Range((int)offset, (int)length).Select(i => (byte)i).ToArray(),
+        };
+
+        byte[] downloaded = service.DownloadFile(new EntityReference("account", Guid.NewGuid()), "new_file", blockSize: 4);
+
+        Assert.Equal(Enumerable.Range(0, 10).Select(i => (byte)i), downloaded);
+        Assert.Equal(chunked ? new[] { 4L, 4L, 2L } : new[] { 10L }, service.RequestedDownloadLengths);
+    }
+
+    [Fact]
+    public void An_empty_file_downloads_without_requesting_a_block()
+    {
+        BlockRecordingService service = new BlockRecordingService { FileSize = 0 };
+
+        Assert.Empty(service.DownloadFile(new EntityReference("account", Guid.NewGuid()), "new_file"));
+        Assert.Empty(service.RequestedDownloadLengths);
     }
 }

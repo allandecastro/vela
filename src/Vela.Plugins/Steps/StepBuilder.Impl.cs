@@ -1792,6 +1792,10 @@ namespace Vela.Steps
         void IModifyAccessPostOperationConfig<TEntity>.Handle(Action<IModifyAccessPostContext<TEntity>> handler) { SetHandler(handler); }
 
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithSubordinatePreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddSubordinateImageNow(PluginImageAliases.SubordinatePreImage, true, attributes); return this; }
+        IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithSubordinatePreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddSubordinateImageNow(alias, true, attributes); return this; }
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
@@ -1801,6 +1805,10 @@ namespace Vela.Steps
         IMergePreValidationConfig<TEntity> IMergePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePreValidationConfig<TEntity>.Handle(Action<IMergePreContext<TEntity>> handler) { SetHandler(handler); }
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithSubordinatePreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddSubordinateImageNow(PluginImageAliases.SubordinatePreImage, true, attributes); return this; }
+        IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithSubordinatePreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddSubordinateImageNow(alias, true, attributes); return this; }
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
@@ -1810,6 +1818,14 @@ namespace Vela.Steps
         IMergePreOperationConfig<TEntity> IMergePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePreOperationConfig<TEntity>.Handle(Action<IMergePreContext<TEntity>> handler) { SetHandler(handler); }
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithPreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PreImage, true, attributes); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, true, attributes); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithPostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(PluginImageAliases.PostImage, false, attributes); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddImageNow(alias, false, attributes); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSubordinatePreImage(params Expression<Func<TEntity, object?>>[] attributes) { AddSubordinateImageNow(PluginImageAliases.SubordinatePreImage, true, attributes); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSubordinatePreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddSubordinateImageNow(alias, true, attributes); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSubordinatePostImage(params Expression<Func<TEntity, object?>>[] attributes) { AddSubordinateImageNow(PluginImageAliases.SubordinatePostImage, false, attributes); return this; }
+        IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithSubordinatePostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { AddSubordinateImageNow(alias, false, attributes); return this; }
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }

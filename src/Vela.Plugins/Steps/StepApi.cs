@@ -1728,6 +1728,26 @@ namespace Vela.Steps
     public interface IMergePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IMergePreValidationConfig<TEntity> WithDescription(string description);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IMergePreValidationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image: the row as it is before the operation.</summary>
+        /// <remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read
+        /// without a lock, so another process can change the row before the main operation. That is fine for validation;
+        /// register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step
+        /// runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>
+        IMergePreValidationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image of the subordinate record: the record merged away, as it is before the merge.</summary>
+        /// <remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePreImage</c>. The
+        /// aliases of a step's images must all differ, master and subordinate alike.</remarks>
+        IMergePreValidationConfig<TEntity> WithSubordinatePreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image of the subordinate record: the record merged away, as it is before the merge.</summary>
+        /// <remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePreImage</c>. The
+        /// aliases of a step's images must all differ, master and subordinate alike.</remarks>
+        IMergePreValidationConfig<TEntity> WithSubordinatePreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IMergePreValidationConfig<TEntity> WithExecutionOrder(int order);
         IMergePreValidationConfig<TEntity> WithStepKey(string key);
         IMergePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
@@ -1742,6 +1762,16 @@ namespace Vela.Steps
     public interface IMergePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IMergePreOperationConfig<TEntity> WithDescription(string description);
+        IMergePreOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IMergePreOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image of the subordinate record: the record merged away, as it is before the merge.</summary>
+        /// <remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePreImage</c>. The
+        /// aliases of a step's images must all differ, master and subordinate alike.</remarks>
+        IMergePreOperationConfig<TEntity> WithSubordinatePreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image of the subordinate record: the record merged away, as it is before the merge.</summary>
+        /// <remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePreImage</c>. The
+        /// aliases of a step's images must all differ, master and subordinate alike.</remarks>
+        IMergePreOperationConfig<TEntity> WithSubordinatePreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IMergePreOperationConfig<TEntity> WithExecutionOrder(int order);
         IMergePreOperationConfig<TEntity> WithStepKey(string key);
         IMergePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
@@ -1756,6 +1786,28 @@ namespace Vela.Steps
     public interface IMergePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
         IMergePostOperationConfig<TEntity> WithDescription(string description);
+        IMergePostOperationConfig<TEntity> WithPreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IMergePostOperationConfig<TEntity> WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        IMergePostOperationConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object?>>[] attributes);
+        IMergePostOperationConfig<TEntity> WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image of the subordinate record: the record merged away, as it is before the merge.</summary>
+        /// <remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePreImage</c>. The
+        /// aliases of a step's images must all differ, master and subordinate alike.</remarks>
+        IMergePostOperationConfig<TEntity> WithSubordinatePreImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a pre-image of the subordinate record: the record merged away, as it is before the merge.</summary>
+        /// <remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePreImage</c>. The
+        /// aliases of a step's images must all differ, master and subordinate alike.</remarks>
+        IMergePostOperationConfig<TEntity> WithSubordinatePreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a post-image of the subordinate record: the record merged away, as it is after the merge
+        /// (deactivated, its <c>masterid</c> pointing at the master).</summary>
+        /// <remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePostImage</c>. The
+        /// aliases of a step's images must all differ, master and subordinate alike.</remarks>
+        IMergePostOperationConfig<TEntity> WithSubordinatePostImage(params Expression<Func<TEntity, object?>>[] attributes);
+        /// <summary>Captures a post-image of the subordinate record: the record merged away, as it is after the merge
+        /// (deactivated, its <c>masterid</c> pointing at the master).</summary>
+        /// <remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePostImage</c>. The
+        /// aliases of a step's images must all differ, master and subordinate alike.</remarks>
+        IMergePostOperationConfig<TEntity> WithSubordinatePostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes);
         IMergePostOperationConfig<TEntity> WithExecutionOrder(int order);
         IMergePostOperationConfig<TEntity> WithStepKey(string key);
         IMergePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
