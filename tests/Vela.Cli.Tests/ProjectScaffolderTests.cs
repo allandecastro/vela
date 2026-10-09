@@ -224,6 +224,37 @@ public class ProjectScaffolderTests
     }
 
     [Fact]
+    public void RunProcess_KillsAChildThatOutlivesItsTimeout_AndReportsItsOutput()
+    {
+        // A child that prints, then waits far longer than the limit: it must be killed and the failure must carry
+        // what it printed, rather than hanging the run.
+        (string file, string args) = OperatingSystem.IsWindows()
+            ? ("powershell", "-NoProfile -Command \"Write-Output started; Start-Sleep -Seconds 60\"")
+            : ("/bin/sh", "-c \"echo started; sleep 60\"");
+
+        System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+        Xunit.Sdk.FailException failure = Assert.Throws<Xunit.Sdk.FailException>(
+            () => RunProcess(file, args, Path.GetTempPath(), TimeSpan.FromSeconds(2)));
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(40), $"took {watch.Elapsed}");
+        Assert.Contains("did not finish within", failure.Message);
+        Assert.Contains("started", failure.Message);
+    }
+
+    [Fact]
+    public void RunProcess_ClosesStdin_SoAReadingChildDoesNotBlock()
+    {
+        (string file, string args) = OperatingSystem.IsWindows()
+            ? ("cmd", "/c \"set /p x= & echo done\"")
+            : ("/bin/sh", "-c \"read x; echo done\"");
+
+        (int exit, string output) = RunProcess(file, args, Path.GetTempPath(), TimeSpan.FromSeconds(20));
+
+        Assert.Contains("done", output);
+        Assert.True(exit is 0 or 1, output); // `read` at end-of-file returns 1 on some shells; it must not hang
+    }
+
+    [Fact]
     public void SmokeReportReaders_CountFromTheXml_NotTheLocalizedConsole()
     {
         RunInTempDir(temp =>
@@ -680,7 +711,7 @@ public class ProjectScaffolderTests
             // runner prints "réussite : N"): a TRX file from `dotnet test`, the xunit XML from the console runner.
             string report = Path.Combine(root, Path.GetFileNameWithoutExtension(assembly) + (OperatingSystem.IsWindows() ? ".trx" : ".xunit.xml"));
             (int exit, string output) = OperatingSystem.IsWindows()
-                ? RunProcess("dotnet", $"test \"{assembly}\" --logger \"trx;LogFileName={report}\"", root)
+                ? RunProcess("dotnet", $"test \"{assembly}\" --logger \"trx;LogFileName={report}\" --blame-hang-timeout 2m", root)
                 : RunProcess("mono", $"\"{FindXunitConsole()}\" \"{assembly}\" -noshadow -xml \"{report}\"", root);
             Assert.True(exit == 0, output);
             Assert.True(File.Exists(report), $"The test runner wrote no report at {report}.\n{output}");
@@ -740,10 +771,15 @@ public class ProjectScaffolderTests
         return null;
     }
 
+    // MSBuild commands run without node reuse or build servers (see RunProcess).
     private static (int ExitCode, string Output) RunDotnet(string arguments, string workingDirectory) =>
-        RunProcess("dotnet", arguments, workingDirectory);
+        RunProcess("dotnet", arguments.StartsWith("test ", StringComparison.Ordinal) ? arguments : arguments + " -nodeReuse:false --disable-build-servers", workingDirectory);
 
-    private static (int ExitCode, string Output) RunProcess(string fileName, string arguments, string workingDirectory)
+    // Every child of the smoke build gets a hard timeout: a hang becomes a readable failure (with what it printed)
+    // instead of the CI job timing out with no log.
+    internal static readonly TimeSpan ChildTimeout = TimeSpan.FromMinutes(5);
+
+    internal static (int ExitCode, string Output) RunProcess(string fileName, string arguments, string workingDirectory, TimeSpan? timeout = null)
     {
         ProcessStartInfo psi = new()
         {
@@ -751,21 +787,62 @@ public class ProjectScaffolderTests
             Arguments = arguments,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
+            // stdin redirected and closed at once: a child that prompts (first-run notices, a test host waiting
+            // for input) reads end-of-file instead of blocking on the test runner's console.
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
 
-        // Belt and braces: ask the .NET CLI / MSBuild / VSTest for English output (nothing above parses console
-        // text for results, but failure messages read better and stay greppable).
+        // Belt and braces: ask the .NET CLI / MSBuild / VSTest for English output (nothing parses console text for
+        // results, but failure messages read better). No MSBuild node reuse or build servers: a lingering node
+        // inherits the output pipes and keeps them open after the build exits, so reading them to the end would hang.
         psi.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
         psi.Environment["VSLANG"] = "1033";
+        psi.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        psi.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+        psi.Environment["DOTNET_NOLOGO"] = "1";
 
-        using Process? process = Process.Start(psi);
-        Assert.NotNull(process);
-        Task<string> stdout = process!.StandardOutput.ReadToEndAsync();
-        Task<string> stderr = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return (process.ExitCode, stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult());
+        using Process process = Process.Start(psi) ?? throw new InvalidOperationException($"Could not start {fileName}.");
+        process.StandardInput.Close();
+
+        // Both streams are drained concurrently (sequential reads deadlock once a pipe buffer fills).
+        System.Text.StringBuilder output = new();
+        object gate = new();
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) { lock (gate) { output.AppendLine(e.Data); } } };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) { lock (gate) { output.AppendLine(e.Data); } } };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        TimeSpan limit = timeout ?? ChildTimeout;
+        if (!process.WaitForExit(limit))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // it exited meanwhile
+            }
+
+            process.WaitForExit(TimeSpan.FromSeconds(10));
+            string captured;
+            lock (gate)
+            {
+                captured = output.ToString();
+            }
+
+            Assert.Fail($"'{fileName} {arguments}' did not finish within {limit.TotalMinutes:0.#} minutes and was killed. Output so far:\n{captured}");
+        }
+
+        // The exit is in; give the async readers a bounded moment to flush (a grandchild still holding the pipes must
+        // not turn into a hang here either).
+        process.WaitForExit(TimeSpan.FromSeconds(30));
+        lock (gate)
+        {
+            return (process.ExitCode, output.ToString());
+        }
     }
 
     [Fact]
