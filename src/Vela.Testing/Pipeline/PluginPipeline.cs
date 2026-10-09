@@ -42,7 +42,7 @@ namespace Vela.Testing
 
         private readonly PipelineOrganizationService _service;
 
-        private int _maxDepth = 16;
+        private int _maxDepth = Vela.Plugin.PluginBase.DefaultMaxDepth;
 
         private int _depth;
 
@@ -237,7 +237,11 @@ namespace Vela.Testing
             return this;
         }
 
-        /// <summary>Sets the cascade-depth safety cap (default 16) that aborts runaway recursion.</summary>
+        /// <summary>
+        /// Sets the cascade-depth cap that aborts runaway recursion. The default is <see cref="Vela.Plugin.PluginBase.DefaultMaxDepth"/>
+        /// (8), the Dataverse default: an operation that would run deeper throws. Unlike Dataverse, the pipeline does not
+        /// track the one-hour window, only the depth of the current cascade.
+        /// </summary>
         public PluginPipeline WithMaxDepth(int maxDepth)
         {
             _maxDepth = maxDepth < 1 ? 1 : maxDepth;

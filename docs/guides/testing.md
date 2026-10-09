@@ -340,8 +340,9 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   into the pipeline; `OperationId` equals it on sync steps and is the async step's own job id on async steps.
   `IsolationMode` is 2 (sandbox) and `SecondaryEntityName` is "none", as on Dataverse.
 - The steps work on a copy of the entity you pass to `Service.Create`/`Update`: your object never receives the
-  created id or a plugin's change to `Target`. Read the id from the return value of `Create`. Cascade depth is guarded (the
-  plugin's own depth guard plus a pipeline cap via `WithMaxDepth`).
+  created id or a plugin's change to `Target`. Read the id from the return value of `Create`. Cascade depth is capped at the
+  Dataverse default of 8 (`WithMaxDepth` changes it; the one-hour window of the platform's loop detection is not
+  modelled), on top of the plugin's own depth guard.
 - **Asynchronous step context.** As on the platform, an async step's context has an `OwningExtension` with
   the step's id but no `Name` (a sync step's carries its name), and its post images include
   `AsynchronousStepPrimaryName` (the record's primary name and id).
