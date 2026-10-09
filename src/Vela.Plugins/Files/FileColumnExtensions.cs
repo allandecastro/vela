@@ -134,11 +134,20 @@ namespace Vela.Files
                 byte[] data = (byte[])service.Execute(download).Results["Data"];
                 if (data == null || data.Length == 0)
                 {
+                    // An empty block before the announced size is a short read, not the end of the file.
                     break;
                 }
 
                 content.Write(data, 0, data.Length);
                 offset += data.Length;
+            }
+
+            // Never hand back a truncated (or overlong) file as if it were whole: the caller could persist it.
+            if (content.Length != size)
+            {
+                throw new InvalidPluginExecutionException(
+                    $"Download of column '{fileAttributeName}' on '{target.LogicalName}' ({target.Id}) returned " +
+                    $"{content.Length} byte(s) but the platform announced {size}.");
             }
 
             return content.ToArray();

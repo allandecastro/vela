@@ -236,6 +236,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   Dataverse, which rejects blocks above 4 MB; it is now capped (`FileColumnExtensions.MaxBlockSize`). When
   `InitializeFileBlocksDownload` reports `IsChunkingSupported = false`, `DownloadFile` reads the whole file in one
   block, as Dataverse requires. `DownloadFile` also assembles the content in one buffer instead of a `List<byte>`.
+- **`DownloadFile` no longer returns a truncated file.** An empty block before the announced `FileSizeInBytes` ended
+  the loop and the partial content was returned as the whole file. `DownloadFile` now throws an
+  `InvalidPluginExecutionException` naming the table, record, column and both sizes when the bytes received differ
+  from the announced size.
 - **`CustomApiResponse` uses its API unique name.** The constructor ignored its `apiUniqueName` argument, so a typed
   Custom API response had no `ResponseName`. It now sets `ResponseName`, as `CustomApiRequest` sets `RequestName`.
 
