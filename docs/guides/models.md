@@ -215,8 +215,9 @@ excluded.
 
 ## SDK message classes (`--messages`)
 
-`--messages a,b,c` generates typed `Request`/`Response` classes for any SDK message (`sdkmessage`), into
-`Messages/`. With **no value** it generates every *registerable* message (Microsoft's "available events":
+`--messages a,b,c` generates typed `Request`/`Response` classes for SDK requests, by request name (`SendEmail`
+generates `SendEmailRequest` / `SendEmailResponse`), into `Messages/`. With **no value** it generates one class per
+request of every *registerable* message (Microsoft's "available events":
 non-private messages with a visible, custom-step-allowed `sdkmessagefilter`), skipping messages backed by a
 Custom API and messages that already ship an SDK request class - the core `Microsoft.Xrm.Sdk.Messages.*` types
 and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (matched against a curated, non-exhaustive supplement;
