@@ -26,6 +26,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **`PluginPipeline` caps the cascade at the Dataverse depth (#450).** The default `WithMaxDepth` cap was 16; it is
+  now `PluginBase.DefaultMaxDepth` (8), the depth at which Dataverse aborts a chain as an infinite loop. A test whose
+  cascade runs deeper than 8 (a plugin with a raised `maxDepth`, or a classic `IPlugin`) now fails with the pipeline's
+  error. Call `WithMaxDepth(16)` to keep the old cap.
 - **An unset `HookOrganizationService` hook throws (#439).** `Create`, `Retrieve`, `Execute`, `RetrieveMultiple`,
   `Update`, `Delete`, `Associate` and `Disassociate` used to return `Guid.Empty`, `null` or an empty collection, or
   do nothing, when their `On...` delegate was not set, so the plugin failed later with a `NullReferenceException`
@@ -151,6 +155,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **`RetryPolicy.Execute(..., maxElapsed:)` bounds the whole call (#450).** Each wait was capped at
+  `RetryPolicy.MaxDelay` (30 s) but their sum was not, so a few attempts could consume most of the ~2-minute plugin
+  budget. With `maxElapsed`, a retry whose wait would end past the budget is not made and the last fault propagates.
+  The default (null) keeps the previous behaviour.
 - **`OnAssign()` steps can capture images (#439).** `WithPreImage(...)` is offered at every stage and
   `WithPostImage(...)` at PostOperation, as Dataverse accepts them on the Assign `Target` (verified live: the
   pre-image holds the old owner, the post-image the new one).
@@ -200,6 +208,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework)
 
+- **The depth guard and `RetryPolicy` are documented as Microsoft describes them (#450).** The `maxDepth` guard is a
+  last-resort backstop (at the default it only stops a chain Dataverse aborts anyway; Microsoft advises against logic
+  that depends on `Depth`), and the plugins guide has a new [Preventing recursion](docs/guides/plugins.md#preventing-recursion)
+  section on `FilterOn`, `HasChanged` and shared-variable flags. `RetryPolicy` notes that service-protection limits
+  don't apply to data operations from a plugin, so it is meant for calls that leave the sandbox and for code shared
+  with a client.
 - **Automatic execution snapshots no longer trace record data.** The `start` / `success` / failure snapshots wrote
   every Target, image and parameter value on every execution, and also sent them to `ILogger` / Application
   Insights. They now list only metadata (message, stage, ids, parameter/attribute names), the redundant `success`
@@ -216,6 +230,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **`RetryPolicy` jitter is independent across threads (#450).** Each thread's `Random` was seeded from the tick
+  count on .NET Framework, so threads that started retrying in the same tick drew the same backoff. The seeds now come
+  from one shared generator.
 - **`DownloadFile` no longer returns a truncated file (#440).** An empty block before the announced
   `FileSizeInBytes` used to end the loop and return the bytes read so far, with no error. It now throws an
   `InvalidPluginExecutionException` naming the table, record, column, the bytes received and the announced size.

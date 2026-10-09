@@ -761,6 +761,45 @@ can echo submitted values (the exception itself still reaches your handler, mess
 Keep your own handler traces business-focused (decisions and key values); rely on the framework for the
 pipeline, snapshot, and Dataverse-operation tracing.
 
+## Preventing recursion
+
+A step that writes to the table it is registered on can fire itself again. Stop that in the step's own logic:
+
+- **Write in a pre-stage.** A default or derived column set on the `Target` in PreValidation / PreOperation is
+  saved with the row: no extra `Update`, so nothing to recurse on (see
+  [Writing the Target](#writing-the-target-which-stage-persists)).
+- **Filter on the columns that matter.** `FilterOn(...)` fires the step only when the `Target` carries those
+  columns. When the step writes back, leave the filtered columns out of that write.
+- **Check for a real change.** `ctx.HasChanged(...)` skips a value re-sent unchanged (see
+  [HasChanged](#reacting-only-to-real-changes-haschanged)).
+- **Flag the write with a shared variable.** Set a flag on the context before the write. The cascaded execution
+  sees it through its parent context, and `ctx.GetSharedVariable(...)` walks the parent contexts:
+
+  ```csharp
+  private const string Recalculating = "zava_recalculating";
+
+  private void OnUpdated(IUpdatePostContext<Account> ctx)
+  {
+      if (ctx.GetSharedVariable(Recalculating) != null)
+      {
+          return; // this execution was caused by our own write below
+      }
+
+      ctx.PluginExecutionContext.SharedVariables[Recalculating] = true;
+      ctx.Service.Update(new Account { Id = ctx.PrimaryEntityId, CreditLimit = Recalculate(ctx) });
+  }
+  ```
+
+Don't build logic on `ctx.Depth`. Microsoft
+[advises against it](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.iexecutioncontext.depth): the same
+operation can arrive through a deeper code path (a flow, a workflow, another plugin) after a configuration change you
+don't control. Dataverse treats a chain that reaches depth 8 within an hour as an infinite loop and aborts it.
+
+The Vela base classes also stop an execution whose depth exceeds `maxDepth` (a constructor argument, default
+`PluginBase.DefaultMaxDepth`, 8). Treat it as a backstop that gives a clearer trace, not as recursion prevention: at
+the default it only stops a chain the platform would abort anyway, and a lower value can reject a legitimate deep
+chain. In the test harness, `PluginPipeline` caps the cascade at the same depth by default (`WithMaxDepth` changes it).
+
 ## Respect the sandbox
 
 A plugin runs in the Dataverse **sandbox**, which constrains what the code may do:
@@ -795,6 +834,21 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   minutes or the platform aborts it. Keep outbound calls fast and few; offload slow work to an asynchronous step or
   an external process. (This is the plugin runtime budget - distinct from the CLI's `--timeout`, which bounds a
   `vela` command's Dataverse requests.)
+- **Retry where throttling can happen.** Dataverse
+  [service-protection limits](https://learn.microsoft.com/power-apps/developer/data-platform/api-limits) don't
+  apply to data operations from a plugin, so `ctx.Service` calls rarely get a throttling fault, and inside a
+  transaction a failed call can't be replayed at all. `RetryPolicy.Execute(ctx, ...)` (or `ExecuteWithRetry` on the
+  Vela base) is useful around calls that leave the sandbox, such as another environment or an external service that
+  reports throttling the same way, and in code shared with a client application. Each wait is capped at
+  `RetryPolicy.MaxDelay` (30 s), but the waits add up: pass `maxElapsed` to bound the whole call within the
+  execution budget.
+
+  ```csharp
+  Entity remote = RetryPolicy.Execute(ctx,
+      () => otherEnvironment.Retrieve("account", id, new ColumnSet("name")),
+      retryOnTimeout: true,                      // a read is safe to replay
+      maxElapsed: TimeSpan.FromSeconds(20));
+  ```
 
 `net462` note: `HttpClient` on `net462` binds against the `System.Net.Http` GAC facade - the project `vela init`
 scaffolds already references it (`<Reference Include="System.Net.Http" />`). No TLS setup is needed: the sandbox
