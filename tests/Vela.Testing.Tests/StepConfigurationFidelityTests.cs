@@ -118,6 +118,45 @@ namespace Vela.Testing.Tests
             Assert.Equal($"associate:contact:{contactId}", SingleCapture(pipeline).GetAttributeValue<string>("subject"));
         }
 
+        // On Dataverse a global message runs on the "none" sdkmessagefilter: every Associate/Disassociate step sees
+        // PrimaryEntityName "none" and an empty PrimaryEntityId, at every stage and mode (verified live, #459). Only
+        // the Target input names the record, so a handler branching on PrimaryEntityName == "account" never matches.
+        [Theory]
+        [InlineData("Associate")]
+        [InlineData("Disassociate")]
+        public void Global_message_steps_see_primary_entity_none_and_the_target_reference(string message)
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .WithManyToMany("account_contacts", "account_contact", "account", "accountid", "contact", "contactid")
+                .Seed(new Entity("account") { Id = accountId }, new Entity("contact") { Id = contactId });
+            Relationship relationship = new Relationship("account_contacts");
+            EntityReferenceCollection related = new EntityReferenceCollection { new EntityReference("contact", contactId) };
+            if (message == PluginMessages.Disassociate)
+            {
+                pipeline.Service.Associate("account", accountId, relationship, related);
+            }
+
+            pipeline.Register<ScCaptureGlobalContext>();
+            if (message == PluginMessages.Associate)
+            {
+                pipeline.Service.Associate("account", accountId, relationship, related);
+            }
+            else
+            {
+                pipeline.Service.Disassociate("account", accountId, relationship, related);
+            }
+
+            string[] captured = pipeline.GetAll("vela_capture").Select(c => c.GetAttributeValue<string>("subject")).OrderBy(s => s).ToArray();
+            Assert.Equal(new[]
+            {
+                $"{message}:10:0:none:{Guid.Empty}:account:{accountId}",
+                $"{message}:40:0:none:{Guid.Empty}:account:{accountId}",
+                $"{message}:40:1:none:{Guid.Empty}:account:{accountId}",
+            }, captured);
+        }
+
         // --- A-17: Upsert and alternate keys ------------------------------------------------------------
 
         [Fact]
@@ -249,6 +288,28 @@ namespace Vela.Testing.Tests
         {
             EntityReference target = (EntityReference)ctx.PluginExecutionContext.InputParameters["Target"];
             ctx.SystemService.Create(new Entity("vela_capture") { ["subject"] = $"associate:{target.LogicalName}:{target.Id}" });
+        }
+    }
+
+    public sealed class ScCaptureGlobalContext : EntityPluginBase<FakeAccount>
+    {
+        public ScCaptureGlobalContext(string u, string s) : base(u, s) { }
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnAssociate().PreValidation().Sync().Handle(Capture);
+            RegisterStep().OnAssociate().PostOperation().Sync().Handle(Capture);
+            RegisterStep().OnAssociate().PostOperation().Async().Handle(Capture);
+            RegisterStep().OnDisassociate().PreValidation().Sync().Handle(Capture);
+            RegisterStep().OnDisassociate().PostOperation().Sync().Handle(Capture);
+            RegisterStep().OnDisassociate().PostOperation().Async().Handle(Capture);
+        }
+        private void Capture(ILocalPluginContext ctx)
+        {
+            EntityReference target = (EntityReference)ctx.PluginExecutionContext.InputParameters["Target"];
+            ctx.SystemService.Create(new Entity("vela_capture")
+            {
+                ["subject"] = $"{ctx.MessageName}:{ctx.Stage}:{ctx.Mode}:{ctx.PrimaryEntityName}:{ctx.PrimaryEntityId}:{target.LogicalName}:{target.Id}"
+            });
         }
     }
 

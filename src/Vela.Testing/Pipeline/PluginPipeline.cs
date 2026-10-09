@@ -1555,6 +1555,11 @@ namespace Vela.Testing
 
         private void Dispatch(PipelineRegistration registration, StageInvocation invocation)
         {
+            // A global message (Associate/Disassociate) runs on the "none" sdkmessagefilter: on Dataverse its steps
+            // see PrimaryEntityName "none" and an empty PrimaryEntityId, whatever the Target (verified live at s10,
+            // s20, s40 sync and s40 async). The Target input still carries the record.
+            bool globalMessage = PluginMessages.IsGlobalMessage(invocation.Message);
+
             FakePluginExecutionContext context = new FakePluginExecutionContext
             {
                 MessageName = invocation.Message,
@@ -1564,10 +1569,12 @@ namespace Vela.Testing
                 // When the invocation could not resolve a primary entity (a generic message with no Target), use
                 // the step's own entity so the plugin's own step matching (which compares PrimaryEntityName to the
                 // step's EntityLogicalName) still resolves this step.
-                PrimaryEntityName = string.IsNullOrEmpty(invocation.EntityLogicalName)
-                    ? registration.Step.EntityLogicalName
-                    : invocation.EntityLogicalName,
-                PrimaryEntityId = invocation.PrimaryId,
+                PrimaryEntityName = globalMessage
+                    ? "none"
+                    : string.IsNullOrEmpty(invocation.EntityLogicalName)
+                        ? registration.Step.EntityLogicalName
+                        : invocation.EntityLogicalName,
+                PrimaryEntityId = globalMessage ? Guid.Empty : invocation.PrimaryId,
                 CorrelationId = _correlationId,
                 IsInTransaction = IsInTransactionFor(invocation.Stage, registration.Step.Mode),
                 SharedVariables = _sharedVariables

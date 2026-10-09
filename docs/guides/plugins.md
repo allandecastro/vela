@@ -473,7 +473,9 @@ RegisterStep().OnAssociate().PostOperation().Sync().Handle(ctx =>
 ```
 
 The `TEntity` on `EntityPluginBase<TEntity>` is irrelevant for these two messages (it does not scope them); pick any
-and filter on `ctx.Request.Relationship`.
+and filter on `ctx.Request.Relationship`. Do not branch on `ctx.PrimaryEntityName` or `ctx.PrimaryEntityId`: on these
+steps they are always `"none"` and `Guid.Empty`, at every stage and mode. Use `ctx.Request.Target` to tell which end
+of the link the call came from.
 
 The scaffold generates an `AccountMessageReference.cs` cheat-sheet with one dormant (`Disabled()`) handler per
 row, so you can copy the exact shape for the message you need. `OnAssign()` is entity-bound (unlike
