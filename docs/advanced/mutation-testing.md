@@ -94,7 +94,7 @@ All jobs run on GitHub-hosted `windows-latest` runners.
 | `cli-steps` | `DataverseRegistration.Steps.cs` | ~89.4% | 87 |
 | `cli-scanner` | `PackageScanner.cs` | ~81.6% | 80 |
 | `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | ~89.4% | 80 |
-| `analyzers` | the whole `Vela.Analyzers` project (diagnostics + image projection generator) | ANALYZERS_SCORE | 80 |
+| `analyzers` | the whole `Vela.Analyzers` project (diagnostics + image projection generator) | ~87.6% | 85 |
 | `plugins-steps` | `Vela.Plugins/Steps` (generated `StepApi.cs` / `StepBuilder.Impl.cs` excluded) | ~63% (net10 proxy, see note) | 80 |
 | `plugins-context` | `Vela.Plugins/Context` | ~55% (net10 proxy, see note) | 80 |
 | `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | ~85% (net10 proxy, see note) | 80 |
