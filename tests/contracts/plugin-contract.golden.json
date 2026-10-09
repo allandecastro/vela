@@ -1,11 +1,12 @@
 {
-  "$comment": "The CLI/framework contract, pinned on tests/ContractPluginFixture. Vela.Tests checks that the framework declares exactly this (FrameworkManifestScanner and the typed definitions); Vela.Cli.Tests checks that the CLI scanner reads exactly this from the packed fixture. Values are what gets deployed: stage 10 PreValidation, 20 PreOperation, 40 PostOperation; mode 0 Sync, 1 Async; supportedDeployment 0 ServerOnly, 2 Both; bindingType 0 Global, 1 Entity; allowedCustomProcessingStepType 2 SyncAndAsync; parameter types are Dataverse Custom API type labels. Attribute lists are sorted; images and parameters are sorted by alias/name.",
+  "$comment": "The CLI/framework contract, pinned on tests/ContractPluginFixture. Vela.Tests checks that the framework declares exactly this (FrameworkManifestScanner and the typed definitions); Vela.Cli.Tests checks that the CLI scanner reads exactly this from the packed fixture. Values are what gets deployed: stage 10 PreValidation, 20 PreOperation, 40 PostOperation; mode 0 Sync, 1 Async; supportedDeployment 0 ServerOnly, 2 Both; bindingType 0 Global, 1 Entity; allowedCustomProcessingStepType 2 SyncAndAsync; parameter types are Dataverse Custom API type labels. asyncAutoDelete is .Async(deleteJobOnSuccess: true); description is the declared one (apply writes the step name when none is). Runtime-only modifiers (ForRelationship, SkipWhenDepthAbove) are not deployed and not part of this contract. Attribute lists are sorted; images and parameters are sorted by alias/name.",
   "steps": [
     {
       "pluginType": "ContractPluginFixture.AccountContractPlugin",
       "stepKey": "account-guard-delete",
       "message": "Delete",
       "entity": "account",
+      "description": "",
       "stage": 10,
       "mode": 0,
       "rank": 1,
@@ -16,64 +17,110 @@
       "enabled": true,
       "unsecureConfig": "",
       "secureConfigName": "",
-      "supportedDeployment": 0
+      "supportedDeployment": 0,
+      "asyncAutoDelete": false
     },
     {
       "pluginType": "ContractPluginFixture.AccountContractPlugin",
       "stepKey": "account-normalize",
       "message": "Update",
       "entity": "account",
+      "description": "",
       "stage": 20,
       "mode": 0,
       "rank": 5,
       "filteringAttributes": [ "name", "telephone1" ],
-      "preImages": [ { "alias": "PreImage", "attributes": [ "name" ] } ],
+      "preImages": [ {"alias": "PreImage", "attributes": ["name"], "messagePropertyName": "Target"} ],
       "postImages": [],
       "impersonatingUserId": "",
       "enabled": true,
       "unsecureConfig": "",
       "secureConfigName": "",
-      "supportedDeployment": 0
+      "supportedDeployment": 0,
+      "asyncAutoDelete": false
     },
     {
       "pluginType": "ContractPluginFixture.AccountContractPlugin",
       "stepKey": "account-sync",
       "message": "Update",
       "entity": "account",
+      "description": "Pushes revenue changes to the ERP.",
       "stage": 40,
       "mode": 1,
       "rank": 1,
       "filteringAttributes": [ "revenue" ],
-      "preImages": [ { "alias": "Before", "attributes": [ "name", "revenue" ] } ],
-      "postImages": [ { "alias": "After", "attributes": [ "revenue" ] } ],
+      "preImages": [ {"alias": "Before", "attributes": ["name", "revenue"], "messagePropertyName": "Target"} ],
+      "postImages": [ {"alias": "After", "attributes": ["revenue"], "messagePropertyName": "Target"} ],
       "impersonatingUserId": "6f1c2a52-0d3b-4f5e-9a41-2b7c8d9e0f11",
       "enabled": true,
       "unsecureConfig": "{\"endpoint\":\"https://erp.example\"}",
       "secureConfigName": "ContractErpKey",
-      "supportedDeployment": 0
+      "supportedDeployment": 0,
+      "asyncAutoDelete": true
     },
     {
       "pluginType": "ContractPluginFixture.AccountContractPlugin",
       "stepKey": "dv-54e8605bbf31",
       "message": "Create",
       "entity": "account",
+      "description": "",
       "stage": 40,
       "mode": 0,
       "rank": 1,
       "filteringAttributes": [ "name" ],
       "preImages": [],
-      "postImages": [ { "alias": "PostImage", "attributes": [ "name", "telephone1" ] } ],
+      "postImages": [ {"alias": "PostImage", "attributes": ["name", "telephone1"], "messagePropertyName": "Id"} ],
       "impersonatingUserId": "",
       "enabled": false,
       "unsecureConfig": "",
       "secureConfigName": "",
-      "supportedDeployment": 2
+      "supportedDeployment": 2,
+      "asyncAutoDelete": false
+    },
+    {
+      "pluginType": "ContractPluginFixture.AccountContractPlugin",
+      "stepKey": "dv-7ac9d11b3787",
+      "message": "Update",
+      "entity": "account",
+      "description": "",
+      "stage": 40,
+      "mode": 0,
+      "rank": 3,
+      "filteringAttributes": [ "creditlimit" ],
+      "preImages": [],
+      "postImages": [],
+      "impersonatingUserId": "",
+      "enabled": true,
+      "unsecureConfig": "",
+      "secureConfigName": "",
+      "supportedDeployment": 0,
+      "asyncAutoDelete": false
+    },
+    {
+      "pluginType": "ContractPluginFixture.AccountContractPlugin",
+      "stepKey": "dv-e2d046d3a07c",
+      "message": "Update",
+      "entity": "account",
+      "description": "",
+      "stage": 40,
+      "mode": 0,
+      "rank": 1,
+      "filteringAttributes": [ "telephone1" ],
+      "preImages": [],
+      "postImages": [ {"alias": "PostImage", "attributes": ["telephone1"], "messagePropertyName": "Target"} ],
+      "impersonatingUserId": "",
+      "enabled": true,
+      "unsecureConfig": "",
+      "secureConfigName": "",
+      "supportedDeployment": 0,
+      "asyncAutoDelete": false
     },
     {
       "pluginType": "ContractPluginFixture.ContactContractPlugin",
       "stepKey": "contact-associate",
       "message": "Associate",
       "entity": "",
+      "description": "",
       "stage": 40,
       "mode": 0,
       "rank": 2,
@@ -84,7 +131,8 @@
       "enabled": true,
       "unsecureConfig": "",
       "secureConfigName": "",
-      "supportedDeployment": 0
+      "supportedDeployment": 0,
+      "asyncAutoDelete": false
     }
   ],
   "customApis": [
@@ -98,17 +146,8 @@
       "executePrivilegeName": "prvReadContact",
       "allowedCustomProcessingStepType": 0,
       "workflowSdkStepEnabled": false,
-      "requestParameters": [
-        { "name": "Owner", "type": "EntityReference", "isOptional": false, "logicalEntityName": "systemuser" },
-        { "name": "Ratio", "type": "Float", "isOptional": true, "logicalEntityName": "" },
-        { "name": "Seed", "type": "EntityCollection", "isOptional": true, "logicalEntityName": "contact" },
-        { "name": "Tags", "type": "StringArray", "isOptional": true, "logicalEntityName": "" }
-      ],
-      "responseProperties": [
-        { "name": "First", "type": "Entity", "logicalEntityName": "contact" },
-        { "name": "Rows", "type": "EntityCollection", "logicalEntityName": "" },
-        { "name": "Warnings", "type": "StringArray", "logicalEntityName": "" }
-      ]
+      "requestParameters": [ {"name": "Owner", "type": "EntityReference", "isOptional": false, "logicalEntityName": "systemuser"}, {"name": "Ratio", "type": "Float", "isOptional": true, "logicalEntityName": ""}, {"name": "Seed", "type": "EntityCollection", "isOptional": true, "logicalEntityName": "contact"}, {"name": "Tags", "type": "StringArray", "isOptional": true, "logicalEntityName": ""} ],
+      "responseProperties": [ {"name": "First", "type": "Entity", "logicalEntityName": "contact"}, {"name": "Rows", "type": "EntityCollection", "logicalEntityName": ""}, {"name": "Warnings", "type": "StringArray", "logicalEntityName": ""} ]
     },
     {
       "pluginType": "ContractPluginFixture.ScoreAccountApi",
@@ -120,20 +159,8 @@
       "executePrivilegeName": "",
       "allowedCustomProcessingStepType": 2,
       "workflowSdkStepEnabled": true,
-      "requestParameters": [
-        { "name": "AsOf", "type": "DateTime", "isOptional": true, "logicalEntityName": "" },
-        { "name": "Budget", "type": "Money", "isOptional": false, "logicalEntityName": "" },
-        { "name": "CorrelationKey", "type": "Guid", "isOptional": false, "logicalEntityName": "" },
-        { "name": "Factor", "type": "Decimal", "isOptional": false, "logicalEntityName": "" },
-        { "name": "Reason", "type": "String", "isOptional": false, "logicalEntityName": "" },
-        { "name": "Strict", "type": "Boolean", "isOptional": false, "logicalEntityName": "" },
-        { "name": "Tier", "type": "Picklist", "isOptional": false, "logicalEntityName": "" },
-        { "name": "Weight", "type": "Integer", "isOptional": false, "logicalEntityName": "" }
-      ],
-      "responseProperties": [
-        { "name": "Explanation", "type": "String", "logicalEntityName": "" },
-        { "name": "Score", "type": "Integer", "logicalEntityName": "" }
-      ]
+      "requestParameters": [ {"name": "AsOf", "type": "DateTime", "isOptional": true, "logicalEntityName": ""}, {"name": "Budget", "type": "Money", "isOptional": false, "logicalEntityName": ""}, {"name": "CorrelationKey", "type": "Guid", "isOptional": false, "logicalEntityName": ""}, {"name": "Factor", "type": "Decimal", "isOptional": false, "logicalEntityName": ""}, {"name": "Reason", "type": "String", "isOptional": false, "logicalEntityName": ""}, {"name": "Strict", "type": "Boolean", "isOptional": false, "logicalEntityName": ""}, {"name": "Tier", "type": "Picklist", "isOptional": false, "logicalEntityName": ""}, {"name": "Weight", "type": "Integer", "isOptional": false, "logicalEntityName": ""} ],
+      "responseProperties": [ {"name": "Explanation", "type": "String", "logicalEntityName": ""}, {"name": "Score", "type": "Integer", "logicalEntityName": ""} ]
     }
   ]
 }

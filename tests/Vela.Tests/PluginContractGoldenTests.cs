@@ -61,7 +61,7 @@ namespace Vela.Tests
 
             Assert.Equal(stepIds.Length, stepIds.Distinct(StringComparer.Ordinal).Count());
             Assert.Equal(apiNames.Length, apiNames.Distinct(StringComparer.Ordinal).Count());
-            Assert.Equal(5, stepIds.Length);
+            Assert.Equal(7, stepIds.Length);
             Assert.Equal(2, apiNames.Length);
         }
 
@@ -88,17 +88,19 @@ namespace Vela.Tests
             ["stepKey"] = d.StepKey,
             ["message"] = d.Message,
             ["entity"] = d.EntityLogicalName,
+            ["description"] = d.Description,
             ["stage"] = (int)d.Stage,
             ["mode"] = (int)d.Mode,
             ["rank"] = d.ExecutionOrder,
             ["filteringAttributes"] = Sorted(d.FilteringAttributes),
-            ["preImages"] = Images(d.PreImages),
-            ["postImages"] = Images(d.PostImages),
+            ["preImages"] = Images(d.PreImages, d.Message),
+            ["postImages"] = Images(d.PostImages, d.Message),
             ["impersonatingUserId"] = d.ImpersonatingUserId?.ToString() ?? string.Empty,
             ["enabled"] = d.Enabled,
             ["unsecureConfig"] = d.UnsecureConfig,
             ["secureConfigName"] = d.SecureConfigName,
             ["supportedDeployment"] = (int)d.SupportedDeployment,
+            ["asyncAutoDelete"] = d.AsyncAutoDelete,
         }.ToString(Formatting.None);
 
         private static string CustomApiShape(CustomApiDefinition d) => new JObject
@@ -148,11 +150,14 @@ namespace Vela.Tests
 
         private static JArray Sorted(IEnumerable<string> values) => new JArray(values.OrderBy(v => v, StringComparer.Ordinal));
 
-        private static JArray Images(IEnumerable<ImageDefinition> images) => new JArray(
+        // The request property each image is registered on: the declared one, else the message's default (the shared
+        // StepImageRules table the CLI deploys from).
+        private static JArray Images(IEnumerable<ImageDefinition> images, string message) => new JArray(
             images.OrderBy(i => i.Alias, StringComparer.Ordinal).Select(i => new JObject
             {
                 ["alias"] = i.Alias,
                 ["attributes"] = Sorted(i.Attributes),
+                ["messagePropertyName"] = StepImageRules.ResolveMessagePropertyName(message, i.MessagePropertyName) ?? string.Empty,
             }));
     }
 }

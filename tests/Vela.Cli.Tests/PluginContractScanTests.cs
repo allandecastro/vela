@@ -78,6 +78,8 @@ public sealed class PluginContractScanTests : IDisposable
             {
                 "ContractPluginFixture.AccountContractPlugin - PostOpAsync: account-sync",
                 "ContractPluginFixture.AccountContractPlugin - PostOpSync: dv-54e8605bbf31",
+                "ContractPluginFixture.AccountContractPlugin - PostOpSync: dv-7ac9d11b3787",
+                "ContractPluginFixture.AccountContractPlugin - PostOpSync: dv-e2d046d3a07c",
                 "ContractPluginFixture.AccountContractPlugin - PreOpSync: account-normalize",
                 "ContractPluginFixture.AccountContractPlugin - PreValSync: account-guard-delete",
                 "ContractPluginFixture.ContactContractPlugin - PostOpSync: contact-associate",
@@ -114,6 +116,8 @@ public sealed class PluginContractScanTests : IDisposable
             ["stepKey"] = d.GetProperty("stepKey").GetString(),
             ["message"] = d.GetProperty("message").GetString(),
             ["entity"] = d.GetProperty("entityLogicalName").GetString(),
+            // Apply writes the step name as the description when none is declared; the golden row holds the declared one.
+            ["description"] = d.GetProperty("description").GetString() == d.GetProperty("name").GetString() ? string.Empty : d.GetProperty("description").GetString(),
             ["stage"] = d.GetProperty("stage").GetInt32(),
             ["mode"] = d.GetProperty("mode").GetInt32(),
             ["rank"] = d.GetProperty("executionOrder").GetInt32(),
@@ -125,6 +129,7 @@ public sealed class PluginContractScanTests : IDisposable
             ["unsecureConfig"] = d.GetProperty("unsecureConfig").GetString(),
             ["secureConfigName"] = secureConfigName ?? string.Empty,
             ["supportedDeployment"] = d.GetProperty("supportedDeployment").GetInt32(),
+            ["asyncAutoDelete"] = d.GetProperty("asyncAutoDelete").GetBoolean(),
         }.ToJsonString();
     }
 
@@ -196,6 +201,7 @@ public sealed class PluginContractScanTests : IDisposable
             {
                 ["alias"] = i.GetProperty("alias").GetString(),
                 ["attributes"] = Strings(i.GetProperty("attributes")),
+                ["messagePropertyName"] = i.GetProperty("messagePropertyName").GetString(),
             }).ToArray());
 
     public void Dispose()

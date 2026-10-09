@@ -25,7 +25,7 @@ namespace ContractPluginFixture
                 .Handle(_ => { });
 
             // Async, impersonated, both configs, named images on both sides.
-            RegisterStep().OnUpdate().PostOperation().Async()
+            RegisterStep().OnUpdate().PostOperation().Async(deleteJobOnSuccess: true)
                 .FilterOn(a => a.Revenue)
                 .WithStepKey("account-sync")
                 .WithDescription("Pushes revenue changes to the ERP.")
@@ -44,9 +44,21 @@ namespace ContractPluginFixture
                 .WithPostImage(a => a.Name, a => a.Telephone1)
                 .Handle(_ => { });
 
-            // PreValidation: no filter, no image.
+            // PreValidation: no filter, no image; a runtime-only depth limit (not deployed).
             RegisterStep().OnDelete().PreValidation().Sync()
                 .WithStepKey("account-guard-delete")
+                .SkipWhenDepthAbove(2)
+                .Handle(_ => { });
+
+            // Two steps on one trigger (Update, PostOperation, Sync) told apart by their filters, neither keyed: the
+            // framework derives a distinct key for each, and the rank is not part of it.
+            RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.CreditLimit)
+                .WithExecutionOrder(3)
+                .Handle(_ => { });
+            RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Telephone1)
+                .WithPostImage(a => a.Telephone1)
                 .Handle(_ => { });
         }
     }
@@ -60,6 +72,7 @@ namespace ContractPluginFixture
             // A global message: registered with no primary entity, whatever TEntity is.
             RegisterStep().OnAssociate().PostOperation().Sync()
                 .WithStepKey("contact-associate")
+                .ForRelationship("contact_customer_accounts")
                 .WithExecutionOrder(2)
                 .Handle(_ => { });
         }

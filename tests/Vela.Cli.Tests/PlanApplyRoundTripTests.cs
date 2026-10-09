@@ -31,7 +31,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         Assert.Equal(ExitChangesPending, Run("plan", detailedExitCode: true));
         JsonElement firstPlan = Output();
         Assert.True(firstPlan.GetProperty("hasChanges").GetBoolean());
-        AssertSummary(firstPlan, added: 7, changed: 0, removed: 0);
+        AssertSummary(firstPlan, added: 9, changed: 0, removed: 0);
 
         Assert.Equal(ExitSuccess, Run("apply"));
         JsonElement applied = Output();
@@ -39,7 +39,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         // The summary of an apply is the diff left AFTER it re-read the environment: nothing.
         AssertSummary(applied, added: 0, changed: 0, removed: 0);
         JsonElement executed = applied.GetProperty("executed");
-        Assert.Equal((7, 0, 0, true), (executed.GetProperty("created").GetInt32(), executed.GetProperty("updated").GetInt32(),
+        Assert.Equal((9, 0, 0, true), (executed.GetProperty("created").GetInt32(), executed.GetProperty("updated").GetInt32(),
             executed.GetProperty("deleted").GetInt32(), executed.GetProperty("packageRepublished").GetBoolean()));
 
         Assert.Equal(ExitSuccess, Run("plan", detailedExitCode: true));
@@ -59,12 +59,15 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         Assert.Equal(ExitSuccess, Run("apply"));
 
         Entity[] steps = _org.Rows("sdkmessageprocessingstep").ToArray();
-        Assert.Equal(5, steps.Length);
+        Assert.Equal(7, steps.Length);
 
         Entity sync = Step(steps, "account-sync");
         Assert.Equal(40, sync.GetAttributeValue<OptionSetValue>("stage").Value);
         Assert.Equal(1, sync.GetAttributeValue<OptionSetValue>("mode").Value);
         Assert.Equal("revenue", sync.GetAttributeValue<string>("filteringattributes"));
+        Assert.True(sync.GetAttributeValue<bool>("asyncautodelete"));
+        Assert.StartsWith("Pushes revenue changes to the ERP.", sync.GetAttributeValue<string>("description"), StringComparison.Ordinal);
+        Assert.False(Step(steps, "account-normalize").GetAttributeValue<bool>("asyncautodelete"));
         Assert.Equal(new Guid("6f1c2a52-0d3b-4f5e-9a41-2b7c8d9e0f11"), sync.GetAttributeValue<EntityReference>("impersonatinguserid").Id);
         Assert.Equal("{\"endpoint\":\"https://erp.example\"}", sync.GetAttributeValue<string>("configuration"));
         Entity secure = Assert.Single(_org.Rows("sdkmessageprocessingstepsecureconfig"));
@@ -84,7 +87,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
 
         Entity[] images = _org.Rows("sdkmessageprocessingstepimage").ToArray();
         Assert.Equal(
-            new[] { "After:1:revenue", "Before:0:name,revenue", "PostImage:1:name,telephone1", "PreImage:0:name" },
+            new[] { "After:1:revenue", "Before:0:name,revenue", "PostImage:1:name,telephone1", "PostImage:1:telephone1", "PreImage:0:name" },
             images.Select(i => $"{i.GetAttributeValue<string>("entityalias")}:{i.GetAttributeValue<OptionSetValue>("imagetype").Value}:{i.GetAttributeValue<string>("attributes")}")
                 .OrderBy(x => x, StringComparer.Ordinal).ToArray());
 
