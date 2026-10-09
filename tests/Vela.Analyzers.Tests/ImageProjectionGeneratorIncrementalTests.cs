@@ -127,7 +127,7 @@ namespace Demo
             () => new object?[]
             {
                 "Demo", ImmutableArray.Create("class AccountAudit"), "OnUpdated_PostImage", Columns(("Name", "string?", "name")),
-                "OnUpdated", "Update", true, false, "global::Demo.Account", null, null,
+                "OnUpdated", "Update", true, false, false, "global::Demo.Account", null, null,
             },
             "ProjectionModel",
             a => With(a, 0, "Other"),
@@ -138,9 +138,10 @@ namespace Demo
             a => With(a, 5, "Create"),
             a => With(a, 6, false),
             a => With(a, 7, true),
-            a => With(a, 8, "global::Demo.Contact"),
-            a => With(a, 9, "global::Demo.DeleteRequest"),
-            a => With(a, 10, "Before"));
+            a => With(a, 8, true),
+            a => With(a, 9, "global::Demo.Contact"),
+            a => With(a, 10, "global::Demo.DeleteRequest"),
+            a => With(a, 11, "Before"));
     }
 
     [Fact]
@@ -167,7 +168,7 @@ namespace Demo
             BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { Skip(reason) }, null)!;
         object Model(string typeName) => Create("ProjectionModel",
             "Demo", ImmutableArray.Create("class P"), typeName, Columns(("Name", "string?", "name")),
-            null, "Update", true, false, "global::Demo.Account", null, null);
+            null, "Update", true, false, false, "global::Demo.Account", null, null);
         object Result(object model) => Create("ProjectionResult", model);
 
         Assert.True(Skipped("a").Equals(Skipped("a")));

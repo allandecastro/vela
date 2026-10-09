@@ -92,7 +92,7 @@ namespace Demo
                         public string? Name { get; set; }
 
             """, pre);
-        Assert.Contains("Equivalent to ctx.GetPreImage&lt;global::Demo.Account&gt;()", pre);
+        Assert.Contains("Equivalent to ctx.GetPreImage&lt;global::Demo.Account&gt;(\"Before\")", pre);
         Assert.DoesNotContain("GetPostImage", pre);
 
         Assert.Equal("""
