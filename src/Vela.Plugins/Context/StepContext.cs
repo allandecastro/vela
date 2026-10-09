@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 using Vela.DI;
 
 namespace Vela.Context
@@ -119,7 +119,7 @@ namespace Vela.Context
         public IDisposable BeginLogScope(IReadOnlyDictionary<string, object?> properties) => _inner.BeginLogScope(properties);
 
         /// <inheritdoc />
-        public void LogMetric(string name, double value, IReadOnlyDictionary<string, object?>? properties = null) => _inner.LogMetric(name, value, properties);
+        public void LogMetric(string name, long value, IReadOnlyDictionary<string, object?>? properties = null) => _inner.LogMetric(name, value, properties);
         /// <inheritdoc />
         public string AcquireManagedIdentityToken(IEnumerable<string> scopes) => _inner.AcquireManagedIdentityToken(scopes);
         /// <inheritdoc />

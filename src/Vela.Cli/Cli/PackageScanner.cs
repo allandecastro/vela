@@ -94,6 +94,10 @@ internal static class PackageScanner
                     {
                         throw new InvalidOperationException($"Plugin '{type.FullName}' {imageError}");
                     }
+                    if (DataverseRegistration.GetStepDescriptionLengthError(DefinitionParser.ParseStepDefinition(normalized)) is { } descriptionError)
+                    {
+                        throw new InvalidOperationException($"Plugin '{type.FullName}' {descriptionError}");
+                    }
                     RegistrationItem item = new("step", type.FullName ?? type.Name, normalized);
                     // Code names the secure configuration; SecureConfigResolver supplies its value at plan/apply time.
                     // Keyed by the full step key (plugin type + step key), so two plugins sharing a step key never
@@ -117,6 +121,10 @@ internal static class PackageScanner
                 }
 
                 JsonElement normalized = NormalizeCustomApiDefinition(JsonSerializer.SerializeToElement(definition, jsonOptions), jsonOptions);
+                if (DataverseRegistration.GetCustomApiLabelLengthError(DefinitionParser.ParseCustomApiDefinition(normalized)) is { } labelError)
+                {
+                    throw new InvalidOperationException($"Plugin '{type.FullName}': {labelError}");
+                }
                 items.Add(new RegistrationItem("custom-api", type.FullName ?? type.Name, normalized));
             }
         }

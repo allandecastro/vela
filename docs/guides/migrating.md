@@ -31,8 +31,7 @@ to large integration-heavy ones).
 - Reference the published `Vela.Plugins` package from NuGet. Do not pin an in-repo development version. Its
   dependency surface is deliberately lean so the plugin package loads in the Dataverse sandbox unmerged (no
   ILMerge / ILRepack step): the SDK core assemblies, `Microsoft.Extensions.DependencyInjection.Abstractions`
-  and `Microsoft.Extensions.Logging.Abstractions` (the abstractions only, not the concrete containers),
-  `Newtonsoft.Json`, and `System.ComponentModel.Annotations`. The package also carries its companion
+  (the abstractions only, not the concrete container), `Newtonsoft.Json`, and `System.ComponentModel.Annotations`. The package also carries its companion
   `Vela.Messages` (the typed request/response and model base types); no concrete DI container or heavy runtime
   closure comes along.
 - Generate [early-bound models](models.md) with `vela models`. If you cannot connect to the org yet, you

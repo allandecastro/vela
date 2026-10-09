@@ -506,14 +506,36 @@ internal static partial class DataverseRegistration
     return DefinitionNormalizer.BuildKeylessStepName(definition.PluginTypeName, definition.Stage, definition.Mode, definition.Message, definition.EntityLogicalName);
 }
 
-    // The step description: the human-readable name plus a stable [vela:stepkey=...] marker (B4). The marker lets a
-    // later read recover the step key even if the display name is changed, so the step's identity survives a rename.
+    // Dataverse's limit on sdkmessageprocessingstep.description.
+    internal const int StepDescriptionMaxLength = 256;
+
+    // The step description: the developer's text (WithDescription), or the step name when none is declared, followed
+    // by a stable [vela:stepkey=...] marker on its own line (B4). The marker lets a later read recover the step key
+    // even if the display name is changed, so the step's identity survives a rename; ExtractStepKeyFromMarker reads
+    // the last marker, so the developer's text may come first.
     internal static string BuildStepDescription(StepApplyDefinition definition)
 {
-    string name = BuildStepName(definition);
+    string text = string.IsNullOrWhiteSpace(definition.Description) ? BuildStepName(definition) : definition.Description.Trim();
     return string.IsNullOrWhiteSpace(definition.StepKey)
-        ? name
-        : $"{name}\n{DefinitionParser.StepKeyMarker(definition.StepKey)}";
+        ? text
+        : $"{text}\n{DefinitionParser.StepKeyMarker(definition.StepKey)}";
+}
+
+    /// <summary>
+    /// The error for a step whose description (with its step-key marker) exceeds what Dataverse stores, or null.
+    /// Checked at scan time so plan fails before any write instead of apply failing mid-run.
+    /// </summary>
+    internal static string? GetStepDescriptionLengthError(StepApplyDefinition definition)
+{
+    int length = BuildStepDescription(definition).Length;
+    if (length <= StepDescriptionMaxLength)
+    {
+        return null;
+    }
+
+    int markerLength = string.IsNullOrWhiteSpace(definition.StepKey) ? 0 : 1 + DefinitionParser.StepKeyMarker(definition.StepKey).Length;
+    return $"step '{BuildStepName(definition)}' has a description of {length - markerLength} characters, but Dataverse stores at most " +
+        $"{StepDescriptionMaxLength - markerLength} once Vela appends its {markerLength}-character step-key marker. Shorten WithDescription(...).";
 }
 
 }

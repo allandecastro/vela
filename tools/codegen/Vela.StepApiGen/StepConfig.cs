@@ -64,7 +64,6 @@ internal sealed record StepConfig(
         }
         yield return new("WithExecutionOrder(int order)", "SetExecutionOrder(order);");
         yield return new("WithStepKey(string key)", "SetKey(key);");
-        yield return new("WithImpersonation(ImpersonationSource source)", "SetImpersonation(source);");
         yield return new("WithImpersonation(Guid systemUserId)", "SetImpersonationUser(systemUserId);");
         yield return new("WithSupportedDeployment(SupportedDeployment deployment)", "SetSupportedDeployment(deployment);");
         yield return new("WithUnsecureConfig(string configuration)", "SetUnsecureConfig(configuration);");

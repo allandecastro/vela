@@ -236,12 +236,6 @@ public sealed partial class StepBuilder<TEntity>
         _definition.Description = description ?? string.Empty;
     }
 
-    private void SetImpersonation(ImpersonationSource source)
-    {
-        MarkSetOnce(SetOnceModifier.Impersonation, "WithImpersonation");
-        _definition.ImpersonationSource = source;
-    }
-
     private void SetImpersonationUser(System.Guid systemUserId)
     {
         MarkSetOnce(SetOnceModifier.Impersonation, "WithImpersonation");

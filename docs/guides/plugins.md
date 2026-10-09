@@ -190,9 +190,14 @@ Omit `WithImpersonation` (the default) to run as the calling user. `vela plan` /
 write `impersonatinguserid`, so setting, changing or removing the impersonated user reconciles like any other step
 field. Passing `Guid.Empty` is rejected at registration.
 
-> [!NOTE]
-> `WithImpersonation(ImpersonationSource)` (the `CallingUser` / `PluginOwner` enum overload) still exists for the
-> calling-user default; use the `Guid` overload to impersonate a specific systemuser.
+### Description
+
+`WithDescription("...")` sets the step's description in Dataverse (what makers see in the plug-in registration
+tool and the solution explorer). Without it, `apply` writes the step name. `vela apply` appends a
+`[vela:stepkey=...]` line to the description of a keyed step, which keeps the step's identity when an admin renames
+it; leave that line in place. The description is part of the plan diff, so a changed `WithDescription` shows as a
+step change and `apply` updates it in place. Dataverse stores at most 256 characters including that line, and
+`vela plan` rejects a longer description before any write.
 
 ### Typed images (compile-safe projections)
 
@@ -663,7 +668,7 @@ Handler entry is traced automatically too: alongside the plugin-level `Executing
 > which additionally covers early-bound entities nested in a deep-insert graph. If you write such graphs from an
 > older project, add that attribute (or `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]`) to your plugin project.
 
-When plugin telemetry is available in runtime (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`), trace messages are also forwarded to plugin telemetry for Application Insights correlation.
+Trace messages also go to the platform's Application Insights logger (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`) at Information level, a no-op when the environment exports no telemetry. See [Telemetry](telemetry.md).
 
 Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment setting (`Off` / `Exception` / `All`) - not anything in code. There is no framework-level verbosity switch: server-side plugins run in Microsoft's sandbox where OS environment variables cannot be set, so a runtime verbosity flag would have no effect online. What you control in code is *what extra detail* you trace, at the call site.
 
@@ -678,7 +683,7 @@ Trace Log is `All`. While debugging, opt into values for one plugin:
 protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full; // adds values, and a success snapshot
 ```
 
-Snapshots go **only to the plug-in trace log**: they are never forwarded to `ILogger` / Application Insights.
+Snapshots go **only to the plug-in trace log**: they are never forwarded to Application Insights.
 
 To capture **intermediate** state, call `TraceExecutionSnapshot(...)` yourself **inside your handler** with your
 own phase label - a checkpoint around a risky step. An explicit call traces values (`TraceSnapshotDetail.Full`)
@@ -751,13 +756,20 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   ```csharp
   private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
   {
-      ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;   // net462: enable TLS 1.2 once
       string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });
       using var http = new HttpClient();
+      http.Timeout = TimeSpan.FromSeconds(15);             // fail fast: the default is 100 s
+      http.DefaultRequestHeaders.ConnectionClose = true;   // KeepAlive off in the sandbox
       http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-      // ... call the allow-listed endpoint; keep it well under the execution budget below.
+      // ... call the allow-listed endpoint synchronously (.GetAwaiter().GetResult()).
   }
   ```
+
+  Set an explicit, short `Timeout` and turn `KeepAlive` off, as Microsoft recommends for plug-ins
+  ([Set Timeout](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-timeout-for-external-calls-from-plug-ins),
+  [Set KeepAlive to false](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-keepalive-false-interacting-external-hosts-plugin)):
+  the default 100-second timeout leaves almost nothing of the execution budget below, and a stale persistent
+  connection makes the call hang until the network resets it.
 
 - **~2-minute execution budget.** The whole pipeline execution (all synchronous steps) must finish inside roughly two
   minutes or the platform aborts it. Keep outbound calls fast and few; offload slow work to an asynchronous step or
@@ -765,9 +777,10 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   `vela` command's Dataverse requests.)
 
 `net462` note: `HttpClient` on `net462` binds against the `System.Net.Http` GAC facade - the project `vela init`
-scaffolds already references it (`<Reference Include="System.Net.Http" />`) - and TLS 1.2 must be enabled once
-(`ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;`, as above), since the net462 default does
-not negotiate it.
+scaffolds already references it (`<Reference Include="System.Net.Http" />`). No TLS setup is needed: the sandbox
+runs the plugin on .NET Framework 4.8 with `ServicePointManager.SecurityProtocol` at `SystemDefault`, so the OS
+negotiates TLS 1.2 or 1.3 even for a `net462` assembly (verified live, 2026-10). Don't set `SecurityProtocol`: it is
+process-wide, so it would change every plugin in the sandbox worker.
 
 ## See also
 

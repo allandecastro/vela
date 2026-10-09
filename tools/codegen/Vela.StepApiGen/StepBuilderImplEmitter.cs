@@ -164,7 +164,6 @@ internal static class StepBuilderImplEmitter
                 internal void SetExecutionOrderInternal(int order) => SetExecutionOrder(order);
                 internal void SetStepKeyInternal(string key) => SetKey(key);
                 internal void SetDescriptionInternal(string description) => SetDescription(description);
-                internal void SetImpersonationInternal(ImpersonationSource source) => SetImpersonation(source);
                 internal void SetImpersonationUserInternal(System.Guid systemUserId) => SetImpersonationUser(systemUserId);
                 internal void SetSupportedDeploymentInternal(SupportedDeployment deployment) => SetSupportedDeployment(deployment);
                 internal void SetUnsecureConfigInternal(string configuration) => SetUnsecureConfig(configuration);

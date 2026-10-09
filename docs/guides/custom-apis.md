@@ -2,10 +2,10 @@
 
 For Custom APIs, use `CustomApiBase<TRequest, TResponse>` and the fluent registration hook. The request and
 response derive from `CustomApiRequest`/`CustomApiResponse` (pass the API unique name to the base constructor):
-each typed property is a one-liner over the base `Get<T>()` / `Set(value)` helpers, and the base keys the
-underlying `Parameters`/`Results` bags with the **full Dataverse names** Dataverse actually uses
-(`{apiUniqueName}.{param}` for inputs, `{apiUniqueName}.{prop}.response` for outputs) while your property bodies
-stay short. A single generated type therefore serves all three usages - authoring the Custom API, calling it
+each typed property is a one-liner over the base `Get<T>()` / `Set(value)` helpers, which key the underlying
+`Parameters`/`Results` bags by the **plain property name** - the key Dataverse uses for a Custom API's
+`InputParameters`/`OutputParameters` - and the base sets `RequestName`/`ResponseName` to the API unique name. A
+single generated type therefore serves all three usages - authoring the Custom API, calling it
 (`service.Execute(new ScoreRequest { ... }).ToResponse<ScoreResponse>()`), and reacting to it
 (`On<ScoreRequest>()...Handle(...)`). Generate these types with [`vela models --custom-apis`](models.md) or write
 them by hand as shown below:
@@ -78,17 +78,18 @@ public class ScoreResponse : CustomApiResponse
 
 `CustomApiRequest` / `CustomApiResponse` (and the base `TypedRequest` / `TypedResponse` for standard messages)
 live in `Vela.Messages`. The `Get<T>()` / `Set(value)` helpers infer the parameter key from the property name and
-the base prepends the API unique name, so a property is a plain one-liner - no `Parameters.Contains(...)`
-boilerplate and no need to spell out the full key. A read-only response property can drop the setter:
+that name is the bag key as-is, so a property is a plain one-liner - no `Parameters.Contains(...)`
+boilerplate and no key string to spell out. A read-only response property can drop the setter:
 `public int Score => Get<int>();`. An absent parameter reads as `default`; a value of another type throws an
 `InvalidCastException` naming the parameter, and a base `Entity` (what Dataverse sends) is converted to a declared
 early-bound type such as `Account`.
 
-> **Why a dedicated base.** Dataverse names a custom API's parameters `{apiUniqueName}.{param}` (inputs) and
-> `{apiUniqueName}.{prop}.response` (outputs) - that is the value the OData operation exposes and the key the
-> plugin's `InputParameters`/`OutputParameters` use. `CustomApiRequest`/`CustomApiResponse` apply that naming for
-> you. A hand-written request that derives from the plain `TypedRequest` would key by the short name and silently
-> read `null` on a real environment, so derive custom API requests/responses from `CustomApiRequest`/`CustomApiResponse`.
+> **Why a dedicated base.** A Custom API's request parameters and response properties are keyed by their plain
+> unique name (for example `AccountId`, not `zava_CalculateAccountScore.AccountId`) - that is the key the plugin's
+> `InputParameters`/`OutputParameters` use. `CustomApiRequest`/`CustomApiResponse` keep that plain-name keying from
+> `TypedRequest`/`TypedResponse` and add the API unique name as the `RequestName`/`ResponseName`, so
+> `service.Execute(new ScoreRequest { ... })` targets the right message without a hand-set `RequestName`. The naming
+> is pinned by [`CustomApiParameterNamingTests`](https://github.com/allandecastro/vela/blob/main/tests/Vela.Tests/CustomApiParameterNamingTests.cs).
 
 **Optional request parameters.** A request parameter you declare is **required** (`isoptional = false`, as in
 Dataverse): a caller that omits it gets an error from the platform instead of your handler reading a default
@@ -233,7 +234,10 @@ The method name is the unique name minus its publisher prefix, PascalCased (`zav
 ## Changing an existing Custom API
 
 Most Custom API metadata reconciles in place on the next `apply`: display name, description, request/response
-parameters, `ExecutePrivilege`, and `IsPrivate`. `plan` and `apply` diff the request inputs and response outputs
+parameters (including their descriptions), `ExecutePrivilege`, and `IsPrivate`. Without `.DisplayName(...)` or
+`.Description(...)`, `apply` writes the unique name; a parameter without a description gets its name. Dataverse
+stores at most 100 characters for the display name, 300 for the description and a request parameter's description,
+and 100 for a response property's description; `vela plan` rejects a longer value before any write. `plan` and `apply` diff the request inputs and response outputs
 **per parameter**, so a change reads as exactly which parameters were added, removed, or retyped rather than the
 whole API showing as one opaque change.
 

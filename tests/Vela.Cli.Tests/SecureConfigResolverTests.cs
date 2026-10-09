@@ -147,7 +147,7 @@ public class SecureConfigResolverTests
         // No step key: the diff pairs local and live by legacy identity, so must the resolver, or every plan shows a
         // phantom secure-config change.
         static RegistrationItem Keyless(string secureConfig) =>
-            new("step", PluginA, DefinitionNormalizer.BuildStepShape(PluginA, "Update", "account", "", "n", 40, 0, 1, [], [], [], true, "", secureConfig, null, 0, Web));
+            new("step", PluginA, DefinitionNormalizer.BuildStepShape(PluginA, "Update", "account", "", "n", "n", 40, 0, 1, [], [], [], true, "", secureConfig, null, 0, Web));
         RegistrationState current = State([Keyless(DefinitionNormalizer.HashSecret("admin-set"))]);
 
         RegistrationState resolved = Resolve(State([Keyless("")]), current);

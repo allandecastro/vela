@@ -346,6 +346,7 @@ internal static partial class DataverseRegistration
             entityLogicalName,
             stepKey,
             stepName ?? string.Empty,
+            DefinitionParser.StripStepKeyMarker(step.GetAttributeValue<string>("description")),
             stage,
             mode,
             executionOrder,
@@ -437,7 +438,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression apiQuery = new QueryExpression("customapi")
     {
-        ColumnSet = new ColumnSet("customapiid", "uniquename", "isfunction", "boundentitylogicalname", "executeprivilegename", "isprivate", "allowedcustomprocessingsteptype", "bindingtype", "workflowsdkstepenabled", "plugintypeid")
+        ColumnSet = new ColumnSet("customapiid", "uniquename", "displayname", "description", "isfunction", "boundentitylogicalname", "executeprivilegename", "isprivate", "allowedcustomprocessingsteptype", "bindingtype", "workflowsdkstepenabled", "plugintypeid")
     };
     apiQuery.Criteria.AddCondition("plugintypeid", ConditionOperator.In, pluginTypeIds.Cast<object>().ToArray());
     List<Entity> apiRows = service.RetrieveAll(apiQuery);
@@ -452,6 +453,8 @@ internal static partial class DataverseRegistration
         string pluginTypeName = pluginTypes.TryGetValue(pluginTypeId, out string? resolved) ? resolved : string.Empty;
 
         string uniqueName = api.GetAttributeValue<string>("uniquename") ?? string.Empty;
+        string displayName = api.GetAttributeValue<string>("displayname") ?? string.Empty;
+        string description = api.GetAttributeValue<string>("description") ?? string.Empty;
         bool isFunction = api.GetAttributeValue<bool?>("isfunction") ?? false;
         string? boundEntityLogicalName = api.GetAttributeValue<string>("boundentitylogicalname");
         string? executePrivilegeName = api.GetAttributeValue<string>("executeprivilegename");
@@ -463,17 +466,17 @@ internal static partial class DataverseRegistration
 
         object[] inputParameters = requestParams.TryGetValue(api.Id, out var input)
             ? input.OrderBy(x => x.Name, StringComparer.Ordinal)
-                .Select(x => CustomApiShape.InputParameter(x.Name, x.IsOptional, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName, x.UniqueName))
+                .Select(x => CustomApiShape.InputParameter(x.Name, x.IsOptional, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName, x.UniqueName, x.Description))
                 .ToArray()
             : [];
         object[] outputParameters = responseParams.TryGetValue(api.Id, out var output)
             ? output.OrderBy(x => x.Name, StringComparer.Ordinal)
-                .Select(x => CustomApiShape.OutputParameter(x.Name, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName, x.UniqueName))
+                .Select(x => CustomApiShape.OutputParameter(x.Name, x.ParameterTypeName, x.IsCollection, x.LogicalEntityName, x.UniqueName, x.Description))
                 .ToArray()
             : [];
 
         object shape = CustomApiShape.Build(
-            pluginTypeName, uniqueName, isFunction, isBound, boundEntityLogicalName, executePrivilegeName,
+            pluginTypeName, uniqueName, displayName, description, isFunction, isBound, boundEntityLogicalName, executePrivilegeName,
             isPrivate, allowedCustomProcessingStepType, bindingType, workflowSdkStepEnabled, inputParameters, outputParameters);
 
         items.Add(new RegistrationItem("custom-api", uniqueName, JsonSerializer.SerializeToElement(shape, jsonOptions)));
@@ -492,7 +495,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression query = new QueryExpression("customapirequestparameter")
     {
-        ColumnSet = new ColumnSet("customapiid", "name", "isoptional", "type", "logicalentityname", "uniquename")
+        ColumnSet = new ColumnSet("customapiid", "name", "isoptional", "type", "logicalentityname", "uniquename", "description")
     };
     query.Criteria.AddCondition("customapiid", ConditionOperator.In, apiIds.Cast<object>().ToArray());
 
@@ -521,7 +524,7 @@ internal static partial class DataverseRegistration
             map[apiId] = list;
         }
 
-        list.Add(new CustomApiParameterApplyDefinition(name, isOptional, typeName, isCollection, logicalEntityName, uniqueName));
+        list.Add(new CustomApiParameterApplyDefinition(name, isOptional, typeName, isCollection, logicalEntityName, uniqueName, row.GetAttributeValue<string>("description") ?? string.Empty));
     }
 
     return map.ToDictionary(x => x.Key, x => x.Value.ToArray());
@@ -537,7 +540,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression query = new QueryExpression("customapiresponseproperty")
     {
-        ColumnSet = new ColumnSet("customapiid", "name", "type", "logicalentityname", "uniquename")
+        ColumnSet = new ColumnSet("customapiid", "name", "type", "logicalentityname", "uniquename", "description")
     };
     query.Criteria.AddCondition("customapiid", ConditionOperator.In, apiIds.Cast<object>().ToArray());
 
@@ -565,7 +568,7 @@ internal static partial class DataverseRegistration
             map[apiId] = list;
         }
 
-        list.Add(new CustomApiParameterApplyDefinition(name, false, typeName, isCollection, logicalEntityName, uniqueName));
+        list.Add(new CustomApiParameterApplyDefinition(name, false, typeName, isCollection, logicalEntityName, uniqueName, row.GetAttributeValue<string>("description") ?? string.Empty));
     }
 
     return map.ToDictionary(x => x.Key, x => x.Value.ToArray());
