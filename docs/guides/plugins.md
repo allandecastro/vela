@@ -190,9 +190,14 @@ Omit `WithImpersonation` (the default) to run as the calling user. `vela plan` /
 write `impersonatinguserid`, so setting, changing or removing the impersonated user reconciles like any other step
 field. Passing `Guid.Empty` is rejected at registration.
 
-> [!NOTE]
-> `WithImpersonation(ImpersonationSource)` (the `CallingUser` / `PluginOwner` enum overload) still exists for the
-> calling-user default; use the `Guid` overload to impersonate a specific systemuser.
+### Description
+
+`WithDescription("...")` sets the step's description in Dataverse (what makers see in the plug-in registration
+tool and the solution explorer). Without it, `apply` writes the step name. `vela apply` appends a
+`[vela:stepkey=...]` line to the description of a keyed step, which keeps the step's identity when an admin renames
+it; leave that line in place. The description is part of the plan diff, so a changed `WithDescription` shows as a
+step change and `apply` updates it in place. Dataverse stores at most 256 characters including that line, and
+`vela plan` rejects a longer description before any write.
 
 ### Typed images (compile-safe projections)
 

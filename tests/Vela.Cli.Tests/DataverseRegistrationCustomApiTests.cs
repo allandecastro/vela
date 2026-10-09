@@ -453,6 +453,7 @@ public sealed class DataverseRegistrationCustomApiTests
         {
             ["name"] = "Target",
             ["uniquename"] = "Target",
+            ["description"] = "Target",
             ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.EntityReference),
             ["isoptional"] = true,
             ["logicalentityname"] = "contact",
@@ -465,6 +466,49 @@ public sealed class DataverseRegistrationCustomApiTests
         Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
         Assert.Empty(svc.Deleted);
+    }
+
+    [Fact]
+    public void SyncRequestParameters_updates_a_changed_description_in_place()   // #442
+    {
+        Guid existingId = Guid.NewGuid();
+        var existing = new Entity("customapirequestparameter", existingId)
+        {
+            ["name"] = "Target",
+            ["uniquename"] = "Target",
+            ["description"] = "Target",
+            ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.EntityReference),
+            ["isoptional"] = true,
+            ["logicalentityname"] = "contact",
+        };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var param = new CustomApiParameterApplyDefinition("Target", IsOptional: true, ParameterTypeName: "Microsoft.Xrm.Sdk.EntityReference", IsCollection: false, LogicalEntityName: "contact", Description: "The contact to score");
+
+        DataverseRegistration.SyncCustomApiRequestParameters(svc, Guid.NewGuid(), "zava_DoThing", [param], verbose: false);
+
+        Entity update = Assert.Single(svc.Updated);
+        Assert.Equal(existingId, update.Id);
+        Assert.Equal("The contact to score", update["description"]);
+        Assert.Empty(svc.Created);
+        Assert.Empty(svc.Deleted);
+    }
+
+    [Fact]
+    public void SyncResponseProperties_creates_with_the_declared_description_or_the_name()   // #442
+    {
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection() };
+        CustomApiParameterApplyDefinition[] desired =
+        [
+            new("Score", false, "System.Int32", false, null, Description: "The computed score"),
+            new("Reason", false, "System.String", false, null),
+        ];
+
+        DataverseRegistration.SyncCustomApiResponseProperties(svc, Guid.NewGuid(), "zava_DoThing", desired, verbose: false);
+
+        Assert.Equal("The computed score", svc.Created.Single(e => (string)e["name"] == "Score")["description"]);
+        Entity reason = svc.Created.Single(e => (string)e["name"] == "Reason");
+        Assert.Equal("Reason", reason["description"]);
+        Assert.Equal("Reason", reason["displayname"]);
     }
 
     [Fact]

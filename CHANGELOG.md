@@ -26,6 +26,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **`ImpersonationSource` and `WithImpersonation(ImpersonationSource)` are removed.** Nothing ever wrote the enum
+  to Dataverse: a step declared `.WithImpersonation(ImpersonationSource.PluginOwner)` ran as the calling user.
+  `StepDefinition.ImpersonationSource` is gone too. Use `.WithImpersonation(Guid systemUserId)` to run a step as a
+  specific user, or drop the call to run as the calling user (the default).
 - **Application Insights goes through the platform's `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, and
   `Microsoft.Extensions.Logging` is gone.** The sandbox never serves a `Microsoft.Extensions.Logging.ILogger`, and
   the reflection bridge to the native logger looked up members that don't exist, so `ctx.Log*`, `ctx.LogMetric` and
@@ -351,6 +355,16 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **Step descriptions and Custom API display names and descriptions reach Dataverse.** `apply` wrote the step name
+  as every step's description, and the unique name (or the parameter name) as every Custom API's display name and
+  description and every parameter's description, whatever the code declared. It now writes `WithDescription(...)`
+  (followed by the `[vela:stepkey=...]` line, which the step-key lookup now reads from the end of the description),
+  `.DisplayName(...)`, `.Description(...)` and the parameter descriptions, falling back to the previous values when
+  none is declared. These fields are part of the plan diff, so a change shows up and converges (a second plan is
+  empty); Dataverse lets them change in place, so a parameter description is updated without recreating the
+  parameter. Existing deployments that declare none show no change. `plan` rejects, before any write, a value
+  longer than Dataverse stores (step description 256 characters with its step-key line, Custom API display name 100,
+  description 300, request parameter description 300, response property description 100).
 - **Bulk step images deploy, with the right image property for every message.** `plan`/`apply` rejected any image
   on a `CreateMultiple`/`UpdateMultiple` step, and `apply` registered every image against `Target` (or `id` for a
   Create post-image), which Dataverse refuses on several messages. Images are now registered against the property

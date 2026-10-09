@@ -926,7 +926,7 @@ public class DataverseRegistrationReaderTests
         var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
         mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
             .Returns(Collection(
-                new Entity("customapirequestparameter", keepId) { ["name"] = "Keep", ["uniquename"] = "Keep", ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.String), ["isoptional"] = true }, // matches desired: kept as is
+                new Entity("customapirequestparameter", keepId) { ["name"] = "Keep", ["uniquename"] = "Keep", ["description"] = "Keep", ["type"] = new OptionSetValue(SdkConstants.CustomApiParameterType.String), ["isoptional"] = true }, // matches desired: kept as is
                 new Entity("customapirequestparameter", dropId) { ["name"] = "Drop" }));
         mock.Setup(s => s.Update(It.IsAny<Entity>())).Callback((Entity e) => updated.Add(e));
 

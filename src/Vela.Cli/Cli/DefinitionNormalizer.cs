@@ -30,6 +30,7 @@ internal static class DefinitionNormalizer
         string entityLogicalName,
         string stepKey,
         string name,
+        string description,
         int stage,
         int mode,
         int executionOrder,
@@ -60,6 +61,9 @@ internal static class DefinitionNormalizer
             entityLogicalName,
             stepKey,
             name,
+            // The step's human-readable description (WithDescription, or the step name when none is declared), without
+            // the [vela:stepkey=...] marker apply appends: the live read strips it (DefinitionParser.StripStepKeyMarker).
+            description,
             stage,
             mode,
             executionOrder,
@@ -200,6 +204,13 @@ internal static class DefinitionNormalizer
         string name = !string.IsNullOrWhiteSpace(stepKey)
             ? $"{pluginTypeName} - {BuildStepLifecycleLabel(stage, mode)}: {stepKey}"
             : BuildKeylessStepName(pluginTypeName, stage, mode, message, entityLogicalName);
+        // Apply writes the step name when no description is declared (DataverseRegistration.BuildStepDescription), so
+        // that is the expected live value; it is also what every step deployed before descriptions were written holds.
+        string description = (TryGetString(raw, "description") ?? string.Empty).Trim();
+        if (description.Length == 0)
+        {
+            description = name;
+        }
 
         return BuildStepShape(
             pluginTypeName,
@@ -207,6 +218,7 @@ internal static class DefinitionNormalizer
             entityLogicalName,
             stepKey,
             name,
+            description,
             stage,
             mode,
             executionOrder,
@@ -227,6 +239,10 @@ internal static class DefinitionNormalizer
             ?? TryGetNestedString(raw, "pluginStep", "pluginTypeName")
             ?? string.Empty;
         string uniqueName = TryGetString(raw, "uniqueName") ?? string.Empty;
+        // Display name and description default to the unique name: what apply writes when none is declared, and what
+        // every Custom API deployed before they were written holds.
+        string displayName = CustomApiShape.LabelOrDefault(TryGetString(raw, "displayName"), uniqueName);
+        string description = CustomApiShape.LabelOrDefault(TryGetString(raw, "description"), uniqueName);
         bool isFunction = TryGetBool(raw, "isFunction");
         bool isBound = TryGetBool(raw, "isBound");
         string? boundEntityLogicalName = TryGetString(raw, "boundEntityLogicalName");
@@ -239,7 +255,7 @@ internal static class DefinitionNormalizer
         object[] outputParameters = TryGetCustomApiOutputShapes(raw, "outputParameters");
 
         object normalized = CustomApiShape.Build(
-            pluginTypeName, uniqueName, isFunction, isBound, boundEntityLogicalName, executePrivilegeName,
+            pluginTypeName, uniqueName, displayName, description, isFunction, isBound, boundEntityLogicalName, executePrivilegeName,
             isPrivate, allowedCustomProcessingStepType, bindingType, workflowSdkStepEnabled, inputParameters, outputParameters);
 
         return JsonSerializer.SerializeToElement(normalized, jsonOptions);

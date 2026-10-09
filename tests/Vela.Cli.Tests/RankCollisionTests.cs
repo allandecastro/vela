@@ -108,7 +108,7 @@ public sealed class RankCollisionTests
     private static RegistrationItem LocalStep(string message, string entity, int stage, int mode, int order, bool enabled, string name)
     {
         JsonElement shape = DefinitionNormalizer.BuildStepShape(
-            "Zava.Plugins.AccountPlugin", message, entity, "key", name, stage, mode, order,
+            "Zava.Plugins.AccountPlugin", message, entity, "key", name, name, stage, mode, order,
             [], [], [], enabled, string.Empty, string.Empty, null, 0, Json);
         return new RegistrationItem("step", "Zava.Plugins.AccountPlugin", shape);
     }

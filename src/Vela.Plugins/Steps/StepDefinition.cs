@@ -39,9 +39,6 @@ public sealed class StepDefinition
     /// <summary>The plugin method name to invoke for this step.</summary>
     public string HandlerMethodName { get; set; } = string.Empty;
 
-    /// <summary>The impersonation source.</summary>
-    public ImpersonationSource ImpersonationSource { get; set; }
-
     /// <summary>
     /// The specific systemuser to impersonate for this step (Dataverse <c>impersonatinguserid</c>), set with
     /// <c>.WithImpersonation(Guid)</c>. When set, the step runs in that user's context; <c>null</c> (the default)

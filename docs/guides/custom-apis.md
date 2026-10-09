@@ -234,7 +234,10 @@ The method name is the unique name minus its publisher prefix, PascalCased (`zav
 ## Changing an existing Custom API
 
 Most Custom API metadata reconciles in place on the next `apply`: display name, description, request/response
-parameters, `ExecutePrivilege`, and `IsPrivate`. `plan` and `apply` diff the request inputs and response outputs
+parameters (including their descriptions), `ExecutePrivilege`, and `IsPrivate`. Without `.DisplayName(...)` or
+`.Description(...)`, `apply` writes the unique name; a parameter without a description gets its name. Dataverse
+stores at most 100 characters for the display name, 300 for the description and a request parameter's description,
+and 100 for a response property's description; `vela plan` rejects a longer value before any write. `plan` and `apply` diff the request inputs and response outputs
 **per parameter**, so a change reads as exactly which parameters were added, removed, or retyped rather than the
 whole API showing as one opaque change.
 
