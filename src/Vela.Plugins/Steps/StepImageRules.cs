@@ -15,8 +15,9 @@ namespace Vela.Steps
     /// <item>CreateMultiple: <c>Ids</c>, post-image only. UpdateMultiple: <c>Targets</c>, pre- and post-image
     /// (<c>Target</c> fails with 0x8004416B).</item>
     /// <item>Send / DeliverIncoming / DeliverPromote: <c>EmailId</c>. Merge: <c>Target</c> (or
-    /// <c>SubordinateId</c>). SetState / SetStateDynamicEntity: <c>EntityMoniker</c> (from Learn, not yet probed
-    /// live). RouteTo: no image at all (0x80044189).</item>
+    /// <c>SubordinateId</c>; Vela always uses <c>Target</c>, see #462). SetState / SetStateDynamicEntity:
+    /// <c>EntityMoniker</c>, pre- and post-image (an SDK <c>SetStateRequest</c> on account fires only the
+    /// SetStateDynamicEntity step). RouteTo: no image at all (0x80044189).</item>
     /// <item>A post-image before PostOperation fails with 0x8004416E; a pre-image is fine at PreValidation.</item>
     /// </list>
     /// </remarks>
