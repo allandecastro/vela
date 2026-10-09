@@ -159,6 +159,28 @@ namespace Demo
     }
 
     [Fact]
+    public void A_projection_result_compares_both_its_model_and_its_skip_reason()
+    {
+        LinePositionSpan line = new LinePositionSpan(new LinePosition(1, 2), new LinePosition(1, 15));
+        object Skip(string reason) => Create("SkippedProjection", "Plugin0.cs", new TextSpan(10, 13), line, "WithPostImage", reason);
+        object Skipped(string reason) => Activator.CreateInstance(Nested("ProjectionResult"),
+            BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { Skip(reason) }, null)!;
+        object Model(string typeName) => Create("ProjectionModel",
+            "Demo", ImmutableArray.Create("class P"), typeName, Columns(("Name", "string?", "name")),
+            null, "Update", true, false, "global::Demo.Account", null, null);
+        object Result(object model) => Create("ProjectionResult", model);
+
+        Assert.True(Skipped("a").Equals(Skipped("a")));
+        Assert.False(Skipped("a").Equals(Skipped("b")));
+        Assert.True(Result(Model("X")).Equals(Result(Model("X"))));
+        Assert.False(Result(Model("X")).Equals(Result(Model("Y"))));
+        Assert.False(Result(Model("X")).Equals(Skipped("a")));
+        Assert.Equal(Skipped("a").GetHashCode(), Skipped("a").GetHashCode());
+        Assert.Equal(Result(Model("X")).GetHashCode(), Result(Model("X")).GetHashCode());
+        Assert.False(Skipped("a").Equals(null));
+    }
+
+    [Fact]
     public void Every_skipped_projection_field_takes_part_in_equality()
     {
         LinePositionSpan line = new LinePositionSpan(new LinePosition(1, 2), new LinePosition(1, 15));
