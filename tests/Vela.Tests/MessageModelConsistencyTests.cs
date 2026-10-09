@@ -27,21 +27,23 @@ namespace Vela.Tests
         // context/step/builder/dispatch entry. Modelling one of these means removing it from this set on purpose.
         private static readonly HashSet<string> ConstantOnly = new HashSet<string>(StringComparer.Ordinal)
         {
-            PluginMessages.SetState,
-            PluginMessages.SetStateDynamicEntity,
+            nameof(PluginMessages.SetState),
+            nameof(PluginMessages.SetStateDynamicEntity),
             // WhoAmI is a global (entity-less) message: it cannot be registered as an entity-bound plugin step, so
             // it is not modelled with a typed On.../context. It stays a constant (reachable via OnMessage / used by
             // `vela models --messages` to generate the SDK request), just not a step.
-            PluginMessages.WhoAmI,
+            nameof(PluginMessages.WhoAmI),
         };
 
         private static readonly Assembly PluginsAssembly = typeof(PluginMessages).Assembly;
 
+        // The constant NAMES: a modelled message is named after its SDK request (SendEmail), which names its
+        // On{Msg}() and contexts, while the constant's value is the sdkmessage the step registers on (Send).
         private static IEnumerable<string> AllMessageConstants() =>
             typeof(PluginMessages)
                 .GetFields(BindingFlags.Public | BindingFlags.Static)
                 .Where(f => f.IsLiteral && f.FieldType == typeof(string))
-                .Select(f => (string)f.GetRawConstantValue()!);
+                .Select(f => f.Name);
 
         public static IEnumerable<object[]> ModelledMessages() =>
             AllMessageConstants().Where(m => !ConstantOnly.Contains(m)).Select(m => new object[] { m });
@@ -135,7 +137,8 @@ namespace Vela.Tests
         private static void AssertBuildsTypedContext(string message, PluginStages stage, string expectedTypeName)
         {
             ILocalPluginContext ctx = Mock.Of<ILocalPluginContext>();
-            object? built = BuildTypedContext.Invoke(null, new object?[] { message, stage, ctx });
+            StepDefinition definition = new StepDefinition { Message = "unused", ModelledMessage = message, Stage = stage };
+            object? built = BuildTypedContext.Invoke(null, new object?[] { definition, ctx });
             Assert.True(built != null, $"BuildTypedContext returned null for '{message}' at {stage} (missing switch arm → silent untyped fallback).");
             Assert.Equal(expectedTypeName, built!.GetType().Name);
         }

@@ -70,6 +70,23 @@ namespace Vela.Tests
             Assert.Equal(MessageName, ExpressionHelper.GetMessageName<CalculateAccountScoreRequest>());
         }
 
+        // An SDK request whose RequestName is not an sdkmessage registers on the sdkmessage the platform runs it as:
+        // a step on "SendEmail" or "WinQuote" could never be registered.
+        [Theory]
+        [InlineData(typeof(Microsoft.Crm.Sdk.Messages.SendEmailRequest), "Send")]
+        [InlineData(typeof(Microsoft.Crm.Sdk.Messages.WinQuoteRequest), "Win")]
+        [InlineData(typeof(Microsoft.Crm.Sdk.Messages.CloseQuoteRequest), "Close")]
+        [InlineData(typeof(SendEmailFromTemplateRequest<TestAccount>), "SendFromTemplate")]
+        [InlineData(typeof(Microsoft.Crm.Sdk.Messages.QualifyLeadRequest), "QualifyLead")]
+        [InlineData(typeof(Microsoft.Xrm.Sdk.Messages.CreateRequest), "Create")]
+        public void GetMessageName_MapsTheRequestNameToItsSdkMessage(Type requestType, string expected)
+        {
+            string actual = (string)typeof(ExpressionHelper).GetMethod(nameof(ExpressionHelper.GetMessageName))!
+                .MakeGenericMethod(requestType).Invoke(null, null)!;
+
+            Assert.Equal(expected, actual);
+        }
+
         [Fact]
         public void Post_stage_On_request_fires_on_the_request_name_with_typed_request()
         {

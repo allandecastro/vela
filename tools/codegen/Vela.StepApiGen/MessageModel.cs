@@ -16,7 +16,11 @@ internal enum Images
 /// in <c>Context/MessageContexts.cs</c>) and the <c>PluginMessages.{Name}</c> constant.</param>
 /// <param name="FilterOn">Whether the stage configs expose <c>FilterOn(...)</c> (filtering attributes).</param>
 /// <param name="Images">Which images the stage configs expose (<c>WithPreImage</c> / <c>WithPostImage</c>).</param>
-internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None)
+/// <param name="Entity">The only table Dataverse accepts a step on for this message (its single sdkmessagefilter that
+/// allows custom steps), or null when it is not limited to one. <c>Build()</c> rejects the trigger on any other
+/// table. The step registers on the sdkmessage held by the <c>PluginMessages.{Name}</c> constant, which differs from
+/// <c>Name</c> when the SDK request name is not the sdkmessage name (<c>OnWinQuote()</c> registers on <c>Win</c>).</param>
+internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None, string? Entity = null)
 {
     public bool HasPreImage(Stage stage) => Images is Images.Pre or Images.PreAndPost;
 
@@ -47,44 +51,36 @@ internal static class MessageModel
         new("Assign"),
         new("RevokeAccess"),
         // Sales lifecycle
-        new("QualifyLead"),
-        new("WinOpportunity"),
-        new("LoseOpportunity"),
-        new("ConvertQuoteToSalesOrder"),
-        new("ConvertSalesOrderToInvoice"),
-        new("GenerateQuoteFromOpportunity"),
-        new("GenerateSalesOrderFromOpportunity"),
-        new("GenerateInvoiceFromOpportunity"),
+        new("QualifyLead", Entity: "lead"),
+        new("WinOpportunity", Entity: "opportunity"),
+        new("LoseOpportunity", Entity: "opportunity"),
+        new("ConvertSalesOrderToInvoice", Entity: "salesorder"),
+        new("GenerateQuoteFromOpportunity", Entity: "quote"),
         // Queues
-        new("AddToQueue"),
-        new("RemoveFromQueue"),
-        new("PickFromQueue"),
-        new("RouteTo"),
-        new("ReleaseToQueue"),
+        new("AddToQueue", Entity: "queueitem"),
+        new("RemoveFromQueue", Entity: "queueitem"),
+        new("PickFromQueue", Entity: "queueitem"),
+        new("RouteTo", Entity: "queueitem"),
+        new("ReleaseToQueue", Entity: "queueitem"),
         // Email
-        new("SendEmail"),
-        new("SendEmailFromTemplate"),
-        new("DeliverIncomingEmail"),
-        new("DeliverPromoteEmail"),
+        new("SendEmail", Entity: "email"),
+        new("SendEmailFromTemplate", Entity: "email"),
+        new("DeliverIncomingEmail", Entity: "email"),
+        new("DeliverPromoteEmail", Entity: "email"),
         // Membership
-        new("AddMembersTeam"),
-        new("RemoveMembersTeam"),
-        new("AddListMembersList"),
-        new("AddMemberList"),
-        new("RemoveMemberList"),
+        new("AddMembersTeam", Entity: "team"),
+        new("RemoveMembersTeam", Entity: "team"),
+        new("AddListMembersList", Entity: "list"),
+        new("AddMemberList", Entity: "list"),
+        new("RemoveMemberList", Entity: "list"),
         // Case and contract
-        new("CloseIncident"),
-        new("CancelContract"),
-        new("CloneContract"),
+        new("CloseIncident", Entity: "incident"),
+        new("CancelContract", Entity: "contract"),
+        new("CloneContract", Entity: "contract"),
         // Access queries, quotes, orders, products, access and merge
         new("RetrievePrincipalAccess"),
         new("RetrieveSharedPrincipalsAndAccess"),
-        new("WinQuote"),
-        new("ReviseQuote"),
-        new("FulfillSalesOrder"),
-        new("GetQuoteProductsFromOpportunity"),
-        new("GetSalesOrderProductsFromOpportunity"),
-        new("GetInvoiceProductsFromOpportunity"),
+        new("WinQuote", Entity: "quote"),
         new("ModifyAccess"),
         new("Merge"),
     ];

@@ -137,7 +137,9 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   (the latter rolls the whole batch back on failure). For any other message, inject your own service.
 - **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on
   `QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident` and the like fires so you can test your own
-  logic, but the record changes the platform would make are not simulated.
+  logic, but the record changes the platform would make are not simulated. The steps fire as on the platform:
+  on the sdkmessage the request runs as (`Send` for `SendEmailRequest`), on the message's table, with an empty
+  `ctx.PrimaryEntityId`.
 - **Execution-context identity is the configured caller.** `ctx.UserId`/`InitiatingUserId`/`BusinessUnitId`/
   `OrganizationId` come from `WithCurrentUser`/`WithCurrentBusinessUnit`/`WithOrganizationId`, and a cascaded
   plugin sees its caller's context as `ctx.PluginExecutionContext.ParentContext`.

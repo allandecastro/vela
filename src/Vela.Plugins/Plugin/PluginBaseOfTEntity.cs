@@ -266,7 +266,7 @@ namespace Vela.Plugin
                 Type parameterType = runtimeHandler.Method.GetParameters()[0].ParameterType;
                 object delegateArgument = BuildDerivedStepContext(parameterType, ctx)
                     ?? BuildGenericMessageContextForType(parameterType, ctx)
-                    ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
+                    ?? BuildTypedContext(matchedDefinition, ctx)
                     ?? ctx;
                 (ctx as LocalPluginContext)?.SetCurrentHandler(runtimeHandler.Method.Name);
                 TraceHandlerEntry(ctx, runtimeHandler.Method.Name);
@@ -280,7 +280,7 @@ namespace Vela.Plugin
             // implement, so the generic message context (built from the handler's own parameter type) is tried
             // first, then the per-message modelled context, then the plain ILocalPluginContext.
             object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
-                ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
+                ?? BuildTypedContext(matchedDefinition, ctx)
                 ?? ctx;
             (ctx as LocalPluginContext)?.SetCurrentHandler(matchedDefinition.HandlerMethodName);
             TraceHandlerEntry(ctx, matchedDefinition.HandlerMethodName);
@@ -394,60 +394,55 @@ namespace Vela.Plugin
         }
 
         // Messages Vela models with a typed context: build the per-message context so its handler receives a
-        // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for a permissive
-        // OnMessage(...) step that Vela does not model, so its handler receives the plain ILocalPluginContext.
-        private static object? BuildTypedContext(string? message, PluginStages stage, ILocalPluginContext ctx)
+        // single strongly-typed argument (e.g. IMergeContext<TEntity>). Keyed by the typed trigger's modelled
+        // message, not the sdkmessage: OnWinOpportunity() and OnWinQuote() both register on "Win" but take different
+        // requests. A permissive OnMessage("Merge") step falls back to its message name. Returns null for a message
+        // Vela does not model, so its handler receives the plain ILocalPluginContext.
+        private static object? BuildTypedContext(StepDefinition definition, ILocalPluginContext ctx)
         {
-            bool post = stage == PluginStages.PostOperation;
+            bool post = definition.Stage == PluginStages.PostOperation;
+            string message = string.IsNullOrEmpty(definition.ModelledMessage) ? definition.Message : definition.ModelledMessage;
             return message switch
             {
-                PluginMessages.Create => post ? (object)new CreatePostContext<TEntity>(ctx) : new CreatePreContext<TEntity>(ctx),
-                PluginMessages.Update => post ? (object)new UpdatePostContext<TEntity>(ctx) : new UpdatePreContext<TEntity>(ctx),
-                PluginMessages.Delete => post ? (object)new DeletePostContext<TEntity>(ctx) : new DeletePreContext<TEntity>(ctx),
-                PluginMessages.CreateMultiple => post ? (object)new CreateMultiplePostContext<TEntity>(ctx) : new CreateMultiplePreContext<TEntity>(ctx),
-                PluginMessages.UpdateMultiple => post ? (object)new UpdateMultiplePostContext<TEntity>(ctx) : new UpdateMultiplePreContext<TEntity>(ctx),
-                PluginMessages.Retrieve => post ? (object)new RetrievePostContext<TEntity>(ctx) : new RetrievePreContext<TEntity>(ctx),
-                PluginMessages.RetrieveMultiple => post ? (object)new RetrieveMultiplePostContext<TEntity>(ctx) : new RetrieveMultiplePreContext<TEntity>(ctx),
-                PluginMessages.Associate => post ? (object)new AssociatePostContext<TEntity>(ctx) : new AssociatePreContext<TEntity>(ctx),
-                PluginMessages.Disassociate => post ? (object)new DisassociatePostContext<TEntity>(ctx) : new DisassociatePreContext<TEntity>(ctx),
-                PluginMessages.Merge => post ? (object)new MergePostContext<TEntity>(ctx) : new MergePreContext<TEntity>(ctx),
-                PluginMessages.GrantAccess => post ? (object)new GrantAccessPostContext<TEntity>(ctx) : new GrantAccessPreContext<TEntity>(ctx),
-                PluginMessages.Assign => post ? (object)new AssignPostContext<TEntity>(ctx) : new AssignPreContext<TEntity>(ctx),
-                PluginMessages.ModifyAccess => post ? (object)new ModifyAccessPostContext<TEntity>(ctx) : new ModifyAccessPreContext<TEntity>(ctx),
-                PluginMessages.RevokeAccess => post ? (object)new RevokeAccessPostContext<TEntity>(ctx) : new RevokeAccessPreContext<TEntity>(ctx),
-                PluginMessages.QualifyLead => post ? (object)new QualifyLeadPostContext<TEntity>(ctx) : new QualifyLeadPreContext<TEntity>(ctx),
-                PluginMessages.WinOpportunity => post ? (object)new WinOpportunityPostContext<TEntity>(ctx) : new WinOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.LoseOpportunity => post ? (object)new LoseOpportunityPostContext<TEntity>(ctx) : new LoseOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.ConvertQuoteToSalesOrder => post ? (object)new ConvertQuoteToSalesOrderPostContext<TEntity>(ctx) : new ConvertQuoteToSalesOrderPreContext<TEntity>(ctx),
-                PluginMessages.ConvertSalesOrderToInvoice => post ? (object)new ConvertSalesOrderToInvoicePostContext<TEntity>(ctx) : new ConvertSalesOrderToInvoicePreContext<TEntity>(ctx),
-                PluginMessages.GenerateQuoteFromOpportunity => post ? (object)new GenerateQuoteFromOpportunityPostContext<TEntity>(ctx) : new GenerateQuoteFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.GenerateSalesOrderFromOpportunity => post ? (object)new GenerateSalesOrderFromOpportunityPostContext<TEntity>(ctx) : new GenerateSalesOrderFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.GenerateInvoiceFromOpportunity => post ? (object)new GenerateInvoiceFromOpportunityPostContext<TEntity>(ctx) : new GenerateInvoiceFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.AddToQueue => post ? (object)new AddToQueuePostContext<TEntity>(ctx) : new AddToQueuePreContext<TEntity>(ctx),
-                PluginMessages.RemoveFromQueue => post ? (object)new RemoveFromQueuePostContext<TEntity>(ctx) : new RemoveFromQueuePreContext<TEntity>(ctx),
-                PluginMessages.PickFromQueue => post ? (object)new PickFromQueuePostContext<TEntity>(ctx) : new PickFromQueuePreContext<TEntity>(ctx),
-                PluginMessages.RouteTo => post ? (object)new RouteToPostContext<TEntity>(ctx) : new RouteToPreContext<TEntity>(ctx),
-                PluginMessages.ReleaseToQueue => post ? (object)new ReleaseToQueuePostContext<TEntity>(ctx) : new ReleaseToQueuePreContext<TEntity>(ctx),
-                PluginMessages.SendEmail => post ? (object)new SendEmailPostContext<TEntity>(ctx) : new SendEmailPreContext<TEntity>(ctx),
-                PluginMessages.SendEmailFromTemplate => post ? (object)new SendEmailFromTemplatePostContext<TEntity>(ctx) : new SendEmailFromTemplatePreContext<TEntity>(ctx),
-                PluginMessages.DeliverIncomingEmail => post ? (object)new DeliverIncomingEmailPostContext<TEntity>(ctx) : new DeliverIncomingEmailPreContext<TEntity>(ctx),
-                PluginMessages.DeliverPromoteEmail => post ? (object)new DeliverPromoteEmailPostContext<TEntity>(ctx) : new DeliverPromoteEmailPreContext<TEntity>(ctx),
-                PluginMessages.AddMembersTeam => post ? (object)new AddMembersTeamPostContext<TEntity>(ctx) : new AddMembersTeamPreContext<TEntity>(ctx),
-                PluginMessages.RemoveMembersTeam => post ? (object)new RemoveMembersTeamPostContext<TEntity>(ctx) : new RemoveMembersTeamPreContext<TEntity>(ctx),
-                PluginMessages.AddListMembersList => post ? (object)new AddListMembersListPostContext<TEntity>(ctx) : new AddListMembersListPreContext<TEntity>(ctx),
-                PluginMessages.AddMemberList => post ? (object)new AddMemberListPostContext<TEntity>(ctx) : new AddMemberListPreContext<TEntity>(ctx),
-                PluginMessages.RemoveMemberList => post ? (object)new RemoveMemberListPostContext<TEntity>(ctx) : new RemoveMemberListPreContext<TEntity>(ctx),
-                PluginMessages.CloseIncident => post ? (object)new CloseIncidentPostContext<TEntity>(ctx) : new CloseIncidentPreContext<TEntity>(ctx),
-                PluginMessages.CancelContract => post ? (object)new CancelContractPostContext<TEntity>(ctx) : new CancelContractPreContext<TEntity>(ctx),
-                PluginMessages.CloneContract => post ? (object)new CloneContractPostContext<TEntity>(ctx) : new CloneContractPreContext<TEntity>(ctx),
-                PluginMessages.RetrievePrincipalAccess => post ? (object)new RetrievePrincipalAccessPostContext<TEntity>(ctx) : new RetrievePrincipalAccessPreContext<TEntity>(ctx),
-                PluginMessages.RetrieveSharedPrincipalsAndAccess => post ? (object)new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(ctx) : new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(ctx),
-                PluginMessages.WinQuote => post ? (object)new WinQuotePostContext<TEntity>(ctx) : new WinQuotePreContext<TEntity>(ctx),
-                PluginMessages.ReviseQuote => post ? (object)new ReviseQuotePostContext<TEntity>(ctx) : new ReviseQuotePreContext<TEntity>(ctx),
-                PluginMessages.FulfillSalesOrder => post ? (object)new FulfillSalesOrderPostContext<TEntity>(ctx) : new FulfillSalesOrderPreContext<TEntity>(ctx),
-                PluginMessages.GetQuoteProductsFromOpportunity => post ? (object)new GetQuoteProductsFromOpportunityPostContext<TEntity>(ctx) : new GetQuoteProductsFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.GetSalesOrderProductsFromOpportunity => post ? (object)new GetSalesOrderProductsFromOpportunityPostContext<TEntity>(ctx) : new GetSalesOrderProductsFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.GetInvoiceProductsFromOpportunity => post ? (object)new GetInvoiceProductsFromOpportunityPostContext<TEntity>(ctx) : new GetInvoiceProductsFromOpportunityPreContext<TEntity>(ctx),
+                "Create" => post ? (object)new CreatePostContext<TEntity>(ctx) : new CreatePreContext<TEntity>(ctx),
+                "Update" => post ? (object)new UpdatePostContext<TEntity>(ctx) : new UpdatePreContext<TEntity>(ctx),
+                "Delete" => post ? (object)new DeletePostContext<TEntity>(ctx) : new DeletePreContext<TEntity>(ctx),
+                "CreateMultiple" => post ? (object)new CreateMultiplePostContext<TEntity>(ctx) : new CreateMultiplePreContext<TEntity>(ctx),
+                "UpdateMultiple" => post ? (object)new UpdateMultiplePostContext<TEntity>(ctx) : new UpdateMultiplePreContext<TEntity>(ctx),
+                "Retrieve" => post ? (object)new RetrievePostContext<TEntity>(ctx) : new RetrievePreContext<TEntity>(ctx),
+                "RetrieveMultiple" => post ? (object)new RetrieveMultiplePostContext<TEntity>(ctx) : new RetrieveMultiplePreContext<TEntity>(ctx),
+                "Associate" => post ? (object)new AssociatePostContext<TEntity>(ctx) : new AssociatePreContext<TEntity>(ctx),
+                "Disassociate" => post ? (object)new DisassociatePostContext<TEntity>(ctx) : new DisassociatePreContext<TEntity>(ctx),
+                "Merge" => post ? (object)new MergePostContext<TEntity>(ctx) : new MergePreContext<TEntity>(ctx),
+                "GrantAccess" => post ? (object)new GrantAccessPostContext<TEntity>(ctx) : new GrantAccessPreContext<TEntity>(ctx),
+                "Assign" => post ? (object)new AssignPostContext<TEntity>(ctx) : new AssignPreContext<TEntity>(ctx),
+                "ModifyAccess" => post ? (object)new ModifyAccessPostContext<TEntity>(ctx) : new ModifyAccessPreContext<TEntity>(ctx),
+                "RevokeAccess" => post ? (object)new RevokeAccessPostContext<TEntity>(ctx) : new RevokeAccessPreContext<TEntity>(ctx),
+                "QualifyLead" => post ? (object)new QualifyLeadPostContext<TEntity>(ctx) : new QualifyLeadPreContext<TEntity>(ctx),
+                "WinOpportunity" => post ? (object)new WinOpportunityPostContext<TEntity>(ctx) : new WinOpportunityPreContext<TEntity>(ctx),
+                "LoseOpportunity" => post ? (object)new LoseOpportunityPostContext<TEntity>(ctx) : new LoseOpportunityPreContext<TEntity>(ctx),
+                "ConvertSalesOrderToInvoice" => post ? (object)new ConvertSalesOrderToInvoicePostContext<TEntity>(ctx) : new ConvertSalesOrderToInvoicePreContext<TEntity>(ctx),
+                "GenerateQuoteFromOpportunity" => post ? (object)new GenerateQuoteFromOpportunityPostContext<TEntity>(ctx) : new GenerateQuoteFromOpportunityPreContext<TEntity>(ctx),
+                "AddToQueue" => post ? (object)new AddToQueuePostContext<TEntity>(ctx) : new AddToQueuePreContext<TEntity>(ctx),
+                "RemoveFromQueue" => post ? (object)new RemoveFromQueuePostContext<TEntity>(ctx) : new RemoveFromQueuePreContext<TEntity>(ctx),
+                "PickFromQueue" => post ? (object)new PickFromQueuePostContext<TEntity>(ctx) : new PickFromQueuePreContext<TEntity>(ctx),
+                "RouteTo" => post ? (object)new RouteToPostContext<TEntity>(ctx) : new RouteToPreContext<TEntity>(ctx),
+                "ReleaseToQueue" => post ? (object)new ReleaseToQueuePostContext<TEntity>(ctx) : new ReleaseToQueuePreContext<TEntity>(ctx),
+                "SendEmail" => post ? (object)new SendEmailPostContext<TEntity>(ctx) : new SendEmailPreContext<TEntity>(ctx),
+                "SendEmailFromTemplate" => post ? (object)new SendEmailFromTemplatePostContext<TEntity>(ctx) : new SendEmailFromTemplatePreContext<TEntity>(ctx),
+                "DeliverIncomingEmail" => post ? (object)new DeliverIncomingEmailPostContext<TEntity>(ctx) : new DeliverIncomingEmailPreContext<TEntity>(ctx),
+                "DeliverPromoteEmail" => post ? (object)new DeliverPromoteEmailPostContext<TEntity>(ctx) : new DeliverPromoteEmailPreContext<TEntity>(ctx),
+                "AddMembersTeam" => post ? (object)new AddMembersTeamPostContext<TEntity>(ctx) : new AddMembersTeamPreContext<TEntity>(ctx),
+                "RemoveMembersTeam" => post ? (object)new RemoveMembersTeamPostContext<TEntity>(ctx) : new RemoveMembersTeamPreContext<TEntity>(ctx),
+                "AddListMembersList" => post ? (object)new AddListMembersListPostContext<TEntity>(ctx) : new AddListMembersListPreContext<TEntity>(ctx),
+                "AddMemberList" => post ? (object)new AddMemberListPostContext<TEntity>(ctx) : new AddMemberListPreContext<TEntity>(ctx),
+                "RemoveMemberList" => post ? (object)new RemoveMemberListPostContext<TEntity>(ctx) : new RemoveMemberListPreContext<TEntity>(ctx),
+                "CloseIncident" => post ? (object)new CloseIncidentPostContext<TEntity>(ctx) : new CloseIncidentPreContext<TEntity>(ctx),
+                "CancelContract" => post ? (object)new CancelContractPostContext<TEntity>(ctx) : new CancelContractPreContext<TEntity>(ctx),
+                "CloneContract" => post ? (object)new CloneContractPostContext<TEntity>(ctx) : new CloneContractPreContext<TEntity>(ctx),
+                "RetrievePrincipalAccess" => post ? (object)new RetrievePrincipalAccessPostContext<TEntity>(ctx) : new RetrievePrincipalAccessPreContext<TEntity>(ctx),
+                "RetrieveSharedPrincipalsAndAccess" => post ? (object)new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(ctx) : new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(ctx),
+                "WinQuote" => post ? (object)new WinQuotePostContext<TEntity>(ctx) : new WinQuotePreContext<TEntity>(ctx),
                 _ => null,
             };
         }

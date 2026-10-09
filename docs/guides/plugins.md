@@ -384,15 +384,34 @@ The modelled messages with a typed context are:
 - **CRUD & bulk:** `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`.
 - **Relationships & sharing:** `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`,
   `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`.
-- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ReviseQuote`,
-  `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`,
-  `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity`, `GetQuoteProductsFromOpportunity`,
-  `GetSalesOrderProductsFromOpportunity`, `GetInvoiceProductsFromOpportunity`.
-- **Queues:** `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
-- **Email:** `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
-- **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`,
-  `AddMemberList`, `RemoveMemberList`.
-- **Case / contract:** `CloseIncident`, `CancelContract`, `CloneContract`.
+- **Sales lifecycle:** `QualifyLead` (lead), `WinOpportunity` / `LoseOpportunity` (opportunity), `WinQuote` and
+  `GenerateQuoteFromOpportunity` (quote), `ConvertSalesOrderToInvoice` (salesorder).
+- **Queues** (queueitem): `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
+- **Email** (email): `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
+- **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam` (team), `AddListMembersList`,
+  `AddMemberList`, `RemoveMemberList` (list).
+- **Case / contract:** `CloseIncident` (incident), `CancelContract`, `CloneContract` (contract).
+
+Each `On<Message>()` is named after its SDK request, but the step registers on the `sdkmessage` Dataverse runs the
+request as, and that is the `ctx.MessageName` your handler sees. They differ for many requests: `OnSendEmail()`
+registers on `Send`, `OnSendEmailFromTemplate()` on `SendFromTemplate`, `OnDeliverIncomingEmail()` /
+`OnDeliverPromoteEmail()` on `DeliverIncoming` / `DeliverPromote`, `OnWinOpportunity()` and `OnWinQuote()` both on
+`Win`, `OnLoseOpportunity()` on `Lose`, `OnAddMembersTeam()` / `OnRemoveMembersTeam()` on `AddMembers` /
+`RemoveMembers`, `OnAddListMembersList()` / `OnAddMemberList()` / `OnRemoveMemberList()` on `AddListMembers` /
+`AddMember` / `RemoveMember`, `OnCloseIncident()` on `Close`, `OnCancelContract()` on `Cancel` and
+`OnCloneContract()` on `Clone`. The `PluginMessages` constant of the same name holds that sdkmessage
+(`PluginMessages.SendEmail == "Send"`), and `On<TRequest>()` maps a request the same way.
+
+A message in parentheses above runs on that table only, so its trigger must be registered from an
+`EntityPluginBase<T>` on that table, and the builder rejects it on any other. This is what tells `OnWinQuote()`
+(quote) from `OnWinOpportunity()` (opportunity), which share `Win`. The queue messages run on `queueitem` whatever
+their `Target`. On all of these Dataverse leaves `ctx.PrimaryEntityId` empty: read the record from `ctx.Request`
+(`ctx.Request.EmailId`, `ctx.Request.TeamId`, ...).
+
+Some Sales requests have no `On...()` because Dataverse accepts no custom step on them (0x80044187): `ReviseQuote`,
+`FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`,
+`GenerateInvoiceFromOpportunity` and the `Get*ProductsFromOpportunity` requests. You can still call them from a
+handler.
 
 Global, entity-less messages (for example `WhoAmI`) are not in this list: they cannot be registered as an
 entity-bound plugin step, so there is no `On...()` for them. You can still call them from a handler
@@ -528,7 +547,8 @@ The rules the chain encodes:
 
 `vela plan`/`apply` check the same rules at scan time, before anything is written, so an image Dataverse would
 refuse fails with a clear error rather than a platform error code mid-apply. They also cover the messages Vela
-does not model: a `PostImage` before `PostOperation` and any image on `RouteTo` are rejected. Each image is
+does not model: a `PostImage` before `PostOperation` and any image on `RouteTo` or `SendFromTemplate` are
+rejected. Each image is
 registered against the request property the message expects (`Id` for Create, `Ids` for CreateMultiple, `Targets`
 for UpdateMultiple, `EmailId` for Send/DeliverIncoming/DeliverPromote, `EntityMoniker` for SetState, `Target`
 otherwise).

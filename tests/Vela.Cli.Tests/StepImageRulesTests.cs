@@ -26,12 +26,16 @@ public sealed class StepImageRulesTests
     public void Maps_the_message_to_its_image_property(string? message, string expected)
         => Assert.Equal(expected, StepImageRules.GetMessagePropertyName(message));
 
-    [Fact]
-    public void RouteTo_supports_no_image()
+    // RouteTo fails with 0x80044189; SendFromTemplate "does not support image registration" (both verified live).
+    [Theory]
+    [InlineData("RouteTo")]
+    [InlineData("SendFromTemplate")]
+    public void Message_supports_no_image(string message)
     {
-        Assert.Null(StepImageRules.GetMessagePropertyName("RouteTo"));
-        Assert.False(StepImageRules.IsImageAllowed("RouteTo", 40, isPreImage: true));
-        Assert.False(StepImageRules.IsImageAllowed("RouteTo", 20, isPreImage: true));
+        Assert.Null(StepImageRules.GetMessagePropertyName(message));
+        Assert.False(StepImageRules.IsImageAllowed(message, 40, isPreImage: true));
+        Assert.False(StepImageRules.IsImageAllowed(message, 40, isPreImage: false));
+        Assert.False(StepImageRules.IsImageAllowed(message, 20, isPreImage: true));
     }
 
     // message, stage, pre-image allowed, post-image allowed

@@ -27,6 +27,7 @@ public sealed partial class StepBuilder<TEntity>
     private ImageDefinition? _currentImage;
     private bool _isPreImage;
     private SetOnceModifier _setOnce;
+    private string? _requiredEntity;
 
     // The single-value modifiers on the fluent chain: each is a "last wins" overwrite if called twice, which
     // silently drops the earlier value. They may be set at most once per step; a second call throws (and the
@@ -98,6 +99,19 @@ public sealed partial class StepBuilder<TEntity>
             _definition.EntityLogicalName = string.Empty;
         }
 
+        // A typed trigger whose message Dataverse accepts on one table only (OnSendEmail() on email, OnWinQuote() on
+        // quote) cannot be registered on another one. Apply would at best fail on the missing sdkmessagefilter; for
+        // an sdkmessage shared by several requests (Win, Close, Cancel) it would register on the sibling table and
+        // hand the handler the wrong typed request.
+        if (_requiredEntity != null &&
+            !string.Equals(_definition.EntityLogicalName, _requiredEntity, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"On{_definition.ModelledMessage}() registers on the '{_definition.Message}' message of table '{_requiredEntity}', " +
+                $"but this plugin's table is '{_definition.EntityLogicalName}'. Register the step from an EntityPluginBase<T> " +
+                $"whose T is the '{_requiredEntity}' table.");
+        }
+
         // Hard guarantee (the type-state only forces filtering when the fluent chain is consumed; the
         // RegisterStep() pattern registers by side-effect and discards it, so the framework calls Build()).
         // Create/Update must declare at least one filtering attribute — an unfiltered step fires on every change.
@@ -138,6 +152,16 @@ public sealed partial class StepBuilder<TEntity>
     }
 
     // ---- Private mutation helpers ------------------------------------------------------------------
+
+    // A typed On{Message}() trigger: the sdkmessage the step registers on, the modelled message that picks the
+    // typed handler context (OnWinQuote() registers on Win but hands the handler a WinQuote context), and the only
+    // table Dataverse accepts the step on (null when it is not limited to one).
+    private void SetModelledMessage(string message, string modelledMessage, string? requiredEntity)
+    {
+        _definition.Message = message;
+        _definition.ModelledMessage = modelledMessage;
+        _requiredEntity = requiredEntity;
+    }
 
     private void SetFilteringAttributes(
         Expression<Func<TEntity, object?>> attribute,

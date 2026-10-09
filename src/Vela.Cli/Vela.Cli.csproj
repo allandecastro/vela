@@ -36,6 +36,8 @@
     <!-- Step image capabilities (allowed images per message/stage, messagepropertyname): shared with the runtime
          builder, the harness and the analyzer so none of them accepts what another rejects. -->
     <Compile Include="..\Vela.Plugins\Steps\StepImageRules.cs" Link="Shared\StepImageRules.cs" />
+    <!-- SDK request name to sdkmessage map (SendEmail runs as Send): shared with the runtime and the harness. -->
+    <Compile Include="..\Vela.Plugins\Constants\SdkMessageNames.cs" Link="Shared\SdkMessageNames.cs" />
   </ItemGroup>
 
   <ItemGroup>

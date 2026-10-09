@@ -26,6 +26,33 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Typed steps register on the sdkmessage Dataverse runs, so they can be deployed.** Seventeen typed triggers
+  registered on the SDK request name, which is not an `sdkmessage`, so `vela apply` could never deploy them:
+  `OnSendEmail()` now registers on `Send`, `OnSendEmailFromTemplate()` on `SendFromTemplate`,
+  `OnDeliverIncomingEmail()` / `OnDeliverPromoteEmail()` on `DeliverIncoming` / `DeliverPromote`,
+  `OnWinOpportunity()` / `OnWinQuote()` on `Win`, `OnLoseOpportunity()` on `Lose`, `OnAddMembersTeam()` /
+  `OnRemoveMembersTeam()` on `AddMembers` / `RemoveMembers`, `OnAddListMembersList()` / `OnAddMemberList()` /
+  `OnRemoveMemberList()` on `AddListMembers` / `AddMember` / `RemoveMember`, `OnCloseIncident()` on `Close`,
+  `OnCancelContract()` on `Cancel` and `OnCloneContract()` on `Clone`. The `PluginMessages` constants of the same
+  names now hold these values, so `OnMessage(PluginMessages.SendEmail)` registers on `Send` too, and `ctx.MessageName`
+  is the sdkmessage name (`Send`), as on the platform. `On<TRequest>()` maps the request the same way
+  (`On<SendEmailRequest>()` registers on `Send`, `On<CloseQuoteRequest>()` on `Close`). A step under the old names
+  could never be registered, so no deployed step changes. Verified live: every typed trigger was deployed by
+  `vela apply` and reached its typed handler with the request parameters unchanged.
+- **A typed trigger bound to one table is rejected on any other.** `OnWinQuote()` and `OnWinOpportunity()` both
+  register on `Win`, on quote and opportunity, so on the wrong table a step would run with the wrong typed request.
+  The step builder now rejects a typed trigger on a table its message does not run on: `OnQualifyLead()` (lead),
+  `OnWinOpportunity()` / `OnLoseOpportunity()` (opportunity), `OnWinQuote()` / `OnGenerateQuoteFromOpportunity()`
+  (quote), `OnConvertSalesOrderToInvoice()` (salesorder), the queue triggers (queueitem), the email triggers
+  (email), the team triggers (team), the list triggers (list), `OnCloseIncident()` (incident) and the contract
+  triggers (contract). Apply already failed on most of these (no message filter for the table).
+- **Typed triggers that Dataverse never accepts a step on are removed.** `OnReviseQuote()`, `OnFulfillSalesOrder()`,
+  `OnConvertQuoteToSalesOrder()`, `OnGenerateSalesOrderFromOpportunity()`, `OnGenerateInvoiceFromOpportunity()`,
+  `OnGetQuoteProductsFromOpportunity()`, `OnGetSalesOrderProductsFromOpportunity()` and
+  `OnGetInvoiceProductsFromOpportunity()` are gone, with their contexts and `PluginMessages` constants: Dataverse
+  refuses a custom step on these messages, with or without a table (0x80044187, verified live). The SDK requests
+  stay callable from a handler.
+
 - **`ctx.EnvironmentId` is a `string?`, and now carries the value.** The platform declares
   `IPluginExecutionContext6.EnvironmentId` as a string, but Vela read it as a `Guid?`, so it was always null and the
   execution snapshot always printed `<none>`. It now returns the platform string (null when missing or empty).
@@ -150,6 +177,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   on every execution.
 
 ### Fixed (Framework)
+
+- **The test harness fires a message's steps the way Dataverse does.** An executed `SendEmailRequest` fired the
+  steps registered on `SendEmail`, which Dataverse does not have, so a test passed while the deploy failed. The
+  harness now matches steps on the sdkmessage the request runs as (`Send`), on the table it runs on (email for
+  SendEmail, queueitem for AddToQueue whatever its `Target`, incident for CloseIncident, quote for WinQuote), and
+  leaves `ctx.PrimaryEntityId` empty on these messages, as the platform does (verified live).
 
 - **VELA007 flags every image the message can never provide.** It now also reports a pre-image on
   `OnMessage("CreateMultiple")` and any image on `OnMessage("RouteTo")`, from the same image table the runtime and
@@ -315,6 +348,14 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
 
 ### Fixed (CLI)
+
+- **`vela add` and `vela models` know the sdkmessage names.** `vela add --message Send` (or `Win`, `Close`, ...) now
+  renders the typed trigger (`OnSendEmail()`, and `OnWinQuote()` or `OnWinOpportunity()` from the table), and no
+  longer offers the triggers removed from the framework. `vela models --messages` without a value skipped a message
+  only when its sdkmessage name was a request class name, so it generated duplicate `SendRequest`, `WinRequest`,
+  `CloseRequest`... wrappers for messages the SDK already covers; it now skips them, and the targeted warning names
+  the SDK request to use instead. `plan` / `apply` also reject any image on `SendFromTemplate`, which Dataverse does
+  not support (verified live).
 
 - **Bulk step images deploy, with the right image property for every message.** `plan`/`apply` rejected any image
   on a `CreateMultiple`/`UpdateMultiple` step, and `apply` registered every image against `Target` (or `id` for a

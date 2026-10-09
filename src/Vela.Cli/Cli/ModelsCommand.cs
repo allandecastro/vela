@@ -353,9 +353,9 @@ internal static class ModelsCommand
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
                 foreach (string name in scope.Messages)
                 {
-                    if (SdkMessageClassResolver.HasSdkRequestClass(name))
+                    if (SdkMessageClassResolver.SdkRequestName(name) is string requestName)
                     {
-                        Console.Error.WriteLine($"Warning: '{name}' already has an SDK request class (Microsoft.Xrm.Sdk.Messages.{name}Request); generating a duplicate. Prefer the SDK type via OnMessage<{name}Request>().");
+                        Console.Error.WriteLine($"Warning: '{name}' already has an SDK request class ({requestName}Request); generating a duplicate. Prefer the SDK type via On<{requestName}Request>().");
                     }
 
                     sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));

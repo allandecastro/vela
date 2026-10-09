@@ -1,7 +1,9 @@
 namespace Vela.Constants
 {
     /// <summary>
-    /// SDK message name constants.
+    /// The <c>sdkmessage</c> names a plugin step registers on, which is also the <c>MessageName</c> the plugin sees.
+    /// Each constant is named after the SDK request (<c>SendEmail</c>), and its value is the sdkmessage, which is
+    /// shorter for some requests (<c>Send</c>).
     /// </summary>
     public static class PluginMessages
     {
@@ -83,26 +85,17 @@ namespace Vela.Constants
         /// <summary>QualifyLead message.</summary>
         public const string QualifyLead = "QualifyLead";
 
-        /// <summary>WinOpportunity message.</summary>
-        public const string WinOpportunity = "WinOpportunity";
+        /// <summary><c>Win</c>: the sdkmessage of a <c>WinOpportunityRequest</c> (on opportunity). The SDK request name is <c>WinOpportunity</c>, but steps register on <c>Win</c>.</summary>
+        public const string WinOpportunity = "Win";
 
-        /// <summary>LoseOpportunity message.</summary>
-        public const string LoseOpportunity = "LoseOpportunity";
-
-        /// <summary>ConvertQuoteToSalesOrder message.</summary>
-        public const string ConvertQuoteToSalesOrder = "ConvertQuoteToSalesOrder";
+        /// <summary><c>Lose</c>: the sdkmessage of a <c>LoseOpportunityRequest</c>. The SDK request name is <c>LoseOpportunity</c>, but steps register on <c>Lose</c>.</summary>
+        public const string LoseOpportunity = "Lose";
 
         /// <summary>ConvertSalesOrderToInvoice message.</summary>
         public const string ConvertSalesOrderToInvoice = "ConvertSalesOrderToInvoice";
 
         /// <summary>GenerateQuoteFromOpportunity message.</summary>
         public const string GenerateQuoteFromOpportunity = "GenerateQuoteFromOpportunity";
-
-        /// <summary>GenerateSalesOrderFromOpportunity message.</summary>
-        public const string GenerateSalesOrderFromOpportunity = "GenerateSalesOrderFromOpportunity";
-
-        /// <summary>GenerateInvoiceFromOpportunity message.</summary>
-        public const string GenerateInvoiceFromOpportunity = "GenerateInvoiceFromOpportunity";
 
         /// <summary>AddToQueue message.</summary>
         public const string AddToQueue = "AddToQueue";
@@ -119,41 +112,41 @@ namespace Vela.Constants
         /// <summary>ReleaseToQueue message.</summary>
         public const string ReleaseToQueue = "ReleaseToQueue";
 
-        /// <summary>SendEmail message.</summary>
-        public const string SendEmail = "SendEmail";
+        /// <summary><c>Send</c>: the sdkmessage of a <c>SendEmailRequest</c> (also of SendFax and SendTemplate). The SDK request name is <c>SendEmail</c>, but steps register on <c>Send</c>.</summary>
+        public const string SendEmail = "Send";
 
-        /// <summary>SendEmailFromTemplate message.</summary>
-        public const string SendEmailFromTemplate = "SendEmailFromTemplate";
+        /// <summary><c>SendFromTemplate</c>: the sdkmessage of a <c>SendEmailFromTemplateRequest</c>. The SDK request name is <c>SendEmailFromTemplate</c>, but steps register on <c>SendFromTemplate</c>.</summary>
+        public const string SendEmailFromTemplate = "SendFromTemplate";
 
-        /// <summary>DeliverIncomingEmail message.</summary>
-        public const string DeliverIncomingEmail = "DeliverIncomingEmail";
+        /// <summary><c>DeliverIncoming</c>: the sdkmessage of a <c>DeliverIncomingEmailRequest</c>. The SDK request name is <c>DeliverIncomingEmail</c>, but steps register on <c>DeliverIncoming</c>.</summary>
+        public const string DeliverIncomingEmail = "DeliverIncoming";
 
-        /// <summary>DeliverPromoteEmail message.</summary>
-        public const string DeliverPromoteEmail = "DeliverPromoteEmail";
+        /// <summary><c>DeliverPromote</c>: the sdkmessage of a <c>DeliverPromoteEmailRequest</c>. The SDK request name is <c>DeliverPromoteEmail</c>, but steps register on <c>DeliverPromote</c>.</summary>
+        public const string DeliverPromoteEmail = "DeliverPromote";
 
-        /// <summary>AddMembersTeam message.</summary>
-        public const string AddMembersTeam = "AddMembersTeam";
+        /// <summary><c>AddMembers</c>: the sdkmessage of an <c>AddMembersTeamRequest</c>. The SDK request name is <c>AddMembersTeam</c>, but steps register on <c>AddMembers</c>.</summary>
+        public const string AddMembersTeam = "AddMembers";
 
-        /// <summary>RemoveMembersTeam message.</summary>
-        public const string RemoveMembersTeam = "RemoveMembersTeam";
+        /// <summary><c>RemoveMembers</c>: the sdkmessage of a <c>RemoveMembersTeamRequest</c>. The SDK request name is <c>RemoveMembersTeam</c>, but steps register on <c>RemoveMembers</c>.</summary>
+        public const string RemoveMembersTeam = "RemoveMembers";
 
-        /// <summary>AddListMembersList message.</summary>
-        public const string AddListMembersList = "AddListMembersList";
+        /// <summary><c>AddListMembers</c>: the sdkmessage of an <c>AddListMembersListRequest</c>. The SDK request name is <c>AddListMembersList</c>, but steps register on <c>AddListMembers</c>.</summary>
+        public const string AddListMembersList = "AddListMembers";
 
-        /// <summary>AddMemberList message.</summary>
-        public const string AddMemberList = "AddMemberList";
+        /// <summary><c>AddMember</c>: the sdkmessage of an <c>AddMemberListRequest</c>. The SDK request name is <c>AddMemberList</c>, but steps register on <c>AddMember</c>.</summary>
+        public const string AddMemberList = "AddMember";
 
-        /// <summary>RemoveMemberList message.</summary>
-        public const string RemoveMemberList = "RemoveMemberList";
+        /// <summary><c>RemoveMember</c>: the sdkmessage of a <c>RemoveMemberListRequest</c>. The SDK request name is <c>RemoveMemberList</c>, but steps register on <c>RemoveMember</c>.</summary>
+        public const string RemoveMemberList = "RemoveMember";
 
-        /// <summary>CloseIncident message.</summary>
-        public const string CloseIncident = "CloseIncident";
+        /// <summary><c>Close</c>: the sdkmessage of a <c>CloseIncidentRequest</c> (on incident; CloseQuote shares it). The SDK request name is <c>CloseIncident</c>, but steps register on <c>Close</c>.</summary>
+        public const string CloseIncident = "Close";
 
-        /// <summary>CancelContract message.</summary>
-        public const string CancelContract = "CancelContract";
+        /// <summary><c>Cancel</c>: the sdkmessage of a <c>CancelContractRequest</c> (on contract; CancelSalesOrder shares it). The SDK request name is <c>CancelContract</c>, but steps register on <c>Cancel</c>.</summary>
+        public const string CancelContract = "Cancel";
 
-        /// <summary>CloneContract message.</summary>
-        public const string CloneContract = "CloneContract";
+        /// <summary><c>Clone</c>: the sdkmessage of a <c>CloneContractRequest</c>. The SDK request name is <c>CloneContract</c>, but steps register on <c>Clone</c>.</summary>
+        public const string CloneContract = "Clone";
 
         /// <summary>RetrievePrincipalAccess message.</summary>
         public const string RetrievePrincipalAccess = "RetrievePrincipalAccess";
@@ -164,23 +157,8 @@ namespace Vela.Constants
         /// <summary>WhoAmI message.</summary>
         public const string WhoAmI = "WhoAmI";
 
-        /// <summary>WinQuote message.</summary>
-        public const string WinQuote = "WinQuote";
-
-        /// <summary>ReviseQuote message.</summary>
-        public const string ReviseQuote = "ReviseQuote";
-
-        /// <summary>FulfillSalesOrder message.</summary>
-        public const string FulfillSalesOrder = "FulfillSalesOrder";
-
-        /// <summary>GetQuoteProductsFromOpportunity message.</summary>
-        public const string GetQuoteProductsFromOpportunity = "GetQuoteProductsFromOpportunity";
-
-        /// <summary>GetSalesOrderProductsFromOpportunity message.</summary>
-        public const string GetSalesOrderProductsFromOpportunity = "GetSalesOrderProductsFromOpportunity";
-
-        /// <summary>GetInvoiceProductsFromOpportunity message.</summary>
-        public const string GetInvoiceProductsFromOpportunity = "GetInvoiceProductsFromOpportunity";
+        /// <summary><c>Win</c>: the sdkmessage of a <c>WinQuoteRequest</c> (on quote). The SDK request name is <c>WinQuote</c>, but steps register on <c>Win</c>.</summary>
+        public const string WinQuote = "Win";
 
         /// <summary>
         /// ModifyAccess message.

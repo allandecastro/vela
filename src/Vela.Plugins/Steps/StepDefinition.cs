@@ -73,6 +73,13 @@ public sealed class StepDefinition
     /// constructor at runtime, so the secret is never compiled into the assembly.
     /// </summary>
     public string SecureConfigName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The modelled message of a typed <c>On{Message}()</c> trigger (<c>WinQuote</c> for <c>OnWinQuote()</c>), which
+    /// picks the handler's typed context. It differs from <see cref="Message"/> (the sdkmessage, <c>Win</c>) when
+    /// several SDK requests share one sdkmessage. Empty for a permissive or <c>On&lt;TRequest&gt;()</c> step.
+    /// </summary>
+    internal string ModelledMessage { get; set; } = string.Empty;
 }
 
 /// <summary>

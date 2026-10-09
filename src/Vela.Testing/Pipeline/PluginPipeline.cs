@@ -927,10 +927,11 @@ namespace Vela.Testing
         // simulated - a fake cannot reproduce the server logic - so the store is asked to execute only if it
         // recognises the request; otherwise the main operation is a no-op returning an empty response. A message
         // with no registered steps falls through to the store unchanged (metadata, file protocol, or its own
-        // "unsupported message" error).
+        // "unsupported message" error). Like the platform, the steps are matched on the sdkmessage the request runs
+        // as, which is not always its RequestName: a SendEmailRequest fires the steps registered on "Send".
         private OrganizationResponse ExecuteModelledMessage(OrganizationRequest request, ParameterCollection shared)
         {
-            string message = request.RequestName;
+            string message = SdkMessageNames.ForRequest(request.RequestName);
             bool hasSteps = _registrations.Any(registration => registration.Step.Enabled
                 && string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
             if (!hasSteps)
@@ -945,7 +946,7 @@ namespace Vela.Testing
                 FireStage(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), asyncQueue);
                 FireStage(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), asyncQueue);
 
-                OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = message };
+                OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
 
                 FireStage(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), asyncQueue);
                 return response;
@@ -965,11 +966,22 @@ namespace Vela.Testing
             };
         }
 
-        // Best-effort primary entity for a generic message: an explicit Target, else the first EntityReference /
-        // Entity parameter (covers LeadId, Target, EntityMoniker, ...). When nothing resolves, the steps match by
-        // (message, stage) alone.
+        // Best-effort primary entity for a generic message: the table the request is bound to, else an explicit
+        // Target, else the first EntityReference / Entity parameter (covers EntityMoniker, ...). When nothing
+        // resolves, the steps match by (message, stage) alone.
         private static (string, Guid) DerivePrimaryEntity(OrganizationRequest request)
         {
+            // A request bound to one table runs on that table, whatever its parameters: SendEmail on email (its EmailId
+            // is a Guid), CloseIncident on incident (not its IncidentResolution activity), WinOpportunity on
+            // opportunity (not its OpportunityClose), AddToQueue on queueitem (not its Target). The platform leaves
+            // PrimaryEntityId empty on these (verified live at PreValidation and PostOperation), and so does the
+            // harness, so a handler reading it fails here as it would there.
+            string? primaryEntity = SdkMessageNames.PrimaryEntityOf(request.RequestName);
+            if (primaryEntity != null)
+            {
+                return (primaryEntity, Guid.Empty);
+            }
+
             if (request.Parameters.TryGetValue("Target", out object? target))
             {
                 if (target is Entity targetEntity)
@@ -981,19 +993,6 @@ namespace Vela.Testing
                 {
                     return (targetReference.LogicalName, targetReference.Id);
                 }
-            }
-
-            // Messages whose primary record is not the first entity-typed parameter: derive it explicitly so an
-            // entity-filtered step still matches. WinOpportunity/LoseOpportunity carry an OpportunityClose activity
-            // whose opportunityid points at the real primary (opportunity); the generic scan below would otherwise
-            // pick the activity ("opportunityclose") and the step would silently not fire (A15).
-            if (request.RequestName is "WinOpportunity" or "LoseOpportunity"
-                && request.Parameters.TryGetValue("OpportunityClose", out object? close)
-                && close is Entity closeEntity
-                && closeEntity.Attributes.TryGetValue("opportunityid", out object? opportunityId)
-                && opportunityId is EntityReference opportunityRef)
-            {
-                return (opportunityRef.LogicalName, opportunityRef.Id);
             }
 
             foreach (KeyValuePair<string, object> parameter in request.Parameters)
