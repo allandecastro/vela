@@ -74,9 +74,10 @@ public sealed class ExecutePipelineTests
 
         InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
 
-        Assert.Contains("InvalidOperationException: registration boom", ex.Message);
+        Assert.DoesNotContain("registration boom", ex.Message);
         Assert.IsType<InvalidOperationException>(ex.InnerException);
         Assert.Contains("Unhandled exception", tracing.Output);
+        Assert.Contains("registration boom", tracing.Output);
         Assert.NotNull(plugin.Probe);
         Assert.True(plugin.Probe!.Disposed); // the finally block ran
         Assert.False(plugin.Ran);
@@ -121,10 +122,11 @@ public sealed class ExecutePipelineTests
         InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
             () => plugin.Execute(new ExplodingContextProvider(tracing)));
 
-        Assert.Contains("while building the execution context", ex.Message);
-        Assert.Contains("InvalidCastException: context boom", ex.Message);
+        Assert.Contains("while building the plug-in execution context", ex.Message);
+        Assert.DoesNotContain("context boom", ex.Message);
         Assert.IsType<InvalidCastException>(ex.InnerException);
         Assert.Contains("Failed to build the execution context", tracing.Output);
+        Assert.Contains("InvalidCastException: context boom", tracing.Output);
         Assert.False(plugin.Ran);
     }
 
@@ -225,7 +227,8 @@ public sealed class ExecutePipelineTests
         builder.Context.IsInTransaction = inTransaction;
         RetryingPlugin plugin = new RetryingPlugin();
 
-        Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(builder.BuildServiceProvider()));
+        // The exhausted throttling fault surfaces unchanged, so the caller keeps its error code.
+        Assert.Throws<System.ServiceModel.FaultException<OrganizationServiceFault>>(() => plugin.Execute(builder.BuildServiceProvider()));
 
         Assert.Equal(expectedCalls, plugin.Calls);
     }
@@ -252,7 +255,7 @@ public sealed class ExecutePipelineTests
 
         InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
 
-        Assert.Contains("InvalidOperationException: registration boom", ex.Message);
+        Assert.Contains("An unexpected error occurred", ex.Message);
         Assert.IsType<InvalidOperationException>(ex.InnerException);
         Assert.True(tracer.Calls > 0); // the handlers did try to trace
         Assert.True(plugin.Probe!.Disposed);
@@ -282,7 +285,7 @@ public sealed class ExecutePipelineTests
     }
 
     [Theory]
-    [InlineData("boom", "InvalidOperationException: registrar boom")]
+    [InlineData("boom", "An unexpected error occurred")]
     [InlineData("business", "Registrar says no.")]
     public void An_assembly_registrar_failure_survives_a_throwing_tracer(string mode, string expectedMessage)
     {

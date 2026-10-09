@@ -30,6 +30,20 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `IPluginExecutionContext6.EnvironmentId` as a string, but Vela read it as a `Guid?`, so it was always null and the
   execution snapshot always printed `<none>`. It now returns the platform string (null when missing or empty).
   Code that used it as a `Guid` must parse it (`Guid.TryParse(ctx.EnvironmentId, out Guid id)`).
+- **An organization service fault from a plugin reaches the caller unchanged.** `PluginBase` wrapped a
+  `FaultException<OrganizationServiceFault>` (duplicate key, missing record, missing privilege, exhausted
+  throttling...) in an `InvalidPluginExecutionException`, so the caller got the generic `0x80040265` instead of the
+  fault's own code. The fault is now traced and rethrown as is: Dataverse returns its `ErrorCode` to the caller, and
+  the Web API its matching HTTP status (404, 412...). Wrapping it with the error-code constructor of
+  `InvalidPluginExecutionException` would not help: Dataverse still returns `0x80040265` and keeps the code only as a
+  `SubErrorCode` detail (verified live). Tests that expected an `InvalidPluginExecutionException` from a failed
+  service call now get the `FaultException<OrganizationServiceFault>`.
+- **An unexpected exception no longer shows its type or message to the caller.** The message was
+  `Unhandled exception in plugin '{FullName}': {Type}: {Message}`, which exposed the plugin's type name and a raw
+  message that can hold record values, endpoints or query fragments. It is now
+  `An unexpected error occurred. Correlation id: {id}. The details are in the plug-in trace log.`; the full exception
+  is still traced and stays the inner exception. Override `FormatUnexpectedErrorMessage` to return a detailed
+  message. A failure while building the execution context gets a generic message too.
 - **A Custom API parameter type with no Dataverse equivalent fails when the step is built.** `long`, `short`,
   `float`, enums, `byte[]`, `List<string>` and other types were registered as a lookalike (Integer, Float or
   String) and then read back as their default value, silently. Building the definition now throws a message naming
@@ -98,7 +112,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   transaction, so its image can be stale by the main operation: use it for validation and keep a strictly
   consistent read at PreOperation. Verified live: the image arrives at PreValidation for Update and Delete, and once
   per `Targets` entry for UpdateMultiple.
-
+- **`PluginBusinessException(message, errorCode)` and `PluginBusinessException(message, innerException)`.** The error
+  code is passed to `InvalidPluginExecutionException(OperationStatus.Failed, code, message)`, which an SDK caller
+  reads as the fault's `SubErrorCode` detail (the top-level code stays `0x80040265`). The business exception is now
+  traced with its stack trace and inner exception, not just its message.
 - **VELA021 warns when a typed image projection cannot be generated.** A `WithPreImage(...)` / `WithPostImage(...)`
   that lists columns but cannot be projected (a non-constant alias, a selector that is not a column property, or a
   `RegisterStep()` chain whose message or stage is not constant) used to generate nothing silently, leaving only a

@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.ServiceModel;
 using Vela.Context;
 using Vela.DI;
 using Vela.Retry;
@@ -52,7 +53,8 @@ namespace Vela.Plugin
 
             // Building the context resolves the platform services. A failure here has no context to trace through
             // yet, so trace it best-effort straight to the platform tracing service and surface it as an
-            // InvalidPluginExecutionException like any other failure (never a raw framework exception).
+            // InvalidPluginExecutionException like any other failure (never a raw framework exception), with a
+            // generic message: the details stay in the trace log.
             LocalPluginContext localContext;
             try
             {
@@ -67,7 +69,7 @@ namespace Vela.Plugin
                 }
 
                 throw new InvalidPluginExecutionException(
-                    $"Unhandled exception in plugin '{GetType().FullName}' while building the execution context: {ex.GetType().Name}: {ex.Message}", ex);
+                    "An unexpected error occurred while building the plug-in execution context. The details are in the plug-in trace log.", ex);
             }
 
             Stopwatch stopwatch = Stopwatch.StartNew();
@@ -107,23 +109,39 @@ namespace Vela.Plugin
                 TryDiagnose(() => localContext.TraceExecutionSnapshot("invalid-plugin-exception", snapshotDetail));
                 throw;
             }
+            // A failed organization service call (duplicate key, missing record, missing privilege, throttling...) is
+            // rethrown unchanged. Dataverse passes a plug-in's FaultException<OrganizationServiceFault> through to the
+            // caller with its own ErrorCode (and the Web API maps it to the matching HTTP status), whereas any
+            // InvalidPluginExecutionException reaches the caller as the generic 0x80040265 - even the constructor that
+            // takes an error code only adds it as a SubErrorCode detail. Verified live on Dataverse 9.2.
+            catch (FaultException<OrganizationServiceFault> fault)
+            {
+                TryDiagnose(() => localContext.Trace("Organization service fault: {0}", fault));
+                TryDiagnose(() => localContext.TraceExecutionSnapshot("organization-service-fault", snapshotDetail));
+                throw;
+            }
             catch (PluginBusinessException businessException)
             {
-                TryDiagnose(() => localContext.Trace("Business exception: {0}", businessException.Message));
+                // ToString, not Message: the business exception never reaches the caller, so its stack trace (and any
+                // inner exception) is recorded here or nowhere.
+                TryDiagnose(() => localContext.Trace("Business exception: {0}", businessException));
                 TryDiagnose(() => localContext.TraceExecutionSnapshot("business-exception", snapshotDetail));
+                if (businessException.ErrorCode is int errorCode)
+                {
+                    throw new InvalidPluginExecutionException(OperationStatus.Failed, errorCode, businessException.Message);
+                }
+
                 throw new InvalidPluginExecutionException(businessException.Message);
             }
             catch (Exception ex)
             {
                 TryDiagnose(() => localContext.Trace("Unhandled exception: {0}", ex));
                 TryDiagnose(() => localContext.TraceExecutionSnapshot("unhandled-exception", snapshotDetail));
-                // Surface the real cause (type + message) to the caller instead of a generic "an error occurred":
-                // the caller only ever sees the InvalidPluginExecutionException message, and a generic one hides
-                // the actual failure (for example a SerializationException from passing an early-bound entity to a
-                // service call). The full stack trace stays in the plugin trace log (the "Unhandled exception"
-                // line above) and in the inner exception passed here.
-                throw new InvalidPluginExecutionException(
-                    $"Unhandled exception in plugin '{GetType().FullName}': {ex.GetType().Name}: {ex.Message}", ex);
+                // The caller sees only this message, so by default it names no exception type and repeats no raw
+                // message (either can carry record values, endpoints or query fragments): it gives the correlation id
+                // that finds the full detail in the plug-in trace log (the "Unhandled exception" line above). The
+                // original exception stays the inner exception, for the test harness.
+                throw new InvalidPluginExecutionException(UnexpectedErrorMessage(localContext, ex), ex);
             }
             finally
             {
@@ -140,6 +158,19 @@ namespace Vela.Plugin
         /// <see cref="TraceSnapshotDetail.Full"/> while debugging to also trace every value, at start and on success.
         /// </summary>
         protected virtual TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Metadata;
+
+        /// <summary>
+        /// Builds the message the caller sees when the plug-in fails with an unexpected exception (anything other than
+        /// an <see cref="InvalidPluginExecutionException"/>, a <see cref="PluginBusinessException"/> or an organization
+        /// service fault). The default is generic and gives the correlation id, so it exposes no exception type or raw
+        /// message; the full exception is always written to the plug-in trace log. Override to return a more detailed
+        /// message, for example while developing.
+        /// </summary>
+        /// <param name="context">The execution context.</param>
+        /// <param name="exception">The unexpected exception.</param>
+        /// <returns>The caller-facing message.</returns>
+        protected virtual string FormatUnexpectedErrorMessage(ILocalPluginContext context, Exception exception) =>
+            DefaultUnexpectedErrorMessage(context);
 
         /// <summary>
         /// Allows derived plugins to register custom services.
@@ -217,6 +248,29 @@ namespace Vela.Plugin
                 // Ignored: diagnostics must never mask the original failure.
             }
         }
+
+        // The caller-facing message for an unexpected exception. An override that throws or returns nothing falls back
+        // to the default message, so the hook can never replace the original failure.
+        private string UnexpectedErrorMessage(ILocalPluginContext context, Exception exception)
+        {
+            try
+            {
+                string message = FormatUnexpectedErrorMessage(context, exception);
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    return message;
+                }
+            }
+            catch (Exception formatException)
+            {
+                TryDiagnose(() => context.Trace("FormatUnexpectedErrorMessage failed: {0}", formatException));
+            }
+
+            return DefaultUnexpectedErrorMessage(context);
+        }
+
+        private static string DefaultUnexpectedErrorMessage(ILocalPluginContext context) =>
+            $"An unexpected error occurred. Correlation id: {context.CorrelationId}. The details are in the plug-in trace log.";
 
         // Best-effort trace of a failure that happened before the context existed. Tracing must never mask the
         // original failure, so any error while tracing is swallowed.

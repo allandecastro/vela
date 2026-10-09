@@ -101,7 +101,8 @@ does not compile.
 - Use `ctx.GetRequiredService<T>()` for dependency resolution in handlers.
 - Read the primary record via `ctx.Request.Target` on the typed message contexts (already early-bound); `GetTarget<T>()` stays for the message-agnostic `OnMessage(...)` handlers where the request does not type the Target.
 - Read images with `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` instead of the raw `PreEntityImages` / `PostEntityImages` dictionaries.
-- Signal a user-facing failure with `throw new InvalidPluginExecutionException("...")`, or `throw new PluginBusinessException("...")` for a named business error (the Vela base surfaces its message cleanly and records a `business-exception` trace snapshot). Both are clean and neither is flagged by [VELA012](../reference/analyzers.md#vela012) inside a plugin that derives from a Vela base. Any other exception type is reported to the caller wrapped (the Vela base adds its type and message, but it is not your intended clean message), which is why VELA012 flags it.
+- Signal a user-facing failure with `throw new InvalidPluginExecutionException("...")`, or `throw new PluginBusinessException("...")` for a named business error (the Vela base surfaces its message cleanly and records a `business-exception` trace snapshot). Both are clean and neither is flagged by [VELA012](../reference/analyzers.md#vela012) inside a plugin that derives from a Vela base. A `FaultException<OrganizationServiceFault>` from a failed service call is rethrown unchanged, so the caller gets the fault's own error code (a duplicate key stays `0x80040237`). Any other exception type reaches the caller as a generic message with the correlation id (`An unexpected error occurred. Correlation id: ...`), with the full exception in the plug-in trace log, which is why VELA012 flags it. Override `FormatUnexpectedErrorMessage(context, exception)` to return a more detailed message.
+- To give a business error a code, use `new PluginBusinessException(message, errorCode)`. Dataverse still reports `0x80040265` to the caller; an SDK caller reads your code from the fault's `ErrorDetails["SubErrorCode"]`, and the Web API does not return it.
 
 **Don't**
 - Stop a step chain before `.Handle(...)`: every step must bind a typed handler (a chain that stops earlier is flagged by analyzer VELA002). Prefer `RegisterPluginSteps()` + `RegisterStep()....Handle(...)` over a no-handler `Execute(...)` override.
@@ -653,7 +654,7 @@ Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment
 
 **You get an automatic snapshot on every execution, without record data.** `PluginBase` wraps your handler and
 writes a `start` snapshot before your code runs, then one for the failure if it throws
-(`invalid-plugin-exception` / `business-exception` / `unhandled-exception`). By default these list only
+(`invalid-plugin-exception` / `organization-service-fault` / `business-exception` / `unhandled-exception`). By default these list only
 **metadata**: message, stage, ids, and the *names* of the parameters, images and attributes, never their values.
 Plugins routinely handle personal data and secrets, and the trace log is persisted when the environment's Plugin
 Trace Log is `All`. While debugging, opt into values for one plugin:
