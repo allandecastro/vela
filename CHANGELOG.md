@@ -240,6 +240,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`RetryPolicy` jitter is independent across threads (#450).** Each thread's `Random` was seeded from the tick
   count on .NET Framework, so threads that started retrying in the same tick drew the same backoff. The seeds now come
   from one shared generator.
+- **The harness refuses to download an Image column that does not store full images (#458, verified live).**
+  Dataverse keeps only a thumbnail for such a column (`account.entityimage` is one), so `InitializeFileBlocksDownload`
+  fails with `0x80040217` ("No FileAttachment records found ..."); the harness served the stored bytes, so a plugin
+  calling `DownloadFile` on it passed its tests and failed in production. When the table's metadata declares the
+  column as an Image column with `CanStoreFullImage` not `true`, the download now throws that fault. Without metadata
+  for the column the stored bytes are still served. New builder method: `FakeEntityMetadata.Image(name,
+  canStoreFullImage)`.
 - **`DownloadFile` no longer returns a truncated file (#440).** An empty block before the announced
   `FileSizeInBytes` used to end the loop and return the bytes read so far, with no error. It now throws an
   `InvalidPluginExecutionException` naming the table, record, column, the bytes received and the announced size.
