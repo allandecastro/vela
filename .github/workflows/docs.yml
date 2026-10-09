@@ -6,6 +6,13 @@ on:
     paths:
       - "docs/**"
       - ".github/workflows/docs.yml"
+  # A pull request builds the site (warnings are errors) without deploying it, so a broken link, anchor or
+  # snippet include fails the PR instead of the deployment. The snippets themselves (docs/samples) compile and run
+  # in the main CI, as part of Vela.sln.
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -13,13 +20,32 @@ permissions:
   pages: write
   id-token: write
 
-# Only one Pages deployment at a time; a newer push cancels an in-flight build.
+# Only one Pages deployment at a time; a newer push cancels an in-flight build. A pull request has its own group,
+# so it never cancels a deployment.
 concurrency:
-  group: pages
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.ref) || 'pages' }}
   cancel-in-progress: true
 
 jobs:
+  check:
+    # Same-repo pull requests only, as in ci.yml (the runner is self-hosted).
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
+    env:
+      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install DocFX
+        run: dotnet tool update -g docfx
+      - name: Build the docs site
+        run: docfx docs/docfx.json --warningsAsErrors
+
   build-deploy:
+    if: github.event_name != 'pull_request'
     runs-on: [self-hosted, Windows]
     environment:
       name: github-pages
@@ -35,6 +61,15 @@ jobs:
         run: dotnet tool update -g docfx
       - name: Build the docs site
         run: docfx docs/docfx.json --warningsAsErrors
+      # llms.txt (copied as a resource) indexes the pages; llms-full.txt is every page it lists, concatenated in
+      # that order, for tools that read the whole documentation in one request.
+      - name: Write llms-full.txt
+        shell: powershell
+        run: |
+          $pages = Select-String -Path docs\llms.txt -Pattern '\]\(([^)]+)\.md\)' -AllMatches |
+            ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value + '.md' }
+          $out = foreach ($page in $pages) { "<!-- $page -->"; Get-Content -Raw -Encoding UTF8 (Join-Path docs $page); '' }
+          Set-Content -Path docs\_site\llms-full.txt -Value $out -Encoding UTF8
       - uses: actions/configure-pages@v5
         with:
           enablement: true
