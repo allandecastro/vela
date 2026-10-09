@@ -28,7 +28,6 @@ internal static class ContractFixturePackage
         "Vela.Messages.dll",
         "Newtonsoft.Json.dll",
         "Microsoft.Extensions.DependencyInjection.Abstractions.dll",
-        "Microsoft.Extensions.Logging.Abstractions.dll",
     ];
 
     internal static string FixtureDirectory =>

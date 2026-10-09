@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 using Microsoft.Xrm.Sdk;
 using Moq;
 using Vela.Context;
@@ -168,18 +168,30 @@ public sealed class LocalPluginContextLoggingTests
     }
 
     [Fact]
-    public void A_metric_reaches_the_trace_log_and_the_logger()
+    public void A_metric_reaches_the_trace_log_and_the_platform_metric_with_its_dimensions()
     {
         PluginContextBuilder builder = Builder();
-        LocalPluginContext ctx = builder.Build();
+        LocalPluginContext ctx = new(builder.BuildServiceProvider(), "Zava.Plugins.AccountPlugin");
 
-        ctx.LogMetric("Latency", 2); // a whole number: the line is formatted in the current culture
+        ctx.LogMetric("Latency", 2, new Dictionary<string, object?> { ["Region"] = "eu", ["Stage"] = 99, [""] = "ignored", ["Ratio"] = 1.5 });
 
         Assert.Equal("[Metric] Latency=2", Assert.Single(builder.TraceCapture.Traces));
-        LogEntry entry = Assert.Single(builder.LogCapture.Entries);
-        Assert.Equal(LogLevel.Information, entry.Level);
-        Assert.Equal("Latency=2", entry.Message);
-        Assert.Equal("Update", entry.Scope["MessageName"]);
+        Assert.Empty(builder.LogCapture.Entries);
+        MetricEntry metric = Assert.Single(builder.LogCapture.Metrics);
+        Assert.Equal(("Latency", 2L), (metric.Name, metric.Value));
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["CorrelationId"] = Correlation.ToString(),
+            ["MessageName"] = "Update",
+            ["Stage"] = "99", // the caller's property wins over the default dimension
+            ["Mode"] = "1",
+            ["Depth"] = "3",
+            ["PrimaryEntityName"] = "account",
+            ["PrimaryEntityId"] = Account.ToString(),
+            ["PluginType"] = "Zava.Plugins.AccountPlugin",
+            ["Region"] = "eu",
+            ["Ratio"] = "1.5", // invariant culture, whatever the thread culture
+        }, metric.Dimensions);
     }
 
     [Fact]

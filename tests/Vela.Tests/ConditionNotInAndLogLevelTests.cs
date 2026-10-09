@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Context;
