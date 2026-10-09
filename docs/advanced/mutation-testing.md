@@ -96,7 +96,7 @@ All jobs run on the self-hosted Windows runner (like `ci.yml`, to avoid GitHub A
 | `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | ~89.4% | 80 |
 | `analyzers` | the whole `Vela.Analyzers` project (diagnostics + image projection generator) | ~87.6% | 85 |
 | `plugins-steps` | `Vela.Plugins/Steps` (generated `StepApi.cs` / `StepBuilder.Impl.cs` excluded) | ~63% (net10 proxy, see note) | 80 |
-| `plugins-context` | `Vela.Plugins/Context` | ~83% (net10 proxy, see note) | 80 |
+| `plugins-context` | `Vela.Plugins/Context` | ~88% (net10 proxy, see note) | 80 |
 | `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | ~85% (net10 proxy, see note) | 80 |
 
 Notes on the scores:
