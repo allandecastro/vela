@@ -80,14 +80,13 @@ namespace Vela.Testing.Tests
             Assert.Equal(environment, raw.EnvironmentId);
         }
 
-        // ILocalPluginContext.EnvironmentId is a Guid? resolved only from a Guid-typed property, but the SDK property is
-        // a string, so it reads null on the harness and on a real context. Un-skip once LocalPluginContext parses it.
-        [Fact(Skip = "LocalPluginContext.EnvironmentId never parses the SDK's string EnvironmentId (runtime bug, see W8 report).")]
-        public void WithEnvironmentId_is_exposed_as_a_guid_on_the_local_context()
+        // ILocalPluginContext.EnvironmentId surfaces the platform's string as-is.
+        [Fact]
+        public void WithEnvironmentId_is_exposed_on_the_local_context()
         {
-            Guid environment = new Guid("7c2e5b1d-3f4a-4e6b-9a8c-0d1e2f3a4b5c");
+            string environment = "7c2e5b1d-3f4a-4e6b-9a8c-0d1e2f3a4b5c";
 
-            LocalPluginContext ctx = PluginContext.For<FakeAccount>().WithEnvironmentId(environment.ToString()).Build();
+            LocalPluginContext ctx = PluginContext.For<FakeAccount>().WithEnvironmentId(environment).Build();
 
             Assert.Equal(environment, ctx.EnvironmentId);
         }
