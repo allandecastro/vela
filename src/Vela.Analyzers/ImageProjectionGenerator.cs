@@ -402,6 +402,7 @@ namespace Vela.Analyzers
                     case "OnDelete": message ??= "Delete"; break;
                     case "OnCreateMultiple": message ??= "CreateMultiple"; break;
                     case "OnUpdateMultiple": message ??= "UpdateMultiple"; break;
+                    case "OnAssign": message ??= "Assign"; break;
                     case "OnMerge": message ??= "Merge"; break;
                 }
 
@@ -732,7 +733,7 @@ namespace Vela.Analyzers
                 else if (IsSingleImageMessage(handler.Message) &&
                     ResolveBaseContext(handler.Message, handler.IsPost, out baseHasPre, out baseHasPost) is string crud)
                 {
-                    // Create/Update/Delete at an image-bearing stage: derive from the concrete context and expose a
+                    // Create/Update/Delete/Assign/Merge at an image-bearing stage: derive from the concrete context and expose a
                     // single typed pre/post image when captured.
                     baseTypeFull = $"global::Vela.Context.{crud}<{handler.EntityType}>";
                 }
@@ -786,10 +787,10 @@ namespace Vela.Analyzers
             string.IsNullOrEmpty(image.Alias) ? string.Empty : ", " + SymbolDisplay.FormatLiteral(image.Alias!, quote: true);
 
         private static bool IsSingleImageMessage(string message) =>
-            message == "Create" || message == "Update" || message == "Delete" || message == "Merge";
+            message == "Create" || message == "Update" || message == "Delete" || message == "Assign" || message == "Merge";
 
         // The concrete step context a generated context derives from, and which typed images it can expose, for a
-        // Create/Update/Delete/Merge message at the given stage. Returns null when the stage carries no image.
+        // Create/Update/Delete/Assign/Merge message at the given stage. Returns null when the stage carries no image.
         private static string? ResolveBaseContext(string message, bool isPost, out bool hasPre, out bool hasPost)
         {
             hasPre = false;
@@ -817,6 +818,10 @@ namespace Vela.Analyzers
                 case "Delete":
                     hasPre = true;
                     return isPost ? "DeletePostContext" : "DeletePreContext";
+                case "Assign":
+                    hasPre = true;
+                    hasPost = isPost;
+                    return isPost ? "AssignPostContext" : "AssignPreContext";
                 case "Merge":
                     hasPre = true;
                     hasPost = isPost;

@@ -55,10 +55,10 @@ namespace Vela.Context
     public interface IGrantAccessPreContext<TEntity> : IStepRequestContext<GrantAccessRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a GrantAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
     public interface IGrantAccessPostContext<TEntity> : IStepRequestContext<GrantAccessRequest>, IStepResponseContext<GrantAccessResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for an Assign step (<c>ctx.Request</c> only).</summary>
-    public interface IAssignPreContext<TEntity> : IStepRequestContext<AssignRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for an Assign step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IAssignPostContext<TEntity> : IStepRequestContext<AssignRequest>, IStepResponseContext<AssignResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for an Assign step (<c>ctx.Request</c> + <c>ctx.PreImage</c>).</summary>
+    public interface IAssignPreContext<TEntity> : IStepRequestContext<AssignRequest>, IPreImageContext<TEntity> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for an Assign step (<c>ctx.Request</c> + <c>ctx.Response</c> + <c>ctx.PreImage</c> / <c>ctx.PostImage</c>).</summary>
+    public interface IAssignPostContext<TEntity> : IStepRequestContext<AssignRequest>, IStepResponseContext<AssignResponse>, IPreImageContext<TEntity>, IPostImageContext<TEntity> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a ModifyAccess step (<c>ctx.Request</c> only).</summary>
     public interface IModifyAccessPreContext<TEntity> : IStepRequestContext<ModifyAccessRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a ModifyAccess step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
@@ -329,12 +329,18 @@ namespace Vela.Context
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public AssignPreContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity? PreImage => this.GetPreImage<TEntity>();
     }
     /// <summary>Runtime post-stage context for Assign.</summary>
     public class AssignPostContext<TEntity> : PostStepContext<AssignRequest, AssignResponse>, IAssignPostContext<TEntity> where TEntity : Entity
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public AssignPostContext(ILocalPluginContext inner) : base(inner) { }
+        /// <inheritdoc/>
+        public TEntity? PreImage => this.GetPreImage<TEntity>();
+        /// <inheritdoc/>
+        public TEntity? PostImage => this.GetPostImage<TEntity>();
     }
     /// <summary>Runtime pre-stage context for ModifyAccess.</summary>
     public class ModifyAccessPreContext<TEntity> : PreStepContext<ModifyAccessRequest>, IModifyAccessPreContext<TEntity> where TEntity : Entity
