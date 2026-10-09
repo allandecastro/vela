@@ -29,6 +29,29 @@ namespace Vela.Testing
             return clone;
         }
 
+        // A request target as the platform receives it: an independent copy of what the caller sent (values, alternate
+        // key, deep-insert related records, row version), so nothing the pipeline or a plugin does to it - setting the
+        // created id, changing an attribute in PreOperation - is visible on the caller's object afterwards.
+        public static Entity CloneTarget(Entity entity)
+        {
+            Entity clone = Clone(entity);
+            clone.RowVersion = entity.RowVersion;
+            foreach (KeyValuePair<string, object> key in entity.KeyAttributes)
+            {
+                clone.KeyAttributes[key.Key] = CloneValue(key.Value)!;
+            }
+
+            foreach (KeyValuePair<Relationship, EntityCollection> related in entity.RelatedEntities)
+            {
+                clone.RelatedEntities[related.Key] = new EntityCollection(related.Value.Entities.Select(CloneTarget).ToList())
+                {
+                    EntityName = related.Value.EntityName,
+                };
+            }
+
+            return clone;
+        }
+
         public static object? CloneValue(object? value)
         {
             switch (value)

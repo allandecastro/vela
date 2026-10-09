@@ -111,9 +111,11 @@ namespace Vela.Testing.Tests
         {
             PluginPipeline pipeline = PluginPipeline.Empty().Register<RequiredParamApi>();
 
-            InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
+            // The platform's fault, verified live: 0x80040203 "Required field '...' is missing for RequestName='...'".
+            System.ServiceModel.FaultException<OrganizationServiceFault> ex = Assert.Throws<System.ServiceModel.FaultException<OrganizationServiceFault>>(
                 () => pipeline.Service.Execute(Request("vela_RequiredParam")));   // "Key" omitted
-            Assert.Contains("Key", ex.Message);
+            Assert.Equal(unchecked((int)0x80040203), ex.Detail.ErrorCode);
+            Assert.Equal("Required field 'Key' is missing for RequestName='vela_RequiredParam'", ex.Detail.Message);
         }
 
         [Fact]
@@ -167,7 +169,8 @@ namespace Vela.Testing.Tests
     {
         public SumApi(string u, string s) : base(u, s) { }
 
-        protected override void RegisterCustomApi() => RegisterCustomApi("vela_Sum", nameof(Handle)).AsAction();
+        protected override void RegisterCustomApi() => RegisterCustomApi("vela_Sum", nameof(Handle)).AsAction()
+            .RequestParameter<int>("A").RequestParameter<int>("B").ResponseParameter<int>("Sum");
 
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
             => services.AddScoped<ICalculator>(_ => new Calculator());

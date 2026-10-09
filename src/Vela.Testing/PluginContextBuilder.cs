@@ -230,11 +230,15 @@ namespace Vela.Testing
             return WithSharedVariable("tag", tag);
         }
 
-        /// <summary>Uses the given organization service for both user and system contexts.</summary>
+        /// <summary>
+        /// Uses the given organization service for both user and system contexts. For an
+        /// <see cref="InMemoryOrganizationService"/>, <c>ctx.SystemService</c> is its SYSTEM view: not subject to the
+        /// store's security model (<c>WithSecurity</c>), as on a real org, while <c>ctx.Service</c> is.
+        /// </summary>
         public PluginContextBuilder<TEntity> WithOrganizationService(IOrganizationService service)
         {
             Factory.UserService = service;
-            Factory.SystemService = service;
+            Factory.SystemService = service is InMemoryOrganizationService store ? new SystemStoreView(store) : service;
             return this;
         }
 
@@ -379,10 +383,10 @@ namespace Vela.Testing
                 return (TPlugin)Activator.CreateInstance(type)!;
             }
 
-            ConstructorInfo? configCtor = type.GetConstructor(new[] { typeof(string), typeof(string) });
+            ConstructorInfo? configCtor = PluginActivator.FindConfigurationConstructor(type);
             if (configCtor is not null)
             {
-                return (TPlugin)configCtor.Invoke(new object?[] { string.Empty, string.Empty });
+                return (TPlugin)PluginActivator.Create(configCtor, string.Empty, string.Empty);
             }
 
             throw new InvalidOperationException(

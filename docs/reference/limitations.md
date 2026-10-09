@@ -132,7 +132,9 @@ untouched.
 ## Vela.Testing
 
 The in-memory CRM (`InMemoryOrganizationService`) and `PluginPipeline` are a faithful-but-partial model. For
-anything below, inject your own `IOrganizationService` via `WithOrganizationService(...)`.
+anything below, a single-plugin test can inject its own `IOrganizationService` with the context builder's
+`WithOrganizationService(...)`. `PluginPipeline` has no such fallback: it always drives its own in-memory store
+(configure it with the pipeline's `With*`/`As*` methods, which mirror every store configuration method).
 
 - **`Execute` covers a common set:** `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`,
   `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`SetState`/`Associate`/`Disassociate`, the metadata reads
@@ -141,9 +143,26 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
 - **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on
   `QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident` and the like fires so you can test your own
   logic, but the record changes the platform would make are not simulated.
+- **Transactions are simulated with store snapshots.** The stage model (PreValidation of the initial operation
+  outside the transaction, non-transactional reads, async steps after the commit, a swallowed failed write ending the
+  transaction while a swallowed failed read does not) follows the platform as verified on a live environment, but
+  there is no locking, isolation level or concurrency: operations run one at a time. Which messages count as reads is
+  a name rule (`Retrieve*`, `WhoAmI`, file downloads). A read issued by a plugin inside a write's transaction runs
+  within it, and its steps report `IsInTransaction` = `false` as a top-level read's do; only the top-level case was
+  verified live, so the nested value is an assumption. `InputParameters["FromSandbox"]` is set only on the
+  PreValidation stage of a plugin's own operation, the only stage where it was observed live; the other stages were
+  not observed to carry it, so the harness does not set it there.
+- **Formatted values are partial.** Reads fill `FormattedValues` for lookups (the referenced record's primary name)
+  and for choices whose labels are registered as metadata, in the registered label language only. Money, dates,
+  numbers and Yes/No columns get no formatted value. Without metadata a primary name is looked up in `name` (or
+  `fullname` / `title` / `subject` for the common system tables that use those).
 - **Execution-context identity is the configured caller.** `ctx.UserId`/`InitiatingUserId`/`BusinessUnitId`/
-  `OrganizationId` come from `WithCurrentUser`/`WithCurrentBusinessUnit`/`WithOrganizationId`, and a cascaded
-  plugin sees its caller's context as `ctx.PluginExecutionContext.ParentContext`.
+  `OrganizationId` come from `WithCurrentUser`/`WithCurrentBusinessUnit`/`WithOrganizationId`. A cascaded plugin finds
+  its caller's context through `ParentContext` (one level up for PreValidation, two for the later stages of
+  Create/Update/Delete, whose direct parent is the operation's stage-30 context).
+- **Steps on a global Custom API.** A global API's main operation sees `PrimaryEntityName` = `"none"`, but a step on
+  its message is declared through `EntityPluginBase<TEntity>` and so carries a table; the harness gives that step's
+  context the step's table so the runtime still matches it. Vela has no entity-less step declaration yet.
 - **Fault codes are partial.** A not-found `Retrieve`/`Update` throws `FaultException<OrganizationServiceFault>`
   with `ObjectDoesNotExist` (`-2147220969`), and a privilege denial carries `PrincipalPrivilegeDenied`; other
   faults (for example an `ExecuteMultiple` child failure) surface an `OrganizationServiceFault` with no
@@ -177,8 +196,8 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   **manager and position** hierarchy security, field-level (column) security, and link-entity (joined-table)
   read-trimming (a join to a record the caller can't read drops the primary row on an inner join, or omits the
   linked columns on a left-outer join, recursively through nested joins). Behavioural note: a parent's Delete
-  plugins fire **after** its cascaded children are removed (the children's Delete plugins run first), rather than
-  the parent's pre-stage seeing its children.
+  PreValidation stage fires first, but its PreOperation/PostOperation stages fire **after** its cascaded children are
+  removed (the children's Delete plugins run in between), rather than the parent's PreOperation seeing its children.
 
 ---
 

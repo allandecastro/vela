@@ -390,7 +390,7 @@ namespace Vela.Testing.Tests
         public GreetApi(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterCustomApi()
-            => RegisterCustomApi("vela_Greet", nameof(Handle));
+            => RegisterCustomApi("vela_Greet", nameof(Handle)).RequestParameter<string>("Name").ResponseParameter<string>("Message");
 
         private void Handle(ILocalPluginContext ctx)
         {

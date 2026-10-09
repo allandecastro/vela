@@ -871,6 +871,7 @@ namespace Vela.Testing
 
             Entity projected = Project(stored, columnSet);
             MaskSecuredColumns(projected);
+            ShapeRead(projected);
             return projected;
         }
 
@@ -1034,6 +1035,11 @@ namespace Vela.Testing
                 {
                     MaskSecuredColumns(row);
                 }
+            }
+
+            foreach (Entity row in result.Entities)
+            {
+                ShapeRead(row);
             }
 
             return result;
