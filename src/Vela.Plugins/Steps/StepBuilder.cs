@@ -377,8 +377,9 @@ public sealed partial class StepBuilder<TEntity>
     // the modelled messages). Only the modelled messages (Create/Update/Delete, and the bulk variants
     // evaluated as their single-row counterparts) are enforced; any other message is permissive - Vela does
     // not model its image rules, so the platform arbitrates at deploy time.
-    //   * PreValidation / MainOperation: no images exist yet, so none are allowed.
-    //   * PreOperation: only a pre-image, and only for Update/Delete (Create has no prior state).
+    //   * MainOperation: no step image exists, so none are allowed.
+    //   * PreValidation / PreOperation: only a pre-image (no post-image before the write), and only for
+    //     Update/Delete (Create has no prior state).
     //   * PostOperation: pre-image for Update/Delete (prior state), post-image for Create/Update
     //     (committed state; Delete has no post-image because the row is gone).
     private static bool IsImageAllowed(string message, PluginStages stage, bool isPreImage)
@@ -394,14 +395,15 @@ public sealed partial class StepBuilder<TEntity>
             message = PluginMessages.Update;
         }
 
-        // Universal rules (platform-wide, independent of the message): no image exists before or outside the
-        // operation, and a post-image never exists before the write is committed. These bind even for a
-        // non-modelled message, so they are checked before the permissive short-circuit below.
-        if (stage == PluginStages.PreValidation || stage == PluginStages.MainOperation)
+        // Universal rules (platform-wide, independent of the message): no image exists outside the step
+        // pipeline, and a post-image never exists before the write (Dataverse rejects a post-image on a
+        // PreValidation or PreOperation step with 0x8004416E). These bind even for a non-modelled message, so
+        // they are checked before the permissive short-circuit below.
+        if (stage == PluginStages.MainOperation)
         {
             return false;
         }
-        if (stage == PluginStages.PreOperation && !isPreImage)
+        if ((stage == PluginStages.PreValidation || stage == PluginStages.PreOperation) && !isPreImage)
         {
             return false;
         }
@@ -419,9 +421,9 @@ public sealed partial class StepBuilder<TEntity>
             return true;
         }
 
-        if (stage == PluginStages.PreOperation)
+        if (stage == PluginStages.PreValidation || stage == PluginStages.PreOperation)
         {
-            // isPreImage is guaranteed true here (the universal rule rejected a pre-operation post-image).
+            // isPreImage is guaranteed true here (the universal rule rejected a pre-stage post-image).
             return isUpdate || isDelete;
         }
 

@@ -19,7 +19,7 @@ namespace Vela.Steps
         IStages OnUpdate();
         IStages OnDelete();
     }
-    public interface IStages : IFluentStep { IMode PreOperation(); IMode PostOperation(); }
+    public interface IStages : IFluentStep { IMode PreValidation(); IMode PreOperation(); IMode PostOperation(); }
     public interface IMode : IFluentStep { IConfig Sync(); IConfig Async(); }
     public interface IConfig : IFluentStep
     {
@@ -67,6 +67,32 @@ namespace Demo
     {
         string code = InMethod("RegisterStep().OnMessage(\"delete\").PostOperation().Sync().{|#0:WithPostImage|}(\"name\").Handle();");
         await Verify.VerifyAnalyzerAsync(code, Expected("A post-image", "Delete", "the row no longer exists after a delete"));
+    }
+
+    // A pre-image is allowed at PreValidation since #436, but never on Create, whatever the stage.
+    [Fact]
+    public async Task Flags_pre_image_on_create_at_prevalidation_permissive()
+    {
+        string code = InMethod("RegisterStep().OnMessage(\"create\").PreValidation().Sync().{|#0:WithPreImage|}(\"name\").Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("A pre-image", "Create", "there is no prior row state before a create"));
+    }
+
+    [Fact]
+    public async Task Flags_pre_image_on_create_at_prevalidation_typed_trigger()
+    {
+        string code = InMethod("RegisterStep().OnCreate().PreValidation().Sync().{|#0:WithPreImage|}(\"name\").Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("A pre-image", "Create", "there is no prior row state before a create"));
+    }
+
+    [Theory]
+    [InlineData("OnUpdate()")]
+    [InlineData("OnDelete()")]
+    [InlineData("OnMessage(\"update\")")]
+    [InlineData("OnMessage(\"assign\")")]
+    public async Task Does_not_flag_pre_image_at_prevalidation(string trigger)
+    {
+        string code = InMethod("RegisterStep()." + trigger + ".PreValidation().Sync().WithPreImage(\"name\").Handle();");
+        await Verify.VerifyAnalyzerAsync(code);
     }
 
     [Fact]

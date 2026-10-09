@@ -31,8 +31,8 @@ change.
   for plugin steps); `FilteringAttributes` apply to `Create`/`Update` (and `CreateMultiple`/`UpdateMultiple`) only, and Vela requires
   at least one there ([VELA020](analyzers.md#vela020));
   images are constrained by stage/message
-  (no images in `PreValidation`; `PreImage` only for `Update`/`Delete` in `PreOperation`; `PostImage` only for
-  `Create`/`Update`). Violations throw.
+  (`PreImage` only for `Update`/`Delete`, at any stage; `PostImage` only for `Create`/`Update`, in `PostOperation`).
+  Violations throw.
 - **No images on bulk messages when deploying.** Dataverse accepts no image on `CreateMultiple`/`UpdateMultiple`,
   so `plan`/`apply` reject a bulk step that carries a pre/post image (the in-memory harness still allows it, to
   simulate per-record bulk images). Register the image on the single `Create`/`Update` step, which also runs for

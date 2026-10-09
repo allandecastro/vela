@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Vela.Context;
 using Vela.Constants;
 using Vela.Steps;
@@ -112,9 +113,109 @@ namespace Vela.Tests
             Assert.Equal(ExecutionMode.Asynchronous, asyncBuilder.Build().Mode);
         }
 
-        // The typed stage chain now prevents an invalid image at compile time (a pre-image in PreValidation,
+        // The typed stage chain now prevents an invalid image at compile time (a post-image before PostOperation,
         // a post-image on Delete, a pre-image on Create, etc. do not compile). These positive tests confirm
         // the valid combinations the chain does expose.
+
+        [Fact]
+        public void StepBuilder_AllowsPreImageForPreValidationUpdate()
+        {
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnUpdate()
+                .PreValidation()
+                .Sync()
+                .FilterOn(a => a.Name)
+                .WithPreImage(a => a.Name);
+
+            var definition = builder.Build();
+            Assert.Equal(PluginStages.PreValidation, definition.Stage);
+            Assert.Single(definition.PreImages);
+            Assert.Equal(PluginImageAliases.PreImage, definition.PreImages[0].Alias);
+        }
+
+        [Fact]
+        public void StepBuilder_AllowsPreImageForPreValidationDelete()
+        {
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnDelete()
+                .PreValidation()
+                .Sync()
+                .WithPreImage("before", a => a.Name);
+
+            var definition = builder.Build();
+            Assert.Equal("before", Assert.Single(definition.PreImages).Alias);
+        }
+
+        // UpdateMultiple at PreValidation delivers one pre-image per Targets entry (verified live on 2026-10-09).
+        [Fact]
+        public void StepBuilder_AllowsPreImageForPreValidationUpdateMultiple()
+        {
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnUpdateMultiple()
+                .PreValidation()
+                .Sync()
+                .FilterOn(a => a.Name)
+                .WithPreImage(a => a.Name);
+
+            Assert.Single(builder.Build().PreImages);
+        }
+
+        [Fact]
+        public void StepBuilder_AllowsPreImageForPreValidationPermissiveMessage()
+        {
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnMessage("Assign")
+                .PreValidation()
+                .Sync()
+                .WithPreImage(a => a.Name);
+
+            Assert.Single(builder.Build().PreImages);
+        }
+
+        // Compile-time surface: no PreValidation config (modelled, permissive or typed) offers a post-image, and the
+        // Create configs offer no pre-image at PreValidation. Reflection stands in for "does not compile".
+        [Fact]
+        public void PreValidation_configs_offer_no_post_image_and_create_offers_no_pre_image()
+        {
+            Type[] preValidationConfigs = typeof(IStepTrigger<>).Assembly.GetTypes()
+                .Where(t => t.IsInterface && t.Namespace == "Vela.Steps" && t.Name.Contains("PreValidationConfig"))
+                .ToArray();
+
+            Assert.Contains(typeof(IUpdatePreValidationConfig<>), preValidationConfigs);
+            Assert.Contains(typeof(IPermissivePreValidationConfig<>), preValidationConfigs);
+            Assert.Contains(typeof(ITypedPreValidationConfig<,>), preValidationConfigs);
+            Assert.All(preValidationConfigs, t => Assert.Null(t.GetMethods().FirstOrDefault(m => m.Name == "WithPostImage")));
+            Assert.DoesNotContain(typeof(ICreatePreValidationConfig<>).GetMethods(), m => m.Name == "WithPreImage");
+            Assert.DoesNotContain(typeof(ICreateMultiplePreValidationConfig<>).GetMethods(), m => m.Name == "WithPreImage");
+            Assert.Contains(typeof(IDeletePreValidationConfig<>).GetMethods(), m => m.Name == "WithPreImage");
+        }
+
+        // Runtime backstop for a chain assembled out of order (the typed chain cannot express these): a pre-image
+        // on Create and a post-image at PreValidation are still rejected at Build().
+
+        [Fact]
+        public void StepBuilder_Build_RejectsPreImageOnCreate_AtPreValidation()
+        {
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnCreate().PreValidation().Sync().FilterOn(a => a.Name);
+            ((IUpdatePreValidationConfig<TestAccount>)builder).WithPreImage(a => a.Name);
+
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
+            Assert.Contains("PreImage", ex.Message);
+            Assert.Contains("'Create'", ex.Message);
+        }
+
+        [Fact]
+        public void StepBuilder_Build_RejectsPostImage_AtPreValidation()
+        {
+            StepBuilder<TestAccount> builder = New();
+            Trigger(builder).OnMessage("acme_DoThing").PreValidation().Sync();
+            ((IPermissivePostOperationConfig<TestAccount>)builder).WithPostImage(a => a.Name);
+
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
+            Assert.Contains("PostImage", ex.Message);
+            Assert.Contains("PreValidation", ex.Message);
+        }
 
         [Fact]
         public void StepBuilder_AllowsPreImageForPreOperationUpdate()

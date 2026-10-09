@@ -576,31 +576,48 @@ namespace Vela.Testing
         {
             RunOperation<object?>(asyncQueue =>
             {
+                // PreValidation runs before the main operation, so before any cascade: the deleted record's
+                // PreValidation steps still see its children (verified live: 2 children at PreValidation, 0 at
+                // PreOperation). A missing record skips it and lets the store raise its not-found fault.
+                bool preValidated = false;
+                if (_store.TryGet(entityName, id, out Entity? pre))
+                {
+                    FireStage(DeleteInvocation(PluginStages.PreValidation, entityName, id, pre), asyncQueue);
+                    preValidated = true;
+                }
+
                 // The store owns the cascade traversal (Restrict/RemoveLink/recursion) but delegates each actual
                 // record removal to us, so the Delete plugins fire for the parent AND every cascaded child.
-                _store.DeleteInternal(entityName, id, (name, recordId) => FireDeleteAndRemove(name, recordId, asyncQueue));
+                _store.DeleteInternal(entityName, id, (name, recordId) => FireDeleteAndRemove(
+                    name,
+                    recordId,
+                    asyncQueue,
+                    firePreValidation: !(preValidated && recordId == id && string.Equals(name, entityName, StringComparison.OrdinalIgnoreCase))));
                 return null;
             }, sharedVariables);
         }
 
         // Fires one record's Delete pre-stages, removes just that record (the store handles cascade around this),
         // then fires its post-stages — the same pre/remove/post a top-level Delete runs, applied per cascaded record.
-        private void FireDeleteAndRemove(string entityName, Guid id, List<Action> asyncQueue)
+        // The top-level record's PreValidation already ran before the cascade (see ExecuteDelete).
+        private void FireDeleteAndRemove(string entityName, Guid id, List<Action> asyncQueue, bool firePreValidation)
         {
             _store.TryGet(entityName, id, out Entity? pre);
-            EntityReference target = new EntityReference(entityName, id);
 
-            StageInvocation Make(PluginStages stage)
+            if (firePreValidation)
             {
-                StageInvocation invocation = NewInvocation(PluginMessages.Delete, stage, entityName, id, target);
-                invocation.PreState = pre;
-                return invocation;
+                FireStage(DeleteInvocation(PluginStages.PreValidation, entityName, id, pre), asyncQueue);
             }
-
-            FireStage(Make(PluginStages.PreValidation), asyncQueue);
-            FireStage(Make(PluginStages.PreOperation), asyncQueue);
+            FireStage(DeleteInvocation(PluginStages.PreOperation, entityName, id, pre), asyncQueue);
             _store.RemoveRecordDirect(entityName, id);
-            FireStage(Make(PluginStages.PostOperation), asyncQueue);
+            FireStage(DeleteInvocation(PluginStages.PostOperation, entityName, id, pre), asyncQueue);
+        }
+
+        private static StageInvocation DeleteInvocation(PluginStages stage, string entityName, Guid id, Entity? pre)
+        {
+            StageInvocation invocation = NewInvocation(PluginMessages.Delete, stage, entityName, id, new EntityReference(entityName, id));
+            invocation.PreState = pre;
+            return invocation;
         }
 
         internal void ExecuteAssociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities, ParameterCollection? sharedVariables = null)

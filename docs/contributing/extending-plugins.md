@@ -28,8 +28,8 @@ these, in this order:
    registrar delegation) are **generated** into `src/Vela.Plugins/Steps/StepApi.cs` and
    `src/Vela.Plugins/Steps/StepBuilder.Impl.cs` (both committed). Add **one line** to the generator's model,
    `tools/codegen/Vela.StepApiGen/MessageModel.cs`, stating whether the message supports `FilterOn(...)` and which
-   images it allows (`Images.Pre`, `Images.Post`, `Images.PreAndPost`; pre-images are offered at PreOperation and
-   PostOperation, post-images at PostOperation only, never at PreValidation), for example
+   images it allows (`Images.Pre`, `Images.Post`, `Images.PreAndPost`; pre-images are offered at every stage,
+   PreValidation included, post-images at PostOperation only), for example
    `new("QualifyLead"),` or `new("Update", FilterOn: true, Images: Images.PreAndPost),`. Then regenerate:
 
    ```bash

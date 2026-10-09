@@ -3,7 +3,8 @@ namespace Vela.StepApiGen;
 /// <summary>A config-interface member that returns the config itself (fluent, order-free).</summary>
 /// <param name="Signature">Name and parameter list, e.g. <c>WithStepKey(string key)</c>.</param>
 /// <param name="Body">The StepBuilder statement that applies it, e.g. <c>SetKey(key);</c>.</param>
-internal sealed record Modifier(string Signature, string Body);
+/// <param name="Doc">XML doc lines emitted above the interface member (without the <c>///</c>), or null for none.</param>
+internal sealed record Modifier(string Signature, string Body, IReadOnlyList<string>? Doc = null);
 
 /// <summary>A terminal <c>Handle(...)</c> overload of a config interface.</summary>
 /// <param name="Parameter">The handler parameter, e.g. <c>Action&lt;ICreatePreContext&lt;TEntity&gt;&gt; handler</c>.</param>
@@ -20,12 +21,26 @@ internal sealed record StepConfig(
     string Type,
     string Constraints,
     string Summary,
+    Stage Stage,
     bool FilterOn,
     bool PreImage,
     bool PostImage,
     IReadOnlyList<HandleOverload> Handles)
 {
     public const string Attributes = "params Expression<Func<TEntity, object?>>[] attributes";
+
+    /// <summary>
+    /// Doc of a PreValidation <c>WithPreImage</c>: a top-level PreValidation step runs outside the transaction, so
+    /// its image can be stale by the main operation. Only PreValidation configs carry it.
+    /// </summary>
+    private static readonly IReadOnlyList<string> PreValidationPreImageDoc =
+    [
+        "<summary>Captures a pre-image: the row as it is before the operation.</summary>",
+        "<remarks>A top-level (depth 1) PreValidation step runs outside the database transaction and the image is read",
+        "without a lock, so another process can change the row before the main operation. That is fine for validation;",
+        "register the step at PreOperation when the logic needs a strictly consistent read. A nested PreValidation step",
+        "runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>",
+    ];
 
     /// <summary>The fluent modifiers in declaration order. FilterOn and the images are per-message; the rest is universal.</summary>
     public IEnumerable<Modifier> Modifiers()
@@ -38,8 +53,9 @@ internal sealed record StepConfig(
         yield return new("WithDescription(string description)", "SetDescription(description);");
         if (PreImage)
         {
-            yield return new($"WithPreImage({Attributes})", "AddImageNow(PluginImageAliases.PreImage, true, attributes);");
-            yield return new($"WithPreImage(string alias, {Attributes})", "AddImageNow(alias, true, attributes);");
+            IReadOnlyList<string>? doc = Stage == Stage.PreValidation ? PreValidationPreImageDoc : null;
+            yield return new($"WithPreImage({Attributes})", "AddImageNow(PluginImageAliases.PreImage, true, attributes);", doc);
+            yield return new($"WithPreImage(string alias, {Attributes})", "AddImageNow(alias, true, attributes);", doc);
         }
         if (PostImage)
         {
@@ -67,6 +83,7 @@ internal sealed record StepConfig(
         ConfigType(message.Name, stage),
         " where TEntity : Entity",
         $"Config for the {message.Name} step at {stage}. Handle(...) is last; With* modifiers are order-free.",
+        stage,
         message.FilterOn,
         message.HasPreImage(stage),
         message.HasPostImage(stage),
@@ -85,6 +102,7 @@ internal sealed record StepConfig(
             $"IPermissive{stage}Config<TEntity>",
             " where TEntity : Entity",
             $"Config for an OnMessage(...) step at {stage}. Handle(...) is last; With* modifiers are order-free.",
+            stage,
             FilterOn: false,
             Unmodelled.HasPreImage(stage),
             Unmodelled.HasPostImage(stage),
@@ -100,6 +118,7 @@ internal sealed record StepConfig(
         $"ITyped{stage}Config<TEntity, TRequest>",
         " where TEntity : Entity where TRequest : OrganizationRequest, new()",
         $"Config for an On&lt;TRequest&gt;() step at {stage}. Handle(...) is last; With* modifiers are order-free.",
+        stage,
         FilterOn: false,
         Unmodelled.HasPreImage(stage),
         Unmodelled.HasPostImage(stage),

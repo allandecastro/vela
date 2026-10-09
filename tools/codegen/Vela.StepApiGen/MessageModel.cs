@@ -1,7 +1,7 @@
 namespace Vela.StepApiGen;
 
-/// <summary>Which entity images a message supports. Pre-images are offered at PreOperation and PostOperation,
-/// post-images at PostOperation only; PreValidation never offers an image (Dataverse rules).</summary>
+/// <summary>Which entity images a message supports. Pre-images are offered at every stage (PreValidation included),
+/// post-images at PostOperation only (Dataverse rules).</summary>
 internal enum Images
 {
     None,
@@ -18,7 +18,7 @@ internal enum Images
 /// <param name="Images">Which images the stage configs expose (<c>WithPreImage</c> / <c>WithPostImage</c>).</param>
 internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None)
 {
-    public bool HasPreImage(Stage stage) => stage != Stage.PreValidation && Images is Images.Pre or Images.PreAndPost;
+    public bool HasPreImage(Stage stage) => Images is Images.Pre or Images.PreAndPost;
 
     public bool HasPostImage(Stage stage) => stage == Stage.PostOperation && Images is Images.Post or Images.PreAndPost;
 }

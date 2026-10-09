@@ -40,6 +40,7 @@ namespace Vela.Steps
         IStepConfig<TEntity> On<TRequest>();
         IStepConfig<TEntity> OnMessage(string messageName);
         IStepConfig<TEntity> OnMessage<TMessage>();
+        IStepConfig<TEntity> PreValidation();
         IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
         IStepConfig<TEntity> Sync();
@@ -833,6 +834,76 @@ namespace Demo
         Assert.Contains("class OnDeletingContext : global::Vela.Context.DeletePreContext<global::Demo.Account>", output);
         Assert.Contains("public new OnDeleting_PreImage? PreImage", output);
         Assert.DoesNotContain("PostImage =>", output);   // no post-image member on a delete-pre context
+    }
+
+    // #436: a pre-image is valid at PreValidation; the typed projection and context are the same as at PreOperation.
+    [Fact]
+    public void Emits_a_typed_pre_image_context_for_update_prevalidation()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountGuard : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PreValidation().Sync()
+                .FilterOn(a => a.Revenue)
+                .WithPreImage(a => a.Revenue)
+                .Handle(OnValidating);
+        private void OnValidating() { }
+    }
+}
+");
+
+        Assert.Contains("class OnValidating_PreImage", output);
+        Assert.Contains("AttributeLogicalName(\"revenue\")", output);
+        Assert.DoesNotContain("telephone1", output);
+        Assert.Contains("class OnValidatingContext : global::Vela.Context.UpdatePreContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnValidating_PreImage? PreImage", output);
+    }
+
+    [Fact]
+    public void Emits_a_typed_pre_image_context_for_delete_prevalidation()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountDeleteGuard : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnDelete().PreValidation().Sync()
+                .WithPreImage(a => a.Name)
+                .Handle(OnDeleteValidating);
+        private void OnDeleteValidating() { }
+    }
+}
+");
+
+        Assert.Contains("class OnDeleteValidatingContext : global::Vela.Context.DeletePreContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnDeleteValidating_PreImage? PreImage", output);
+    }
+
+    [Fact]
+    public void Names_a_lambda_prevalidation_projection_after_message_and_stage()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountGuard : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PreValidation().Sync()
+                .FilterOn(a => a.Name)
+                .WithPreImage(a => a.Name)
+                .Handle(() => { });
+    }
+}
+");
+
+        Assert.Contains("class UpdatePreVal_PreImage", output);
     }
 
     [Fact]
