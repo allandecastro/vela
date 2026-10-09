@@ -180,6 +180,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **`DownloadFile` no longer returns a truncated file (#440).** An empty block before the announced
+  `FileSizeInBytes` used to end the loop and return the bytes read so far, with no error. It now throws an
+  `InvalidPluginExecutionException` naming the table, record, column, the bytes received and the announced size.
+  The same check rejects a download whose total differs from the announced size.
 - **Typed triggers register on the real sdkmessage (#461).** 15 triggers registered steps on SDK request names that
   do not exist as sdkmessages, so `vela apply` could not deploy them: `OnSendEmail()` now registers on `Send`,
   `OnSendEmailFromTemplate()` on `SendFromTemplate`, `OnDeliverIncomingEmail()` / `OnDeliverPromoteEmail()` on
