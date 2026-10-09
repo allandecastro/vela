@@ -2,7 +2,7 @@
 
 From an empty folder to registered, running steps in five commands:
 
-```powershell
+```bash
 # 1. Install the CLI (.NET global tool - exposes the `vela` command)
 dotnet tool install --global Vela.Cli
 
@@ -13,17 +13,20 @@ cd ZavaSales
 # 3. Build the plugin package into a .nupkg (the build packages it into artifacts/; not dotnet pack)
 dotnet build ZavaSales.sln -c Release
 
-# 4. Preview what would change in your environment (read-only)
-vela plan  --packages-dir artifacts --interactive
+# 4. Preview what would change in an existing Dataverse solution (read-only)
+vela plan  --packages-dir artifacts --solution ZavaSales --interactive
 
-# 5. Apply the changes (idempotent create/update/delete) into an existing Dataverse solution.
-#    apply writes by default: on a terminal it shows the plan and asks you to confirm (type "yes").
-#    Add --auto-approve to skip the prompt in CI / unattended runs.
+# 5. Apply the changes (idempotent create/update/delete). On a terminal it shows the plan and asks you to
+#    confirm; --auto-approve skips the prompt in CI.
 vela apply --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
+`--solution` names a solution that already exists in the environment: it gives the plugin package the publisher
+prefix Dataverse requires, so `plan` and `apply` fail without it.
+
 What you get from `vela init`: a solution that references `Vela.Plugins` as a NuGet package, with seeded
-plugins, Custom APIs, services and a no-connection test project. See [Initialize a solution](initialize-a-solution.md)
+plugins, Custom APIs, services, a no-connection test project, and an `AGENTS.md` that tells AI coding agents how to
+write steps, Custom APIs and tests in it. `vela init --minimal` scaffolds only the Shared and Plugins projects, with no samples. See [Initialize a solution](initialize-a-solution.md)
 for the layout and the [guides](../guides/index.md) to write and test your own code.
 
 > [!NOTE]
