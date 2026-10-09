@@ -46,9 +46,9 @@ Run these from the solution root:
 1. Generate early-bound models from your environment: `vela models --entities account,contact --out src/{{prefix}}.Shared/Models/Generated --namespace {{prefix}}.Shared.Models.Generated`.
 2. Add a plugin or Custom API (`--entity` is the early-bound model type): `vela add plugin MyPlugin --entity Account --filtering-attributes Name --project src/{{prefix}}.Plugins` (a Create/Update step needs its filtering columns) or `vela add customapi MyApi --global --project src/{{prefix}}.Plugins`.
 3. Build: `dotnet build {{options.SolutionName}}.sln -c Release`.
-{{testStep}}{{deployStep}}. Preview and deploy: `vela plan --packages-dir artifacts`, then `vela apply --packages-dir artifacts`.
+{{testStep}}{{deployStep}}. Preview and deploy into your Dataverse solution: `vela plan --packages-dir artifacts --solution {{options.SolutionName}}`, then `vela apply --packages-dir artifacts --solution {{options.SolutionName}}` (use your solution's unique name; `--solution` gives the package its publisher prefix, without which `vela plan` refuses an unprefixed package).
 
-Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts` simply reports no changes.
+Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts --solution {{options.SolutionName}}` simply reports no changes.
 
 {{publisherNote}}
 
@@ -126,11 +126,11 @@ during the build (from the publish output), so a cold `dotnet pack` emits an ass
 
 ```powershell
 # Preview (read-only)
-vela plan --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
+vela plan --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --solution {{options.SolutionName}} --interactive --verbose
 
 # Apply (idempotent create/update/delete). apply writes by default and prompts on a terminal;
 # add --auto-approve to skip the prompt in CI.
-vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
+vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --solution {{options.SolutionName}} --interactive --verbose
 ```
 
 ## What's inside the plugin project

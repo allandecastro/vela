@@ -1,3 +1,4 @@
+using System.Linq;
 using Vela.Cli;
 using Xunit;
 
@@ -406,6 +407,28 @@ public class ScaffoldTemplatesTests
         string signed = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = true });
         Assert.Contains("--pfx-base64-env CODE_SIGN_PFX_BASE64 --pfx-password-env CODE_SIGN_PFX_PASSWORD", signed);
         Assert.DoesNotContain("--pfx-password $env:", signed);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RootReadme_EveryPlanAndApplyExample_PassesSolution(bool samples)   // plan exits 4 on an unprefixed package
+    {
+        string readme = ScaffoldTemplates.RootReadme(Options() with { IncludeSamples = samples });
+
+        string[] commands = System.Text.RegularExpressions.Regex.Matches(readme, @"vela (?:plan|apply) --package[^`\n]*")
+            .Select(m => m.Value)
+            .ToArray();
+        Assert.NotEmpty(commands);
+        Assert.All(commands, command => Assert.Contains("--solution ZavaSales", command));
+    }
+
+    [Fact]
+    public void AccountPostCreatePlugin_DescribesTheCurrentUserService()
+    {
+        string code = ScaffoldTemplates.AccountPostCreatePlugin("Zava");
+        Assert.DoesNotContain("initiating", code);
+        Assert.Contains("current user's IOrganizationService (ctx.Service", code);
     }
 
     [Fact]

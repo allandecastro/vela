@@ -113,7 +113,7 @@ internal static class ProjectScaffolder
 
         // `dotnet build -c Release` packages the plugin project(s) into artifacts/ (GeneratePackageOnBuild +
         // PackageOutputPath). `dotnet pack` is intentionally not used: run cold it emits an assembly-less package.
-        Console.WriteLine($"  vela plan --packages-dir artifacts --interactive --verbose");
+        Console.WriteLine($"  vela plan --packages-dir artifacts --solution {options.SolutionName} --interactive --verbose   # your solution's unique name");
         if (options.IncludeWebResources)
         {
             string webResourcesName = $"{prefix}.WebResources";

@@ -318,7 +318,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
     {
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
-            // The default registrations already expose the initiating-user IOrganizationService; hand it
+            // The default registrations already expose the current user's IOrganizationService (ctx.Service, which
+            // honours the step's impersonation); hand it
             // to the table-scoped service.
             services.AddScoped<IAccountFollowUpService>(r => new AccountFollowUpService(r.GetRequiredService<IOrganizationService>()));
         }
