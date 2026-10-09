@@ -266,7 +266,7 @@ namespace Vela.Plugin
                 Type parameterType = runtimeHandler.Method.GetParameters()[0].ParameterType;
                 object delegateArgument = BuildDerivedStepContext(parameterType, ctx)
                     ?? BuildGenericMessageContextForType(parameterType, ctx)
-                    ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
+                    ?? BuildTypedContext(TypedMessageOf(matchedDefinition), matchedDefinition.Stage, ctx)
                     ?? ctx;
                 (ctx as LocalPluginContext)?.SetCurrentHandler(runtimeHandler.Method.Name);
                 TraceHandlerEntry(ctx, runtimeHandler.Method.Name);
@@ -280,7 +280,7 @@ namespace Vela.Plugin
             // implement, so the generic message context (built from the handler's own parameter type) is tried
             // first, then the per-message modelled context, then the plain ILocalPluginContext.
             object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
-                ?? BuildTypedContext(matchedDefinition.Message, matchedDefinition.Stage, ctx)
+                ?? BuildTypedContext(TypedMessageOf(matchedDefinition), matchedDefinition.Stage, ctx)
                 ?? ctx;
             (ctx as LocalPluginContext)?.SetCurrentHandler(matchedDefinition.HandlerMethodName);
             TraceHandlerEntry(ctx, matchedDefinition.HandlerMethodName);
@@ -393,6 +393,11 @@ namespace Vela.Plugin
             }
         }
 
+        // The request name the step was declared with picks its typed context: one sdkmessage can serve several
+        // requests (Win is WinOpportunity on opportunity and WinQuote on quote).
+        private static string TypedMessageOf(StepDefinition definition)
+            => string.IsNullOrEmpty(definition.RequestName) ? definition.Message : definition.RequestName;
+
         // Messages Vela models with a typed context: build the per-message context so its handler receives a
         // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for a permissive
         // OnMessage(...) step that Vela does not model, so its handler receives the plain ILocalPluginContext.
@@ -418,11 +423,8 @@ namespace Vela.Plugin
                 PluginMessages.QualifyLead => post ? (object)new QualifyLeadPostContext<TEntity>(ctx) : new QualifyLeadPreContext<TEntity>(ctx),
                 PluginMessages.WinOpportunity => post ? (object)new WinOpportunityPostContext<TEntity>(ctx) : new WinOpportunityPreContext<TEntity>(ctx),
                 PluginMessages.LoseOpportunity => post ? (object)new LoseOpportunityPostContext<TEntity>(ctx) : new LoseOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.ConvertQuoteToSalesOrder => post ? (object)new ConvertQuoteToSalesOrderPostContext<TEntity>(ctx) : new ConvertQuoteToSalesOrderPreContext<TEntity>(ctx),
                 PluginMessages.ConvertSalesOrderToInvoice => post ? (object)new ConvertSalesOrderToInvoicePostContext<TEntity>(ctx) : new ConvertSalesOrderToInvoicePreContext<TEntity>(ctx),
                 PluginMessages.GenerateQuoteFromOpportunity => post ? (object)new GenerateQuoteFromOpportunityPostContext<TEntity>(ctx) : new GenerateQuoteFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.GenerateSalesOrderFromOpportunity => post ? (object)new GenerateSalesOrderFromOpportunityPostContext<TEntity>(ctx) : new GenerateSalesOrderFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.GenerateInvoiceFromOpportunity => post ? (object)new GenerateInvoiceFromOpportunityPostContext<TEntity>(ctx) : new GenerateInvoiceFromOpportunityPreContext<TEntity>(ctx),
                 PluginMessages.AddToQueue => post ? (object)new AddToQueuePostContext<TEntity>(ctx) : new AddToQueuePreContext<TEntity>(ctx),
                 PluginMessages.RemoveFromQueue => post ? (object)new RemoveFromQueuePostContext<TEntity>(ctx) : new RemoveFromQueuePreContext<TEntity>(ctx),
                 PluginMessages.PickFromQueue => post ? (object)new PickFromQueuePostContext<TEntity>(ctx) : new PickFromQueuePreContext<TEntity>(ctx),
@@ -443,11 +445,6 @@ namespace Vela.Plugin
                 PluginMessages.RetrievePrincipalAccess => post ? (object)new RetrievePrincipalAccessPostContext<TEntity>(ctx) : new RetrievePrincipalAccessPreContext<TEntity>(ctx),
                 PluginMessages.RetrieveSharedPrincipalsAndAccess => post ? (object)new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(ctx) : new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(ctx),
                 PluginMessages.WinQuote => post ? (object)new WinQuotePostContext<TEntity>(ctx) : new WinQuotePreContext<TEntity>(ctx),
-                PluginMessages.ReviseQuote => post ? (object)new ReviseQuotePostContext<TEntity>(ctx) : new ReviseQuotePreContext<TEntity>(ctx),
-                PluginMessages.FulfillSalesOrder => post ? (object)new FulfillSalesOrderPostContext<TEntity>(ctx) : new FulfillSalesOrderPreContext<TEntity>(ctx),
-                PluginMessages.GetQuoteProductsFromOpportunity => post ? (object)new GetQuoteProductsFromOpportunityPostContext<TEntity>(ctx) : new GetQuoteProductsFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.GetSalesOrderProductsFromOpportunity => post ? (object)new GetSalesOrderProductsFromOpportunityPostContext<TEntity>(ctx) : new GetSalesOrderProductsFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.GetInvoiceProductsFromOpportunity => post ? (object)new GetInvoiceProductsFromOpportunityPostContext<TEntity>(ctx) : new GetInvoiceProductsFromOpportunityPreContext<TEntity>(ctx),
                 _ => null,
             };
         }

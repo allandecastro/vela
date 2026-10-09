@@ -15,7 +15,8 @@ namespace Vela.Tests
     // EntityPluginBase.BuildTypedContext), and that a permissive OnMessage(...) step binds and runs an untyped
     // handler. One plugin registers a step for all 13 modelled messages plus a custom message, each bound to a
     // single ILocalPluginContext handler (assignable to every typed context by contravariance); the test runs it
-    // once per message and asserts the matching step fired.
+    // once per message and asserts the matching step fired. WinQuote shares the Win sdkmessage with
+    // WinOpportunity, so it has its own test below.
     public sealed class TypedContextDispatchTests
     {
         private sealed class AllMessagesProbe : EntityPluginBase<TestAccount>
@@ -46,11 +47,8 @@ namespace Vela.Tests
                 RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnWinOpportunity().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnLoseOpportunity().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnConvertQuoteToSalesOrder().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnConvertSalesOrderToInvoice().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnGenerateQuoteFromOpportunity().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnGenerateSalesOrderFromOpportunity().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnGenerateInvoiceFromOpportunity().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnAddToQueue().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRemoveFromQueue().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnPickFromQueue().PostOperation().Sync().Handle(OnAny);
@@ -70,12 +68,6 @@ namespace Vela.Tests
                 RegisterStep().OnCloneContract().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrievePrincipalAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnWinQuote().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnReviseQuote().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnFulfillSalesOrder().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnGetQuoteProductsFromOpportunity().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnGetSalesOrderProductsFromOpportunity().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnGetInvoiceProductsFromOpportunity().PostOperation().Sync().Handle(OnAny);
             }
 
             // Bound to every step: contravariantly assignable to each Action<I{Msg}Context<TestAccount>> and to
@@ -101,11 +93,8 @@ namespace Vela.Tests
         [InlineData(PluginMessages.QualifyLead)]
         [InlineData(PluginMessages.WinOpportunity)]
         [InlineData(PluginMessages.LoseOpportunity)]
-        [InlineData(PluginMessages.ConvertQuoteToSalesOrder)]
         [InlineData(PluginMessages.ConvertSalesOrderToInvoice)]
         [InlineData(PluginMessages.GenerateQuoteFromOpportunity)]
-        [InlineData(PluginMessages.GenerateSalesOrderFromOpportunity)]
-        [InlineData(PluginMessages.GenerateInvoiceFromOpportunity)]
         [InlineData(PluginMessages.AddToQueue)]
         [InlineData(PluginMessages.RemoveFromQueue)]
         [InlineData(PluginMessages.PickFromQueue)]
@@ -125,12 +114,6 @@ namespace Vela.Tests
         [InlineData(PluginMessages.CloneContract)]
         [InlineData(PluginMessages.RetrievePrincipalAccess)]
         [InlineData(PluginMessages.RetrieveSharedPrincipalsAndAccess)]
-        [InlineData(PluginMessages.WinQuote)]
-        [InlineData(PluginMessages.ReviseQuote)]
-        [InlineData(PluginMessages.FulfillSalesOrder)]
-        [InlineData(PluginMessages.GetQuoteProductsFromOpportunity)]
-        [InlineData(PluginMessages.GetSalesOrderProductsFromOpportunity)]
-        [InlineData(PluginMessages.GetInvoiceProductsFromOpportunity)]
         [InlineData(AllMessagesProbe.CustomMessage)]
         public void Each_message_dispatches_to_its_handler(string message)
         {
@@ -143,7 +126,55 @@ namespace Vela.Tests
                 .WithPrimaryEntity(TestAccount.EntityLogicalNameValue, Guid.NewGuid())
                 .Execute(probe);
 
-            Assert.Equal(message, probe.Seen);
+            // The platform sends the sdkmessage, which differs from the request name for some messages
+            // (SendEmail runs as Send); the context builder translates it the same way.
+            Assert.Equal(SdkMessageNames.ToSdkMessage(message), probe.Seen);
+        }
+
+        // WinOpportunity and WinQuote share the Win sdkmessage; the step keeps its request name, so each handler gets
+        // its own typed context. A wrong context would fail to bind the typed handler.
+        private sealed class WinOpportunityProbe : EntityPluginBase<TestAccount>
+        {
+            public string? Seen { get; private set; }
+
+            public WinOpportunityProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnWinOpportunity().PostOperation().Sync().Handle(OnWon);
+
+            private void OnWon(IWinOpportunityPostContext<TestAccount> ctx) => Seen = ctx.GetType().Name;
+        }
+
+        private sealed class WinQuoteProbe : EntityPluginBase<TestAccount>
+        {
+            public string? Seen { get; private set; }
+
+            public WinQuoteProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnWinQuote().PostOperation().Sync().Handle(OnWon);
+
+            private void OnWon(IWinQuotePostContext<TestAccount> ctx) => Seen = ctx.GetType().Name;
+        }
+
+        [Fact]
+        public void Win_builds_the_context_of_the_request_the_step_was_declared_with()
+        {
+            WinOpportunityProbe opportunity = new WinOpportunityProbe();
+            WinQuoteProbe quote = new WinQuoteProbe();
+
+            foreach (IPlugin plugin in new IPlugin[] { opportunity, quote })
+            {
+                PluginContext.For<TestAccount>()
+                    .OnMessage("Win")
+                    .Stage(PluginStages.PostOperation)
+                    .Mode(ExecutionMode.Synchronous)
+                    .WithPrimaryEntity(TestAccount.EntityLogicalNameValue, Guid.NewGuid())
+                    .Execute(plugin);
+            }
+
+            Assert.StartsWith("WinOpportunityPostContext", opportunity.Seen);
+            Assert.StartsWith("WinQuotePostContext", quote.Seen);
         }
 
         // Regression: on a real org an (Dis)Associate execution context carries no primary entity matching the

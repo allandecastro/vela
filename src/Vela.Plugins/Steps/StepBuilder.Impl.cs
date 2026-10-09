@@ -28,11 +28,8 @@ namespace Vela.Steps
         IQualifyLeadStages<TEntity>,
         IWinOpportunityStages<TEntity>,
         ILoseOpportunityStages<TEntity>,
-        IConvertQuoteToSalesOrderStages<TEntity>,
         IConvertSalesOrderToInvoiceStages<TEntity>,
         IGenerateQuoteFromOpportunityStages<TEntity>,
-        IGenerateSalesOrderFromOpportunityStages<TEntity>,
-        IGenerateInvoiceFromOpportunityStages<TEntity>,
         IAddToQueueStages<TEntity>,
         IRemoveFromQueueStages<TEntity>,
         IPickFromQueueStages<TEntity>,
@@ -53,11 +50,6 @@ namespace Vela.Steps
         IRetrievePrincipalAccessStages<TEntity>,
         IRetrieveSharedPrincipalsAndAccessStages<TEntity>,
         IWinQuoteStages<TEntity>,
-        IReviseQuoteStages<TEntity>,
-        IFulfillSalesOrderStages<TEntity>,
-        IGetQuoteProductsFromOpportunityStages<TEntity>,
-        IGetSalesOrderProductsFromOpportunityStages<TEntity>,
-        IGetInvoiceProductsFromOpportunityStages<TEntity>,
         IModifyAccessStages<TEntity>,
         IMergeStages<TEntity>,
         ISyncMode<ICreatePreValidationConfig<TEntity>>,
@@ -150,12 +142,6 @@ namespace Vela.Steps
         ILoseOpportunityPreOperationConfig<TEntity>,
         ISyncAsyncMode<ILoseOpportunityPostOperationConfig<TEntity>>,
         ILoseOpportunityPostOperationConfig<TEntity>,
-        ISyncMode<IConvertQuoteToSalesOrderPreValidationConfig<TEntity>>,
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity>,
-        ISyncMode<IConvertQuoteToSalesOrderPreOperationConfig<TEntity>>,
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity>,
-        ISyncAsyncMode<IConvertQuoteToSalesOrderPostOperationConfig<TEntity>>,
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity>,
         ISyncMode<IConvertSalesOrderToInvoicePreValidationConfig<TEntity>>,
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity>,
         ISyncMode<IConvertSalesOrderToInvoicePreOperationConfig<TEntity>>,
@@ -168,18 +154,6 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>,
         ISyncAsyncMode<IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>>,
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>,
-        ISyncMode<IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>>,
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>,
-        ISyncMode<IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>>,
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>,
-        ISyncAsyncMode<IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>>,
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>,
-        ISyncMode<IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>>,
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>,
-        ISyncMode<IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>>,
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>,
-        ISyncAsyncMode<IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>>,
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>,
         ISyncMode<IAddToQueuePreValidationConfig<TEntity>>,
         IAddToQueuePreValidationConfig<TEntity>,
         ISyncMode<IAddToQueuePreOperationConfig<TEntity>>,
@@ -300,36 +274,6 @@ namespace Vela.Steps
         IWinQuotePreOperationConfig<TEntity>,
         ISyncAsyncMode<IWinQuotePostOperationConfig<TEntity>>,
         IWinQuotePostOperationConfig<TEntity>,
-        ISyncMode<IReviseQuotePreValidationConfig<TEntity>>,
-        IReviseQuotePreValidationConfig<TEntity>,
-        ISyncMode<IReviseQuotePreOperationConfig<TEntity>>,
-        IReviseQuotePreOperationConfig<TEntity>,
-        ISyncAsyncMode<IReviseQuotePostOperationConfig<TEntity>>,
-        IReviseQuotePostOperationConfig<TEntity>,
-        ISyncMode<IFulfillSalesOrderPreValidationConfig<TEntity>>,
-        IFulfillSalesOrderPreValidationConfig<TEntity>,
-        ISyncMode<IFulfillSalesOrderPreOperationConfig<TEntity>>,
-        IFulfillSalesOrderPreOperationConfig<TEntity>,
-        ISyncAsyncMode<IFulfillSalesOrderPostOperationConfig<TEntity>>,
-        IFulfillSalesOrderPostOperationConfig<TEntity>,
-        ISyncMode<IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>>,
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>,
-        ISyncMode<IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>>,
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>,
-        ISyncAsyncMode<IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>>,
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>,
-        ISyncMode<IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>>,
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>,
-        ISyncMode<IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>>,
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>,
-        ISyncAsyncMode<IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>>,
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>,
-        ISyncMode<IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>>,
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>,
-        ISyncMode<IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>>,
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>,
-        ISyncAsyncMode<IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>>,
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>,
         ISyncMode<IModifyAccessPreValidationConfig<TEntity>>,
         IModifyAccessPreValidationConfig<TEntity>,
         ISyncMode<IModifyAccessPreOperationConfig<TEntity>>,
@@ -351,57 +295,49 @@ namespace Vela.Steps
         IPermissivePostOperationConfig<TEntity>
         where TEntity : Entity
     {
-        ICreateStages<TEntity> IStepTrigger<TEntity>.OnCreate() { _definition.Message = PluginMessages.Create; return this; }
-        IUpdateStages<TEntity> IStepTrigger<TEntity>.OnUpdate() { _definition.Message = PluginMessages.Update; return this; }
-        ICreateMultipleStages<TEntity> IStepTrigger<TEntity>.OnCreateMultiple() { _definition.Message = PluginMessages.CreateMultiple; return this; }
-        IUpdateMultipleStages<TEntity> IStepTrigger<TEntity>.OnUpdateMultiple() { _definition.Message = PluginMessages.UpdateMultiple; return this; }
-        IDeleteStages<TEntity> IStepTrigger<TEntity>.OnDelete() { _definition.Message = PluginMessages.Delete; return this; }
-        IRetrieveStages<TEntity> IStepTrigger<TEntity>.OnRetrieve() { _definition.Message = PluginMessages.Retrieve; return this; }
-        IRetrieveMultipleStages<TEntity> IStepTrigger<TEntity>.OnRetrieveMultiple() { _definition.Message = PluginMessages.RetrieveMultiple; return this; }
-        IAssociateStages<TEntity> IStepTrigger<TEntity>.OnAssociate() { _definition.Message = PluginMessages.Associate; return this; }
-        IDisassociateStages<TEntity> IStepTrigger<TEntity>.OnDisassociate() { _definition.Message = PluginMessages.Disassociate; return this; }
-        IGrantAccessStages<TEntity> IStepTrigger<TEntity>.OnGrantAccess() { _definition.Message = PluginMessages.GrantAccess; return this; }
-        IAssignStages<TEntity> IStepTrigger<TEntity>.OnAssign() { _definition.Message = PluginMessages.Assign; return this; }
-        IRevokeAccessStages<TEntity> IStepTrigger<TEntity>.OnRevokeAccess() { _definition.Message = PluginMessages.RevokeAccess; return this; }
-        IQualifyLeadStages<TEntity> IStepTrigger<TEntity>.OnQualifyLead() { _definition.Message = PluginMessages.QualifyLead; return this; }
-        IWinOpportunityStages<TEntity> IStepTrigger<TEntity>.OnWinOpportunity() { _definition.Message = PluginMessages.WinOpportunity; return this; }
-        ILoseOpportunityStages<TEntity> IStepTrigger<TEntity>.OnLoseOpportunity() { _definition.Message = PluginMessages.LoseOpportunity; return this; }
-        IConvertQuoteToSalesOrderStages<TEntity> IStepTrigger<TEntity>.OnConvertQuoteToSalesOrder() { _definition.Message = PluginMessages.ConvertQuoteToSalesOrder; return this; }
-        IConvertSalesOrderToInvoiceStages<TEntity> IStepTrigger<TEntity>.OnConvertSalesOrderToInvoice() { _definition.Message = PluginMessages.ConvertSalesOrderToInvoice; return this; }
-        IGenerateQuoteFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateQuoteFromOpportunity() { _definition.Message = PluginMessages.GenerateQuoteFromOpportunity; return this; }
-        IGenerateSalesOrderFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateSalesOrderFromOpportunity() { _definition.Message = PluginMessages.GenerateSalesOrderFromOpportunity; return this; }
-        IGenerateInvoiceFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateInvoiceFromOpportunity() { _definition.Message = PluginMessages.GenerateInvoiceFromOpportunity; return this; }
-        IAddToQueueStages<TEntity> IStepTrigger<TEntity>.OnAddToQueue() { _definition.Message = PluginMessages.AddToQueue; return this; }
-        IRemoveFromQueueStages<TEntity> IStepTrigger<TEntity>.OnRemoveFromQueue() { _definition.Message = PluginMessages.RemoveFromQueue; return this; }
-        IPickFromQueueStages<TEntity> IStepTrigger<TEntity>.OnPickFromQueue() { _definition.Message = PluginMessages.PickFromQueue; return this; }
-        IRouteToStages<TEntity> IStepTrigger<TEntity>.OnRouteTo() { _definition.Message = PluginMessages.RouteTo; return this; }
-        IReleaseToQueueStages<TEntity> IStepTrigger<TEntity>.OnReleaseToQueue() { _definition.Message = PluginMessages.ReleaseToQueue; return this; }
-        ISendEmailStages<TEntity> IStepTrigger<TEntity>.OnSendEmail() { _definition.Message = PluginMessages.SendEmail; return this; }
-        ISendEmailFromTemplateStages<TEntity> IStepTrigger<TEntity>.OnSendEmailFromTemplate() { _definition.Message = PluginMessages.SendEmailFromTemplate; return this; }
-        IDeliverIncomingEmailStages<TEntity> IStepTrigger<TEntity>.OnDeliverIncomingEmail() { _definition.Message = PluginMessages.DeliverIncomingEmail; return this; }
-        IDeliverPromoteEmailStages<TEntity> IStepTrigger<TEntity>.OnDeliverPromoteEmail() { _definition.Message = PluginMessages.DeliverPromoteEmail; return this; }
-        IAddMembersTeamStages<TEntity> IStepTrigger<TEntity>.OnAddMembersTeam() { _definition.Message = PluginMessages.AddMembersTeam; return this; }
-        IRemoveMembersTeamStages<TEntity> IStepTrigger<TEntity>.OnRemoveMembersTeam() { _definition.Message = PluginMessages.RemoveMembersTeam; return this; }
-        IAddListMembersListStages<TEntity> IStepTrigger<TEntity>.OnAddListMembersList() { _definition.Message = PluginMessages.AddListMembersList; return this; }
-        IAddMemberListStages<TEntity> IStepTrigger<TEntity>.OnAddMemberList() { _definition.Message = PluginMessages.AddMemberList; return this; }
-        IRemoveMemberListStages<TEntity> IStepTrigger<TEntity>.OnRemoveMemberList() { _definition.Message = PluginMessages.RemoveMemberList; return this; }
-        ICloseIncidentStages<TEntity> IStepTrigger<TEntity>.OnCloseIncident() { _definition.Message = PluginMessages.CloseIncident; return this; }
-        ICancelContractStages<TEntity> IStepTrigger<TEntity>.OnCancelContract() { _definition.Message = PluginMessages.CancelContract; return this; }
-        ICloneContractStages<TEntity> IStepTrigger<TEntity>.OnCloneContract() { _definition.Message = PluginMessages.CloneContract; return this; }
-        IRetrievePrincipalAccessStages<TEntity> IStepTrigger<TEntity>.OnRetrievePrincipalAccess() { _definition.Message = PluginMessages.RetrievePrincipalAccess; return this; }
-        IRetrieveSharedPrincipalsAndAccessStages<TEntity> IStepTrigger<TEntity>.OnRetrieveSharedPrincipalsAndAccess() { _definition.Message = PluginMessages.RetrieveSharedPrincipalsAndAccess; return this; }
-        IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() { _definition.Message = PluginMessages.WinQuote; return this; }
-        IReviseQuoteStages<TEntity> IStepTrigger<TEntity>.OnReviseQuote() { _definition.Message = PluginMessages.ReviseQuote; return this; }
-        IFulfillSalesOrderStages<TEntity> IStepTrigger<TEntity>.OnFulfillSalesOrder() { _definition.Message = PluginMessages.FulfillSalesOrder; return this; }
-        IGetQuoteProductsFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGetQuoteProductsFromOpportunity() { _definition.Message = PluginMessages.GetQuoteProductsFromOpportunity; return this; }
-        IGetSalesOrderProductsFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGetSalesOrderProductsFromOpportunity() { _definition.Message = PluginMessages.GetSalesOrderProductsFromOpportunity; return this; }
-        IGetInvoiceProductsFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGetInvoiceProductsFromOpportunity() { _definition.Message = PluginMessages.GetInvoiceProductsFromOpportunity; return this; }
-        IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() { _definition.Message = PluginMessages.ModifyAccess; return this; }
-        IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() { _definition.Message = PluginMessages.Merge; return this; }
-        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) { if (string.IsNullOrWhiteSpace(messageName)) throw new ArgumentNullException(nameof(messageName)); _definition.Message = messageName; return this; }
-        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { _definition.Message = ExpressionHelper.GetMessageName<TMessage>(); return this; }
-        ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { _definition.Message = ExpressionHelper.GetMessageName<TRequest>(); return new TypedStepAdapter<TEntity, TRequest>(this); }
-        IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { _definition.Message = ExpressionHelper.GetMessageName<TRequest>(); return new TypedStepAdapter<TEntity, TRequest>(this); }
+        ICreateStages<TEntity> IStepTrigger<TEntity>.OnCreate() { SetMessage(PluginMessages.Create); return this; }
+        IUpdateStages<TEntity> IStepTrigger<TEntity>.OnUpdate() { SetMessage(PluginMessages.Update); return this; }
+        ICreateMultipleStages<TEntity> IStepTrigger<TEntity>.OnCreateMultiple() { SetMessage(PluginMessages.CreateMultiple); return this; }
+        IUpdateMultipleStages<TEntity> IStepTrigger<TEntity>.OnUpdateMultiple() { SetMessage(PluginMessages.UpdateMultiple); return this; }
+        IDeleteStages<TEntity> IStepTrigger<TEntity>.OnDelete() { SetMessage(PluginMessages.Delete); return this; }
+        IRetrieveStages<TEntity> IStepTrigger<TEntity>.OnRetrieve() { SetMessage(PluginMessages.Retrieve); return this; }
+        IRetrieveMultipleStages<TEntity> IStepTrigger<TEntity>.OnRetrieveMultiple() { SetMessage(PluginMessages.RetrieveMultiple); return this; }
+        IAssociateStages<TEntity> IStepTrigger<TEntity>.OnAssociate() { SetMessage(PluginMessages.Associate); return this; }
+        IDisassociateStages<TEntity> IStepTrigger<TEntity>.OnDisassociate() { SetMessage(PluginMessages.Disassociate); return this; }
+        IGrantAccessStages<TEntity> IStepTrigger<TEntity>.OnGrantAccess() { SetMessage(PluginMessages.GrantAccess); return this; }
+        IAssignStages<TEntity> IStepTrigger<TEntity>.OnAssign() { SetMessage(PluginMessages.Assign); return this; }
+        IRevokeAccessStages<TEntity> IStepTrigger<TEntity>.OnRevokeAccess() { SetMessage(PluginMessages.RevokeAccess); return this; }
+        IQualifyLeadStages<TEntity> IStepTrigger<TEntity>.OnQualifyLead() { SetMessage(PluginMessages.QualifyLead); return this; }
+        IWinOpportunityStages<TEntity> IStepTrigger<TEntity>.OnWinOpportunity() { SetMessage(PluginMessages.WinOpportunity); return this; }
+        ILoseOpportunityStages<TEntity> IStepTrigger<TEntity>.OnLoseOpportunity() { SetMessage(PluginMessages.LoseOpportunity); return this; }
+        IConvertSalesOrderToInvoiceStages<TEntity> IStepTrigger<TEntity>.OnConvertSalesOrderToInvoice() { SetMessage(PluginMessages.ConvertSalesOrderToInvoice); return this; }
+        IGenerateQuoteFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateQuoteFromOpportunity() { SetMessage(PluginMessages.GenerateQuoteFromOpportunity); return this; }
+        IAddToQueueStages<TEntity> IStepTrigger<TEntity>.OnAddToQueue() { SetMessage(PluginMessages.AddToQueue); return this; }
+        IRemoveFromQueueStages<TEntity> IStepTrigger<TEntity>.OnRemoveFromQueue() { SetMessage(PluginMessages.RemoveFromQueue); return this; }
+        IPickFromQueueStages<TEntity> IStepTrigger<TEntity>.OnPickFromQueue() { SetMessage(PluginMessages.PickFromQueue); return this; }
+        IRouteToStages<TEntity> IStepTrigger<TEntity>.OnRouteTo() { SetMessage(PluginMessages.RouteTo); return this; }
+        IReleaseToQueueStages<TEntity> IStepTrigger<TEntity>.OnReleaseToQueue() { SetMessage(PluginMessages.ReleaseToQueue); return this; }
+        ISendEmailStages<TEntity> IStepTrigger<TEntity>.OnSendEmail() { SetMessage(PluginMessages.SendEmail); return this; }
+        ISendEmailFromTemplateStages<TEntity> IStepTrigger<TEntity>.OnSendEmailFromTemplate() { SetMessage(PluginMessages.SendEmailFromTemplate); return this; }
+        IDeliverIncomingEmailStages<TEntity> IStepTrigger<TEntity>.OnDeliverIncomingEmail() { SetMessage(PluginMessages.DeliverIncomingEmail); return this; }
+        IDeliverPromoteEmailStages<TEntity> IStepTrigger<TEntity>.OnDeliverPromoteEmail() { SetMessage(PluginMessages.DeliverPromoteEmail); return this; }
+        IAddMembersTeamStages<TEntity> IStepTrigger<TEntity>.OnAddMembersTeam() { SetMessage(PluginMessages.AddMembersTeam); return this; }
+        IRemoveMembersTeamStages<TEntity> IStepTrigger<TEntity>.OnRemoveMembersTeam() { SetMessage(PluginMessages.RemoveMembersTeam); return this; }
+        IAddListMembersListStages<TEntity> IStepTrigger<TEntity>.OnAddListMembersList() { SetMessage(PluginMessages.AddListMembersList); return this; }
+        IAddMemberListStages<TEntity> IStepTrigger<TEntity>.OnAddMemberList() { SetMessage(PluginMessages.AddMemberList); return this; }
+        IRemoveMemberListStages<TEntity> IStepTrigger<TEntity>.OnRemoveMemberList() { SetMessage(PluginMessages.RemoveMemberList); return this; }
+        ICloseIncidentStages<TEntity> IStepTrigger<TEntity>.OnCloseIncident() { SetMessage(PluginMessages.CloseIncident); return this; }
+        ICancelContractStages<TEntity> IStepTrigger<TEntity>.OnCancelContract() { SetMessage(PluginMessages.CancelContract); return this; }
+        ICloneContractStages<TEntity> IStepTrigger<TEntity>.OnCloneContract() { SetMessage(PluginMessages.CloneContract); return this; }
+        IRetrievePrincipalAccessStages<TEntity> IStepTrigger<TEntity>.OnRetrievePrincipalAccess() { SetMessage(PluginMessages.RetrievePrincipalAccess); return this; }
+        IRetrieveSharedPrincipalsAndAccessStages<TEntity> IStepTrigger<TEntity>.OnRetrieveSharedPrincipalsAndAccess() { SetMessage(PluginMessages.RetrieveSharedPrincipalsAndAccess); return this; }
+        IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() { SetMessage(PluginMessages.WinQuote); return this; }
+        IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() { SetMessage(PluginMessages.ModifyAccess); return this; }
+        IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() { SetMessage(PluginMessages.Merge); return this; }
+        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) { if (string.IsNullOrWhiteSpace(messageName)) throw new ArgumentNullException(nameof(messageName)); SetMessage(messageName); return this; }
+        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { SetMessage(ExpressionHelper.GetMessageName<TMessage>()); return this; }
+        ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetMessage(ExpressionHelper.GetMessageName<TRequest>()); return new TypedStepAdapter<TEntity, TRequest>(this); }
+        IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetMessage(ExpressionHelper.GetMessageName<TRequest>()); return new TypedStepAdapter<TEntity, TRequest>(this); }
 
         ISyncMode<IPermissivePreValidationConfig<TEntity>> IPermissiveStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IPermissivePreOperationConfig<TEntity>> IPermissiveStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
@@ -511,21 +447,12 @@ namespace Vela.Steps
         ISyncMode<ILoseOpportunityPreValidationConfig<TEntity>> ILoseOpportunityStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<ILoseOpportunityPreOperationConfig<TEntity>> ILoseOpportunityStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<ILoseOpportunityPostOperationConfig<TEntity>> ILoseOpportunityStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-        ISyncMode<IConvertQuoteToSalesOrderPreValidationConfig<TEntity>> IConvertQuoteToSalesOrderStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-        ISyncMode<IConvertQuoteToSalesOrderPreOperationConfig<TEntity>> IConvertQuoteToSalesOrderStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-        ISyncAsyncMode<IConvertQuoteToSalesOrderPostOperationConfig<TEntity>> IConvertQuoteToSalesOrderStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
         ISyncMode<IConvertSalesOrderToInvoicePreValidationConfig<TEntity>> IConvertSalesOrderToInvoiceStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IConvertSalesOrderToInvoicePreOperationConfig<TEntity>> IConvertSalesOrderToInvoiceStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IConvertSalesOrderToInvoicePostOperationConfig<TEntity>> IConvertSalesOrderToInvoiceStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
         ISyncMode<IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>> IGenerateQuoteFromOpportunityStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>> IGenerateQuoteFromOpportunityStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>> IGenerateQuoteFromOpportunityStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-        ISyncMode<IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>> IGenerateSalesOrderFromOpportunityStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-        ISyncMode<IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>> IGenerateSalesOrderFromOpportunityStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-        ISyncAsyncMode<IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>> IGenerateSalesOrderFromOpportunityStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-        ISyncMode<IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>> IGenerateInvoiceFromOpportunityStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-        ISyncMode<IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>> IGenerateInvoiceFromOpportunityStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-        ISyncAsyncMode<IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>> IGenerateInvoiceFromOpportunityStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
         ISyncMode<IAddToQueuePreValidationConfig<TEntity>> IAddToQueueStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IAddToQueuePreOperationConfig<TEntity>> IAddToQueueStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IAddToQueuePostOperationConfig<TEntity>> IAddToQueueStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
@@ -586,21 +513,6 @@ namespace Vela.Steps
         ISyncMode<IWinQuotePreValidationConfig<TEntity>> IWinQuoteStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IWinQuotePreOperationConfig<TEntity>> IWinQuoteStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IWinQuotePostOperationConfig<TEntity>> IWinQuoteStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-        ISyncMode<IReviseQuotePreValidationConfig<TEntity>> IReviseQuoteStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-        ISyncMode<IReviseQuotePreOperationConfig<TEntity>> IReviseQuoteStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-        ISyncAsyncMode<IReviseQuotePostOperationConfig<TEntity>> IReviseQuoteStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-        ISyncMode<IFulfillSalesOrderPreValidationConfig<TEntity>> IFulfillSalesOrderStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-        ISyncMode<IFulfillSalesOrderPreOperationConfig<TEntity>> IFulfillSalesOrderStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-        ISyncAsyncMode<IFulfillSalesOrderPostOperationConfig<TEntity>> IFulfillSalesOrderStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-        ISyncMode<IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>> IGetQuoteProductsFromOpportunityStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-        ISyncMode<IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>> IGetQuoteProductsFromOpportunityStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-        ISyncAsyncMode<IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>> IGetQuoteProductsFromOpportunityStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-        ISyncMode<IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>> IGetSalesOrderProductsFromOpportunityStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-        ISyncMode<IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>> IGetSalesOrderProductsFromOpportunityStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-        ISyncAsyncMode<IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>> IGetSalesOrderProductsFromOpportunityStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
-        ISyncMode<IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>> IGetInvoiceProductsFromOpportunityStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
-        ISyncMode<IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>> IGetInvoiceProductsFromOpportunityStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
-        ISyncAsyncMode<IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>> IGetInvoiceProductsFromOpportunityStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
         ISyncMode<IModifyAccessPreValidationConfig<TEntity>> IModifyAccessStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IModifyAccessPreOperationConfig<TEntity>> IModifyAccessStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IModifyAccessPostOperationConfig<TEntity>> IModifyAccessStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
@@ -668,10 +580,6 @@ namespace Vela.Steps
         ILoseOpportunityPreOperationConfig<TEntity> ISyncMode<ILoseOpportunityPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         ILoseOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<ILoseOpportunityPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         ILoseOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<ILoseOpportunityPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> ISyncMode<IConvertQuoteToSalesOrderPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> ISyncMode<IConvertQuoteToSalesOrderPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> ISyncAsyncMode<IConvertQuoteToSalesOrderPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> ISyncAsyncMode<IConvertQuoteToSalesOrderPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> ISyncMode<IConvertSalesOrderToInvoicePreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IConvertSalesOrderToInvoicePreOperationConfig<TEntity> ISyncMode<IConvertSalesOrderToInvoicePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IConvertSalesOrderToInvoicePostOperationConfig<TEntity> ISyncAsyncMode<IConvertSalesOrderToInvoicePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
@@ -680,14 +588,6 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPreOperationConfig<TEntity> ISyncMode<IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> ISyncMode<IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> ISyncMode<IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> ISyncMode<IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> ISyncMode<IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
         IAddToQueuePreValidationConfig<TEntity> ISyncMode<IAddToQueuePreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IAddToQueuePreOperationConfig<TEntity> ISyncMode<IAddToQueuePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IAddToQueuePostOperationConfig<TEntity> ISyncAsyncMode<IAddToQueuePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
@@ -768,26 +668,6 @@ namespace Vela.Steps
         IWinQuotePreOperationConfig<TEntity> ISyncMode<IWinQuotePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IWinQuotePostOperationConfig<TEntity> ISyncAsyncMode<IWinQuotePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IWinQuotePostOperationConfig<TEntity> ISyncAsyncMode<IWinQuotePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
-        IReviseQuotePreValidationConfig<TEntity> ISyncMode<IReviseQuotePreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IReviseQuotePreOperationConfig<TEntity> ISyncMode<IReviseQuotePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IReviseQuotePostOperationConfig<TEntity> ISyncAsyncMode<IReviseQuotePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IReviseQuotePostOperationConfig<TEntity> ISyncAsyncMode<IReviseQuotePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> ISyncMode<IFulfillSalesOrderPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> ISyncMode<IFulfillSalesOrderPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> ISyncAsyncMode<IFulfillSalesOrderPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> ISyncAsyncMode<IFulfillSalesOrderPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> ISyncMode<IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> ISyncMode<IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> ISyncMode<IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> ISyncMode<IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> ISyncMode<IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> ISyncMode<IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> ISyncAsyncMode<IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
         IModifyAccessPreValidationConfig<TEntity> ISyncMode<IModifyAccessPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IModifyAccessPreOperationConfig<TEntity> ISyncMode<IModifyAccessPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IModifyAccessPostOperationConfig<TEntity> ISyncAsyncMode<IModifyAccessPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
@@ -1259,34 +1139,6 @@ namespace Vela.Steps
         ILoseOpportunityPostOperationConfig<TEntity> ILoseOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void ILoseOpportunityPostOperationConfig<TEntity>.Handle(Action<ILoseOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IConvertQuoteToSalesOrderPreValidationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IConvertQuoteToSalesOrderPreOperationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IConvertQuoteToSalesOrderPostOperationConfig<TEntity>.Handle(Action<IConvertQuoteToSalesOrderPostContext<TEntity>> handler) { SetHandler(handler); }
-
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IConvertSalesOrderToInvoicePreValidationConfig<TEntity> IConvertSalesOrderToInvoicePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
@@ -1342,62 +1194,6 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateQuoteFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
-
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateSalesOrderFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
-
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGenerateInvoiceFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
 
         IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IAddToQueuePreValidationConfig<TEntity> IAddToQueuePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
@@ -1959,146 +1755,6 @@ namespace Vela.Steps
         IWinQuotePostOperationConfig<TEntity> IWinQuotePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IWinQuotePostOperationConfig<TEntity>.Handle(Action<IWinQuotePostContext<TEntity>> handler) { SetHandler(handler); }
 
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IReviseQuotePreValidationConfig<TEntity> IReviseQuotePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IReviseQuotePreValidationConfig<TEntity>.Handle(Action<IReviseQuotePreContext<TEntity>> handler) { SetHandler(handler); }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IReviseQuotePreOperationConfig<TEntity> IReviseQuotePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IReviseQuotePreOperationConfig<TEntity>.Handle(Action<IReviseQuotePreContext<TEntity>> handler) { SetHandler(handler); }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IReviseQuotePostOperationConfig<TEntity> IReviseQuotePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IReviseQuotePostOperationConfig<TEntity>.Handle(Action<IReviseQuotePostContext<TEntity>> handler) { SetHandler(handler); }
-
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IFulfillSalesOrderPreValidationConfig<TEntity> IFulfillSalesOrderPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IFulfillSalesOrderPreValidationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IFulfillSalesOrderPreOperationConfig<TEntity> IFulfillSalesOrderPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IFulfillSalesOrderPreOperationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler) { SetHandler(handler); }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IFulfillSalesOrderPostOperationConfig<TEntity> IFulfillSalesOrderPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IFulfillSalesOrderPostOperationConfig<TEntity>.Handle(Action<IFulfillSalesOrderPostContext<TEntity>> handler) { SetHandler(handler); }
-
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetQuoteProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
-
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetSalesOrderProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
-
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler) { SetHandler(handler); }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
-        void IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>.Handle(Action<IGetInvoiceProductsFromOpportunityPostContext<TEntity>> handler) { SetHandler(handler); }
-
         IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
         IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
         IModifyAccessPreValidationConfig<TEntity> IModifyAccessPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
@@ -2177,11 +1833,8 @@ namespace Vela.Plugin
         IQualifyLeadStages<TEntity> IStepTrigger<TEntity>.OnQualifyLead() => ((IStepTrigger<TEntity>)BeginStep()).OnQualifyLead();
         IWinOpportunityStages<TEntity> IStepTrigger<TEntity>.OnWinOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnWinOpportunity();
         ILoseOpportunityStages<TEntity> IStepTrigger<TEntity>.OnLoseOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnLoseOpportunity();
-        IConvertQuoteToSalesOrderStages<TEntity> IStepTrigger<TEntity>.OnConvertQuoteToSalesOrder() => ((IStepTrigger<TEntity>)BeginStep()).OnConvertQuoteToSalesOrder();
         IConvertSalesOrderToInvoiceStages<TEntity> IStepTrigger<TEntity>.OnConvertSalesOrderToInvoice() => ((IStepTrigger<TEntity>)BeginStep()).OnConvertSalesOrderToInvoice();
         IGenerateQuoteFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateQuoteFromOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnGenerateQuoteFromOpportunity();
-        IGenerateSalesOrderFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateSalesOrderFromOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnGenerateSalesOrderFromOpportunity();
-        IGenerateInvoiceFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateInvoiceFromOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnGenerateInvoiceFromOpportunity();
         IAddToQueueStages<TEntity> IStepTrigger<TEntity>.OnAddToQueue() => ((IStepTrigger<TEntity>)BeginStep()).OnAddToQueue();
         IRemoveFromQueueStages<TEntity> IStepTrigger<TEntity>.OnRemoveFromQueue() => ((IStepTrigger<TEntity>)BeginStep()).OnRemoveFromQueue();
         IPickFromQueueStages<TEntity> IStepTrigger<TEntity>.OnPickFromQueue() => ((IStepTrigger<TEntity>)BeginStep()).OnPickFromQueue();
@@ -2202,11 +1855,6 @@ namespace Vela.Plugin
         IRetrievePrincipalAccessStages<TEntity> IStepTrigger<TEntity>.OnRetrievePrincipalAccess() => ((IStepTrigger<TEntity>)BeginStep()).OnRetrievePrincipalAccess();
         IRetrieveSharedPrincipalsAndAccessStages<TEntity> IStepTrigger<TEntity>.OnRetrieveSharedPrincipalsAndAccess() => ((IStepTrigger<TEntity>)BeginStep()).OnRetrieveSharedPrincipalsAndAccess();
         IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() => ((IStepTrigger<TEntity>)BeginStep()).OnWinQuote();
-        IReviseQuoteStages<TEntity> IStepTrigger<TEntity>.OnReviseQuote() => ((IStepTrigger<TEntity>)BeginStep()).OnReviseQuote();
-        IFulfillSalesOrderStages<TEntity> IStepTrigger<TEntity>.OnFulfillSalesOrder() => ((IStepTrigger<TEntity>)BeginStep()).OnFulfillSalesOrder();
-        IGetQuoteProductsFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGetQuoteProductsFromOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnGetQuoteProductsFromOpportunity();
-        IGetSalesOrderProductsFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGetSalesOrderProductsFromOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnGetSalesOrderProductsFromOpportunity();
-        IGetInvoiceProductsFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGetInvoiceProductsFromOpportunity() => ((IStepTrigger<TEntity>)BeginStep()).OnGetInvoiceProductsFromOpportunity();
         IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() => ((IStepTrigger<TEntity>)BeginStep()).OnModifyAccess();
         IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() => ((IStepTrigger<TEntity>)BeginStep()).OnMerge();
         IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) => ((IStepTrigger<TEntity>)BeginStep()).OnMessage(messageName);

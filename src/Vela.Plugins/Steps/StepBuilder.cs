@@ -207,6 +207,14 @@ public sealed partial class StepBuilder<TEntity>
         SetHandler(handler.Method.Name);
     }
 
+    // Every trigger records its message here: the request name it was declared with is kept for the typed context,
+    // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win).
+    private void SetMessage(string requestName)
+    {
+        _definition.RequestName = requestName;
+        _definition.Message = SdkMessageNames.ToSdkMessage(requestName);
+    }
+
     // Mutation hooks for the generic typed-message adapter (Vela.Steps.TypedStepAdapter<TEntity, TRequest>),
     // which cannot see the private _definition / helpers directly. Same effect as the explicit-interface
     // stage/mode/handler transitions of the guided chain, just reached from the adapter.

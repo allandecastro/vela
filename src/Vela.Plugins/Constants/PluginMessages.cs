@@ -89,20 +89,11 @@ namespace Vela.Constants
         /// <summary>LoseOpportunity message.</summary>
         public const string LoseOpportunity = "LoseOpportunity";
 
-        /// <summary>ConvertQuoteToSalesOrder message.</summary>
-        public const string ConvertQuoteToSalesOrder = "ConvertQuoteToSalesOrder";
-
         /// <summary>ConvertSalesOrderToInvoice message.</summary>
         public const string ConvertSalesOrderToInvoice = "ConvertSalesOrderToInvoice";
 
         /// <summary>GenerateQuoteFromOpportunity message.</summary>
         public const string GenerateQuoteFromOpportunity = "GenerateQuoteFromOpportunity";
-
-        /// <summary>GenerateSalesOrderFromOpportunity message.</summary>
-        public const string GenerateSalesOrderFromOpportunity = "GenerateSalesOrderFromOpportunity";
-
-        /// <summary>GenerateInvoiceFromOpportunity message.</summary>
-        public const string GenerateInvoiceFromOpportunity = "GenerateInvoiceFromOpportunity";
 
         /// <summary>AddToQueue message.</summary>
         public const string AddToQueue = "AddToQueue";
@@ -166,21 +157,6 @@ namespace Vela.Constants
 
         /// <summary>WinQuote message.</summary>
         public const string WinQuote = "WinQuote";
-
-        /// <summary>ReviseQuote message.</summary>
-        public const string ReviseQuote = "ReviseQuote";
-
-        /// <summary>FulfillSalesOrder message.</summary>
-        public const string FulfillSalesOrder = "FulfillSalesOrder";
-
-        /// <summary>GetQuoteProductsFromOpportunity message.</summary>
-        public const string GetQuoteProductsFromOpportunity = "GetQuoteProductsFromOpportunity";
-
-        /// <summary>GetSalesOrderProductsFromOpportunity message.</summary>
-        public const string GetSalesOrderProductsFromOpportunity = "GetSalesOrderProductsFromOpportunity";
-
-        /// <summary>GetInvoiceProductsFromOpportunity message.</summary>
-        public const string GetInvoiceProductsFromOpportunity = "GetInvoiceProductsFromOpportunity";
 
         /// <summary>
         /// ModifyAccess message.

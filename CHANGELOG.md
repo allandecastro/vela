@@ -26,6 +26,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Removed the 8 typed triggers Dataverse never accepts a custom step on (#461).** `OnReviseQuote()`,
+  `OnFulfillSalesOrder()`, `OnConvertQuoteToSalesOrder()`, `OnGenerateSalesOrderFromOpportunity()`,
+  `OnGenerateInvoiceFromOpportunity()` and the three `OnGet*ProductsFromOpportunity()` are gone, with their typed
+  contexts and `PluginMessages` constants. Their sdkmessage filter has `iscustomprocessingstepallowed = false`, so
+  registering a step fails with 0x80044187 (verified live): code using them could never be deployed.
 - **`ImpersonationSource` and `WithImpersonation(ImpersonationSource)` are removed.** Nothing ever wrote the enum
   to Dataverse: a step declared `.WithImpersonation(ImpersonationSource.PluginOwner)` ran as the calling user.
   `StepDefinition.ImpersonationSource` is gone too. Use `.WithImpersonation(Guid systemUserId)` to run a step as a
@@ -175,6 +180,21 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **Typed triggers register on the real sdkmessage (#461).** 15 triggers registered steps on SDK request names that
+  do not exist as sdkmessages, so `vela apply` could not deploy them: `OnSendEmail()` now registers on `Send`,
+  `OnSendEmailFromTemplate()` on `SendFromTemplate`, `OnDeliverIncomingEmail()` / `OnDeliverPromoteEmail()` on
+  `DeliverIncoming` / `DeliverPromote`, `OnWinOpportunity()` / `OnWinQuote()` on `Win`, `OnLoseOpportunity()` on
+  `Lose`, `OnCloseIncident()` on `Close`, `OnCancelContract()` / `OnCloneContract()` on `Cancel` / `Clone`,
+  `OnAddMembersTeam()` / `OnRemoveMembersTeam()` on `AddMembers` / `RemoveMembers`, and `OnAddListMembersList()` /
+  `OnAddMemberList()` / `OnRemoveMemberList()` on `AddListMembers` / `AddMember` / `RemoveMember`. The handler keeps
+  its typed context (one sdkmessage can serve two requests: `Win` on opportunity or quote), and `ctx.MessageName` is
+  the sdkmessage, as on the platform. `OnMessage(PluginMessages.SendEmail)` is translated the same way. Verified
+  live through `vela apply`: each step registers, fires on its SDK request and reaches its typed handler.
+- **The harness runs a request's steps under the sdkmessage.** An executed `SendEmailRequest` runs the `Send` steps
+  and plugins see `MessageName == "Send"`, so a test now catches a step registered under a wrong name.
+  `PluginContext.For<T>().OnMessage(...)` translates request names the same way. `CloseIncidentRequest` and
+  `WinQuoteRequest` resolve their primary entity from the closing activity's lookup (incident, quote), so an
+  entity-bound step fires.
 - **The harness runs async steps only once the outermost operation commits** (#438). Each operation used to run its
   own async steps as soon as its body returned, so an async step queued by a nested write ran, with its side effects
   and log entries, even when the outer operation then failed. Live, a rolled-back operation creates no async job

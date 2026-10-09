@@ -78,10 +78,6 @@ namespace Vela.Context
     public interface ILoseOpportunityPreContext<TEntity> : IStepRequestContext<LoseOpportunityRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a LoseOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
     public interface ILoseOpportunityPostContext<TEntity> : IStepRequestContext<LoseOpportunityRequest>, IStepResponseContext<LoseOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a ConvertQuoteToSalesOrder step (<c>ctx.Request</c> only).</summary>
-    public interface IConvertQuoteToSalesOrderPreContext<TEntity> : IStepRequestContext<ConvertQuoteToSalesOrderRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a ConvertQuoteToSalesOrder step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IConvertQuoteToSalesOrderPostContext<TEntity> : IStepRequestContext<ConvertQuoteToSalesOrderRequest>, IStepResponseContext<ConvertQuoteToSalesOrderResponse> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a ConvertSalesOrderToInvoice step (<c>ctx.Request</c> only).</summary>
     public interface IConvertSalesOrderToInvoicePreContext<TEntity> : IStepRequestContext<ConvertSalesOrderToInvoiceRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a ConvertSalesOrderToInvoice step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
@@ -90,14 +86,6 @@ namespace Vela.Context
     public interface IGenerateQuoteFromOpportunityPreContext<TEntity> : IStepRequestContext<GenerateQuoteFromOpportunityRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a GenerateQuoteFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
     public interface IGenerateQuoteFromOpportunityPostContext<TEntity> : IStepRequestContext<GenerateQuoteFromOpportunityRequest>, IStepResponseContext<GenerateQuoteFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a GenerateSalesOrderFromOpportunity step (<c>ctx.Request</c> only).</summary>
-    public interface IGenerateSalesOrderFromOpportunityPreContext<TEntity> : IStepRequestContext<GenerateSalesOrderFromOpportunityRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a GenerateSalesOrderFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IGenerateSalesOrderFromOpportunityPostContext<TEntity> : IStepRequestContext<GenerateSalesOrderFromOpportunityRequest>, IStepResponseContext<GenerateSalesOrderFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a GenerateInvoiceFromOpportunity step (<c>ctx.Request</c> only).</summary>
-    public interface IGenerateInvoiceFromOpportunityPreContext<TEntity> : IStepRequestContext<GenerateInvoiceFromOpportunityRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a GenerateInvoiceFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IGenerateInvoiceFromOpportunityPostContext<TEntity> : IStepRequestContext<GenerateInvoiceFromOpportunityRequest>, IStepResponseContext<GenerateInvoiceFromOpportunityResponse> where TEntity : Entity { }
     /// <summary>Pre-stage typed context for a AddToQueue step (<c>ctx.Request</c> only).</summary>
     public interface IAddToQueuePreContext<TEntity> : IStepRequestContext<AddToQueueRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a AddToQueue step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
@@ -178,26 +166,6 @@ namespace Vela.Context
     public interface IWinQuotePreContext<TEntity> : IStepRequestContext<WinQuoteRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a WinQuote step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
     public interface IWinQuotePostContext<TEntity> : IStepRequestContext<WinQuoteRequest>, IStepResponseContext<WinQuoteResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a ReviseQuote step (<c>ctx.Request</c> only).</summary>
-    public interface IReviseQuotePreContext<TEntity> : IStepRequestContext<ReviseQuoteRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a ReviseQuote step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IReviseQuotePostContext<TEntity> : IStepRequestContext<ReviseQuoteRequest>, IStepResponseContext<ReviseQuoteResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a FulfillSalesOrder step (<c>ctx.Request</c> only).</summary>
-    public interface IFulfillSalesOrderPreContext<TEntity> : IStepRequestContext<FulfillSalesOrderRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a FulfillSalesOrder step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IFulfillSalesOrderPostContext<TEntity> : IStepRequestContext<FulfillSalesOrderRequest>, IStepResponseContext<FulfillSalesOrderResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a GetQuoteProductsFromOpportunity step (<c>ctx.Request</c> only).</summary>
-    public interface IGetQuoteProductsFromOpportunityPreContext<TEntity> : IStepRequestContext<GetQuoteProductsFromOpportunityRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a GetQuoteProductsFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IGetQuoteProductsFromOpportunityPostContext<TEntity> : IStepRequestContext<GetQuoteProductsFromOpportunityRequest>, IStepResponseContext<GetQuoteProductsFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a GetSalesOrderProductsFromOpportunity step (<c>ctx.Request</c> only).</summary>
-    public interface IGetSalesOrderProductsFromOpportunityPreContext<TEntity> : IStepRequestContext<GetSalesOrderProductsFromOpportunityRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a GetSalesOrderProductsFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IGetSalesOrderProductsFromOpportunityPostContext<TEntity> : IStepRequestContext<GetSalesOrderProductsFromOpportunityRequest>, IStepResponseContext<GetSalesOrderProductsFromOpportunityResponse> where TEntity : Entity { }
-    /// <summary>Pre-stage typed context for a GetInvoiceProductsFromOpportunity step (<c>ctx.Request</c> only).</summary>
-    public interface IGetInvoiceProductsFromOpportunityPreContext<TEntity> : IStepRequestContext<GetInvoiceProductsFromOpportunityRequest> where TEntity : Entity { }
-    /// <summary>Post-stage typed context for a GetInvoiceProductsFromOpportunity step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
-    public interface IGetInvoiceProductsFromOpportunityPostContext<TEntity> : IStepRequestContext<GetInvoiceProductsFromOpportunityRequest>, IStepResponseContext<GetInvoiceProductsFromOpportunityResponse> where TEntity : Entity { }
 
     /// <summary>Runtime pre-stage context for Create.</summary>
     public class CreatePreContext<TEntity> : PreStepContext<Vela.Messages.CreateRequest<TEntity>>, ICreatePreContext<TEntity> where TEntity : Entity
@@ -415,18 +383,6 @@ namespace Vela.Context
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public LoseOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
     }
-    /// <summary>Runtime pre-stage context for ConvertQuoteToSalesOrder.</summary>
-    public class ConvertQuoteToSalesOrderPreContext<TEntity> : PreStepContext<ConvertQuoteToSalesOrderRequest>, IConvertQuoteToSalesOrderPreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ConvertQuoteToSalesOrderPreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for ConvertQuoteToSalesOrder.</summary>
-    public class ConvertQuoteToSalesOrderPostContext<TEntity> : PostStepContext<ConvertQuoteToSalesOrderRequest, ConvertQuoteToSalesOrderResponse>, IConvertQuoteToSalesOrderPostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ConvertQuoteToSalesOrderPostContext(ILocalPluginContext inner) : base(inner) { }
-    }
     /// <summary>Runtime pre-stage context for ConvertSalesOrderToInvoice.</summary>
     public class ConvertSalesOrderToInvoicePreContext<TEntity> : PreStepContext<ConvertSalesOrderToInvoiceRequest>, IConvertSalesOrderToInvoicePreContext<TEntity> where TEntity : Entity
     {
@@ -450,30 +406,6 @@ namespace Vela.Context
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public GenerateQuoteFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime pre-stage context for GenerateSalesOrderFromOpportunity.</summary>
-    public class GenerateSalesOrderFromOpportunityPreContext<TEntity> : PreStepContext<GenerateSalesOrderFromOpportunityRequest>, IGenerateSalesOrderFromOpportunityPreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GenerateSalesOrderFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for GenerateSalesOrderFromOpportunity.</summary>
-    public class GenerateSalesOrderFromOpportunityPostContext<TEntity> : PostStepContext<GenerateSalesOrderFromOpportunityRequest, GenerateSalesOrderFromOpportunityResponse>, IGenerateSalesOrderFromOpportunityPostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GenerateSalesOrderFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime pre-stage context for GenerateInvoiceFromOpportunity.</summary>
-    public class GenerateInvoiceFromOpportunityPreContext<TEntity> : PreStepContext<GenerateInvoiceFromOpportunityRequest>, IGenerateInvoiceFromOpportunityPreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GenerateInvoiceFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for GenerateInvoiceFromOpportunity.</summary>
-    public class GenerateInvoiceFromOpportunityPostContext<TEntity> : PostStepContext<GenerateInvoiceFromOpportunityRequest, GenerateInvoiceFromOpportunityResponse>, IGenerateInvoiceFromOpportunityPostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GenerateInvoiceFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
     }
     /// <summary>Runtime pre-stage context for AddToQueue.</summary>
     public class AddToQueuePreContext<TEntity> : PreStepContext<AddToQueueRequest>, IAddToQueuePreContext<TEntity> where TEntity : Entity
@@ -714,65 +646,5 @@ namespace Vela.Context
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public WinQuotePostContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime pre-stage context for ReviseQuote.</summary>
-    public class ReviseQuotePreContext<TEntity> : PreStepContext<ReviseQuoteRequest>, IReviseQuotePreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ReviseQuotePreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for ReviseQuote.</summary>
-    public class ReviseQuotePostContext<TEntity> : PostStepContext<ReviseQuoteRequest, ReviseQuoteResponse>, IReviseQuotePostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public ReviseQuotePostContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime pre-stage context for FulfillSalesOrder.</summary>
-    public class FulfillSalesOrderPreContext<TEntity> : PreStepContext<FulfillSalesOrderRequest>, IFulfillSalesOrderPreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public FulfillSalesOrderPreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for FulfillSalesOrder.</summary>
-    public class FulfillSalesOrderPostContext<TEntity> : PostStepContext<FulfillSalesOrderRequest, FulfillSalesOrderResponse>, IFulfillSalesOrderPostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public FulfillSalesOrderPostContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime pre-stage context for GetQuoteProductsFromOpportunity.</summary>
-    public class GetQuoteProductsFromOpportunityPreContext<TEntity> : PreStepContext<GetQuoteProductsFromOpportunityRequest>, IGetQuoteProductsFromOpportunityPreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetQuoteProductsFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for GetQuoteProductsFromOpportunity.</summary>
-    public class GetQuoteProductsFromOpportunityPostContext<TEntity> : PostStepContext<GetQuoteProductsFromOpportunityRequest, GetQuoteProductsFromOpportunityResponse>, IGetQuoteProductsFromOpportunityPostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetQuoteProductsFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime pre-stage context for GetSalesOrderProductsFromOpportunity.</summary>
-    public class GetSalesOrderProductsFromOpportunityPreContext<TEntity> : PreStepContext<GetSalesOrderProductsFromOpportunityRequest>, IGetSalesOrderProductsFromOpportunityPreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetSalesOrderProductsFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for GetSalesOrderProductsFromOpportunity.</summary>
-    public class GetSalesOrderProductsFromOpportunityPostContext<TEntity> : PostStepContext<GetSalesOrderProductsFromOpportunityRequest, GetSalesOrderProductsFromOpportunityResponse>, IGetSalesOrderProductsFromOpportunityPostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetSalesOrderProductsFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime pre-stage context for GetInvoiceProductsFromOpportunity.</summary>
-    public class GetInvoiceProductsFromOpportunityPreContext<TEntity> : PreStepContext<GetInvoiceProductsFromOpportunityRequest>, IGetInvoiceProductsFromOpportunityPreContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetInvoiceProductsFromOpportunityPreContext(ILocalPluginContext inner) : base(inner) { }
-    }
-    /// <summary>Runtime post-stage context for GetInvoiceProductsFromOpportunity.</summary>
-    public class GetInvoiceProductsFromOpportunityPostContext<TEntity> : PostStepContext<GetInvoiceProductsFromOpportunityRequest, GetInvoiceProductsFromOpportunityResponse>, IGetInvoiceProductsFromOpportunityPostContext<TEntity> where TEntity : Entity
-    {
-        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
-        public GetInvoiceProductsFromOpportunityPostContext(ILocalPluginContext inner) : base(inner) { }
     }
 }

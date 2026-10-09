@@ -389,15 +389,28 @@ The modelled messages with a typed context are:
 - **CRUD & bulk:** `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`.
 - **Relationships & sharing:** `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`,
   `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`.
-- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ReviseQuote`,
-  `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`,
-  `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity`, `GetQuoteProductsFromOpportunity`,
-  `GetSalesOrderProductsFromOpportunity`, `GetInvoiceProductsFromOpportunity`.
+- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`,
+  `GenerateQuoteFromOpportunity` (registered on `quote`, the only entity Dataverse filters it on).
 - **Queues:** `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
 - **Email:** `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
 - **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`,
   `AddMemberList`, `RemoveMemberList`.
 - **Case / contract:** `CloseIncident`, `CancelContract`, `CloneContract`.
+
+**A trigger is named after the SDK request, the step registers on the sdkmessage.** For some business messages the
+two differ, and Dataverse only knows the sdkmessage: `OnSendEmail()` registers on `Send`, and the handler sees
+`ctx.MessageName == "Send"`. The full list (verified live): `SendEmail` → `Send`, `SendEmailFromTemplate` →
+`SendFromTemplate`, `DeliverIncomingEmail` → `DeliverIncoming`, `DeliverPromoteEmail` → `DeliverPromote`,
+`WinOpportunity` / `WinQuote` → `Win`, `LoseOpportunity` → `Lose`, `CloseIncident` → `Close`, `CancelContract` →
+`Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
+`AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`.
+`OnMessage(...)`, the test harness and `PluginContext.For<T>().OnMessage(...)` apply the same translation, so
+`OnMessage(PluginMessages.SendEmail)` also registers on `Send`.
+
+Some request messages accept no custom step at all, so they have no trigger: `ReviseQuote`, `FulfillSalesOrder`,
+`ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity` and the three
+`Get*ProductsFromOpportunity`. Dataverse rejects a step on them with 0x80044187 ("Custom SdkMessageProcessingStep is
+not allowed on the specified message and entity").
 
 Global, entity-less messages (for example `WhoAmI`) are not in this list: they cannot be registered as an
 entity-bound plugin step, so there is no `On...()` for them. You can still call them from a handler

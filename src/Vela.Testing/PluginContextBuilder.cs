@@ -62,10 +62,13 @@ namespace Vela.Testing
         /// <summary>Sets the message to <c>Delete</c>.</summary>
         public PluginContextBuilder<TEntity> OnDelete() => OnMessage(PluginMessages.Delete);
 
-        /// <summary>Sets an arbitrary message name.</summary>
+        /// <summary>
+        /// Sets the message. An SDK request name whose sdkmessage differs is translated to what the platform sends as
+        /// <c>MessageName</c> (<c>SendEmail</c> becomes <c>Send</c>, <c>WinQuote</c> becomes <c>Win</c>).
+        /// </summary>
         public PluginContextBuilder<TEntity> OnMessage(string messageName)
         {
-            Context.MessageName = messageName;
+            Context.MessageName = SdkMessageNames.ToSdkMessage(messageName);
             _triggerConfigured = true;
             return this;
         }
