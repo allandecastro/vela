@@ -66,8 +66,8 @@ jobs:
       - name: Write llms-full.txt
         shell: powershell
         run: |
-          $pages = Select-String -Path docs\llms.txt -Pattern '\]\(([^)]+)\.md\)' -AllMatches |
-            ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value + '.md' }
+          $pages = Select-String -Path docs\llms.txt -Pattern '/main/docs/([^)]+\.md)\)' -AllMatches |
+            ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }
           $out = foreach ($page in $pages) { "<!-- $page -->"; Get-Content -Raw -Encoding UTF8 (Join-Path docs $page); '' }
           Set-Content -Path docs\_site\llms-full.txt -Value $out -Encoding UTF8
       - uses: actions/configure-pages@v5

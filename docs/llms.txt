@@ -1,0 +1,67 @@
+# Vela
+
+> Vela is a framework (Vela.Plugins, .NET Framework 4.6.2), a CLI (Vela.Cli, command `vela`) and an in-memory test harness (Vela.Testing) for Microsoft Dataverse plugins and Custom APIs, with a preview-first `vela plan` then `vela apply` workflow. Steps are declared in code with a type-state fluent builder; Roslyn analyzers (VELA001-VELA022) reject invalid registrations at build time.
+
+Key facts: plugin classes are `sealed partial` with a primary constructor `(string unsecureConfig, string secureConfig)`; Create/Update steps require `FilterOn(...)`; the handler context exposes `ctx.Service`, `ctx.SystemService` and `ctx.AsUser(id)`; `vela plan` and `vela apply` take `--solution <uniquename>`; `vela plan --json` and `vela help --json` are machine-readable. A project scaffolded by `vela init` has its own AGENTS.md.
+
+## Getting started
+
+- [Install](https://raw.githubusercontent.com/allandecastro/vela/main/docs/getting-started/install.md): install the vela CLI and the prerequisites (.NET 10 SDK, Mono for net462 tests outside Windows, an existing solution)
+- [Quickstart](https://raw.githubusercontent.com/allandecastro/vela/main/docs/getting-started/quickstart.md): from an empty folder to deployed steps: init, build, plan, apply
+- [Initialize a solution](https://raw.githubusercontent.com/allandecastro/vela/main/docs/getting-started/initialize-a-solution.md): what vela init scaffolds and where to edit
+
+## Write plugins and Custom APIs
+
+- [Write a plugin](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/plugins.md): the step builder: typed triggers, stages, modes, FilterOn, images, several steps per trigger, typed handler contexts
+- [Write a Custom API](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/custom-apis.md): typed request/response, parameters (required by default), binding, the rules Build() enforces
+- [Typed queries](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/queries.md): typed QueryExpression and FetchXML helpers
+- [Dependency injection](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/dependency-injection.md): the sandbox-safe container and the default services
+- [Caching](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/caching.md): TTL cache scoped per organization
+- [Environment variables](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/environment-variables.md): read Dataverse environment variables, typed
+- [Localized messages](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/localization.md): resolve messages in the user's or the organization's language
+- [Managed identity](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/managed-identity.md): call external APIs with a managed-identity token
+- [Telemetry](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/telemetry.md): trace log and Application Insights through the platform logger
+- [Escape hatches](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/escape-hatches.md): drop to the raw Dataverse SDK
+- [Early-bound models](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/models.md): vela models: entities, Custom API and SDK messages, roles
+
+## Test
+
+- [Testing](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/testing.md): PluginContext for one plugin, PluginPipeline for the whole in-memory pipeline
+- [Security model in tests](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/security-model.md): roles, privileges, business units, teams, sharing
+
+## CLI and deployment
+
+- [The vela CLI](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/cli-overview.md): commands, generated help, exit codes
+- [Plan and apply](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/plan-apply.md): preview then apply registrations; --solution, secure config, CI usage
+- [vela add](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/add.md): generate a plugin, service, Custom API, test or step
+- [vela init](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/scaffold.md): scaffold a solution
+- [Signing](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/signing.md): sign a plugin package for managed identity
+- [Client-side (preview)](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/client-side.md): TypeScript form scripts and web resources, work in progress
+- [Authentication](https://raw.githubusercontent.com/allandecastro/vela/main/docs/configuration/authentication.md): interactive, ambient Azure credential, client secret, connection string
+- [Environments and CI](https://raw.githubusercontent.com/allandecastro/vela/main/docs/configuration/environments-secrets.md): environment URLs, secrets and pipelines
+
+## Reference
+
+- [Machine-readable output](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/machine-readable-output.md): the versioned JSON contract of plan, apply and inspect, and the exit codes
+- [CLI cheat sheet](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/cli-cheatsheet.md): every command and environment variable at a glance
+- [Analyzers and generators](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/analyzers.md): VELA001 to VELA022, their code fixes, and the source generator
+- [Limitations](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/limitations.md): what is out of scope, and where the harness differs from Dataverse
+- [FAQ](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/faq.md): common questions
+- [Troubleshooting](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/troubleshooting.md): fixes for common errors
+
+## Examples
+
+- [End-to-end example](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/end-to-end.md): code to a running step
+- [Cookbook](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/cookbook.md): short recipes
+- [Migrating](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/migrating.md): move an existing plugin project to Vela
+
+## Contributing
+
+- [Architecture](https://raw.githubusercontent.com/allandecastro/vela/main/docs/advanced/architecture.md): solution layout and how a step goes from registration to execution
+- [Add a typed plugin message](https://raw.githubusercontent.com/allandecastro/vela/main/docs/contributing/extending-plugins.md): the files a new modelled message touches
+- [Mutation testing](https://raw.githubusercontent.com/allandecastro/vela/main/docs/advanced/mutation-testing.md): the mutation gates
+
+## Optional
+
+- [Full documentation in one file](https://allandecastro.github.io/vela/llms-full.txt): every page above, concatenated
+- [Changelog](https://raw.githubusercontent.com/allandecastro/vela/main/CHANGELOG.md): what changed in each release
