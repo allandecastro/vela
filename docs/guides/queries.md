@@ -7,7 +7,7 @@ using Vela.Querying;
 using Zava.Shared.Models.Generated;
 using Microsoft.Xrm.Sdk.Query;
 
-QueryExpression query = new QueryExpression(Account.EntityLogicalName)
+QueryExpression query = new QueryExpression(Account.EntityLogicalNameValue)
     .Select<Account>(x => x.AccountId, x => x.Name)
     .Where<Account>(x => x.Name, ConditionOperator.NotNull);
 ```

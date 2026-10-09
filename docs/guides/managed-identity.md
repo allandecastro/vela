@@ -9,7 +9,7 @@ surfaced on the context as `ctx.AcquireManagedIdentityToken(...)`.
 string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });
 
 // Or for a specific application user (federated identity credential).
-string token = ctx.AcquireManagedIdentityToken(applicationUserId, new[] { "https://graph.microsoft.com/.default" });
+string userToken = ctx.AcquireManagedIdentityToken(applicationUserId, new[] { "https://graph.microsoft.com/.default" });
 ```
 
 Use the token as a bearer credential when calling the external API (for example on an `HttpClient` request).
