@@ -6,8 +6,11 @@ using static Vela.Cli.JsonReader;
 
 namespace Vela.Cli;
 
-/// <summary>A step pre/post image: an alias and the (order-preserving) attribute list it projects.</summary>
-internal readonly record struct StepImage(string Alias, string[] Attributes);
+/// <summary>
+/// A step pre/post image: an alias, the (order-preserving) attribute list it projects, and the request property it is
+/// taken from (Dataverse <c>messagepropertyname</c>; empty in a raw definition means the message's own).
+/// </summary>
+internal readonly record struct StepImage(string Alias, string[] Attributes, string MessagePropertyName = "");
 
 /// <summary>
 /// Produces canonical, order-stable JSON shapes for plugin steps and custom APIs so that
@@ -125,7 +128,7 @@ internal static class DefinitionNormalizer
 
     private static object[] OrderImages(IEnumerable<StepImage> images) =>
         images
-            .Select(image => new { alias = image.Alias, attributes = image.Attributes })
+            .Select(image => new { alias = image.Alias, attributes = image.Attributes, messagePropertyName = image.MessagePropertyName })
             .OrderBy(x => x.alias, StringComparer.Ordinal)
             .ToArray<object>();
 
@@ -161,8 +164,14 @@ internal static class DefinitionNormalizer
     private static string[] LowerSorted(string[] values) =>
         values.Select(v => v.ToLowerInvariant()).OrderBy(v => v, StringComparer.Ordinal).ToArray();
 
-    private static StepImage[] LowerImageAttributes(StepImage[] images) =>
-        images.Select(i => new StepImage(i.Alias, LowerSorted(i.Attributes))).ToArray();
+    // Also resolves each image's request property the way apply registers it (the message's own unless the step chose
+    // one, e.g. SubordinateId on Merge), so the shape matches the live messagepropertyname and a change of property is
+    // a diff.
+    private static StepImage[] NormalizeImages(StepImage[] images, string message) =>
+        images.Select(i => new StepImage(
+            i.Alias,
+            LowerSorted(i.Attributes),
+            Vela.Steps.StepImageRules.ResolveMessagePropertyName(message, i.MessagePropertyName) ?? string.Empty)).ToArray();
 
     public static string BuildKeylessStepName(string pluginTypeName, int stage, int mode, string message, string entityLogicalName)
     {
@@ -187,8 +196,8 @@ internal static class DefinitionNormalizer
         int stage = DataverseRegistration.NormalizeRegistrationStage(TryGetInt(raw, "stage"), mode);
         int executionOrder = DataverseRegistration.NormalizeRegistrationRank(TryGetInt(raw, "executionOrder", defaultValue: 1));
         string[] filteringAttributes = LowerSorted(TryGetStringArray(raw, "filteringAttributes"));
-        StepImage[] preImages = LowerImageAttributes(TryGetStepImages(raw, "preImages"));
-        StepImage[] postImages = LowerImageAttributes(TryGetStepImages(raw, "postImages"));
+        StepImage[] preImages = NormalizeImages(TryGetStepImages(raw, "preImages"), message);
+        StepImage[] postImages = NormalizeImages(TryGetStepImages(raw, "postImages"), message);
         bool enabled = TryGetBool(raw, "enabled", defaultValue: true);
         string unsecureConfig = TryGetString(raw, "unsecureConfig") ?? string.Empty;
         // A definition carries no secret: code only names its secure configuration, and SecureConfigResolver sets the

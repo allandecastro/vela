@@ -1126,14 +1126,68 @@ namespace Vela.Testing
             bool transactional = !NonTransactionalMessages.Contains(message);
             return RunOperation(() =>
             {
-                FireStage(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null));
-                FireStage(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null));
+                // Merge images: the master (Target) and the subordinate (SubordinateId), both snapshotted before the
+                // pre stages and again after the merge (the subordinate's post-image is the deactivated record).
+                MergeStates? merge = request is MergeRequest mergeRequest ? MergeStates.Before(_store, mergeRequest) : null;
+
+                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), merge, post: false));
+                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), merge, post: false));
 
                 OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
 
-                FireStage(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results));
+                merge?.After(_store);
+                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), merge, post: true));
                 return response;
             }, shared, transactional);
+        }
+
+        private static StageInvocation WithMergeStates(StageInvocation invocation, MergeStates? merge, bool post)
+        {
+            if (merge != null)
+            {
+                invocation.PreState = merge.MasterPre;
+                invocation.SubordinatePreState = merge.SubordinatePre;
+                if (post)
+                {
+                    invocation.PostState = merge.MasterPost;
+                    invocation.SubordinatePostState = merge.SubordinatePost;
+                }
+            }
+
+            return invocation;
+        }
+
+        // The records a Merge step can image, read from the store before and after the merge.
+        private sealed class MergeStates
+        {
+            private readonly MergeRequest _request;
+            public Entity? MasterPre;
+            public Entity? SubordinatePre;
+            public Entity? MasterPost;
+            public Entity? SubordinatePost;
+
+            private MergeStates(MergeRequest request) => _request = request;
+
+            public static MergeStates Before(InMemoryOrganizationService store, MergeRequest request)
+            {
+                MergeStates states = new MergeStates(request);
+                (states.MasterPre, states.SubordinatePre) = states.Read(store);
+                return states;
+            }
+
+            public void After(InMemoryOrganizationService store) => (MasterPost, SubordinatePost) = Read(store);
+
+            private (Entity? Master, Entity? Subordinate) Read(InMemoryOrganizationService store)
+            {
+                if (_request.Target is not EntityReference target)
+                {
+                    return (null, null);
+                }
+
+                store.TryGet(target.LogicalName, target.Id, out Entity? master);
+                store.TryGet(target.LogicalName, _request.SubordinateId, out Entity? subordinate);
+                return (master, subordinate);
+            }
         }
 
         private static readonly HashSet<string> NonTransactionalMessages =
@@ -1763,8 +1817,8 @@ namespace Vela.Testing
                 }
             }
 
-            BuildImages(context.PreEntityImages, registration.Step.PreImages, invocation.PreState);
-            BuildImages(context.PostEntityImages, registration.Step.PostImages, invocation.PostState);
+            BuildImages(context.PreEntityImages, registration.Step.PreImages, invocation.PreState, invocation.SubordinatePreState);
+            BuildImages(context.PostEntityImages, registration.Step.PostImages, invocation.PostState, invocation.SubordinatePostState);
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth));
             IPlugin plugin = registration.CreateInstance(SecureConfigFor(registration.Step));
@@ -1889,16 +1943,24 @@ namespace Vela.Testing
             return (IPlugin)constructor.Invoke(new object?[] { null, null });
         }
 
-        private static void BuildImages(EntityImageCollection target, ImageDefinition[] definitions, Entity? state)
+        private static void BuildImages(EntityImageCollection target, ImageDefinition[] definitions, Entity? state, Entity? subordinateState = null)
         {
-            if (state == null || definitions == null)
+            if (definitions == null)
             {
                 return;
             }
 
             foreach (ImageDefinition definition in definitions)
             {
-                target[definition.Alias] = ProjectImage(state, definition.Attributes);
+                // An image registered against SubordinateId (a Merge step) is taken from the subordinate record; every
+                // other image from the step's primary record.
+                Entity? source = string.Equals(definition.MessagePropertyName, StepImageRules.SubordinateId, StringComparison.OrdinalIgnoreCase)
+                    ? subordinateState
+                    : state;
+                if (source != null)
+                {
+                    target[definition.Alias] = ProjectImage(source, definition.Attributes);
+                }
             }
         }
 
@@ -2052,6 +2114,9 @@ namespace Vela.Testing
             public object? Target;
             public Entity? PreState;
             public Entity? PostState;
+            // Merge only: the subordinate record (SubordinateId) before and after the merge.
+            public Entity? SubordinatePreState;
+            public Entity? SubordinatePostState;
             public IDictionary<string, object>? ExtraInputs;
             public ISet<string>? ChangedAttributes;
             // For a generic modelled message (no dedicated data simulation): the whole request parameter set to

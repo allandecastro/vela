@@ -473,7 +473,7 @@ message-specific `ctx.GetRequest<TRequest>()`.
 | `OnRetrieveMultiple()` | `IRetrieveMultiplePostContext<T>` | `RetrieveMultipleRequest` | `ctx.Request.Query` |
 | `OnAssociate()` | `IAssociatePostContext<T>` | `AssociateRequest` | `ctx.Request.Target`, `ctx.Request.Relationship` |
 | `OnDisassociate()` | `IDisassociatePostContext<T>` | `DisassociateRequest` | `ctx.Request.Target` |
-| `OnMerge()` | `IMergePostContext<T>` | `MergeRequest` | `ctx.Request.Target`, `ctx.Request.SubordinateId` |
+| `OnMerge()` | `IMergePostContext<T>` | `MergeRequest` | `ctx.Request.Target`, `ctx.Request.SubordinateId`, `ctx.PreImage` / `ctx.PostImage`, `ctx.SubordinatePreImage` / `ctx.SubordinatePostImage` |
 | `OnGrantAccess()` | `IGrantAccessPostContext<T>` | `GrantAccessRequest` | `ctx.Request.Target`, `ctx.Request.PrincipalAccess` |
 | `OnModifyAccess()` | `IModifyAccessPostContext<T>` | `ModifyAccessRequest` | `ctx.Request.Target` |
 | `OnRevokeAccess()` | `IRevokeAccessPostContext<T>` | `RevokeAccessRequest` | `ctx.Request.Target`, `ctx.Request.Revokee` |
@@ -536,9 +536,9 @@ in the IDE, without the CLI. For example `OnDelete().PostOperation()....WithPost
 `OnUpdate().PreValidation()....WithPostImage()` and `OnCreate().PreValidation()....WithPreImage()` all fail to build.
 The rules the chain encodes:
 
-1. `PreValidation` - only `PreImage`, only for `Update` and `Delete` (and `UpdateMultiple`). See the note below.
-2. `PreOperation` - only `PreImage`, only for `Update` and `Delete`.
-3. `PostOperation` - `PreImage` for `Update`/`Delete`, `PostImage` for `Create`/`Update`.
+1. `PreValidation` - only `PreImage`, only for `Update`, `Delete`, `Assign` and `Merge` (and `UpdateMultiple`). See the note below.
+2. `PreOperation` - only `PreImage`, only for `Update`, `Delete`, `Assign` and `Merge`.
+3. `PostOperation` - `PreImage` for `Update`/`Delete`/`Assign`/`Merge`, `PostImage` for `Create`/`Update`/`Assign`/`Merge`.
 4. `OnMessage("...")` - a non-modelled message is **permissive**: both images are offered and validity is left
    to Dataverse at deploy time (Vela does not know an arbitrary message's image rules). A modelled message
    reached through `OnMessage(...)` is still validated by the runtime backstop in `Build()`.
@@ -553,6 +553,23 @@ does not model: a `PostImage` before `PostOperation` and any image on `RouteTo` 
 registered against the request property the message expects (`Id` for Create, `Ids` for CreateMultiple, `Targets`
 for UpdateMultiple, `EmailId` for Send/DeliverIncoming/DeliverPromote, `EntityMoniker` for SetState, `Target`
 otherwise).
+
+**A Merge step can image both records.** `WithPreImage` / `WithPostImage` capture the master (`Target`), and
+`WithSubordinatePreImage` / `WithSubordinatePostImage` capture the subordinate, the record merged away
+(`SubordinateId`), under the same stage rules. The handler reads them as `ctx.PreImage` / `ctx.PostImage` and
+`ctx.SubordinatePreImage` / `ctx.SubordinatePostImage`. The subordinate's post-image is the deactivated record, with
+`masterid` pointing at the master. One step can carry both kinds, but every image alias on a step must be unique:
+Dataverse accepts the same alias on a master and a subordinate image, then delivers only one of them.
+
+```csharp
+RegisterStep().OnMerge().PreOperation().Sync()
+    .WithPreImage(a => a.Name)
+    .WithSubordinatePreImage(a => a.Name, a => a.Telephone1)
+    .Handle(ctx => Log(ctx.PreImage?.Name, ctx.SubordinatePreImage?.Telephone1));
+```
+
+`vela plan` shows an image whose request property changed (for example a master image turned into a subordinate
+one under the same alias) as a change, and `apply` recreates it.
 
 **A PreValidation pre-image is fine for validation, not for a strictly consistent read.** A top-level PreValidation
 step runs outside the database transaction and its image is read without a lock, so another process can change the

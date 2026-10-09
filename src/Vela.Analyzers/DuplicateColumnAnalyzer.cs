@@ -27,13 +27,15 @@ namespace Vela.Analyzers
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "The same column appears more than once in a single FilterOn / WithPreImage / WithPostImage / typed-query Select call. A repeated column has no effect and is usually a copy/paste mistake.");
+            description: "The same column appears more than once in a single FilterOn / With...Image / typed-query Select call. A repeated column has no effect and is usually a copy/paste mistake.");
 
         // Step-authoring column-list methods, gated on Vela.Steps.IFluentStep.
         private static readonly ImmutableHashSet<string> FluentColumnMethods = ImmutableHashSet.Create(
             "FilterOn",
             "WithPreImage",
-            "WithPostImage");
+            "WithPostImage",
+            "WithSubordinatePreImage",
+            "WithSubordinatePostImage");
 
         // The typed-query column selector Query.For<T>().Select(...); gated on the Vela.Querying namespace so an
         // unrelated Select (LINQ, a user type) is ignored. Include (relationship selector) is a different name.

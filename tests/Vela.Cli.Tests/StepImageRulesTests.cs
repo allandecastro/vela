@@ -26,6 +26,37 @@ public sealed class StepImageRulesTests
     public void Maps_the_message_to_its_image_property(string? message, string expected)
         => Assert.Equal(expected, StepImageRules.GetMessagePropertyName(message));
 
+    [Theory]
+    [InlineData("Merge", null, null)]
+    [InlineData("Merge", "", null)]
+    [InlineData("Merge", "Target", null)]
+    [InlineData("Merge", "SubordinateId", null)]
+    [InlineData("merge", "subordinateid", null)]
+    [InlineData("Update", "Target", null)]
+    [InlineData("Create", "Id", null)]
+    [InlineData("Update", "SubordinateId", "only a Merge step")]   // 0x8004416B, verified live
+    [InlineData("Merge", "Id", "not 'Id'")]
+    public void Checks_an_explicit_image_property(string message, string? property, string? rejection)   // #462
+    {
+        string? reason = StepImageRules.GetMessagePropertyRejectionReason(message, property);
+        if (rejection is null)
+        {
+            Assert.Null(reason);
+        }
+        else
+        {
+            Assert.Contains(rejection, reason);
+        }
+    }
+
+    [Theory]
+    [InlineData("Merge", null, "Target")]
+    [InlineData("Merge", "SubordinateId", "SubordinateId")]
+    [InlineData("Create", "", "Id")]
+    [InlineData("RouteTo", null, null)]
+    public void Resolves_the_registered_image_property(string message, string? property, string? expected)
+        => Assert.Equal(expected, StepImageRules.ResolveMessagePropertyName(message, property));
+
     [Fact]
     public void RouteTo_supports_no_image()
     {

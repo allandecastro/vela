@@ -330,11 +330,11 @@ internal static partial class DataverseRegistration
         Entity[] images = imagesByStep.TryGetValue(step.Id, out Entity[]? found) ? found : [];
         StepImage[] preImages = images
             .Where(x => (x.GetAttributeValue<OptionSetValue>("imagetype")?.Value ?? -1) is 0 or 2)
-            .Select(x => new StepImage(x.GetAttributeValue<string>("entityalias") ?? string.Empty, SplitCsv(x.GetAttributeValue<string>("attributes"))))
+            .Select(ReadStepImage)
             .ToArray();
         StepImage[] postImages = images
             .Where(x => (x.GetAttributeValue<OptionSetValue>("imagetype")?.Value ?? -1) is 1 or 2)
-            .Select(x => new StepImage(x.GetAttributeValue<string>("entityalias") ?? string.Empty, SplitCsv(x.GetAttributeValue<string>("attributes"))))
+            .Select(ReadStepImage)
             .ToArray();
 
         // Build the diff shape through the shared builder so the live read and the local definition
@@ -366,6 +366,11 @@ internal static partial class DataverseRegistration
     return items;
 }
 
+    private static StepImage ReadStepImage(Entity image) => new(
+        image.GetAttributeValue<string>("entityalias") ?? string.Empty,
+        SplitCsv(image.GetAttributeValue<string>("attributes")),
+        image.GetAttributeValue<string>("messagepropertyname") ?? string.Empty);
+
     internal static Dictionary<Guid, Entity[]> GetStepImages(IOrganizationService service, Guid[] stepIds)
 {
     Dictionary<Guid, List<Entity>> map = new Dictionary<Guid, List<Entity>>();
@@ -376,7 +381,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression imageQuery = new QueryExpression("sdkmessageprocessingstepimage")
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "imagetype", "entityalias", "attributes")
+        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "imagetype", "entityalias", "attributes", "messagepropertyname")
     };
     imageQuery.Criteria.AddCondition("sdkmessageprocessingstepid", ConditionOperator.In, stepIds.Cast<object>().ToArray());
 
