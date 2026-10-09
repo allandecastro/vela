@@ -785,51 +785,6 @@ namespace Vela.Steps
         void Handle(Action<ILoseOpportunityPostContext<TEntity>> handler);
     }
 
-    /// <summary>Config for the ConvertQuoteToSalesOrder step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertQuoteToSalesOrderPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithDescription(string description);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithExecutionOrder(int order);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithStepKey(string key);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
-        IConvertQuoteToSalesOrderPreValidationConfig<TEntity> Disabled();
-        void Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the ConvertQuoteToSalesOrder step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertQuoteToSalesOrderPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithDescription(string description);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithExecutionOrder(int order);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithStepKey(string key);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IConvertQuoteToSalesOrderPreOperationConfig<TEntity> Disabled();
-        void Handle(Action<IConvertQuoteToSalesOrderPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the ConvertQuoteToSalesOrder step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IConvertQuoteToSalesOrderPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithDescription(string description);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithExecutionOrder(int order);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithStepKey(string key);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IConvertQuoteToSalesOrderPostOperationConfig<TEntity> Disabled();
-        void Handle(Action<IConvertQuoteToSalesOrderPostContext<TEntity>> handler);
-    }
-
     /// <summary>Config for the ConvertSalesOrderToInvoice step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IConvertSalesOrderToInvoicePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
@@ -918,96 +873,6 @@ namespace Vela.Steps
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
         IGenerateQuoteFromOpportunityPostOperationConfig<TEntity> Disabled();
         void Handle(Action<IGenerateQuoteFromOpportunityPostContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GenerateSalesOrderFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity> Disabled();
-        void Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GenerateSalesOrderFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGenerateSalesOrderFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GenerateSalesOrderFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGenerateSalesOrderFromOpportunityPostContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GenerateInvoiceFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity> Disabled();
-        void Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GenerateInvoiceFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGenerateInvoiceFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GenerateInvoiceFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGenerateInvoiceFromOpportunityPostContext<TEntity>> handler);
     }
 
     /// <summary>Config for the AddToQueue step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
@@ -1910,231 +1775,6 @@ namespace Vela.Steps
         void Handle(Action<IWinQuotePostContext<TEntity>> handler);
     }
 
-    /// <summary>Config for the ReviseQuote step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReviseQuotePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IReviseQuotePreValidationConfig<TEntity> WithDescription(string description);
-        IReviseQuotePreValidationConfig<TEntity> WithExecutionOrder(int order);
-        IReviseQuotePreValidationConfig<TEntity> WithStepKey(string key);
-        IReviseQuotePreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IReviseQuotePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IReviseQuotePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IReviseQuotePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReviseQuotePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
-        IReviseQuotePreValidationConfig<TEntity> Disabled();
-        void Handle(Action<IReviseQuotePreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the ReviseQuote step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReviseQuotePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IReviseQuotePreOperationConfig<TEntity> WithDescription(string description);
-        IReviseQuotePreOperationConfig<TEntity> WithExecutionOrder(int order);
-        IReviseQuotePreOperationConfig<TEntity> WithStepKey(string key);
-        IReviseQuotePreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IReviseQuotePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IReviseQuotePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IReviseQuotePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReviseQuotePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IReviseQuotePreOperationConfig<TEntity> Disabled();
-        void Handle(Action<IReviseQuotePreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the ReviseQuote step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IReviseQuotePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IReviseQuotePostOperationConfig<TEntity> WithDescription(string description);
-        IReviseQuotePostOperationConfig<TEntity> WithExecutionOrder(int order);
-        IReviseQuotePostOperationConfig<TEntity> WithStepKey(string key);
-        IReviseQuotePostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IReviseQuotePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IReviseQuotePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IReviseQuotePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IReviseQuotePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IReviseQuotePostOperationConfig<TEntity> Disabled();
-        void Handle(Action<IReviseQuotePostContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the FulfillSalesOrder step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IFulfillSalesOrderPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithDescription(string description);
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithExecutionOrder(int order);
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithStepKey(string key);
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IFulfillSalesOrderPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
-        IFulfillSalesOrderPreValidationConfig<TEntity> Disabled();
-        void Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the FulfillSalesOrder step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IFulfillSalesOrderPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithDescription(string description);
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithExecutionOrder(int order);
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithStepKey(string key);
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IFulfillSalesOrderPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IFulfillSalesOrderPreOperationConfig<TEntity> Disabled();
-        void Handle(Action<IFulfillSalesOrderPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the FulfillSalesOrder step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IFulfillSalesOrderPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithDescription(string description);
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithExecutionOrder(int order);
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithStepKey(string key);
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IFulfillSalesOrderPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IFulfillSalesOrderPostOperationConfig<TEntity> Disabled();
-        void Handle(Action<IFulfillSalesOrderPostContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetQuoteProductsFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
-        void Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetQuoteProductsFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGetQuoteProductsFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetQuoteProductsFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGetQuoteProductsFromOpportunityPostContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetSalesOrderProductsFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
-        void Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetSalesOrderProductsFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGetSalesOrderProductsFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetSalesOrderProductsFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGetSalesOrderProductsFromOpportunityPostContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetInvoiceProductsFromOpportunity step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithDescription(string description);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithExecutionOrder(int order);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithStepKey(string key);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity> Disabled();
-        void Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetInvoiceProductsFromOpportunity step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithDescription(string description);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithStepKey(string key);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGetInvoiceProductsFromOpportunityPreContext<TEntity>> handler);
-    }
-
-    /// <summary>Config for the GetInvoiceProductsFromOpportunity step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
-    public interface IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
-    {
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithDescription(string description);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithExecutionOrder(int order);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithStepKey(string key);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(ImpersonationSource source);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
-        IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity> Disabled();
-        void Handle(Action<IGetInvoiceProductsFromOpportunityPostContext<TEntity>> handler);
-    }
-
     /// <summary>Config for the ModifyAccess step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
     public interface IModifyAccessPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
     {
@@ -2345,14 +1985,6 @@ namespace Vela.Steps
         ISyncAsyncMode<ILoseOpportunityPostOperationConfig<TEntity>> PostOperation();
     }
 
-    /// <summary>Stage choice for OnConvertQuoteToSalesOrder(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
-    public interface IConvertQuoteToSalesOrderStages<TEntity> : IFluentStep where TEntity : Entity
-    {
-        ISyncMode<IConvertQuoteToSalesOrderPreValidationConfig<TEntity>> PreValidation();
-        ISyncMode<IConvertQuoteToSalesOrderPreOperationConfig<TEntity>> PreOperation();
-        ISyncAsyncMode<IConvertQuoteToSalesOrderPostOperationConfig<TEntity>> PostOperation();
-    }
-
     /// <summary>Stage choice for OnConvertSalesOrderToInvoice(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
     public interface IConvertSalesOrderToInvoiceStages<TEntity> : IFluentStep where TEntity : Entity
     {
@@ -2367,22 +1999,6 @@ namespace Vela.Steps
         ISyncMode<IGenerateQuoteFromOpportunityPreValidationConfig<TEntity>> PreValidation();
         ISyncMode<IGenerateQuoteFromOpportunityPreOperationConfig<TEntity>> PreOperation();
         ISyncAsyncMode<IGenerateQuoteFromOpportunityPostOperationConfig<TEntity>> PostOperation();
-    }
-
-    /// <summary>Stage choice for OnGenerateSalesOrderFromOpportunity(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
-    public interface IGenerateSalesOrderFromOpportunityStages<TEntity> : IFluentStep where TEntity : Entity
-    {
-        ISyncMode<IGenerateSalesOrderFromOpportunityPreValidationConfig<TEntity>> PreValidation();
-        ISyncMode<IGenerateSalesOrderFromOpportunityPreOperationConfig<TEntity>> PreOperation();
-        ISyncAsyncMode<IGenerateSalesOrderFromOpportunityPostOperationConfig<TEntity>> PostOperation();
-    }
-
-    /// <summary>Stage choice for OnGenerateInvoiceFromOpportunity(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
-    public interface IGenerateInvoiceFromOpportunityStages<TEntity> : IFluentStep where TEntity : Entity
-    {
-        ISyncMode<IGenerateInvoiceFromOpportunityPreValidationConfig<TEntity>> PreValidation();
-        ISyncMode<IGenerateInvoiceFromOpportunityPreOperationConfig<TEntity>> PreOperation();
-        ISyncAsyncMode<IGenerateInvoiceFromOpportunityPostOperationConfig<TEntity>> PostOperation();
     }
 
     /// <summary>Stage choice for OnAddToQueue(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
@@ -2543,46 +2159,6 @@ namespace Vela.Steps
         ISyncMode<IWinQuotePreValidationConfig<TEntity>> PreValidation();
         ISyncMode<IWinQuotePreOperationConfig<TEntity>> PreOperation();
         ISyncAsyncMode<IWinQuotePostOperationConfig<TEntity>> PostOperation();
-    }
-
-    /// <summary>Stage choice for OnReviseQuote(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
-    public interface IReviseQuoteStages<TEntity> : IFluentStep where TEntity : Entity
-    {
-        ISyncMode<IReviseQuotePreValidationConfig<TEntity>> PreValidation();
-        ISyncMode<IReviseQuotePreOperationConfig<TEntity>> PreOperation();
-        ISyncAsyncMode<IReviseQuotePostOperationConfig<TEntity>> PostOperation();
-    }
-
-    /// <summary>Stage choice for OnFulfillSalesOrder(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
-    public interface IFulfillSalesOrderStages<TEntity> : IFluentStep where TEntity : Entity
-    {
-        ISyncMode<IFulfillSalesOrderPreValidationConfig<TEntity>> PreValidation();
-        ISyncMode<IFulfillSalesOrderPreOperationConfig<TEntity>> PreOperation();
-        ISyncAsyncMode<IFulfillSalesOrderPostOperationConfig<TEntity>> PostOperation();
-    }
-
-    /// <summary>Stage choice for OnGetQuoteProductsFromOpportunity(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
-    public interface IGetQuoteProductsFromOpportunityStages<TEntity> : IFluentStep where TEntity : Entity
-    {
-        ISyncMode<IGetQuoteProductsFromOpportunityPreValidationConfig<TEntity>> PreValidation();
-        ISyncMode<IGetQuoteProductsFromOpportunityPreOperationConfig<TEntity>> PreOperation();
-        ISyncAsyncMode<IGetQuoteProductsFromOpportunityPostOperationConfig<TEntity>> PostOperation();
-    }
-
-    /// <summary>Stage choice for OnGetSalesOrderProductsFromOpportunity(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
-    public interface IGetSalesOrderProductsFromOpportunityStages<TEntity> : IFluentStep where TEntity : Entity
-    {
-        ISyncMode<IGetSalesOrderProductsFromOpportunityPreValidationConfig<TEntity>> PreValidation();
-        ISyncMode<IGetSalesOrderProductsFromOpportunityPreOperationConfig<TEntity>> PreOperation();
-        ISyncAsyncMode<IGetSalesOrderProductsFromOpportunityPostOperationConfig<TEntity>> PostOperation();
-    }
-
-    /// <summary>Stage choice for OnGetInvoiceProductsFromOpportunity(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
-    public interface IGetInvoiceProductsFromOpportunityStages<TEntity> : IFluentStep where TEntity : Entity
-    {
-        ISyncMode<IGetInvoiceProductsFromOpportunityPreValidationConfig<TEntity>> PreValidation();
-        ISyncMode<IGetInvoiceProductsFromOpportunityPreOperationConfig<TEntity>> PreOperation();
-        ISyncAsyncMode<IGetInvoiceProductsFromOpportunityPostOperationConfig<TEntity>> PostOperation();
     }
 
     /// <summary>Stage choice for OnModifyAccess(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
@@ -2775,11 +2351,8 @@ namespace Vela.Steps
         IQualifyLeadStages<TEntity> OnQualifyLead();
         IWinOpportunityStages<TEntity> OnWinOpportunity();
         ILoseOpportunityStages<TEntity> OnLoseOpportunity();
-        IConvertQuoteToSalesOrderStages<TEntity> OnConvertQuoteToSalesOrder();
         IConvertSalesOrderToInvoiceStages<TEntity> OnConvertSalesOrderToInvoice();
         IGenerateQuoteFromOpportunityStages<TEntity> OnGenerateQuoteFromOpportunity();
-        IGenerateSalesOrderFromOpportunityStages<TEntity> OnGenerateSalesOrderFromOpportunity();
-        IGenerateInvoiceFromOpportunityStages<TEntity> OnGenerateInvoiceFromOpportunity();
         IAddToQueueStages<TEntity> OnAddToQueue();
         IRemoveFromQueueStages<TEntity> OnRemoveFromQueue();
         IPickFromQueueStages<TEntity> OnPickFromQueue();
@@ -2800,11 +2373,6 @@ namespace Vela.Steps
         IRetrievePrincipalAccessStages<TEntity> OnRetrievePrincipalAccess();
         IRetrieveSharedPrincipalsAndAccessStages<TEntity> OnRetrieveSharedPrincipalsAndAccess();
         IWinQuoteStages<TEntity> OnWinQuote();
-        IReviseQuoteStages<TEntity> OnReviseQuote();
-        IFulfillSalesOrderStages<TEntity> OnFulfillSalesOrder();
-        IGetQuoteProductsFromOpportunityStages<TEntity> OnGetQuoteProductsFromOpportunity();
-        IGetSalesOrderProductsFromOpportunityStages<TEntity> OnGetSalesOrderProductsFromOpportunity();
-        IGetInvoiceProductsFromOpportunityStages<TEntity> OnGetInvoiceProductsFromOpportunity();
         IModifyAccessStages<TEntity> OnModifyAccess();
         IMergeStages<TEntity> OnMerge();
         /// <summary>Trigger on a custom / non-modelled message stated by name. Image validity is enforced at runtime.</summary>

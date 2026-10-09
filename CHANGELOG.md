@@ -26,6 +26,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Removed the 8 typed triggers Dataverse never accepts a custom step on (#461).** `OnReviseQuote()`,
+  `OnFulfillSalesOrder()`, `OnConvertQuoteToSalesOrder()`, `OnGenerateSalesOrderFromOpportunity()`,
+  `OnGenerateInvoiceFromOpportunity()` and the three `OnGet*ProductsFromOpportunity()` are gone, with their typed
+  contexts and `PluginMessages` constants. Their sdkmessage filter has `iscustomprocessingstepallowed = false`, so
+  registering a step fails with 0x80044187 (verified live): code using them could never be deployed.
+
 - **`ctx.EnvironmentId` is a `string?`, and now carries the value.** The platform declares
   `IPluginExecutionContext6.EnvironmentId` as a string, but Vela read it as a `Guid?`, so it was always null and the
   execution snapshot always printed `<none>`. It now returns the platform string (null when missing or empty).
@@ -150,6 +156,22 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   on every execution.
 
 ### Fixed (Framework)
+
+- **Typed triggers register on the real sdkmessage (#461).** 15 triggers registered steps on SDK request names that
+  do not exist as sdkmessages, so `vela apply` could not deploy them: `OnSendEmail()` now registers on `Send`,
+  `OnSendEmailFromTemplate()` on `SendFromTemplate`, `OnDeliverIncomingEmail()` / `OnDeliverPromoteEmail()` on
+  `DeliverIncoming` / `DeliverPromote`, `OnWinOpportunity()` / `OnWinQuote()` on `Win`, `OnLoseOpportunity()` on
+  `Lose`, `OnCloseIncident()` on `Close`, `OnCancelContract()` / `OnCloneContract()` on `Cancel` / `Clone`,
+  `OnAddMembersTeam()` / `OnRemoveMembersTeam()` on `AddMembers` / `RemoveMembers`, and `OnAddListMembersList()` /
+  `OnAddMemberList()` / `OnRemoveMemberList()` on `AddListMembers` / `AddMember` / `RemoveMember`. The handler keeps
+  its typed context (one sdkmessage can serve two requests: `Win` on opportunity or quote), and `ctx.MessageName` is
+  the sdkmessage, as on the platform. `OnMessage(PluginMessages.SendEmail)` is translated the same way. Verified
+  live through `vela apply`: each step registers, fires on its SDK request and reaches its typed handler.
+- **The harness runs a request's steps under the sdkmessage.** An executed `SendEmailRequest` runs the `Send` steps
+  and plugins see `MessageName == "Send"`, so a test now catches a step registered under a wrong name.
+  `PluginContext.For<T>().OnMessage(...)` translates request names the same way. `CloseIncidentRequest` and
+  `WinQuoteRequest` resolve their primary entity from the closing activity's lookup (incident, quote), so an
+  entity-bound step fires.
 
 - **VELA007 flags every image the message can never provide.** It now also reports a pre-image on
   `OnMessage("CreateMultiple")` and any image on `OnMessage("RouteTo")`, from the same image table the runtime and

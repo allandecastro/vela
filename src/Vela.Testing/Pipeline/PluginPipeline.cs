@@ -930,7 +930,9 @@ namespace Vela.Testing
         // "unsupported message" error).
         private OrganizationResponse ExecuteModelledMessage(OrganizationRequest request, ParameterCollection shared)
         {
-            string message = request.RequestName;
+            // Steps register on the sdkmessage, which differs from the request name for some business messages
+            // (SendEmailRequest runs the Send steps, WinQuoteRequest the Win steps), and plugins see that name.
+            string message = SdkMessageNames.ToSdkMessage(request.RequestName);
             bool hasSteps = _registrations.Any(registration => registration.Step.Enabled
                 && string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
             if (!hasSteps)
@@ -945,7 +947,7 @@ namespace Vela.Testing
                 FireStage(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), asyncQueue);
                 FireStage(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), asyncQueue);
 
-                OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = message };
+                OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
 
                 FireStage(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), asyncQueue);
                 return response;
@@ -968,6 +970,13 @@ namespace Vela.Testing
         // Best-effort primary entity for a generic message: an explicit Target, else the first EntityReference /
         // Entity parameter (covers LeadId, Target, EntityMoniker, ...). When nothing resolves, the steps match by
         // (message, stage) alone.
+        private static readonly (string Parameter, string Lookup)[] ClosingActivityPrimaries =
+        {
+            ("OpportunityClose", "opportunityid"),
+            ("QuoteClose", "quoteid"),
+            ("IncidentResolution", "incidentid"),
+        };
+
         private static (string, Guid) DerivePrimaryEntity(OrganizationRequest request)
         {
             if (request.Parameters.TryGetValue("Target", out object? target))
@@ -983,17 +992,19 @@ namespace Vela.Testing
                 }
             }
 
-            // Messages whose primary record is not the first entity-typed parameter: derive it explicitly so an
-            // entity-filtered step still matches. WinOpportunity/LoseOpportunity carry an OpportunityClose activity
-            // whose opportunityid points at the real primary (opportunity); the generic scan below would otherwise
-            // pick the activity ("opportunityclose") and the step would silently not fire (A15).
-            if (request.RequestName is "WinOpportunity" or "LoseOpportunity"
-                && request.Parameters.TryGetValue("OpportunityClose", out object? close)
-                && close is Entity closeEntity
-                && closeEntity.Attributes.TryGetValue("opportunityid", out object? opportunityId)
-                && opportunityId is EntityReference opportunityRef)
+            // Messages whose primary record is not the first entity-typed parameter: a closing activity whose lookup
+            // points at the real primary. The generic scan below would otherwise pick the activity
+            // (opportunityclose, incidentresolution, quoteclose) and an entity-filtered step would silently not fire
+            // (A15). Verified live: Win/Lose run with PrimaryEntityName opportunity, Close with incident.
+            foreach ((string parameterName, string lookup) in ClosingActivityPrimaries)
             {
-                return (opportunityRef.LogicalName, opportunityRef.Id);
+                if (request.Parameters.TryGetValue(parameterName, out object? activity)
+                    && activity is Entity activityEntity
+                    && activityEntity.Attributes.TryGetValue(lookup, out object? primary)
+                    && primary is EntityReference primaryRef)
+                {
+                    return (primaryRef.LogicalName, primaryRef.Id);
+                }
             }
 
             foreach (KeyValuePair<string, object> parameter in request.Parameters)
