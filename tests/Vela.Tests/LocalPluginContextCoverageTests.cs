@@ -186,6 +186,15 @@ public sealed class LocalPluginContextCoverageTests
     }
 
     [Fact]
+    public void Environment_id_is_read_as_the_platform_string_and_empty_maps_to_null()
+    {
+        // IPluginExecutionContext6.EnvironmentId is a string, not a Guid.
+        const string environment = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+        Assert.Equal(environment, new PluginContextBuilder().WithEnvironmentId(environment).Build().EnvironmentId);
+        Assert.Null(new PluginContextBuilder().Build().EnvironmentId); // default string.Empty -> null
+    }
+
+    [Fact]
     public void Bulk_operation_flag_and_image_collections_reflect_the_context()
     {
         LocalPluginContext plain = new PluginContextBuilder().Build();

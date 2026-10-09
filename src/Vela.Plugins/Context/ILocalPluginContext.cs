@@ -126,9 +126,10 @@ namespace Vela.Context
         bool IsApplicationUser { get; }
 
         /// <summary>
-        /// Gets the Dataverse environment id when available.
+        /// Gets the Dataverse environment id when available, as the platform reports it (a string on
+        /// <c>IPluginExecutionContext6</c>). Returns null when the runtime does not expose it or it is empty.
         /// </summary>
-        Guid? EnvironmentId { get; }
+        string? EnvironmentId { get; }
 
         /// <summary>
         /// Gets the Entra tenant id when available.

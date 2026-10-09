@@ -26,6 +26,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **`ctx.EnvironmentId` is a `string?`, and now carries the value.** The platform declares
+  `IPluginExecutionContext6.EnvironmentId` as a string, but Vela read it as a `Guid?`, so it was always null and the
+  execution snapshot always printed `<none>`. It now returns the platform string (null when missing or empty).
+  Code that used it as a `Guid` must parse it (`Guid.TryParse(ctx.EnvironmentId, out Guid id)`).
 - **A Custom API parameter type with no Dataverse equivalent fails when the step is built.** `long`, `short`,
   `float`, enums, `byte[]`, `List<string>` and other types were registered as a lookalike (Integer, Float or
   String) and then read back as their default value, silently. Building the definition now throws a message naming

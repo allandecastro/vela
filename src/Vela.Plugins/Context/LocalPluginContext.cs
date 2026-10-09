@@ -20,7 +20,7 @@ namespace Vela.Context
         private readonly string? _pluginTypeName;
         private string? _currentHandler;
         private int _scopeDepth;
-        private readonly Guid? _environmentId;
+        private readonly string? _environmentId;
         private readonly Guid? _tenantId;
         private readonly string _initiatingUserAgent;
         private readonly Guid? _portalsContactId;
@@ -60,7 +60,7 @@ namespace Vela.Context
             Logger = serviceProvider.GetService(typeof(ILogger)) as ILogger ?? NullLogger.Instance;
             ManagedIdentityService = serviceProvider.GetService(typeof(IManagedIdentityService)) as IManagedIdentityService;
             _pluginTelemetryLogger = ResolvePluginTelemetryLogger(serviceProvider);
-            _environmentId = ResolveContextGuid(PluginExecutionContext, "EnvironmentId");
+            _environmentId = ResolveContextNonEmptyString(PluginExecutionContext, "EnvironmentId");
             _tenantId = ResolveContextGuid(PluginExecutionContext, "TenantId");
             _initiatingUserAgent = ResolveContextString(PluginExecutionContext, "InitiatingUserAgent") ?? string.Empty;
             _isPortalsClientCall = ResolveContextBool(PluginExecutionContext, "IsPortalsClientCall");
@@ -153,7 +153,7 @@ namespace Vela.Context
         public bool IsApplicationUser => _isApplicationUser;
 
         /// <inheritdoc />
-        public Guid? EnvironmentId => _environmentId;
+        public string? EnvironmentId => _environmentId;
 
         /// <inheritdoc />
         public Guid? TenantId => _tenantId;
@@ -435,6 +435,12 @@ namespace Vela.Context
             }
 
             return value as string;
+        }
+
+        private static string? ResolveContextNonEmptyString(object context, string propertyName)
+        {
+            string? value = ResolveContextString(context, propertyName);
+            return string.IsNullOrEmpty(value) ? null : value;
         }
 
         private static bool ResolveContextBool(object context, string propertyName)
