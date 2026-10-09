@@ -98,25 +98,6 @@ namespace Vela.Analyzers
             return null;
         }
 
-        /// <summary>True when <paramref name="plugin"/> derives from <c>EntityPluginBase&lt;TEntity&gt;</c>.</summary>
-        public static bool IsEntityPlugin(INamedTypeSymbol? plugin, INamedTypeSymbol? entityPluginBase)
-        {
-            if (entityPluginBase is null)
-            {
-                return false;
-            }
-
-            for (INamedTypeSymbol? t = plugin?.BaseType; t is not null; t = t.BaseType)
-            {
-                if (SymbolEqualityComparer.Default.Equals(t.OriginalDefinition, entityPluginBase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         private static bool Is(INamedTypeSymbol type, INamedTypeSymbol? target)
             => target is not null && SymbolEqualityComparer.Default.Equals(type, target);
     }

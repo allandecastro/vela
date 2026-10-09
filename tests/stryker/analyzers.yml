@@ -2,7 +2,7 @@
 # image projection generator). Run from tests/Vela.Analyzers.Tests (net10, no solution needed).
 # Measured at ~87.6% (1282 killed + 6 timeouts, 162 survived, 20 no coverage); break is ratcheted to 85. The
 # remaining survivors are mostly equivalent: GetHashCode arithmetic of the generator models, EnableConcurrentExecution,
-# unreachable variance handling, and the unused PluginTypes.IsEntityPlugin.
+# and unreachable variance handling.
 stryker-config:
   project: Vela.Analyzers.csproj
   mutate:
