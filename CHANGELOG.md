@@ -216,6 +216,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **`DownloadFile` no longer returns a truncated file (#440).** An empty block before the announced
+  `FileSizeInBytes` used to end the loop and return the bytes read so far, with no error. It now throws an
+  `InvalidPluginExecutionException` naming the table, record, column, the bytes received and the announced size.
+  The same check rejects a download whose total differs from the announced size.
 - **FetchXML condition values compare as the column's type (#439).** A `<value>` was kept as text and compared with
   the stored value's string form, so `eq` on a date (`2026-10-09`), a money with another scale (`10.50`) or a braced
   guid matched nothing, and `ne` matched everything. Values (FetchXML, and text values in a `QueryExpression` or
