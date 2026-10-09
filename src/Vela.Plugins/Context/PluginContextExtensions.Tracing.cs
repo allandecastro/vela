@@ -82,7 +82,7 @@ namespace Vela.Context
             trace.AppendFormat("  IsPortalsClientCall: {0}{1}", context.IsPortalsClientCall, nl);
             trace.AppendFormat("  PortalsContactId: {0}{1}", context.PortalsContactId?.ToString() ?? "<none>", nl);
             trace.AppendFormat("  InitiatingUserAgent: {0}{1}", string.IsNullOrWhiteSpace(context.InitiatingUserAgent) ? "<none>" : context.InitiatingUserAgent, nl);
-            trace.AppendFormat("  EnvironmentId: {0}{1}", context.EnvironmentId?.ToString() ?? "<none>", nl);
+            trace.AppendFormat("  EnvironmentId: {0}{1}", context.EnvironmentId ?? "<none>", nl);
             trace.AppendFormat("  TenantId: {0}{1}", context.TenantId?.ToString() ?? "<none>", nl);
             trace.AppendFormat("  IsBulkOperation: {0}{1}", context.IsBulkOperation, nl);
             if (context.IsBulkOperation)

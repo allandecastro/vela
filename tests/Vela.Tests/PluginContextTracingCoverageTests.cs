@@ -53,7 +53,7 @@ public sealed class PluginContextTracingCoverageTests
     {
         RecordingTracingService recorder = new RecordingTracingService();
         Guid tenant = Guid.NewGuid();
-        LocalPluginContext ctx = new PluginContextBuilder().WithTenantId(tenant).WithTracingService(recorder).Build();
+        LocalPluginContext ctx = new PluginContextBuilder().WithTenantId(tenant).WithEnvironmentId("env-snapshot").WithTracingService(recorder).Build();
 
         Entity target = new Entity("account", Guid.NewGuid())
         {
@@ -90,6 +90,7 @@ public sealed class PluginContextTracingCoverageTests
         Assert.Contains("EntityCollection(Count=0)", output);
         Assert.Contains("<null>", output);
         Assert.Contains(tenant.ToString(), output);     // TenantId value branch
+        Assert.Contains("EnvironmentId: env-snapshot", output);
         Assert.Contains("LogicalName: child", output);  // nested entity formatting
     }
 

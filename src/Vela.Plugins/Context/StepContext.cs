@@ -83,7 +83,7 @@ namespace Vela.Context
         /// <inheritdoc />
         public bool IsApplicationUser => _inner.IsApplicationUser;
         /// <inheritdoc />
-        public Guid? EnvironmentId => _inner.EnvironmentId;
+        public string? EnvironmentId => _inner.EnvironmentId;
         /// <inheritdoc />
         public Guid? TenantId => _inner.TenantId;
         /// <inheritdoc />

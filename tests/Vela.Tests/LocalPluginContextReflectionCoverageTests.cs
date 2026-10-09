@@ -39,6 +39,7 @@ public sealed class LocalPluginContextReflectionCoverageTests
             InitiatingUserAgent = "vela-agent/1.0",
             IsApplicationUser = true,
             TenantId = tenant,
+            EnvironmentId = "env-42",
             PreEntityImagesCollection = new[] { preImages },
         };
         fake.InputParameters["Targets"] = new EntityCollection(new List<Entity> { new Entity("account", Guid.NewGuid()) });
@@ -50,6 +51,7 @@ public sealed class LocalPluginContextReflectionCoverageTests
         Assert.Equal("vela-agent/1.0", ctx.InitiatingUserAgent);  // ResolveContextString -> value
         Assert.True(ctx.IsApplicationUser);                        // ResolveContextBool -> true
         Assert.Equal(tenant, ctx.TenantId);                        // ResolveContextGuid -> non-empty
+        Assert.Equal("env-42", ctx.EnvironmentId);                 // ResolveContextNonEmptyString -> value
         Assert.True(ctx.IsBulkOperation);                          // ResolveBulkTargets -> Targets present
         Assert.Single(ctx.BulkPreEntityImagesCollection);         // ResolveBulkEntityImages -> array as IReadOnlyList
     }
@@ -65,6 +67,7 @@ public sealed class LocalPluginContextReflectionCoverageTests
         LocalPluginContext ctx = new LocalPluginContext(Provider(bare.Object));
 
         Assert.Null(ctx.TenantId);                         // ResolveContextGuid -> property missing
+        Assert.Null(ctx.EnvironmentId);                    // ResolveContextNonEmptyString -> property missing
         Assert.Null(ctx.PortalsContactId);
         Assert.False(ctx.IsPortalsClientCall);             // ResolveContextBool -> property missing
         Assert.False(ctx.IsApplicationUser);
