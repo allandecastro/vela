@@ -4,9 +4,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
 using Vela.DI;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 
 namespace Vela.Context
 {
@@ -16,7 +15,6 @@ namespace Vela.Context
     public sealed class LocalPluginContext : ILocalPluginContext, IServiceResolverContext
     {
         private readonly ITracingService _safeTracingService;
-        private readonly object? _pluginTelemetryLogger;
         private readonly string? _pluginTypeName;
         private string? _currentHandler;
         private int _scopeDepth;
@@ -34,15 +32,10 @@ namespace Vela.Context
         private IServiceEndpointNotificationService? _notificationService;
 
         // Reflection results are the same for every execution of a worker, so resolve them once per process instead
-        // of on every plugin invocation: the context interface types, the telemetry logger type, the context property
-        // accessors read by name, and the LogMetric extension method.
+        // of on every plugin invocation: the context interface types and the context property accessors read by name.
         private static readonly Type[] PreferredContextTypes = ResolvePreferredContextTypes();
-        private static readonly Type? PluginTelemetryLoggerType =
-            Type.GetType("Microsoft.Xrm.Sdk.PluginTelemetry.ILogger, Microsoft.Xrm.Sdk", throwOnError: false);
         private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> ContextProperties =
             new ConcurrentDictionary<(Type, string), PropertyInfo?>();
-        private static readonly ConcurrentDictionary<Type, MethodInfo?> LogMetricMethods =
-            new ConcurrentDictionary<Type, MethodInfo?>();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LocalPluginContext"/> class.
@@ -57,9 +50,10 @@ namespace Vela.Context
             _safeTracingService = TracingService;
             OrganizationServiceFactory = serviceProvider.GetService(typeof(IOrganizationServiceFactory)) as IOrganizationServiceFactory
                 ?? throw new InvalidPluginExecutionException("IOrganizationServiceFactory is unavailable.");
-            Logger = serviceProvider.GetService(typeof(ILogger)) as ILogger ?? NullLogger.Instance;
+            // The platform serves its Application Insights logger as Microsoft.Xrm.Sdk.PluginTelemetry.ILogger (never as
+            // a Microsoft.Extensions.Logging.ILogger). It is a no-op when the environment exports no telemetry.
+            Logger = serviceProvider.GetService(typeof(ILogger)) as ILogger ?? NullPluginTelemetryLogger.Instance;
             ManagedIdentityService = serviceProvider.GetService(typeof(IManagedIdentityService)) as IManagedIdentityService;
-            _pluginTelemetryLogger = ResolvePluginTelemetryLogger(serviceProvider);
             _environmentId = ResolveContextNonEmptyString(PluginExecutionContext, "EnvironmentId");
             _tenantId = ResolveContextGuid(PluginExecutionContext, "TenantId");
             _initiatingUserAgent = ResolveContextString(PluginExecutionContext, "InitiatingUserAgent") ?? string.Empty;
@@ -279,17 +273,24 @@ namespace Vela.Context
                 SafeTrace(exception.ToString());
             }
 
-            // Platform MEL logger (routes to Application Insights when the environment supplies it; NullLogger
-            // otherwise). The default dimensions and any active BeginLogScope properties ride along as scopes.
-            // Log the already-formatted text as a literal (identity formatter), NOT as a MEL message template:
-            // trace text can contain arbitrary '{'/'}' (e.g. serialized snapshots) that would break template
-            // parsing. Structured dimensions ride along via the scopes instead.
-            using (Logger.BeginScope(DefaultDimensions()))
+            // Platform Application Insights logger. The default dimensions and any active BeginLogScope properties
+            // ride along as scopes. The already-formatted text goes in as the "{0}" argument, NOT as the message
+            // template: trace text can contain arbitrary '{'/'}' (e.g. serialized snapshots) that would break
+            // template parsing.
+            if (!ReferenceEquals(Logger, NullPluginTelemetryLogger.Instance))
             {
-                Logger.Log(level, default(EventId), formatted, exception, LiteralFormatter);
+                try
+                {
+                    using (Logger.BeginScope(DefaultDimensions()))
+                    {
+                        Logger.Log(level, exception, "{0}", formatted);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _safeTracingService.Trace("Application Insights logging failed: {0}", ex.Message);
+                }
             }
-
-            ForwardToPluginTelemetryLogger(level, exception, formatted);
         }
 
         /// <inheritdoc />
@@ -297,12 +298,20 @@ namespace Vela.Context
         {
             properties = properties ?? throw new ArgumentNullException(nameof(properties));
 
-            // Push the scope onto both logger channels so the properties become Application Insights dimensions on
-            // every subsequent log until disposed, and bump the depth so trace-log lines indent under the scope.
+            // Push the scope onto the Application Insights logger so the properties become dimensions on every
+            // subsequent log until disposed, and bump the depth so trace-log lines indent under the scope.
+            IDisposable? telemetryScope = null;
+            try
+            {
+                telemetryScope = Logger.BeginScope(properties);
+            }
+            catch (Exception ex)
+            {
+                _safeTracingService.Trace("Application Insights scope failed: {0}", ex.Message);
+            }
+
             _scopeDepth++;
-            IDisposable? melScope = Logger.BeginScope(properties);
-            IDisposable? telemetryScope = (_pluginTelemetryLogger as ILogger)?.BeginScope(properties);
-            return new ScopeHandle(this, melScope, telemetryScope);
+            return new ScopeHandle(this, telemetryScope);
         }
 
         // Sets the currently executing handler method name for the "Method" telemetry dimension. Called by the
@@ -310,7 +319,7 @@ namespace Vela.Context
         internal void SetCurrentHandler(string? handlerMethod) => _currentHandler = handlerMethod;
 
         /// <inheritdoc />
-        public void LogMetric(string name, double value, IReadOnlyDictionary<string, object?>? properties = null)
+        public void LogMetric(string name, long value, IReadOnlyDictionary<string, object?>? properties = null)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -319,16 +328,42 @@ namespace Vela.Context
 
             _safeTracingService.Trace("[Metric] {0}={1}", name, value);
 
-            // Emit as a structured log (visible via ILogger / Application Insights traces).
-            string metricLine = string.Format("{0}={1}", name, value);
-            using (Logger.BeginScope(DefaultDimensions()))
+            if (ReferenceEquals(Logger, NullPluginTelemetryLogger.Instance))
             {
-                Logger.Log(LogLevel.Information, default(EventId), metricLine, null, LiteralFormatter);
+                return;
             }
 
-            // Best-effort Application Insights custom metric via the native PluginTelemetry logger, when present.
-            ForwardMetricToPluginTelemetryLogger(name, value, properties);
+            // Application Insights custom metric. The platform's metric API only takes string dimensions, so the
+            // defaults and the caller's properties are flattened to invariant strings (caller properties win).
+            try
+            {
+                var dimensions = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (KeyValuePair<string, object?> pair in DefaultDimensions())
+                {
+                    dimensions[pair.Key] = DimensionString(pair.Value);
+                }
+
+                if (properties != null)
+                {
+                    foreach (KeyValuePair<string, object?> pair in properties)
+                    {
+                        if (!string.IsNullOrEmpty(pair.Key))
+                        {
+                            dimensions[pair.Key] = DimensionString(pair.Value);
+                        }
+                    }
+                }
+
+                Logger.LogMetric(name, dimensions, value);
+            }
+            catch (Exception ex)
+            {
+                _safeTracingService.Trace("Application Insights metric failed: {0}", ex.Message);
+            }
         }
+
+        private static string DimensionString(object? value) =>
+            Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
 
         // The framework's default Application Insights dimensions, derived from the execution context. Attached to
         // every log/metric; user BeginLogScope properties stack on top.
@@ -358,20 +393,18 @@ namespace Vela.Context
             return dimensions;
         }
 
-        // Disposes the (possibly null) scope handles from BeginLogScope's two channels and pops the trace-log
+        // Disposes the (possibly null) Application Insights scope from BeginLogScope and pops the trace-log
         // indentation depth. Idempotent.
         private sealed class ScopeHandle : IDisposable
         {
             private readonly LocalPluginContext _context;
-            private readonly IDisposable? _first;
-            private readonly IDisposable? _second;
+            private readonly IDisposable? _telemetryScope;
             private bool _disposed;
 
-            public ScopeHandle(LocalPluginContext context, IDisposable? first, IDisposable? second)
+            public ScopeHandle(LocalPluginContext context, IDisposable? telemetryScope)
             {
                 _context = context;
-                _first = first;
-                _second = second;
+                _telemetryScope = telemetryScope;
             }
 
             public void Dispose()
@@ -382,8 +415,14 @@ namespace Vela.Context
                 }
 
                 _disposed = true;
-                _first?.Dispose();
-                _second?.Dispose();
+                try
+                {
+                    _telemetryScope?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _context._safeTracingService.Trace("Application Insights scope failed: {0}", ex.Message);
+                }
                 if (_context._scopeDepth > 0)
                 {
                     _context._scopeDepth--;
@@ -405,11 +444,6 @@ namespace Vela.Context
             scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
             return ManagedIdentityService?.AcquireToken(applicationUserId, scopes)
                 ?? throw new InvalidPluginExecutionException("IManagedIdentityService is unavailable.");
-        }
-
-        private static object? ResolvePluginTelemetryLogger(IServiceProvider serviceProvider)
-        {
-            return PluginTelemetryLoggerType == null ? null : serviceProvider.GetService(PluginTelemetryLoggerType);
         }
 
         private static Guid? ResolveContextGuid(object context, string propertyName)
@@ -523,129 +557,11 @@ namespace Vela.Context
             return true;
         }
 
-        // Identity formatter: logs a pre-formatted string verbatim, bypassing MEL message-template parsing.
-        private static readonly Func<string, Exception?, string> LiteralFormatter = (state, _) => state;
-
         // Traces an ALREADY-COMPOSED string safely. Dataverse's ITracingService.Trace runs string.Format even when
         // no args are supplied, so a pre-built line containing a literal '{' or '}' (e.g. a serialized entity
         // snapshot) would throw FormatException. Passing the text as the {0} argument means string.Format never
         // parses the braces inside it.
         private void SafeTrace(string text) => _safeTracingService.Trace("{0}", text);
-
-        private void ForwardToPluginTelemetryLogger(LogLevel level, Exception? exception, string formatted)
-        {
-            if (_pluginTelemetryLogger == null)
-            {
-                return;
-            }
-
-            // Skip when the native telemetry logger IS the same instance already logged as Logger, to avoid a
-            // duplicate Application Insights entry.
-            if (ReferenceEquals(_pluginTelemetryLogger, Logger))
-            {
-                return;
-            }
-
-            try
-            {
-                // Preferred: the PluginTelemetry logger is a Microsoft.Extensions.Logging.ILogger, so log at the
-                // real level with structured args and the default dimensions as a scope.
-                if (_pluginTelemetryLogger is ILogger telemetry)
-                {
-                    using (telemetry.BeginScope(DefaultDimensions()))
-                    {
-                        telemetry.Log(level, default(EventId), formatted, exception, LiteralFormatter);
-                    }
-
-                    return;
-                }
-
-                // Fallback (older SDK where the logger is not MEL): call the level-named method, else Information,
-                // else Trace, with the already-formatted string.
-                MethodInfo? method = _pluginTelemetryLogger.GetType().GetMethod(LevelMethodName(level), new[] { typeof(string) })
-                    ?? _pluginTelemetryLogger.GetType().GetMethod("LogInformation", new[] { typeof(string) })
-                    ?? _pluginTelemetryLogger.GetType().GetMethod("Trace", new[] { typeof(string) });
-                method?.Invoke(_pluginTelemetryLogger, new object[] { formatted });
-            }
-            catch (Exception ex)
-            {
-                _safeTracingService.Trace("Plugin telemetry forwarding failed: {0}", ex.Message);
-            }
-        }
-
-        private static string LevelMethodName(LogLevel level) => level switch
-        {
-            LogLevel.Trace => "LogTrace",
-            LogLevel.Debug => "LogDebug",
-            LogLevel.Warning => "LogWarning",
-            LogLevel.Error => "LogError",
-            LogLevel.Critical => "LogCritical",
-            _ => "LogInformation",
-        };
-
-        private void ForwardMetricToPluginTelemetryLogger(string name, double value, IReadOnlyDictionary<string, object?>? properties)
-        {
-            if (_pluginTelemetryLogger == null)
-            {
-                return;
-            }
-
-            try
-            {
-                // Application Insights custom metrics are exposed through the static
-                // Microsoft.Xrm.Sdk.PluginTelemetry.LoggerExtensions.LogMetric(ILogger, string, double, ...). The
-                // matching overload depends only on the logger's type, so it is looked up once per type.
-                MethodInfo? method = LogMetricMethods.GetOrAdd(_pluginTelemetryLogger.GetType(), FindLogMetric);
-                if (method == null)
-                {
-                    return;
-                }
-
-                ParameterInfo[] parameters = method.GetParameters();
-                object?[] callArgs = new object?[parameters.Length];
-                callArgs[0] = _pluginTelemetryLogger;
-                callArgs[1] = name;
-                callArgs[2] = value;
-                for (int i = 3; i < parameters.Length; i++)
-                {
-                    callArgs[i] = parameters[i].HasDefaultValue ? parameters[i].DefaultValue : null;
-                }
-
-                method.Invoke(null, callArgs);
-            }
-            catch (Exception ex)
-            {
-                _safeTracingService.Trace("Plugin telemetry metric forwarding failed: {0}", ex.Message);
-            }
-        }
-
-        private static MethodInfo? FindLogMetric(Type loggerType)
-        {
-            Type? extensions = Type.GetType("Microsoft.Xrm.Sdk.PluginTelemetry.LoggerExtensions, Microsoft.Xrm.Sdk", throwOnError: false);
-            if (extensions == null)
-            {
-                return null;
-            }
-
-            foreach (MethodInfo method in extensions.GetMethods(BindingFlags.Public | BindingFlags.Static))
-            {
-                if (method.Name != "LogMetric")
-                {
-                    continue;
-                }
-
-                ParameterInfo[] parameters = method.GetParameters();
-                if (parameters.Length >= 3
-                    && parameters[0].ParameterType.IsAssignableFrom(loggerType)
-                    && parameters[1].ParameterType == typeof(string)
-                    && parameters[2].ParameterType == typeof(double))
-                {
-                    return method;
-                }
-            }
-
-            return null;
-        }
 
         private static Type[] ResolvePreferredContextTypes()
         {

@@ -77,7 +77,8 @@ services: `r => new PricingService(context.Service, r.GetRequiredService<IPlugin
 These are always available to resolve without registering them yourself:
 
 `ILocalPluginContext`, `IPluginExecutionContext`, `IOrganizationService` (the current user), `ITracingService`,
-`ILogger`, `IPluginCacheService`, `IEnvironmentVariableReader`, `IMessageService` (and `IManagedIdentityService`
+`ILogger` (the platform's Application Insights logger, `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`; see
+[Telemetry](telemetry.md)), `IPluginCacheService`, `IEnvironmentVariableReader`, `IMessageService` (and `IManagedIdentityService`
 when the runtime provides it). The built-in resolver and `AddPluginRuntime` register the same set.
 
 > [!TIP]

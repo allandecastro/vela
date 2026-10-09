@@ -4,7 +4,10 @@ Emit leveled, structured telemetry from a plugin handler. When the environment h
 [Application Insights configured](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/application-insights-integration-overview),
 entries flow there at the right severity with custom dimensions; when it is not, nothing is lost - every entry
 still goes to the plug-in trace log (subject to the environment's trace-log setting). You never instantiate a
-`TelemetryClient`; the platform owns ingestion through the logger it provides.
+`TelemetryClient`; the platform owns ingestion through the logger it provides,
+[`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`](https://learn.microsoft.com/power-apps/developer/data-platform/application-insights-ilogger).
+Vela calls it for you and exposes it as `ctx.Logger` (and as the injected `ILogger`) when you need its other
+members. Don't reference `Microsoft.Extensions.Logging`: the platform never serves its `ILogger`.
 
 ```csharp
 ctx.LogInformation("Processing order {0}", orderId);
@@ -13,7 +16,12 @@ ctx.LogError(ex, "Order sync failed");
 ```
 
 Levels: `LogTrace`, `LogDebug`, `LogInformation`, `LogWarning`, `LogError`, `LogCritical`. `LogError` and
-`LogCritical` have an overload that takes an `Exception` first.
+`LogCritical` have an overload that takes an `Exception` first. `ctx.Log(level, exception, message, args)` takes a
+`Microsoft.Xrm.Sdk.PluginTelemetry.LogLevel`.
+
+The message is formatted with `string.Format` first (`{0}`, `{1}`, ...) and sent to Application Insights as plain
+text, so braces in the text (JSON, for example) are safe. Structured values belong in dimensions (below), not in
+the message.
 
 ## Custom dimensions (scopes)
 
@@ -39,10 +47,13 @@ log reads as a tree. Application Insights entries carry the scope as dimensions 
 
 ```csharp
 ctx.LogMetric("OrdersProcessed", 1);
+ctx.LogMetric("LinesImported", lines.Count, new Dictionary<string, object?> { ["Source"] = "ERP" });
 ```
 
-Sends an Application Insights custom metric when the environment supports it, and always emits a structured log
-line so the value is visible via the logger / trace log too.
+Sends an Application Insights custom metric (`customMetrics`) when the environment exports telemetry, and always
+writes a `[Metric] name=value` line to the plug-in trace log. The value is a `long`: the platform's metric API only
+takes integers. The metric carries the default dimensions plus the properties you pass, converted to invariant
+strings. Scope properties from `BeginLogScope` are not copied onto metrics; pass them explicitly.
 
 ## Trace vs Log
 
@@ -63,21 +74,28 @@ The integration is safe either way and never throws for telemetry reasons:
 
 ## Testing
 
-The context logs through an `ILogger`, so tests can assert what a handler emitted with the recording logger:
+The harness serves a recording `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, the same type the platform serves, so
+tests can assert what a handler emitted:
 
 ```csharp
+using Microsoft.Xrm.Sdk.PluginTelemetry;
+
 var builder = PluginContext.For<Account>().OnCreate();
 ILocalPluginContext ctx = builder.Build();
 
 ctx.LogWarning("careful");
+ctx.LogMetric("Orders", 2);
 
 LogEntry entry = Assert.Single(builder.LogCapture.Entries);
 Assert.Equal(LogLevel.Warning, entry.Level);
 Assert.Equal("careful", entry.Message);
+Assert.Equal(2, Assert.Single(builder.LogCapture.Metrics).Value);
 ```
 
-`builder.LogCapture` records level, message, exception, and scope dimensions; `builder.TraceCapture` records the
-trace-log channel. Override the logger with `WithLogger(...)`.
+`LogCapture` records level, message, exception and scope dimensions in `Entries`, and name, value and dimensions
+in `Metrics`. `builder.TraceCapture` records the trace-log channel. Override the logger with `WithLogger(...)`
+(any `PluginTelemetry.ILogger`, a mock included). `PluginPipeline` exposes the same recorder as
+`pipeline.LogCapture`, across the whole cascade.
 
 ## See also
 

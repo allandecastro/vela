@@ -647,7 +647,7 @@ Handler entry is traced automatically too: alongside the plugin-level `Executing
 > which additionally covers early-bound entities nested in a deep-insert graph. If you write such graphs from an
 > older project, add that attribute (or `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]`) to your plugin project.
 
-When plugin telemetry is available in runtime (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`), trace messages are also forwarded to plugin telemetry for Application Insights correlation.
+Trace messages also go to the platform's Application Insights logger (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`) at Information level, a no-op when the environment exports no telemetry. See [Telemetry](telemetry.md).
 
 Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment setting (`Off` / `Exception` / `All`) - not anything in code. There is no framework-level verbosity switch: server-side plugins run in Microsoft's sandbox where OS environment variables cannot be set, so a runtime verbosity flag would have no effect online. What you control in code is *what extra detail* you trace, at the call site.
 
@@ -662,7 +662,7 @@ Trace Log is `All`. While debugging, opt into values for one plugin:
 protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full; // adds values, and a success snapshot
 ```
 
-Snapshots go **only to the plug-in trace log**: they are never forwarded to `ILogger` / Application Insights.
+Snapshots go **only to the plug-in trace log**: they are never forwarded to Application Insights.
 
 To capture **intermediate** state, call `TraceExecutionSnapshot(...)` yourself **inside your handler** with your
 own phase label - a checkpoint around a risky step. An explicit call traces values (`TraceSnapshotDetail.Full`)

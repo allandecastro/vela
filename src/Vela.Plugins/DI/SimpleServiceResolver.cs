@@ -5,9 +5,8 @@ using System.Runtime.ExceptionServices;
 using Vela.Caching;
 using Vela.Context;
 using Vela.Localization;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 
 namespace Vela.DI
 {
@@ -70,7 +69,7 @@ namespace Vela.DI
             yield return Scoped(() => context.PluginExecutionContext);
             yield return Scoped(() => context.Service);
             yield return Scoped(() => context.TracingService);
-            yield return Scoped(() => context.Logger ?? NullLogger.Instance);
+            yield return Scoped<ILogger>(() => context.Logger ?? NullPluginTelemetryLogger.Instance);
             // The injected cache is the organization-scoped view of the process-wide cache: user keys cannot collide
             // across organizations, and Clear() only drops this organization's entries (the framework's own entries
             // included, since the built-in services go through the same view).
