@@ -441,6 +441,7 @@ public sealed class DataverseRegistrationStepsTests
             ["entityalias"] = "PreImage",
             ["imagetype"] = new OptionSetValue(0),
             ["attributes"] = "name",
+            ["messagepropertyname"] = "Target",
         };
         var svc = new TestSupport.FakeOrgService
         {
@@ -455,6 +456,44 @@ public sealed class DataverseRegistrationStepsTests
         Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
         Assert.Empty(svc.Deleted);
+    }
+
+    [Fact]
+    public void SyncStepImages_registers_a_merge_subordinate_image_against_SubordinateId()   // #462
+    {
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
+        var pre = new[]
+        {
+            new ImageApplyDefinition("PreImage", new[] { "name" }),
+            new ImageApplyDefinition("SubordinatePreImage", new[] { "name" }, "SubordinateId"),
+        };
+
+        DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "Merge", pre, Array.Empty<ImageApplyDefinition>());
+
+        Assert.Equal("Target", svc.Created.Single(e => e.GetAttributeValue<string>("entityalias") == "PreImage").GetAttributeValue<string>("messagepropertyname"));
+        Assert.Equal("SubordinateId", svc.Created.Single(e => e.GetAttributeValue<string>("entityalias") == "SubordinatePreImage").GetAttributeValue<string>("messagepropertyname"));
+    }
+
+    [Fact]
+    public void SyncStepImages_recreates_an_image_whose_message_property_changed()   // #462
+    {
+        // Same alias, type and attributes, but the image now targets the subordinate: the row cannot be updated in
+        // place (0x80040216), so it is deleted and recreated with the new messagepropertyname.
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("sdkmessageprocessingstepimage", existingId)
+        {
+            ["entityalias"] = "snap",
+            ["imagetype"] = new OptionSetValue(0),
+            ["attributes"] = "name",
+            ["messagepropertyname"] = "Target",
+        };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var pre = new[] { new ImageApplyDefinition("snap", new[] { "name" }, "SubordinateId") };
+
+        DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "Merge", pre, Array.Empty<ImageApplyDefinition>());
+
+        Assert.Contains(svc.Deleted, d => d.Id == existingId);
+        Assert.Equal("SubordinateId", svc.Created.Single().GetAttributeValue<string>("messagepropertyname"));
     }
 
     [Fact]
@@ -490,7 +529,7 @@ public sealed class DataverseRegistrationStepsTests
         DataverseRegistration.SyncStepImages(svc, stepId, "Update", Array.Empty<ImageApplyDefinition>(), Array.Empty<ImageApplyDefinition>());
 
         Assert.Equal("sdkmessageprocessingstepimage", captured!.EntityName);
-        Assert.Equal(new[] { "sdkmessageprocessingstepimageid", "imagetype", "entityalias", "attributes", "name" }, captured.ColumnSet.Columns);
+        Assert.Equal(new[] { "sdkmessageprocessingstepimageid", "imagetype", "entityalias", "attributes", "messagepropertyname", "name" }, captured.ColumnSet.Columns);
         Assert.Equal("sdkmessageprocessingstepid", captured.Criteria.Conditions.Single().AttributeName);
         Assert.Equal(stepId, captured.Criteria.Conditions.Single().Values.Single());
     }

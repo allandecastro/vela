@@ -39,6 +39,36 @@ public class DefinitionNormalizerTests
     }
 
     [Fact]
+    public void Step_image_message_property_matches_the_live_read_and_a_change_is_a_diff()   // #462
+    {
+        // The code side resolves each image's request property the way apply registers it: the message's own (Target on
+        // Merge) unless the step chose one (SubordinateId). The live read carries messagepropertyname as stored, so the
+        // same images compare equal, and an image moved from the master to the subordinate is "changed".
+        JsonElement code = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new
+            {
+                pluginTypeName = "P", message = "Merge", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0,
+                preImages = new object[]
+                {
+                    new { alias = "PreImage", attributes = new[] { "name" } },
+                    new { alias = "SubordinatePreImage", attributes = new[] { "name" }, messagePropertyName = "SubordinateId" },
+                },
+            }),
+            Options);
+        JsonElement live = DefinitionNormalizer.BuildStepShape(
+            "P", "Merge", "account", "k", code.GetProperty("name").GetString()!, code.GetProperty("description").GetString()!, 40, 0, 1, new string[0],
+            new[] { new StepImage("PreImage", new[] { "name" }, "Target"), new StepImage("SubordinatePreImage", new[] { "name" }, "SubordinateId") },
+            new StepImage[0], true, "", "", null, 0, Options);
+        Assert.Equal(JsonSerializer.Serialize(live), JsonSerializer.Serialize(code));
+
+        JsonElement moved = DefinitionNormalizer.BuildStepShape(
+            "P", "Merge", "account", "k", code.GetProperty("name").GetString()!, code.GetProperty("description").GetString()!, 40, 0, 1, new string[0],
+            new[] { new StepImage("PreImage", new[] { "name" }, "Target"), new StepImage("SubordinatePreImage", new[] { "name" }, "Target") },
+            new StepImage[0], true, "", "", null, 0, Options);
+        Assert.NotEqual(JsonSerializer.Serialize(moved), JsonSerializer.Serialize(code));
+    }
+
+    [Fact]
     public void Step_entity_and_attribute_casing_is_canonicalized_to_lowercase()   // #305 churn
     {
         // Dataverse stores entity/attribute logical names lower case (so the live read is always lower case). A

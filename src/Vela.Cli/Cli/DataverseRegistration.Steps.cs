@@ -378,21 +378,21 @@ internal static partial class DataverseRegistration
     internal static void SyncStepImages(IOrganizationService service, Guid stepId, string message, ImageApplyDefinition[] preImages, ImageApplyDefinition[] postImages)
 {
     List<StepImageApplyDefinition> desired = [];
-    desired.AddRange(preImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 0)));
-    desired.AddRange(postImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 1)));
+    desired.AddRange(preImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 0, x.MessagePropertyName)));
+    desired.AddRange(postImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 1, x.MessagePropertyName)));
 
     // The image's messagepropertyname depends on the message (Create → Id, CreateMultiple → Ids, UpdateMultiple →
-    // Targets, Send → EmailId, ...); StepImageRules holds the map shared with the runtime and the scanner. A message
-    // that supports no image (RouteTo) never gets here with images: the scanner rejects it before any write.
-    string? msgPropertyName = Vela.Steps.StepImageRules.GetMessagePropertyName(message);
-    if (msgPropertyName is null && desired.Count > 0)
+    // Targets, Send → EmailId, ...) unless the step chose one (SubordinateId on Merge); StepImageRules holds the map
+    // shared with the runtime and the scanner. A message that supports no image (RouteTo) never gets here with images:
+    // the scanner rejects it before any write.
+    if (desired.Count > 0 && Vela.Steps.StepImageRules.GetMessagePropertyName(message) is null)
     {
         throw new InvalidOperationException($"Dataverse supports no image on the '{message}' message.");
     }
 
     QueryExpression query = new QueryExpression("sdkmessageprocessingstepimage")
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepimageid", "imagetype", "entityalias", "attributes", "name")
+        ColumnSet = new ColumnSet("sdkmessageprocessingstepimageid", "imagetype", "entityalias", "attributes", "messagepropertyname", "name")
     };
     query.Criteria.AddCondition("sdkmessageprocessingstepid", ConditionOperator.Equal, stepId);
     List<Entity> existingRows = service.RetrieveAll(query);
@@ -409,16 +409,20 @@ internal static partial class DataverseRegistration
             ? string.Empty
             : string.Join(",", desiredImage.Attributes.OrderBy(x => x, StringComparer.Ordinal));
 
+        string messagePropertyName = Vela.Steps.StepImageRules.ResolveMessagePropertyName(message, desiredImage.MessagePropertyName)!;
+
         if (existingByKey.TryGetValue(key, out Entity? existing))
         {
-            // The match key is (alias, imagetype), so those already agree; only `attributes` can differ.
-            // Skip entirely when nothing changed.
+            // The match key is (alias, imagetype), so those already agree; `attributes` and `messagepropertyname`
+            // (which record the image is taken from, e.g. Target or SubordinateId on Merge) can differ. Skip entirely
+            // when nothing changed.
             string existingAttributes = string.Join(",", (existing.GetAttributeValue<string>("attributes") ?? string.Empty)
                 .Split(',')
                 .Select(x => x.Trim())
                 .Where(x => x.Length > 0)
                 .OrderBy(x => x, StringComparer.Ordinal));
-            if (string.Equals(existingAttributes, attributesCsv, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(existingAttributes, attributesCsv, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(existing.GetAttributeValue<string>("messagepropertyname"), messagePropertyName, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -436,7 +440,7 @@ internal static partial class DataverseRegistration
         create["name"] = desiredImage.Alias;
         create["attributes"] = attributesCsv;
         create["imagetype"] = new OptionSetValue(desiredImage.ImageType);
-        create["messagepropertyname"] = msgPropertyName!;
+        create["messagepropertyname"] = messagePropertyName;
         service.Create(create);
     }
 

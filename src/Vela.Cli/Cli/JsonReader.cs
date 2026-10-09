@@ -97,7 +97,8 @@ internal static class JsonReader
         return images.EnumerateArray()
             .Select(image => new StepImage(
                 TryGetString(image, "alias") ?? string.Empty,
-                TryGetStringArray(image, "attributes")))
+                TryGetStringArray(image, "attributes"),
+                TryGetString(image, "messagePropertyName") ?? string.Empty))
             .ToArray();
     }
 

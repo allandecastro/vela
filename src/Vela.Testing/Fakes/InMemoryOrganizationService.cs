@@ -1696,11 +1696,13 @@ namespace Vela.Testing
                     }
                 }
 
-                // 4. Deactivate the subordinate (Inactive = statecode 1 / statuscode 2).
+                // 4. Deactivate the subordinate (Inactive = statecode 1 / statuscode 2) and point its masterid at the
+                //    target (verified live: the subordinate's post-image carries both).
                 Update(new Entity(entity, subordinateId)
                 {
                     ["statecode"] = new OptionSetValue(1),
                     ["statuscode"] = new OptionSetValue(2),
+                    ["masterid"] = new EntityReference(entity, target.Id),
                 });
                 return null;
             });

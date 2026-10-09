@@ -319,13 +319,28 @@ internal static class PackageScanner
             }
 
             string? reason = Vela.Steps.StepImageRules.GetRejectionReason(message, stage, isPreImage);
+            JsonElement offending = images[0];
             if (reason is null)
             {
-                return null;
+                // The stage takes this kind of image; each image's request property must also be one the message has.
+                foreach (JsonElement image in images.EnumerateArray())
+                {
+                    string? imageProperty = image.ValueKind == JsonValueKind.Object && image.TryGetProperty("messagePropertyName", out JsonElement p) ? p.GetString() : null;
+                    reason = Vela.Steps.StepImageRules.GetMessagePropertyRejectionReason(message, imageProperty);
+                    if (reason is not null)
+                    {
+                        offending = image;
+                        break;
+                    }
+                }
+
+                if (reason is null)
+                {
+                    return null;
+                }
             }
 
-            JsonElement first = images[0];
-            string alias = first.ValueKind == JsonValueKind.Object && first.TryGetProperty("alias", out JsonElement a) ? a.GetString() ?? string.Empty : string.Empty;
+            string alias = offending.ValueKind == JsonValueKind.Object && offending.TryGetProperty("alias", out JsonElement a) ? a.GetString() ?? string.Empty : string.Empty;
             return $"registers a {kind} '{alias}' on a '{message}' step at {(Vela.Constants.PluginStages)stage}, " +
                 $"which Dataverse rejects: {reason}. Remove the image or move the step to a stage that supports it.";
         }

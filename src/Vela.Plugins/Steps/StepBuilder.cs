@@ -120,11 +120,11 @@ public sealed partial class StepBuilder<TEntity>
         // modelled message string is still validated here.
         foreach (ImageDefinition image in _preImages)
         {
-            EnsureImageAllowed(isPreImage: true, image.Alias);
+            EnsureImageAllowed(isPreImage: true, image);
         }
         foreach (ImageDefinition image in _postImages)
         {
-            EnsureImageAllowed(isPreImage: false, image.Alias);
+            EnsureImageAllowed(isPreImage: false, image);
         }
 
         EnsureNoDuplicates(_definition.FilteringAttributes, "filtering attribute");
@@ -132,6 +132,9 @@ public sealed partial class StepBuilder<TEntity>
         {
             EnsureNoDuplicates(img.Attributes, $"attribute in image '{img.Alias}'");
         }
+        // Aliases are unique across every image of the step, whatever record each one targets: Dataverse accepts a
+        // Merge step with the same alias on a Target and a SubordinateId image, then delivers only one of them
+        // (verified live), so the duplicate is rejected here.
         EnsureNoDuplicates(_preImages.Concat(_postImages).Select(i => i.Alias).ToArray(), "image alias");
 
         return _definition;
@@ -296,16 +299,23 @@ public sealed partial class StepBuilder<TEntity>
         return true;
     }
 
-    private void StartImage(string alias, bool isPre)
+    private void StartImage(string alias, bool isPre, string messagePropertyName)
     {
         FinalizeCurrentImage();
-        _currentImage = new ImageDefinition { Alias = alias };
+        _currentImage = new ImageDefinition { Alias = alias, MessagePropertyName = messagePropertyName };
         _isPreImage = isPre;
     }
 
     private void AddImageNow(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes)
+        => AddImageNow(alias, isPre, string.Empty, attributes);
+
+    // An image of the subordinate record of a Merge (the record merged away), registered against SubordinateId.
+    private void AddSubordinateImageNow(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes)
+        => AddImageNow(alias, isPre, StepImageRules.SubordinateId, attributes);
+
+    private void AddImageNow(string alias, bool isPre, string messagePropertyName, Expression<Func<TEntity, object?>>[] attributes)
     {
-        StartImage(alias, isPre);
+        StartImage(alias, isPre, messagePropertyName);
         if (attributes != null && attributes.Length > 0)
         {
             SetCurrentImageAttributes(attributes);
@@ -341,11 +351,12 @@ public sealed partial class StepBuilder<TEntity>
         }
     }
 
-    private void EnsureImageAllowed(bool isPreImage, string alias)
+    private void EnsureImageAllowed(bool isPreImage, ImageDefinition image)
     {
         string message = _definition.Message ?? string.Empty;
         PluginStages stage = _definition.Stage;
-        string? reason = StepImageRules.GetRejectionReason(message, (int)stage, isPreImage);
+        string? reason = StepImageRules.GetRejectionReason(message, (int)stage, isPreImage)
+            ?? StepImageRules.GetMessagePropertyRejectionReason(message, image.MessagePropertyName);
         if (reason is null)
         {
             return;
@@ -353,7 +364,7 @@ public sealed partial class StepBuilder<TEntity>
 
         string imageType = isPreImage ? "PreImage" : "PostImage";
         throw new InvalidOperationException(
-            $"{imageType} '{alias}' is not supported for message '{message}' at stage '{stage}': {reason}.");
+            $"{imageType} '{image.Alias}' is not supported for message '{message}' at stage '{stage}': {reason}.");
     }
 
     private static void EnsureNoDuplicates(string[]? names, string what)
