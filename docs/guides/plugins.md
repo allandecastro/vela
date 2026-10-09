@@ -516,7 +516,7 @@ message-specific `ctx.GetRequest<TRequest>()`.
 | `OnGrantAccess()` | `IGrantAccessPostContext<T>` | `GrantAccessRequest` | `ctx.Request.Target`, `ctx.Request.PrincipalAccess` |
 | `OnModifyAccess()` | `IModifyAccessPostContext<T>` | `ModifyAccessRequest` | `ctx.Request.Target` |
 | `OnRevokeAccess()` | `IRevokeAccessPostContext<T>` | `RevokeAccessRequest` | `ctx.Request.Target`, `ctx.Request.Revokee` |
-| `OnAssign()` | `IAssignPostContext<T>` | `AssignRequest` | `ctx.Request.Target`, `ctx.Request.Assignee` |
+| `OnAssign()` | `IAssignPostContext<T>` | `AssignRequest` | `ctx.Request.Target`, `ctx.Request.Assignee`, `ctx.PreImage` / `ctx.PostImage` |
 
 **Associate / Disassociate** register with **no primary entity**, whatever `TEntity` the plugin uses. Dataverse has
 no per-entity message filter for these (the `Target` can be either end of the relationship), so the step is global

@@ -148,6 +148,20 @@ have no strongly-typed request class in the referenced SDK, so call them with a 
 inline is downloaded directly (its bytes are the thumbnail); a plain `byte[]`/fileid attribute already
 round-trips through Create/Update/Retrieve.
 
+Dataverse only downloads an Image column that stores full images: otherwise (`account.entityimage`, or a column
+created without "Can store full images") `InitializeFileBlocksDownload` fails with `0x80040217`. The harness cannot
+tell an Image column from inline bytes on its own, so register the column to get that check:
+
+```csharp
+svc.WithEntityMetadata(FakeEntityMetadata.For("account")
+    .PrimaryId("accountid")
+    .Image("new_img", canStoreFullImage: false)
+    .Build());
+// svc.DownloadFile(target, "new_img") now throws FaultException<OrganizationServiceFault> (0x80040217).
+```
+
+On the platform the setting in force when the image was set decides; the harness reads it at download time.
+
 ### Standard system columns
 
 Create/Update auto-populate the standard columns the platform sets for you, so plugins that read or filter on

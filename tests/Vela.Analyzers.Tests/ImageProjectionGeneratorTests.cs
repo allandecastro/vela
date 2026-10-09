@@ -87,7 +87,8 @@ namespace Vela.Context
     public class UpdateMultiplePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public UpdateMultiplePostContext(ILocalPluginContext inner) { } }
     public class MergePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public MergePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? SubordinatePreImage => default; }
     public class MergePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public MergePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; public TEntity? SubordinatePreImage => default; public TEntity? SubordinatePostImage => default; }
-    public class AssignPostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public AssignPostContext(ILocalPluginContext inner) { } }
+    public class AssignPreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public AssignPreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
+    public class AssignPostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public AssignPostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; }
     public static class ImageProjectionExtensions
     {
         public static TImage PreImageAs<TImage>(this ILocalPluginContext context, string alias = ""PreImage"") => default!;
@@ -819,6 +820,60 @@ namespace Demo
         Assert.Contains("class OnMergingContext : global::Vela.Context.MergePreContext<global::Demo.Account>", output);
         Assert.Contains("public new OnMerging_SubordinatePreImage? SubordinatePreImage", output);
         Assert.DoesNotContain("OnMerging_PreImage", output);
+    }
+
+    [Fact]
+    public void An_assign_context_exposes_the_pre_and_post_projections()   // #475
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountAssign : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnAssign().PostOperation().Sync()
+                .WithPreImage(a => a.Name)
+                .WithPostImage(""after"", a => a.Revenue)
+                .Handle(OnAssigned);
+            RegisterStep().OnAssign().PreValidation().Sync()
+                .WithPreImage(a => a.Telephone1)
+                .Handle(OnAssigning);
+        }
+        private void OnAssigned() { }
+        private void OnAssigning() { }
+    }
+}
+");
+
+        Assert.Contains("class OnAssignedContext : global::Vela.Context.AssignPostContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnAssigned_PreImage? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<OnAssigned_PreImage>(this);", output);
+        Assert.Contains("public new OnAssigned_PostImage_after? PostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<OnAssigned_PostImage_after>(this, \"after\");", output);
+
+        Assert.Contains("class OnAssigningContext : global::Vela.Context.AssignPreContext<global::Demo.Account>", output);
+        Assert.Contains("public new OnAssigning_PreImage? PreImage", output);
+        Assert.Contains(" Telephone1 { get; set; }", output);
+    }
+
+    [Fact]
+    public void An_assign_capture_compiles_without_VELA021()   // #475
+    {
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountAssign : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnAssign().PostOperation().Sync().WithPreImage(a => a.Name).WithPostImage(a => a.Name).Handle(() => { });
+        private static string Read(AssignPostOp_PreImage pre, AssignPostOp_PostImage post) => pre.Name + post.Name;
+    }
+}
+");
+
+        Assert.DoesNotContain(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 
     [Fact]

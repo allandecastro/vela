@@ -35,7 +35,7 @@ namespace Vela.Context
     /// Adds the early-bound <see cref="PreImage"/> (a snapshot of the step's primary record taken before the
     /// operation) to a message context. A pre-image is always the step's own table, so it is exposed as the
     /// context's <typeparamref name="TEntity"/> - no type argument needed. Only mixed into the messages and stages
-    /// where a pre-image exists (Update, Delete, Merge). It reads the pre-image registered under the default alias; for a
+    /// where a pre-image exists (Update, Delete, Assign, Merge). It reads the pre-image registered under the default alias; for a
     /// custom alias use <c>ctx.GetPreImage&lt;T&gt;("alias")</c> instead.
     /// </summary>
     /// <typeparam name="TEntity">The early-bound entity type of the step's primary record.</typeparam>
@@ -50,7 +50,7 @@ namespace Vela.Context
     /// Adds the early-bound <see cref="PostImage"/> (a snapshot of the step's primary record taken after the
     /// operation) to a message context. A post-image is always the step's own table, so it is exposed as the
     /// context's <typeparamref name="TEntity"/> - no type argument needed. Only mixed into the messages and stages
-    /// where a post-image exists (Create, Update, Merge - PostOperation). It reads the post-image registered under the
+    /// where a post-image exists (Create, Update, Assign, Merge - PostOperation). It reads the post-image registered under the
     /// default alias; for a custom alias use <c>ctx.GetPostImage&lt;T&gt;("alias")</c> instead.
     /// </summary>
     /// <typeparam name="TEntity">The early-bound entity type of the step's primary record.</typeparam>
