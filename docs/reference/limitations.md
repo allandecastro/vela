@@ -48,7 +48,9 @@ change.
   message text. It waits the fault's `Retry-After`, and rethrows when that wait exceeds `RetryPolicy.MaxDelay`
   (30 s); without one it uses jittered exponential backoff. Timeouts (`TimeoutException`, `WebException`, a fault
   whose message mentions `timeout`) are retried only with `retryOnTimeout: true`, for idempotent operations. The
-  classification isn't pluggable.
+  classification isn't pluggable. Service-protection limits don't apply to data operations from a plugin, so the
+  policy rarely fires on `ctx.Service` calls; it is meant for calls that leave the sandbox and for code shared with a
+  client. Each wait is capped, not their sum: pass `maxElapsed` for an overall budget.
 - **No retry inside a transaction.** A failed call in a synchronous pre/post-operation step aborts the database
   transaction, so a replay cannot succeed. Every retry entry point therefore takes the context
   (`RetryPolicy.Execute(ctx, ...)`, or `ExecuteWithRetry(ctx, ...)` / `ExecuteIdempotentWithRetry(ctx, ...)` on the

@@ -174,10 +174,29 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Recursion_TripsTheDepthGuard_AndRollsBack()
+        public void Recursion_TripsThePipelineCap_AtTheDataverseDefaultDepth_AndRollsBack()
+        {
+            // The pipeline cap defaults to the Dataverse limit (8), the same value as the plugin's own guard, so the
+            // pipeline stops the cascade before a step at depth 9 runs, as the platform would.
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<RecurseOnUpdate>()
+                .Seed(new FakeAccount { Id = id, Name = "Seed" });
+
+            InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
+                () => pipeline.Service.Update(new FakeAccount { Id = id, Name = "trigger" }));
+            Assert.Contains($"stopped at depth {Vela.Plugin.PluginBase.DefaultMaxDepth + 1} (cap {Vela.Plugin.PluginBase.DefaultMaxDepth})", ex.Message);
+            Assert.Equal(Vela.Plugin.PluginBase.DefaultMaxDepth, pipeline.ExecutionLog.Max(e => e.Depth));
+
+            Entity account = Assert.Single(pipeline.GetAll("account"));
+            Assert.Equal("Seed", account.GetAttributeValue<string>("name"));
+        }
+
+        [Fact]
+        public void Recursion_TripsThePluginsDepthGuard_UnderARaisedPipelineCap_AndRollsBack()
         {
             Guid id = Guid.NewGuid();
             PluginPipeline pipeline = PluginPipeline.Empty().Register<RecurseOnUpdate>()
+                .WithMaxDepth(16)
                 .Seed(new FakeAccount { Id = id, Name = "Seed" });
 
             InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
