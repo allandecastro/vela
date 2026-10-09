@@ -35,6 +35,28 @@ public sealed class StepDefinition
     /// <summary>The execution mode (sync or async).</summary>
     public ExecutionMode Mode { get; set; }
 
+    /// <summary>
+    /// Whether the system job of an asynchronous step is deleted once it succeeds (Dataverse
+    /// <c>asyncautodelete</c>), set with <c>.Async(deleteJobOnSuccess: true)</c>. Always <c>false</c> on a
+    /// synchronous step.
+    /// </summary>
+    public bool AsyncAutoDelete { get; set; }
+
+    /// <summary>
+    /// The relationship schema names an Associate / Disassociate step is scoped to, set with
+    /// <c>.ForRelationship(...)</c>. Dataverse registers these steps for every relationship, so the scope is
+    /// enforced at dispatch: the handler runs only when the request's <c>Relationship</c> is one of these. Empty
+    /// (the default) means every relationship.
+    /// </summary>
+    public string[] Relationships { get; set; } = [];
+
+    /// <summary>
+    /// The pipeline depth above which this step's handler is skipped (with a trace line) instead of run, set with
+    /// <c>.SkipWhenDepthAbove(n)</c>. It replaces the plugin-level depth guard (which throws) for this step only.
+    /// Runtime-only: it is not deployed to Dataverse. <c>null</c> (the default) keeps the plugin-level guard.
+    /// </summary>
+    public int? SkipWhenDepthAbove { get; set; }
+
     /// <summary>The filtering attributes (triggers plugin only when these change).</summary>
     public string[] FilteringAttributes { get; set; } = [];
 

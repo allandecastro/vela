@@ -84,6 +84,7 @@ namespace Vela.Context
     public class MessagePostContext<TRequest, TEntity> : ILocalPluginContext where TEntity : Entity { public MessagePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; }
     public class CreatePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public CreatePreContext(ILocalPluginContext inner) { } }
     public class CreateMultiplePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public CreateMultiplePostContext(ILocalPluginContext inner) { } }
+    public class UpdateMultiplePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public UpdateMultiplePostContext(ILocalPluginContext inner) { } }
     public class MergePreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public MergePreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? SubordinatePreImage => default; }
     public class MergePostContext<TEntity> : ILocalPluginContext where TEntity : Entity { public MergePostContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; public TEntity? PostImage => default; public TEntity? SubordinatePreImage => default; public TEntity? SubordinatePostImage => default; }
     public class AssignPreContext<TEntity> : ILocalPluginContext where TEntity : Entity { public AssignPreContext(ILocalPluginContext inner) { } public TEntity? PreImage => default; }
@@ -92,6 +93,8 @@ namespace Vela.Context
     {
         public static TImage PreImageAs<TImage>(this ILocalPluginContext context, string alias = ""PreImage"") => default!;
         public static TImage PostImageAs<TImage>(this ILocalPluginContext context, string alias = ""PostImage"") => default!;
+        public static System.Collections.Generic.IReadOnlyList<TImage> PreImagesAs<TImage>(this ILocalPluginContext context, string alias = ""PreImage"") => default!;
+        public static System.Collections.Generic.IReadOnlyList<TImage> PostImagesAs<TImage>(this ILocalPluginContext context, string alias = ""PostImage"") => default!;
     }
 }
 
@@ -1054,6 +1057,34 @@ namespace Demo
         Assert.Contains("class OnCreatedManyContext : global::Vela.Context.CreateMultiplePostContext<global::Demo.Account>", output);
         Assert.DoesNotContain("PreImage =>", output);
         Assert.DoesNotContain("PostImage =>", output);
+    }
+
+    [Fact]
+    public void A_bulk_handler_context_lists_the_steps_own_images_per_target()
+    {
+        // Verified live: bulk images reach the plugin per target through the image collections, which can also hold
+        // other steps' and platform images, so the generated lists select the step's own alias.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountBulkUpdate : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdateMultiple().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .WithPreImage(""Before"", a => a.Name)
+                .WithPostImage(a => a.Name)
+                .Handle(OnUpdatedMany);
+        private void OnUpdatedMany() { }
+    }
+}
+");
+
+        Assert.Contains("class OnUpdatedManyContext : global::Vela.Context.UpdateMultiplePostContext<global::Demo.Account>", output);
+        Assert.Contains("IReadOnlyList<OnUpdatedMany_PreImage_Before?> PreImages => global::Vela.Context.ImageProjectionExtensions.PreImagesAs<OnUpdatedMany_PreImage_Before>(this, \"Before\")", output);
+        Assert.Contains("PostImages => global::Vela.Context.ImageProjectionExtensions.PostImagesAs<OnUpdatedMany_PostImage>(this)", output);
+        Assert.DoesNotContain("PreImage =>", output);
     }
 
     [Fact]

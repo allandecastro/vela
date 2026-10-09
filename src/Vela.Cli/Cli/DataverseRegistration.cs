@@ -265,7 +265,7 @@ internal static partial class DataverseRegistration
 
     QueryExpression stepsQuery = new QueryExpression("sdkmessageprocessingstep")
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment")
+        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment", "asyncautodelete")
     };
     stepsQuery.Criteria.AddCondition("eventhandler", ConditionOperator.In, pluginTypeIds.Cast<object>().ToArray());
 
@@ -358,7 +358,8 @@ internal static partial class DataverseRegistration
             DefinitionNormalizer.HashSecret(secureConfig),
             impersonatingUserId,
             supportedDeployment,
-            jsonOptions);
+            jsonOptions,
+            step.GetAttributeValue<bool?>("asyncautodelete") ?? false);
 
         items.Add(new RegistrationItem("step", pluginTypeName, shape));
     }

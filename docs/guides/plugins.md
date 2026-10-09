@@ -87,12 +87,16 @@ public partial class AccountStepRouter : EntityPluginBase<Account>
 }
 ```
 
-Each step in a multi-step plugin must have a **distinct trigger** (message + stage + mode + entity) and its own
-`Handle(...)` (bound by method group, not a string). Two steps with the same trigger can't be told apart at
-runtime, so `Build()` rejects them - put the shared logic in one step (combine the filtering attributes) or use a
-different stage/mode. Because the handler is bound as a method group, the message and the handler's context type
-are checked at compile time: binding an `OnUpdate()` step to a `void Handle(ICreatePostContext<Account> ctx)` method
-does not compile.
+Each step in a multi-step plugin has its own `Handle(...)` (bound by method group, not a string). Several steps
+may share a **trigger** (message + stage + mode + entity) as long as something tells them apart: their filtering
+attributes, their images, their relationship scope (`ForRelationship`) or an explicit `WithStepKey("...")`. Each
+one is deployed as its own Dataverse step, and at run time the executing step (`OwningExtension`) selects its
+handler. A synchronous step's `OwningExtension` carries the step name; an asynchronous step's carries only its id,
+so the runtime reads the step's name once (cached for the process). Two steps on one trigger that differ in none of
+these (for example the same `FilterOn` and only a different rank) are rejected at registration, and analyzer
+[VELA008](../reference/analyzers.md#vela008) flags them at build: give one a `WithStepKey(...)`. Because the handler
+is bound as a method group, the message and the handler's context type are checked at compile time: binding an
+`OnUpdate()` step to a `void Handle(ICreatePostContext<Account> ctx)` method does not compile.
 
 ## Do / Don't (plugins)
 
@@ -122,13 +126,14 @@ The fluent builder enforces a specific order:
    ([VELA022](../reference/analyzers.md#vela022)).
 2. **Stage** - `PreValidation()`, `PreOperation()`, or `PostOperation()` (typed methods; the stage you pick
    determines which images the rest of the chain will offer)
-3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only)
+3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only). `Async(deleteJobOnSuccess: true)` deletes
+   the system job once it succeeds (Dataverse `asyncautodelete`); it exists only on the async branch.
 4. **Filtering** - `FilterOn(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
    `CreateMultiple` and `UpdateMultiple`** (at least one attribute; a chain without it is a build error,
    [VELA020](../reference/analyzers.md#vela020)); not offered on other messages. The step fires only when the
    request sets one of the attributes: on Update the changed columns, on Create the columns the record is created
    with. An unfiltered Create/Update step would fire on every change, so the builder makes you state the trigger.
-5. **Optional** - `WithDescription()`, `WithImpersonation(...)` (see [Impersonation](#impersonation)), `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfigFrom(...)`
+5. **Optional** - `WithDescription()`, `WithImpersonation(...)` (see [Impersonation](#impersonation)), `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `WithStepKey(...)`, `SkipWhenDepthAbove(n)` (see [Depth limit per step](#depth-limit-per-step)), `ForRelationship(...)` on `OnAssociate()` / `OnDisassociate()` (see [Relationship scope](#relationship-scope)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfigFrom(...)`
 6. **Images** - `WithPreImage(...)` and/or `WithPostImage(...)`
 7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).
 
@@ -155,23 +160,57 @@ steps registered on the same message, primary entity, stage and mode. Lower rank
 defaults to `1` when you don't call it. Give steps distinct ranks to pin their relative order:
 
 ```csharp
-// Lower rank runs first, so NormalizeName runs before ValidateName.
+// Lower rank runs first, so NormalizeName runs before ValidateName. The two steps share a trigger and a filter,
+// so each names its step key: the rank is not part of a step's identity.
 RegisterStep().OnUpdate().PreOperation().Sync()
     .FilterOn(a => a.Name)
     .WithExecutionOrder(10)
+    .WithStepKey("normalize-name")
     .Handle(NormalizeName);
 
 RegisterStep().OnUpdate().PreOperation().Sync()
     .FilterOn(a => a.Name)
     .WithExecutionOrder(20)
+    .WithStepKey("validate-name")
     .Handle(ValidateName);
 ```
+
+Changing a step's rank updates the deployed step in place: the rank is not part of its identity (step key), so
+`vela plan` shows a change, never a delete and a create.
 
 > [!NOTE]
 > Two steps that share a rank on the same message, entity, stage and mode execute in an order Dataverse does not
 > define. `vela plan` and `vela apply` warn when a step you are deploying shares its rank with another step
 > already registered in the environment (including steps owned by other assemblies), so you can give them
 > distinct ranks. Under `--strict` the warning fails the run.
+
+### Relationship scope
+
+`OnAssociate()` / `OnDisassociate()` steps are registered by Dataverse for **every** relationship (their message
+filter has no primary entity), whatever entity the plugin is declared on. `ForRelationship("schema_name", ...)`
+scopes the step: its handler runs only when the request's `Relationship` is one of the names, and any other
+relationship is skipped with a trace line. The scope is enforced at dispatch, so it is not deployed.
+
+```csharp
+RegisterStep().OnAssociate().PostOperation().Sync()
+    .ForRelationship("account_contacts")
+    .Handle(OnContactLinked);
+```
+
+### Depth limit per step
+
+The plugin-level depth guard (`MaxDepth`, 8 by default) is a last-resort backstop that stops a deep execution by
+throwing (see [Preventing recursion](#preventing-recursion)). `SkipWhenDepthAbove(n)` replaces it for one step: past
+depth `n` that step's handler is **skipped** (with a trace line) rather than failing the operation, and up to `n` it
+runs even past the plugin-level limit. `n` must be at least 1. It is a runtime setting only: it is not deployed and
+does not appear in `vela plan`.
+
+```csharp
+RegisterStep().OnUpdate().PostOperation().Sync()
+    .FilterOn(a => a.Revenue)
+    .SkipWhenDepthAbove(2)
+    .Handle(OnRevenueChanged);
+```
 
 ### Impersonation
 
