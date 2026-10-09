@@ -759,9 +759,10 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   `vela` command's Dataverse requests.)
 
 `net462` note: `HttpClient` on `net462` binds against the `System.Net.Http` GAC facade - the project `vela init`
-scaffolds already references it (`<Reference Include="System.Net.Http" />`). If an endpoint requires TLS 1.2 and the
-handshake fails, enable it once (for example in a static constructor), never per call:
-`ServicePointManager.SecurityProtocol` is process-wide, so it changes every plugin in the sandbox worker.
+scaffolds already references it (`<Reference Include="System.Net.Http" />`). No TLS setup is needed: the sandbox
+runs the plugin on .NET Framework 4.8 with `ServicePointManager.SecurityProtocol` at `SystemDefault`, so the OS
+negotiates TLS 1.2 or 1.3 even for a `net462` assembly (verified live, 2026-10). Don't set `SecurityProtocol`: it is
+process-wide, so it would change every plugin in the sandbox worker.
 
 ## See also
 
