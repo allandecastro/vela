@@ -74,5 +74,62 @@ namespace Vela.Testing
         // expose as InputParameters, and the response Results to expose as OutputParameters (Post stage).
         public ParameterCollection? AllInputs;
         public ParameterCollection? Outputs;
+        // Captured when the stage fires (so a deferred async dispatch sees them too): the operation came from a
+        // plugin, the step contexts' own SharedVariables when they differ from the operation's, and their
+        // ParentContext when it is not the calling plugin's context.
+        public bool FromSandbox;
+        // A read's steps report IsInTransaction = false even when the read runs inside a write's transaction.
+        public bool OutsideTransaction;
+        public ParameterCollection? SharedVariables;
+        public FakePluginExecutionContext? ParentContext;
+    }
+
+    // The simulated database transaction: the store snapshot to restore on rollback, the asynchronous steps queued
+    // in it (run after it commits), and the failure that ended it when a plugin swallowed a failed service call.
+    internal sealed class PipelineTransaction
+    {
+        public PipelineTransaction(InMemoryOrganizationService.StoreSnapshot snapshot)
+        {
+            Snapshot = snapshot;
+        }
+
+        public InMemoryOrganizationService.StoreSnapshot Snapshot { get; }
+
+        public List<Action> AsyncSteps { get; } = new List<Action>();
+
+        public Exception? AbortedBy { get; set; }
+    }
+
+    // One operation on the pipeline's call stack; Owned is the transaction it opened (and so commits or rolls back).
+    internal sealed class OperationFrame
+    {
+        public PipelineTransaction? Owned { get; set; }
+
+        // The operation was issued by a plugin (its PreValidation steps see InputParameters["FromSandbox"] = true).
+        public bool FromSandbox { get; set; }
+
+        // Create/Update/Delete: the shared variables of the PreOperation/PostOperation steps (those set at
+        // PreValidation are not in them) and the stage-30 context that exposes the PreValidation ones as their
+        // ParentContext. Created on first use.
+        public ParameterCollection? MainStageShared { get; set; }
+
+        public FakePluginExecutionContext? MainStageContext { get; set; }
+
+        // The operation's shared variables as they were before its PreValidation stage ran.
+        public ParameterCollection? InitialShared { get; set; }
+    }
+
+    // A transaction scope spanning several operations started at Depth; it owns the transaction its first direct
+    // operation opens (see PluginPipeline.RunInOneTransaction).
+    internal sealed class TransactionClaim
+    {
+        public TransactionClaim(int depth)
+        {
+            Depth = depth;
+        }
+
+        public int Depth { get; }
+
+        public PipelineTransaction? Transaction { get; set; }
     }
 }

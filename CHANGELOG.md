@@ -102,6 +102,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected
   `Func<Guid?, IOrganizationService>` factory are removed. Migrate `ctx.UserService` to `ctx.Service`,
   `ctx.AsSystem()` to `ctx.SystemService`, and `ctx.AsInitiatingUser()` to `ctx.AsUser(ctx.InitiatingUserId)`.
+- **The test pipeline reuses one plugin instance per step (and per Custom API).** It constructed a fresh instance
+  for every execution, which hid plugins that keep state in fields; the platform caches and reuses instances, so such
+  a plugin now misbehaves in the test as it would in production.
 - **A Custom API request parameter you declare is required unless you say otherwise.** `Add(x => x.Foo)` and
   `Add(x => x.Foo, optional: false)` registered an optional parameter unless the property carried `[Required]`,
   contrary to the documentation, so the handler read a default value when a caller left it out. They are now
@@ -341,11 +344,43 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   failed). Upsert now resolves the id or alternate key and runs the Create steps (new record) or the Update steps
   (existing record), returning `RecordCreated` and `Target`; Update and Delete by alternate key fire their steps with
   the resolved id.
+- **The test pipeline models the rest of Dataverse's transaction scope** (verified live). The initial
+  PreValidation stage runs before the transaction, so a write a PreValidation step makes commits on its own even
+  if the operation fails later; nested operations join the caller's transaction. A plugin that catches a failed
+  **write** can no longer let the operation commit: returning fails it with "ISV code reduced the open transaction
+  count" (`0x8009000C`) and a further call gets "There is no active transaction"; a caught failed **read** does not
+  end the transaction. A plugin's own operations carry `InputParameters["FromSandbox"] = true` at PreValidation.
+  An async step's context has an unnamed `OwningExtension` and the `AsynchronousStepPrimaryName` post image.
+  Shared variables set at PreValidation of a Create/Update/Delete reach the later stages only through
+  `ParentContext.SharedVariables`, their ParentContext being the operation's stage-30 context.
 - **A Retrieve/RetrieveMultiple Post step's typed `ctx.Response` reads the result.** The platform hands the step
   the result as `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]` (verified on a live
   environment), but `RetrieveResponse.Entity` / `RetrieveMultipleResponse.EntityCollection` read `Entity` /
   `EntityCollection`, so `ctx.Response.Entity` was missing. `GetResponse<T>()` now exposes the platform value under
   the SDK key.
+- **Reads run through the test pipeline.** `PluginPipeline.Service.Retrieve`/`RetrieveMultiple` read the store
+  directly, so `OnRetrieve()`/`OnRetrieveMultiple()` steps never fired, and a PreOperation step that replaced
+  `InputParameters["Query"]` (or any input of a modelled message) was ignored. Reads now fire their steps, a Pre
+  step's change to `ColumnSet`/`Target`/`Query` changes what is read, and a Post step sees and can change the result
+  under `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]`. For every message, a synchronous
+  step's changes to the inputs reach the main operation and its changes to the outputs reach the caller.
+- **Harness reads return the platform's record shape.** A retrieved or queried record now always includes its
+  primary key column (`accountid`, `activityid` for activities, or the metadata's primary id), a lookup carries the
+  referenced record's name (`EntityReference.Name` and `FormattedValues`), and a choice carries its label in
+  `FormattedValues` when its metadata is registered.
+- **Custom APIs run the whole pipeline in the harness.** Only the API's own plugin ran: steps registered on its
+  message never fired, and inputs of the wrong type reached the handler. Now PreValidation, PreOperation and
+  PostOperation steps fire around the main operation as far as the API's `AllowedCustomProcessingSteps(...)` allows
+  (a step it forbids fails the call), and the main operation runs at stage 30 under the
+  `CustomApi '<name>' implementation` step. Before any step runs, a missing required input fails with `0x80040203`
+  and a wrong-typed or undeclared input with `0x80040315`, with the platform's messages (verified live).
+- **The test pipeline's steps work on a deep copy of every request.** The values of a request (entities,
+  references and their keys, column sets, queries) were shared with the caller, so a step editing one in place
+  changed the caller's objects; an Upsert step's change to `Target` never reached the main operation; and a step
+  could not remove an input or output. All of these now behave as on the platform.
+- **`ctx.SystemService` over an `InMemoryOrganizationService` is SYSTEM in a context-builder test.**
+  `PluginContext...WithOrganizationService(store)` used the store as its calling user for both services, so under
+  `WithSecurity` `ctx.SystemService` was denied what SYSTEM may do. It is now the store's SYSTEM view.
 - **A nested request's own bypass parameters are honoured by the test pipeline.** Bypass parameters were read only
   from the outermost request, so a plugin's own write with `BypassCustomPluginExecution` (the usual way to avoid
   re-entering itself) re-fired the plugin, and `ExecuteMultiple`/`ExecuteTransaction` children's own parameters were

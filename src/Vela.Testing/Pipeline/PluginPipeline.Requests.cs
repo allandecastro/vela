@@ -49,55 +49,7 @@ namespace Vela.Testing
 
             if (_customApis.TryGetValue(request.RequestName, out Type? pluginType))
             {
-                return RunOperation(() =>
-                {
-                    IPlugin plugin = PluginActivator.Create(PluginActivator.RequireConfigurationConstructor(pluginType, "to run as a Custom API"), null, null);
-                    CustomApiDefinition? definition = (plugin as CustomApiBase)?.GetCustomApiDefinition();
-                    (string primaryEntityName, Guid primaryEntityId) = CustomApiPrimaryEntity(definition, request);
-
-                    FakePluginExecutionContext context = new FakePluginExecutionContext
-                    {
-                        MessageName = request.RequestName,
-                        Stage = (int)PluginStages.MainOperation,
-                        Mode = (int)ExecutionMode.Synchronous,
-                        Depth = _depth,
-                        PrimaryEntityName = primaryEntityName,
-                        PrimaryEntityId = primaryEntityId,
-                        CorrelationId = _correlationId,
-                        IsInTransaction = IsInTransactionFor(PluginStages.MainOperation, ExecutionMode.Synchronous),
-                        SharedVariables = _sharedVariables
-                    };
-
-                    foreach (KeyValuePair<string, object> parameter in request.Parameters)
-                    {
-                        context.InputParameters[parameter.Key] = parameter.Value;
-                    }
-
-                    // The platform rejects a call that omits a required (non-optional) input parameter before the
-                    // Custom API runs; enforce the same so a test cannot pass while omitting a required input.
-                    if (definition != null)
-                    {
-                        foreach (CustomApiParameterDefinition parameter in definition.InputParameters)
-                        {
-                            if (!parameter.IsOptional && !request.Parameters.Contains(parameter.Name))
-                            {
-                                throw new InvalidPluginExecutionException(
-                                    $"Custom API '{request.RequestName}' requires the input parameter '{parameter.Name}', which was not supplied.");
-                            }
-                        }
-                    }
-
-                    _log.Add(new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, request.RequestName, PluginStages.MainOperation, ExecutionMode.Synchronous, string.Empty, _depth));
-                    ExecuteWithContext(context, plugin);
-
-                    OrganizationResponse response = new OrganizationResponse();
-                    foreach (KeyValuePair<string, object> output in context.OutputParameters)
-                    {
-                        response.Results[output.Key] = output.Value;
-                    }
-
-                    return response;
-                }, shared);
+                return ExecuteCustomApi(request, pluginType, shared);
             }
 
             // Pipeline-aware messages run their registered steps and carry any shared variables the request set
@@ -152,6 +104,16 @@ namespace Vela.Testing
                     ExecuteAssign(assign, shared);
                     return new AssignResponse();
 
+                case RetrieveRequest retrieve:
+                    return ExecuteRetrieveRequest(retrieve, shared);
+
+                case RetrieveMultipleRequest retrieveMultiple:
+                {
+                    RetrieveMultipleResponse response = new RetrieveMultipleResponse();
+                    response.Results["EntityCollection"] = ExecuteRetrieveMultiple(retrieveMultiple.Query, shared);
+                    return response;
+                }
+
                 case ExecuteMultipleRequest executeMultiple:
                     return ExecuteMultipleThroughPipeline(executeMultiple);
 
@@ -161,6 +123,16 @@ namespace Vela.Testing
                 default:
                     return ExecuteModelledMessage(request, shared);
             }
+        }
+
+        // A message that only reads: its failure does not end the caller's transaction (verified live for Retrieve).
+        internal static bool IsReadOnly(OrganizationRequest request)
+        {
+            string name = request?.RequestName ?? string.Empty;
+            return name.StartsWith("Retrieve", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "WhoAmI", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("InitializeFileBlocksDownload", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "DownloadBlock", StringComparison.OrdinalIgnoreCase);
         }
 
         // Upsert is matched by RequestName so both the SDK UpsertRequest and Vela's typed UpsertRequest<T> (a plain
@@ -203,6 +175,13 @@ namespace Vela.Testing
                 }
                 catch (Exception ex)
                 {
+                    // Inside a plugin's transaction a failed child ends that transaction, even though ExecuteMultiple
+                    // reports it as a per-item fault (the plugin cannot carry on, as with any failed service call).
+                    if (_transaction != null && _transaction.AbortedBy == null && !IsReadOnly(request.Requests[i]))
+                    {
+                        _transaction.AbortedBy = ex;
+                    }
+
                     faulted = true;
                     items.Add(new ExecuteMultipleResponseItem
                     {
@@ -240,27 +219,25 @@ namespace Vela.Testing
             return new OrganizationServiceFault { Message = exception.Message };
         }
 
-        // All-or-nothing: snapshot the store, run every child through the pipeline, and roll back the whole batch
-        // if any child throws. Mirrors the store's ExecuteTransaction but with plugin steps firing per child.
-        // The batch is one transaction, so the children's async steps wait for the whole batch to commit and are
-        // dropped with it.
+        // All-or-nothing: every child runs through the pipeline inside one transaction (opened up front, so each
+        // child's PreValidation runs inside it too), and the whole batch rolls back - its queued asynchronous steps
+        // included - if any child throws. Mirrors the store's ExecuteTransaction but with plugin steps per child.
         private ExecuteTransactionResponse ExecuteTransactionThroughPipeline(ExecuteTransactionRequest request)
         {
-            OrganizationResponseCollection responses = new OrganizationResponseCollection();
-
-            RunAtomically(() =>
+            OrganizationResponseCollection responses = RunInOneTransaction(() =>
             {
+                OrganizationResponseCollection collected = new OrganizationResponseCollection();
                 foreach (OrganizationRequest child in request.Requests)
                 {
                     OrganizationResponse childResponse = ExecuteRequest(child);
                     if (request.ReturnResponses == true)
                     {
-                        responses.Add(childResponse);
+                        collected.Add(childResponse);
                     }
                 }
 
-                return true;
-            }, transactional: true);
+                return collected;
+            }, eager: true);
 
             ExecuteTransactionResponse response = new ExecuteTransactionResponse();
             response.Results["Responses"] = responses;
@@ -289,24 +266,26 @@ namespace Vela.Testing
 
             (string entityName, Guid entityId) = DerivePrimaryEntity(request);
 
-            // Retrieve and RetrieveMultiple are not transactional (verified live: IsInTransaction false at stages 20
-            // and 40); every other message runs its main operation in a transaction.
-            bool transactional = !NonTransactionalMessages.Contains(message);
-            return RunOperation(() =>
+            // The steps see (and may change) a copy of the request, so the caller's request object is never mutated
+            // and a PreValidation/PreOperation change to an input reaches the main operation.
+            request = CopyRequest(request);
+
+            return RunOperation(asyncQueue =>
             {
                 // Merge images: the master (Target) and the subordinate (SubordinateId), both snapshotted before the
                 // pre stages and again after the merge (the subordinate's post-image is the deactivated record).
                 MergeStates? merge = request is MergeRequest mergeRequest ? MergeStates.Before(_store, mergeRequest) : null;
 
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), merge, post: false));
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), merge, post: false));
+                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), merge, post: false), asyncQueue);
+                EnterTransaction();
+                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), merge, post: false), asyncQueue);
 
                 OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
 
                 merge?.After(_store);
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), merge, post: true));
+                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), merge, post: true), asyncQueue);
                 return response;
-            }, shared, transactional);
+            }, shared);
         }
 
         private static StageInvocation WithMergeStates(StageInvocation invocation, MergeStates? merge, bool post)
@@ -360,6 +339,30 @@ namespace Vela.Testing
 
         private static readonly HashSet<string> NonTransactionalMessages =
             new HashSet<string>(new[] { "Retrieve", "RetrieveMultiple" }, StringComparer.OrdinalIgnoreCase);
+
+        // A copy of the request (same type, so the store still recognises it) with its own parameter collection and
+        // its own copies of the mutable SDK values, so a step editing a value in place cannot reach the caller's request.
+        internal static OrganizationRequest CopyRequest(OrganizationRequest request)
+        {
+            OrganizationRequest copy;
+            try
+            {
+                copy = (OrganizationRequest)(Activator.CreateInstance(request.GetType()) ?? new OrganizationRequest());
+            }
+            catch (MissingMethodException)
+            {
+                copy = new OrganizationRequest();
+            }
+
+            copy.RequestName = request.RequestName;
+            copy.RequestId = request.RequestId;
+            foreach (KeyValuePair<string, object> parameter in request.Parameters)
+            {
+                copy.Parameters[parameter.Key] = RequestValues.Clone(parameter.Value)!;
+            }
+
+            return copy;
+        }
 
         // The primary entity a Custom API's main operation sees on Dataverse (verified live): "none" and an empty id
         // for a global API, the bound entity and the Target's id for an entity-bound API, and the bound entity with
@@ -458,6 +461,8 @@ namespace Vela.Testing
             }
             catch (MessageNotModelledException)
             {
+                // Only a message the store does not model is a no-op; a modelled message that fails (an invalid
+                // Merge, a missing record, a denied privilege) fails the operation as it would on the platform.
                 return null;
             }
         }

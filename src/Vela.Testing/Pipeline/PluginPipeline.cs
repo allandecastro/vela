@@ -56,27 +56,8 @@ namespace Vela.Testing
         // async step's is its own system job id.
         private Guid _requestId = Guid.NewGuid();
 
-        private bool _inRequest;
-
+        // The system job id of the asynchronous step running now (its OperationId).
         private Guid _asyncOperationId;
-
-        // Asynchronous steps waiting for the outermost scope to commit. Live, an async step becomes a system job only
-        // when the triggering transaction commits, and a rolled-back operation creates no job at all (verified live
-        // 2026-10-07), so a scope that rolls back drops the steps it queued (see RunAtomically).
-        private readonly List<PendingAsyncStep> _pendingAsyncSteps = new List<PendingAsyncStep>();
-
-        // All-or-nothing scopes currently open: operations, ExecuteTransaction and a running async step. Async steps
-        // run only once the count drops back to zero.
-        private int _openScopes;
-
-        // Database transactions currently open. Every operation opens one except the non-transactional reads, and so
-        // does ExecuteTransaction; an async step runs outside any transaction.
-        private int _openTransactions;
-
-        // Whether the running operation started inside an already open transaction. Its PreValidation steps run before
-        // its own transaction begins, so this alone decides their IsInTransaction (verified live: false at depth 1,
-        // true for a nested PreValidation).
-        private bool _operationEnclosedInTransaction;
 
         // The execution contexts currently on the (synchronous) call stack. The context of the plugin that is
         // executing when a cascaded write re-enters the pipeline becomes the nested execution's ParentContext,

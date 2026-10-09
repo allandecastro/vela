@@ -19,8 +19,9 @@ namespace Vela.Testing
     // images) and runs the plugin, synchronously or after the commit for an asynchronous step.
     public sealed partial class PluginPipeline
     {
-        private void FireStage(StageInvocation invocation)
+        private void FireStage(StageInvocation invocation, List<Action> asyncQueue)
         {
+            CaptureOperationContext(invocation);
             List<PipelineRegistration> steps = _registrations
                 // A disabled step (.Disabled()) is registered but dormant: it never fires, as on a real org.
                 .Where(registration => registration.Step.Enabled
@@ -44,21 +45,14 @@ namespace Vela.Testing
             foreach (PipelineRegistration registration in steps)
             {
                 PipelineRegistration captured = registration;
-                if (captured.Step.Mode == ExecutionMode.Asynchronous)
-                {
-                    QueueAsyncStep(() => Dispatch(captured, invocation));
-                }
-                else
-                {
-                    Dispatch(captured, invocation);
-                }
+                Emit(captured, asyncQueue, () => Dispatch(captured, invocation));
             }
         }
 
         // Fires one stage of a Create/Update batch. The two registration messages are merged: a bulk step
         // (CreateMultiple/UpdateMultiple) fires once with the whole Targets collection; a single step
         // (Create/Update) fires once per row. Both are ordered by execution order and filtered by FilterOn.
-        private void FireBatchStage(string singleMessage, string bulkMessage, PluginStages stage, string entityName, IReadOnlyList<BatchItem> items)
+        private void FireBatchStage(string singleMessage, string bulkMessage, PluginStages stage, string entityName, IReadOnlyList<BatchItem> items, List<Action> asyncQueue)
         {
             bool isUpdate = string.Equals(singleMessage, PluginMessages.Update, StringComparison.OrdinalIgnoreCase);
 
@@ -92,7 +86,8 @@ namespace Vela.Testing
                     }
 
                     EntityCollection capturedTargets = targets ??= BuildTargets(entityName, items);
-                    Emit(captured, () => DispatchBulk(captured, bulkMessage, stage, entityName, capturedTargets, items));
+                    bool fromSandbox = _frames.Count > 0 && _frames.Peek().FromSandbox;
+                    Emit(captured, asyncQueue, () => DispatchBulk(captured, bulkMessage, stage, entityName, capturedTargets, items, fromSandbox));
                 }
                 else
                 {
@@ -108,25 +103,26 @@ namespace Vela.Testing
                         invocation.PreState = capturedItem.PreState;
                         invocation.PostState = capturedItem.PostState;
                         invocation.ChangedAttributes = capturedItem.ChangedAttributes;
+                        CaptureOperationContext(invocation);
                         // A Create Post step sees the created id as OutputParameters["id"], exactly as Dataverse
                         // surfaces it, so ctx.Response.id resolves in a post-create handler.
                         if (!isUpdate && stage == PluginStages.PostOperation)
                         {
                             invocation.Outputs = new ParameterCollection { { "id", capturedItem.Target.Id } };
                         }
-                        Emit(captured, () => Dispatch(captured, invocation));
+                        Emit(captured, asyncQueue, () => Dispatch(captured, invocation));
                     }
                 }
             }
         }
 
-        // Runs the dispatch now for a synchronous step, or defers it to after the synchronous commit for an
-        // asynchronous one — the same sync/async split FireStage applies to single-operation steps.
-        private void Emit(PipelineRegistration registration, Action dispatch)
+        // Runs the dispatch now for a synchronous step, or queues it for an asynchronous one: it then runs, with the
+        // context it was queued with, after the transaction commits (and never if it rolls back).
+        private void Emit(PipelineRegistration registration, List<Action> asyncQueue, Action dispatch)
         {
             if (registration.Step.Mode == ExecutionMode.Asynchronous)
             {
-                QueueAsyncStep(dispatch);
+                asyncQueue.Add(Deferred(dispatch));
             }
             else
             {
@@ -145,7 +141,7 @@ namespace Vela.Testing
             return collection;
         }
 
-        private void DispatchBulk(PipelineRegistration registration, string message, PluginStages stage, string entityName, EntityCollection targets, IReadOnlyList<BatchItem> items)
+        private void DispatchBulk(PipelineRegistration registration, string message, PluginStages stage, string entityName, EntityCollection targets, IReadOnlyList<BatchItem> items, bool fromSandbox)
         {
             FakePluginExecutionContext context = new FakePluginExecutionContext
             {
@@ -156,13 +152,19 @@ namespace Vela.Testing
                 PrimaryEntityName = entityName,
                 PrimaryEntityId = Guid.Empty,
                 CorrelationId = _correlationId,
-                IsInTransaction = IsInTransactionFor(stage, registration.Step.Mode),
                 SharedVariables = _sharedVariables
             };
 
             // Bulk steps read the batch via ctx.BulkTargets (InputParameters["Targets"]) and per-row pre/post
             // images via the image collections (aligned by target index).
             context.InputParameters["Targets"] = targets;
+            if (fromSandbox && stage == PluginStages.PreValidation)
+            {
+                // Verified live at PreValidation only (see Dispatch).
+                context.InputParameters[FromSandboxInput] = true;
+            }
+
+            StampOwningExtension(context, registration.Step);
             context.PreEntityImagesCollection = items.Select(item => BuildImageCollection(registration.Step.PreImages, item.PreState)).ToArray();
             context.PostEntityImagesCollection = items.Select(item => BuildImageCollection(registration.Step.PostImages, item.PostState)).ToArray();
 
@@ -175,7 +177,7 @@ namespace Vela.Testing
             }
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, message, stage, registration.Step.Mode, entityName, _depth));
-            IPlugin plugin = registration.CreateInstance(SecureConfigFor(registration.Step));
+            IPlugin plugin = registration.GetInstance(SecureConfigFor(registration.Step));
             ExecuteWithContext(context, plugin, registration.Step);
         }
 
@@ -209,8 +211,7 @@ namespace Vela.Testing
                         : invocation.EntityLogicalName,
                 PrimaryEntityId = globalMessage ? Guid.Empty : invocation.PrimaryId,
                 CorrelationId = _correlationId,
-                IsInTransaction = IsInTransactionFor(invocation.Stage, registration.Step.Mode),
-                SharedVariables = _sharedVariables
+                SharedVariables = invocation.SharedVariables ?? _sharedVariables
             };
 
             if (invocation.Target is Entity entityTarget)
@@ -248,12 +249,168 @@ namespace Vela.Testing
                 }
             }
 
+            // A plugin's own operation gets InputParameters["FromSandbox"] = true at its PreValidation stage (verified
+            // live). Only the PreValidation stage was observed to carry it; the other stages were not, so they do not get it.
+            if (invocation.FromSandbox && invocation.Stage == PluginStages.PreValidation)
+            {
+                context.InputParameters[FromSandboxInput] = true;
+            }
+
             BuildImages(context.PreEntityImages, registration.Step.PreImages, invocation.PreState, invocation.SubordinatePreState);
             BuildImages(context.PostEntityImages, registration.Step.PostImages, invocation.PostState, invocation.SubordinatePostState);
+            StampOwningExtension(context, registration.Step);
+            if (registration.Step.Mode == ExecutionMode.Asynchronous && invocation.PostState != null)
+            {
+                // The platform adds this post image to every asynchronous step: the record's primary name and id.
+                context.PostEntityImages[AsyncPrimaryNameImage] = PrimaryNameImage(invocation.PostState);
+            }
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth));
-            IPlugin plugin = registration.CreateInstance(SecureConfigFor(registration.Step));
-            ExecuteWithContext(context, plugin, registration.Step);
+            IPlugin plugin = registration.GetInstance(SecureConfigFor(registration.Step));
+            ExecuteWithContext(context, plugin, registration.Step, invocation.ParentContext, invocation.OutsideTransaction);
+
+            // A synchronous step changes the message as it flows: a PreValidation/PreOperation step that replaces an
+            // input (a Retrieve's ColumnSet, a RetrieveMultiple's Query, ...) changes what the main operation runs, and
+            // a PostOperation step that sets an output changes what the caller receives. (An async step cannot.)
+            if (registration.Step.Mode == ExecutionMode.Synchronous)
+            {
+                CopyBack(context.InputParameters, invocation.AllInputs);
+                CopyBack(context.OutputParameters, invocation.Outputs);
+            }
+        }
+
+        private static void CopyBack(ParameterCollection from, ParameterCollection? to)
+        {
+            if (to == null)
+            {
+                return;
+            }
+
+            // A removed parameter is removed for the next phase too.
+            foreach (string key in to.Keys.Where(key => !from.ContainsKey(key)).ToList())
+            {
+                to.Remove(key);
+            }
+
+            foreach (KeyValuePair<string, object> pair in from)
+            {
+                if (pair.Key != FromSandboxInput)
+                {
+                    to[pair.Key] = pair.Value;
+                }
+            }
+        }
+
+        private const string FromSandboxInput = "FromSandbox";
+        private const string AsyncPrimaryNameImage = "AsynchronousStepPrimaryName";
+
+        // The messages whose PreValidation-stage shared variables the PreOperation/PostOperation steps see only through
+        // ParentContext.SharedVariables (MS Learn; verified live for Create).
+        private static bool SplitsPreValidationSharedVariables(string message)
+            => string.Equals(message, PluginMessages.Create, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(message, PluginMessages.Delete, StringComparison.OrdinalIgnoreCase);
+
+        // Records, on the invocation, what its step contexts need from the operation that fires it (so an async step
+        // dispatched later still sees them): whether a plugin issued the operation, and for Create/Update/Delete the
+        // PreOperation/PostOperation shared variables and their stage-30 ParentContext.
+        private void CaptureOperationContext(StageInvocation invocation)
+        {
+            if (_frames.Count == 0)
+            {
+                return;
+            }
+
+            OperationFrame frame = _frames.Peek();
+            invocation.FromSandbox = frame.FromSandbox;
+            if (invocation.Stage == PluginStages.PreValidation || !SplitsPreValidationSharedVariables(invocation.Message))
+            {
+                return;
+            }
+
+            frame.MainStageShared ??= CopyParameters(frame.InitialShared);
+            if (frame.MainStageContext == null)
+            {
+                FakePluginExecutionContext main = new FakePluginExecutionContext
+                {
+                    MessageName = invocation.Message,
+                    Stage = (int)PluginStages.MainOperation,
+                    Mode = (int)ExecutionMode.Synchronous,
+                    Depth = _depth,
+                    PrimaryEntityName = invocation.EntityLogicalName,
+                    PrimaryEntityId = invocation.PrimaryId,
+                    CorrelationId = _correlationId,
+                    SharedVariables = _sharedVariables,
+                    ParentContext = _contextStack.Count > 0 ? _contextStack.Peek() : null,
+                    IsInTransaction = _transaction != null,
+                };
+                (main.UserId, main.BusinessUnitId, main.OrganizationId) = _store.CurrentActor();
+                main.InitiatingUserId = _initiatingUserId ?? main.UserId;
+                if (invocation.Target != null)
+                {
+                    main.InputParameters["Target"] = invocation.Target;
+                }
+
+                frame.MainStageContext = main;
+            }
+
+            invocation.SharedVariables = frame.MainStageShared;
+            invocation.ParentContext = frame.MainStageContext;
+        }
+
+        internal static ParameterCollection CopyParameters(ParameterCollection? source)
+        {
+            ParameterCollection copy = new ParameterCollection();
+            if (source != null)
+            {
+                foreach (KeyValuePair<string, object> pair in source)
+                {
+                    copy[pair.Key] = pair.Value;
+                }
+            }
+
+            return copy;
+        }
+
+        // The step registration the context runs under, as the platform reports it in OwningExtension: the step's id,
+        // and its name for a synchronous step. An asynchronous step's context carries no name (verified live).
+        private static void StampOwningExtension(FakePluginExecutionContext context, StepDefinition step)
+        {
+            string name = StepName(step);
+            context.OwningExtension = new EntityReference("sdkmessageprocessingstep", Security.DeterministicGuid.From("sdkmessageprocessingstep", name))
+            {
+                Name = step.Mode == ExecutionMode.Asynchronous ? null : name,
+            };
+        }
+
+        // The name vela apply gives the step ({plugin} - {lifecycle}: {step key, or message [of entity]}).
+        internal static string StepName(StepDefinition step)
+        {
+            string stage = step.Stage switch
+            {
+                PluginStages.PreValidation => "PreVal",
+                PluginStages.PreOperation => "PreOp",
+                PluginStages.MainOperation => "MainOp",
+                _ => "PostOp",
+            };
+            string lifecycle = stage + (step.Mode == ExecutionMode.Asynchronous ? "Async" : "Sync");
+            string subject = !string.IsNullOrWhiteSpace(step.StepKey)
+                ? step.StepKey
+                : step.Message + (string.IsNullOrWhiteSpace(step.EntityLogicalName) ? string.Empty : " of " + step.EntityLogicalName.ToLowerInvariant());
+            return $"{step.PluginTypeName} - {lifecycle}: {subject}";
+        }
+
+        private Entity PrimaryNameImage(Entity state)
+        {
+            Entity image = new Entity(state.LogicalName) { Id = state.Id };
+            image[_store.PrimaryIdAttribute(state.LogicalName)] = state.Id;
+            string nameAttribute = _store.PrimaryNameAttributeName(state.LogicalName);
+            if (state.Contains(nameAttribute))
+            {
+                image[nameAttribute] = state[nameAttribute];
+            }
+
+            return image;
         }
 
         private string? SecureConfigFor(StepDefinition step)
