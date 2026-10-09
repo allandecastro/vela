@@ -3,9 +3,14 @@
 `Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command. See
 [Install](../getting-started/install.md) to get it. Then run, for example:
 
-```powershell
-vela plan --packages-dir .\artifacts --interactive
+```bash
+vela plan --packages-dir ./artifacts --solution ZavaSales --interactive
 ```
+
+`vela help` lists the commands; `vela help <command>` (or `vela <command> --help`) prints that command's usage,
+options, notes and examples, and `vela help --json` describes every command, option and exit code for scripts and
+coding agents. The help is generated from the same table that validates the options, so it never lists an option
+the command rejects.
 
 Core commands:
 
@@ -17,12 +22,14 @@ Core commands:
 | `vela plan` | Preview the create/update/delete operations needed to converge Dataverse with your package (read-only). |
 | `vela apply` | Apply those operations (idempotent upsert/delete); writes by default, prompting on a terminal or `--auto-approve` for CI. See [CLI automation](plan-apply.md). |
 | `vela inspect` | Report local package registrations alongside live Dataverse state, with diagnostics (read-only). |
+| `vela solution show <uniquename>` | Print the publisher prefix of a solution (read-only). See [below](#solution-prefix-vela-solution-show). |
 | `vela logs` (alias `vela trace`) | Read the Plug-in Trace Log, or failed system jobs with `--jobs` (read-only). See [Reading execution logs](#reading-execution-logs-vela-logs). |
 | `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
 | `vela logout` | Clear the cached interactive token and remembered Dataverse URL. |
 | `vela update` | Update the vela global tool to the latest published version (or `--version <x.y.z>`). |
 | `vela menu` (or bare `vela`) | Launch the interactive menu that guides you through the commands above. |
 | `vela version` | Print the tool version. |
+| `vela help [<command>]` | Help for one command, or `--json` for the whole command table. |
 
 > [!NOTE]
 > **`vela update`** runs `dotnet tool update --global Vela.Cli` for you. On **Windows** the running executable is
@@ -42,6 +49,7 @@ Every command returns a stable exit code, so scripts and coding agents can branc
 | `5` | Drift detected (`vela models --verify` found the local model out of sync with the live schema). |
 | `6` | Dataverse connection failure (auth or endpoint). |
 | `7` | Partial apply (a mid-run `apply` failure; Dataverse may be partially updated, so re-run `apply` to reconcile). |
+| `8` | Changes pending (`vela plan --detailed-exitcode` only). |
 
 > [!NOTE]
 > **Client-side (preview / work in progress).** For the **vela-client** (separate) runtime,
@@ -72,14 +80,28 @@ Every command returns a stable exit code, so scripts and coding agents can branc
 > the cached token and remembered URL. Override the config location with `$VELA_CONFIG_DIR`.
 
 > [!TIP]
-> **Option syntax.** Every option accepts both `--option value` and `--option=value`. A misspelled option is
-> rejected up front, and an option that needs a value but has none (it is the last token, or is followed by
+> **Option syntax.** Every option accepts both `--option value` and `--option=value`. Each command accepts only
+> its own options: a misspelled option, or one that belongs to another command (`plan --auto-approve`), is
+> rejected up front with exit `2`, and an option that needs a value but has none (it is the last token, or is followed by
 > another known option) fails with `Option '--x' requires a value.` rather than silently doing the wrong thing.
 
 > [!NOTE]
 > **Update notice.** After a command runs, the CLI checks nuget.org at most once a day and prints a one-line
 > notice to stderr when a newer version is available (`dotnet tool update -g Vela.Cli`). It never blocks or fails a
 > command, and is silent for `--json` output. Set `VELA_NO_UPDATE_CHECK` to disable it.
+
+## Solution prefix (`vela solution show`)
+
+`vela solution show <uniquename>` connects with the usual options and prints the customization prefix of the
+solution's publisher, so you can align a scaffold with the solution before the first `apply` rejects a mismatch:
+
+```bash
+vela solution show ZavaSales -i            # prints: zava
+vela solution show ZavaSales -i --json     # {"solution":"ZavaSales","publisherPrefix":"zava"}
+vela init --name ZavaSales --prefix "$(vela solution show ZavaSales -i)"
+```
+
+It is read-only. `show` is its only subcommand.
 
 ## Reading execution logs (`vela logs`)
 

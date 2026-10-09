@@ -22,27 +22,17 @@ too: pass it to `plan`/`apply` with `--secure-config Name=@file` (or `Name=VALUE
 `VELA_SECURE_CONFIG_<Name>` environment variable in the pipeline. Without a value, `apply` leaves the environment's
 own secure configuration untouched. See [Write a plugin](../guides/plugins.md).
 
-The unattended `plan` / `apply` invocations take the same connection flags:
+In a pipeline, map the secret store to `DATAVERSE_CLIENT_SECRET` and keep only non-secret values on the command
+line:
 
-```powershell
-# Compare local package(s) with live Dataverse state (client id / client secret)
-vela plan `
-  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret>
-
-# Execute apply operations (idempotent upsert/delete) into an existing Dataverse solution
-vela apply `
-  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret> `
-  --solution ZavaSales `
+```bash
+# DATAVERSE_CLIENT_SECRET and VELA_SECURE_CONFIG_<Name> come from the pipeline's secret store
+vela apply --packages-dir ./artifacts --solution ZavaSales \
+  --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id> \
   --auto-approve
 ```
+
+The full set of `plan` / `apply` commands is on [Plan & Apply](../guides/plan-apply.md).
 
 ## CI strict mode
 
@@ -51,15 +41,10 @@ secure configuration without a value, a Custom API name without the publisher pr
 assembly not yet in Dataverse on a first deployment is reported under `info` and never fails it. Add
 `--detailed-exitcode` to `plan` to get exit `8` when there are changes to apply:
 
-```powershell
-# CI strict mode (fail on any warning)
-vela plan `
-  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret> `
-  --strict
+```bash
+vela plan --packages-dir ./artifacts --solution ZavaSales \
+  --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id> \
+  --strict --detailed-exitcode
 ```
 
 The same strictness is available at the scanner level. `FrameworkManifestScanner`
@@ -84,8 +69,8 @@ connection `--url`. (`--solution-unique-name` is also accepted as an alias of `-
 when the output is piped or redirected (as it is in CI). This means the same command gives a readable preview
 at the keyboard and a machine-readable contract in a pipeline, with no flag change:
 
-```powershell
-vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
+```bash
+vela plan --packages-dir ./artifacts --solution ZavaSales --interactive
 ```
 
 To force JSON at a terminal (for example, to pipe into `jq` or save it), pass `--json` or `--out <file>`. The
@@ -95,6 +80,6 @@ turn colors off, set `NO_COLOR` or `VELA_NO_COLOR`.
 Add `--verbose` for full exception stack traces on failure (and the human summary on stderr alongside the JSON
 when output is piped):
 
-```powershell
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive --verbose
+```bash
+vela apply --packages-dir ./artifacts --solution ZavaSales --interactive --verbose
 ```

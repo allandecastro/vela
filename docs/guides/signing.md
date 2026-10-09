@@ -28,6 +28,6 @@ The generated solution's README documents the full property set.
 rewriting the `.nupkg`. That rewrite changes the archive, so it would invalidate a signature already applied by
 `vela sign` (Dataverse rejects the import with `0x80040265`, "the package is signed but its signature does not
 cover the package content"). `apply` detects a signed package up front and fails with a clear message rather
-than uploading one Dataverse will reject. To deploy a signed package into a solution, build and sign it with the
-prefixed name already in place (so no rename is needed), or apply it without `--solution`. See
-[plan → apply](plan-apply.md).
+than uploading one Dataverse will reject. To deploy a signed package, build and sign it with the
+publisher-prefixed name already in place (package id `zava_Zava.Integrations` for prefix `zava`): `apply --solution`
+then needs no rename and uploads the signed bytes unchanged. See [Plan & Apply](plan-apply.md).
