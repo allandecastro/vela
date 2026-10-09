@@ -6,7 +6,9 @@ namespace Vela.Testing
 {
     /// <summary>
     /// A configurable <see cref="IOrganizationService"/> test double with no mocking-library dependency.
-    /// Every operation is a no-op returning SDK defaults unless the matching delegate hook is set.
+    /// Each operation runs its matching delegate hook; an operation whose hook is not set throws a
+    /// <see cref="NotSupportedException"/> naming the hook, so a plugin call the test did not plan for fails at the
+    /// call instead of returning a default the plugin then trips over.
     /// Consumers can ignore this type and inject their own <see cref="IOrganizationService"/> via the builder, or
     /// use <see cref="InMemoryOrganizationService"/> for a stateful store.
     /// </summary>
@@ -23,42 +25,49 @@ namespace Vela.Testing
 
         public Guid Create(Entity entity)
         {
-            return OnCreate != null ? OnCreate(entity) : Guid.Empty;
+            return (OnCreate ?? throw Unset(nameof(OnCreate)))(entity);
         }
 
         public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
         {
-            return OnRetrieve != null ? OnRetrieve(entityName, id, columnSet) : null!;
+            return (OnRetrieve ?? throw Unset(nameof(OnRetrieve)))(entityName, id, columnSet);
         }
 
         public void Update(Entity entity)
         {
-            OnUpdate?.Invoke(entity);
+            (OnUpdate ?? throw Unset(nameof(OnUpdate)))(entity);
         }
 
         public void Delete(string entityName, Guid id)
         {
-            OnDelete?.Invoke(entityName, id);
+            (OnDelete ?? throw Unset(nameof(OnDelete)))(entityName, id);
         }
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {
-            return OnExecute != null ? OnExecute(request) : null!;
+            return (OnExecute ?? throw Unset(nameof(OnExecute)))(request);
         }
 
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
-            OnAssociate?.Invoke(entityName, entityId, relationship, relatedEntities);
+            (OnAssociate ?? throw Unset(nameof(OnAssociate)))(entityName, entityId, relationship, relatedEntities);
         }
 
         public void Disassociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
-            OnDisassociate?.Invoke(entityName, entityId, relationship, relatedEntities);
+            (OnDisassociate ?? throw Unset(nameof(OnDisassociate)))(entityName, entityId, relationship, relatedEntities);
         }
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
-            return OnRetrieveMultiple != null ? OnRetrieveMultiple(query) : new EntityCollection();
+            return (OnRetrieveMultiple ?? throw Unset(nameof(OnRetrieveMultiple)))(query);
+        }
+
+        private static NotSupportedException Unset(string hook)
+        {
+            return new NotSupportedException(
+                $"HookOrganizationService.{hook} is not set, so this call has no behaviour. Set {hook} for the call the " +
+                $"plugin makes, or use InMemoryOrganizationService for a stateful store.");
         }
     }
 }

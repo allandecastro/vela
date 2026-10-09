@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Microsoft.Xrm.Sdk;
 using Vela.Context;
@@ -87,16 +88,109 @@ namespace Vela.Testing
             return AttributeValueComparer.AreEqual(actual, expected);
         }
 
+        // Query equality for a condition operand: a text operand (every FetchXML <value>) is first read as the
+        // column's type, so eq/ne/in on a date, lookup, money, number or boolean column match as Dataverse does.
+        public static bool ConditionEquals(object? actual, object? operand)
+        {
+            return AreEqual(actual, CoerceOperand(actual, operand));
+        }
+
         public static int Compare(object? actual, object? expected)
         {
             object? left = Normalize(actual);
-            object? right = Normalize(expected);
+            object? right = Normalize(CoerceOperand(actual, expected));
             if (left is IComparable comparable && right != null)
             {
-                return comparable.CompareTo(Convert.ChangeType(right, left.GetType()));
+                return comparable.CompareTo(left.GetType().IsInstanceOfType(right)
+                    ? right
+                    : Convert.ChangeType(right, left.GetType(), CultureInfo.InvariantCulture));
             }
 
             throw new NotSupportedException("InMemoryOrganizationService cannot compare the supplied values.");
+        }
+
+        // Reads a text operand as the CLR type of the stored value it is compared with, using the invariant culture
+        // (FetchXML values are culture-neutral: "2026-10-09", "10.50", "{guid}", "1"). A typed operand, a text
+        // column or a null stored value is returned unchanged. Text that is not a valid value of the column's type
+        // fails, as Dataverse rejects the query, rather than silently matching nothing (or everything, for ne).
+        public static object? CoerceOperand(object? actual, object? operand)
+        {
+            object? stored = Normalize(actual);
+            if (operand is not string text || stored == null || stored is string)
+            {
+                return operand;
+            }
+
+            Type type = stored.GetType();
+            if (TryParse(text.Trim(), type, out object? parsed))
+            {
+                return parsed;
+            }
+
+            throw new InvalidOperationException(
+                $"The query value '{text}' is not a valid {type.Name} for the column it is compared with.");
+        }
+
+        private static bool TryParse(string text, Type type, out object? value)
+        {
+            value = null;
+            if (type == typeof(Guid))
+            {
+                bool ok = Guid.TryParse(text, out Guid guid);
+                value = guid;
+                return ok;
+            }
+
+            if (type == typeof(DateTime))
+            {
+                // Dataverse stores date-times in UTC; a value with no offset is read as UTC, one with an offset is
+                // converted to it.
+                bool ok = DateTime.TryParse(
+                    text,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out DateTime date);
+                value = date;
+                return ok;
+            }
+
+            if (type == typeof(bool))
+            {
+                switch (text.ToLowerInvariant())
+                {
+                    case "1":
+                    case "true":
+                        value = true;
+                        return true;
+                    case "0":
+                    case "false":
+                        value = false;
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+
+            if (type == typeof(int) || type == typeof(long) || type == typeof(decimal) || type == typeof(double))
+            {
+                try
+                {
+                    value = Convert.ChangeType(text, type, CultureInfo.InvariantCulture);
+                    return true;
+                }
+                catch (FormatException)
+                {
+                    return false;
+                }
+                catch (OverflowException)
+                {
+                    return false;
+                }
+            }
+
+            // Any other stored type keeps the text operand (compared through the invariant string fallback).
+            value = text;
+            return true;
         }
 
         // Reduce Dataverse value wrappers to their comparable scalar (shared with the runtime — single source).

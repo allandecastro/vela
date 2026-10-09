@@ -34,7 +34,7 @@ namespace Vela.Testing.Tests
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService();
 
-            NotSupportedException ex = Assert.Throws<NotSupportedException>(
+            MessageNotModelledException ex = Assert.Throws<MessageNotModelledException>(
                 () => crm.Execute(new OrganizationRequest("vela_SomethingElse")));
             Assert.Contains("CreateMultiple", ex.Message);
         }

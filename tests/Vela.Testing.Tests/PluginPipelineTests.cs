@@ -109,7 +109,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Owner_and_standard_update_passes_share_one_atomic_scope()   // #303
+        public void Owner_update_failure_rolls_back_the_standard_fields_too()   // #303
         {
             Guid id = Guid.NewGuid();
             PluginPipeline pipeline = PluginPipeline.Empty().Register<ThrowOnOwnerUpdate>()
@@ -118,8 +118,8 @@ namespace Vela.Testing.Tests
             FakeOwnable update = new FakeOwnable { Id = id, Name = "changed" };
             update["ownerid"] = new EntityReference("systemuser", Guid.NewGuid());
 
-            // The owner (special) pass throws; because both passes share one snapshot scope, the standard name change
-            // rolls back too - the record is left untouched rather than half-updated.
+            // The step filtered on the owner throws; the name change in the same Update rolls back too - the record is
+            // left untouched rather than half-updated.
             Assert.ThrowsAny<Exception>(() => pipeline.Service.Update(update));
             Assert.Equal("original", pipeline.GetAll("vela_ownable").Single().GetAttributeValue<string>("name"));
         }
@@ -302,7 +302,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Update_CarryingOwnerAndStandardFields_FiresTheStepTwice()
+        public void Update_CarryingOwnerAndStandardFields_FiresTheStepOnce()
         {
             Guid id = Guid.NewGuid();
             PluginPipeline pipeline = PluginPipeline.Empty().Register<RecordUpdatePasses>()
@@ -312,14 +312,10 @@ namespace Vela.Testing.Tests
             update["ownerid"] = new EntityReference("systemuser", Guid.NewGuid());
             pipeline.Service.Update(update);
 
-            // One execution for the standard fields, a separate one for the owner field — like the platform.
-            string[] passes = pipeline.GetAll("task")
-                .Select(t => t.GetAttributeValue<string>("subject"))
-                .OrderBy(s => s, StringComparer.Ordinal)
-                .ToArray();
-            Assert.Equal(new[] { "pass:owner", "pass:standard" }, passes);
+            // One execution with both fields in its Target (verified live), not a standard pass then an owner pass.
+            Entity task = Assert.Single(pipeline.GetAll("task"));
+            Assert.Equal("pass:owner", task.GetAttributeValue<string>("subject"));
 
-            // Both writes still land.
             Entity stored = pipeline.GetAll("vela_ownable").Single();
             Assert.Equal("New", stored.GetAttributeValue<string>("name"));
             Assert.Equal("systemuser", stored.GetAttributeValue<EntityReference>("ownerid").LogicalName);
@@ -334,13 +330,12 @@ namespace Vela.Testing.Tests
 
             pipeline.Service.Update(new FakeOwnable { Id = id, Name = "New" });
 
-            // No special field present, so no split.
             Entity task = Assert.Single(pipeline.GetAll("task"));
             Assert.Equal("pass:standard", task.GetAttributeValue<string>("subject"));
         }
 
         [Fact]
-        public void SetState_MapsToAStatecodeUpdate_AndFiresUpdatePlugins()
+        public void SetState_RunsAStatecodeUpdate_AndFiresUpdatePlugins()
         {
             Guid id = Guid.NewGuid();
             PluginPipeline pipeline = PluginPipeline.Empty().Register<OnStateChange>()

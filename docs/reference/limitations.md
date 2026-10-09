@@ -131,7 +131,7 @@ The in-memory CRM (`InMemoryOrganizationService`) and `PluginPipeline` are a fai
 anything below, inject your own `IOrganizationService` via `WithOrganizationService(...)`.
 
 - **`Execute` covers a common set:** `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`,
-  `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`Associate`/`Disassociate`, the metadata reads
+  `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`SetState`/`Associate`/`Disassociate`, the metadata reads
   (`RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute`), and `ExecuteMultiple`/`ExecuteTransaction`
   (the latter rolls the whole batch back on failure). For any other message, inject your own service.
 - **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on

@@ -26,6 +26,24 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **An unset `HookOrganizationService` hook throws (#439).** `Create`, `Retrieve`, `Execute`, `RetrieveMultiple`,
+  `Update`, `Delete`, `Associate` and `Disassociate` used to return `Guid.Empty`, `null` or an empty collection, or
+  do nothing, when their `On...` delegate was not set, so the plugin failed later with a `NullReferenceException`
+  (or passed without the write it needed). Each now throws a `NotSupportedException` naming the hook to set. This
+  includes the default services of `PluginContextBuilder`: set the hook, or inject a store with
+  `WithOrganizationService(...)`.
+- **The pipeline fires the steps Dataverse fires for owner and state changes (#439, verified live).** An `Update`
+  that mixes `ownerid` or `statecode`/`statuscode` with other fields is one execution, no longer two (Microsoft Learn
+  describes a split that the platform does not do). An `AssignRequest` fires the `Assign` steps around an `ownerid`
+  Update; it used to fire no Update step at all, and with an `Assign` step registered, ran that step without the
+  Update. A `SetStateRequest`, and an `Update` that sets `statecode`, fire the `SetStateDynamicEntity` steps (nested
+  at depth + 1 for the Update). The Update inside Assign or SetState has no PreValidation stage. Steps on `SetState`
+  never fire, as on the platform.
+- **A pipeline registration that would never fire fails the setup (#439).** `PluginPipeline.FromAssembly` threw away
+  a step or Custom API whose type it could not resolve, and `Register<T>()` / `Register(Type)` added nothing for a
+  type that declares no step and no Custom API. Both now throw an `InvalidOperationException` naming what was
+  skipped.
+
 - **`ctx.EnvironmentId` is a `string?`, and now carries the value.** The platform declares
   `IPluginExecutionContext6.EnvironmentId` as a string, but Vela read it as a `Guid?`, so it was always null and the
   execution snapshot always printed `<none>`. It now returns the platform string (null when missing or empty).
@@ -91,6 +109,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **`WithDefaultStatus(table, state, status)` on `InMemoryOrganizationService` and `PluginPipeline` (#439).** It
+  sets the status a record gets when a write changes `statecode` without `statuscode`, or a SetState passes status
+  -1; the store now applies that default (state 0 gets status 1, any other state status 2, when undeclared).
+  `InMemoryOrganizationService.Execute` also runs a `SetStateRequest`.
+
 - **PreValidation steps can capture a pre-image (#436).** `WithPreImage(...)` is now offered at PreValidation on
   `OnUpdate()`, `OnDelete()`, `OnUpdateMultiple()`, `OnMessage(...)` and `On<TRequest>()`, as Microsoft Learn
   recommends over an extra Retrieve. A post-image is still not offered before PostOperation, and Create never has
@@ -133,6 +156,20 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   on every execution.
 
 ### Fixed (Framework)
+
+- **FetchXML condition values compare as the column's type (#439).** A `<value>` was kept as text and compared with
+  the stored value's string form, so `eq` on a date (`2026-10-09`), a money with another scale (`10.50`) or a braced
+  guid matched nothing, and `ne` matched everything. Values (FetchXML, and text values in a `QueryExpression` or
+  `QueryByAttribute`) are now read as the column's type in the invariant culture, and a value that is not valid for
+  it throws. Ordered operators (`gt`, `lt`, `between`, ...) no longer depend on the machine's culture, and no longer
+  throw `InvalidCastException` on a lookup.
+- **A store-side rejection of a modelled message fails the operation (#439).** With a step registered on the
+  message, a failure such as `Merge` on a table that cannot merge was caught as "message not modelled": the call
+  returned an empty response and the PostOperation steps still fired. Only a message the store does not simulate is
+  now treated that way (it throws the new `MessageNotModelledException`, a `NotSupportedException`); every other
+  failure reaches the caller.
+- **`WithStrictSecurity()` protects Delete (#439).** Without `WithSecurity(...)`, Create, Update and RetrieveMultiple
+  failed as documented, but Delete went through.
 
 - **The harness runs a Delete's PreValidation steps before the cascade.** They used to fire after the cascaded
   children were already deleted, so a PreValidation step could not see them. On Dataverse they still exist at
