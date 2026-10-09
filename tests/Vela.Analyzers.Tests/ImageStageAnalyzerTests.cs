@@ -84,6 +84,33 @@ namespace Demo
         await Verify.VerifyAnalyzerAsync(code, Expected("A pre-image", "Create", "there is no prior row state before a create"));
     }
 
+    [Fact]
+    public async Task Flags_pre_image_on_create_multiple_permissive()
+    {
+        string code = InMethod("RegisterStep().OnMessage(\"CreateMultiple\").PostOperation().Sync().{|#0:WithPreImage|}(\"name\").Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("A pre-image", "CreateMultiple", "there is no prior row state before a create"));
+    }
+
+    // RouteTo supports no image at all (the platform fails with 0x80044189), whatever the image type.
+    [Theory]
+    [InlineData("WithPreImage", "A pre-image")]
+    [InlineData("WithPostImage", "A post-image")]
+    public async Task Flags_any_image_on_route_to(string method, string image)
+    {
+        string code = InMethod("RegisterStep().OnMessage(\"RouteTo\").PostOperation().Sync().{|#0:" + method + "|}(\"name\").Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected(image, "RouteTo", "Dataverse supports no image on this message"));
+    }
+
+    [Theory]
+    [InlineData("OnMessage(\"UpdateMultiple\")", "WithPreImage")]
+    [InlineData("OnMessage(\"UpdateMultiple\")", "WithPostImage")]
+    [InlineData("OnMessage(\"CreateMultiple\")", "WithPostImage")]
+    public async Task Does_not_flag_bulk_images(string trigger, string method)
+    {
+        string code = InMethod("RegisterStep()." + trigger + ".PostOperation().Sync()." + method + "(\"name\").Handle();");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
     [Theory]
     [InlineData("OnUpdate()")]
     [InlineData("OnDelete()")]

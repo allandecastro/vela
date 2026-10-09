@@ -341,8 +341,60 @@ public sealed class DataverseRegistrationStepsTests
         DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "Create", Array.Empty<ImageApplyDefinition>(), post);
 
         Entity created = Assert.Single(svc.Created);
-        Assert.Equal("id", created.GetAttributeValue<string>("messagepropertyname")); // Create + post image → "id"
+        Assert.Equal("Id", created.GetAttributeValue<string>("messagepropertyname")); // Create + post image → "Id"
         Assert.Equal("", created.GetAttributeValue<string>("attributes"));
+    }
+
+    // Each image is written with the message's own property (StepImageRules), not a hard-coded "Target".
+    [Theory]
+    [InlineData("CreateMultiple", false, "Ids")]
+    [InlineData("UpdateMultiple", true, "Targets")]
+    [InlineData("UpdateMultiple", false, "Targets")]
+    [InlineData("Delete", true, "Target")]
+    [InlineData("SetState", true, "EntityMoniker")]
+    [InlineData("Send", false, "EmailId")]
+    [InlineData("adc_DoThing", true, "Target")]
+    public void SyncStepImages_writes_the_message_property(string message, bool isPreImage, string expected)
+    {
+        var svc = new TestSupport.FakeOrgService();
+        var images = new[] { new ImageApplyDefinition("img", new[] { "name" }) };
+        var none = Array.Empty<ImageApplyDefinition>();
+
+        DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), message, isPreImage ? images : none, isPreImage ? none : images);
+
+        Entity created = Assert.Single(svc.Created);
+        Assert.Equal(expected, created.GetAttributeValue<string>("messagepropertyname"));
+    }
+
+    [Fact]
+    public void SyncStepImages_rejects_an_image_on_a_message_that_supports_none()
+    {
+        var svc = new TestSupport.FakeOrgService();
+        var pre = new[] { new ImageApplyDefinition("PreImage", new[] { "name" }) };
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "RouteTo", pre, Array.Empty<ImageApplyDefinition>()));
+
+        Assert.Contains("RouteTo", ex.Message);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
+    public void SyncStepImages_removes_stale_images_on_a_message_that_supports_none()
+    {
+        var staleId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstepimage", staleId)
+            {
+                ["entityalias"] = "PreImage",
+                ["imagetype"] = new OptionSetValue(0),
+            }),
+        };
+
+        DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "RouteTo", Array.Empty<ImageApplyDefinition>(), Array.Empty<ImageApplyDefinition>());
+
+        Assert.Equal(staleId, Assert.Single(svc.Deleted).Id);
     }
 
     [Fact]

@@ -8,11 +8,13 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Vela.Analyzers
 {
     /// <summary>
-    /// Flags a pre/post-image that the message can never provide: a <c>WithPreImage(...)</c> on a Create step (there
-    /// is no prior row state before a create), or a <c>WithPostImage(...)</c> on a Delete step (the row no longer
-    /// exists afterwards). The typed triggers (<c>OnCreate()</c>, ...) already prevent this through the builder's
-    /// type-state, so this targets the permissive <c>OnMessage("create"|"delete")</c> path where the image methods
-    /// are exposed unconditionally. The runtime throws for the same cases (StepBuilder.EnsureImageAllowed).
+    /// Flags a pre/post-image that the message can never provide: a <c>WithPreImage(...)</c> on a Create or
+    /// CreateMultiple step (there is no prior row state before a create), a <c>WithPostImage(...)</c> on a Delete
+    /// step (the row no longer exists afterwards), or any image on a message that supports none (RouteTo). The typed
+    /// triggers (<c>OnCreate()</c>, ...) already prevent most of this through the builder's type-state, so this
+    /// targets the permissive <c>OnMessage(...)</c> path where the image methods are exposed unconditionally. The
+    /// rules come from <see cref="Vela.Steps.StepImageRules"/>, shared with the runtime (StepBuilder.EnsureImageAllowed)
+    /// and the CLI scanner; the stage rules are left to those, since the stage is not always visible here.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class ImageStageAnalyzer : DiagnosticAnalyzer
@@ -26,25 +28,27 @@ namespace Vela.Analyzers
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "A pre-image on Create (no prior row state) or a post-image on Delete (the row is gone) can never be provided. The runtime rejects these; use the correct image for the message.");
+            description: "A pre-image on Create (no prior row state), a post-image on Delete (the row is gone) or any image on a message that supports none (RouteTo) can never be provided. The runtime and the CLI reject these; use the correct image for the message.");
 
-        // Message names (lower-case) mapped to the normalized message this analyzer reasons about.
-        private static readonly ImmutableDictionary<string, string> MessageAliases = new Dictionary<string, string>
+        // Display names for the messages whose image rules are modelled (lower-case key), so a permissive
+        // OnMessage("create") reports as "Create".
+        private static readonly ImmutableDictionary<string, string> MessageDisplayNames = new Dictionary<string, string>
         {
             ["create"] = "Create",
-            ["createmultiple"] = "Create",
+            ["createmultiple"] = "CreateMultiple",
             ["update"] = "Update",
-            ["updatemultiple"] = "Update",
+            ["updatemultiple"] = "UpdateMultiple",
             ["delete"] = "Delete",
+            ["routeto"] = "RouteTo",
         }.ToImmutableDictionary();
 
         // Typed trigger method names mapped to their message (OnCreate -> Create, ...).
         private static readonly ImmutableDictionary<string, string> TypedTriggerMessage = new Dictionary<string, string>
         {
             ["OnCreate"] = "Create",
-            ["OnCreateMultiple"] = "Create",
+            ["OnCreateMultiple"] = "CreateMultiple",
             ["OnUpdate"] = "Update",
-            ["OnUpdateMultiple"] = "Update",
+            ["OnUpdateMultiple"] = "UpdateMultiple",
             ["OnDelete"] = "Delete",
         }.ToImmutableDictionary();
 
@@ -93,18 +97,15 @@ namespace Vela.Analyzers
                 return; // message not determinable from the chain - do not guess
             }
 
-            if (isPreImage && message == "Create")
+            string? reason = Vela.Steps.StepImageRules.GetMessageRejectionReason(message, isPreImage);
+            if (reason is not null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), "A pre-image", "Create", "there is no prior row state before a create"));
-            }
-            else if (isPostImage && message == "Delete")
-            {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), "A post-image", "Delete", "the row no longer exists after a delete"));
+                context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), isPreImage ? "A pre-image" : "A post-image", message, reason));
             }
         }
 
         // Walks the receiver spine looking for the trigger that set the message: a typed OnCreate()/OnDelete()/...
-        // or a permissive OnMessage("create"|...). Returns the normalized message, or null if undeterminable.
+        // or a permissive OnMessage("create"|...). Returns the message, or null if undeterminable.
         private static string? ResolveMessage(ExpressionSyntax? receiver)
         {
             foreach (ChainCall call in FluentStep.Spine(receiver))
@@ -116,7 +117,7 @@ namespace Vela.Analyzers
 
                 if (call.MethodName == "OnMessage" && TryGetLiteralMessage(call.Invocation, out string permissiveMessage))
                 {
-                    return MessageAliases.TryGetValue(permissiveMessage, out string? normalized) ? normalized : null;
+                    return MessageDisplayNames.TryGetValue(permissiveMessage, out string? displayName) ? displayName : permissiveMessage;
                 }
             }
 

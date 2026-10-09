@@ -805,7 +805,7 @@ These are pre-registered for every execution - request them from the resolver (`
 | `ITracingService` | Plugin trace log (`ctx.Trace(...)` wraps it). |
 | `IPluginExecutionContext` | The raw execution context. |
 | `ILocalPluginContext` | The framework context itself. |
-| `ILogger` | Logging abstraction. |
+| `ILogger` | Application Insights logger (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`). |
 | `IEnvironmentVariableReader` | Reads Dataverse environment variables (cached). |
 | `IMessageService` | Localized messages. |
 | `IPluginCacheService` | Cache that survives across executions. |

@@ -101,7 +101,8 @@ does not compile.
 - Use `ctx.GetRequiredService<T>()` for dependency resolution in handlers.
 - Read the primary record via `ctx.Request.Target` on the typed message contexts (already early-bound); `GetTarget<T>()` stays for the message-agnostic `OnMessage(...)` handlers where the request does not type the Target.
 - Read images with `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` instead of the raw `PreEntityImages` / `PostEntityImages` dictionaries.
-- Signal a user-facing failure with `throw new InvalidPluginExecutionException("...")`, or `throw new PluginBusinessException("...")` for a named business error (the Vela base surfaces its message cleanly and records a `business-exception` trace snapshot). Both are clean and neither is flagged by [VELA012](../reference/analyzers.md#vela012) inside a plugin that derives from a Vela base. Any other exception type is reported to the caller wrapped (the Vela base adds its type and message, but it is not your intended clean message), which is why VELA012 flags it.
+- Signal a user-facing failure with `throw new InvalidPluginExecutionException("...")`, or `throw new PluginBusinessException("...")` for a named business error (the Vela base surfaces its message cleanly and records a `business-exception` trace snapshot). Both are clean and neither is flagged by [VELA012](../reference/analyzers.md#vela012) inside a plugin that derives from a Vela base. A `FaultException<OrganizationServiceFault>` from a failed service call is rethrown unchanged, so the caller gets the fault's own error code (a duplicate key stays `0x80040237`). Any other exception type reaches the caller as a generic message with the correlation id (`An unexpected error occurred. Correlation id: ...`). The full exception is traced, so the plug-in trace log keeps it unless the environment's Plugin Trace Log setting is `Off`. That generic message is why VELA012 flags it. Override `FormatUnexpectedErrorMessage(context, exception)` to return a more detailed message.
+- To give a business error a code, use `new PluginBusinessException(message, errorCode)`. Dataverse still reports `0x80040265` to the caller; an SDK caller reads your code from the fault's `ErrorDetails["SubErrorCode"]`, and the Web API does not return it.
 
 **Don't**
 - Stop a step chain before `.Handle(...)`: every step must bind a typed handler (a chain that stops earlier is flagged by analyzer VELA002). Prefer `RegisterPluginSteps()` + `RegisterStep()....Handle(...)` over a no-handler `Execute(...)` override.
@@ -237,13 +238,10 @@ public sealed partial class AccountAudit(string unsecure, string secure) : Entit
   from the message: a string literal is capitalized into the name segment (`OnMessage("update")` with a lambda
   handler gives `UpdatePostOp_PostImage`, nested in the plugin), and a marker type uses its type name; a message
   passed as a variable is not statically known, so the generator skips it and you keep the untyped image.
-- **Bulk operations:** Dataverse does not allow entity images on `CreateMultiple` / `UpdateMultiple` steps
-  (a `*Multiple` step that captures a `WithPreImage`/`WithPostImage` is rejected at `vela plan`/`apply`). Capture
-  the image on the single **`OnCreate()` / `OnUpdate()`** step instead: that step also runs for bulk operations,
-  firing per record, so each invocation reads its record's projection with the singular `ctx.PreImageAs<T>()` /
-  `ctx.PostImageAs<T>()`. (The list accessors `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()`, aligned with
-  `ctx.GetTargets()`, exist for a native `*Multiple` batch context and are exercised via the in-memory test
-  harness, where per-record image collections can be supplied.)
+- **Bulk operations:** a `CreateMultiple` step can capture a post-image and an `UpdateMultiple` step a pre- and
+  post-image. Dataverse delivers one image per target, so read them with the list accessors
+  `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()`, aligned with `ctx.GetTargets()`. On a single
+  `OnCreate()` / `OnUpdate()` step, use the singular `ctx.PreImageAs<T>()` / `ctx.PostImageAs<T>()`.
 - Reading a column the step did not capture is a normal C# "no such member" compile error on the projection
   (the column simply is not on the type). The projection is nested in your plugin's `partial` class, so the handler
   reads it unqualified with no `using` to add; a plugin that captures a typed image must therefore be `partial`
@@ -523,12 +521,17 @@ The rules the chain encodes:
 4. `OnMessage("...")` - a non-modelled message is **permissive**: both images are offered and validity is left
    to Dataverse at deploy time (Vela does not know an arbitrary message's image rules). A modelled message
    reached through `OnMessage(...)` is still validated by the runtime backstop in `Build()`.
-5. `CreateMultiple` / `UpdateMultiple` - not deployable with images. Dataverse accepts neither `Target` nor
-   `Targets` as an image property on the bulk messages, so a `*Multiple` step that carries a `PreImage`/`PostImage`
-   is rejected by `plan`/`apply` at scan time (a clear error, before anything is written). Register the image on
-   the single `Create`/`Update` step instead: it also runs for bulk operations, where per-record images are read
-   with `ctx.GetPreImage(index, alias)` / `ctx.GetPostImage(index, alias)`. The in-memory test harness does allow
-   bulk-step images, so you can still unit-test per-record image handling against `ctx.BulkPreEntityImagesCollection`.
+5. `CreateMultiple` / `UpdateMultiple` - the same rules as `Create` / `Update`: a `PostImage` on `CreateMultiple`,
+   a `PreImage` (at any stage) and a `PostImage` on `UpdateMultiple`. Dataverse delivers one image per target, only
+   in `Pre/PostEntityImagesCollection`; read them with `ctx.GetPreImage(index, alias)` /
+   `ctx.GetPostImage(index, alias)`.
+
+`vela plan`/`apply` check the same rules at scan time, before anything is written, so an image Dataverse would
+refuse fails with a clear error rather than a platform error code mid-apply. They also cover the messages Vela
+does not model: a `PostImage` before `PostOperation` and any image on `RouteTo` are rejected. Each image is
+registered against the request property the message expects (`Id` for Create, `Ids` for CreateMultiple, `Targets`
+for UpdateMultiple, `EmailId` for Send/DeliverIncoming/DeliverPromote, `EntityMoniker` for SetState, `Target`
+otherwise).
 
 **A PreValidation pre-image is fine for validation, not for a strictly consistent read.** A top-level PreValidation
 step runs outside the database transaction and its image is read without a lock, so another process can change the
@@ -647,13 +650,13 @@ Handler entry is traced automatically too: alongside the plugin-level `Executing
 > which additionally covers early-bound entities nested in a deep-insert graph. If you write such graphs from an
 > older project, add that attribute (or `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]`) to your plugin project.
 
-When plugin telemetry is available in runtime (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`), trace messages are also forwarded to plugin telemetry for Application Insights correlation.
+Trace messages also go to the platform's Application Insights logger (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`) at Information level, a no-op when the environment exports no telemetry. See [Telemetry](telemetry.md).
 
 Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment setting (`Off` / `Exception` / `All`) - not anything in code. There is no framework-level verbosity switch: server-side plugins run in Microsoft's sandbox where OS environment variables cannot be set, so a runtime verbosity flag would have no effect online. What you control in code is *what extra detail* you trace, at the call site.
 
 **You get an automatic snapshot on every execution, without record data.** `PluginBase` wraps your handler and
 writes a `start` snapshot before your code runs, then one for the failure if it throws
-(`invalid-plugin-exception` / `business-exception` / `unhandled-exception`). By default these list only
+(`invalid-plugin-exception` / `organization-service-fault` / `business-exception` / `unhandled-exception`). By default these list only
 **metadata**: message, stage, ids, and the *names* of the parameters, images and attributes, never their values.
 Plugins routinely handle personal data and secrets, and the trace log is persisted when the environment's Plugin
 Trace Log is `All`. While debugging, opt into values for one plugin:
@@ -662,7 +665,7 @@ Trace Log is `All`. While debugging, opt into values for one plugin:
 protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full; // adds values, and a success snapshot
 ```
 
-Snapshots go **only to the plug-in trace log**: they are never forwarded to `ILogger` / Application Insights.
+Snapshots go **only to the plug-in trace log**: they are never forwarded to Application Insights.
 
 To capture **intermediate** state, call `TraceExecutionSnapshot(...)` yourself **inside your handler** with your
 own phase label - a checkpoint around a risky step. An explicit call traces values (`TraceSnapshotDetail.Full`)

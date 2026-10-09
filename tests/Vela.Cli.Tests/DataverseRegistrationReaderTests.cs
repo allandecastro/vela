@@ -1075,13 +1075,13 @@ public class DataverseRegistrationReaderTests
         var pre = new[] { new ImageApplyDefinition("preimg", new[] { "name" }) };
         var post = new[] { new ImageApplyDefinition("postimg", new[] { "name" }) };
 
-        DataverseRegistration.SyncStepImages(mock.Object, stepId, "Create", pre, post);
+        DataverseRegistration.SyncStepImages(mock.Object, stepId, "UpdateMultiple", pre, post);
 
-        // Create message + PostImage → messagepropertyname "id"; everything else "Target".
+        // Both images take the message's property (UpdateMultiple → "Targets"; see StepImageRules).
         Entity preCreate = created.Single(e => e.GetAttributeValue<string>("entityalias") == "preimg");
-        Assert.Equal("Target", preCreate.GetAttributeValue<string>("messagepropertyname"));
+        Assert.Equal("Targets", preCreate.GetAttributeValue<string>("messagepropertyname"));
         Entity postCreate = created.Single(e => e.GetAttributeValue<string>("entityalias") == "postimg");
-        Assert.Equal("id", postCreate.GetAttributeValue<string>("messagepropertyname"));
+        Assert.Equal("Targets", postCreate.GetAttributeValue<string>("messagepropertyname"));
 
         // The pre-existing "old" image isn't desired → deleted.
         mock.Verify(s => s.Delete("sdkmessageprocessingstepimage", staleImageId), Times.Once);
