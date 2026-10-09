@@ -32,6 +32,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA019](#vela019) | Vela.Reliability | Warning | A plugin accesses the filesystem (`System.IO.File` / `FileStream` / ...), which the sandbox denies |
 | [VELA020](#vela020) | Vela.Usage | Error | A Create/Update (or bulk) step reaches `Handle(...)` without `FilterOn(...)` |
 | [VELA021](#vela021) | Vela.Usage | Warning | An image capture lists columns but no typed projection can be generated for it |
+| [VELA022](#vela022) | Vela.Reliability | Warning | A step on the `SetState` message never fires |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
 VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
@@ -298,6 +299,16 @@ already errors of VELA001 / VELA010 and are not reported again; a chain split ac
 
 **Fix:** use a constant alias and column selectors, or read the full image with `ctx.GetPreImage<T>()` /
 `ctx.GetPostImage<T>()`.
+
+## VELA022
+
+**A step on `SetState` never fires.** Reported on `OnMessage("SetState")` / `OnMessage(PluginMessages.SetState)`.
+Dataverse accepts the registration, but never runs the step: a `SetStateRequest` fires the `SetStateDynamicEntity`
+steps, and an Update of `statecode` fires the Update steps plus nested `SetStateDynamicEntity` steps (verified live
+on every stage). The step's logic would silently never execute.
+
+**Fix:** register on `OnUpdate().FilterOn(x => x.StateCode)` (fires for both a SetState and an Update of the state),
+or on `OnMessage(PluginMessages.SetStateDynamicEntity)` (inputs `EntityMoniker`, `State`, `Status`).
 
 ## Typed image projection generator
 

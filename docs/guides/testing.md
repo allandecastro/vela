@@ -55,7 +55,7 @@ chain, so plugins reading newer context members work.
 | Type | Purpose |
 | --- | --- |
 | `FakePluginExecutionContext` | mutable execution context (full interface chain) |
-| `HookOrganizationService` | delegate hooks `OnCreate`/`OnRetrieve`/... (no-op by default) |
+| `HookOrganizationService` | delegate hooks `OnCreate`/`OnRetrieve`/... (an unset hook throws `NotSupportedException` naming it) |
 | `HookOrganizationServiceFactory` | hands out user/system services |
 | `RecordingTracingService` | captures `ctx.Trace(...)` for assertions |
 | `InMemoryOrganizationService` | **stateful** CRM (see below) |
@@ -256,7 +256,10 @@ aggregates (count/countcolumn/sum/avg/min/max + group-by, also on linked columns
 
 FetchXML is parsed into the equivalent `QueryExpression` and runs through the same engine path, so a query and
 its `ToFetchXml()` return the same rows. The parser is strict: anything it does not model throws
-`NotSupportedException` naming the element or attribute, never silently ignored.
+`NotSupportedException` naming the element or attribute, never silently ignored. A condition `<value>` is read
+as the type of the column it is compared with, in the invariant culture (`2026-10-09` on a date column, `10.50`
+on a money column, `{guid}` on a lookup, `1` on a boolean), and a value that is not valid for that type throws
+instead of matching nothing.
 
 | FetchXML | Supported |
 | --- | --- |
@@ -295,7 +298,10 @@ Also: `Distinct()`, `Page(n, count)`, `WithTotalRecordCount()`, `WhereColumns(a,
 For scenario tests that go beyond a single plugin, `PluginPipeline` simulates the Dataverse pipeline **in
 memory**: writes through its service auto-fire the registered plugins (pre/post stages, execution order,
 filtering attributes, pre/post images), and a plugin that writes triggers further plugins (**cascade**).
-Registrations are **discovered automatically** from the assembly via `GetStepDefinitions()`.
+Registrations are **discovered automatically** from the assembly via `GetStepDefinitions()`. A registration
+that would never fire fails the setup instead of leaving the tests green: `FromAssembly` throws when a step or
+Custom API names a type it cannot resolve, and `Register<T>()` throws for a type that declares no step and no
+Custom API.
 
 ```csharp
 var pipeline = PluginPipeline.FromAssemblyOf<AccountPostCreate>()
@@ -347,11 +353,20 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   via `ctx.BulkTargets`, with per-row pre/post images on `ctx.BulkPre/PostEntityImagesCollection`). The merge
   runs both ways, so a bulk step also fires for a plain `Create`/`Update` (a one-row batch). The whole batch is
   one transaction: a synchronous failure rolls every row back.
-- **Owner/state Update split & `SetState`:** an `Update` that carries `ownerid` or `statecode`/`statuscode`
-  **alongside** standard fields fires the Update step **twice**, once for the standard fields, then once for
-  the owner/state fields, like the platform. `Execute(new SetStateRequest { ... })` is mapped to a
-  `statecode`/`statuscode` Update (so Update plugins run; the status defaults from the state when omitted),
-  mirroring how `AssignRequest` is modelled as an `ownerid` update.
+- **Owner, state, `Assign` and `SetState`** follow what the platform does (verified live), which differs from
+  Microsoft Learn on several points:
+  - An `Update` is **one** execution, even when it mixes `ownerid` or `statecode`/`statuscode` with other fields.
+    An `ownerid` Update never fires the `Assign` steps.
+  - An `Update` that sets `statecode` also fires the `SetStateDynamicEntity` steps, nested at depth + 1 between the
+    Update's PreOperation and PostOperation. Their `Status` is -1 when the Update sets no `statuscode`; the record
+    then lands on the state's default status, and the Update's Target stays as sent.
+  - `Execute(new AssignRequest { ... })` fires the `Assign` steps (PreValidation, PreOperation), then an `ownerid`
+    Update at the same depth that fires the Update steps at PreOperation and PostOperation only, then the `Assign`
+    PostOperation steps.
+  - `Execute(new SetStateRequest { ... })` fires the `SetStateDynamicEntity` steps the same way around a
+    `statecode`/`statuscode` Update. Steps registered on `SetState` never fire, on the platform or in the harness.
+  - Status -1 (or a missing status) resolves to the state's default status: state 0 gets status 1, any other state
+    status 2, unless you declare it with `WithDefaultStatus("table", state, status)`.
 - **Shared variables / `tag`.** A client passes the `tag` via a named request (not the shortcut methods, per
   the platform); the pipeline routes `Execute(CreateRequest/UpdateRequest/...)` through the registered steps
   and exposes it as a shared variable. Read it with `ctx.Tag` (or `ctx.GetSharedVariable("key")`):

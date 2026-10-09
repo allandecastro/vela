@@ -38,6 +38,7 @@ namespace Vela.Testing
         private readonly AlternateKeyValidator _alternateKeys = new AlternateKeyValidator();
 
         private readonly AutoNumberApplier _autoNumbers = new AutoNumberApplier();
+        private readonly Dictionary<string, int> _defaultStatuses = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         private readonly SystemFieldApplier _systemFields = new SystemFieldApplier();
 
@@ -404,6 +405,32 @@ namespace Vela.Testing
         {
             return WithAutoNumber(entityLogicalName, attribute, AutoNumber.Sequential(prefix, length, suffix));
         }
+
+        /// <summary>
+        /// Declares the default status reason of a state: the <c>statuscode</c> a record of the table gets when a
+        /// write sets <c>statecode</c> without <c>statuscode</c> (or a SetState passes status -1). Undeclared states use
+        /// the standard default: state 0 (active) gets status 1, any other state status 2.
+        /// </summary>
+        public InMemoryOrganizationService WithDefaultStatus(string entityLogicalName, int state, int status)
+        {
+            if (string.IsNullOrEmpty(entityLogicalName))
+            {
+                throw new ArgumentException("A table logical name is required.", nameof(entityLogicalName));
+            }
+
+            _defaultStatuses[DefaultStatusKey(entityLogicalName, state)] = status;
+            return this;
+        }
+
+        // The status a state change with no explicit status lands on (see WithDefaultStatus).
+        internal int DefaultStatus(string entityLogicalName, int state)
+        {
+            return _defaultStatuses.TryGetValue(DefaultStatusKey(entityLogicalName, state), out int status)
+                ? status
+                : (state == 0 ? 1 : 2);
+        }
+
+        private static string DefaultStatusKey(string entityLogicalName, int state) => entityLogicalName + "|" + state;
 
         /// <summary>Pre-populates the store without going through Create (ids are assigned when empty).</summary>
         public InMemoryOrganizationService Seed(params Entity[] entities)
@@ -897,6 +924,14 @@ namespace Vela.Testing
                 stored[attribute.Key] = EntityValues.CloneValue(attribute.Value);
             }
 
+            // A state change without a status lands on the state's default status (the platform sets it on the
+            // record; the caller's Target is left as sent).
+            if (entity.GetAttributeValue<OptionSetValue>(SystemFieldApplier.StateCode) is OptionSetValue state
+                && !entity.Contains(SystemFieldApplier.StatusCode))
+            {
+                stored[SystemFieldApplier.StatusCode] = new OptionSetValue(DefaultStatus(entity.LogicalName, state.Value));
+            }
+
             ResolveLookupKeyReferences(stored);
             _systemFields.ApplyOnUpdate(entity, stored, Actor(), _clock(), NextVersion());
             if (changesOwner)
@@ -910,6 +945,18 @@ namespace Vela.Testing
             }
         }
 
+
+        // The statecode/statuscode Update a SetState request performs (status -1 or missing = the state's default).
+        internal Entity SetStateUpdate(EntityReference record, OptionSetValue? state, OptionSetValue? status)
+        {
+            int stateValue = state?.Value ?? 0;
+            int statusValue = status != null && status.Value >= 0 ? status.Value : DefaultStatus(record.LogicalName, stateValue);
+            return new Entity(record.LogicalName, ResolveReference(record))
+            {
+                [SystemFieldApplier.StateCode] = new OptionSetValue(stateValue),
+                [SystemFieldApplier.StatusCode] = new OptionSetValue(statusValue),
+            };
+        }
 
         private long NextVersion() => ++_version;
 
@@ -936,10 +983,8 @@ namespace Vela.Testing
                 throw RecordDoesNotExist(entityName, id);
             }
 
-            if (Enforcing != null)
-            {
-                DemandAccess(entityName, Privilege.Delete, stored);
-            }
+            // Unconditional, like Create/Update: with security off this is the WithStrictSecurity guard.
+            DemandAccess(entityName, Privilege.Delete, stored);
 
             CascadeDelete(entityName, id, new HashSet<Guid>(), removeRecord);
         }
@@ -1078,6 +1123,14 @@ namespace Vela.Testing
                     // privilege from the ownerid change, so both paths enforce identically.
                     UpdateCore(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee });
                     return new AssignResponse();
+                }
+
+                case SetStateRequest setState:
+                {
+                    // The platform runs SetState as an Update of statecode/statuscode, with status -1 resolved to the
+                    // state's default status.
+                    UpdateCore(SetStateUpdate(setState.EntityMoniker, setState.State, setState.Status));
+                    return new SetStateResponse();
                 }
 
                 case AssociateRequest associate:
@@ -1233,9 +1286,9 @@ namespace Vela.Testing
                 case "DeleteFile":
                     return DeleteFile(request);
                 default:
-                    throw new NotSupportedException(
+                    throw new MessageNotModelledException(
                         $"InMemoryOrganizationService.Execute handles Create/Update/Delete/Retrieve/RetrieveMultiple, " +
-                        $"CreateMultiple/UpdateMultiple, Assign/Associate/Disassociate, ExecuteMultiple/ExecuteTransaction, the " +
+                        $"CreateMultiple/UpdateMultiple, Assign/SetState/Associate/Disassociate, ExecuteMultiple/ExecuteTransaction, the " +
                         $"File/Image block messages (InitializeFileBlocksUpload/UploadBlock/CommitFileBlocksUpload/" +
                         $"InitializeFileBlocksDownload/DownloadBlock/DeleteFile), and the metadata reads " +
                         $"RetrieveEntity/RetrieveAllEntities/RetrieveAttribute. For other messages, inject a service that " +
