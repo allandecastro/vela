@@ -109,6 +109,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **`OnAssign()` steps can capture images (#439).** `WithPreImage(...)` is offered at every stage and
+  `WithPostImage(...)` at PostOperation, as Dataverse accepts them on the Assign `Target` (verified live: the
+  pre-image holds the old owner, the post-image the new one).
+- **VELA022 warns on a step registered on `SetState` (#439).** Dataverse accepts the registration but never runs
+  it: a `SetStateRequest` and an Update of `statecode` fire `SetStateDynamicEntity` (verified live). Register on
+  `OnUpdate().FilterOn(x => x.StateCode)` or `OnMessage(PluginMessages.SetStateDynamicEntity)` instead.
+
 - **`WithDefaultStatus(table, state, status)` on `InMemoryOrganizationService` and `PluginPipeline` (#439).** It
   sets the status a record gets when a write changes `statecode` without `statuscode`, or a SetState passes status
   -1; the store now applies that default (state 0 gets status 1, any other state status 2, when undeclared).

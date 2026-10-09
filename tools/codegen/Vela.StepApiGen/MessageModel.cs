@@ -44,7 +44,7 @@ internal static class MessageModel
         new("Associate"),
         new("Disassociate"),
         new("GrantAccess"),
-        new("Assign"),
+        new("Assign", Images: Images.PreAndPost),
         new("RevokeAccess"),
         // Sales lifecycle
         new("QualifyLead"),

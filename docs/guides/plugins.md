@@ -115,9 +115,10 @@ The fluent builder enforces a specific order:
 
 1. **Message** - `OnCreate()`, `OnUpdate()`, `OnCreateMultiple()`, `OnUpdateMultiple()`, `OnDelete()`,
    `OnRetrieve()`, `OnRetrieveMultiple()`, `OnAssociate()`, `OnDisassociate()`, or
-   `OnMessage("custom_message")` for any other SDK message. The deprecated `SetState` /
-   `SetStateDynamicEntity` messages have no typed method: update `statecode`/`statuscode` with `OnUpdate()`
-   instead, or register through `OnMessage("SetState")` if you must target the legacy message.
+   `OnMessage("custom_message")` for any other SDK message. A state change has no typed method: register on
+   `OnUpdate().FilterOn(x => x.StateCode)`, or on `OnMessage(PluginMessages.SetStateDynamicEntity)`, which both
+   a `SetStateRequest` and an Update of `statecode` fire. A step on `SetState` never fires on the platform
+   ([VELA022](../reference/analyzers.md#vela022)).
 2. **Stage** - `PreValidation()`, `PreOperation()`, or `PostOperation()` (typed methods; the stage you pick
    determines which images the rest of the chain will offer)
 3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only)

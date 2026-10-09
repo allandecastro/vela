@@ -197,13 +197,15 @@ namespace Vela.Testing.Tests
                 RegisterStep().OnUpdate().PreValidation().Sync().FilterOn(o => o.Name, o => o.OwnerId, o => o.StateCode).WithPreImage().Handle((Action<ILocalPluginContext>)Record);
                 RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(o => o.Name, o => o.OwnerId, o => o.StateCode).WithPreImage().Handle((Action<ILocalPluginContext>)Record);
                 RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(o => o.Name, o => o.OwnerId, o => o.StateCode).WithPreImage().WithPostImage().Handle((Action<ILocalPluginContext>)Record);
-                RegisterStep().OnMessage(PluginMessages.Assign).PreValidation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
-                RegisterStep().OnMessage(PluginMessages.Assign).PreOperation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
-                RegisterStep().OnMessage(PluginMessages.Assign).PostOperation().Sync().WithPreImage().WithPostImage().Handle((Action<ILocalPluginContext>)Record);
+                RegisterStep().OnAssign().PreValidation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
+                RegisterStep().OnAssign().PreOperation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
+                RegisterStep().OnAssign().PostOperation().Sync().WithPreImage().WithPostImage().Handle((Action<ILocalPluginContext>)Record);
                 RegisterStep().OnMessage(PluginMessages.SetStateDynamicEntity).PreValidation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
                 RegisterStep().OnMessage(PluginMessages.SetStateDynamicEntity).PreOperation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
                 RegisterStep().OnMessage(PluginMessages.SetStateDynamicEntity).PostOperation().Sync().WithPreImage().WithPostImage().Handle((Action<ILocalPluginContext>)Record);
+#pragma warning disable VELA022 // Deliberate: proves the SetState step never fires.
                 RegisterStep().OnMessage(PluginMessages.SetState).PreOperation().Sync().Handle((Action<ILocalPluginContext>)Record);
+#pragma warning restore VELA022
             }
 
             private void Record(ILocalPluginContext ctx)
