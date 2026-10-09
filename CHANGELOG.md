@@ -440,6 +440,14 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **A scaffolded solution's parallel build no longer packs a plugin twice.** When MSBuild could not match a test
+  project's reference to the solution configuration (the path reaches it in a different form, e.g. through a
+  symlink), it built the referenced plugin project a second time, without Configuration/Platform (Debug), in
+  parallel with the solution's Release build. Both packed into the same `artifacts/<Plugin>.1.0.0.nupkg`, so the
+  build failed with "being used by another process", or the Debug package could overwrite the Release one. `vela
+  init` now sets `ShouldUnsetParentConfigurationAndPlatform=false` in the test projects, so such a reference
+  inherits their configuration and is the same build, run once. Existing solutions can add the property to their
+  test projects (#406).
 - **Step descriptions and Custom API display names and descriptions reach Dataverse.** `apply` wrote the step name
   as every step's description, and the unique name (or the parameter name) as every Custom API's display name and
   description and every parameter's description, whatever the code declared. It now writes `WithDescription(...)`
