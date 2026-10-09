@@ -8,7 +8,8 @@ namespace Vela.Cli;
 /// <summary>A single SDK message request/response field: its name and the resolved C# type string.</summary>
 public sealed record SdkMessageField(string Name, string CSharpType);
 
-/// <summary>An SDK message (<c>sdkmessage</c>) to generate typed Request/Response classes for.</summary>
+/// <summary>An SDK request to generate typed Request/Response classes for, named after the request (its
+/// <c>sdkmessagerequest</c> name, which Dataverse executes).</summary>
 public sealed record SdkMessage(
     string Name,
     IReadOnlyList<SdkMessageField> RequestFields,
@@ -18,6 +19,10 @@ public sealed record SdkMessage(
     /// Drives the generated entity-constrained <c>On&lt;Message&gt;()</c> step extension(s); an empty list (or a
     /// large fan-out) yields a single generic extension instead (see <see cref="SdkMessageGenerator"/>).</summary>
     public IReadOnlyList<string> Entities { get; init; } = Array.Empty<string>();
+
+    /// <summary>The <c>sdkmessage</c> the request runs as, when it differs from <see cref="Name"/> (the request name,
+    /// which is what Dataverse executes): <c>Send</c> for <c>SendEmail</c>. Null when they are the same.</summary>
+    public string? MessageName { get; init; }
 }
 
 /// <summary>
@@ -79,7 +84,9 @@ public static class SdkMessageGenerator
         sb.AppendLine();
 
         // Request
-        sb.AppendLine($"    /// <summary>Typed request for the <c>{message.Name}</c> message.</summary>");
+        sb.AppendLine(message.MessageName is null || string.Equals(message.MessageName, message.Name, StringComparison.Ordinal)
+            ? $"    /// <summary>Typed request for the <c>{message.Name}</c> message.</summary>"
+            : $"    /// <summary>Typed request for the <c>{message.Name}</c> request, which runs as the <c>{message.MessageName}</c> message.</summary>");
         sb.AppendLine($"    public partial class {request} : Vela.Messages.TypedRequest");
         sb.AppendLine("    {");
         sb.AppendLine($"        public {request}()");

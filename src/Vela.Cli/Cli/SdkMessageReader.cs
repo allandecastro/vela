@@ -74,37 +74,99 @@ internal static class SdkMessageReader
             .ToList();
     }
 
-    internal static SdkMessage ReadSdkMessage(IOrganizationService service, string messageName)
+    /// <summary>
+    /// Reads the request/response contract of every request that runs as <paramref name="name"/>: one
+    /// <see cref="SdkMessage"/> per request, named after the request, which is the name Dataverse executes. Most
+    /// messages have one request of the same name, but some differ (the <c>Send</c> sdkmessage is run by
+    /// <c>SendEmail</c>, <c>SendFax</c> and <c>SendTemplate</c>), and executing <c>"Send"</c> fails with "Request not
+    /// supported" (verified live). <paramref name="name"/> can also be a request name (<c>WinQuote</c>), which reads
+    /// that request only.
+    /// </summary>
+    internal static IReadOnlyList<SdkMessage> ReadSdkMessages(IOrganizationService service, string name)
     {
-        QueryExpression messageQuery = new QueryExpression("sdkmessage") { ColumnSet = new ColumnSet("sdkmessageid", "name"), TopCount = 1 };
-        messageQuery.Criteria.AddCondition("name", ConditionOperator.Equal, messageName);
-        Entity message = service.RetrieveMultiple(messageQuery).Entities.FirstOrDefault()
-            ?? throw new InvalidOperationException($"SDK message '{messageName}' was not found.");
+        string? onlyRequest = null;
+        Entity? message = FindMessage(service, name);
+        if (message == null && !string.Equals(Vela.Constants.SdkMessageNames.ForRequest(name), name, StringComparison.OrdinalIgnoreCase))
+        {
+            onlyRequest = name;
+            message = FindMessage(service, Vela.Constants.SdkMessageNames.ForRequest(name));
+        }
 
-        // A message has several pairs, one per SOAP contract version, and the field CLR types differ by pair:
-        // the legacy 2007/WebServices pair carries null or pre-Xrm types (e.g. Microsoft.Crm.Sdk.SecurityPrincipal)
+        if (message == null)
+        {
+            throw new InvalidOperationException($"SDK message '{name}' was not found.");
+        }
+
+        string messageName = message.GetAttributeValue<string>("name") ?? name;
+
+        // A message has one pair per (request, SOAP contract version), and the field CLR types differ by version:
+        // the legacy 2007/WebServices pairs carry null or pre-Xrm types (e.g. Microsoft.Crm.Sdk.SecurityPrincipal)
         // while 2011/Contracts (and xrm/*/Contracts) carry the modern Microsoft.Xrm.Sdk.* types. The pair order is
-        // not stable across environments, so we cannot take the first - prefer 2011/Contracts, then any other
-        // Contracts (7.1/...), and only fall back to the legacy pair when nothing else exists. (Validated live
-        // against two environments.)
+        // not stable across environments, so walk the pairs from the preferred version down (2011/Contracts, then any
+        // other Contracts, the legacy pairs last) and keep each request from the first pair that has it. (Validated
+        // live: the Win message has a pair per version for WinOpportunity and another set for WinQuote.)
         QueryExpression pairQuery = new QueryExpression("sdkmessagepair") { ColumnSet = new ColumnSet("sdkmessagepairid", "namespace") };
         pairQuery.Criteria.AddCondition("sdkmessageid", ConditionOperator.Equal, message.Id);
         List<Entity> pairs = service.RetrieveAll(pairQuery);
-        Entity pair = SelectBestPair(pairs)
-            ?? throw new InvalidOperationException($"SDK message '{messageName}' has no message pair.");
-
-        QueryExpression requestQuery = new QueryExpression("sdkmessagerequest") { ColumnSet = new ColumnSet("sdkmessagerequestid"), TopCount = 1 };
-        requestQuery.Criteria.AddCondition("sdkmessagepairid", ConditionOperator.Equal, pair.Id);
-        Entity request = service.RetrieveMultiple(requestQuery).Entities.FirstOrDefault()
-            ?? throw new InvalidOperationException($"SDK message '{messageName}' has no request definition.");
-
-        return new SdkMessage(
-            messageName,
-            ReadRequestFields(service, request.Id),
-            ReadResponseFields(service, request.Id))
+        if (pairs.Count == 0)
         {
-            Entities = ReadApplicableEntities(service, message.Id),
-        };
+            throw new InvalidOperationException($"SDK message '{messageName}' has no message pair.");
+        }
+
+        Dictionary<string, Entity> requestsByName = new Dictionary<string, Entity>(StringComparer.Ordinal);
+        foreach (Entity pair in pairs.OrderBy(PairPreference))
+        {
+            QueryExpression requestQuery = new QueryExpression("sdkmessagerequest") { ColumnSet = new ColumnSet("sdkmessagerequestid", "name", "primaryobjecttypecode") };
+            requestQuery.Criteria.AddCondition("sdkmessagepairid", ConditionOperator.Equal, pair.Id);
+            foreach (Entity row in service.RetrieveAll(requestQuery))
+            {
+                string requestName = RequestName(row, messageName);
+                if ((onlyRequest == null || string.Equals(requestName, onlyRequest, StringComparison.OrdinalIgnoreCase))
+                    && !requestsByName.ContainsKey(requestName))
+                {
+                    requestsByName.Add(requestName, row);
+                }
+            }
+        }
+
+        List<(Entity Row, string Name)> requests = requestsByName
+            .OrderBy(r => r.Key, StringComparer.Ordinal)
+            .Select(r => (Row: r.Value, Name: r.Key))
+            .ToList();
+        if (requests.Count == 0)
+        {
+            throw new InvalidOperationException($"SDK message '{name}' has no request definition.");
+        }
+
+        IReadOnlyList<string> entities = ReadApplicableEntities(service, message.Id);
+        return requests
+            .Select(r =>
+            {
+                // A request bound to one table (SendEmail on email, WinQuote on quote) only runs on that table.
+                string? table = r.Row.GetAttributeValue<string>("primaryobjecttypecode");
+                bool bound = !string.IsNullOrWhiteSpace(table) && !string.Equals(table, "none", StringComparison.OrdinalIgnoreCase);
+                return new SdkMessage(r.Name, ReadRequestFields(service, r.Row.Id), ReadResponseFields(service, r.Row.Id))
+                {
+                    MessageName = messageName,
+                    Entities = bound ? new[] { table! } : entities,
+                };
+            })
+            .ToList();
+    }
+
+    private static Entity? FindMessage(IOrganizationService service, string messageName)
+    {
+        QueryExpression messageQuery = new QueryExpression("sdkmessage") { ColumnSet = new ColumnSet("sdkmessageid", "name"), TopCount = 1 };
+        messageQuery.Criteria.AddCondition("name", ConditionOperator.Equal, messageName);
+        return service.RetrieveMultiple(messageQuery).Entities.FirstOrDefault();
+    }
+
+    // The request's own name, the one Dataverse executes. Falls back to the message name when the row has none, or a
+    // name that cannot be a C# class name (the legacy "SetState{Entity.PrimaryEntityName}" placeholder).
+    private static string RequestName(Entity request, string messageName)
+    {
+        string? name = request.GetAttributeValue<string>("name");
+        return !string.IsNullOrWhiteSpace(name) && name!.All(c => char.IsLetterOrDigit(c) || c == '_') ? name : messageName;
     }
 
     // The entities a message applies to (its step-eligible, visible sdkmessagefilter rows'
@@ -174,22 +236,12 @@ internal static class SdkMessageReader
             .ToList();
     }
 
-    // Picks the pair whose field CLR types are the modern Microsoft.Xrm.Sdk.* ones: prefer 2011/Contracts, then
-    // any other *Contracts (e.g. xrm/7.1/Contracts), avoiding the legacy 2007/WebServices pair unless it is the
-    // only one present.
-    private static Entity? SelectBestPair(List<Entity> pairs)
+    // Rank of a pair's contract version, lowest first: 2011/Contracts carries the modern Microsoft.Xrm.Sdk.* field
+    // types, then any other *Contracts (e.g. xrm/7.1/Contracts), then anything but the legacy 2007/WebServices.
+    private static int PairPreference(Entity pair)
     {
-        if (pairs.Count == 0)
-        {
-            return null;
-        }
-
-        static bool Has(Entity p, string token) =>
-            (p.GetAttributeValue<string>("namespace") ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
-
-        return pairs.FirstOrDefault(p => Has(p, "2011/Contracts"))
-            ?? pairs.FirstOrDefault(p => Has(p, "Contracts"))
-            ?? pairs.FirstOrDefault(p => !Has(p, "2007/WebServices"))
-            ?? pairs[0];
+        string ns = pair.GetAttributeValue<string>("namespace") ?? string.Empty;
+        bool Has(string token) => ns.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
+        return Has("2011/Contracts") ? 0 : Has("Contracts") ? 1 : !Has("2007/WebServices") ? 2 : 3;
     }
 }

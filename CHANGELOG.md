@@ -353,8 +353,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   renders the typed trigger (`OnSendEmail()`, and `OnWinQuote()` or `OnWinOpportunity()` from the table), and no
   longer offers the triggers removed from the framework. `vela models --messages` without a value skipped a message
   only when its sdkmessage name was a request class name, so it generated duplicate `SendRequest`, `WinRequest`,
-  `CloseRequest`... wrappers for messages the SDK already covers; it now skips them, and the targeted warning names
-  the SDK request to use instead. `plan` / `apply` also reject any image on `SendFromTemplate`, which Dataverse does
+  `CloseRequest`... wrappers for messages the SDK already covers; it now skips them. A generated class is now named
+  after its request, and one is generated per request: `--messages Send` used to emit a `SendRequest` with
+  `RequestName = "Send"`, which Dataverse refuses ("Request not supported", verified live); it now emits
+  `SendEmailRequest`, `SendFaxRequest` and `SendTemplateRequest`, each bound to its table. A request name
+  (`--messages WinQuote`) is accepted too. `plan` / `apply` also reject any image on `SendFromTemplate`, which Dataverse does
   not support (verified live).
 
 - **Bulk step images deploy, with the right image property for every message.** `plan`/`apply` rejected any image

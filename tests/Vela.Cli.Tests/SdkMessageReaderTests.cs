@@ -51,7 +51,7 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "QualifyLead");
+        SdkMessage message = SdkMessageReader.ReadSdkMessages(svc, "QualifyLead").Single();
 
         Assert.Equal("QualifyLead", message.Name);
 
@@ -72,7 +72,7 @@ public class SdkMessageReaderTests
         Entity legacy = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2007/WebServices"));
         Entity modern = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"));
         Entity xrm = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/xrm/7.1/Contracts"));
-        Guid usedPairId = Guid.Empty;
+        List<Guid> queriedPairIds = new List<Guid>();
 
         var svc = new FakeOrgService
         {
@@ -85,8 +85,8 @@ public class SdkMessageReaderTests
                     case "sdkmessagepair":
                         return FakeOrgService.Collection(legacy, xrm, modern);
                     case "sdkmessagerequest":
-                        // Capture which pair id the request query filtered on.
-                        usedPairId = (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0];
+                        // Capture the order the request queries walk the pairs in.
+                        queriedPairIds.Add((Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0]);
                         return FakeOrgService.Collection(Row("sdkmessagerequest"));
                     default:
                         return new EntityCollection();
@@ -94,10 +94,10 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "Whatever");
+        SdkMessage message = SdkMessageReader.ReadSdkMessages(svc, "Whatever").Single();
 
         Assert.Equal("Whatever", message.Name);
-        Assert.Equal(modern.Id, usedPairId);
+        Assert.Equal(new[] { modern.Id, xrm.Id, legacy.Id }, queriedPairIds.ToArray());
         Assert.Empty(message.ResponseFields);
     }
 
@@ -107,7 +107,7 @@ public class SdkMessageReaderTests
         // No 2011/Contracts present: an xrm/*/Contracts pair is preferred over the legacy WebServices pair.
         Entity legacy = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2007/WebServices"));
         Entity xrm = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/xrm/7.1/Contracts"));
-        Guid usedPairId = Guid.Empty;
+        List<Guid> queriedPairIds = new List<Guid>();
 
         var svc = new FakeOrgService
         {
@@ -120,7 +120,7 @@ public class SdkMessageReaderTests
                     case "sdkmessagepair":
                         return FakeOrgService.Collection(legacy, xrm);
                     case "sdkmessagerequest":
-                        usedPairId = (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0];
+                        queriedPairIds.Add((Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0]);
                         return FakeOrgService.Collection(Row("sdkmessagerequest"));
                     default:
                         return new EntityCollection();
@@ -128,9 +128,9 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessageReader.ReadSdkMessage(svc, "Whatever");
+        SdkMessageReader.ReadSdkMessages(svc, "Whatever").Single();
 
-        Assert.Equal(xrm.Id, usedPairId);
+        Assert.Equal(new[] { xrm.Id, legacy.Id }, queriedPairIds.ToArray());
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
+        SdkMessage message = SdkMessageReader.ReadSdkMessages(svc, "M").Single();
 
         SdkMessageField only = Assert.Single(message.RequestFields);
         Assert.Equal("Dup", only.Name);
@@ -249,7 +249,7 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "QualifyLead");
+        SdkMessage message = SdkMessageReader.ReadSdkMessages(svc, "QualifyLead").Single();
 
         Assert.Equal(new[] { "account", "lead" }, message.Entities.ToArray());
 
@@ -274,9 +274,67 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
+        SdkMessage message = SdkMessageReader.ReadSdkMessages(svc, "M").Single();
 
         Assert.Empty(message.Entities);
+    }
+
+    // The Win sdkmessage is run by two requests. Dataverse executes them under their request names only ("Win"
+    // fails with "Request not supported", verified live), so each one gets its own class, bound to its own table.
+    // As on Dataverse, each request has its own pair (one per contract version; the legacy ones carry no table).
+    private static FakeOrgService WinService(List<string> queriedMessages)
+    {
+        Entity quotePair = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"));
+        Entity opportunityPair = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"));
+        Entity legacyPair = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2007/WebServices"));
+        return new FakeOrgService
+        {
+            OnRetrieveMultiple = q =>
+            {
+                switch (q.EntityName)
+                {
+                    case "sdkmessage":
+                        string name = (string)q.Criteria.Conditions.Single(c => c.AttributeName == "name").Values[0];
+                        queriedMessages.Add(name);
+                        return name == "Win" ? FakeOrgService.Collection(Row("sdkmessage", ("name", "Win"))) : new EntityCollection();
+                    case "sdkmessagepair":
+                        return FakeOrgService.Collection(legacyPair, quotePair, opportunityPair);
+                    case "sdkmessagerequest":
+                        Guid pairId = (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0];
+                        return pairId == quotePair.Id ? FakeOrgService.Collection(Row("sdkmessagerequest", ("name", "WinQuote"), ("primaryobjecttypecode", "quote")))
+                            : pairId == opportunityPair.Id ? FakeOrgService.Collection(Row("sdkmessagerequest", ("name", "WinOpportunity"), ("primaryobjecttypecode", "opportunity")))
+                            : FakeOrgService.Collection(Row("sdkmessagerequest", ("name", "WinQuote")), Row("sdkmessagerequest", ("name", "WinOpportunity")));
+                    case "sdkmessagefilter":
+                        return FakeOrgService.Collection(
+                            Row("sdkmessagefilter", ("primaryobjecttypecode", "opportunity")),
+                            Row("sdkmessagefilter", ("primaryobjecttypecode", "quote")));
+                    default:
+                        return new EntityCollection();
+                }
+            },
+        };
+    }
+
+    [Fact]
+    public void ReadSdkMessages_ReturnsOneMessagePerRequest_NamedAfterTheRequest()
+    {
+        IReadOnlyList<SdkMessage> messages = SdkMessageReader.ReadSdkMessages(WinService(new List<string>()), "Win");
+
+        Assert.Equal(new[] { "WinOpportunity", "WinQuote" }, messages.Select(m => m.Name).ToArray());
+        Assert.All(messages, m => Assert.Equal("Win", m.MessageName));
+        Assert.Equal(new[] { "opportunity" }, messages[0].Entities.ToArray());
+        Assert.Equal(new[] { "quote" }, messages[1].Entities.ToArray());
+    }
+
+    [Fact]
+    public void ReadSdkMessages_AcceptsARequestName_AndReadsThatRequestOnly()
+    {
+        List<string> queried = new List<string>();
+
+        SdkMessage message = Assert.Single(SdkMessageReader.ReadSdkMessages(WinService(queried), "WinQuote"));
+
+        Assert.Equal("WinQuote", message.Name);
+        Assert.Equal(new[] { "WinQuote", "Win" }, queried.ToArray());
     }
 
     [Fact]
@@ -285,7 +343,7 @@ public class SdkMessageReaderTests
         var svc = new FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => SdkMessageReader.ReadSdkMessage(svc, "Nope"));
+            () => SdkMessageReader.ReadSdkMessages(svc, "Nope").Single());
         Assert.Contains("Nope", ex.Message);
     }
 
@@ -303,7 +361,7 @@ public class SdkMessageReaderTests
             },
         };
 
-        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
+        SdkMessage message = SdkMessageReader.ReadSdkMessages(svc, "M").Single();
 
         Assert.Empty(message.RequestFields);
         Assert.Empty(message.ResponseFields);

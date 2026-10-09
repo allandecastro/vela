@@ -222,6 +222,12 @@ Custom API and messages that already ship an SDK request class - the core `Micro
 and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (matched against a curated, non-exhaustive supplement;
 an unlisted one just makes a harmless duplicate).
 
+A class is generated per **request**, named after the request: that is the name Dataverse executes, which is not
+always the `sdkmessage` name. `--messages Send` generates `SendEmailRequest`, `SendFaxRequest` and
+`SendTemplateRequest` (each bound to its own table), and `--messages Win` generates `WinOpportunityRequest` and
+`WinQuoteRequest`; a request sent as `"Send"` fails with "Request not supported". You can also pass the request
+name (`--messages WinQuote`) to generate that request only.
+
 Alongside each `XxxRequest`/`XxxResponse`, `--messages` emits an **entity-constrained `On<Message>()` step
 extension** per applicable entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), giving
 **compile-time entity applicability**: a generated `OnMyMessage()` only compiles inside the `EntityPluginBase<T>`
