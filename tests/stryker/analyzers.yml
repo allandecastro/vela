@@ -1,12 +1,15 @@
 # Mutation area: the whole Vela.Analyzers project (the diagnostics shipped in the Vela.Plugins package and the typed
 # image projection generator). Run from tests/Vela.Analyzers.Tests (net10, no solution needed).
-# Measured at ~87.6% (1282 killed + 6 timeouts, 162 survived, 20 no coverage); break is ratcheted to 85. The
+# Measured at ~86.1% after W1 (#479) grew the step-shape logic; break stays at 85. The
 # remaining survivors are mostly equivalent: GetHashCode arithmetic of the generator models, EnableConcurrentExecution,
 # and unreachable variance handling.
 stryker-config:
   project: Vela.Analyzers.csproj
   mutate:
     - "**/*.cs"
+    # Linked from Vela.Plugins (one table of image rules for the runtime, VELA007 and the CLI); its mutants are
+    # owned and measured by the plugins-steps area.
+    - "!**/StepImageRules.cs"
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90
