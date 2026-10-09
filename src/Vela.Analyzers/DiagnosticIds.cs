@@ -27,5 +27,6 @@ namespace Vela
         public const string FilesystemAccess = "VELA019";
         public const string MissingFilter = "VELA020";
         public const string ImageProjectionNotGenerated = "VELA021";
+        public const string SetStateNeverFires = "VELA022";
     }
 }

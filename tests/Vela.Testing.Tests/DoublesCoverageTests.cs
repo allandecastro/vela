@@ -14,19 +14,26 @@ namespace Vela.Testing.Tests
         // ---- HookOrganizationService -------------------------------------------------------------------
 
         [Fact]
-        public void Hook_service_returns_defaults_when_no_hooks_are_set()
+        public void Hook_service_throws_naming_the_hook_when_it_is_not_set()
         {
             HookOrganizationService svc = new HookOrganizationService();
 
-            Assert.Equal(Guid.Empty, svc.Create(new Entity("account")));
-            Assert.Null(svc.Retrieve("account", Guid.NewGuid(), new ColumnSet()));
-            Assert.Null(svc.Execute(new OrganizationRequest("WhoAmI")));
-            Assert.Empty(svc.RetrieveMultiple(new QueryExpression("account")).Entities);
-            // Void operations are no-ops with no hook set; they must not throw.
-            svc.Update(new Entity("account"));
-            svc.Delete("account", Guid.NewGuid());
-            svc.Associate("account", Guid.NewGuid(), new Relationship("r"), new EntityReferenceCollection());
-            svc.Disassociate("account", Guid.NewGuid(), new Relationship("r"), new EntityReferenceCollection());
+            // An unset hook used to return null / Guid.Empty / nothing, so the plugin failed later with a
+            // NullReferenceException far from the call. Each call now fails at once and names the hook to set.
+            AssertUnset("OnCreate", () => svc.Create(new Entity("account")));
+            AssertUnset("OnRetrieve", () => svc.Retrieve("account", Guid.NewGuid(), new ColumnSet()));
+            AssertUnset("OnExecute", () => svc.Execute(new OrganizationRequest("WhoAmI")));
+            AssertUnset("OnRetrieveMultiple", () => svc.RetrieveMultiple(new QueryExpression("account")));
+            AssertUnset("OnUpdate", () => svc.Update(new Entity("account")));
+            AssertUnset("OnDelete", () => svc.Delete("account", Guid.NewGuid()));
+            AssertUnset("OnAssociate", () => svc.Associate("account", Guid.NewGuid(), new Relationship("r"), new EntityReferenceCollection()));
+            AssertUnset("OnDisassociate", () => svc.Disassociate("account", Guid.NewGuid(), new Relationship("r"), new EntityReferenceCollection()));
+        }
+
+        private static void AssertUnset(string hook, Action call)
+        {
+            NotSupportedException ex = Assert.Throws<NotSupportedException>(call);
+            Assert.Contains("HookOrganizationService." + hook + " is not set", ex.Message);
         }
 
         [Fact]

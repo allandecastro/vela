@@ -215,6 +215,8 @@ namespace Acme.Plugins.Account.Plugins
     [InlineData("\n                .WithStepKey(\"main\")")]
     [InlineData("\n                .WithPostImage(a => a.Name)")]
     [InlineData("\n                .WithPreImage(a => a.Name)")]
+    [InlineData("\n                .WithSubordinatePreImage(a => a.Name)")]
+    [InlineData("\n                .ForRelationship(\"contact_customer_accounts\")")]
     public void TryInject_AllowsTheSameFilterColumns_WhenTheExistingStepIsToldApartOtherwise(string modifier)
     {
         bool ok = StepInjector.TryInject(FilteredCreate(modifier), "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out string? note);

@@ -44,6 +44,8 @@ public sealed partial class StepBuilder<TEntity>
         SupportedDeployment = 32,
         UnsecureConfig = 64,
         SecureConfig = 128,
+        Relationship = 256,
+        SkipDepth = 512,
     }
 
     private void MarkSetOnce(SetOnceModifier modifier, string method)
@@ -120,18 +122,22 @@ public sealed partial class StepBuilder<TEntity>
         // modelled message string is still validated here.
         foreach (ImageDefinition image in _preImages)
         {
-            EnsureImageAllowed(isPreImage: true, image.Alias);
+            EnsureImageAllowed(isPreImage: true, image);
         }
         foreach (ImageDefinition image in _postImages)
         {
-            EnsureImageAllowed(isPreImage: false, image.Alias);
+            EnsureImageAllowed(isPreImage: false, image);
         }
 
         EnsureNoDuplicates(_definition.FilteringAttributes, "filtering attribute");
+        EnsureNoDuplicates(_definition.Relationships, "relationship");
         foreach (ImageDefinition img in _preImages.Concat(_postImages))
         {
             EnsureNoDuplicates(img.Attributes, $"attribute in image '{img.Alias}'");
         }
+        // Aliases are unique across every image of the step, whatever record each one targets: Dataverse accepts a
+        // Merge step with the same alias on a Target and a SubordinateId image, then delivers only one of them
+        // (verified live), so the duplicate is rejected here.
         EnsureNoDuplicates(_preImages.Concat(_postImages).Select(i => i.Alias).ToArray(), "image alias");
 
         return _definition;
@@ -207,11 +213,20 @@ public sealed partial class StepBuilder<TEntity>
         SetHandler(handler.Method.Name);
     }
 
+    // Every trigger records its message here: the request name it was declared with is kept for the typed context,
+    // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win).
+    private void SetMessage(string requestName)
+    {
+        _definition.RequestName = requestName;
+        _definition.Message = SdkMessageNames.ToSdkMessage(requestName);
+    }
+
     // Mutation hooks for the generic typed-message adapter (Vela.Steps.TypedStepAdapter<TEntity, TRequest>),
     // which cannot see the private _definition / helpers directly. Same effect as the explicit-interface
     // stage/mode/handler transitions of the guided chain, just reached from the adapter.
     internal void SetStageInternal(PluginStages stage) => _definition.Stage = stage;
     internal void SetModeInternal(ExecutionMode mode) => _definition.Mode = mode;
+    internal void SetAsyncModeInternal(bool deleteJobOnSuccess) => SetAsyncMode(deleteJobOnSuccess);
     internal void SetHandlerInternal(Delegate handler) => SetHandler(handler);
 
     // Setting mutations centralised so the interface implementations stay in lockstep (each explicit
@@ -222,16 +237,47 @@ public sealed partial class StepBuilder<TEntity>
         _definition.ExecutionOrder = order;
     }
 
+    private void SetAsyncMode(bool deleteJobOnSuccess)
+    {
+        _definition.Mode = ExecutionMode.Asynchronous;
+        _definition.AsyncAutoDelete = deleteJobOnSuccess;
+    }
+
+    private void SetSkipWhenDepthAbove(int maxDepth)
+    {
+        MarkSetOnce(SetOnceModifier.SkipDepth, "SkipWhenDepthAbove");
+        if (maxDepth < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDepth), maxDepth, "SkipWhenDepthAbove requires a depth of at least 1.");
+        }
+
+        _definition.SkipWhenDepthAbove = maxDepth;
+    }
+
+    private void SetRelationships(string schemaName, string[] additionalSchemaNames)
+    {
+        MarkSetOnce(SetOnceModifier.Relationship, "ForRelationship");
+        List<string> names = new() { schemaName };
+        if (additionalSchemaNames != null)
+        {
+            names.AddRange(additionalSchemaNames);
+        }
+
+        foreach (string name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("ForRelationship requires non-empty relationship schema names.", nameof(schemaName));
+            }
+        }
+
+        _definition.Relationships = names.Select(n => n.Trim()).ToArray();
+    }
+
     private void SetDescription(string description)
     {
         MarkSetOnce(SetOnceModifier.Description, "WithDescription");
         _definition.Description = description ?? string.Empty;
-    }
-
-    private void SetImpersonation(ImpersonationSource source)
-    {
-        MarkSetOnce(SetOnceModifier.Impersonation, "WithImpersonation");
-        _definition.ImpersonationSource = source;
     }
 
     private void SetImpersonationUser(System.Guid systemUserId)
@@ -294,16 +340,23 @@ public sealed partial class StepBuilder<TEntity>
         return true;
     }
 
-    private void StartImage(string alias, bool isPre)
+    private void StartImage(string alias, bool isPre, string messagePropertyName)
     {
         FinalizeCurrentImage();
-        _currentImage = new ImageDefinition { Alias = alias };
+        _currentImage = new ImageDefinition { Alias = alias, MessagePropertyName = messagePropertyName };
         _isPreImage = isPre;
     }
 
     private void AddImageNow(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes)
+        => AddImageNow(alias, isPre, string.Empty, attributes);
+
+    // An image of the subordinate record of a Merge (the record merged away), registered against SubordinateId.
+    private void AddSubordinateImageNow(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes)
+        => AddImageNow(alias, isPre, StepImageRules.SubordinateId, attributes);
+
+    private void AddImageNow(string alias, bool isPre, string messagePropertyName, Expression<Func<TEntity, object?>>[] attributes)
     {
-        StartImage(alias, isPre);
+        StartImage(alias, isPre, messagePropertyName);
         if (attributes != null && attributes.Length > 0)
         {
             SetCurrentImageAttributes(attributes);
@@ -339,18 +392,20 @@ public sealed partial class StepBuilder<TEntity>
         }
     }
 
-    private void EnsureImageAllowed(bool isPreImage, string alias)
+    private void EnsureImageAllowed(bool isPreImage, ImageDefinition image)
     {
         string message = _definition.Message ?? string.Empty;
         PluginStages stage = _definition.Stage;
-        if (IsImageAllowed(message, stage, isPreImage))
+        string? reason = StepImageRules.GetRejectionReason(message, (int)stage, isPreImage)
+            ?? StepImageRules.GetMessagePropertyRejectionReason(message, image.MessagePropertyName);
+        if (reason is null)
         {
             return;
         }
 
         string imageType = isPreImage ? "PreImage" : "PostImage";
         throw new InvalidOperationException(
-            $"{imageType} '{alias}' is not supported for message '{message}' at stage '{stage}'.");
+            $"{imageType} '{image.Alias}' is not supported for message '{message}' at stage '{stage}': {reason}.");
     }
 
     private static void EnsureNoDuplicates(string[]? names, string what)
@@ -370,73 +425,5 @@ public sealed partial class StepBuilder<TEntity>
         {
             throw new InvalidOperationException($"Duplicate {what}: '{duplicate}' is specified more than once.");
         }
-    }
-
-    // Encodes the stage/message rules for which entity images a step may capture. This is the runtime
-    // backstop behind the typed builder (the type-state already blocks an invalid image at compile time for
-    // the modelled messages). Only the modelled messages (Create/Update/Delete, and the bulk variants
-    // evaluated as their single-row counterparts) are enforced; any other message is permissive - Vela does
-    // not model its image rules, so the platform arbitrates at deploy time.
-    //   * MainOperation: no step image exists, so none are allowed.
-    //   * PreValidation / PreOperation: only a pre-image (no post-image before the write), and only for
-    //     Update/Delete (Create has no prior state).
-    //   * PostOperation: pre-image for Update/Delete (prior state), post-image for Create/Update
-    //     (committed state; Delete has no post-image because the row is gone).
-    private static bool IsImageAllowed(string message, PluginStages stage, bool isPreImage)
-    {
-        // Bulk messages capture per-target image collections under the same stage/message rules as their
-        // single-row counterparts, so evaluate them as Create/Update.
-        if (string.Equals(message, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase))
-        {
-            message = PluginMessages.Create;
-        }
-        else if (string.Equals(message, PluginMessages.UpdateMultiple, StringComparison.OrdinalIgnoreCase))
-        {
-            message = PluginMessages.Update;
-        }
-
-        // Universal rules (platform-wide, independent of the message): no image exists outside the step
-        // pipeline, and a post-image never exists before the write (Dataverse rejects a post-image on a
-        // PreValidation or PreOperation step with 0x8004416E). These bind even for a non-modelled message, so
-        // they are checked before the permissive short-circuit below.
-        if (stage == PluginStages.MainOperation)
-        {
-            return false;
-        }
-        if ((stage == PluginStages.PreValidation || stage == PluginStages.PreOperation) && !isPreImage)
-        {
-            return false;
-        }
-
-        bool isCreate = string.Equals(message, PluginMessages.Create, StringComparison.OrdinalIgnoreCase);
-        bool isUpdate = string.Equals(message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase);
-        bool isDelete = string.Equals(message, PluginMessages.Delete, StringComparison.OrdinalIgnoreCase);
-
-        // Permissive: a message Vela does not model (custom messages, custom APIs, or platform messages such
-        // as Merge/Route/Send that Vela does not expose as typed methods). The universal rules above still
-        // applied; the message-specific part is trusted here and the platform rejects a genuinely invalid
-        // image at deploy time.
-        if (!isCreate && !isUpdate && !isDelete)
-        {
-            return true;
-        }
-
-        if (stage == PluginStages.PreValidation || stage == PluginStages.PreOperation)
-        {
-            // isPreImage is guaranteed true here (the universal rule rejected a pre-stage post-image).
-            return isUpdate || isDelete;
-        }
-
-        if (stage == PluginStages.PostOperation)
-        {
-            if (isPreImage)
-            {
-                return isUpdate || isDelete;
-            }
-
-            return isCreate || isUpdate;
-        }
-
-        return false;
     }
 }

@@ -42,7 +42,7 @@ public sealed class EntityPluginBaseCoverageTests
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name);
-            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.AccountId);
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name);
         }
     }
 
@@ -89,7 +89,7 @@ public sealed class EntityPluginBaseCoverageTests
     }
 
     [Fact]
-    public void Two_steps_with_the_same_trigger_are_rejected()
+    public void Two_indistinguishable_steps_on_one_trigger_are_rejected()
     {
         InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
             () => new DuplicateTriggerSteps().GetStepDefinitions());

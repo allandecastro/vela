@@ -31,6 +31,13 @@ internal static class DiffEngine
         return slash < 0 ? name : name.Substring(0, slash);
     }
 
+    /// <summary>
+    /// Set on a changed step's <c>After</c> definition when it was paired with its live step by legacy identity
+    /// rather than by step key (its key changed, or the live step predates keys): the live step's key, so apply
+    /// updates exactly that step. Several steps may share a trigger, so the trigger alone cannot designate it.
+    /// </summary>
+    internal const string LiveStepKeyField = "liveStepKey";
+
     public static string GetIdentityKey(RegistrationItem item)
     {
         return $"{item.Kind}:{GetIdentity(item)}";
@@ -116,6 +123,9 @@ internal static class DiffEngine
     // and nested parameter unique names (the dotted-name self-heal) comparing exactly. (#305)
     private static readonly string[] CaseFoldedFields = ["message", "name", "uniqueName"];
 
+    private static readonly (string Label, string Source)[] DerivedLabelFields =
+        [("description", "name"), ("displayName", "uniqueName"), ("description", "uniqueName")];
+
     // A comparison-only serialization of a normalized definition: identical to the stored shape except the
     // case-folded fields are lower-cased, so a case-only drift compares equal. The stored Definition is untouched,
     // so apply still writes the authored casing.
@@ -129,6 +139,19 @@ internal static class DiffEngine
         if (JsonNode.Parse(definition.GetRawText()) is not JsonObject obj)
         {
             return JsonSerializer.Serialize(definition);
+        }
+
+        // A label that defaults to a case-folded field (a step description to the step name, a Custom API display name
+        // and description to the unique name) inherits that field's casing, so fold it too while it is still the
+        // default. A label the developer wrote keeps comparing exactly.
+        foreach ((string label, string source) in DerivedLabelFields)
+        {
+            if (obj[label] is JsonValue labelValue && labelValue.TryGetValue(out string? labelText)
+                && obj[source] is JsonValue sourceValue && sourceValue.TryGetValue(out string? sourceText)
+                && string.Equals(labelText, sourceText, StringComparison.OrdinalIgnoreCase))
+            {
+                obj[label] = labelText!.ToLowerInvariant();
+            }
         }
 
         foreach (string field in CaseFoldedFields)
@@ -245,6 +268,21 @@ internal static class DiffEngine
         return pairedCurrent;
     }
 
+    // A local step paired with a live step whose key differs carries that live key, so apply targets that step.
+    private static JsonElement WithLiveStepKey(RegistrationItem localStep, RegistrationItem currentStep)
+    {
+        string localKey = TryGetString(localStep.Definition, "stepKey") ?? string.Empty;
+        string liveKey = TryGetString(currentStep.Definition, "stepKey") ?? string.Empty;
+        if (string.Equals(localKey, liveKey, StringComparison.OrdinalIgnoreCase)
+            || JsonNode.Parse(localStep.Definition.GetRawText()) is not JsonObject obj)
+        {
+            return localStep.Definition;
+        }
+
+        obj[LiveStepKeyField] = liveKey;
+        return JsonSerializer.SerializeToElement(obj);
+    }
+
     public static RegistrationDiff BuildDiff(RegistrationState local, RegistrationState current)
     {
         List<RegistrationItem> added = [];
@@ -300,7 +338,7 @@ internal static class DiffEngine
             string afterJson = ComparisonKey(localStep.Definition);
             if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
             {
-                changed.Add(new RegistrationChange(localStep.Kind, localStep.Type, currentStep.Definition, localStep.Definition));
+                changed.Add(new RegistrationChange(localStep.Kind, localStep.Type, currentStep.Definition, WithLiveStepKey(localStep, currentStep)));
             }
         }
 

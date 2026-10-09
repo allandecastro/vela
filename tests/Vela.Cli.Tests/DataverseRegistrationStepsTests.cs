@@ -118,20 +118,48 @@ public sealed class DataverseRegistrationStepsTests
     }
 
     [Fact]
-    public void FindStepId_falls_back_to_trigger_identity_when_key_drifted()   // #305 duplicate-step
+    public void FindStepId_targets_the_live_step_the_diff_paired_under_its_previous_key()   // #305 duplicate-step
     {
-        // The definition is keyed, but the live row's stored key drifted (e.g. an executionOrder change reseeded the
-        // auto key, or a pre-marker deployment has no key). The trigger coordinate still matches uniquely, so
-        // FindStepId must return the existing row (an update) rather than null (which would make apply CREATE a
-        // duplicate).
-        var row = StepRow(Guid.NewGuid(), "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: stale-key");
+        // The definition's key changed, and the diff paired it with its live step by legacy identity, recording that
+        // step's key (liveStepKey). FindStepId returns exactly that row (an update), even though a second live step
+        // shares the trigger.
+        var stale = StepRow(Guid.NewGuid(), "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: stale-key");
+        var other = StepRow(Guid.NewGuid(), "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: other-key");
         var svc = new TestSupport.FakeOrgService
         {
-            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(row) : new EntityCollection(),
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(other, stale) : new EntityCollection(),
         };
 
-        Guid? found = DataverseRegistration.FindStepId(svc, Guid.NewGuid(), Def(stepKey: "my-key", message: "Update", entity: "account", stage: 40, mode: 0));
-        Assert.Equal(row.Id, found);
+        Guid? found = DataverseRegistration.FindStepId(svc, Guid.NewGuid(), Def(stepKey: "my-key") with { LiveStepKey = "stale-key" });
+        Assert.Equal(stale.Id, found);
+    }
+
+    [Fact]
+    public void FindStepId_never_lets_an_added_step_take_over_another_step_on_its_trigger()   // A-25
+    {
+        // Several steps may share a trigger: a keyed step the diff did not pair (an added step) must be created, not
+        // written over the step already registered there.
+        var existing = StepRow(Guid.NewGuid(), "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: first-key");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(existing) : new EntityCollection(),
+        };
+
+        Assert.Null(DataverseRegistration.FindStepId(svc, Guid.NewGuid(), Def(stepKey: "second-key")));
+    }
+
+    [Fact]
+    public void FindStepId_adopts_a_keyless_live_step_the_diff_paired()   // pre-marker deployment
+    {
+        // A step deployed before step keys reads back keyless (its name is the computed keyless name); the diff pairs
+        // it by legacy identity with an empty liveStepKey, and apply adopts it by trigger.
+        var keyless = StepRow(Guid.NewGuid(), "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: Update of account");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(keyless) : new EntityCollection(),
+        };
+
+        Assert.Equal(keyless.Id, DataverseRegistration.FindStepId(svc, Guid.NewGuid(), Def(stepKey: "my-key") with { LiveStepKey = "" }));
     }
 
     [Fact]
@@ -341,8 +369,60 @@ public sealed class DataverseRegistrationStepsTests
         DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "Create", Array.Empty<ImageApplyDefinition>(), post);
 
         Entity created = Assert.Single(svc.Created);
-        Assert.Equal("id", created.GetAttributeValue<string>("messagepropertyname")); // Create + post image → "id"
+        Assert.Equal("Id", created.GetAttributeValue<string>("messagepropertyname")); // Create + post image → "Id"
         Assert.Equal("", created.GetAttributeValue<string>("attributes"));
+    }
+
+    // Each image is written with the message's own property (StepImageRules), not a hard-coded "Target".
+    [Theory]
+    [InlineData("CreateMultiple", false, "Ids")]
+    [InlineData("UpdateMultiple", true, "Targets")]
+    [InlineData("UpdateMultiple", false, "Targets")]
+    [InlineData("Delete", true, "Target")]
+    [InlineData("SetState", true, "EntityMoniker")]
+    [InlineData("Send", false, "EmailId")]
+    [InlineData("adc_DoThing", true, "Target")]
+    public void SyncStepImages_writes_the_message_property(string message, bool isPreImage, string expected)
+    {
+        var svc = new TestSupport.FakeOrgService();
+        var images = new[] { new ImageApplyDefinition("img", new[] { "name" }) };
+        var none = Array.Empty<ImageApplyDefinition>();
+
+        DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), message, isPreImage ? images : none, isPreImage ? none : images);
+
+        Entity created = Assert.Single(svc.Created);
+        Assert.Equal(expected, created.GetAttributeValue<string>("messagepropertyname"));
+    }
+
+    [Fact]
+    public void SyncStepImages_rejects_an_image_on_a_message_that_supports_none()
+    {
+        var svc = new TestSupport.FakeOrgService();
+        var pre = new[] { new ImageApplyDefinition("PreImage", new[] { "name" }) };
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "RouteTo", pre, Array.Empty<ImageApplyDefinition>()));
+
+        Assert.Contains("RouteTo", ex.Message);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
+    public void SyncStepImages_removes_stale_images_on_a_message_that_supports_none()
+    {
+        var staleId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstepimage", staleId)
+            {
+                ["entityalias"] = "PreImage",
+                ["imagetype"] = new OptionSetValue(0),
+            }),
+        };
+
+        DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "RouteTo", Array.Empty<ImageApplyDefinition>(), Array.Empty<ImageApplyDefinition>());
+
+        Assert.Equal(staleId, Assert.Single(svc.Deleted).Id);
     }
 
     [Fact]
@@ -389,6 +469,7 @@ public sealed class DataverseRegistrationStepsTests
             ["entityalias"] = "PreImage",
             ["imagetype"] = new OptionSetValue(0),
             ["attributes"] = "name",
+            ["messagepropertyname"] = "Target",
         };
         var svc = new TestSupport.FakeOrgService
         {
@@ -403,6 +484,44 @@ public sealed class DataverseRegistrationStepsTests
         Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
         Assert.Empty(svc.Deleted);
+    }
+
+    [Fact]
+    public void SyncStepImages_registers_a_merge_subordinate_image_against_SubordinateId()   // #462
+    {
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
+        var pre = new[]
+        {
+            new ImageApplyDefinition("PreImage", new[] { "name" }),
+            new ImageApplyDefinition("SubordinatePreImage", new[] { "name" }, "SubordinateId"),
+        };
+
+        DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "Merge", pre, Array.Empty<ImageApplyDefinition>());
+
+        Assert.Equal("Target", svc.Created.Single(e => e.GetAttributeValue<string>("entityalias") == "PreImage").GetAttributeValue<string>("messagepropertyname"));
+        Assert.Equal("SubordinateId", svc.Created.Single(e => e.GetAttributeValue<string>("entityalias") == "SubordinatePreImage").GetAttributeValue<string>("messagepropertyname"));
+    }
+
+    [Fact]
+    public void SyncStepImages_recreates_an_image_whose_message_property_changed()   // #462
+    {
+        // Same alias, type and attributes, but the image now targets the subordinate: the row cannot be updated in
+        // place (0x80040216), so it is deleted and recreated with the new messagepropertyname.
+        var existingId = Guid.NewGuid();
+        var existing = new Entity("sdkmessageprocessingstepimage", existingId)
+        {
+            ["entityalias"] = "snap",
+            ["imagetype"] = new OptionSetValue(0),
+            ["attributes"] = "name",
+            ["messagepropertyname"] = "Target",
+        };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        var pre = new[] { new ImageApplyDefinition("snap", new[] { "name" }, "SubordinateId") };
+
+        DataverseRegistration.SyncStepImages(svc, Guid.NewGuid(), "Merge", pre, Array.Empty<ImageApplyDefinition>());
+
+        Assert.Contains(svc.Deleted, d => d.Id == existingId);
+        Assert.Equal("SubordinateId", svc.Created.Single().GetAttributeValue<string>("messagepropertyname"));
     }
 
     [Fact]
@@ -438,7 +557,7 @@ public sealed class DataverseRegistrationStepsTests
         DataverseRegistration.SyncStepImages(svc, stepId, "Update", Array.Empty<ImageApplyDefinition>(), Array.Empty<ImageApplyDefinition>());
 
         Assert.Equal("sdkmessageprocessingstepimage", captured!.EntityName);
-        Assert.Equal(new[] { "sdkmessageprocessingstepimageid", "imagetype", "entityalias", "attributes", "name" }, captured.ColumnSet.Columns);
+        Assert.Equal(new[] { "sdkmessageprocessingstepimageid", "imagetype", "entityalias", "attributes", "messagepropertyname", "name" }, captured.ColumnSet.Columns);
         Assert.Equal("sdkmessageprocessingstepid", captured.Criteria.Conditions.Single().AttributeName);
         Assert.Equal(stepId, captured.Criteria.Conditions.Single().Values.Single());
     }

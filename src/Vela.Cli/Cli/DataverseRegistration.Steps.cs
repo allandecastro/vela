@@ -62,6 +62,8 @@ internal static partial class DataverseRegistration
     step["sdkmessageid"] = new EntityReference("sdkmessage", messageId);
     step["stage"] = new OptionSetValue(normalizedStage);
     step["mode"] = new OptionSetValue(normalizedMode);
+    // Delete the system job once it succeeds: an asynchronous-step setting, always cleared on a synchronous step.
+    step["asyncautodelete"] = normalizedMode == 1 && definition.AsyncAutoDelete;
     step["rank"] = NormalizeRegistrationRank(definition.ExecutionOrder);
     step["filteringattributes"] = filteringAttributes;
     step["supporteddeployment"] = new OptionSetValue(definition.SupportedDeployment);
@@ -250,6 +252,8 @@ internal static partial class DataverseRegistration
 
     Guid? triggerMatch = null;
     int triggerMatchCount = 0;
+    // Set when the diff paired this step with a live step under another key (DiffEngine.LiveStepKeyField).
+    string? liveStepKey = definition.LiveStepKey;
 
     foreach (Entity row in service.RetrieveAll(query))
     {
@@ -260,6 +264,12 @@ internal static partial class DataverseRegistration
         string keylessName = DefinitionNormalizer.BuildKeylessStepName(definition.PluginTypeName, stage, mode, message, entity);
         string parsedStepKey = DefinitionParser.ResolveStepKey(
             row.GetAttributeValue<string>("description"), row.GetAttributeValue<string>("name"), definition.PluginTypeName, keylessName);
+
+        // The live step the diff paired this definition with, under its previous key.
+        if (!string.IsNullOrEmpty(liveStepKey) && string.Equals(parsedStepKey, liveStepKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return row.Id;
+        }
 
         // An exact step-key match is authoritative.
         if (!string.IsNullOrWhiteSpace(definition.StepKey) &&
@@ -285,17 +295,18 @@ internal static partial class DataverseRegistration
             return row.Id;
         }
 
-        // A keyed definition whose stored key drifted (an executionOrder change reseeds the framework auto key, or a
-        // pre-marker deployment carries no key at all) finds no exact key match above. Remember the trigger match so
-        // we can fall back to it - but only when it is unambiguous. Without this, FindStepId returns null and apply
-        // CREATES a duplicate live step even though the diff correctly classified the change as an update (#305).
-        triggerMatch = row.Id;
-        triggerMatchCount++;
+        // A keyed definition paired with a keyless live step (a deployment that predates step keys): adopt that step
+        // by its trigger, when it is the only keyless one there.
+        if (liveStepKey is { Length: 0 } && parsedStepKey.Length == 0)
+        {
+            triggerMatch = row.Id;
+            triggerMatchCount++;
+        }
     }
 
-    // No exact key match. For a keyed definition, adopt the trigger match only when it is the single candidate for the
-    // (message, entity, stage, mode) coordinate; an ambiguous coordinate stays null so apply never updates the wrong
-    // step (creating a duplicate is the pre-existing, safer outcome there).
+    // No key match. A keyed definition adopts a live step by trigger only when the diff paired it with a keyless one
+    // and that one is unambiguous. Several steps may share a trigger, so a keyed step with no pairing (an added step)
+    // never takes over another step's row: it is created (#305).
     return triggerMatchCount == 1 ? triggerMatch : null;
 }
 
@@ -378,18 +389,21 @@ internal static partial class DataverseRegistration
     internal static void SyncStepImages(IOrganizationService service, Guid stepId, string message, ImageApplyDefinition[] preImages, ImageApplyDefinition[] postImages)
 {
     List<StepImageApplyDefinition> desired = [];
-    desired.AddRange(preImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 0)));
-    desired.AddRange(postImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 1)));
+    desired.AddRange(preImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 0, x.MessagePropertyName)));
+    desired.AddRange(postImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 1, x.MessagePropertyName)));
 
-    // Dataverse requires different messagepropertyname depending on the message:
-    // Create PostImage → "id" (captures the new record ID); all others → "Target".
-    // Bulk messages (CreateMultiple/UpdateMultiple) never reach here: the platform supports no images on them,
-    // so the scanner rejects a bulk step carrying images before apply (see PackageScanner.IsBulkStepWithImages).
-    bool isCreateMessage = string.Equals(message, "Create", StringComparison.OrdinalIgnoreCase);
+    // The image's messagepropertyname depends on the message (Create → Id, CreateMultiple → Ids, UpdateMultiple →
+    // Targets, Send → EmailId, ...) unless the step chose one (SubordinateId on Merge); StepImageRules holds the map
+    // shared with the runtime and the scanner. A message that supports no image (RouteTo) never gets here with images:
+    // the scanner rejects it before any write.
+    if (desired.Count > 0 && Vela.Steps.StepImageRules.GetMessagePropertyName(message) is null)
+    {
+        throw new InvalidOperationException($"Dataverse supports no image on the '{message}' message.");
+    }
 
     QueryExpression query = new QueryExpression("sdkmessageprocessingstepimage")
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepimageid", "imagetype", "entityalias", "attributes", "name")
+        ColumnSet = new ColumnSet("sdkmessageprocessingstepimageid", "imagetype", "entityalias", "attributes", "messagepropertyname", "name")
     };
     query.Criteria.AddCondition("sdkmessageprocessingstepid", ConditionOperator.Equal, stepId);
     List<Entity> existingRows = service.RetrieveAll(query);
@@ -405,18 +419,21 @@ internal static partial class DataverseRegistration
         string attributesCsv = desiredImage.Attributes.Length == 0
             ? string.Empty
             : string.Join(",", desiredImage.Attributes.OrderBy(x => x, StringComparer.Ordinal));
-        string msgPropertyName = isCreateMessage && desiredImage.ImageType == 1 ? "id" : "Target";
+
+        string messagePropertyName = Vela.Steps.StepImageRules.ResolveMessagePropertyName(message, desiredImage.MessagePropertyName)!;
 
         if (existingByKey.TryGetValue(key, out Entity? existing))
         {
-            // The match key is (alias, imagetype), so those already agree; only `attributes` can differ.
-            // Skip entirely when nothing changed.
+            // The match key is (alias, imagetype), so those already agree; `attributes` and `messagepropertyname`
+            // (which record the image is taken from, e.g. Target or SubordinateId on Merge) can differ. Skip entirely
+            // when nothing changed.
             string existingAttributes = string.Join(",", (existing.GetAttributeValue<string>("attributes") ?? string.Empty)
                 .Split(',')
                 .Select(x => x.Trim())
                 .Where(x => x.Length > 0)
                 .OrderBy(x => x, StringComparer.Ordinal));
-            if (string.Equals(existingAttributes, attributesCsv, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(existingAttributes, attributesCsv, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(existing.GetAttributeValue<string>("messagepropertyname"), messagePropertyName, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -434,7 +451,7 @@ internal static partial class DataverseRegistration
         create["name"] = desiredImage.Alias;
         create["attributes"] = attributesCsv;
         create["imagetype"] = new OptionSetValue(desiredImage.ImageType);
-        create["messagepropertyname"] = msgPropertyName;
+        create["messagepropertyname"] = messagePropertyName;
         service.Create(create);
     }
 
@@ -504,14 +521,36 @@ internal static partial class DataverseRegistration
     return DefinitionNormalizer.BuildKeylessStepName(definition.PluginTypeName, definition.Stage, definition.Mode, definition.Message, definition.EntityLogicalName);
 }
 
-    // The step description: the human-readable name plus a stable [vela:stepkey=...] marker (B4). The marker lets a
-    // later read recover the step key even if the display name is changed, so the step's identity survives a rename.
+    // Dataverse's limit on sdkmessageprocessingstep.description.
+    internal const int StepDescriptionMaxLength = 256;
+
+    // The step description: the developer's text (WithDescription), or the step name when none is declared, followed
+    // by a stable [vela:stepkey=...] marker on its own line (B4). The marker lets a later read recover the step key
+    // even if the display name is changed, so the step's identity survives a rename; ExtractStepKeyFromMarker reads
+    // the last marker, so the developer's text may come first.
     internal static string BuildStepDescription(StepApplyDefinition definition)
 {
-    string name = BuildStepName(definition);
+    string text = string.IsNullOrWhiteSpace(definition.Description) ? BuildStepName(definition) : definition.Description.Trim();
     return string.IsNullOrWhiteSpace(definition.StepKey)
-        ? name
-        : $"{name}\n{DefinitionParser.StepKeyMarker(definition.StepKey)}";
+        ? text
+        : $"{text}\n{DefinitionParser.StepKeyMarker(definition.StepKey)}";
+}
+
+    /// <summary>
+    /// The error for a step whose description (with its step-key marker) exceeds what Dataverse stores, or null.
+    /// Checked at scan time so plan fails before any write instead of apply failing mid-run.
+    /// </summary>
+    internal static string? GetStepDescriptionLengthError(StepApplyDefinition definition)
+{
+    int length = BuildStepDescription(definition).Length;
+    if (length <= StepDescriptionMaxLength)
+    {
+        return null;
+    }
+
+    int markerLength = string.IsNullOrWhiteSpace(definition.StepKey) ? 0 : 1 + DefinitionParser.StepKeyMarker(definition.StepKey).Length;
+    return $"step '{BuildStepName(definition)}' has a description of {length - markerLength} characters, but Dataverse stores at most " +
+        $"{StepDescriptionMaxLength - markerLength} once Vela appends its {markerLength}-character step-key marker. Shorten WithDescription(...).";
 }
 
 }

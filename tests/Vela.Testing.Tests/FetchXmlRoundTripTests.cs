@@ -300,8 +300,9 @@ namespace Vela.Testing.Tests
             Entity row = Assert.Single(Both(Org(), query).Entities);
             Assert.Equal("Globex", Name(row));
 
-            // Nothing from the link is returned: neither the unselected column nor the join key.
-            Assert.Equal(new[] { "name" }, row.Attributes.Keys.ToArray());
+            // Nothing from the link is returned: neither the unselected column nor the join key (only the selected
+            // column and the primary key, which Dataverse always returns).
+            Assert.Equal(new[] { "name", "accountid" }, row.Attributes.Keys.ToArray());
         }
 
         [Fact]
@@ -397,7 +398,7 @@ namespace Vela.Testing.Tests
 
             EntityCollection rows = Both(Org(), query);
             Assert.Equal(expected, Names(rows));
-            Assert.All(rows.Entities, r => Assert.Equal(new[] { "name" }, r.Attributes.Keys.ToArray()));
+            Assert.All(rows.Entities, r => Assert.Equal(new[] { "name", "accountid" }, r.Attributes.Keys.ToArray()));
         }
 
         [Fact]
@@ -901,7 +902,7 @@ namespace Vela.Testing.Tests
             foreach (Entity row in Both(Org(), query).Entities)
             {
                 Assert.Equal(
-                    new[] { "c.fullname", "createdon", "name", "new_target", "numberofemployees", "revenue", "t.subject" },
+                    new[] { "accountid", "c.fullname", "createdon", "name", "new_target", "numberofemployees", "revenue", "t.subject" },
                     row.Attributes.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
             }
         }

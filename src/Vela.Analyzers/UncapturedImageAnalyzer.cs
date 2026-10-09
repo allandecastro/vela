@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -11,12 +12,14 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Vela.Analyzers
 {
     /// <summary>
-    /// Flags <c>ctx.PreImage</c> / <c>ctx.PostImage</c> in a handler whose step did not capture that image. The
+    /// Flags <c>ctx.PreImage</c> / <c>ctx.PostImage</c> (and, on Merge, <c>ctx.SubordinatePreImage</c> /
+    /// <c>ctx.SubordinatePostImage</c>) in a handler whose step did not capture that image. The
     /// accessor is inherited from the base context (a post-operation context exposes both; a pre context exposes
     /// PreImage), so it compiles and returns <c>null</c> at runtime - a silent footgun. To keep false positives
     /// at zero this fires only in the unambiguous case: the handler is an instance method referenced by exactly
     /// one <c>RegisterStep()</c> chain in the same class, and that chain has no matching
-    /// <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c>. Lambda handlers and handlers shared across steps are
+    /// <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c> / <c>WithSubordinate...Image(...)</c>. Lambda handlers and
+    /// handlers shared across steps are
     /// left alone.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -31,7 +34,16 @@ namespace Vela.Analyzers
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "ctx.PreImage / ctx.PostImage are populated only when the step captures them with WithPreImage(...) / WithPostImage(...). Reading an uncaptured image compiles (the base context exposes the property) but returns null.");
+            description: "ctx.PreImage / ctx.PostImage (and ctx.SubordinatePreImage / ctx.SubordinatePostImage on Merge) are populated only when the step captures them with WithPreImage(...) / WithPostImage(...) / WithSubordinatePreImage(...) / WithSubordinatePostImage(...). Reading an uncaptured image compiles (the base context exposes the property) but returns null.");
+
+        // Each typed image property, the step method that captures it, and how the message names it.
+        private static readonly (string Property, string Method, string Kind)[] Images =
+        {
+            ("PreImage", "WithPreImage", "pre-image"),
+            ("PostImage", "WithPostImage", "post-image"),
+            ("SubordinatePreImage", "WithSubordinatePreImage", "subordinate pre-image"),
+            ("SubordinatePostImage", "WithSubordinatePostImage", "subordinate post-image"),
+        };
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -48,7 +60,7 @@ namespace Vela.Analyzers
                     return;
                 }
 
-                var perTypeBindings = new ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage, bool HasPostImage)>>();
+                var perTypeBindings = new ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)>>();
                 // SimpleMemberAccess covers ctx.PreImage; MemberBinding covers the null-conditional ctx?.PreImage
                 // (the name sits in a member-binding node whose receiver is the enclosing conditional access).
                 start.RegisterSyntaxNodeAction(
@@ -58,7 +70,7 @@ namespace Vela.Analyzers
             });
         }
 
-        private static void AnalyzeAccess(SyntaxNodeAnalysisContext context, INamedTypeSymbol contextType, INamedTypeSymbol fluent, ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage, bool HasPostImage)>> perTypeBindings)
+        private static void AnalyzeAccess(SyntaxNodeAnalysisContext context, INamedTypeSymbol contextType, INamedTypeSymbol fluent, ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)>> perTypeBindings)
         {
             SimpleNameSyntax nameSyntax;
             ExpressionSyntax receiver;
@@ -77,9 +89,8 @@ namespace Vela.Analyzers
             }
 
             string name = nameSyntax.Identifier.ValueText;
-            bool isPre = name == "PreImage";
-            bool isPost = name == "PostImage";
-            if (!isPre && !isPost)
+            int image = Array.FindIndex(Images, i => i.Property == name);
+            if (image < 0)
             {
                 return;
             }
@@ -108,30 +119,27 @@ namespace Vela.Analyzers
                 return;
             }
 
-            IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage, bool HasPostImage)> bindings = perTypeBindings.GetOrAdd(
+            IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)> bindings = perTypeBindings.GetOrAdd(
                 owningType, ot => BuildHandlerBindings(ot, context.SemanticModel, fluent, context.CancellationToken));
 
-            if (!bindings.TryGetValue(handlerSymbol, out (int Chains, bool HasPreImage, bool HasPostImage) binding) || binding.Chains != 1)
+            if (!bindings.TryGetValue(handlerSymbol, out (int Chains, HashSet<string> Captured) binding) || binding.Chains != 1)
             {
                 return;
             }
 
-            if (isPre && !binding.HasPreImage)
+            (string property, string method, string kind) = Images[image];
+            if (!binding.Captured.Contains(method))
             {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, nameSyntax.GetLocation(), "pre-image", "PreImage", "WithPreImage"));
-            }
-            else if (isPost && !binding.HasPostImage)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, nameSyntax.GetLocation(), "post-image", "PostImage", "WithPostImage"));
+                context.ReportDiagnostic(Diagnostic.Create(Rule, nameSyntax.GetLocation(), kind, property, method));
             }
         }
 
         // Scans a type once, mapping each method-group handler bound by a RegisterStep()...Handle(handler) chain to
-        // the number of chains that own it and whether any of those chains declares WithPreImage / WithPostImage.
-        private static IReadOnlyDictionary<ISymbol, (int Chains, bool HasPreImage, bool HasPostImage)> BuildHandlerBindings(
+        // the number of chains that own it and the image capture methods (WithPreImage, ...) those chains declare.
+        private static IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)> BuildHandlerBindings(
             TypeDeclarationSyntax owningType, SemanticModel model, INamedTypeSymbol fluent, CancellationToken cancellationToken)
         {
-            var result = new Dictionary<ISymbol, (int Chains, bool HasPreImage, bool HasPostImage)>(SymbolEqualityComparer.Default);
+            var result = new Dictionary<ISymbol, (int Chains, HashSet<string> Captured)>(SymbolEqualityComparer.Default);
             foreach (InvocationExpressionSyntax handleCall in owningType.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 if (handleCall.Expression is not MemberAccessExpressionSyntax handleMember || handleMember.Name.Identifier.ValueText != "Handle")
@@ -151,10 +159,18 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                bool hasPre = FluentStep.SpineHasCall(handleMember.Expression, "WithPreImage");
-                bool hasPost = FluentStep.SpineHasCall(handleMember.Expression, "WithPostImage");
-                (int Chains, bool HasPreImage, bool HasPostImage) existing = result.TryGetValue(bound, out (int Chains, bool HasPreImage, bool HasPostImage) e) ? e : (0, false, false);
-                result[bound] = (existing.Chains + 1, existing.HasPreImage || hasPre, existing.HasPostImage || hasPost);
+                (int Chains, HashSet<string> Captured) existing = result.TryGetValue(bound, out (int Chains, HashSet<string> Captured) e)
+                    ? e
+                    : (0, new HashSet<string>(StringComparer.Ordinal));
+                foreach ((string _, string method, string _) in Images)
+                {
+                    if (FluentStep.SpineHasCall(handleMember.Expression, method))
+                    {
+                        existing.Captured.Add(method);
+                    }
+                }
+
+                result[bound] = (existing.Chains + 1, existing.Captured);
             }
 
             return result;

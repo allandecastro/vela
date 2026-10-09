@@ -11,8 +11,10 @@ change.
 
 ## Vela.Plugins (runtime)
 
-- **Cache is synchronous only.** `IPluginCacheService` exposes no async methods and is TTL-based with no size
-  cap or eviction policy beyond expiry. The plugin pipeline runs synchronously and the cache locks with
+- **Cache is synchronous only.** `IPluginCacheService` exposes no async methods. Entries expire by TTL, and the
+  default `PluginCacheService` is capped at `DefaultMaxEntries` (1024): an insert over the cap first drops expired
+  entries, then evicts the oldest-inserted ones. The eviction policy isn't pluggable (only the cap, via the
+  `PluginCacheService(int maxEntries)` constructor). The plugin pipeline runs synchronously and the cache locks with
   `Monitor` (the sandbox-safe primitive) - do your I/O inside the factory and cache the result.
 - **DI lifetimes: transient and scoped only.** `SimpleServiceResolver` has no singleton lifetime - a
   singleton would leak across plugin executions sharing a sandbox process. The scope is one execution.
@@ -30,13 +32,13 @@ change.
 - **Step registration follows platform rules.** `MainOperation` is reserved for Custom API handlers (rejected
   for plugin steps); `FilteringAttributes` apply to `Create`/`Update` (and `CreateMultiple`/`UpdateMultiple`) only, and Vela requires
   at least one there ([VELA020](analyzers.md#vela020));
-  images are constrained by stage/message
-  (`PreImage` only for `Update`/`Delete`, at any stage; `PostImage` only for `Create`/`Update`, in `PostOperation`).
+  images are constrained by stage/message (none at `MainOperation`; a `PostImage` only in `PostOperation`; no
+  `PreImage` on `Create`/`CreateMultiple`, no `PostImage` on `Delete`, and no image at all on `RouteTo`).
   Violations throw.
-- **No images on bulk messages when deploying.** Dataverse accepts no image on `CreateMultiple`/`UpdateMultiple`,
-  so `plan`/`apply` reject a bulk step that carries a pre/post image (the in-memory harness still allows it, to
-  simulate per-record bulk images). Register the image on the single `Create`/`Update` step, which also runs for
-  bulk operations, and read per-record pre/post images by index, not by target reference.
+- **Bulk-step images arrive only in the image collections.** On `CreateMultiple` (post-image) and `UpdateMultiple`
+  (pre- and post-image), Dataverse delivers one image per target in `Pre/PostEntityImagesCollection`, never in the
+  classic `PreEntityImages`/`PostEntityImages`. Those collections can also hold other steps' and platform images,
+  so read per-record images by index and alias (`ctx.GetPreImage(index, alias)`), not by target reference.
 - **Custom APIs run at `MainOperation`, synchronously** - that stage/mode is fixed.
 - **Typed query builder = typed `QueryExpression`.** `Query.For<T>()` adds type safety and attribute-name
   mapping; it does **not** add capabilities beyond `QueryExpression` (`ToFetchXml()` renders the same query as
@@ -46,7 +48,9 @@ change.
   message text. It waits the fault's `Retry-After`, and rethrows when that wait exceeds `RetryPolicy.MaxDelay`
   (30 s); without one it uses jittered exponential backoff. Timeouts (`TimeoutException`, `WebException`, a fault
   whose message mentions `timeout`) are retried only with `retryOnTimeout: true`, for idempotent operations. The
-  classification isn't pluggable.
+  classification isn't pluggable. Service-protection limits don't apply to data operations from a plugin, so the
+  policy rarely fires on `ctx.Service` calls; it is meant for calls that leave the sandbox and for code shared with a
+  client. Each wait is capped, not their sum: pass `maxElapsed` for an overall budget.
 - **No retry inside a transaction.** A failed call in a synchronous pre/post-operation step aborts the database
   transaction, so a replay cannot succeed. Every retry entry point therefore takes the context
   (`RetryPolicy.Execute(ctx, ...)`, or `ExecuteWithRetry(ctx, ...)` / `ExecuteIdempotentWithRetry(ctx, ...)` on the
@@ -86,7 +90,7 @@ untouched.
   `sdkmessagefilter` for its message (a typo'd or unsupported entity), `apply` fails rather than registering an
   unfiltered step that would fire for every entity.
 - **Stage normalization:** async steps are forced to `PostOperation`; non-standard stage values default to
-  `MainOperation`.
+  `PostOperation`.
 - **Packaging:** a plugin-package `.nupkg` (built via `Microsoft.PowerApps.MSBuild.Plugin`) is required - a
   bare `.dll` is not supported. Framework/Microsoft/Newtonsoft assemblies are excluded from registration.
 - **Scanning runs package code (trust your packages).** Discovering steps/Custom APIs requires instantiating
@@ -128,27 +132,46 @@ untouched.
 ## Vela.Testing
 
 The in-memory CRM (`InMemoryOrganizationService`) and `PluginPipeline` are a faithful-but-partial model. For
-anything below, inject your own `IOrganizationService` via `WithOrganizationService(...)`.
+anything below, a single-plugin test can inject its own `IOrganizationService` with the context builder's
+`WithOrganizationService(...)`. `PluginPipeline` has no such fallback: it always drives its own in-memory store
+(configure it with the pipeline's `With*`/`As*` methods, which mirror every store configuration method).
 
 - **`Execute` covers a common set:** `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`,
-  `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`Associate`/`Disassociate`, the metadata reads
+  `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`SetState`/`Associate`/`Disassociate`, the metadata reads
   (`RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute`), and `ExecuteMultiple`/`ExecuteTransaction`
   (the latter rolls the whole batch back on failure). For any other message, inject your own service.
 - **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on
   `QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident` and the like fires so you can test your own
   logic, but the record changes the platform would make are not simulated.
+- **Transactions are simulated with store snapshots.** The stage model (PreValidation of the initial operation
+  outside the transaction, non-transactional reads, async steps after the commit, a swallowed failed write ending the
+  transaction while a swallowed failed read does not) follows the platform as verified on a live environment, but
+  there is no locking, isolation level or concurrency: operations run one at a time. Which messages count as reads is
+  a name rule (`Retrieve*`, `WhoAmI`, file downloads). A read issued by a plugin inside a write's transaction runs
+  within it, and its steps report `IsInTransaction` = `false` as a top-level read's do; only the top-level case was
+  verified live, so the nested value is an assumption. `InputParameters["FromSandbox"]` is set only on the
+  PreValidation stage of a plugin's own operation, the only stage where it was observed live; the other stages were
+  not observed to carry it, so the harness does not set it there.
+- **Formatted values are partial.** Reads fill `FormattedValues` for lookups (the referenced record's primary name)
+  and for choices whose labels are registered as metadata, in the registered label language only. Money, dates,
+  numbers and Yes/No columns get no formatted value. Without metadata a primary name is looked up in `name` (or
+  `fullname` / `title` / `subject` for the common system tables that use those).
 - **Execution-context identity is the configured caller.** `ctx.UserId`/`InitiatingUserId`/`BusinessUnitId`/
-  `OrganizationId` come from `WithCurrentUser`/`WithCurrentBusinessUnit`/`WithOrganizationId`, and a cascaded
-  plugin sees its caller's context as `ctx.PluginExecutionContext.ParentContext`.
+  `OrganizationId` come from `WithCurrentUser`/`WithCurrentBusinessUnit`/`WithOrganizationId`. A cascaded plugin finds
+  its caller's context through `ParentContext` (one level up for PreValidation, two for the later stages of
+  Create/Update/Delete, whose direct parent is the operation's stage-30 context).
+- **Steps on a global Custom API.** A global API's main operation sees `PrimaryEntityName` = `"none"`, but a step on
+  its message is declared through `EntityPluginBase<TEntity>` and so carries a table; the harness gives that step's
+  context the step's table so the runtime still matches it. Vela has no entity-less step declaration yet.
 - **Fault codes are partial.** A not-found `Retrieve`/`Update` throws `FaultException<OrganizationServiceFault>`
   with `ObjectDoesNotExist` (`-2147220969`), and a privilege denial carries `PrincipalPrivilegeDenied`; other
   faults (for example an `ExecuteMultiple` child failure) surface an `OrganizationServiceFault` with no
   `ErrorCode`. No formula/rollup/calculated columns, business rules, or duplicate-detection.
 - **N:N `Associate`/`Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or via a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise); then Associate/
-  Disassociate persist the intersect rows and `RetrieveMultiple` joins through them. `Associate` is idempotent
-  (no duplicate-key fault), and a self-referential N:N maps its two columns positionally. A 1:N relationship is
-  modelled by `Update`-ing the lookup column.
+  Disassociate persist the intersect rows and `RetrieveMultiple` joins through them. Re-associating an
+  existing pair throws a `DuplicateRecord` (`0x80040237`) fault, as Dataverse does, and a self-referential N:N maps
+  its two columns positionally. A 1:N relationship is modelled by `Update`-ing the lookup column.
 - **`RetrieveMultiple` is a common subset.** No query hints, `NoLock`, `FilterHint=union`, or faithful paging
   cookies. FetchXML support covers a common subset (incl. aggregates); anything outside it throws
   `NotSupportedException` naming the element or attribute (see [Testing](../guides/testing.md#queries)).
@@ -173,8 +196,8 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   **manager and position** hierarchy security, field-level (column) security, and link-entity (joined-table)
   read-trimming (a join to a record the caller can't read drops the primary row on an inner join, or omits the
   linked columns on a left-outer join, recursively through nested joins). Behavioural note: a parent's Delete
-  plugins fire **after** its cascaded children are removed (the children's Delete plugins run first), rather than
-  the parent's pre-stage seeing its children.
+  PreValidation stage fires first, but its PreOperation/PostOperation stages fire **after** its cascaded children are
+  removed (the children's Delete plugins run in between), rather than the parent's PreOperation seeing its children.
 
 ---
 

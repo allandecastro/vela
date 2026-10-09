@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Vela.Tests;
 
-// The automatic execution snapshots must not copy record data into the trace log (by default) nor into ILogger /
+// The automatic execution snapshots must not copy record data into the trace log (by default) nor into
 // Application Insights (ever): plugins routinely handle personal data and secrets.
 public sealed class TracePrivacyTests
 {

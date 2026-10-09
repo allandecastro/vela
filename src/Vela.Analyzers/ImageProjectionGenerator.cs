@@ -13,12 +13,13 @@ namespace Vela.Analyzers
 {
     /// <summary>
     /// Emits, per step, a projection type that exposes only the columns the step captured in
-    /// <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c>. The handler reads it via
+    /// <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c> (and, on Merge, <c>WithSubordinatePreImage(...)</c> /
+    /// <c>WithSubordinatePostImage(...)</c>). The handler reads it via
     /// <c>ctx.PreImageAs&lt;T&gt;()</c> / <c>ctx.PostImageAs&lt;T&gt;()</c>, so reading a column the step did not
     /// capture is a compile error instead of a silent <c>null</c>. Covers the guided (<c>OnCreate()</c>...), typed
     /// (<c>On&lt;TRequest&gt;()</c>) and permissive (<c>OnMessage("...")</c> / <c>OnMessage&lt;TMessage&gt;()</c>)
     /// trigger paths. Each type is emitted as a nested type inside the plugin's own <c>partial</c> class (named
-    /// <c>{Handler}_{PreImage|PostImage}</c>, so the handler reads it unqualified), which is why a plugin declaring
+    /// <c>{Handler}_{PreImage|PostImage|SubordinatePreImage|SubordinatePostImage}</c>, so the handler reads it unqualified), which is why a plugin declaring
     /// typed images must be <c>partial</c> (VELA014). The generator is purely additive (it never rewrites the fluent
     /// chain). When a capture lists columns it cannot read statically it emits no projection (the developer keeps the
     /// full early-bound image) and reports why (VELA021), unless an analyzer already reports the selector.
@@ -68,7 +69,7 @@ namespace Vela.Analyzers
                 static (spc, pair) => Emit(spc, pair.Left, pair.Right));
 
             context.RegisterSourceOutput(skipped,
-                static (spc, skip) => spc.ReportDiagnostic(Diagnostic.Create(NotGeneratedRule, skip.ToLocation(), skip.Method, skip.Reason, skip.Method == "WithPreImage" ? "PreImage" : "PostImage")));
+                static (spc, skip) => spc.ReportDiagnostic(Diagnostic.Create(NotGeneratedRule, skip.ToLocation(), skip.Method, skip.Reason, IsPreImageMethod(skip.Method) ? "PreImage" : "PostImage")));
         }
 
         /// <summary>
@@ -95,8 +96,10 @@ namespace Vela.Analyzers
             }
 
             string name = member.Name.Identifier.ValueText;
-            return name == "WithPreImage" || name == "WithPostImage";
+            return name is "WithPreImage" or "WithPostImage" or "WithSubordinatePreImage" or "WithSubordinatePostImage";
         }
+
+        private static bool IsPreImageMethod(string method) => method is "WithPreImage" or "WithSubordinatePreImage";
 
         // The enclosing entity plugin of a fluent step call: its class symbol and TEntity. Null when the call is not
         // Vela's (its declaring type does not implement Vela.Steps.IFluentStep, compared by symbol) or the enclosing
@@ -123,7 +126,9 @@ namespace Vela.Analyzers
         {
             MemberAccessExpressionSyntax member = (MemberAccessExpressionSyntax)invocation.Expression;
             string method = member.Name.Identifier.ValueText;
-            bool isPre = method == "WithPreImage";
+            bool isPre = IsPreImageMethod(method);
+            // A Merge step's image of the subordinate record (WithSubordinate*Image): its own projection and property.
+            bool isSubordinate = method.StartsWith("WithSubordinate", System.StringComparison.Ordinal);
 
             // Confirm this is Vela's image method inside an entity plugin, so a same-named method on an unrelated
             // type is ignored.
@@ -182,7 +187,7 @@ namespace Vela.Analyzers
                 columns.Add(column.Value);
             }
 
-            string role = isPre ? "PreImage" : "PostImage";
+            string role = (isSubordinate ? "Subordinate" : string.Empty) + (isPre ? "PreImage" : "PostImage");
             string aliasSuffix = string.IsNullOrEmpty(alias) ? string.Empty : "_" + Sanitize(alias!);
             // Name the projection after the (named-method) handler bound with .Handle(...), so a developer can guess
             // it from their own method: OnAccountUpdated_PostImage. Fall back to message + stage for a lambda
@@ -204,7 +209,7 @@ namespace Vela.Analyzers
             string? requestType = FindTypedRequestType(member.Expression, model, cancellationToken);
 
             return new ProjectionResult(new ProjectionModel(NamespaceOf(plugin.Plugin), ContainingDeclarations(plugin.Plugin), typeName,
-                columns.ToImmutableArray(), handlerName, messageLabel, isPost, isPre, entityType, requestType, alias));
+                columns.ToImmutableArray(), handlerName, messageLabel, isPost, isPre, isSubordinate, entityType, requestType, alias));
         }
 
         private static bool IsHandleInvocation(SyntaxNode node)
@@ -397,6 +402,8 @@ namespace Vela.Analyzers
                     case "OnDelete": message ??= "Delete"; break;
                     case "OnCreateMultiple": message ??= "CreateMultiple"; break;
                     case "OnUpdateMultiple": message ??= "UpdateMultiple"; break;
+                    case "OnAssign": message ??= "Assign"; break;
+                    case "OnMerge": message ??= "Merge"; break;
                 }
 
                 // Typed path: On<TRequest>() derives the message from the request type name (DeleteRequest ->
@@ -695,8 +702,8 @@ namespace Vela.Analyzers
             // up its captured typed image(s). Keyed on handler + stage-role, not message, so it is robust to the two
             // drivers labelling a message slightly differently.
             // The projection each handler's context exposes; the model carries the image alias the context reads.
-            Dictionary<string, ProjectionModel> preByHandler = new Dictionary<string, ProjectionModel>(System.StringComparer.Ordinal);
-            Dictionary<string, ProjectionModel> postByHandler = new Dictionary<string, ProjectionModel>(System.StringComparer.Ordinal);
+            // Keyed on handler + role (pre/post, master/subordinate); the first projection of a role wins.
+            Dictionary<string, ProjectionModel> byHandlerAndRole = new Dictionary<string, ProjectionModel>(System.StringComparer.Ordinal);
             foreach (ProjectionModel model in projections)
             {
                 if (model.HandlerName is null)
@@ -704,15 +711,8 @@ namespace Vela.Analyzers
                     continue;
                 }
 
-                string key = model.Namespace + "|" + string.Join(".", model.ContainingTypes) + "|" + model.HandlerName;
-                if (model.IsPre)
-                {
-                    if (!preByHandler.ContainsKey(key)) { preByHandler[key] = model; }
-                }
-                else
-                {
-                    if (!postByHandler.ContainsKey(key)) { postByHandler[key] = model; }
-                }
+                string key = model.Namespace + "|" + string.Join(".", model.ContainingTypes) + "|" + model.HandlerName + "|" + RoleKey(model.IsPre, model.IsSubordinate);
+                if (!byHandlerAndRole.ContainsKey(key)) { byHandlerAndRole[key] = model; }
             }
 
             HashSet<string> emitted = new HashSet<string>(System.StringComparer.Ordinal);
@@ -721,6 +721,7 @@ namespace Vela.Analyzers
                 string baseTypeFull;
                 bool baseHasPre;
                 bool baseHasPost;
+                bool bulk = false;
                 if (handler.RequestType is not null)
                 {
                     // Typed On<TRequest>() -> generic message context (pre at a pre-stage, post with a Response at
@@ -733,9 +734,20 @@ namespace Vela.Analyzers
                 else if (IsSingleImageMessage(handler.Message) &&
                     ResolveBaseContext(handler.Message, handler.IsPost, out baseHasPre, out baseHasPost) is string crud)
                 {
-                    // Create/Update/Delete at an image-bearing stage: derive from the concrete context and expose a
+                    // Create/Update/Delete/Assign/Merge at an image-bearing stage: derive from the concrete context and expose a
                     // single typed pre/post image when captured.
                     baseTypeFull = $"global::Vela.Context.{crud}<{handler.EntityType}>";
+                }
+                else if (handler.Message is "CreateMultiple" or "UpdateMultiple")
+                {
+                    // Bulk: the images reach the plugin per target (PreEntityImagesCollection /
+                    // PostEntityImagesCollection, verified live), so expose a per-target list of the step's own image,
+                    // selected by its alias: the collections also hold other steps' and platform images.
+                    string stageSuffix = handler.IsPost ? "PostContext" : "PreContext";
+                    baseTypeFull = $"global::Vela.Context.{handler.Message}{stageSuffix}<{handler.EntityType}>";
+                    baseHasPre = handler.Message == "UpdateMultiple";
+                    baseHasPost = handler.IsPost;
+                    bulk = true;
                 }
                 else
                 {
@@ -750,9 +762,14 @@ namespace Vela.Analyzers
                     baseHasPost = false;
                 }
 
-                string handlerKey = handler.Namespace + "|" + string.Join(".", handler.ContainingTypes) + "|" + handler.HandlerName;
-                ProjectionModel? pre = baseHasPre && preByHandler.TryGetValue(handlerKey, out ProjectionModel p) ? p : null;
-                ProjectionModel? post = baseHasPost && postByHandler.TryGetValue(handlerKey, out ProjectionModel po) ? po : null;
+                string handlerKey = handler.Namespace + "|" + string.Join(".", handler.ContainingTypes) + "|" + handler.HandlerName + "|";
+                // Only Merge has a subordinate record, and its context exposes the subordinate images at the same stages
+                // as the master's.
+                bool baseHasSubordinate = handler.RequestType is null && handler.Message == "Merge";
+                ProjectionModel? pre = baseHasPre && byHandlerAndRole.TryGetValue(handlerKey + RoleKey(true, false), out ProjectionModel p) ? p : null;
+                ProjectionModel? post = baseHasPost && byHandlerAndRole.TryGetValue(handlerKey + RoleKey(false, false), out ProjectionModel po) ? po : null;
+                ProjectionModel? subordinatePre = baseHasSubordinate && baseHasPre && byHandlerAndRole.TryGetValue(handlerKey + RoleKey(true, true), out ProjectionModel sp) ? sp : null;
+                ProjectionModel? subordinatePost = baseHasSubordinate && baseHasPost && byHandlerAndRole.TryGetValue(handlerKey + RoleKey(false, true), out ProjectionModel spo) ? spo : null;
 
                 string contextName = Sanitize(handler.HandlerName) + "Context";
                 string prefix = handler.Namespace.Length == 0 ? string.Empty : handler.Namespace + ".";
@@ -766,19 +783,26 @@ namespace Vela.Analyzers
                 }
 
                 context.AddSource(Sanitize(contextFull) + ".Context.g.cs",
-                    SourceText.From(RenderContext(handler, contextName, baseTypeFull, pre, post), Encoding.UTF8));
+                    SourceText.From(RenderContext(handler, contextName, baseTypeFull, pre, post, subordinatePre, subordinatePost, bulk), Encoding.UTF8));
             }
         }
+
+        private static string RoleKey(bool isPre, bool isSubordinate) => (isSubordinate ? "Subordinate" : string.Empty) + (isPre ? "Pre" : "Post");
+
+        // The alias argument a subordinate image read passes: its default alias is not the one PreImageAs/PostImageAs
+        // default to, so it is always explicit.
+        private static string SubordinateAliasArgument(ProjectionModel image, string defaultAlias) =>
+            ", " + SymbolDisplay.FormatLiteral(string.IsNullOrEmpty(image.Alias) ? defaultAlias : image.Alias!, quote: true);
 
         // ", \"snap\"" for a custom alias, nothing for the default one (the extension's default argument matches it).
         private static string AliasArgument(ProjectionModel image) =>
             string.IsNullOrEmpty(image.Alias) ? string.Empty : ", " + SymbolDisplay.FormatLiteral(image.Alias!, quote: true);
 
         private static bool IsSingleImageMessage(string message) =>
-            message == "Create" || message == "Update" || message == "Delete";
+            message == "Create" || message == "Update" || message == "Delete" || message == "Assign" || message == "Merge";
 
         // The concrete step context a generated context derives from, and which typed images it can expose, for a
-        // Create/Update/Delete message at the given stage. Returns null when the stage carries no image.
+        // Create/Update/Delete/Assign/Merge message at the given stage. Returns null when the stage carries no image.
         private static string? ResolveBaseContext(string message, bool isPost, out bool hasPre, out bool hasPost)
         {
             hasPre = false;
@@ -806,12 +830,21 @@ namespace Vela.Analyzers
                 case "Delete":
                     hasPre = true;
                     return isPost ? "DeletePostContext" : "DeletePreContext";
+                case "Assign":
+                    hasPre = true;
+                    hasPost = isPost;
+                    return isPost ? "AssignPostContext" : "AssignPreContext";
+                case "Merge":
+                    hasPre = true;
+                    hasPost = isPost;
+                    return isPost ? "MergePostContext" : "MergePreContext";
                 default:
                     return null;
             }
         }
 
-        private static string RenderContext(HandlerModel model, string contextName, string baseTypeFull, ProjectionModel? pre, ProjectionModel? post)
+        private static string RenderContext(HandlerModel model, string contextName, string baseTypeFull, ProjectionModel? pre, ProjectionModel? post,
+            ProjectionModel? subordinatePre, ProjectionModel? subordinatePost, bool bulk = false)
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/> Vela typed step context. Do not edit.");
@@ -834,7 +867,7 @@ namespace Vela.Analyzers
                 indent++;
             }
 
-            string images = pre != null || post != null
+            string images = pre != null || post != null || subordinatePre != null || subordinatePost != null
                 ? "plus the typed image(s) this step captured"
                 : "for this step";
             sb.AppendLine($"{Pad(indent)}/// <summary>");
@@ -844,14 +877,37 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent)}public sealed class {contextName} : {baseTypeFull}");
             sb.AppendLine($"{Pad(indent)}{{");
             sb.AppendLine($"{Pad(indent + 1)}public {contextName}(global::Vela.Context.ILocalPluginContext inner) : base(inner) {{ }}");
-            if (pre is { } preImage)
+            if (bulk)
+            {
+                // One entry per target, aligned with ctx.GetTargets(); null when that target has no such image.
+                if (pre is { } bulkPre)
+                {
+                    sb.AppendLine($"{Pad(indent + 1)}public global::System.Collections.Generic.IReadOnlyList<{bulkPre.TypeName}?> PreImages => global::Vela.Context.ImageProjectionExtensions.PreImagesAs<{bulkPre.TypeName}>(this{AliasArgument(bulkPre)});");
+                }
+
+                if (post is { } bulkPost)
+                {
+                    sb.AppendLine($"{Pad(indent + 1)}public global::System.Collections.Generic.IReadOnlyList<{bulkPost.TypeName}?> PostImages => global::Vela.Context.ImageProjectionExtensions.PostImagesAs<{bulkPost.TypeName}>(this{AliasArgument(bulkPost)});");
+                }
+            }
+            else if (pre is { } preImage)
             {
                 sb.AppendLine($"{Pad(indent + 1)}public new {preImage.TypeName}? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<{preImage.TypeName}>(this{AliasArgument(preImage)});");
             }
 
-            if (post is { } postImage)
+            if (!bulk && post is { } postImage)
             {
                 sb.AppendLine($"{Pad(indent + 1)}public new {postImage.TypeName}? PostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<{postImage.TypeName}>(this{AliasArgument(postImage)});");
+            }
+
+            if (subordinatePre is { } subordinatePreImage)
+            {
+                sb.AppendLine($"{Pad(indent + 1)}public new {subordinatePreImage.TypeName}? SubordinatePreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<{subordinatePreImage.TypeName}>(this{SubordinateAliasArgument(subordinatePreImage, "SubordinatePreImage")});");
+            }
+
+            if (subordinatePost is { } subordinatePostImage)
+            {
+                sb.AppendLine($"{Pad(indent + 1)}public new {subordinatePostImage.TypeName}? SubordinatePostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<{subordinatePostImage.TypeName}>(this{SubordinateAliasArgument(subordinatePostImage, "SubordinatePostImage")});");
             }
 
             sb.AppendLine($"{Pad(indent)}}}");
@@ -904,7 +960,7 @@ namespace Vela.Analyzers
             }
 
             sb.AppendLine($"{Pad(indent)}/// <summary>");
-            sb.AppendLine($"{Pad(indent)}/// Generated projection: exposes only the columns this step captured in WithPreImage/WithPostImage(...).");
+            sb.AppendLine($"{Pad(indent)}/// Generated projection: exposes only the columns this step captured in {(model.IsSubordinate ? "WithSubordinatePreImage/WithSubordinatePostImage" : "WithPreImage/WithPostImage")}(...).");
             sb.AppendLine($"{Pad(indent)}/// A column the step did not capture is absent here (reading it is a compile error, not a silent null);");
             sb.AppendLine($"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().");
             sb.AppendLine($"{Pad(indent)}/// </summary>");
@@ -927,7 +983,7 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent + 1)}/// <summary>");
             sb.AppendLine($"{Pad(indent + 1)}/// Widens this captured-columns projection to the full early-bound image (Id, logical name and every");
             sb.AppendLine($"{Pad(indent + 1)}/// attribute the image carried). Explicit on purpose: prefer reading the projection directly; cast only");
-            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "GetPreImage" : "GetPostImage")}&lt;{model.EntityType}&gt;()");
+            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "GetPreImage" : "GetPostImage")}&lt;{model.EntityType}&gt;({ReadAlias(model)})");
             sb.AppendLine($"{Pad(indent + 1)}/// (both go through Entity.ToEntity, so the Id is preserved); returns null for an absent image.");
             sb.AppendLine($"{Pad(indent + 1)}/// </summary>");
             sb.AppendLine($"{Pad(indent + 1)}public static explicit operator {model.EntityType}({model.TypeName}? projection)");
@@ -950,6 +1006,16 @@ namespace Vela.Analyzers
         }
 
         private static string Pad(int levels) => new string(' ', levels * 4);
+
+        // The alias a doc comment shows for reading the full image: none for the default master alias, the subordinate
+        // default otherwise.
+        private static string ReadAlias(ProjectionModel model)
+        {
+            string? alias = !string.IsNullOrEmpty(model.Alias)
+                ? model.Alias
+                : model.IsSubordinate ? (model.IsPre ? "SubordinatePreImage" : "SubordinatePostImage") : null;
+            return alias is null ? string.Empty : "\"" + alias + "\"";
+        }
 
         // Value equality (not the default ImmutableArray reference equality) so the incremental generator caches the
         // model between keystrokes instead of re-running every edit.
@@ -989,8 +1055,9 @@ namespace Vela.Analyzers
         private readonly struct ProjectionModel : System.IEquatable<ProjectionModel>
         {
             public ProjectionModel(string @namespace, ImmutableArray<string> containingTypes, string typeName, ImmutableArray<ProjectionColumn> columns,
-                string? handlerName, string message, bool isPost, bool isPre, string entityType, string? requestType, string? alias)
+                string? handlerName, string message, bool isPost, bool isPre, bool isSubordinate, string entityType, string? requestType, string? alias)
             {
+                IsSubordinate = isSubordinate;
                 Alias = alias;
                 Namespace = @namespace;
                 ContainingTypes = containingTypes;
@@ -1013,6 +1080,8 @@ namespace Vela.Analyzers
             public string Message { get; }
             public bool IsPost { get; }
             public bool IsPre { get; }
+            // An image of a Merge step's subordinate record (WithSubordinatePreImage / WithSubordinatePostImage).
+            public bool IsSubordinate { get; }
             public string EntityType { get; }
             public string? RequestType { get; }
             // The image alias passed to WithPreImage/WithPostImage, or null for the default (PreImage / PostImage).
@@ -1020,7 +1089,7 @@ namespace Vela.Analyzers
             public string? Alias { get; }
 
             public ProjectionModel WithTypeName(string typeName) =>
-                new ProjectionModel(Namespace, ContainingTypes, typeName, Columns, HandlerName, Message, IsPost, IsPre, EntityType, RequestType, Alias);
+                new ProjectionModel(Namespace, ContainingTypes, typeName, Columns, HandlerName, Message, IsPost, IsPre, IsSubordinate, EntityType, RequestType, Alias);
 
             public bool Equals(ProjectionModel other) =>
                 Namespace == other.Namespace &&
@@ -1031,6 +1100,7 @@ namespace Vela.Analyzers
                 Message == other.Message &&
                 IsPost == other.IsPost &&
                 IsPre == other.IsPre &&
+                IsSubordinate == other.IsSubordinate &&
                 EntityType == other.EntityType &&
                 RequestType == other.RequestType &&
                 Alias == other.Alias;

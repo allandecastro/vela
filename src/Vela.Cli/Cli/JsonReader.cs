@@ -97,7 +97,8 @@ internal static class JsonReader
         return images.EnumerateArray()
             .Select(image => new StepImage(
                 TryGetString(image, "alias") ?? string.Empty,
-                TryGetStringArray(image, "attributes")))
+                TryGetStringArray(image, "attributes"),
+                TryGetString(image, "messagePropertyName") ?? string.Empty))
             .ToArray();
     }
 
@@ -120,12 +121,13 @@ internal static class JsonReader
                 // value is the bare parameter name. The live side supplies the actual Dataverse uniquename, so a
                 // drifted (dotted) live value diffs against the bare expected value and triggers reconciliation.
                 string uniqueName = TryGetString(value, "uniqueName") ?? name;
+                string description = CustomApiShape.LabelOrDefault(TryGetString(value, "description"), name);
                 (parameterTypeName, isCollection) = CanonicalizeCustomApiType(parameterTypeName, isCollection, logicalEntityName);
-                return (name, isOptional, parameterTypeName, isCollection, logicalEntityName, uniqueName);
+                return (name, isOptional, parameterTypeName, isCollection, logicalEntityName, uniqueName, description);
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.name))
             .OrderBy(x => x.name, StringComparer.Ordinal)
-            .Select(x => CustomApiShape.InputParameter(x.name, x.isOptional, x.parameterTypeName, x.isCollection, x.logicalEntityName, x.uniqueName))
+            .Select(x => CustomApiShape.InputParameter(x.name, x.isOptional, x.parameterTypeName, x.isCollection, x.logicalEntityName, x.uniqueName, x.description))
             .ToArray();
     }
 
@@ -144,12 +146,13 @@ internal static class JsonReader
                 bool isCollection = TryGetBool(value, "isCollection");
                 string? logicalEntityName = TryGetString(value, "logicalEntityName");
                 string uniqueName = TryGetString(value, "uniqueName") ?? name;
+                string description = CustomApiShape.LabelOrDefault(TryGetString(value, "description"), name);
                 (parameterTypeName, isCollection) = CanonicalizeCustomApiType(parameterTypeName, isCollection, logicalEntityName);
-                return (name, parameterTypeName, isCollection, logicalEntityName, uniqueName);
+                return (name, parameterTypeName, isCollection, logicalEntityName, uniqueName, description);
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.name))
             .OrderBy(x => x.name, StringComparer.Ordinal)
-            .Select(x => CustomApiShape.OutputParameter(x.name, x.parameterTypeName, x.isCollection, x.logicalEntityName, x.uniqueName))
+            .Select(x => CustomApiShape.OutputParameter(x.name, x.parameterTypeName, x.isCollection, x.logicalEntityName, x.uniqueName, x.description))
             .ToArray();
     }
 

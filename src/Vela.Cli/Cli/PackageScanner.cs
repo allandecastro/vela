@@ -87,19 +87,16 @@ internal static class PackageScanner
                 {
                     JsonElement raw = JsonSerializer.SerializeToElement(def, jsonOptions);
                     JsonElement normalized = NormalizeStepDefinition(raw, jsonOptions);
-                    // Dataverse supports no image on the CreateMultiple/UpdateMultiple messages (it accepts
-                    // neither 'Target' nor 'Targets' as an image messagepropertyname), so a bulk-message step
-                    // with a pre/post image cannot be deployed. The in-memory harness allows it (to simulate
-                    // per-record bulk images), so reject it here at scan time - before any write - with a clear
-                    // message rather than letting apply fail mid-run with a cryptic platform error.
-                    if (IsBulkStepWithImages(normalized))
+                    // Reject an image Dataverse would refuse (a post-image before PostOperation, a pre-image on Create,
+                    // any image on RouteTo, ...) at scan time, before any write, with a clear message rather than
+                    // letting apply fail mid-run with a cryptic platform error. Same rules as the runtime builder.
+                    if (GetInvalidImageError(normalized) is { } imageError)
                     {
-                        string bulkMessage = normalized.TryGetProperty("message", out JsonElement bm) ? bm.GetString() ?? "" : "";
-                        throw new InvalidOperationException(
-                            $"Plugin '{type.FullName}' registers a step on '{bulkMessage}' with a pre/post image, but " +
-                            "Dataverse supports no images on the CreateMultiple/UpdateMultiple messages. Register the " +
-                            "image on the single Create/Update step instead (it also runs for bulk operations, where " +
-                            "per-record images are available by index), or remove the image from the bulk step.");
+                        throw new InvalidOperationException($"Plugin '{type.FullName}' {imageError}");
+                    }
+                    if (DataverseRegistration.GetStepDescriptionLengthError(DefinitionParser.ParseStepDefinition(normalized)) is { } descriptionError)
+                    {
+                        throw new InvalidOperationException($"Plugin '{type.FullName}' {descriptionError}");
                     }
                     RegistrationItem item = new("step", type.FullName ?? type.Name, normalized);
                     // Code names the secure configuration; SecureConfigResolver supplies its value at plan/apply time.
@@ -124,6 +121,10 @@ internal static class PackageScanner
                 }
 
                 JsonElement normalized = NormalizeCustomApiDefinition(JsonSerializer.SerializeToElement(definition, jsonOptions), jsonOptions);
+                if (DataverseRegistration.GetCustomApiLabelLengthError(DefinitionParser.ParseCustomApiDefinition(normalized)) is { } labelError)
+                {
+                    throw new InvalidOperationException($"Plugin '{type.FullName}': {labelError}");
+                }
                 items.Add(new RegistrationItem("custom-api", type.FullName ?? type.Name, normalized));
             }
         }
@@ -302,22 +303,47 @@ internal static class PackageScanner
         }
     }
 
-    // True when a step targets a bulk message (CreateMultiple/UpdateMultiple) and carries any pre/post image.
-    // Dataverse cannot deploy such a step, so plan/apply reject it up front (see the call site).
-    internal static bool IsBulkStepWithImages(JsonElement step)
+    // Describes the first pre/post image on a normalized step that Dataverse would reject for the step's message and
+    // effective stage (see StepImageRules), or returns null when every image is valid.
+    internal static string? GetInvalidImageError(JsonElement step)
     {
-        string? message = step.TryGetProperty("message", out JsonElement m) ? m.GetString() : null;
-        bool isBulk = string.Equals(message, "CreateMultiple", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(message, "UpdateMultiple", StringComparison.OrdinalIgnoreCase);
-        if (!isBulk)
+        string message = step.TryGetProperty("message", out JsonElement m) && m.ValueKind == JsonValueKind.String ? m.GetString() ?? string.Empty : string.Empty;
+        int stage = step.TryGetProperty("stage", out JsonElement s) && s.ValueKind == JsonValueKind.Number ? s.GetInt32() : 0;
+        return Check("preImages", isPreImage: true, "pre-image") ?? Check("postImages", isPreImage: false, "post-image");
+
+        string? Check(string property, bool isPreImage, string kind)
         {
-            return false;
+            if (!step.TryGetProperty(property, out JsonElement images) || images.ValueKind != JsonValueKind.Array || images.GetArrayLength() == 0)
+            {
+                return null;
+            }
+
+            string? reason = Vela.Steps.StepImageRules.GetRejectionReason(message, stage, isPreImage);
+            JsonElement offending = images[0];
+            if (reason is null)
+            {
+                // The stage takes this kind of image; each image's request property must also be one the message has.
+                foreach (JsonElement image in images.EnumerateArray())
+                {
+                    string? imageProperty = image.ValueKind == JsonValueKind.Object && image.TryGetProperty("messagePropertyName", out JsonElement p) ? p.GetString() : null;
+                    reason = Vela.Steps.StepImageRules.GetMessagePropertyRejectionReason(message, imageProperty);
+                    if (reason is not null)
+                    {
+                        offending = image;
+                        break;
+                    }
+                }
+
+                if (reason is null)
+                {
+                    return null;
+                }
+            }
+
+            string alias = offending.ValueKind == JsonValueKind.Object && offending.TryGetProperty("alias", out JsonElement a) ? a.GetString() ?? string.Empty : string.Empty;
+            return $"registers a {kind} '{alias}' on a '{message}' step at {(Vela.Constants.PluginStages)stage}, " +
+                $"which Dataverse rejects: {reason}. Remove the image or move the step to a stage that supports it.";
         }
-
-        return HasItems(step, "preImages") || HasItems(step, "postImages");
-
-        static bool HasItems(JsonElement e, string name)
-            => e.TryGetProperty(name, out JsonElement arr) && arr.ValueKind == JsonValueKind.Array && arr.GetArrayLength() > 0;
     }
 
     // A type we identified as a plugin/Custom API but couldn't introspect is a fatal authoring error: continuing

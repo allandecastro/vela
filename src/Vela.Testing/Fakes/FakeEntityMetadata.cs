@@ -262,6 +262,22 @@ namespace Vela.Testing
         }
 
         /// <summary>
+        /// Adds an Image attribute. <paramref name="canStoreFullImage"/> mirrors the column's "Can store full images"
+        /// setting: once the table's metadata is registered, downloading a column that does not store full images
+        /// (<c>InitializeFileBlocksDownload</c> / <c>DownloadFile</c>) fails with <c>0x80040217</c>, as on the
+        /// platform (e.g. <c>account.entityimage</c>).
+        /// </summary>
+        public FakeEntityMetadata Image(string logicalName, bool canStoreFullImage)
+        {
+            ImageAttributeMetadata attribute = new ImageAttributeMetadata { SchemaName = logicalName, CanStoreFullImage = canStoreFullImage };
+            SetSealed(attribute, nameof(AttributeMetadata.LogicalName), logicalName);
+            SetSealed(attribute, nameof(AttributeMetadata.AttributeType), AttributeTypeCode.Virtual);
+            _attributes.Add(attribute);
+            _selected = attribute;
+            return this;
+        }
+
+        /// <summary>
         /// Declares a many-to-many relationship carried by this table's metadata. Once registered via
         /// <c>WithEntityMetadata(...)</c>, Associate/Disassociate can resolve the intersect from it, so an
         /// explicit <c>WithManyToMany(...)</c> becomes optional.

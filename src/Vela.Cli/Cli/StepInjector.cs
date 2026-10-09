@@ -94,7 +94,7 @@ internal static class StepInjector
         TriggerMatch match = FindDuplicateTrigger(body, registrationCall, stageCall, modeCall, explicitFilterAttributes ?? []);
         if (match.Kind == TriggerMatchKind.ExactDuplicate)
         {
-            error = $"This plugin already registers a {match.Trigger} step with the same filtering columns, so the two could not be told apart. Pass different --filtering-attributes, another --message, --stage or --mode, or add the columns to the existing step and branch in its handler.";
+            error = $"This plugin already registers a {match.Trigger} step with the same filtering columns and no image, step key or relationship, so the two could not be told apart (VELA008). Pass different --filtering-attributes, another --message, --stage or --mode, or add the columns to the existing step and branch in its handler.";
             return false;
         }
 
@@ -154,7 +154,7 @@ internal static class StepInjector
     private static readonly Regex AsyncCall = new(@"\.\s*Async\s*\(\s*\)", RegexOptions.Compiled);
 
     // Modifiers that tell two steps on the same trigger apart besides their filter columns (A-25).
-    private static readonly Regex Distinguishing = new(@"\.\s*(?:WithStepKey|WithPreImage|WithPostImage|ForRelationship)\s*[<(]", RegexOptions.Compiled);
+    private static readonly Regex Distinguishing = new(@"\.\s*(?:WithStepKey|WithPreImage|WithPostImage|WithSubordinatePreImage|WithSubordinatePostImage|ForRelationship)\s*[<(]", RegexOptions.Compiled);
     private static readonly Regex FilterOnCall = new(@"\.\s*FilterOn\s*\(", RegexOptions.Compiled);
     private static readonly Regex SelectedMember = new(@"=>\s*\w+\s*\.\s*(?<member>\w+)", RegexOptions.Compiled);
 

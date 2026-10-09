@@ -16,11 +16,19 @@ internal enum Images
 /// in <c>Context/MessageContexts.cs</c>) and the <c>PluginMessages.{Name}</c> constant.</param>
 /// <param name="FilterOn">Whether the stage configs expose <c>FilterOn(...)</c> (filtering attributes).</param>
 /// <param name="Images">Which images the stage configs expose (<c>WithPreImage</c> / <c>WithPostImage</c>).</param>
-internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None)
+/// <param name="SubordinateImages">Whether the stage configs also expose images of the Merge subordinate record
+/// (<c>WithSubordinatePreImage</c> / <c>WithSubordinatePostImage</c>, registered against <c>SubordinateId</c>), under the
+/// same stage rules as <paramref name="Images"/>.</param>
+/// <param name="Relationship">Whether the stage configs expose <c>ForRelationship(...)</c> (Associate / Disassociate).</param>
+internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None, bool SubordinateImages = false, bool Relationship = false)
 {
     public bool HasPreImage(Stage stage) => Images is Images.Pre or Images.PreAndPost;
 
     public bool HasPostImage(Stage stage) => stage == Stage.PostOperation && Images is Images.Post or Images.PreAndPost;
+
+    public bool HasSubordinatePreImage(Stage stage) => SubordinateImages && HasPreImage(stage);
+
+    public bool HasSubordinatePostImage(Stage stage) => SubordinateImages && HasPostImage(stage);
 }
 
 /// <summary>
@@ -41,20 +49,17 @@ internal static class MessageModel
         new("Retrieve"),
         new("RetrieveMultiple"),
         // Relationships, sharing and ownership
-        new("Associate"),
-        new("Disassociate"),
+        new("Associate", Relationship: true),
+        new("Disassociate", Relationship: true),
         new("GrantAccess"),
-        new("Assign"),
+        new("Assign", Images: Images.PreAndPost),
         new("RevokeAccess"),
         // Sales lifecycle
         new("QualifyLead"),
         new("WinOpportunity"),
         new("LoseOpportunity"),
-        new("ConvertQuoteToSalesOrder"),
         new("ConvertSalesOrderToInvoice"),
         new("GenerateQuoteFromOpportunity"),
-        new("GenerateSalesOrderFromOpportunity"),
-        new("GenerateInvoiceFromOpportunity"),
         // Queues
         new("AddToQueue"),
         new("RemoveFromQueue"),
@@ -80,13 +85,9 @@ internal static class MessageModel
         new("RetrievePrincipalAccess"),
         new("RetrieveSharedPrincipalsAndAccess"),
         new("WinQuote"),
-        new("ReviseQuote"),
-        new("FulfillSalesOrder"),
-        new("GetQuoteProductsFromOpportunity"),
-        new("GetSalesOrderProductsFromOpportunity"),
-        new("GetInvoiceProductsFromOpportunity"),
         new("ModifyAccess"),
-        new("Merge"),
+        // Verified live: one Merge step takes images of the master (Target) and of the subordinate (SubordinateId).
+        new("Merge", Images: Images.PreAndPost, SubordinateImages: true),
     ];
 
     /// <summary>

@@ -35,7 +35,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="System.ComponentModel.Annotations" />
   </ItemGroup>

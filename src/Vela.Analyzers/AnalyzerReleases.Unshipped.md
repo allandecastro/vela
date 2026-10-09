@@ -13,3 +13,4 @@ VELA018 | Vela.Reliability | Warning | AsyncTargetWriteAnalyzer
 VELA019 | Vela.Reliability | Warning | FilesystemAccessAnalyzer
 VELA020 | Vela.Usage | Error | MissingFilterAnalyzer
 VELA021 | Vela.Usage | Warning | ImageProjectionGenerator
+VELA022 | Vela.Reliability | Warning | SetStateStepAnalyzer

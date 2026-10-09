@@ -25,7 +25,10 @@ internal sealed record StepConfig(
     bool FilterOn,
     bool PreImage,
     bool PostImage,
-    IReadOnlyList<HandleOverload> Handles)
+    IReadOnlyList<HandleOverload> Handles,
+    bool SubordinatePreImage = false,
+    bool SubordinatePostImage = false,
+    bool Relationship = false)
 {
     public const string Attributes = "params Expression<Func<TEntity, object?>>[] attributes";
 
@@ -42,6 +45,21 @@ internal sealed record StepConfig(
         "runs inside the parent transaction and its image includes that transaction's uncommitted writes.</remarks>",
     ];
 
+    private static readonly IReadOnlyList<string> SubordinatePreImageDoc =
+    [
+        "<summary>Captures a pre-image of the subordinate record: the record merged away, as it is before the merge.</summary>",
+        "<remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePreImage</c>. The",
+        "aliases of a step's images must all differ, master and subordinate alike.</remarks>",
+    ];
+
+    private static readonly IReadOnlyList<string> SubordinatePostImageDoc =
+    [
+        "<summary>Captures a post-image of the subordinate record: the record merged away, as it is after the merge",
+        "(deactivated, its <c>masterid</c> pointing at the master).</summary>",
+        "<remarks>Registered against the request's <c>SubordinateId</c> and read with <c>ctx.SubordinatePostImage</c>. The",
+        "aliases of a step's images must all differ, master and subordinate alike.</remarks>",
+    ];
+
     /// <summary>The fluent modifiers in declaration order. FilterOn and the images are per-message; the rest is universal.</summary>
     public IEnumerable<Modifier> Modifiers()
     {
@@ -49,6 +67,11 @@ internal sealed record StepConfig(
         {
             yield return new("FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes)",
                 "SetFilteringAttributes(attribute, additionalAttributes);");
+        }
+        if (Relationship)
+        {
+            yield return new("ForRelationship(string schemaName, params string[] additionalSchemaNames)",
+                "SetRelationships(schemaName, additionalSchemaNames);");
         }
         yield return new("WithDescription(string description)", "SetDescription(description);");
         if (PreImage)
@@ -62,9 +85,19 @@ internal sealed record StepConfig(
             yield return new($"WithPostImage({Attributes})", "AddImageNow(PluginImageAliases.PostImage, false, attributes);");
             yield return new($"WithPostImage(string alias, {Attributes})", "AddImageNow(alias, false, attributes);");
         }
+        if (SubordinatePreImage)
+        {
+            yield return new($"WithSubordinatePreImage({Attributes})", "AddSubordinateImageNow(PluginImageAliases.SubordinatePreImage, true, attributes);", SubordinatePreImageDoc);
+            yield return new($"WithSubordinatePreImage(string alias, {Attributes})", "AddSubordinateImageNow(alias, true, attributes);", SubordinatePreImageDoc);
+        }
+        if (SubordinatePostImage)
+        {
+            yield return new($"WithSubordinatePostImage({Attributes})", "AddSubordinateImageNow(PluginImageAliases.SubordinatePostImage, false, attributes);", SubordinatePostImageDoc);
+            yield return new($"WithSubordinatePostImage(string alias, {Attributes})", "AddSubordinateImageNow(alias, false, attributes);", SubordinatePostImageDoc);
+        }
         yield return new("WithExecutionOrder(int order)", "SetExecutionOrder(order);");
         yield return new("WithStepKey(string key)", "SetKey(key);");
-        yield return new("WithImpersonation(ImpersonationSource source)", "SetImpersonation(source);");
+        yield return new("SkipWhenDepthAbove(int maxDepth)", "SetSkipWhenDepthAbove(maxDepth);");
         yield return new("WithImpersonation(Guid systemUserId)", "SetImpersonationUser(systemUserId);");
         yield return new("WithSupportedDeployment(SupportedDeployment deployment)", "SetSupportedDeployment(deployment);");
         yield return new("WithUnsecureConfig(string configuration)", "SetUnsecureConfig(configuration);");
@@ -87,7 +120,10 @@ internal sealed record StepConfig(
         message.FilterOn,
         message.HasPreImage(stage),
         message.HasPostImage(stage),
-        [new($"Action<I{message.Name}{stage.ContextSuffix()}Context<TEntity>> handler")]);
+        [new($"Action<I{message.Name}{stage.ContextSuffix()}Context<TEntity>> handler")],
+        message.HasSubordinatePreImage(stage),
+        message.HasSubordinatePostImage(stage),
+        message.Relationship);
 
     /// <summary>Universal image rules for steps on a message the model does not know (OnMessage / On&lt;TRequest&gt;).</summary>
     private static readonly Message Unmodelled = new("(unmodelled)", Images: Images.PreAndPost);

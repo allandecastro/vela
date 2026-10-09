@@ -94,10 +94,7 @@ namespace Vela.Testing.Tests
         }
     }
 
-    // Fires only when 'name' changes (filtering attributes).
-    // Throws on the owner (ownerid) Update pass only. Because the pipeline splits an owner+standard Update into two
-    // passes (standard, then owner/state), filtering on OwnerId makes this fire only on the second pass - used to
-    // prove the two passes are one atomic scope (a second-pass failure rolls the first pass back).
+    // Throws on an Update that changes the owner - used to prove the whole Update (standard fields included) rolls back.
     public sealed class ThrowOnOwnerUpdate : EntityPluginBase<FakeOwnable>
     {
         public ThrowOnOwnerUpdate(string unsecure, string secure) : base(unsecure, secure) { }
@@ -143,8 +140,7 @@ namespace Vela.Testing.Tests
         }
     }
 
-    // Fires on name OR ownerid changes; tags a task with which split-pass it ran in (Target carries only the
-    // standard fields on the first pass and only the owner/state fields on the second).
+    // Fires on name OR ownerid changes; tags a task with whether its Target carried the owner.
     public sealed class RecordUpdatePasses : EntityPluginBase<FakeOwnable>
     {
         public RecordUpdatePasses(string unsecure, string secure) : base(unsecure, secure) { }
@@ -161,7 +157,7 @@ namespace Vela.Testing.Tests
         }
     }
 
-    // Fires when statecode changes — used to prove SetState routes through the Update pipeline.
+    // Fires when statecode changes - used to prove SetState runs the Update steps.
     public sealed class OnStateChange : EntityPluginBase<FakeOwnable>
     {
         public OnStateChange(string unsecure, string secure) : base(unsecure, secure) { }
@@ -394,7 +390,7 @@ namespace Vela.Testing.Tests
         public GreetApi(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterCustomApi()
-            => RegisterCustomApi("vela_Greet", nameof(Handle));
+            => RegisterCustomApi("vela_Greet", nameof(Handle)).RequestParameter<string>("Name").ResponseParameter<string>("Message");
 
         private void Handle(ILocalPluginContext ctx)
         {

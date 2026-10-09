@@ -87,12 +87,16 @@ public partial class AccountStepRouter : EntityPluginBase<Account>
 }
 ```
 
-Each step in a multi-step plugin must have a **distinct trigger** (message + stage + mode + entity) and its own
-`Handle(...)` (bound by method group, not a string). Two steps with the same trigger can't be told apart at
-runtime, so `Build()` rejects them - put the shared logic in one step (combine the filtering attributes) or use a
-different stage/mode. Because the handler is bound as a method group, the message and the handler's context type
-are checked at compile time: binding an `OnUpdate()` step to a `void Handle(ICreatePostContext<Account> ctx)` method
-does not compile.
+Each step in a multi-step plugin has its own `Handle(...)` (bound by method group, not a string). Several steps
+may share a **trigger** (message + stage + mode + entity) as long as something tells them apart: their filtering
+attributes, their images, their relationship scope (`ForRelationship`) or an explicit `WithStepKey("...")`. Each
+one is deployed as its own Dataverse step, and at run time the executing step (`OwningExtension`) selects its
+handler. A synchronous step's `OwningExtension` carries the step name; an asynchronous step's carries only its id,
+so the runtime reads the step's name once (cached for the process). Two steps on one trigger that differ in none of
+these (for example the same `FilterOn` and only a different rank) are rejected at registration, and analyzer
+[VELA008](../reference/analyzers.md#vela008) flags them at build: give one a `WithStepKey(...)`. Because the handler
+is bound as a method group, the message and the handler's context type are checked at compile time: binding an
+`OnUpdate()` step to a `void Handle(ICreatePostContext<Account> ctx)` method does not compile.
 
 ## Do / Don't (plugins)
 
@@ -101,7 +105,8 @@ does not compile.
 - Use `ctx.GetRequiredService<T>()` for dependency resolution in handlers.
 - Read the primary record via `ctx.Request.Target` on the typed message contexts (already early-bound); `GetTarget<T>()` stays for the message-agnostic `OnMessage(...)` handlers where the request does not type the Target.
 - Read images with `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` instead of the raw `PreEntityImages` / `PostEntityImages` dictionaries.
-- Signal a user-facing failure with `throw new InvalidPluginExecutionException("...")`, or `throw new PluginBusinessException("...")` for a named business error (the Vela base surfaces its message cleanly and records a `business-exception` trace snapshot). Both are clean and neither is flagged by [VELA012](../reference/analyzers.md#vela012) inside a plugin that derives from a Vela base. Any other exception type is reported to the caller wrapped (the Vela base adds its type and message, but it is not your intended clean message), which is why VELA012 flags it.
+- Signal a user-facing failure with `throw new InvalidPluginExecutionException("...")`, or `throw new PluginBusinessException("...")` for a named business error (the Vela base surfaces its message cleanly and records a `business-exception` trace snapshot). Both are clean and neither is flagged by [VELA012](../reference/analyzers.md#vela012) inside a plugin that derives from a Vela base. A `FaultException<OrganizationServiceFault>` from a failed service call is rethrown unchanged, so the caller gets the fault's own error code (a duplicate key stays `0x80040237`). Any other exception type reaches the caller as a generic message with the correlation id (`An unexpected error occurred. Correlation id: ...`). The full exception is traced, so the plug-in trace log keeps it unless the environment's Plugin Trace Log setting is `Off`. That generic message is why VELA012 flags it. Override `FormatUnexpectedErrorMessage(context, exception)` to return a more detailed message.
+- To give a business error a code, use `new PluginBusinessException(message, errorCode)`. Dataverse still reports `0x80040265` to the caller; an SDK caller reads your code from the fault's `ErrorDetails["SubErrorCode"]`, and the Web API does not return it.
 
 **Don't**
 - Stop a step chain before `.Handle(...)`: every step must bind a typed handler (a chain that stops earlier is flagged by analyzer VELA002). Prefer `RegisterPluginSteps()` + `RegisterStep()....Handle(...)` over a no-handler `Execute(...)` override.
@@ -115,18 +120,20 @@ The fluent builder enforces a specific order:
 
 1. **Message** - `OnCreate()`, `OnUpdate()`, `OnCreateMultiple()`, `OnUpdateMultiple()`, `OnDelete()`,
    `OnRetrieve()`, `OnRetrieveMultiple()`, `OnAssociate()`, `OnDisassociate()`, or
-   `OnMessage("custom_message")` for any other SDK message. The deprecated `SetState` /
-   `SetStateDynamicEntity` messages have no typed method: update `statecode`/`statuscode` with `OnUpdate()`
-   instead, or register through `OnMessage("SetState")` if you must target the legacy message.
+   `OnMessage("custom_message")` for any other SDK message. A state change has no typed method: register on
+   `OnUpdate().FilterOn(x => x.StateCode)`, or on `OnMessage(PluginMessages.SetStateDynamicEntity)`, which both
+   a `SetStateRequest` and an Update of `statecode` fire. A step on `SetState` never fires on the platform
+   ([VELA022](../reference/analyzers.md#vela022)).
 2. **Stage** - `PreValidation()`, `PreOperation()`, or `PostOperation()` (typed methods; the stage you pick
    determines which images the rest of the chain will offer)
-3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only)
+3. **Mode** - `Sync()` / `Async()` (`Async()` is PostOperation-only). `Async(deleteJobOnSuccess: true)` deletes
+   the system job once it succeeds (Dataverse `asyncautodelete`); it exists only on the async branch.
 4. **Filtering** - `FilterOn(a => a.Attr1, a => a.Attr2)` - **required for `Create`, `Update`,
    `CreateMultiple` and `UpdateMultiple`** (at least one attribute; a chain without it is a build error,
    [VELA020](../reference/analyzers.md#vela020)); not offered on other messages. The step fires only when the
    request sets one of the attributes: on Update the changed columns, on Create the columns the record is created
    with. An unfiltered Create/Update step would fire on every change, so the builder makes you state the trigger.
-5. **Optional** - `WithDescription()`, `WithImpersonation(...)` (see [Impersonation](#impersonation)), `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfigFrom(...)`
+5. **Optional** - `WithDescription()`, `WithImpersonation(...)` (see [Impersonation](#impersonation)), `WithSupportedDeployment()`, `WithExecutionOrder()` (the rank; defaults to `1`, see [Execution order](#execution-order-rank)), `WithStepKey(...)`, `SkipWhenDepthAbove(n)` (see [Depth limit per step](#depth-limit-per-step)), `ForRelationship(...)` on `OnAssociate()` / `OnDisassociate()` (see [Relationship scope](#relationship-scope)), `Disabled()`, `WithUnsecureConfig(...)`, `WithSecureConfigFrom(...)`
 6. **Images** - `WithPreImage(...)` and/or `WithPostImage(...)`
 7. **Handler** - `Handle(...)` closes the chain; it must be the last call (a chain that stops earlier is flagged by analyzer VELA002).
 
@@ -153,23 +160,57 @@ steps registered on the same message, primary entity, stage and mode. Lower rank
 defaults to `1` when you don't call it. Give steps distinct ranks to pin their relative order:
 
 ```csharp
-// Lower rank runs first, so NormalizeName runs before ValidateName.
+// Lower rank runs first, so NormalizeName runs before ValidateName. The two steps share a trigger and a filter,
+// so each names its step key: the rank is not part of a step's identity.
 RegisterStep().OnUpdate().PreOperation().Sync()
     .FilterOn(a => a.Name)
     .WithExecutionOrder(10)
+    .WithStepKey("normalize-name")
     .Handle(NormalizeName);
 
 RegisterStep().OnUpdate().PreOperation().Sync()
     .FilterOn(a => a.Name)
     .WithExecutionOrder(20)
+    .WithStepKey("validate-name")
     .Handle(ValidateName);
 ```
+
+Changing a step's rank updates the deployed step in place: the rank is not part of its identity (step key), so
+`vela plan` shows a change, never a delete and a create.
 
 > [!NOTE]
 > Two steps that share a rank on the same message, entity, stage and mode execute in an order Dataverse does not
 > define. `vela plan` and `vela apply` warn when a step you are deploying shares its rank with another step
 > already registered in the environment (including steps owned by other assemblies), so you can give them
 > distinct ranks. Under `--strict` the warning fails the run.
+
+### Relationship scope
+
+`OnAssociate()` / `OnDisassociate()` steps are registered by Dataverse for **every** relationship (their message
+filter has no primary entity), whatever entity the plugin is declared on. `ForRelationship("schema_name", ...)`
+scopes the step: its handler runs only when the request's `Relationship` is one of the names, and any other
+relationship is skipped with a trace line. The scope is enforced at dispatch, so it is not deployed.
+
+```csharp
+RegisterStep().OnAssociate().PostOperation().Sync()
+    .ForRelationship("account_contacts")
+    .Handle(OnContactLinked);
+```
+
+### Depth limit per step
+
+The plugin-level depth guard (`MaxDepth`, 8 by default) is a last-resort backstop that stops a deep execution by
+throwing (see [Preventing recursion](#preventing-recursion)). `SkipWhenDepthAbove(n)` replaces it for one step: past
+depth `n` that step's handler is **skipped** (with a trace line) rather than failing the operation, and up to `n` it
+runs even past the plugin-level limit. `n` must be at least 1. It is a runtime setting only: it is not deployed and
+does not appear in `vela plan`.
+
+```csharp
+RegisterStep().OnUpdate().PostOperation().Sync()
+    .FilterOn(a => a.Revenue)
+    .SkipWhenDepthAbove(2)
+    .Handle(OnRevenueChanged);
+```
 
 ### Impersonation
 
@@ -189,9 +230,14 @@ Omit `WithImpersonation` (the default) to run as the calling user. `vela plan` /
 write `impersonatinguserid`, so setting, changing or removing the impersonated user reconciles like any other step
 field. Passing `Guid.Empty` is rejected at registration.
 
-> [!NOTE]
-> `WithImpersonation(ImpersonationSource)` (the `CallingUser` / `PluginOwner` enum overload) still exists for the
-> calling-user default; use the `Guid` overload to impersonate a specific systemuser.
+### Description
+
+`WithDescription("...")` sets the step's description in Dataverse (what makers see in the plug-in registration
+tool and the solution explorer). Without it, `apply` writes the step name. `vela apply` appends a
+`[vela:stepkey=...]` line to the description of a keyed step, which keeps the step's identity when an admin renames
+it; leave that line in place. The description is part of the plan diff, so a changed `WithDescription` shows as a
+step change and `apply` updates it in place. Dataverse stores at most 256 characters including that line, and
+`vela plan` rejects a longer description before any write.
 
 ### Typed images (compile-safe projections)
 
@@ -237,13 +283,10 @@ public sealed partial class AccountAudit(string unsecure, string secure) : Entit
   from the message: a string literal is capitalized into the name segment (`OnMessage("update")` with a lambda
   handler gives `UpdatePostOp_PostImage`, nested in the plugin), and a marker type uses its type name; a message
   passed as a variable is not statically known, so the generator skips it and you keep the untyped image.
-- **Bulk operations:** Dataverse does not allow entity images on `CreateMultiple` / `UpdateMultiple` steps
-  (a `*Multiple` step that captures a `WithPreImage`/`WithPostImage` is rejected at `vela plan`/`apply`). Capture
-  the image on the single **`OnCreate()` / `OnUpdate()`** step instead: that step also runs for bulk operations,
-  firing per record, so each invocation reads its record's projection with the singular `ctx.PreImageAs<T>()` /
-  `ctx.PostImageAs<T>()`. (The list accessors `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()`, aligned with
-  `ctx.GetTargets()`, exist for a native `*Multiple` batch context and are exercised via the in-memory test
-  harness, where per-record image collections can be supplied.)
+- **Bulk operations:** a `CreateMultiple` step can capture a post-image and an `UpdateMultiple` step a pre- and
+  post-image. Dataverse delivers one image per target, so read them with the list accessors
+  `ctx.PreImagesAs<T>()` / `ctx.PostImagesAs<T>()`, aligned with `ctx.GetTargets()`. On a single
+  `OnCreate()` / `OnUpdate()` step, use the singular `ctx.PreImageAs<T>()` / `ctx.PostImageAs<T>()`.
 - Reading a column the step did not capture is a normal C# "no such member" compile error on the projection
   (the column simply is not on the type). The projection is nested in your plugin's `partial` class, so the handler
   reads it unqualified with no `using` to add; a plugin that captures a typed image must therefore be `partial`
@@ -386,15 +429,28 @@ The modelled messages with a typed context are:
 - **CRUD & bulk:** `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`.
 - **Relationships & sharing:** `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`,
   `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`.
-- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ReviseQuote`,
-  `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`,
-  `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity`, `GetQuoteProductsFromOpportunity`,
-  `GetSalesOrderProductsFromOpportunity`, `GetInvoiceProductsFromOpportunity`.
+- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`,
+  `GenerateQuoteFromOpportunity` (registered on `quote`, the only entity Dataverse filters it on).
 - **Queues:** `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
 - **Email:** `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
 - **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`,
   `AddMemberList`, `RemoveMemberList`.
 - **Case / contract:** `CloseIncident`, `CancelContract`, `CloneContract`.
+
+**A trigger is named after the SDK request, the step registers on the sdkmessage.** For some business messages the
+two differ, and Dataverse only knows the sdkmessage: `OnSendEmail()` registers on `Send`, and the handler sees
+`ctx.MessageName == "Send"`. The full list (verified live): `SendEmail` → `Send`, `SendEmailFromTemplate` →
+`SendFromTemplate`, `DeliverIncomingEmail` → `DeliverIncoming`, `DeliverPromoteEmail` → `DeliverPromote`,
+`WinOpportunity` / `WinQuote` → `Win`, `LoseOpportunity` → `Lose`, `CloseIncident` → `Close`, `CancelContract` →
+`Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
+`AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`.
+`OnMessage(...)`, the test harness and `PluginContext.For<T>().OnMessage(...)` apply the same translation, so
+`OnMessage(PluginMessages.SendEmail)` also registers on `Send`.
+
+Some request messages accept no custom step at all, so they have no trigger: `ReviseQuote`, `FulfillSalesOrder`,
+`ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity` and the three
+`Get*ProductsFromOpportunity`. Dataverse rejects a step on them with 0x80044187 ("Custom SdkMessageProcessingStep is
+not allowed on the specified message and entity").
 
 Global, entity-less messages (for example `WhoAmI`) are not in this list: they cannot be registered as an
 entity-bound plugin step, so there is no `On...()` for them. You can still call them from a handler
@@ -456,11 +512,11 @@ message-specific `ctx.GetRequest<TRequest>()`.
 | `OnRetrieveMultiple()` | `IRetrieveMultiplePostContext<T>` | `RetrieveMultipleRequest` | `ctx.Request.Query` |
 | `OnAssociate()` | `IAssociatePostContext<T>` | `AssociateRequest` | `ctx.Request.Target`, `ctx.Request.Relationship` |
 | `OnDisassociate()` | `IDisassociatePostContext<T>` | `DisassociateRequest` | `ctx.Request.Target` |
-| `OnMerge()` | `IMergePostContext<T>` | `MergeRequest` | `ctx.Request.Target`, `ctx.Request.SubordinateId` |
+| `OnMerge()` | `IMergePostContext<T>` | `MergeRequest` | `ctx.Request.Target`, `ctx.Request.SubordinateId`, `ctx.PreImage` / `ctx.PostImage`, `ctx.SubordinatePreImage` / `ctx.SubordinatePostImage` |
 | `OnGrantAccess()` | `IGrantAccessPostContext<T>` | `GrantAccessRequest` | `ctx.Request.Target`, `ctx.Request.PrincipalAccess` |
 | `OnModifyAccess()` | `IModifyAccessPostContext<T>` | `ModifyAccessRequest` | `ctx.Request.Target` |
 | `OnRevokeAccess()` | `IRevokeAccessPostContext<T>` | `RevokeAccessRequest` | `ctx.Request.Target`, `ctx.Request.Revokee` |
-| `OnAssign()` | `IAssignPostContext<T>` | `AssignRequest` | `ctx.Request.Target`, `ctx.Request.Assignee` |
+| `OnAssign()` | `IAssignPostContext<T>` | `AssignRequest` | `ctx.Request.Target`, `ctx.Request.Assignee`, `ctx.PreImage` / `ctx.PostImage` |
 
 **Associate / Disassociate** register with **no primary entity**, whatever `TEntity` the plugin uses. Dataverse has
 no per-entity message filter for these (the `Target` can be either end of the relationship), so the step is global
@@ -475,7 +531,9 @@ RegisterStep().OnAssociate().PostOperation().Sync().Handle(ctx =>
 ```
 
 The `TEntity` on `EntityPluginBase<TEntity>` is irrelevant for these two messages (it does not scope them); pick any
-and filter on `ctx.Request.Relationship`.
+and filter on `ctx.Request.Relationship`. Do not branch on `ctx.PrimaryEntityName` or `ctx.PrimaryEntityId`: on these
+steps they are always `"none"` and `Guid.Empty`, at every stage and mode. Use `ctx.Request.Target` to tell which end
+of the link the call came from.
 
 `vela init --samples` generates an `AccountMessageReference.cs` cheat-sheet with one handler per row, so you can copy
 the exact shape for the message you need. It is an `abstract` class, so it compiles but is never deployed. `OnAssign()` is entity-bound (unlike
@@ -517,18 +575,40 @@ in the IDE, without the CLI. For example `OnDelete().PostOperation()....WithPost
 `OnUpdate().PreValidation()....WithPostImage()` and `OnCreate().PreValidation()....WithPreImage()` all fail to build.
 The rules the chain encodes:
 
-1. `PreValidation` - only `PreImage`, only for `Update` and `Delete` (and `UpdateMultiple`). See the note below.
-2. `PreOperation` - only `PreImage`, only for `Update` and `Delete`.
-3. `PostOperation` - `PreImage` for `Update`/`Delete`, `PostImage` for `Create`/`Update`.
+1. `PreValidation` - only `PreImage`, only for `Update`, `Delete`, `Assign` and `Merge` (and `UpdateMultiple`). See the note below.
+2. `PreOperation` - only `PreImage`, only for `Update`, `Delete`, `Assign` and `Merge`.
+3. `PostOperation` - `PreImage` for `Update`/`Delete`/`Assign`/`Merge`, `PostImage` for `Create`/`Update`/`Assign`/`Merge`.
 4. `OnMessage("...")` - a non-modelled message is **permissive**: both images are offered and validity is left
    to Dataverse at deploy time (Vela does not know an arbitrary message's image rules). A modelled message
    reached through `OnMessage(...)` is still validated by the runtime backstop in `Build()`.
-5. `CreateMultiple` / `UpdateMultiple` - not deployable with images. Dataverse accepts neither `Target` nor
-   `Targets` as an image property on the bulk messages, so a `*Multiple` step that carries a `PreImage`/`PostImage`
-   is rejected by `plan`/`apply` at scan time (a clear error, before anything is written). Register the image on
-   the single `Create`/`Update` step instead: it also runs for bulk operations, where per-record images are read
-   with `ctx.GetPreImage(index, alias)` / `ctx.GetPostImage(index, alias)`. The in-memory test harness does allow
-   bulk-step images, so you can still unit-test per-record image handling against `ctx.BulkPreEntityImagesCollection`.
+5. `CreateMultiple` / `UpdateMultiple` - the same rules as `Create` / `Update`: a `PostImage` on `CreateMultiple`,
+   a `PreImage` (at any stage) and a `PostImage` on `UpdateMultiple`. Dataverse delivers one image per target, only
+   in `Pre/PostEntityImagesCollection`; read them with `ctx.GetPreImage(index, alias)` /
+   `ctx.GetPostImage(index, alias)`.
+
+`vela plan`/`apply` check the same rules at scan time, before anything is written, so an image Dataverse would
+refuse fails with a clear error rather than a platform error code mid-apply. They also cover the messages Vela
+does not model: a `PostImage` before `PostOperation` and any image on `RouteTo` are rejected. Each image is
+registered against the request property the message expects (`Id` for Create, `Ids` for CreateMultiple, `Targets`
+for UpdateMultiple, `EmailId` for Send/DeliverIncoming/DeliverPromote, `EntityMoniker` for SetState, `Target`
+otherwise).
+
+**A Merge step can image both records.** `WithPreImage` / `WithPostImage` capture the master (`Target`), and
+`WithSubordinatePreImage` / `WithSubordinatePostImage` capture the subordinate, the record merged away
+(`SubordinateId`), under the same stage rules. The handler reads them as `ctx.PreImage` / `ctx.PostImage` and
+`ctx.SubordinatePreImage` / `ctx.SubordinatePostImage`. The subordinate's post-image is the deactivated record, with
+`masterid` pointing at the master. One step can carry both kinds, but every image alias on a step must be unique:
+Dataverse accepts the same alias on a master and a subordinate image, then delivers only one of them.
+
+```csharp
+RegisterStep().OnMerge().PreOperation().Sync()
+    .WithPreImage(a => a.Name)
+    .WithSubordinatePreImage(a => a.Name, a => a.Telephone1)
+    .Handle(ctx => Log(ctx.PreImage?.Name, ctx.SubordinatePreImage?.Telephone1));
+```
+
+`vela plan` shows an image whose request property changed (for example a master image turned into a subordinate
+one under the same alias) as a change, and `apply` recreates it.
 
 **A PreValidation pre-image is fine for validation, not for a strictly consistent read.** A top-level PreValidation
 step runs outside the database transaction and its image is read without a lock, so another process can change the
@@ -552,7 +632,7 @@ deletes them before PreOperation.
 - `entity.Clone()` - A detached, create-ready copy of a record for the "duplicate a record" pattern (see [Duplicating a record](#duplicating-a-record-clone) below)
 - `ctx.Tag` / `ctx.GetSharedVariable("key")` / `ctx.TryGetSharedVariable<T>("key", out var v)` - Read shared variables: the client-supplied `tag`, a value set by an earlier plugin in the same operation, or one inherited from the parent context of a cascaded operation
 - `ctx.IsApplicationUser`, `ctx.EnvironmentId`, `ctx.TenantId`, `ctx.InitiatingUserAgent`, `ctx.IsPortalsClientCall`, `ctx.PortalsContactId` - Extended execution context helpers with graceful fallback
-- `service.UploadFile(target, "vela_doc", "name.ext", bytes)` / `service.DownloadFile(target, "vela_doc")` / `service.DeleteFile(...)` - One-call File/Image column helpers (`using Vela.Files;`) that drive the block upload/download protocol for you (blocks of at most 4 MB, the platform maximum; a larger `blockSize` is capped; a file the platform serves without chunking is downloaded in one block)
+- `service.UploadFile(target, "vela_doc", "name.ext", bytes)` / `service.DownloadFile(target, "vela_doc")` / `service.DeleteFile(...)` - One-call File/Image column helpers (`using Vela.Files;`) that drive the block upload/download protocol for you (blocks of at most 4 MB, the platform maximum; a larger `blockSize` is capped; a file the platform serves without chunking is downloaded in one block; a download that does not return exactly the announced size throws instead of returning a truncated file)
 - `ctx.GetEnvironmentVariable("adc_ApiBaseUrl")` / `ctx.GetEnvironmentVariableAs<int>("adc_MaxRetries")` - Read a Dataverse environment variable (see [Environment variables](#environment-variables) below)
 - `ctx.AcquireManagedIdentityToken(scopes)` - Acquire token via `IManagedIdentityService` when available
 - `ctx.LogInformation(...)` / `ctx.LogWarning(...)` / `ctx.LogError(ex, ...)` / `ctx.LogMetric(...)` - Leveled, structured telemetry to the trace log and Application Insights (see [Telemetry & Application Insights](telemetry.md))
@@ -647,13 +727,13 @@ Handler entry is traced automatically too: alongside the plugin-level `Executing
 > which additionally covers early-bound entities nested in a deep-insert graph. If you write such graphs from an
 > older project, add that attribute (or `[assembly: Microsoft.Xrm.Sdk.Client.ProxyTypesAssembly]`) to your plugin project.
 
-When plugin telemetry is available in runtime (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`), trace messages are also forwarded to plugin telemetry for Application Insights correlation.
+Trace messages also go to the platform's Application Insights logger (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`) at Information level, a no-op when the environment exports no telemetry. See [Telemetry](telemetry.md).
 
 Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment setting (`Off` / `Exception` / `All`) - not anything in code. There is no framework-level verbosity switch: server-side plugins run in Microsoft's sandbox where OS environment variables cannot be set, so a runtime verbosity flag would have no effect online. What you control in code is *what extra detail* you trace, at the call site.
 
 **You get an automatic snapshot on every execution, without record data.** `PluginBase` wraps your handler and
 writes a `start` snapshot before your code runs, then one for the failure if it throws
-(`invalid-plugin-exception` / `business-exception` / `unhandled-exception`). By default these list only
+(`invalid-plugin-exception` / `organization-service-fault` / `business-exception` / `unhandled-exception`). By default these list only
 **metadata**: message, stage, ids, and the *names* of the parameters, images and attributes, never their values.
 Plugins routinely handle personal data and secrets, and the trace log is persisted when the environment's Plugin
 Trace Log is `All`. While debugging, opt into values for one plugin:
@@ -662,7 +742,7 @@ Trace Log is `All`. While debugging, opt into values for one plugin:
 protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full; // adds values, and a success snapshot
 ```
 
-Snapshots go **only to the plug-in trace log**: they are never forwarded to `ILogger` / Application Insights.
+Snapshots go **only to the plug-in trace log**: they are never forwarded to Application Insights.
 
 To capture **intermediate** state, call `TraceExecutionSnapshot(...)` yourself **inside your handler** with your
 own phase label - a checkpoint around a risky step. An explicit call traces values (`TraceSnapshotDetail.Full`)
@@ -720,6 +800,45 @@ can echo submitted values (the exception itself still reaches your handler, mess
 Keep your own handler traces business-focused (decisions and key values); rely on the framework for the
 pipeline, snapshot, and Dataverse-operation tracing.
 
+## Preventing recursion
+
+A step that writes to the table it is registered on can fire itself again. Stop that in the step's own logic:
+
+- **Write in a pre-stage.** A default or derived column set on the `Target` in PreValidation / PreOperation is
+  saved with the row: no extra `Update`, so nothing to recurse on (see
+  [Writing the Target](#writing-the-target-which-stage-persists)).
+- **Filter on the columns that matter.** `FilterOn(...)` fires the step only when the `Target` carries those
+  columns. When the step writes back, leave the filtered columns out of that write.
+- **Check for a real change.** `ctx.HasChanged(...)` skips a value re-sent unchanged (see
+  [HasChanged](#reacting-only-to-real-changes-haschanged)).
+- **Flag the write with a shared variable.** Set a flag on the context before the write. The cascaded execution
+  sees it through its parent context, and `ctx.GetSharedVariable(...)` walks the parent contexts:
+
+  ```csharp
+  private const string Recalculating = "zava_recalculating";
+
+  private void OnUpdated(IUpdatePostContext<Account> ctx)
+  {
+      if (ctx.GetSharedVariable(Recalculating) != null)
+      {
+          return; // this execution was caused by our own write below
+      }
+
+      ctx.PluginExecutionContext.SharedVariables[Recalculating] = true;
+      ctx.Service.Update(new Account { Id = ctx.PrimaryEntityId, CreditLimit = Recalculate(ctx) });
+  }
+  ```
+
+Don't build logic on `ctx.Depth`. Microsoft
+[advises against it](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.iexecutioncontext.depth): the same
+operation can arrive through a deeper code path (a flow, a workflow, another plugin) after a configuration change you
+don't control. Dataverse treats a chain that reaches depth 8 within an hour as an infinite loop and aborts it.
+
+The Vela base classes also stop an execution whose depth exceeds `maxDepth` (a constructor argument, default
+`PluginBase.DefaultMaxDepth`, 8). Treat it as a backstop that gives a clearer trace, not as recursion prevention: at
+the default it only stops a chain the platform would abort anyway, and a lower value can reject a legitimate deep
+chain. In the test harness, `PluginPipeline` caps the cascade at the same depth by default (`WithMaxDepth` changes it).
+
 ## Respect the sandbox
 
 A plugin runs in the Dataverse **sandbox**, which constrains what the code may do:
@@ -735,23 +854,46 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   ```csharp
   private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
   {
-      ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;   // net462: enable TLS 1.2 once
       string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });
       using var http = new HttpClient();
+      http.Timeout = TimeSpan.FromSeconds(15);             // fail fast: the default is 100 s
+      http.DefaultRequestHeaders.ConnectionClose = true;   // KeepAlive off in the sandbox
       http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-      // ... call the allow-listed endpoint; keep it well under the execution budget below.
+      // ... call the allow-listed endpoint synchronously (.GetAwaiter().GetResult()).
   }
   ```
+
+  Set an explicit, short `Timeout` and turn `KeepAlive` off, as Microsoft recommends for plug-ins
+  ([Set Timeout](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-timeout-for-external-calls-from-plug-ins),
+  [Set KeepAlive to false](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-keepalive-false-interacting-external-hosts-plugin)):
+  the default 100-second timeout leaves almost nothing of the execution budget below, and a stale persistent
+  connection makes the call hang until the network resets it.
 
 - **~2-minute execution budget.** The whole pipeline execution (all synchronous steps) must finish inside roughly two
   minutes or the platform aborts it. Keep outbound calls fast and few; offload slow work to an asynchronous step or
   an external process. (This is the plugin runtime budget - distinct from the CLI's `--timeout`, which bounds a
   `vela` command's Dataverse requests.)
+- **Retry where throttling can happen.** Dataverse
+  [service-protection limits](https://learn.microsoft.com/power-apps/developer/data-platform/api-limits) don't
+  apply to data operations from a plugin, so `ctx.Service` calls rarely get a throttling fault, and inside a
+  transaction a failed call can't be replayed at all. `RetryPolicy.Execute(ctx, ...)` (or `ExecuteWithRetry` on the
+  Vela base) is useful around calls that leave the sandbox, such as another environment or an external service that
+  reports throttling the same way, and in code shared with a client application. Each wait is capped at
+  `RetryPolicy.MaxDelay` (30 s), but the waits add up: pass `maxElapsed` to bound the whole call within the
+  execution budget.
+
+  ```csharp
+  Entity remote = RetryPolicy.Execute(ctx,
+      () => otherEnvironment.Retrieve("account", id, new ColumnSet("name")),
+      retryOnTimeout: true,                      // a read is safe to replay
+      maxElapsed: TimeSpan.FromSeconds(20));
+  ```
 
 `net462` note: `HttpClient` on `net462` binds against the `System.Net.Http` GAC facade - the project `vela init`
-scaffolds already references it (`<Reference Include="System.Net.Http" />`) - and TLS 1.2 must be enabled once
-(`ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;`, as above), since the net462 default does
-not negotiate it.
+scaffolds already references it (`<Reference Include="System.Net.Http" />`). No TLS setup is needed: the sandbox
+runs the plugin on .NET Framework 4.8 with `ServicePointManager.SecurityProtocol` at `SystemDefault`, so the OS
+negotiates TLS 1.2 or 1.3 even for a `net462` assembly (verified live, 2026-10). Don't set `SecurityProtocol`: it is
+process-wide, so it would change every plugin in the sandbox worker.
 
 ## See also
 

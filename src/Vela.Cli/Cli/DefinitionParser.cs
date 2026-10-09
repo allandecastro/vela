@@ -33,7 +33,10 @@ internal static class DefinitionParser
             UnsecureConfig: TryGetString(definition, "unsecureConfig") ?? string.Empty,
             SecureConfig: TryGetString(definition, "secureConfig") ?? string.Empty,
             ImpersonatingUserId: Guid.TryParse(TryGetString(definition, "impersonatingUserId"), out Guid impersonatingUserId) ? impersonatingUserId : Guid.Empty,
-            SupportedDeployment: TryGetInt(definition, "supportedDeployment"));
+            SupportedDeployment: TryGetInt(definition, "supportedDeployment"),
+            Description: TryGetString(definition, "description") ?? string.Empty,
+            AsyncAutoDelete: TryGetBool(definition, "asyncAutoDelete"),
+            LiveStepKey: TryGetString(definition, DiffEngine.LiveStepKeyField));
     }
 
     internal static ImageApplyDefinition[] ParseImageDefinitions(JsonElement definition, string propertyName)
@@ -52,7 +55,7 @@ internal static class DefinitionParser
                 continue;
             }
 
-            result.Add(new ImageApplyDefinition(alias, TryGetStringArray(image, "attributes")));
+            result.Add(new ImageApplyDefinition(alias, TryGetStringArray(image, "attributes"), TryGetString(image, "messagePropertyName") ?? string.Empty));
         }
 
         return result.OrderBy(x => x.Alias, StringComparer.Ordinal).ToArray();
@@ -62,9 +65,10 @@ internal static class DefinitionParser
     {
         CustomApiParameterApplyDefinition[] input = ParseCustomApiParameters(definition, "inputParameters", true);
         CustomApiParameterApplyDefinition[] output = ParseCustomApiParameters(definition, "outputParameters", false);
+        string uniqueName = TryGetString(definition, "uniqueName") ?? string.Empty;
         return new CustomApiApplyDefinition(
             PluginTypeName: TryGetString(definition, "pluginTypeName") ?? string.Empty,
-            UniqueName: TryGetString(definition, "uniqueName") ?? string.Empty,
+            UniqueName: uniqueName,
             IsFunction: TryGetBool(definition, "isFunction"),
             IsBound: TryGetBool(definition, "isBound"),
             BoundEntityLogicalName: TryGetString(definition, "boundEntityLogicalName"),
@@ -74,7 +78,9 @@ internal static class DefinitionParser
             BindingType: TryGetInt(definition, "bindingType", defaultValue: TryGetBool(definition, "isBound") ? 1 : 0),
             WorkflowSdkStepEnabled: TryGetBool(definition, "workflowSdkStepEnabled"),
             InputParameters: input,
-            OutputParameters: output);
+            OutputParameters: output,
+            DisplayName: CustomApiShape.LabelOrDefault(TryGetString(definition, "displayName"), uniqueName),
+            Description: CustomApiShape.LabelOrDefault(TryGetString(definition, "description"), uniqueName));
     }
 
     internal static CustomApiParameterApplyDefinition[] ParseCustomApiParameters(JsonElement definition, string propertyName, bool includeOptional)
@@ -97,7 +103,8 @@ internal static class DefinitionParser
             string? parameterTypeName = TryGetString(row, "parameterTypeName") ?? TryGetString(row, "typeName");
             bool isCollection = TryGetBool(row, "isCollection");
             string? logicalEntityName = TryGetString(row, "logicalEntityName");
-            result.Add(new CustomApiParameterApplyDefinition(name, isOptional, parameterTypeName, isCollection, logicalEntityName));
+            string description = CustomApiShape.LabelOrDefault(TryGetString(row, "description"), name);
+            result.Add(new CustomApiParameterApplyDefinition(name, isOptional, parameterTypeName, isCollection, logicalEntityName, Description: description));
         }
 
         return result.OrderBy(x => x.Name, StringComparer.Ordinal).ToArray();
@@ -121,7 +128,9 @@ internal static class DefinitionParser
             return null;
         }
 
-        int start = text!.IndexOf(StepKeyMarkerPrefix, StringComparison.Ordinal);
+        // The marker is the description's suffix, after the developer's own text (WithDescription). Take the LAST one,
+        // so a description that happens to quote a marker cannot shadow the real key.
+        int start = text!.LastIndexOf(StepKeyMarkerPrefix, StringComparison.Ordinal);
         if (start < 0)
         {
             return null;
@@ -130,6 +139,21 @@ internal static class DefinitionParser
         start += StepKeyMarkerPrefix.Length;
         int end = text.IndexOf(StepKeyMarkerSuffix, start, StringComparison.Ordinal);
         return end < 0 ? null : text.Substring(start, end - start);
+    }
+
+    /// <summary>
+    /// The human-readable part of a live step description: the text before the trailing step-key marker, trimmed
+    /// (the whole description, trimmed, when there is no marker).
+    /// </summary>
+    internal static string StripStepKeyMarker(string? description)
+    {
+        if (string.IsNullOrEmpty(description))
+        {
+            return string.Empty;
+        }
+
+        int start = description!.LastIndexOf(StepKeyMarkerPrefix, StringComparison.Ordinal);
+        return (start < 0 ? description : description.Substring(0, start)).Trim();
     }
 
     /// <summary>

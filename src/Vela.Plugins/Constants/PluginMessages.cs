@@ -53,15 +53,18 @@ namespace Vela.Constants
         public const string Disassociate = "Disassociate";
 
         /// <summary>
-        /// SetState message. Deprecated by the platform - update <c>statecode</c>/<c>statuscode</c> with an
-        /// Update instead. Vela does not expose a typed <c>OnSetState()</c> method; if you must target the
-        /// legacy message, register it via <c>OnMessage(PluginMessages.SetState)</c>.
+        /// SetState message. Deprecated by the platform, and a step registered on it never fires: Dataverse runs a
+        /// <c>SetStateRequest</c> and an Update of <c>statecode</c> as <see cref="SetStateDynamicEntity"/> (verified
+        /// live). Register on <c>OnUpdate().FilterOn(x =&gt; x.StateCode)</c> or on
+        /// <c>OnMessage(PluginMessages.SetStateDynamicEntity)</c> instead (analyzer VELA022).
         /// </summary>
         public const string SetState = "SetState";
 
         /// <summary>
-        /// SetStateDynamicEntity message. Deprecated by the platform (see <see cref="SetState"/>); no typed
-        /// method - register via <c>OnMessage(PluginMessages.SetStateDynamicEntity)</c> if required.
+        /// SetStateDynamicEntity message: the one a state change fires (a <c>SetStateRequest</c>, or an Update of
+        /// <c>statecode</c>, where it runs nested at depth + 1). Its inputs are <c>EntityMoniker</c>, <c>State</c> and
+        /// <c>Status</c> (-1 for the state's default). No typed method - register via
+        /// <c>OnMessage(PluginMessages.SetStateDynamicEntity)</c>.
         /// </summary>
         public const string SetStateDynamicEntity = "SetStateDynamicEntity";
 
@@ -89,20 +92,11 @@ namespace Vela.Constants
         /// <summary>LoseOpportunity message.</summary>
         public const string LoseOpportunity = "LoseOpportunity";
 
-        /// <summary>ConvertQuoteToSalesOrder message.</summary>
-        public const string ConvertQuoteToSalesOrder = "ConvertQuoteToSalesOrder";
-
         /// <summary>ConvertSalesOrderToInvoice message.</summary>
         public const string ConvertSalesOrderToInvoice = "ConvertSalesOrderToInvoice";
 
         /// <summary>GenerateQuoteFromOpportunity message.</summary>
         public const string GenerateQuoteFromOpportunity = "GenerateQuoteFromOpportunity";
-
-        /// <summary>GenerateSalesOrderFromOpportunity message.</summary>
-        public const string GenerateSalesOrderFromOpportunity = "GenerateSalesOrderFromOpportunity";
-
-        /// <summary>GenerateInvoiceFromOpportunity message.</summary>
-        public const string GenerateInvoiceFromOpportunity = "GenerateInvoiceFromOpportunity";
 
         /// <summary>AddToQueue message.</summary>
         public const string AddToQueue = "AddToQueue";
@@ -166,21 +160,6 @@ namespace Vela.Constants
 
         /// <summary>WinQuote message.</summary>
         public const string WinQuote = "WinQuote";
-
-        /// <summary>ReviseQuote message.</summary>
-        public const string ReviseQuote = "ReviseQuote";
-
-        /// <summary>FulfillSalesOrder message.</summary>
-        public const string FulfillSalesOrder = "FulfillSalesOrder";
-
-        /// <summary>GetQuoteProductsFromOpportunity message.</summary>
-        public const string GetQuoteProductsFromOpportunity = "GetQuoteProductsFromOpportunity";
-
-        /// <summary>GetSalesOrderProductsFromOpportunity message.</summary>
-        public const string GetSalesOrderProductsFromOpportunity = "GetSalesOrderProductsFromOpportunity";
-
-        /// <summary>GetInvoiceProductsFromOpportunity message.</summary>
-        public const string GetInvoiceProductsFromOpportunity = "GetInvoiceProductsFromOpportunity";
 
         /// <summary>
         /// ModifyAccess message.
