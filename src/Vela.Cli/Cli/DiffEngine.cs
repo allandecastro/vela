@@ -116,6 +116,9 @@ internal static class DiffEngine
     // and nested parameter unique names (the dotted-name self-heal) comparing exactly. (#305)
     private static readonly string[] CaseFoldedFields = ["message", "name", "uniqueName"];
 
+    private static readonly (string Label, string Source)[] DerivedLabelFields =
+        [("description", "name"), ("displayName", "uniqueName"), ("description", "uniqueName")];
+
     // A comparison-only serialization of a normalized definition: identical to the stored shape except the
     // case-folded fields are lower-cased, so a case-only drift compares equal. The stored Definition is untouched,
     // so apply still writes the authored casing.
@@ -129,6 +132,19 @@ internal static class DiffEngine
         if (JsonNode.Parse(definition.GetRawText()) is not JsonObject obj)
         {
             return JsonSerializer.Serialize(definition);
+        }
+
+        // A label that defaults to a case-folded field (a step description to the step name, a Custom API display name
+        // and description to the unique name) inherits that field's casing, so fold it too while it is still the
+        // default. A label the developer wrote keeps comparing exactly.
+        foreach ((string label, string source) in DerivedLabelFields)
+        {
+            if (obj[label] is JsonValue labelValue && labelValue.TryGetValue(out string? labelText)
+                && obj[source] is JsonValue sourceValue && sourceValue.TryGetValue(out string? sourceText)
+                && string.Equals(labelText, sourceText, StringComparison.OrdinalIgnoreCase))
+            {
+                obj[label] = labelText!.ToLowerInvariant();
+            }
         }
 
         foreach (string field in CaseFoldedFields)

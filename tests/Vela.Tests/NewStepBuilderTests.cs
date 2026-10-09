@@ -171,6 +171,18 @@ namespace Vela.Tests
             Assert.Null(create.ImpersonatingUserId);
         }
 
+        [Fact]
+        public void WithImpersonation_takes_only_a_systemuser_id()   // #442
+        {
+            // The ImpersonationSource overload was never written to Dataverse (PluginOwner ran as the calling user), so
+            // it is gone: the Guid overload is the only way to impersonate.
+            Assert.Null(typeof(StepDefinition).Assembly.GetType("Vela.Steps.ImpersonationSource"));
+            Assert.Null(typeof(StepDefinition).GetProperty("ImpersonationSource"));
+            Assert.All(
+                typeof(ICreatePreOperationConfig<TestAccount>).GetMethods().Where(m => m.Name == "WithImpersonation"),
+                m => Assert.Equal(typeof(Guid), Assert.Single(m.GetParameters()).ParameterType));
+        }
+
         private sealed class EmptyImpersonationPlugin : EntityPluginBase<TestAccount>
         {
             public EmptyImpersonationPlugin() : base(string.Empty, string.Empty) { }
