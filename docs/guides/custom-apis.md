@@ -186,6 +186,15 @@ var response = service.Execute(new zava_RecalculateRequest { Target = accountRef
 Run the handler with no connection using the [test harness](testing.md) - the same `Execute` call works
 against the in-memory `IOrganizationService`.
 
+In the handler, `ctx.PrimaryEntityName` and `ctx.PrimaryEntityId` follow the binding type, in the harness as on
+Dataverse:
+
+| Binding | `PrimaryEntityName` | `PrimaryEntityId` |
+|---|---|---|
+| Global | `"none"` | `Guid.Empty` |
+| `BoundTo<T>()` | the bound table | the `Target` record's id |
+| `BoundToCollection<T>()` | the bound table | `Guid.Empty` |
+
 ## React with a plugin step (registrability-gated)
 
 To run your own step when a Custom API executes, `vela models --custom-apis` emits an `On<Message>()` builder

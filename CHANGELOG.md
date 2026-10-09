@@ -210,6 +210,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `OperationId` equals `RequestId` on sync steps and is a separate system job id on async steps. `IsolationMode` is 2
   (sandbox) and `SecondaryEntityName` is "none". The children of an `ExecuteTransaction` share one correlation id and
   run in its transaction, PreValidation included; the children of an `ExecuteMultiple` each get their own.
+- **Harness Associate/Disassociate steps see `PrimaryEntityName` "none".** The harness reported the Target's entity
+  and id, so a handler branching on `ctx.PrimaryEntityName == "account"` passed in tests and never matched live. On
+  Dataverse both are global messages: every step sees `PrimaryEntityName` "none" and an empty `PrimaryEntityId`, at
+  every stage and mode (verified live), and only the `Target` input names the record. The harness now matches (#459).
+- **Harness Custom APIs see the platform's primary entity.** The harness gave every Custom API an empty
+  `PrimaryEntityName` and no `PrimaryEntityId`. On Dataverse (verified live) a global API sees "none" and an empty id,
+  an entity-bound API sees the bound table and the `Target`'s id, and a collection-bound API sees the bound table and
+  an empty id. The harness now matches.
+
 - **VELA007 flags every image the message can never provide.** It now also reports a pre-image on
   `OnMessage("CreateMultiple")` and any image on `OnMessage("RouteTo")`, from the same image table the runtime and
   the CLI use (#435).

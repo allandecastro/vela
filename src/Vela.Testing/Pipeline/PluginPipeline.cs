@@ -719,13 +719,18 @@ namespace Vela.Testing
             {
                 return RunOperation(() =>
                 {
+                    IPlugin plugin = Instantiate(pluginType);
+                    CustomApiDefinition? definition = (plugin as CustomApiBase)?.GetCustomApiDefinition();
+                    (string primaryEntityName, Guid primaryEntityId) = CustomApiPrimaryEntity(definition, request);
+
                     FakePluginExecutionContext context = new FakePluginExecutionContext
                     {
                         MessageName = request.RequestName,
                         Stage = (int)PluginStages.MainOperation,
                         Mode = (int)ExecutionMode.Synchronous,
                         Depth = _depth,
-                        PrimaryEntityName = string.Empty,
+                        PrimaryEntityName = primaryEntityName,
+                        PrimaryEntityId = primaryEntityId,
                         CorrelationId = _correlationId,
                         IsInTransaction = IsInTransactionFor(PluginStages.MainOperation, ExecutionMode.Synchronous),
                         SharedVariables = _sharedVariables
@@ -736,11 +741,9 @@ namespace Vela.Testing
                         context.InputParameters[parameter.Key] = parameter.Value;
                     }
 
-                    IPlugin plugin = Instantiate(pluginType);
-
                     // The platform rejects a call that omits a required (non-optional) input parameter before the
                     // Custom API runs; enforce the same so a test cannot pass while omitting a required input.
-                    if (plugin is CustomApiBase customApi && customApi.GetCustomApiDefinition() is CustomApiDefinition definition)
+                    if (definition != null)
                     {
                         foreach (CustomApiParameterDefinition parameter in definition.InputParameters)
                         {
@@ -1015,6 +1018,23 @@ namespace Vela.Testing
 
         private static readonly HashSet<string> NonTransactionalMessages =
             new HashSet<string>(new[] { "Retrieve", "RetrieveMultiple" }, StringComparer.OrdinalIgnoreCase);
+
+        // The primary entity a Custom API's main operation sees on Dataverse (verified live): "none" and an empty id
+        // for a global API, the bound entity and the Target's id for an entity-bound API, and the bound entity with
+        // an empty id for an entity-collection-bound API.
+        private static (string, Guid) CustomApiPrimaryEntity(CustomApiDefinition? definition, OrganizationRequest request)
+        {
+            if (definition == null || definition.BindingType == CustomApiBindingType.Global || string.IsNullOrEmpty(definition.BoundEntityLogicalName))
+            {
+                return ("none", Guid.Empty);
+            }
+
+            Guid id = definition.BindingType == CustomApiBindingType.Entity
+                && request.Parameters.TryGetValue("Target", out object? target) && target is EntityReference reference
+                ? reference.Id
+                : Guid.Empty;
+            return (definition.BoundEntityLogicalName!, id);
+        }
 
         private static StageInvocation GenericInvocation(string message, PluginStages stage, string entityName, Guid entityId, ParameterCollection inputs, ParameterCollection? outputs)
         {
@@ -1566,6 +1586,11 @@ namespace Vela.Testing
 
         private void Dispatch(PipelineRegistration registration, StageInvocation invocation)
         {
+            // A global message (Associate/Disassociate) runs on the "none" sdkmessagefilter: on Dataverse its steps
+            // see PrimaryEntityName "none" and an empty PrimaryEntityId, whatever the Target (verified live at s10,
+            // s20, s40 sync and s40 async). The Target input still carries the record.
+            bool globalMessage = PluginMessages.IsGlobalMessage(invocation.Message);
+
             FakePluginExecutionContext context = new FakePluginExecutionContext
             {
                 MessageName = invocation.Message,
@@ -1575,10 +1600,12 @@ namespace Vela.Testing
                 // When the invocation could not resolve a primary entity (a generic message with no Target), use
                 // the step's own entity so the plugin's own step matching (which compares PrimaryEntityName to the
                 // step's EntityLogicalName) still resolves this step.
-                PrimaryEntityName = string.IsNullOrEmpty(invocation.EntityLogicalName)
-                    ? registration.Step.EntityLogicalName
-                    : invocation.EntityLogicalName,
-                PrimaryEntityId = invocation.PrimaryId,
+                PrimaryEntityName = globalMessage
+                    ? "none"
+                    : string.IsNullOrEmpty(invocation.EntityLogicalName)
+                        ? registration.Step.EntityLogicalName
+                        : invocation.EntityLogicalName,
+                PrimaryEntityId = globalMessage ? Guid.Empty : invocation.PrimaryId,
                 CorrelationId = _correlationId,
                 IsInTransaction = IsInTransactionFor(invocation.Stage, registration.Step.Mode),
                 SharedVariables = _sharedVariables
