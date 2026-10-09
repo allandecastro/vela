@@ -11,7 +11,7 @@ namespace Vela.Cli;
 /// Raw interpolated string literals (<c>$$"""..."""</c>) are used so the emitted C# braces stay
 /// literal and only <c>{{token}}</c> placeholders interpolate.
 /// </summary>
-internal static class ScaffoldTemplates
+internal static partial class ScaffoldTemplates
 {
     // Version of the Power Platform plugin MSBuild SDK package. Bump as new releases ship; this only
     // affects newly generated solutions, not this repository.
@@ -605,9 +605,9 @@ Run these from the solution root:
 
 1. Generate early-bound models from your environment: `vela models --entities account,contact` (writes into `src/{{options.Prefix}}.Shared`).
 2. Add a plugin or Custom API (`--entity` is the early-bound model type): `vela add plugin MyPlugin --entity Account --filtering-attributes Name` (a Create/Update step needs its filtering columns) or `vela add customapi MyApi --global`.
-3. Build, then preview and deploy: `dotnet build -c Release`, then `vela plan --packages-dir artifacts` and `vela apply --packages-dir artifacts`.
+3. Build, then preview and deploy into your solution: `dotnet build -c Release`, then `vela plan --packages-dir artifacts --solution <name>` and `vela apply --packages-dir artifacts --solution <name>` (`--solution` gives the package its publisher prefix, which Dataverse requires).
 
-Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts` simply reports no changes.
+Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts --solution <name>` simply reports no changes.
 """;
     }
 
@@ -679,11 +679,11 @@ during the build (from the publish output), so a cold `dotnet pack` emits an ass
 
 ```powershell
 # Preview (read-only)
-vela plan --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
+vela plan --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --solution <name> --interactive --verbose
 
 # Apply (idempotent create/update/delete). apply writes by default and prompts on a terminal;
-# add --auto-approve to skip the prompt in CI.
-vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --interactive --verbose
+# add --auto-approve to skip the prompt in CI. --solution gives the package its publisher prefix.
+vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --solution <name> --interactive --verbose
 ```
 
 ## What's inside the plugin project

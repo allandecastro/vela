@@ -121,6 +121,80 @@ public class ProjectScaffolderTests
     }
 
     [Fact]
+    public void Generate_WritesAnAgentsGuide_ForThisSolution()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+
+            string agents = File.ReadAllText(Path.Combine(temp, "ZavaSales", "AGENTS.md"));
+
+            // The step, Custom API and test patterns, each with the current API.
+            Assert.Contains("## Write a step", agents);
+            Assert.Contains("RegisterStep().OnUpdate().PreOperation().Sync()", agents);
+            Assert.Contains(".FilterOn(a => a.CreditLimit)", agents);
+            Assert.Contains(".WithStepKey(\"credit-review\")", agents);
+            Assert.Contains("ctx.Service", agents);
+            Assert.Contains("ctx.SystemService", agents);
+            Assert.Contains("ctx.AsUser(userId)", agents);
+            Assert.Contains("## Write a Custom API", agents);
+            Assert.Contains("RegisterCustomApi(\"zava_EstimateValue\")", agents);
+            Assert.Contains("## Write a test", agents);
+            Assert.Contains("PluginPipeline.Empty().Register<AccountCreditPlugin>()", agents);
+
+            // The CLI loop on this solution's own names, always with --solution.
+            Assert.Contains("dotnet build ZavaSales.sln -c Release", agents);
+            Assert.Contains("dotnet test tests/Zava.Plugins.Tests -c Release", agents);
+            Assert.Contains("vela plan  --packages-dir artifacts --solution <uniquename> --json", agents);
+            Assert.Contains("vela apply --packages-dir artifacts --solution <uniquename>", agents);
+            Assert.Contains("--project src/Zava.Plugins/Zava.Plugins.csproj", agents);
+            Assert.DoesNotContain("{{", agents);
+        });
+    }
+
+    [Fact]
+    public void AgentsGuide_Snippets_AreTheCompiledDocSamples()
+    {
+        // Every line of the guide's C# blocks must appear in docs/samples/Vela.DocSamples/AgentsGuideSamples.cs,
+        // which CI compiles with the analyzers and runs, so the guide cannot drift from code that builds.
+        string? pluginsProject = FindRepoProject("Vela.Plugins");
+        Assert.NotNull(pluginsProject);
+        string repoRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(pluginsProject)!, "..", ".."));
+        string compiled = File.ReadAllText(Path.Combine(repoRoot, "docs", "samples", "Vela.DocSamples", "AgentsGuideSamples.cs"));
+
+        string guide = ScaffoldTemplates.AgentsGuide(Options("unused"));
+        string[] blocks = guide.Split("```");
+        string[] csharpLines = blocks
+            .Where(block => block.StartsWith("csharp", StringComparison.Ordinal))
+            .SelectMany(block => block.Substring("csharp".Length).Split('\n'))
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .ToArray();
+
+        Assert.NotEmpty(csharpLines);
+        Assert.All(csharpLines, line => Assert.Contains(line, compiled));
+    }
+
+    [Fact]
+    public void Generate_AgentsGuide_OmitsTheTestProjectWhenThereIsNone_AndKeepsUserEdits()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, console: false, integrations: false, tests: false, demos: false)));
+
+            string path = Path.Combine(temp, "ZavaSales", "AGENTS.md");
+            string agents = File.ReadAllText(path);
+            Assert.DoesNotContain("Zava.Plugins.Tests", agents);
+            Assert.DoesNotContain("dotnet test", agents);
+
+            // Like the README, AGENTS.md is the user's once written: --force does not overwrite it.
+            File.WriteAllText(path, "my own instructions");
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, console: false, integrations: false, tests: false, demos: false, force: true)));
+            Assert.Equal("my own instructions", File.ReadAllText(path));
+        });
+    }
+
+    [Fact]
     public void Generate_EmitsDirectoryPackagesProps_DisablingCentralPackageManagement()   // #315
     {
         RunInTempDir(temp =>

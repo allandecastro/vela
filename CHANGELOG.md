@@ -514,6 +514,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **`vela init` writes an `AGENTS.md`** at the solution root: instructions for AI coding agents on how to write a step
+  (typed trigger, required `FilterOn`, images, `WithStepKey`, `ctx.Service` / `SystemService` / `AsUser`), a typed
+  Custom API and a `PluginPipeline` test in this solution, and how to drive `vela models`, `vela add`,
+  `vela plan --json` and `vela apply`. Like the README, it is written only when absent, so `--force` keeps your edits.
 - **`apply` writes `asyncautodelete`** for a step declared `Async(deleteJobOnSuccess: true)`, and `plan` diffs it.
 - **Several steps on one trigger** are created, updated and deleted as separate steps. A changed step that pairs
   with its live step under another key carries `liveStepKey` in its `after` definition, so `apply` updates that step.
@@ -541,6 +545,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **The scaffolded README and next steps pass `--solution` to `plan` and `apply`.** They showed both commands without
+  it, and on the scaffolded package (`Zava.Plugins`, which has no publisher prefix) both fail with exit 4.
 - **An added step no longer takes over another step registered on the same trigger.** `apply` adopted any single
   live step on the trigger for a step whose key it did not find; it now adopts only the step the diff paired.
 

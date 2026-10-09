@@ -225,6 +225,8 @@ internal static class ProjectScaffolder
         // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
         // nuget.org, the default source. Add your own nuget.config only if you use a private feed.
         WriteIfAbsent("README.md", RootReadme(options));
+        // Instructions for AI coding agents (step, Custom API and test patterns, CLI loop); user-editable like the README.
+        WriteIfAbsent("AGENTS.md", AgentsGuide(options));
 
         if (options.Json)
         {
@@ -253,7 +255,7 @@ internal static class ProjectScaffolder
 
         // `dotnet build -c Release` packages the plugin project(s) into artifacts/ (GeneratePackageOnBuild +
         // PackageOutputPath). `dotnet pack` is intentionally not used: run cold it emits an assembly-less package.
-        Console.WriteLine($"  vela plan --packages-dir artifacts --interactive --verbose");
+        Console.WriteLine($"  vela plan --packages-dir artifacts --solution <name> --interactive --verbose");
         if (options.IncludeWebResources)
         {
             Console.WriteLine($"  cd src/{webResourcesName} && npm install && npm run build   # bundle the form web resources");
