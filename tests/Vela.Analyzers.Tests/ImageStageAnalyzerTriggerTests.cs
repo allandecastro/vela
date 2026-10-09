@@ -50,15 +50,15 @@ namespace Demo
     private static string In(string body) => Harness.Replace("BODY", body);
 
     [Theory]
-    [InlineData("OnCreate()")]
-    [InlineData("OnCreateMultiple()")]
-    [InlineData("OnMessage(\"Create\")")]
-    [InlineData("OnMessage(\" createmultiple \")")]
-    public async Task A_pre_image_on_any_create_trigger_is_reported(string trigger)
+    [InlineData("OnCreate()", "Create")]
+    [InlineData("OnCreateMultiple()", "CreateMultiple")]
+    [InlineData("OnMessage(\"Create\")", "Create")]
+    [InlineData("OnMessage(\" createmultiple \")", "CreateMultiple")]
+    public async Task A_pre_image_on_any_create_trigger_is_reported(string trigger, string message)
     {
         await Verify.VerifyAnalyzerAsync(In("RegisterStep()." + trigger + ".PostOperation().{|#0:WithPreImage|}(\"name\").Handle();"),
             new DiagnosticResult(ImageStageAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(0)
-                .WithMessage("A pre-image is not valid on a Create step: there is no prior row state before a create"));
+                .WithMessage($"A pre-image is not valid on a {message} step: there is no prior row state before a create"));
     }
 
     [Theory]
