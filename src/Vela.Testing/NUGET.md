@@ -63,7 +63,7 @@ Custom APIs and message-only plugins use `PluginContext.ForMessage("vela_DoThing
 - **Pipeline simulation** - `PluginPipeline` auto-discovers your plugins from the assembly and runs the
   Dataverse pipeline in memory: writes through `pipeline.Service` fire the registered steps (stages, order,
   filtering attributes, pre/post images) and **cascade** (a plugin that writes triggers more plugins).
-  Synchronous failures roll back; async steps run after commit; Custom APIs run via `Service.Execute(...)`.
+  Synchronous failures roll back; async steps run after the outermost commit; Custom APIs run via `Service.Execute(...)`.
   Inspect `pipeline.ExecutionLog` to see what fired.
 
 ## Documentation

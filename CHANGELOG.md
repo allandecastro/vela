@@ -118,6 +118,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ExecuteIdempotentWithRetry(operation)` are removed. Use `RetryPolicy.Execute(ctx, operation, ...)` and
   `ExecuteWithRetry(ctx, operation)` / `ExecuteIdempotentWithRetry(ctx, operation)`: when `ctx.IsInTransaction` is
   true the operation runs once, because a failed call aborts the transaction and a replay cannot succeed.
+- **`PluginPipeline` no longer writes onto the entities you pass it.** `Service.Create(entity)` used to set
+  `entity.Id`, and a plugin's change to `Target` showed up on your object (and survived a rollback). The steps now
+  work on a copy, as on Dataverse where the request is serialized: read the id from the return value of `Create` (or
+  `CreateMultipleResponse.Ids`), and the stored state from `pipeline.GetAll(...)`.
 
 ### Added (Framework)
 
@@ -167,6 +171,21 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **The harness runs async steps only once the outermost operation commits** (#438). Each operation used to run its
+  own async steps as soon as its body returned, so an async step queued by a nested write ran, with its side effects
+  and log entries, even when the outer operation then failed. Live, a rolled-back operation creates no async job
+  (verified 2026-10-07). Async steps now wait for the outermost operation (or `ExecuteTransaction` batch) to commit, are
+  dropped when it rolls back, and each runs in its own rollback scope: a failed async step leaves no writes behind.
+- **`IsInTransaction` follows the stage and mode in the harness** (#438). It was always true. It is now false for
+  async steps and for a depth-1 PreValidation step, and true for PreOperation, sync PostOperation and a nested
+  PreValidation (verified live), so the retry path of `RetryPolicy` can be tested through the pipeline. Retrieve and
+  RetrieveMultiple steps report false, as on Dataverse. `CorrelationId` is now one id per top-level operation, shared
+  by its cascade and its async steps, instead of one id for the whole pipeline.
+- **The harness fills the remaining context fields as Dataverse does** (#438, verified live 2026-10-09). `RequestId`
+  is one id per call into the pipeline (an `ExecuteMultiple` batch is one request) and is kept by async steps.
+  `OperationId` equals `RequestId` on sync steps and is a separate system job id on async steps. `IsolationMode` is 2
+  (sandbox) and `SecondaryEntityName` is "none". The children of an `ExecuteTransaction` share one correlation id and
+  run in its transaction, PreValidation included; the children of an `ExecuteMultiple` each get their own.
 - **VELA007 flags every image the message can never provide.** It now also reports a pre-image on
   `OnMessage("CreateMultiple")` and any image on `OnMessage("RouteTo")`, from the same image table the runtime and
   the CLI use (#435).
