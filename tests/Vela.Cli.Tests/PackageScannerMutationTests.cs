@@ -71,17 +71,17 @@ public sealed class PackageScannerMutationTests
         Assert.Contains("returned null", error, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ---- bulk-image guard: a non-array image property must not count as "has images" ----
-    // Kills the &&-to-|| mutant on the HasItems predicate: with a present-but-not-an-array property the
-    // ValueKind==Array clause is what makes the result false, so the two clauses cannot be OR-ed.
+    // ---- image guard: a non-array image property must not count as "has images" ----
+    // Kills the &&-to-|| mutant on the array check: with a present-but-not-an-array property the
+    // ValueKind==Array clause is what makes the result null, so the two clauses cannot be OR-ed.
 
     [Fact]
-    public void IsBulkStepWithImages_False_WhenImagePropertyIsNotAnArray()
+    public void GetInvalidImageError_Null_WhenImagePropertyIsNotAnArray()
     {
         JsonElement step = JsonDocument.Parse(
-            "{\"message\":\"CreateMultiple\",\"preImages\":{\"alias\":\"pre\"},\"postImages\":42}").RootElement;
+            "{\"message\":\"Create\",\"stage\":10,\"preImages\":{\"alias\":\"pre\"},\"postImages\":42}").RootElement;
 
-        Assert.False(PackageScanner.IsBulkStepWithImages(step));
+        Assert.Null(PackageScanner.GetInvalidImageError(step));
     }
 
     // ---- ExtractPackage: primary-assembly selection and lib/ filtering ----

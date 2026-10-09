@@ -151,6 +151,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **VELA007 flags every image the message can never provide.** It now also reports a pre-image on
+  `OnMessage("CreateMultiple")` and any image on `OnMessage("RouteTo")`, from the same image table the runtime and
+  the CLI use (#435).
+
 - **The harness runs a Delete's PreValidation steps before the cascade.** They used to fire after the cascaded
   children were already deleted, so a PreValidation step could not see them. On Dataverse they still exist at
   PreValidation and are gone by PreOperation (verified live), which the harness now matches.
@@ -311,6 +315,17 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
 
 ### Fixed (CLI)
+
+- **Bulk step images deploy, with the right image property for every message.** `plan`/`apply` rejected any image
+  on a `CreateMultiple`/`UpdateMultiple` step, and `apply` registered every image against `Target` (or `id` for a
+  Create post-image), which Dataverse refuses on several messages. Images are now registered against the property
+  the message expects (verified live): `Id` for Create, `Ids` for CreateMultiple, `Targets` for UpdateMultiple
+  (pre- and post-image, pre-image also at PreValidation), `EmailId` for Send/DeliverIncoming/DeliverPromote,
+  `EntityMoniker` for SetState/SetStateDynamicEntity, and `Target` otherwise. `plan` now rejects, with a clear error
+  and before any write, an image Dataverse refuses: a post-image before PostOperation (0x8004416E), a pre-image on
+  Create/CreateMultiple or a post-image on Delete (0x8004416D), or any image on RouteTo (0x80044189). The rules
+  live in one table shared by the fluent API, the harness, VELA007 and the CLI, so none of them accepts what
+  another rejects (#435).
 
 - **Every command has its own `--help`.** `vela init --help`, `sign --help`, `logout --help`, `plan`/`apply`/
   `inspect --help` printed the global usage; they now print the command's usage, options, notes and examples.

@@ -381,11 +381,14 @@ internal static partial class DataverseRegistration
     desired.AddRange(preImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 0)));
     desired.AddRange(postImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 1)));
 
-    // Dataverse requires different messagepropertyname depending on the message:
-    // Create PostImage → "id" (captures the new record ID); all others → "Target".
-    // Bulk messages (CreateMultiple/UpdateMultiple) never reach here: the platform supports no images on them,
-    // so the scanner rejects a bulk step carrying images before apply (see PackageScanner.IsBulkStepWithImages).
-    bool isCreateMessage = string.Equals(message, "Create", StringComparison.OrdinalIgnoreCase);
+    // The image's messagepropertyname depends on the message (Create → Id, CreateMultiple → Ids, UpdateMultiple →
+    // Targets, Send → EmailId, ...); StepImageRules holds the map shared with the runtime and the scanner. A message
+    // that supports no image (RouteTo) never gets here with images: the scanner rejects it before any write.
+    string? msgPropertyName = Vela.Steps.StepImageRules.GetMessagePropertyName(message);
+    if (msgPropertyName is null && desired.Count > 0)
+    {
+        throw new InvalidOperationException($"Dataverse supports no image on the '{message}' message.");
+    }
 
     QueryExpression query = new QueryExpression("sdkmessageprocessingstepimage")
     {
@@ -405,7 +408,6 @@ internal static partial class DataverseRegistration
         string attributesCsv = desiredImage.Attributes.Length == 0
             ? string.Empty
             : string.Join(",", desiredImage.Attributes.OrderBy(x => x, StringComparer.Ordinal));
-        string msgPropertyName = isCreateMessage && desiredImage.ImageType == 1 ? "id" : "Target";
 
         if (existingByKey.TryGetValue(key, out Entity? existing))
         {
@@ -434,7 +436,7 @@ internal static partial class DataverseRegistration
         create["name"] = desiredImage.Alias;
         create["attributes"] = attributesCsv;
         create["imagetype"] = new OptionSetValue(desiredImage.ImageType);
-        create["messagepropertyname"] = msgPropertyName;
+        create["messagepropertyname"] = msgPropertyName!;
         service.Create(create);
     }
 

@@ -33,10 +33,11 @@ change.
   images are constrained by stage/message
   (`PreImage` only for `Update`/`Delete`, at any stage; `PostImage` only for `Create`/`Update`, in `PostOperation`).
   Violations throw.
-- **No images on bulk messages when deploying.** Dataverse accepts no image on `CreateMultiple`/`UpdateMultiple`,
-  so `plan`/`apply` reject a bulk step that carries a pre/post image (the in-memory harness still allows it, to
-  simulate per-record bulk images). Register the image on the single `Create`/`Update` step, which also runs for
-  bulk operations, and read per-record pre/post images by index, not by target reference.
+- **Bulk-step images arrive only in the image collections.** On `CreateMultiple` (post-image) and `UpdateMultiple`
+  (pre- and post-image), Dataverse delivers one image per target in `Pre/PostEntityImagesCollection`, never in the
+  classic `PreEntityImages`/`PostEntityImages`. Those collections can also hold other steps' and platform images,
+  so read per-record images by index and alias (`ctx.GetPreImage(index, alias)`), not by target reference.
+- **No images on `RouteTo`.** Dataverse supports none on that message, so `plan`/`apply` reject them.
 - **Custom APIs run at `MainOperation`, synchronously** - that stage/mode is fixed.
 - **Typed query builder = typed `QueryExpression`.** `Query.For<T>()` adds type safety and attribute-name
   mapping; it does **not** add capabilities beyond `QueryExpression` (`ToFetchXml()` renders the same query as

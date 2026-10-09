@@ -20,6 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Step image capabilities, shared as source with the runtime builder and the CLI (VELA007). -->
+    <Compile Include="..\Vela.Plugins\Steps\StepImageRules.cs" Link="Shared\StepImageRules.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>

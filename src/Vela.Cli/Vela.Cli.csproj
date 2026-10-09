@@ -33,6 +33,9 @@
     <Compile Include="..\Vela.Plugins\Constants\PluginStages.cs" Link="Shared\PluginStages.cs" />
     <!-- Global (entity-agnostic) messages: shared with the runtime step resolution and the test harness. -->
     <Compile Include="..\Vela.Plugins\Constants\PluginMessages.cs" Link="Shared\PluginMessages.cs" />
+    <!-- Step image capabilities (allowed images per message/stage, messagepropertyname): shared with the runtime
+         builder, the harness and the analyzer so none of them accepts what another rejects. -->
+    <Compile Include="..\Vela.Plugins\Steps\StepImageRules.cs" Link="Shared\StepImageRules.cs" />
   </ItemGroup>
 
   <ItemGroup>
