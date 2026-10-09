@@ -738,13 +738,20 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   ```csharp
   private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
   {
-      ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;   // net462: enable TLS 1.2 once
       string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });
       using var http = new HttpClient();
+      http.Timeout = TimeSpan.FromSeconds(15);             // fail fast: the default is 100 s
+      http.DefaultRequestHeaders.ConnectionClose = true;   // KeepAlive off in the sandbox
       http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-      // ... call the allow-listed endpoint; keep it well under the execution budget below.
+      // ... call the allow-listed endpoint synchronously (.GetAwaiter().GetResult()).
   }
   ```
+
+  Set an explicit, short `Timeout` and turn `KeepAlive` off, as Microsoft recommends for plug-ins
+  ([Set Timeout](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-timeout-for-external-calls-from-plug-ins),
+  [Set KeepAlive to false](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-keepalive-false-interacting-external-hosts-plugin)):
+  the default 100-second timeout leaves almost nothing of the execution budget below, and a stale persistent
+  connection makes the call hang until the network resets it.
 
 - **~2-minute execution budget.** The whole pipeline execution (all synchronous steps) must finish inside roughly two
   minutes or the platform aborts it. Keep outbound calls fast and few; offload slow work to an asynchronous step or
@@ -752,9 +759,9 @@ A plugin runs in the Dataverse **sandbox**, which constrains what the code may d
   `vela` command's Dataverse requests.)
 
 `net462` note: `HttpClient` on `net462` binds against the `System.Net.Http` GAC facade - the project `vela init`
-scaffolds already references it (`<Reference Include="System.Net.Http" />`) - and TLS 1.2 must be enabled once
-(`ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;`, as above), since the net462 default does
-not negotiate it.
+scaffolds already references it (`<Reference Include="System.Net.Http" />`). If an endpoint requires TLS 1.2 and the
+handshake fails, enable it once (for example in a static constructor), never per call:
+`ServicePointManager.SecurityProtocol` is process-wide, so it changes every plugin in the sandbox worker.
 
 ## See also
 

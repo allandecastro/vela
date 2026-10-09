@@ -11,8 +11,10 @@ change.
 
 ## Vela.Plugins (runtime)
 
-- **Cache is synchronous only.** `IPluginCacheService` exposes no async methods and is TTL-based with no size
-  cap or eviction policy beyond expiry. The plugin pipeline runs synchronously and the cache locks with
+- **Cache is synchronous only.** `IPluginCacheService` exposes no async methods. Entries expire by TTL, and the
+  default `PluginCacheService` is capped at `DefaultMaxEntries` (1024): an insert over the cap first drops expired
+  entries, then evicts the oldest-inserted ones. The eviction policy isn't pluggable (only the cap, via the
+  `PluginCacheService(int maxEntries)` constructor). The plugin pipeline runs synchronously and the cache locks with
   `Monitor` (the sandbox-safe primitive) - do your I/O inside the factory and cache the result.
 - **DI lifetimes: transient and scoped only.** `SimpleServiceResolver` has no singleton lifetime - a
   singleton would leak across plugin executions sharing a sandbox process. The scope is one execution.
@@ -30,14 +32,13 @@ change.
 - **Step registration follows platform rules.** `MainOperation` is reserved for Custom API handlers (rejected
   for plugin steps); `FilteringAttributes` apply to `Create`/`Update` (and `CreateMultiple`/`UpdateMultiple`) only, and Vela requires
   at least one there ([VELA020](analyzers.md#vela020));
-  images are constrained by stage/message
-  (`PreImage` only for `Update`/`Delete`, at any stage; `PostImage` only for `Create`/`Update`, in `PostOperation`).
+  images are constrained by stage/message (none at `MainOperation`; a `PostImage` only in `PostOperation`; no
+  `PreImage` on `Create`/`CreateMultiple`, no `PostImage` on `Delete`, and no image at all on `RouteTo`).
   Violations throw.
 - **Bulk-step images arrive only in the image collections.** On `CreateMultiple` (post-image) and `UpdateMultiple`
   (pre- and post-image), Dataverse delivers one image per target in `Pre/PostEntityImagesCollection`, never in the
   classic `PreEntityImages`/`PostEntityImages`. Those collections can also hold other steps' and platform images,
   so read per-record images by index and alias (`ctx.GetPreImage(index, alias)`), not by target reference.
-- **No images on `RouteTo`.** Dataverse supports none on that message, so `plan`/`apply` reject them.
 - **Custom APIs run at `MainOperation`, synchronously** - that stage/mode is fixed.
 - **Typed query builder = typed `QueryExpression`.** `Query.For<T>()` adds type safety and attribute-name
   mapping; it does **not** add capabilities beyond `QueryExpression` (`ToFetchXml()` renders the same query as
@@ -87,7 +88,7 @@ untouched.
   `sdkmessagefilter` for its message (a typo'd or unsupported entity), `apply` fails rather than registering an
   unfiltered step that would fire for every entity.
 - **Stage normalization:** async steps are forced to `PostOperation`; non-standard stage values default to
-  `MainOperation`.
+  `PostOperation`.
 - **Packaging:** a plugin-package `.nupkg` (built via `Microsoft.PowerApps.MSBuild.Plugin`) is required - a
   bare `.dll` is not supported. Framework/Microsoft/Newtonsoft assemblies are excluded from registration.
 - **Scanning runs package code (trust your packages).** Discovering steps/Custom APIs requires instantiating
@@ -147,9 +148,9 @@ anything below, inject your own `IOrganizationService` via `WithOrganizationServ
   `ErrorCode`. No formula/rollup/calculated columns, business rules, or duplicate-detection.
 - **N:N `Associate`/`Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or via a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise); then Associate/
-  Disassociate persist the intersect rows and `RetrieveMultiple` joins through them. `Associate` is idempotent
-  (no duplicate-key fault), and a self-referential N:N maps its two columns positionally. A 1:N relationship is
-  modelled by `Update`-ing the lookup column.
+  Disassociate persist the intersect rows and `RetrieveMultiple` joins through them. Re-associating an
+  existing pair throws a `DuplicateRecord` (`0x80040237`) fault, as Dataverse does, and a self-referential N:N maps
+  its two columns positionally. A 1:N relationship is modelled by `Update`-ing the lookup column.
 - **`RetrieveMultiple` is a common subset.** No query hints, `NoLock`, `FilterHint=union`, or faithful paging
   cookies. FetchXML support covers a common subset (incl. aggregates); anything outside it throws
   `NotSupportedException` naming the element or attribute (see [Testing](../guides/testing.md#queries)).

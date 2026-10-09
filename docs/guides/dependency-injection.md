@@ -61,8 +61,9 @@ best-effort: a tracing service that throws never replaces the original error.
 
 ## Lifetimes
 
-A plugin runs in a fresh instance per pipeline invocation, so there is **no singleton lifetime** - the two
-lifetimes are scoped to a single execution:
+The sandbox caches a plugin instance and reuses it, concurrently, across executions in the same process, so a
+singleton would leak state between unrelated executions (and users). There is therefore **no singleton
+lifetime** - the two lifetimes are scoped to a single execution:
 
 | Method | Lifetime | Use for |
 | --- | --- | --- |
