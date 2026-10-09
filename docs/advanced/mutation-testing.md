@@ -95,7 +95,7 @@ All jobs run on the self-hosted Windows runner (like `ci.yml`, to avoid GitHub A
 | `cli-scanner` | `PackageScanner.cs` | ~81.6% | 80 |
 | `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | ~89.4% | 80 |
 | `analyzers` | the whole `Vela.Analyzers` project (diagnostics + image projection generator) | ~87.6% | 85 |
-| `plugins-steps` | `Vela.Plugins/Steps` (generated `StepApi.cs` / `StepBuilder.Impl.cs` excluded) | ~63% (net10 proxy, see note) | 80 |
+| `plugins-steps` | `Vela.Plugins/Steps` (generated `StepApi.cs` / `StepBuilder.Impl.cs` excluded) | ~89% (net10 proxy, see note) | 80 |
 | `plugins-context` | `Vela.Plugins/Context` | ~88% (net10 proxy, see note) | 80 |
 | `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | ~85% (net10 proxy, see note) | 80 |
 
@@ -111,7 +111,4 @@ Notes on the scores:
   `PackageScannerBuildStateTests` on a real compiled plugin fixture.
 - The **plugin runtime** areas are net462, so their scores above are estimates from a
   throwaway net10 build of `Vela.Plugins` and its tests (same mutate globs, both test
-  projects), not the Windows run. `plugins-services` and `plugins-context` measure above
-  the floor; `plugins-steps` measures below it and fails its `break` of 80 until its
-  survivors are killed (`TypedStepAdapter`, `StepDefinitionReader`, `StepBuilder`).
-  Ratchet each area once its first Windows run is in.
+  projects), not the Windows run. Ratchet each area once its first Windows run is in.
