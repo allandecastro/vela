@@ -280,6 +280,97 @@ public sealed class RetryPolicyTests
         Assert.True(watch.ElapsedMilliseconds < 5000);
     }
 
+    // ---- Time budget ---------------------------------------------------------------------------------
+
+    [Fact]
+    public void Execute_DoesNotRetry_WhenTheWaitWouldOverrunTheBudget()
+    {
+        int calls = 0;
+        Stopwatch watch = Stopwatch.StartNew();
+
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+            RetryPolicy.Execute<int>(Ctx,
+                () => { calls++; throw Throttled(TimeSpan.FromSeconds(5)); },
+                maxAttempts: 3,
+                initialDelayMs: 0,
+                maxElapsed: TimeSpan.FromSeconds(1)));
+
+        Assert.Equal(1, calls); // the 5 s Retry-After is under MaxDelay but past the 1 s budget
+        Assert.True(watch.ElapsedMilliseconds < 1000, $"waited {watch.ElapsedMilliseconds} ms");
+    }
+
+    [Fact]
+    public void Execute_StopsRetrying_OnceTheBudgetIsSpent()
+    {
+        int calls = 0;
+        Stopwatch watch = Stopwatch.StartNew();
+
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+            RetryPolicy.Execute<int>(Ctx,
+                () => { calls++; throw Throttled(TimeSpan.FromMilliseconds(100)); },
+                maxAttempts: 10,
+                initialDelayMs: 0,
+                maxElapsed: TimeSpan.FromMilliseconds(250)));
+
+        // Two 100 ms waits fit in 250 ms and a third would end past it, so three attempts, not ten (two when a sleep
+        // overruns). The waits never run past the budget.
+        Assert.InRange(calls, 2, 3);
+        Assert.True(watch.ElapsedMilliseconds < 400, $"took {watch.ElapsedMilliseconds} ms");
+    }
+
+    [Fact]
+    public void Execute_RetriesWithinTheBudget()
+    {
+        int calls = 0;
+
+        int result = RetryPolicy.Execute(Ctx,
+            () => { calls++; if (calls == 1) { throw Throttled(TimeSpan.FromMilliseconds(10)); } return 9; },
+            maxAttempts: 2,
+            initialDelayMs: 0,
+            maxElapsed: TimeSpan.FromSeconds(5));
+
+        Assert.Equal(9, result);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public void Execute_Throws_OnNegativeBudget()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            RetryPolicy.Execute(Ctx, () => 1, maxElapsed: TimeSpan.FromMilliseconds(-1)));
+    }
+
+    [Fact]
+    public void Threads_started_together_draw_distinct_jitter()
+    {
+        // On .NET Framework new Random() is seeded from the tick count, so per-thread generators created in the same
+        // tick produced identical jitter sequences. Each thread's first draws must now differ.
+        System.Reflection.MethodInfo computeDelay = typeof(RetryPolicy).GetMethod(
+            "ComputeDelay", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        const int threadCount = 8;
+        string[] sequences = new string[threadCount];
+        using (System.Threading.Barrier barrier = new System.Threading.Barrier(threadCount))
+        {
+            System.Threading.Thread[] threads = Enumerable.Range(0, threadCount).Select(i => new System.Threading.Thread(() =>
+            {
+                barrier.SignalAndWait();
+                sequences[i] = string.Join(",", Enumerable.Range(0, 4)
+                    .Select(_ => ((TimeSpan)computeDelay.Invoke(null, new object[] { 20, 1000 })!).TotalMilliseconds));
+            })).ToArray();
+            foreach (System.Threading.Thread thread in threads)
+            {
+                thread.Start();
+            }
+
+            foreach (System.Threading.Thread thread in threads)
+            {
+                thread.Join();
+            }
+        }
+
+        Assert.Equal(threadCount, sequences.Distinct().Count());
+    }
+
     // ---- Transactions --------------------------------------------------------------------------------
 
     private static ILocalPluginContext ContextInTransaction(bool inTransaction, Mock<ILocalPluginContext>? mock = null)

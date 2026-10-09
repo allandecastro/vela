@@ -159,7 +159,8 @@ collides with the generated entity type of the same name.
 - **Set defaults in PreOperation on the target**, not in PostOperation with an extra `Update`. A
   PreOperation change to the target persists with no extra write, no extra Update event, and no recursion.
 - **Guard against recursion.** A PostOperation Update handler that writes back to its own record can
-  re-fire itself. Gate on what actually changed and check `ctx.Depth`.
+  re-fire itself. Gate on what actually changed (`FilterOn`, `HasChanged`) or flag the write with a shared
+  variable, rather than checking `ctx.Depth` (see [Preventing recursion](plugins.md#preventing-recursion)).
 - **Keep plugins stateless.** Instances are cached and shared across threads, so avoid mutable instance
   fields and mutable static state; the only fields should be the readonly configuration from the
   constructor.

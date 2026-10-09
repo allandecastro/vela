@@ -62,6 +62,8 @@ internal static partial class DataverseRegistration
     step["sdkmessageid"] = new EntityReference("sdkmessage", messageId);
     step["stage"] = new OptionSetValue(normalizedStage);
     step["mode"] = new OptionSetValue(normalizedMode);
+    // Delete the system job once it succeeds: an asynchronous-step setting, always cleared on a synchronous step.
+    step["asyncautodelete"] = normalizedMode == 1 && definition.AsyncAutoDelete;
     step["rank"] = NormalizeRegistrationRank(definition.ExecutionOrder);
     step["filteringattributes"] = filteringAttributes;
     step["supporteddeployment"] = new OptionSetValue(definition.SupportedDeployment);
@@ -250,6 +252,8 @@ internal static partial class DataverseRegistration
 
     Guid? triggerMatch = null;
     int triggerMatchCount = 0;
+    // Set when the diff paired this step with a live step under another key (DiffEngine.LiveStepKeyField).
+    string? liveStepKey = definition.LiveStepKey;
 
     foreach (Entity row in service.RetrieveAll(query))
     {
@@ -260,6 +264,12 @@ internal static partial class DataverseRegistration
         string keylessName = DefinitionNormalizer.BuildKeylessStepName(definition.PluginTypeName, stage, mode, message, entity);
         string parsedStepKey = DefinitionParser.ResolveStepKey(
             row.GetAttributeValue<string>("description"), row.GetAttributeValue<string>("name"), definition.PluginTypeName, keylessName);
+
+        // The live step the diff paired this definition with, under its previous key.
+        if (!string.IsNullOrEmpty(liveStepKey) && string.Equals(parsedStepKey, liveStepKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return row.Id;
+        }
 
         // An exact step-key match is authoritative.
         if (!string.IsNullOrWhiteSpace(definition.StepKey) &&
@@ -285,17 +295,18 @@ internal static partial class DataverseRegistration
             return row.Id;
         }
 
-        // A keyed definition whose stored key drifted (an executionOrder change reseeds the framework auto key, or a
-        // pre-marker deployment carries no key at all) finds no exact key match above. Remember the trigger match so
-        // we can fall back to it - but only when it is unambiguous. Without this, FindStepId returns null and apply
-        // CREATES a duplicate live step even though the diff correctly classified the change as an update (#305).
-        triggerMatch = row.Id;
-        triggerMatchCount++;
+        // A keyed definition paired with a keyless live step (a deployment that predates step keys): adopt that step
+        // by its trigger, when it is the only keyless one there.
+        if (liveStepKey is { Length: 0 } && parsedStepKey.Length == 0)
+        {
+            triggerMatch = row.Id;
+            triggerMatchCount++;
+        }
     }
 
-    // No exact key match. For a keyed definition, adopt the trigger match only when it is the single candidate for the
-    // (message, entity, stage, mode) coordinate; an ambiguous coordinate stays null so apply never updates the wrong
-    // step (creating a duplicate is the pre-existing, safer outcome there).
+    // No key match. A keyed definition adopts a live step by trigger only when the diff paired it with a keyless one
+    // and that one is unambiguous. Several steps may share a trigger, so a keyed step with no pairing (an added step)
+    // never takes over another step's row: it is created (#305).
     return triggerMatchCount == 1 ? triggerMatch : null;
 }
 

@@ -44,6 +44,8 @@ public sealed partial class StepBuilder<TEntity>
         SupportedDeployment = 32,
         UnsecureConfig = 64,
         SecureConfig = 128,
+        Relationship = 256,
+        SkipDepth = 512,
     }
 
     private void MarkSetOnce(SetOnceModifier modifier, string method)
@@ -128,6 +130,7 @@ public sealed partial class StepBuilder<TEntity>
         }
 
         EnsureNoDuplicates(_definition.FilteringAttributes, "filtering attribute");
+        EnsureNoDuplicates(_definition.Relationships, "relationship");
         foreach (ImageDefinition img in _preImages.Concat(_postImages))
         {
             EnsureNoDuplicates(img.Attributes, $"attribute in image '{img.Alias}'");
@@ -223,6 +226,7 @@ public sealed partial class StepBuilder<TEntity>
     // stage/mode/handler transitions of the guided chain, just reached from the adapter.
     internal void SetStageInternal(PluginStages stage) => _definition.Stage = stage;
     internal void SetModeInternal(ExecutionMode mode) => _definition.Mode = mode;
+    internal void SetAsyncModeInternal(bool deleteJobOnSuccess) => SetAsyncMode(deleteJobOnSuccess);
     internal void SetHandlerInternal(Delegate handler) => SetHandler(handler);
 
     // Setting mutations centralised so the interface implementations stay in lockstep (each explicit
@@ -231,6 +235,43 @@ public sealed partial class StepBuilder<TEntity>
     {
         MarkSetOnce(SetOnceModifier.ExecutionOrder, "WithExecutionOrder");
         _definition.ExecutionOrder = order;
+    }
+
+    private void SetAsyncMode(bool deleteJobOnSuccess)
+    {
+        _definition.Mode = ExecutionMode.Asynchronous;
+        _definition.AsyncAutoDelete = deleteJobOnSuccess;
+    }
+
+    private void SetSkipWhenDepthAbove(int maxDepth)
+    {
+        MarkSetOnce(SetOnceModifier.SkipDepth, "SkipWhenDepthAbove");
+        if (maxDepth < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDepth), maxDepth, "SkipWhenDepthAbove requires a depth of at least 1.");
+        }
+
+        _definition.SkipWhenDepthAbove = maxDepth;
+    }
+
+    private void SetRelationships(string schemaName, string[] additionalSchemaNames)
+    {
+        MarkSetOnce(SetOnceModifier.Relationship, "ForRelationship");
+        List<string> names = new() { schemaName };
+        if (additionalSchemaNames != null)
+        {
+            names.AddRange(additionalSchemaNames);
+        }
+
+        foreach (string name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("ForRelationship requires non-empty relationship schema names.", nameof(schemaName));
+            }
+        }
+
+        _definition.Relationships = names.Select(n => n.Trim()).ToArray();
     }
 
     private void SetDescription(string description)

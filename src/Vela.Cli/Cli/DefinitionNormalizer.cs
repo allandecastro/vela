@@ -45,7 +45,8 @@ internal static class DefinitionNormalizer
         string secureConfigDigest,
         Guid? impersonatingUserId,
         int supportedDeployment,
-        JsonSerializerOptions jsonOptions)
+        JsonSerializerOptions jsonOptions,
+        bool asyncAutoDelete = false)
     {
         // Global (entity-agnostic) messages such as Associate/Disassociate cannot carry a primary entity on
         // their sdkmessagefilter (primaryobjecttypecode is "none"), so the live read always comes back with an
@@ -82,6 +83,8 @@ internal static class DefinitionNormalizer
             // Supported deployment (Dataverse supporteddeployment): 0 ServerOnly (default), 1 OfflineOnly, 2 Both.
             // Carried so .WithSupportedDeployment(...) is honoured and drift is detected instead of silently ignored.
             supportedDeployment,
+            // Dataverse asyncautodelete: meaningful on an asynchronous step only, so a sync step always reads false.
+            asyncAutoDelete = mode == 1 && asyncAutoDelete,
             // Secure config can hold secrets (API keys, connection strings). It must never appear in the
             // plan/inspect JSON output, but the diff still has to detect when it changes - so the shape carries
             // a digest, not the value. Same value on both sides -> same digest -> no diff; a changed secret
@@ -239,7 +242,8 @@ internal static class DefinitionNormalizer
             secureConfig,
             impersonatingUserId,
             supportedDeployment,
-            jsonOptions);
+            jsonOptions,
+            TryGetBool(raw, "asyncAutoDelete"));
     }
 
     public static JsonElement NormalizeCustomApiDefinition(JsonElement raw, JsonSerializerOptions jsonOptions)

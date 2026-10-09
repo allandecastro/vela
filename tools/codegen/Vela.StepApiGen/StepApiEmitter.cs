@@ -136,9 +136,20 @@ internal static class StepApiEmitter
             /// <summary>Sync-only mode choice (pre-validation / pre-operation): async is PostOperation-only in Dataverse.</summary>
             public interface ISyncMode<out TConfig> : IFluentStep { TConfig Sync(); }
             /// <summary>Sync or async mode choice (post-operation only).</summary>
-            public interface ISyncAsyncMode<out TConfig> : IFluentStep { TConfig Sync(); TConfig Async(); }
+            public interface ISyncAsyncMode<out TConfig> : IFluentStep
+            {
+                TConfig Sync();
+                TConfig Async();
+                /// <summary>Asynchronous; when <paramref name="deleteJobOnSuccess"/> is true, the system job is deleted once it succeeds (Dataverse asyncautodelete).</summary>
+                TConfig Async(bool deleteJobOnSuccess);
+            }
             /// <summary>Async-only mode choice (a Custom API whose allowedcustomprocessingsteptype is AsyncOnly).</summary>
-            public interface IAsyncMode<out TConfig> : IFluentStep { TConfig Async(); }
+            public interface IAsyncMode<out TConfig> : IFluentStep
+            {
+                TConfig Async();
+                /// <summary>Asynchronous; when <paramref name="deleteJobOnSuccess"/> is true, the system job is deleted once it succeeds (Dataverse asyncautodelete).</summary>
+                TConfig Async(bool deleteJobOnSuccess);
+            }
 
         """;
 

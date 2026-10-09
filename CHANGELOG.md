@@ -26,6 +26,20 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Several steps may share a trigger, and the rank is no longer part of a step's identity.** Two steps on the same
+  message, stage, mode and entity were rejected; they are now allowed when their filtering attributes, images,
+  relationship scope or step key tell them apart, and the executing step (`OwningExtension`, resolved by id for an
+  async step, whose name Dataverse leaves null) selects its handler. The automatic step key no longer includes the
+  rank, so a rank change updates the step in place; the first step of a trigger keeps its earlier key at the default
+  rank, and a keyless step deployed at another rank gets a new key once (the first `vela plan` shows an update).
+  Two steps that still cannot be told apart need a `WithStepKey(...)`. VELA008 flags only those.
+- **`ISyncAsyncMode<T>` and `IAsyncMode<T>` gain `Async(bool deleteJobOnSuccess)`.** A class implementing them must
+  add it.
+
+- **`PluginPipeline` caps the cascade at the Dataverse depth (#450).** The default `WithMaxDepth` cap was 16; it is
+  now `PluginBase.DefaultMaxDepth` (8), the depth at which Dataverse aborts a chain as an infinite loop. A test whose
+  cascade runs deeper than 8 (a plugin with a raised `maxDepth`, or a classic `IPlugin`) now fails with the pipeline's
+  error. Call `WithMaxDepth(16)` to keep the old cap.
 - **An unset `HookOrganizationService` hook throws (#439).** `Create`, `Retrieve`, `Execute`, `RetrieveMultiple`,
   `Update`, `Delete`, `Associate` and `Disassociate` used to return `Guid.Empty`, `null` or an empty collection, or
   do nothing, when their `On...` delegate was not set, so the plugin failed later with a `NullReferenceException`
@@ -102,6 +116,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected
   `Func<Guid?, IOrganizationService>` factory are removed. Migrate `ctx.UserService` to `ctx.Service`,
   `ctx.AsSystem()` to `ctx.SystemService`, and `ctx.AsInitiatingUser()` to `ctx.AsUser(ctx.InitiatingUserId)`.
+- **The test pipeline reuses one plugin instance per step (and per Custom API).** It constructed a fresh instance
+  for every execution, which hid plugins that keep state in fields; the platform caches and reuses instances, so such
+  a plugin now misbehaves in the test as it would in production.
 - **A Custom API request parameter you declare is required unless you say otherwise.** `Add(x => x.Foo)` and
   `Add(x => x.Foo, optional: false)` registered an optional parameter unless the property carried `[Required]`,
   contrary to the documentation, so the handler read a default value when a caller left it out. They are now
@@ -151,9 +168,26 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **`Async(deleteJobOnSuccess: true)`** deletes an asynchronous step's system job once it succeeds (Dataverse
+  `asyncautodelete`), carried on `StepDefinition.AsyncAutoDelete`.
+- **`ForRelationship("schema_name", ...)` on `OnAssociate()` / `OnDisassociate()`.** Dataverse fires these steps for
+  every relationship; the handler now runs only for the named ones (`StepDefinition.Relationships`), and any other
+  relationship is skipped with a trace line.
+- **`SkipWhenDepthAbove(n)`** skips a step's handler (with a trace line) when the execution depth is above `n`,
+  replacing the plugin-level depth guard, which throws, for that step only. `n` must be at least 1. Runtime-only.
+- **Typed bulk images.** A typed step context of a `CreateMultiple` / `UpdateMultiple` handler exposes `PreImages` /
+  `PostImages`: one projection per target, aligned with `ctx.GetTargets()`, read by the step's own alias.
+
+- **`RetryPolicy.Execute(..., maxElapsed:)` bounds the whole call (#450).** Each wait was capped at
+  `RetryPolicy.MaxDelay` (30 s) but their sum was not, so a few attempts could consume most of the ~2-minute plugin
+  budget. With `maxElapsed`, a retry whose wait would end past the budget is not made and the last fault propagates.
+  The default (null) keeps the previous behaviour.
 - **`OnAssign()` steps can capture images (#439).** `WithPreImage(...)` is offered at every stage and
   `WithPostImage(...)` at PostOperation, as Dataverse accepts them on the Assign `Target` (verified live: the
-  pre-image holds the old owner, the post-image the new one).
+  pre-image holds the old owner, the post-image the new one). They are read with the typed `ctx.PreImage` /
+  `ctx.PostImage` on `IAssignPreContext<T>` / `IAssignPostContext<T>`, and a named handler gets generated
+  projections of the captured columns, like Update and Merge (#475). A capture on `OnAssign()` no longer reports
+  VELA021.
 - **VELA022 warns on a step registered on `SetState` (#439).** Dataverse accepts the registration but never runs
   it: a `SetStateRequest` and an Update of `statecode` fire `SetStateDynamicEntity` (verified live). Register on
   `OnUpdate().FilterOn(x => x.StateCode)` or `OnMessage(PluginMessages.SetStateDynamicEntity)` instead.
@@ -197,9 +231,19 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase`,
   `EntityPluginBase<TEntity>`, `CustomApiBase` and `CustomApiBase<TRequest, TResponse>` default their `maxDepth` to it
   instead of repeating the literal.
+- **`PluginPipeline.WithStrictSecurity()`, `WithAccessTeamTemplate(...)` and `WithSharedRecord(...)`.** The
+  pipeline forwards the in-memory store's configuration by hand, and these three were missing, so a pipeline
+  scenario could not opt into strict security, register an access-team template or pre-share a record. A test now
+  fails if any store configuration method has no pipeline counterpart.
 
 ### Changed (Framework)
 
+- **The depth guard and `RetryPolicy` are documented as Microsoft describes them (#450).** The `maxDepth` guard is a
+  last-resort backstop (at the default it only stops a chain Dataverse aborts anyway; Microsoft advises against logic
+  that depends on `Depth`), and the plugins guide has a new [Preventing recursion](docs/guides/plugins.md#preventing-recursion)
+  section on `FilterOn`, `HasChanged` and shared-variable flags. `RetryPolicy` notes that service-protection limits
+  don't apply to data operations from a plugin, so it is meant for calls that leave the sandbox and for code shared
+  with a client.
 - **Automatic execution snapshots no longer trace record data.** The `start` / `success` / failure snapshots wrote
   every Target, image and parameter value on every execution, and also sent them to `ILogger` / Application
   Insights. They now list only metadata (message, stage, ids, parameter/attribute names), the redundant `success`
@@ -216,6 +260,22 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **The in-memory pipeline fills a bulk step's image collections as Dataverse does** (verified live): each target's
+  collection also holds the images of the plugin type's other steps on the message and the platform's
+  `PreBusinessEntity` / `PostBusinessEntity`, so a test of access by alias is real. It also seeds the
+  `sdkmessageprocessingstep` rows an async step's `OwningExtension` points at, so several async steps on one trigger
+  dispatch as on Dataverse.
+
+- **`RetryPolicy` jitter is independent across threads (#450).** Each thread's `Random` was seeded from the tick
+  count on .NET Framework, so threads that started retrying in the same tick drew the same backoff. The seeds now come
+  from one shared generator.
+- **The harness refuses to download an Image column that does not store full images (#458, verified live).**
+  Dataverse keeps only a thumbnail for such a column (`account.entityimage` is one), so `InitializeFileBlocksDownload`
+  fails with `0x80040217` ("No FileAttachment records found ..."); the harness served the stored bytes, so a plugin
+  calling `DownloadFile` on it passed its tests and failed in production. When the table's metadata declares the
+  column as an Image column with `CanStoreFullImage` not `true`, the download now throws that fault. Without metadata
+  for the column the stored bytes are still served. New builder method: `FakeEntityMetadata.Image(name,
+  canStoreFullImage)`.
 - **`DownloadFile` no longer returns a truncated file (#440).** An empty block before the announced
   `FileSizeInBytes` used to end the loop and return the bytes read so far, with no error. It now throws an
   `InvalidPluginExecutionException` naming the table, record, column, the bytes received and the announced size.
@@ -337,6 +397,43 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   failed). Upsert now resolves the id or alternate key and runs the Create steps (new record) or the Update steps
   (existing record), returning `RecordCreated` and `Target`; Update and Delete by alternate key fire their steps with
   the resolved id.
+- **The test pipeline models the rest of Dataverse's transaction scope** (verified live). The initial
+  PreValidation stage runs before the transaction, so a write a PreValidation step makes commits on its own even
+  if the operation fails later; nested operations join the caller's transaction. A plugin that catches a failed
+  **write** can no longer let the operation commit: returning fails it with "ISV code reduced the open transaction
+  count" (`0x8009000C`) and a further call gets "There is no active transaction"; a caught failed **read** does not
+  end the transaction. A plugin's own operations carry `InputParameters["FromSandbox"] = true` at PreValidation.
+  An async step's context has an unnamed `OwningExtension` and the `AsynchronousStepPrimaryName` post image.
+  Shared variables set at PreValidation of a Create/Update/Delete reach the later stages only through
+  `ParentContext.SharedVariables`, their ParentContext being the operation's stage-30 context.
+- **A Retrieve/RetrieveMultiple Post step's typed `ctx.Response` reads the result.** The platform hands the step
+  the result as `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]` (verified on a live
+  environment), but `RetrieveResponse.Entity` / `RetrieveMultipleResponse.EntityCollection` read `Entity` /
+  `EntityCollection`, so `ctx.Response.Entity` was missing. `GetResponse<T>()` now exposes the platform value under
+  the SDK key.
+- **Reads run through the test pipeline.** `PluginPipeline.Service.Retrieve`/`RetrieveMultiple` read the store
+  directly, so `OnRetrieve()`/`OnRetrieveMultiple()` steps never fired, and a PreOperation step that replaced
+  `InputParameters["Query"]` (or any input of a modelled message) was ignored. Reads now fire their steps, a Pre
+  step's change to `ColumnSet`/`Target`/`Query` changes what is read, and a Post step sees and can change the result
+  under `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]`. For every message, a synchronous
+  step's changes to the inputs reach the main operation and its changes to the outputs reach the caller.
+- **Harness reads return the platform's record shape.** A retrieved or queried record now always includes its
+  primary key column (`accountid`, `activityid` for activities, or the metadata's primary id), a lookup carries the
+  referenced record's name (`EntityReference.Name` and `FormattedValues`), and a choice carries its label in
+  `FormattedValues` when its metadata is registered.
+- **Custom APIs run the whole pipeline in the harness.** Only the API's own plugin ran: steps registered on its
+  message never fired, and inputs of the wrong type reached the handler. Now PreValidation, PreOperation and
+  PostOperation steps fire around the main operation as far as the API's `AllowedCustomProcessingSteps(...)` allows
+  (a step it forbids fails the call), and the main operation runs at stage 30 under the
+  `CustomApi '<name>' implementation` step. Before any step runs, a missing required input fails with `0x80040203`
+  and a wrong-typed or undeclared input with `0x80040315`, with the platform's messages (verified live).
+- **The test pipeline's steps work on a deep copy of every request.** The values of a request (entities,
+  references and their keys, column sets, queries) were shared with the caller, so a step editing one in place
+  changed the caller's objects; an Upsert step's change to `Target` never reached the main operation; and a step
+  could not remove an input or output. All of these now behave as on the platform.
+- **`ctx.SystemService` over an `InMemoryOrganizationService` is SYSTEM in a context-builder test.**
+  `PluginContext...WithOrganizationService(store)` used the store as its calling user for both services, so under
+  `WithSecurity` `ctx.SystemService` was denied what SYSTEM may do. It is now the store's SYSTEM view.
 - **A nested request's own bypass parameters are honoured by the test pipeline.** Bypass parameters were read only
   from the outermost request, so a plugin's own write with `BypassCustomPluginExecution` (the usual way to avoid
   re-entering itself) re-fired the plugin, and `ExecuteMultiple`/`ExecuteTransaction` children's own parameters were
@@ -417,6 +514,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **`apply` writes `asyncautodelete`** for a step declared `Async(deleteJobOnSuccess: true)`, and `plan` diffs it.
+- **Several steps on one trigger** are created, updated and deleted as separate steps. A changed step that pairs
+  with its live step under another key carries `liveStepKey` in its `after` definition, so `apply` updates that step.
+
 - **Image request property in plan and apply (#462).** The step shape compares each image's `messagepropertyname`,
   so `plan` shows an image moved between the Merge master and subordinate as a change and `apply` recreates it.
   The scanner rejects `SubordinateId` on any message other than Merge (the platform fails with 0x8004416B).
@@ -448,6 +549,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   init` now sets `ShouldUnsetParentConfigurationAndPlatform=false` in the test projects, so such a reference
   inherits their configuration and is the same build, run once. Existing solutions can add the property to their
   test projects (#406).
+- **An added step no longer takes over another step registered on the same trigger.** `apply` adopted any single
+  live step on the trigger for a step whose key it did not find; it now adopts only the step the diff paired.
+
 - **Step descriptions and Custom API display names and descriptions reach Dataverse.** `apply` wrote the step name
   as every step's description, and the unique name (or the parameter name) as every Custom API's display name and
   description and every parameter's description, whatever the code declared. It now writes `WithDescription(...)`

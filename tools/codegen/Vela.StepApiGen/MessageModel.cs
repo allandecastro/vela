@@ -19,7 +19,8 @@ internal enum Images
 /// <param name="SubordinateImages">Whether the stage configs also expose images of the Merge subordinate record
 /// (<c>WithSubordinatePreImage</c> / <c>WithSubordinatePostImage</c>, registered against <c>SubordinateId</c>), under the
 /// same stage rules as <paramref name="Images"/>.</param>
-internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None, bool SubordinateImages = false)
+/// <param name="Relationship">Whether the stage configs expose <c>ForRelationship(...)</c> (Associate / Disassociate).</param>
+internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None, bool SubordinateImages = false, bool Relationship = false)
 {
     public bool HasPreImage(Stage stage) => Images is Images.Pre or Images.PreAndPost;
 
@@ -48,8 +49,8 @@ internal static class MessageModel
         new("Retrieve"),
         new("RetrieveMultiple"),
         // Relationships, sharing and ownership
-        new("Associate"),
-        new("Disassociate"),
+        new("Associate", Relationship: true),
+        new("Disassociate", Relationship: true),
         new("GrantAccess"),
         new("Assign", Images: Images.PreAndPost),
         new("RevokeAccess"),

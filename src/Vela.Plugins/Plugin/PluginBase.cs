@@ -16,13 +16,24 @@ namespace Vela.Plugin
     /// </remarks>
     /// <param name="unsecureConfig">Unsecure JSON configuration.</param>
     /// <param name="secureConfig">Secure JSON configuration.</param>
-    /// <param name="maxDepth">Depth guard threshold (defaults to <see cref="DefaultMaxDepth"/>).</param>
+    /// <param name="maxDepth">
+    /// Depth guard threshold (defaults to <see cref="DefaultMaxDepth"/>). The guard is a last-resort backstop, not
+    /// recursion prevention: see <see cref="DefaultMaxDepth"/>.
+    /// </param>
     public abstract class PluginBase(string unsecureConfig, string secureConfig, int maxDepth = PluginBase.DefaultMaxDepth) : IPlugin
     {
         /// <summary>
         /// The default depth guard threshold shared by every Vela base class: an execution whose
         /// <see cref="ILocalPluginContext.Depth"/> exceeds it is stopped. It matches the Dataverse default depth limit.
         /// </summary>
+        /// <remarks>
+        /// At this default the guard only stops, with a clearer trace, a chain the platform would abort anyway: Dataverse
+        /// treats a chain that reaches depth 8 within an hour as an infinite loop. Microsoft advises against business
+        /// logic that depends on a specific <c>Depth</c> value, because the same operation can arrive through a deeper
+        /// code path after a configuration change. A lower value can therefore reject a legitimate deep chain (a
+        /// workflow, a Power Automate flow or another plugin calling in). Prevent recursion with <c>FilterOn</c>, a
+        /// change check (<c>HasChanged</c>) or a shared variable flag instead, and keep this guard as a backstop.
+        /// </remarks>
         public const int DefaultMaxDepth = 8;
 
         /// <summary>
@@ -288,9 +299,15 @@ namespace Vela.Plugin
             }
         }
 
+        /// <summary>
+        /// Whether the step this execution belongs to sets its own depth limit (<c>.SkipWhenDepthAbove(n)</c>), which
+        /// then replaces the plugin-level guard for it.
+        /// </summary>
+        private protected virtual bool HasStepDepthLimit(ILocalPluginContext context) => false;
+
         private void EnforceDepth(ILocalPluginContext context)
         {
-            if (context.Depth <= MaxDepth)
+            if (context.Depth <= MaxDepth || HasStepDepthLimit(context))
             {
                 return;
             }

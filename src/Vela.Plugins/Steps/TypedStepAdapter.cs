@@ -47,6 +47,8 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Sync() { _b.SetModeInternal(ExecutionMode.Synchronous); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Async() { _b.SetModeInternal(ExecutionMode.Asynchronous); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Async() { _b.SetModeInternal(ExecutionMode.Asynchronous); return this; }
+        ITypedPostOperationConfig<TEntity, TRequest> ISyncAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Async(bool deleteJobOnSuccess) { _b.SetAsyncModeInternal(deleteJobOnSuccess); return this; }
+        ITypedPostOperationConfig<TEntity, TRequest> IAsyncMode<ITypedPostOperationConfig<TEntity, TRequest>>.Async(bool deleteJobOnSuccess) { _b.SetAsyncModeInternal(deleteJobOnSuccess); return this; }
 
         // ---- PreValidation config (pre-image) ----
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithDescription(string description) { _b.SetDescriptionInternal(description); return this; }
@@ -54,6 +56,7 @@ namespace Vela.Steps
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { _b.AddImageInternal(alias, true, attributes); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithExecutionOrder(int order) { _b.SetExecutionOrderInternal(order); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithStepKey(string key) { _b.SetStepKeyInternal(key); return this; }
+        ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.SkipWhenDepthAbove(int maxDepth) { _b.SetSkipWhenDepthAboveInternal(maxDepth); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithImpersonation(Guid systemUserId) { _b.SetImpersonationUserInternal(systemUserId); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithSupportedDeployment(SupportedDeployment deployment) { _b.SetSupportedDeploymentInternal(deployment); return this; }
         ITypedPreValidationConfig<TEntity, TRequest> ITypedPreValidationConfig<TEntity, TRequest>.WithUnsecureConfig(string configuration) { _b.SetUnsecureConfigInternal(configuration); return this; }
@@ -69,6 +72,7 @@ namespace Vela.Steps
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithPreImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { _b.AddImageInternal(alias, true, attributes); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithExecutionOrder(int order) { _b.SetExecutionOrderInternal(order); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithStepKey(string key) { _b.SetStepKeyInternal(key); return this; }
+        ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.SkipWhenDepthAbove(int maxDepth) { _b.SetSkipWhenDepthAboveInternal(maxDepth); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithImpersonation(Guid systemUserId) { _b.SetImpersonationUserInternal(systemUserId); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithSupportedDeployment(SupportedDeployment deployment) { _b.SetSupportedDeploymentInternal(deployment); return this; }
         ITypedPreOperationConfig<TEntity, TRequest> ITypedPreOperationConfig<TEntity, TRequest>.WithUnsecureConfig(string configuration) { _b.SetUnsecureConfigInternal(configuration); return this; }
@@ -84,6 +88,7 @@ namespace Vela.Steps
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithPostImage(string alias, params Expression<Func<TEntity, object?>>[] attributes) { _b.AddImageInternal(alias, false, attributes); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithExecutionOrder(int order) { _b.SetExecutionOrderInternal(order); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithStepKey(string key) { _b.SetStepKeyInternal(key); return this; }
+        ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.SkipWhenDepthAbove(int maxDepth) { _b.SetSkipWhenDepthAboveInternal(maxDepth); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithImpersonation(Guid systemUserId) { _b.SetImpersonationUserInternal(systemUserId); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithSupportedDeployment(SupportedDeployment deployment) { _b.SetSupportedDeploymentInternal(deployment); return this; }
         ITypedPostOperationConfig<TEntity, TRequest> ITypedPostOperationConfig<TEntity, TRequest>.WithUnsecureConfig(string configuration) { _b.SetUnsecureConfigInternal(configuration); return this; }

@@ -871,6 +871,7 @@ namespace Vela.Testing
 
             Entity projected = Project(stored, columnSet);
             MaskSecuredColumns(projected);
+            ShapeRead(projected);
             return projected;
         }
 
@@ -1034,6 +1035,11 @@ namespace Vela.Testing
                 {
                     MaskSecuredColumns(row);
                 }
+            }
+
+            foreach (Entity row in result.Entities)
+            {
+                ShapeRead(row);
             }
 
             return result;
@@ -1898,6 +1904,7 @@ namespace Vela.Testing
             }
 
             DemandSecuredColumnRead(target.LogicalName, attribute);
+            DemandFullImageStored(target, attribute, record);
 
             if (!record.Contains(attribute) || record[attribute] == null)
             {
@@ -1915,6 +1922,30 @@ namespace Vela.Testing
             response.Results["FileSizeInBytes"] = (long)content.Length;
             response.Results["IsChunkingSupported"] = true;
             return response;
+        }
+
+        // The platform keeps only a thumbnail for an Image column that does not store full images, so the block
+        // download has nothing to serve and fails with 0x80040217 (verified live, 9.2.26094.133; account.entityimage
+        // is such a column). Only registered metadata tells an Image column from inline bytes, so without an
+        // ImageAttributeMetadata for the column the download keeps serving the stored bytes. The platform applies
+        // the setting in force when the image was set; the harness reads it at download time.
+        private void DemandFullImageStored(EntityReference target, string attribute, Entity record)
+        {
+            if (!_metadata.TryGetValue(target.LogicalName, out EntityMetadata? metadata)
+                || metadata.Attributes?.FirstOrDefault(a => string.Equals(a.LogicalName, attribute, StringComparison.OrdinalIgnoreCase))
+                    is not ImageAttributeMetadata image
+                || image.CanStoreFullImage == true)
+            {
+                return;
+            }
+
+            Guid descriptorId = record.GetAttributeValue<Guid>(attribute + "id");
+            string message =
+                $"No FileAttachment records found for imagedescriptorId: {descriptorId:D} for image attribute: {attribute} " +
+                $"of {target.LogicalName} record with id {target.Id:D}";
+            throw new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { ErrorCode = ObjectDoesNotExist, Message = message },
+                new FaultReason(message));
         }
 
         private OrganizationResponse DownloadBlock(OrganizationRequest request)

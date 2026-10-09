@@ -215,7 +215,7 @@ public sealed class DataverseRegistrationReadShapeTests
 
         Assert.NotNull(captured);
         Assert.Equal(
-            new[] { "sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment" },
+            new[] { "sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment", "asyncautodelete" },
             captured!.ColumnSet.Columns);
         ConditionExpression c = Assert.Single(captured.Criteria.Conditions);
         Assert.Equal("eventhandler", c.AttributeName);
