@@ -153,7 +153,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 - **`OnAssign()` steps can capture images (#439).** `WithPreImage(...)` is offered at every stage and
   `WithPostImage(...)` at PostOperation, as Dataverse accepts them on the Assign `Target` (verified live: the
-  pre-image holds the old owner, the post-image the new one).
+  pre-image holds the old owner, the post-image the new one). They are read with the typed `ctx.PreImage` /
+  `ctx.PostImage` on `IAssignPreContext<T>` / `IAssignPostContext<T>`, and a named handler gets generated
+  projections of the captured columns, like Update and Merge (#475). A capture on `OnAssign()` no longer reports
+  VELA021.
 - **VELA022 warns on a step registered on `SetState` (#439).** Dataverse accepts the registration but never runs
   it: a `SetStateRequest` and an Update of `statecode` fire `SetStateDynamicEntity` (verified live). Register on
   `OnUpdate().FilterOn(x => x.StateCode)` or `OnMessage(PluginMessages.SetStateDynamicEntity)` instead.
