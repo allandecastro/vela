@@ -1,10 +1,14 @@
 # Testing with Vela.Testing
 
-`Vela.Testing` builds a fake plugin execution context and a stateful in-memory CRM, so you can unit-test
-plugins and Custom APIs **without a Dataverse connection** and **without any mocking library**. The fluent
-builder mirrors the registration DSL (`OnUpdate().Stage(...).Sync()`), and the primary entity name is
-derived from `[EntityLogicalName]`. You can still inject your own `IOrganizationService` when you need
-behaviour the built-in fakes don't cover.
+`Vela.Testing` runs plugins and Custom APIs **without a Dataverse connection** and **without a mocking library**.
+It has two levels:
+
+- `PluginContext` builds a fake execution context and runs **one plugin** against it.
+- `PluginPipeline` runs **the Dataverse pipeline in memory**: writes fire the registered steps, cascade, and roll
+  back as on the platform.
+
+Both run on a stateful in-memory CRM (`InMemoryOrganizationService`), and both accept your own
+`IOrganizationService` when you need behaviour the fakes don't cover.
 
 ```powershell
 dotnet add package Vela.Testing
@@ -17,11 +21,11 @@ own registration, so you don't restate it.
 
 ```csharp
 using Vela.Constants;
-using Vela.Steps;
+using Vela.Context;
 using Vela.Testing;
 
-// Construct the plugin, run it, then assert on the instance.
-AccountPostUpdate plugin = new AccountPostUpdate(unsecure: "", secure: "");
+// Construct the plugin (a Vela plugin takes its unsecure and secure configuration), run it, then assert.
+AccountPostUpdate plugin = new AccountPostUpdate(string.Empty, string.Empty);
 PluginContext.For<Account>()
     .WithTarget(new Account { Id = accountId, Name = "Zava" })
     .WithPreImage(new Account { Name = "Old name" })
@@ -34,20 +38,34 @@ LocalPluginContext ctx = PluginContext.For<Account>()
     .Build();
 ```
 
-`Build<MyPlugin>()` (or `Build(plugin)`) derives the message/stage/mode from the plugin's single registered
-step when you do not set one explicitly, the same inference `Execute` applies - so Build and Execute stay
-consistent. The plugin-less `Build()` keeps whatever trigger you set (or the default).
+`Build<MyPlugin>()` and `Build(plugin)` derive the trigger the same way `Execute` does. The plugin-less `Build()`
+keeps whatever trigger you set. The inference only applies to a plugin with **one** step: for a plugin with
+several steps, set the trigger yourself.
 
-You can also let the harness construct the plugin for you with `.Execute<AccountPostUpdate>()` (it returns the
-instance for assertions). This works whether the plugin has a parameterless constructor or the Vela
-`(string unsecureConfig, string secureConfig)` primary constructor that `vela init`/`vela add` generate.
+`.Execute<AccountPostUpdate>()` constructs the plugin for you (parameterless constructor, or the
+`(string unsecureConfig, string secureConfig)` constructor with empty configuration) and returns it.
+
+**Several steps on one trigger.** When two steps of a plugin share the message, stage and mode, the runtime
+picks the handler from the executing step (`OwningExtension`), whose name ends with the step key. Set it on the
+builder's `Context`, or use `PluginPipeline`, which stamps it for you:
+
+```csharp
+var builder = PluginContext.For<Account>().OnUpdate().Stage(PluginStages.PostOperation).Sync()
+    .WithTarget(new Account { Id = accountId, Name = "Zava" });
+builder.Context.OwningExtension = new EntityReference("sdkmessageprocessingstep", Guid.NewGuid())
+{
+    Name = "validate-name", // the step's WithStepKey(...)
+};
+builder.Execute(new AccountNamePlugin(string.Empty, string.Empty));
+```
 
 **Custom APIs / message-only plugins:** `PluginContext.ForMessage("vela_DoThing").WithInputParameter("amount", 5)`.
 
 The builder also exposes: `WithInputParameter`/`WithOutputParameter`, `WithSharedVariable`, `WithTag`,
-`WithUserId`, `WithTargets(...)` (bulk `CreateMultiple`/`UpdateMultiple`), `WithManagedIdentityService`,
-`WithEnvironmentId`/`WithTenantId`/`AsApplicationUser`, and `TraceCapture` (a `RecordingTracingService` to
-assert on emitted traces). `FakePluginExecutionContext` implements the full `IPluginExecutionContext2..7`
+`WithUserId`/`WithInitiatingUserId`, `WithTargets(...)` and `WithBulkPreImages`/`WithBulkPostImages` (bulk
+`CreateMultiple`/`UpdateMultiple`), `WithParentContext`, `WithManagedIdentityService`,
+`WithEnvironmentId`/`WithTenantId`/`AsApplicationUser`, `TraceCapture` (a `RecordingTracingService`) and
+`LogCapture` (a `RecordingLogger` that records `ctx.Log*` entries and `ctx.LogMetric` metrics). `FakePluginExecutionContext` implements the full `IPluginExecutionContext2..7`
 chain, so plugins reading newer context members work.
 
 ## Test doubles (no Moq)
@@ -84,7 +102,7 @@ state:
 PluginContext.For<Account>()
     .WithTarget(new Account { Id = accountId, Name = "Zava" })
     .WithOrganizationService(crm)
-    .Execute(new ProvisionAccountPlugin());
+    .Execute(new ProvisionAccountPlugin(string.Empty, string.Empty));
 
 Assert.Single(crm.GetAll("task"));
 ```
@@ -294,22 +312,8 @@ grouping, and every other element or attribute.
 
 ### Typed query builder
 
-`Query.For<T>()` produces the same `QueryExpression`, fully typed, with no repeated type arguments:
-
-```csharp
-QueryExpression q = Query.For<Contact>()
-    .Select(c => c.FullName)
-    .Where(c => c.FullName, ConditionOperator.BeginsWith, "J")
-    .Link<Account>(c => c.ParentCustomerId, a => a.AccountId, JoinOperator.Inner, "acct",
-        acct => acct.Select(a => a.Name))
-    .OrderBy(c => c.FullName);
-
-crm.RetrieveMultiple(q); // implicit conversion to QueryExpression
-```
-
-Also: `Distinct()`, `Page(n, count)`, `WithTotalRecordCount()`, `WhereColumns(a, op, b)`,
-`WhereLink<TLinked>(alias, ...)`, `WhereRelated<TTo>(..., JoinOperator.Any/All/...)`, and aggregates
-`GroupBy/Count/Sum/Average/Min/Max`.
+`Query.For<T>()` builds the same `QueryExpression`, fully typed, and runs against the in-memory CRM like any query.
+See [Typed queries](queries.md).
 
 ## Simulate the pipeline (cascade)
 
@@ -378,8 +382,8 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   plugin whose write triggered the operation is one level further up (`ParentContext.ParentContext`), and a PreValidation
   step's `ParentContext` is that calling plugin's context directly. Shared variables set by a PreValidation step are
   **not** in the later steps' own `SharedVariables`: they are visible only through `ParentContext.SharedVariables`
-  (verified live). A cascaded operation inherits the shared variables of the plugin that issued it. Guard against
-  re-entrancy with `ctx.PluginExecutionContext.Depth` rather than `ParentContext?.MessageName`.
+  (verified live). A cascaded operation inherits the shared variables of the plugin that issued it. To avoid
+  re-entrancy, see [Preventing recursion](plugins.md#preventing-recursion).
 - **Not-found faults.** Retrieving or updating a record that does not exist throws
   `FaultException<OrganizationServiceFault>` with the platform `ObjectDoesNotExist` code (`-2147220969`), like a
   real `IOrganizationService`, so a plugin that catches that fault code is exercised faithfully.
@@ -396,7 +400,9 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
 - **Bulk (`CreateMultiple`/`UpdateMultiple`)** fire steps the way Dataverse merges the two messages: a
   `CreateMultiple`/`UpdateMultiple` request runs your single `Create`/`Update` steps **once per row**, and a
   step registered with `OnCreateMultiple()`/`OnUpdateMultiple()` runs **once with the whole batch** (read it
-  via `ctx.BulkTargets`, with per-row pre/post images on `ctx.BulkPre/PostEntityImagesCollection`). The merge
+  via `ctx.BulkTargets`, with per-row pre/post images on `ctx.BulkPreEntityImagesCollection` /
+  `ctx.BulkPostEntityImagesCollection`, which also hold the plugin's other steps' images and the platform's
+  `PreBusinessEntity` / `PostBusinessEntity`, as on Dataverse: read images by alias). The merge
   runs both ways, so a bulk step also fires for a plain `Create`/`Update` (a one-row batch). The whole batch is
   one transaction: a synchronous failure rolls every row back.
 - **Owner, state, `Assign` and `SetState`** follow what the platform does (verified live), which differs from
@@ -465,6 +471,11 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
   production. A modelled message whose store simulation fails (an invalid `Merge`, a missing record) fails even when
   steps are registered on it; only a message the store does not model at all runs its steps around a no-op.
 - Use `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
+- **Pipeline configuration.** `PluginPipeline` forwards the store's configuration (`WithSecurity`,
+  `WithStrictSecurity`, `WithAlternateKey`, `WithAutoNumber`, `WithDefaultStatus`, relationships, metadata,
+  ownership, clock and id sequence), and adds `Seed(...)`, `WithSecureConfig(name, value)` and `WithMaxDepth(n)`.
+  Assert with `GetAll(table)`, `ExecutionLog`, `AsyncStepFailures`, `Trace` and `LogCapture` (the whole cascade's
+  `ctx.Log*` entries).
 
 ## Not supported (by design)
 
@@ -475,9 +486,10 @@ is modelled by `Update`-ing the lookup column. For anything else, inject your ow
 The harness does **not** simulate the server-side **data effect** of non-CRUD "modelled" messages
 (`QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident`, and the like): it fires the steps registered on
 those messages so you can test your own logic, but the record changes the platform would make are not produced.
-Only `PrincipalPrivilegeDenied` (security) and `ObjectDoesNotExist` (not-found) faults carry a real Dataverse
-`ErrorCode`; other faults (for example an `ExecuteMultiple`/`ExecuteTransaction` child failure) surface an
-`OrganizationServiceFault` with no `ErrorCode`. There is no formula/rollup/calculated-column, business-rule, or
+The faults the harness raises itself carry the platform `ErrorCode`: not found (`0x80040217`), duplicate key
+(`0x80040237`), missing privilege (`0x80040220`), aggregate limit (`0x8004E023`), the transaction faults above and
+the Custom API input checks. An `ExecuteMultiple` child fault keeps its inner fault's code; any other exception
+surfaces as an `OrganizationServiceFault` with no `ErrorCode`. There is no formula/rollup/calculated-column, business-rule, or
 duplicate-detection simulation.
 
 For the full picture across the whole framework (runtime, CLI and this test harness), see

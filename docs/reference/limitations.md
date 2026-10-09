@@ -80,10 +80,12 @@ untouched.
 - **Some Custom API fields are create-only.** `IsFunction`, the binding type, the bound entity, the allowed
   custom-processing-step type, and `WorkflowSdkStepEnabled` are fixed when the Custom API is created; Dataverse
   ignores updates to them. `apply` detects such a change and fails fast (delete and recreate the Custom API to
-  change one) rather than reporting an update that never lands.
-- **Workflow-enabled Custom APIs are validated locally.** When `WorkflowSdkStepEnabled` is set, the Custom API
-  must be an action (not a function) and cannot use `Entity`/`EntityCollection`/`StringArray` parameters; `apply`
-  fails with a clear message instead of an opaque platform error. Under `--solution`, a Custom API's unique name
+  change one) rather than reporting an update that never lands. A parameter's type, optionality and table are
+  create-only too: `apply` recreates that one parameter.
+- **Custom API shapes are validated locally.** `Build()` rejects what Dataverse refuses (a function without a
+  response property, a workflow-enabled function, a workflow-enabled API with `Entity`/`EntityCollection`/
+  `string[]` parameters, invalid or duplicate parameter names), so the error names the API instead of surfacing as
+  an opaque platform fault. Under `--solution`, a Custom API's unique name
   must carry the solution publisher prefix (as web resources and plugin packages do) - `apply` checks this too.
   (Step and Custom API unique-name prefix enforcement applies only under `--solution`.)
 - **An entity-scoped step must resolve a message filter.** If a step names an entity that has no
@@ -95,17 +97,18 @@ untouched.
   bare `.dll` is not supported. Framework/Microsoft/Newtonsoft assemblies are excluded from registration.
 - **Scanning runs package code (trust your packages).** Discovering steps/Custom APIs requires instantiating
   the plugin types and calling `GetStepDefinitions()` / `GetCustomApiDefinition()`, so `plan`/`apply` execute
-  code from the scanned `.nupkg`. This is inherent (the definitions come from the plugin itself) - **only scan
-  packages you build or trust.** An isolating load context would not change this; the code still runs.
+  code from the scanned `.nupkg`. The scan runs in a child `vela` process with no connection, token or secret and
+  an allowlisted environment, but it is not a sandbox: the code runs with your OS rights. **Only scan packages you
+  build or trust.**
 - **Authentication:** a bare `--url` uses the **ambient Azure credential** (`DefaultAzureCredential`: `az login`,
   environment variables, workload identity, and **managed identity**) - the recommended default for CI and agents;
   plus connection string, client secret (env var / stdin / arg), and interactive MSAL (sovereign clouds via
   `--auth-client-id` / `--authority`). **No certificate auth.** Prefer `DATAVERSE_CLIENT_SECRET`
   or `--client-secret-stdin` (piped) over `--client-secret` (exposed to shell history / process listings; the
   CLI warns). `--client-secret-stdin` requires stdin to be piped, not an interactive terminal.
-- **Secrets in output.** Secure step configuration is **redacted to a hash** in all `plan`/`inspect` output -
-  the terminal summary, the JSON, and any `--out` plan file - changes are still detected, but the value never
-  appears. Unsecure config is shown verbatim (non-sensitive by design).
+- **Secrets in output.** Secure step configuration is **redacted to a digest** (an HMAC keyed per run) in all
+  `plan`/`inspect` output - the terminal summary, the JSON, and any `--out` plan file - changes are still detected,
+  but the value never appears. Unsecure config is shown verbatim (non-sensitive by design).
 - **No cross-operation transaction.** A partway failure leaves partial state; the resume report lists what
   completed. Upserts are idempotent - fix the cause and re-run. `plan`/`apply`/`inspect` never block on a prompt
   under redirected/piped stdin (safe for CI and agents); the optional package-assembly prompt and interactive
@@ -137,7 +140,8 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
 (configure it with the pipeline's `With*`/`As*` methods, which mirror every store configuration method).
 
 - **`Execute` covers a common set:** `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`,
-  `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`SetState`/`Associate`/`Disassociate`, the metadata reads
+  `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`SetState`/`Merge`/`Associate`/`Disassociate`,
+  the file block messages, the metadata reads
   (`RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute`), and `ExecuteMultiple`/`ExecuteTransaction`
   (the latter rolls the whole batch back on failure). For any other message, inject your own service.
 - **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on
@@ -163,10 +167,10 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
 - **Steps on a global Custom API.** A global API's main operation sees `PrimaryEntityName` = `"none"`, but a step on
   its message is declared through `EntityPluginBase<TEntity>` and so carries a table; the harness gives that step's
   context the step's table so the runtime still matches it. Vela has no entity-less step declaration yet.
-- **Fault codes are partial.** A not-found `Retrieve`/`Update` throws `FaultException<OrganizationServiceFault>`
-  with `ObjectDoesNotExist` (`-2147220969`), and a privilege denial carries `PrincipalPrivilegeDenied`; other
-  faults (for example an `ExecuteMultiple` child failure) surface an `OrganizationServiceFault` with no
-  `ErrorCode`. No formula/rollup/calculated columns, business rules, or duplicate-detection.
+- **Fault codes are partial.** The faults the harness raises itself carry the platform code (not found
+  `0x80040217`, duplicate key `0x80040237`, privilege denial `0x80040220`, the transaction faults, the Custom API
+  input checks); any other exception surfaces as an `OrganizationServiceFault` with no `ErrorCode`. No
+  formula/rollup/calculated columns, business rules, or duplicate-detection.
 - **N:N `Associate`/`Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or via a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise); then Associate/
   Disassociate persist the intersect rows and `RetrieveMultiple` joins through them. Re-associating an
@@ -195,9 +199,9 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   (PoA, incl. org-wide), inherited access from parental relationships, 1:N relationship cascades, access teams,
   **manager and position** hierarchy security, field-level (column) security, and link-entity (joined-table)
   read-trimming (a join to a record the caller can't read drops the primary row on an inner join, or omits the
-  linked columns on a left-outer join, recursively through nested joins). Behavioural note: a parent's Delete
-  PreValidation stage fires first, but its PreOperation/PostOperation stages fire **after** its cascaded children are
-  removed (the children's Delete plugins run in between), rather than the parent's PreOperation seeing its children.
+  linked columns on a left-outer join, recursively through nested joins). A parent's Delete PreValidation steps
+  still see its cascaded children; by PreOperation they are gone (the children's Delete plugins run in between), as
+  on Dataverse (verified live).
 
 ---
 
