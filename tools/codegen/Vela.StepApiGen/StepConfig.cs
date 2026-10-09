@@ -27,7 +27,8 @@ internal sealed record StepConfig(
     bool PostImage,
     IReadOnlyList<HandleOverload> Handles,
     bool SubordinatePreImage = false,
-    bool SubordinatePostImage = false)
+    bool SubordinatePostImage = false,
+    bool Relationship = false)
 {
     public const string Attributes = "params Expression<Func<TEntity, object?>>[] attributes";
 
@@ -67,6 +68,11 @@ internal sealed record StepConfig(
             yield return new("FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes)",
                 "SetFilteringAttributes(attribute, additionalAttributes);");
         }
+        if (Relationship)
+        {
+            yield return new("ForRelationship(string schemaName, params string[] additionalSchemaNames)",
+                "SetRelationships(schemaName, additionalSchemaNames);");
+        }
         yield return new("WithDescription(string description)", "SetDescription(description);");
         if (PreImage)
         {
@@ -91,6 +97,7 @@ internal sealed record StepConfig(
         }
         yield return new("WithExecutionOrder(int order)", "SetExecutionOrder(order);");
         yield return new("WithStepKey(string key)", "SetKey(key);");
+        yield return new("SkipWhenDepthAbove(int maxDepth)", "SetSkipWhenDepthAbove(maxDepth);");
         yield return new("WithImpersonation(Guid systemUserId)", "SetImpersonationUser(systemUserId);");
         yield return new("WithSupportedDeployment(SupportedDeployment deployment)", "SetSupportedDeployment(deployment);");
         yield return new("WithUnsecureConfig(string configuration)", "SetUnsecureConfig(configuration);");
@@ -115,7 +122,8 @@ internal sealed record StepConfig(
         message.HasPostImage(stage),
         [new($"Action<I{message.Name}{stage.ContextSuffix()}Context<TEntity>> handler")],
         message.HasSubordinatePreImage(stage),
-        message.HasSubordinatePostImage(stage));
+        message.HasSubordinatePostImage(stage),
+        message.Relationship);
 
     /// <summary>Universal image rules for steps on a message the model does not know (OnMessage / On&lt;TRequest&gt;).</summary>
     private static readonly Message Unmodelled = new("(unmodelled)", Images: Images.PreAndPost);

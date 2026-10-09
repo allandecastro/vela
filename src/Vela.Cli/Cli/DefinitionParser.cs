@@ -34,7 +34,9 @@ internal static class DefinitionParser
             SecureConfig: TryGetString(definition, "secureConfig") ?? string.Empty,
             ImpersonatingUserId: Guid.TryParse(TryGetString(definition, "impersonatingUserId"), out Guid impersonatingUserId) ? impersonatingUserId : Guid.Empty,
             SupportedDeployment: TryGetInt(definition, "supportedDeployment"),
-            Description: TryGetString(definition, "description") ?? string.Empty);
+            Description: TryGetString(definition, "description") ?? string.Empty,
+            AsyncAutoDelete: TryGetBool(definition, "asyncAutoDelete"),
+            LiveStepKey: TryGetString(definition, DiffEngine.LiveStepKeyField));
     }
 
     internal static ImageApplyDefinition[] ParseImageDefinitions(JsonElement definition, string propertyName)

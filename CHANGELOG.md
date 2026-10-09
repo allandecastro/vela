@@ -26,6 +26,16 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Several steps may share a trigger, and the rank is no longer part of a step's identity.** Two steps on the same
+  message, stage, mode and entity were rejected; they are now allowed when their filtering attributes, images,
+  relationship scope or step key tell them apart, and the executing step (`OwningExtension`, resolved by id for an
+  async step, whose name Dataverse leaves null) selects its handler. The automatic step key no longer includes the
+  rank, so a rank change updates the step in place; the first step of a trigger keeps its earlier key at the default
+  rank, and a keyless step deployed at another rank gets a new key once (the first `vela plan` shows an update).
+  Two steps that still cannot be told apart need a `WithStepKey(...)`. VELA008 flags only those.
+- **`ISyncAsyncMode<T>` and `IAsyncMode<T>` gain `Async(bool deleteJobOnSuccess)`.** A class implementing them must
+  add it.
+
 - **`PluginPipeline` caps the cascade at the Dataverse depth (#450).** The default `WithMaxDepth` cap was 16; it is
   now `PluginBase.DefaultMaxDepth` (8), the depth at which Dataverse aborts a chain as an infinite loop. A test whose
   cascade runs deeper than 8 (a plugin with a raised `maxDepth`, or a classic `IPlugin`) now fails with the pipeline's
@@ -158,6 +168,16 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **`Async(deleteJobOnSuccess: true)`** deletes an asynchronous step's system job once it succeeds (Dataverse
+  `asyncautodelete`), carried on `StepDefinition.AsyncAutoDelete`.
+- **`ForRelationship("schema_name", ...)` on `OnAssociate()` / `OnDisassociate()`.** Dataverse fires these steps for
+  every relationship; the handler now runs only for the named ones (`StepDefinition.Relationships`), and any other
+  relationship is skipped with a trace line.
+- **`SkipWhenDepthAbove(n)`** skips a step's handler (with a trace line) when the execution depth is above `n`,
+  replacing the plugin-level depth guard, which throws, for that step only. `n` must be at least 1. Runtime-only.
+- **Typed bulk images.** A typed step context of a `CreateMultiple` / `UpdateMultiple` handler exposes `PreImages` /
+  `PostImages`: one projection per target, aligned with `ctx.GetTargets()`, read by the step's own alias.
+
 - **`RetryPolicy.Execute(..., maxElapsed:)` bounds the whole call (#450).** Each wait was capped at
   `RetryPolicy.MaxDelay` (30 s) but their sum was not, so a few attempts could consume most of the ~2-minute plugin
   budget. With `maxElapsed`, a retry whose wait would end past the budget is not made and the last fault propagates.
@@ -236,6 +256,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   on every execution.
 
 ### Fixed (Framework)
+
+- **The in-memory pipeline fills a bulk step's image collections as Dataverse does** (verified live): each target's
+  collection also holds the images of the plugin type's other steps on the message and the platform's
+  `PreBusinessEntity` / `PostBusinessEntity`, so a test of access by alias is real. It also seeds the
+  `sdkmessageprocessingstep` rows an async step's `OwningExtension` points at, so several async steps on one trigger
+  dispatch as on Dataverse.
 
 - **`RetryPolicy` jitter is independent across threads (#450).** Each thread's `Random` was seeded from the tick
   count on .NET Framework, so threads that started retrying in the same tick drew the same backoff. The seeds now come
@@ -478,6 +504,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **`apply` writes `asyncautodelete`** for a step declared `Async(deleteJobOnSuccess: true)`, and `plan` diffs it.
+- **Several steps on one trigger** are created, updated and deleted as separate steps. A changed step that pairs
+  with its live step under another key carries `liveStepKey` in its `after` definition, so `apply` updates that step.
+
 - **Image request property in plan and apply (#462).** The step shape compares each image's `messagepropertyname`,
   so `plan` shows an image moved between the Merge master and subordinate as a change and `apply` recreates it.
   The scanner rejects `SubordinateId` on any message other than Merge (the platform fails with 0x8004416B).
@@ -500,6 +530,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
 
 ### Fixed (CLI)
+
+- **An added step no longer takes over another step registered on the same trigger.** `apply` adopted any single
+  live step on the trigger for a step whose key it did not find; it now adopts only the step the diff paired.
 
 - **Step descriptions and Custom API display names and descriptions reach Dataverse.** `apply` wrote the step name
   as every step's description, and the unique name (or the parameter name) as every Custom API's display name and

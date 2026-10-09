@@ -128,6 +128,7 @@ namespace Vela.Testing
                 if (type != null)
                 {
                     pipeline._registrations.Add(new PipelineRegistration(type, step));
+                    pipeline.SeedStepRow(step);
                 }
                 else
                 {
@@ -189,6 +190,7 @@ namespace Vela.Testing
                 foreach (StepDefinition step in steps)
                 {
                     _registrations.Add(new PipelineRegistration(pluginType, step));
+                    SeedStepRow(step);
                     registered = true;
                 }
             }
