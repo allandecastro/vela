@@ -17,9 +17,7 @@ namespace Vela.Testing
         {
             PluginType = pluginType;
             Step = step;
-            _constructor = pluginType.GetConstructor(new[] { typeof(string), typeof(string) })
-                ?? throw new InvalidOperationException(
-                    $"Plugin '{pluginType.FullName}' must have a (string unsecureConfig, string secureConfig) constructor to be simulated.");
+            _constructor = PluginActivator.RequireConfigurationConstructor(pluginType, "to be simulated");
         }
 
         public Type PluginType { get; }
@@ -33,7 +31,7 @@ namespace Vela.Testing
         {
             string? unsecureConfig = string.IsNullOrEmpty(Step.UnsecureConfig) ? null : Step.UnsecureConfig;
             string? secure = string.IsNullOrEmpty(secureConfig) ? null : secureConfig;
-            return (IPlugin)_constructor.Invoke(new object?[] { unsecureConfig, secure });
+            return PluginActivator.Create(_constructor, unsecureConfig, secure);
         }
     }
 }

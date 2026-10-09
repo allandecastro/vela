@@ -379,10 +379,10 @@ namespace Vela.Testing
                 return (TPlugin)Activator.CreateInstance(type)!;
             }
 
-            ConstructorInfo? configCtor = type.GetConstructor(new[] { typeof(string), typeof(string) });
+            ConstructorInfo? configCtor = PluginActivator.FindConfigurationConstructor(type);
             if (configCtor is not null)
             {
-                return (TPlugin)configCtor.Invoke(new object?[] { string.Empty, string.Empty });
+                return (TPlugin)PluginActivator.Create(configCtor, string.Empty, string.Empty);
             }
 
             throw new InvalidOperationException(
