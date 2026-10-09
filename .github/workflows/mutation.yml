@@ -11,9 +11,8 @@ name: Mutation Testing
 #   floor rather than at the area's ratcheted threshold.
 #
 # Stryker is pinned in .config/dotnet-tools.json (`dotnet tool restore`), so a Stryker release cannot move the scores
-# on its own. The mutation jobs run on GitHub-hosted windows-latest runners (reliable for long runs, unlike the
-# personal self-hosted box that can sleep mid-run): the net462 projects only build on Windows, and Stryker's VsTest
-# launches an x64 test host, which windows-latest (x64) provides.
+# on its own. Every job runs on the self-hosted Windows runner, like ci.yml, to avoid GitHub Actions billing: the
+# net462 projects only build on Windows. The runner is a single machine, so the areas run one after another.
 on:
   workflow_dispatch:
   schedule:
@@ -28,52 +27,53 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
 
+# Windows PowerShell 5.1 is always present on the Windows runner (its pwsh is the WindowsApps stub, which the service
+# account can't execute), so it is the default shell for run steps.
+defaults:
+  run:
+    shell: powershell
+
 jobs:
   # Picks the areas to run: all of them, or on a pull request those whose files it changes.
   plan:
-    # Pull requests from forks are skipped, like the CI workflow.
+    # Same-repo pull requests, scheduled and manual runs only; fork PRs are skipped, like the CI workflow.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     outputs:
       areas: ${{ steps.select.outputs.areas }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - name: Select areas
         id: select
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ "$EVENT" = "pull_request" ]; then
-            git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-            git diff --name-only "origin/$BASE_REF...HEAD" > "$RUNNER_TEMP/changed.txt"
-            areas=$(python3 tests/stryker/select-areas.py "$RUNNER_TEMP/changed.txt")
-          else
-            areas=$(python3 tests/stryker/select-areas.py)
-          fi
-          echo "areas=$areas" >> "$GITHUB_OUTPUT"
-          echo "Areas: $areas"
+          if ('${{ github.event_name }}' -eq 'pull_request') {
+            git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $changed = Join-Path $env:RUNNER_TEMP 'changed.txt'
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" | Set-Content -Path $changed
+            $areas = & ./tests/stryker/select-areas.ps1 -ChangedFiles $changed
+          } else {
+            $areas = & ./tests/stryker/select-areas.ps1
+          }
+          "areas=$areas" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Areas: $areas"
 
   mutation:
     name: ${{ matrix.area }}
     needs: plan
     if: needs.plan.outputs.areas != '[]'
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows]
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.areas) }}
-    # Use Windows PowerShell 5.1 (always present) rather than pwsh: the runner's pwsh is the WindowsApps stub,
-    # which the service account can't execute ("EACCES ... pwsh.EXE"), intermittently failing steps.
-    defaults:
-      run:
-        shell: powershell
     env:
-      # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
+      # The service account can't write to the default install root 'C:\Program Files\dotnet', so setup-dotnet
+      # installs into the workspace instead (it adds this to PATH for the run steps).
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +86,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Install x64 .NET runtime for the VsTest test host
+        # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime so it can start
+        # and expose it via DOTNET_ROOT_X64 (the arch-specific lookup the x64 apphost uses).
+        run: |
+          $dir = "$env:RUNNER_TEMP\dotnet-x64"
+          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
+          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker (pinned in .config/dotnet-tools.json)
         run: dotnet tool restore
 
@@ -98,11 +105,12 @@ jobs:
         working-directory: ${{ matrix.tests }}
         run: dotnet tool run dotnet-stryker --config-file ../stryker/${{ matrix.area }}.yml --since:main --break-at 80
 
-      # Dumps every survivor so the next round can keep killing rather than lowering the gate.
+      # Dumps every survivor so the next round can keep killing rather than lowering the gate. The newest report is
+      # read: the runner's workspace persists between runs.
       - name: List surviving mutants
         if: always()
         run: |
-          $f = Get-ChildItem ${{ matrix.tests }}/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
+          $f = Get-ChildItem ${{ matrix.tests }}/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $f) { Write-Host 'no json report'; exit 0 }
           $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
           $n = 0
@@ -122,6 +130,7 @@ jobs:
         if: always()
         run: >
           Get-ChildItem ${{ matrix.tests }}/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
+          | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
       - name: Upload HTML report
         if: always()

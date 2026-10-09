@@ -36,7 +36,7 @@ artifact:
   and only the mutants in the changed files (`--since:main`), gated at the **80**
   floor. An incremental run scores a handful of mutants, so it is gated at the floor
   rather than at the area's ratcheted threshold. A `plan` job picks the areas
-  (`tests/stryker/select-areas.py`).
+  (`tests/stryker/select-areas.ps1`).
 
 ## Policy: measure-first, then ratchet
 
@@ -78,7 +78,7 @@ dotnet tool run dotnet-stryker --config-file ../stryker/diff-engine.yml --since:
 To add an area, add its `tests/stryker/<area>.yml` and its row in
 `tests/stryker/areas.json`, then measure it before choosing its `break`.
 
-All jobs run on GitHub-hosted `windows-latest` runners.
+All jobs run on the self-hosted Windows runner (like `ci.yml`, to avoid GitHub Actions billing), so the areas run one after another.
 
 ## Gated cores and approximate scores
 
