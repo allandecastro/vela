@@ -314,9 +314,18 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
 ```
 
 - Synchronous-plugin exceptions **roll the operation back** (snapshot/restore); **asynchronous** steps run
-  inline after the synchronous commit. An asynchronous step's exception does **not** surface to the caller
-  (matching Dataverse, where async steps are decoupled system jobs) - it is recorded on
-  `pipeline.AsyncStepFailures` so you can still assert an async step failed. Cascade depth is guarded (the
+  inline once the outermost operation (or `ExecuteTransaction` batch) commits, and never when it rolls back, as on
+  Dataverse where a rolled-back operation creates no async job. An asynchronous step's exception does **not**
+  surface to the caller (matching Dataverse, where async steps are decoupled system jobs) - it is recorded on
+  `pipeline.AsyncStepFailures` so you can still assert an async step failed, and the step's own writes are rolled
+  back. `ctx.IsInTransaction` is false for async steps and a depth-1 PreValidation step, true otherwise (a
+  PreValidation step inside an `ExecuteTransaction` is in its transaction).
+- **Execution-context ids.** `CorrelationId` is one id per top-level operation (an `ExecuteTransaction` batch shares
+  one, each `ExecuteMultiple` child gets its own), kept by the async steps it queues. `RequestId` is one id per call
+  into the pipeline; `OperationId` equals it on sync steps and is the async step's own job id on async steps.
+  `IsolationMode` is 2 (sandbox) and `SecondaryEntityName` is "none", as on Dataverse.
+- The steps work on a copy of the entity you pass to `Service.Create`/`Update`: your object never receives the
+  created id or a plugin's change to `Target`. Read the id from the return value of `Create`. Cascade depth is guarded (the
   plugin's own depth guard plus a pipeline cap via `WithMaxDepth`).
 - **Execution-context identity.** The plugin's `ctx` reports the configured caller: `UserId`,
   `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` come from `WithCurrentUser(...)` /

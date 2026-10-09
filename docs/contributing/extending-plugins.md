@@ -46,6 +46,12 @@ these, in this order:
    messages that render a typed `On<Message>()` call from `vela add plugin --message <Message>`. **It must stay in
    sync with the framework's typed methods**: leave the message out and the scaffold silently falls back to the
    permissive `OnMessage("<Message>")` even though the typed builder now exists.
+6. **Check the sdkmessage on a live environment first.** The trigger is named after the SDK request, but the step
+   registers on the sdkmessage, and for some business messages the two differ (`SendEmail` is `Send`, `WinQuote` is
+   `Win`). Query `sdkmessage` / `sdkmessagefilter` for the request name: if it does not exist, add the mapping to
+   `src/Vela.Plugins/Steps/SdkMessageNames.cs`. If the filter for your entity has
+   `iscustomprocessingstepallowed = false`, do not model the message at all: Dataverse rejects every custom step on
+   it (0x80044187).
 
 ## Verify
 

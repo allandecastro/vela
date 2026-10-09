@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.Context
@@ -50,7 +50,9 @@ namespace Vela.Context
         IOrganizationService SystemService { get; }
 
         /// <summary>
-        /// Gets logger abstraction.
+        /// Gets the platform's Application Insights logger (<c>Microsoft.Xrm.Sdk.PluginTelemetry.ILogger</c>). Never
+        /// null: a no-op logger stands in when the service provider supplies none. Prefer the leveled context helpers
+        /// (<c>LogInformation</c>, ...), which also write to the plug-in trace log and attach the default dimensions.
         /// </summary>
         ILogger Logger { get; }
 
@@ -235,13 +237,14 @@ namespace Vela.Context
         IDisposable BeginLogScope(IReadOnlyDictionary<string, object?> properties);
 
         /// <summary>
-        /// Emits a custom metric to Application Insights (when configured) and a structured log line. No-op for the
-        /// metric channel when Application Insights is not set up; never throws.
+        /// Emits a custom metric to Application Insights (when configured), with the default dimensions plus
+        /// <paramref name="properties"/> (as invariant strings), and a <c>[Metric]</c> line to the plug-in trace log.
+        /// Never throws for telemetry reasons.
         /// </summary>
         /// <param name="name">Metric name.</param>
-        /// <param name="value">Metric value.</param>
+        /// <param name="value">Metric value (the platform's metric API only takes integers).</param>
         /// <param name="properties">Optional custom dimensions.</param>
-        void LogMetric(string name, double value, IReadOnlyDictionary<string, object?>? properties = null);
+        void LogMetric(string name, long value, IReadOnlyDictionary<string, object?>? properties = null);
 
         /// <summary>
         /// Acquires a managed identity access token for the given scopes.

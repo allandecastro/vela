@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using Vela.Context;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.DI

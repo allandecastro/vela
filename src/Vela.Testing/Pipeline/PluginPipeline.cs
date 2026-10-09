@@ -21,8 +21,8 @@ namespace Vela.Testing
     /// Create/Update/Delete/Associate (or Custom API <c>Execute</c>) fires the registered steps for the
     /// matching message/stage/entity, honouring filtering attributes, execution order, pre/post images and
     /// cascade (a plugin that writes triggers further plugins). Synchronous failures roll the operation
-    /// back; asynchronous steps run after the synchronous "commit". This is scenario/behavioural testing —
-    /// fully offline, not integration testing.
+    /// back; asynchronous steps run once the outermost operation commits, and never when it rolls back. This is
+    /// scenario/behavioural testing — fully offline, not integration testing.
     /// </summary>
     public sealed class PluginPipeline
     {
@@ -32,10 +32,40 @@ namespace Vela.Testing
         private readonly List<PipelineExecutionEntry> _log = new List<PipelineExecutionEntry>();
         private readonly List<Exception> _asyncStepFailures = new List<Exception>();
         private readonly RecordingTracingService _trace = new RecordingTracingService();
+        private readonly RecordingLogger _logger = new RecordingLogger();
         private readonly PipelineOrganizationService _service;
-        private readonly Guid _correlationId = Guid.NewGuid();
         private int _maxDepth = 16;
         private int _depth;
+
+        // One correlation id per top-level operation, shared by everything it cascades into, including the async
+        // steps it queues (each restores the id captured when it was queued). Verified live: an ExecuteTransaction
+        // batch shares one id, each child of an ExecuteMultiple gets its own.
+        private Guid _correlationId = Guid.NewGuid();
+
+        // One request id per call into the pipeline from outside (an ExecuteMultiple batch is one request), carried by
+        // every step it triggers, async ones included. Verified live: a sync step's OperationId is the request id, an
+        // async step's is its own system job id.
+        private Guid _requestId = Guid.NewGuid();
+        private bool _inRequest;
+        private Guid _asyncOperationId;
+
+        // Asynchronous steps waiting for the outermost scope to commit. Live, an async step becomes a system job only
+        // when the triggering transaction commits, and a rolled-back operation creates no job at all (verified live
+        // 2026-10-07), so a scope that rolls back drops the steps it queued (see RunAtomically).
+        private readonly List<PendingAsyncStep> _pendingAsyncSteps = new List<PendingAsyncStep>();
+
+        // All-or-nothing scopes currently open: operations, ExecuteTransaction and a running async step. Async steps
+        // run only once the count drops back to zero.
+        private int _openScopes;
+
+        // Database transactions currently open. Every operation opens one except the non-transactional reads, and so
+        // does ExecuteTransaction; an async step runs outside any transaction.
+        private int _openTransactions;
+
+        // Whether the running operation started inside an already open transaction. Its PreValidation steps run before
+        // its own transaction begins, so this alone decides their IsInTransaction (verified live: false at depth 1,
+        // true for a nested PreValidation).
+        private bool _operationEnclosedInTransaction;
 
         // The execution contexts currently on the (synchronous) call stack. The context of the plugin that is
         // executing when a cascaded write re-enters the pipeline becomes the nested execution's ParentContext,
@@ -423,6 +453,12 @@ namespace Vela.Testing
         /// <summary>Captured traces aggregated across the whole cascade.</summary>
         public RecordingTracingService Trace => _trace;
 
+        /// <summary>
+        /// Captured Application Insights entries and metrics (<c>ctx.LogInformation</c>, <c>ctx.LogMetric</c>, ...)
+        /// aggregated across the whole cascade.
+        /// </summary>
+        public RecordingLogger LogCapture => _logger;
+
         /// <summary>Snapshot (clones) of all stored records of a logical name, for assertions.</summary>
         public IReadOnlyList<Entity> GetAll(string logicalName) => _store.GetAll(logicalName);
 
@@ -471,21 +507,38 @@ namespace Vela.Testing
             return resolved;
         }
 
+        // A copy of a write target for the steps to work on: its attributes, alternate key and deep-insert children
+        // (each child is copied in turn when it is created).
+        private static Entity CloneTarget(Entity entity)
+        {
+            Entity clone = EntityValues.Clone(entity);
+            foreach (KeyValuePair<string, object> key in entity.KeyAttributes)
+            {
+                clone.KeyAttributes[key.Key] = key.Value;
+            }
+
+            foreach (KeyValuePair<Relationship, EntityCollection> related in entity.RelatedEntities)
+            {
+                clone.RelatedEntities[related.Key] = related.Value;
+            }
+
+            return clone;
+        }
+
         // SetState, as the platform runs it (verified live): the request fires the SetStateDynamicEntity steps (never
         // the SetState ones), and its main operation is an Update of statecode/statuscode at the same depth that fires
         // the Update steps at PreOperation and PostOperation only. The SetStateDynamicEntity steps see the Status as
         // sent (-1 = default); the Update Target carries the resolved status (see WithDefaultStatus).
         internal void ExecuteSetState(EntityReference target, OptionSetValue? state, OptionSetValue? status, ParameterCollection? sharedVariables = null)
         {
-            RunOperation<object?>(asyncQueue =>
+            RunOperation<object?>(() =>
             {
                 Entity update = _store.SetStateUpdate(target, state, status);
                 FireSetStateDynamicEntity(
                     new EntityReference(update.LogicalName, update.Id),
                     state ?? new OptionSetValue(0),
                     status ?? new OptionSetValue(-1),
-                    asyncQueue,
-                    () => UpdateBatch(new[] { update }, asyncQueue, platformUpdate: true));
+                    () => UpdateBatch(new[] { update }, platformUpdate: true));
                 return null;
             }, sharedVariables);
         }
@@ -495,7 +548,7 @@ namespace Vela.Testing
         // only, then Assign PostOperation. (An Update of ownerid, conversely, never fires the Assign steps.)
         internal void ExecuteAssign(AssignRequest request, ParameterCollection? sharedVariables = null)
         {
-            RunOperation<object?>(asyncQueue =>
+            RunOperation<object?>(() =>
             {
                 EntityReference record = new EntityReference(request.Target.LogicalName, _store.ResolveReference(request.Target));
                 _store.TryGet(record.LogicalName, record.Id, out Entity? pre);
@@ -504,23 +557,23 @@ namespace Vela.Testing
                 {
                     StageInvocation invocation = GenericInvocation(PluginMessages.Assign, stage, record.LogicalName, record.Id, request.Parameters, null);
                     invocation.PreState = pre;
-                    FireStage(invocation, asyncQueue);
+                    FireStage(invocation);
                 }
 
-                UpdateBatch(new[] { new Entity(record.LogicalName, record.Id) { ["ownerid"] = request.Assignee } }, asyncQueue, platformUpdate: true);
+                UpdateBatch(new[] { new Entity(record.LogicalName, record.Id) { ["ownerid"] = request.Assignee } }, platformUpdate: true);
 
                 _store.TryGet(record.LogicalName, record.Id, out Entity? post);
                 StageInvocation postInvocation = GenericInvocation(PluginMessages.Assign, PluginStages.PostOperation, record.LogicalName, record.Id, request.Parameters, null);
                 postInvocation.PreState = pre;
                 postInvocation.PostState = post;
-                FireStage(postInvocation, asyncQueue);
+                FireStage(postInvocation);
                 return null;
             }, sharedVariables);
         }
 
         // Fires the SetStateDynamicEntity steps around a state change: PreValidation and PreOperation, the main
         // operation (which writes the state), then PostOperation. Images come from the record before and after it.
-        private void FireSetStateDynamicEntity(EntityReference record, OptionSetValue state, OptionSetValue status, List<Action> asyncQueue, Action mainOperation)
+        private void FireSetStateDynamicEntity(EntityReference record, OptionSetValue state, OptionSetValue status, Action mainOperation)
         {
             ParameterCollection inputs = new ParameterCollection
             {
@@ -534,7 +587,7 @@ namespace Vela.Testing
             {
                 StageInvocation invocation = GenericInvocation(PluginMessages.SetStateDynamicEntity, stage, record.LogicalName, record.Id, inputs, null);
                 invocation.PreState = pre;
-                FireStage(invocation, asyncQueue);
+                FireStage(invocation);
             }
 
             mainOperation();
@@ -543,7 +596,7 @@ namespace Vela.Testing
             StageInvocation postInvocation = GenericInvocation(PluginMessages.SetStateDynamicEntity, PluginStages.PostOperation, record.LogicalName, record.Id, inputs, null);
             postInvocation.PreState = pre;
             postInvocation.PostState = post;
-            FireStage(postInvocation, asyncQueue);
+            FireStage(postInvocation);
         }
 
         // The main operation of an Update row. A row that changes statecode runs the state change as the platform
@@ -574,13 +627,12 @@ namespace Vela.Testing
                 _store.Update(standard);
             }
 
-            RunOperation<object?>(asyncQueue =>
+            RunOperation<object?>(() =>
             {
                 FireSetStateDynamicEntity(
                     new EntityReference(row.LogicalName, row.Id),
                     state,
                     row.GetAttributeValue<OptionSetValue>("statuscode") ?? new OptionSetValue(-1),
-                    asyncQueue,
                     () => _store.Update(stateChange));
                 return null;
             });
@@ -601,7 +653,10 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(entities));
             }
 
-            return RunOperation(asyncQueue =>
+            // The steps work on copies: live, the request is serialized, so neither a plugin's change to Target nor the
+            // created id ever reaches the caller's entity (and so cannot survive a rollback on it).
+            entities = entities.Select(CloneTarget).ToArray();
+            return RunOperation(() =>
             {
                 string entityName = entities.Length > 0 ? entities[0].LogicalName : string.Empty;
                 // FilterOn applies to Create as it does to Update: a Create step fires only when the request sets one
@@ -612,8 +667,8 @@ namespace Vela.Testing
                     ChangedAttributes = new HashSet<string>(e.Attributes.Keys, StringComparer.OrdinalIgnoreCase)
                 }).ToList();
 
-                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PreValidation, entityName, items, asyncQueue);
-                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PreOperation, entityName, items, asyncQueue);
+                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PreValidation, entityName, items);
+                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PreOperation, entityName, items);
 
                 Guid[] ids = new Guid[entities.Length];
                 for (int i = 0; i < entities.Length; i++)
@@ -629,7 +684,7 @@ namespace Vela.Testing
                     items[i].PostState = post;
                 }
 
-                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue);
+                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items);
                 return ids;
             }, sharedVariables);
         }
@@ -644,17 +699,18 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(entities));
             }
 
-            entities = entities.Select(ResolveKeyedTarget).ToArray();
-            RunOperation<object?>(asyncQueue =>
+            // ResolveKeyedTarget may return the caller's own entity; the steps work on a copy (see ExecuteCreateMultiple).
+            entities = entities.Select(entity => CloneTarget(ResolveKeyedTarget(entity))).ToArray();
+            RunOperation<object?>(() =>
             {
-                UpdateBatch(entities, asyncQueue, platformUpdate: false);
+                UpdateBatch(entities, platformUpdate: false);
                 return null;
             }, sharedVariables);
         }
 
         // The stages of an Update batch inside the current operation. A platform-generated Update (the main operation
         // of Assign or SetState) has no PreValidation stage (verified live) and runs at its parent's depth.
-        private void UpdateBatch(Entity[] entities, List<Action> asyncQueue, bool platformUpdate)
+        private void UpdateBatch(Entity[] entities, bool platformUpdate)
         {
             string entityName = entities.Length > 0 ? entities[0].LogicalName : string.Empty;
             List<BatchItem> items = new List<BatchItem>(entities.Length);
@@ -671,10 +727,10 @@ namespace Vela.Testing
 
             if (!platformUpdate)
             {
-                FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreValidation, entityName, items, asyncQueue);
+                FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreValidation, entityName, items);
             }
 
-            FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreOperation, entityName, items, asyncQueue);
+            FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreOperation, entityName, items);
 
             foreach (Entity entity in entities)
             {
@@ -687,12 +743,12 @@ namespace Vela.Testing
                 item.PostState = post;
             }
 
-            FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue);
+            FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PostOperation, entityName, items);
         }
 
         internal void ExecuteDelete(string entityName, Guid id, ParameterCollection? sharedVariables = null)
         {
-            RunOperation<object?>(asyncQueue =>
+            RunOperation<object?>(() =>
             {
                 // PreValidation runs before the main operation, so before any cascade: the deleted record's
                 // PreValidation steps still see its children (verified live: 2 children at PreValidation, 0 at
@@ -700,7 +756,7 @@ namespace Vela.Testing
                 bool preValidated = false;
                 if (_store.TryGet(entityName, id, out Entity? pre))
                 {
-                    FireStage(DeleteInvocation(PluginStages.PreValidation, entityName, id, pre), asyncQueue);
+                    FireStage(DeleteInvocation(PluginStages.PreValidation, entityName, id, pre));
                     preValidated = true;
                 }
 
@@ -709,7 +765,6 @@ namespace Vela.Testing
                 _store.DeleteInternal(entityName, id, (name, recordId) => FireDeleteAndRemove(
                     name,
                     recordId,
-                    asyncQueue,
                     firePreValidation: !(preValidated && recordId == id && string.Equals(name, entityName, StringComparison.OrdinalIgnoreCase))));
                 return null;
             }, sharedVariables);
@@ -718,17 +773,17 @@ namespace Vela.Testing
         // Fires one record's Delete pre-stages, removes just that record (the store handles cascade around this),
         // then fires its post-stages — the same pre/remove/post a top-level Delete runs, applied per cascaded record.
         // The top-level record's PreValidation already ran before the cascade (see ExecuteDelete).
-        private void FireDeleteAndRemove(string entityName, Guid id, List<Action> asyncQueue, bool firePreValidation)
+        private void FireDeleteAndRemove(string entityName, Guid id, bool firePreValidation)
         {
             _store.TryGet(entityName, id, out Entity? pre);
 
             if (firePreValidation)
             {
-                FireStage(DeleteInvocation(PluginStages.PreValidation, entityName, id, pre), asyncQueue);
+                FireStage(DeleteInvocation(PluginStages.PreValidation, entityName, id, pre));
             }
-            FireStage(DeleteInvocation(PluginStages.PreOperation, entityName, id, pre), asyncQueue);
+            FireStage(DeleteInvocation(PluginStages.PreOperation, entityName, id, pre));
             _store.RemoveRecordDirect(entityName, id);
-            FireStage(DeleteInvocation(PluginStages.PostOperation, entityName, id, pre), asyncQueue);
+            FireStage(DeleteInvocation(PluginStages.PostOperation, entityName, id, pre));
         }
 
         private static StageInvocation DeleteInvocation(PluginStages stage, string entityName, Guid id, Entity? pre)
@@ -778,16 +833,22 @@ namespace Vela.Testing
 
             if (_customApis.TryGetValue(request.RequestName, out Type? pluginType))
             {
-                return RunOperation(asyncQueue =>
+                return RunOperation(() =>
                 {
+                    IPlugin plugin = Instantiate(pluginType);
+                    CustomApiDefinition? definition = (plugin as CustomApiBase)?.GetCustomApiDefinition();
+                    (string primaryEntityName, Guid primaryEntityId) = CustomApiPrimaryEntity(definition, request);
+
                     FakePluginExecutionContext context = new FakePluginExecutionContext
                     {
                         MessageName = request.RequestName,
                         Stage = (int)PluginStages.MainOperation,
                         Mode = (int)ExecutionMode.Synchronous,
                         Depth = _depth,
-                        PrimaryEntityName = string.Empty,
+                        PrimaryEntityName = primaryEntityName,
+                        PrimaryEntityId = primaryEntityId,
                         CorrelationId = _correlationId,
+                        IsInTransaction = IsInTransactionFor(PluginStages.MainOperation, ExecutionMode.Synchronous),
                         SharedVariables = _sharedVariables
                     };
 
@@ -796,11 +857,9 @@ namespace Vela.Testing
                         context.InputParameters[parameter.Key] = parameter.Value;
                     }
 
-                    IPlugin plugin = Instantiate(pluginType);
-
                     // The platform rejects a call that omits a required (non-optional) input parameter before the
                     // Custom API runs; enforce the same so a test cannot pass while omitting a required input.
-                    if (plugin is CustomApiBase customApi && customApi.GetCustomApiDefinition() is CustomApiDefinition definition)
+                    if (definition != null)
                     {
                         foreach (CustomApiParameterDefinition parameter in definition.InputParameters)
                         {
@@ -910,10 +969,10 @@ namespace Vela.Testing
         // message itself fire around the inner operation, and the response carries RecordCreated and Target.
         private OrganizationResponse ExecuteUpsert(OrganizationRequest request, Entity target, ParameterCollection shared)
         {
-            return RunOperation(asyncQueue =>
+            return RunOperation(() =>
             {
-                FireStage(GenericInvocation("Upsert", PluginStages.PreValidation, target.LogicalName, target.Id, request.Parameters, null), asyncQueue);
-                FireStage(GenericInvocation("Upsert", PluginStages.PreOperation, target.LogicalName, target.Id, request.Parameters, null), asyncQueue);
+                FireStage(GenericInvocation("Upsert", PluginStages.PreValidation, target.LogicalName, target.Id, request.Parameters, null));
+                FireStage(GenericInvocation("Upsert", PluginStages.PreOperation, target.LogicalName, target.Id, request.Parameters, null));
 
                 EntityReference key = target.Id != Guid.Empty
                     ? new EntityReference(target.LogicalName, target.Id)
@@ -947,7 +1006,7 @@ namespace Vela.Testing
                 }
 
                 response.Results["Target"] = new EntityReference(target.LogicalName, affectedId);
-                FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, target.LogicalName, affectedId, request.Parameters, response.Results), asyncQueue);
+                FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, target.LogicalName, affectedId, request.Parameters, response.Results));
                 return (OrganizationResponse)response;
             }, shared);
         }
@@ -1015,12 +1074,13 @@ namespace Vela.Testing
 
         // All-or-nothing: snapshot the store, run every child through the pipeline, and roll back the whole batch
         // if any child throws. Mirrors the store's ExecuteTransaction but with plugin steps firing per child.
+        // The batch is one transaction, so the children's async steps wait for the whole batch to commit and are
+        // dropped with it.
         private ExecuteTransactionResponse ExecuteTransactionThroughPipeline(ExecuteTransactionRequest request)
         {
-            var snapshot = _store.Snapshot();
             OrganizationResponseCollection responses = new OrganizationResponseCollection();
 
-            try
+            RunAtomically(() =>
             {
                 foreach (OrganizationRequest child in request.Requests)
                 {
@@ -1030,12 +1090,9 @@ namespace Vela.Testing
                         responses.Add(childResponse);
                     }
                 }
-            }
-            catch
-            {
-                _store.RestoreTo(snapshot);
-                throw;
-            }
+
+                return true;
+            }, transactional: true);
 
             ExecuteTransactionResponse response = new ExecuteTransactionResponse();
             response.Results["Responses"] = responses;
@@ -1052,7 +1109,9 @@ namespace Vela.Testing
         // "unsupported message" error).
         private OrganizationResponse ExecuteModelledMessage(OrganizationRequest request, ParameterCollection shared)
         {
-            string message = request.RequestName;
+            // Steps register on the sdkmessage, which differs from the request name for some business messages
+            // (SendEmailRequest runs the Send steps, WinQuoteRequest the Win steps), and plugins see that name.
+            string message = SdkMessageNames.ToSdkMessage(request.RequestName);
             bool hasSteps = _registrations.Any(registration => registration.Step.Enabled
                 && string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
             if (!hasSteps)
@@ -1062,16 +1121,39 @@ namespace Vela.Testing
 
             (string entityName, Guid entityId) = DerivePrimaryEntity(request);
 
-            return RunOperation(asyncQueue =>
+            // Retrieve and RetrieveMultiple are not transactional (verified live: IsInTransaction false at stages 20
+            // and 40); every other message runs its main operation in a transaction.
+            bool transactional = !NonTransactionalMessages.Contains(message);
+            return RunOperation(() =>
             {
-                FireStage(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), asyncQueue);
-                FireStage(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), asyncQueue);
+                FireStage(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null));
+                FireStage(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null));
 
-                OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = message };
+                OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
 
-                FireStage(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), asyncQueue);
+                FireStage(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results));
                 return response;
-            }, shared);
+            }, shared, transactional);
+        }
+
+        private static readonly HashSet<string> NonTransactionalMessages =
+            new HashSet<string>(new[] { "Retrieve", "RetrieveMultiple" }, StringComparer.OrdinalIgnoreCase);
+
+        // The primary entity a Custom API's main operation sees on Dataverse (verified live): "none" and an empty id
+        // for a global API, the bound entity and the Target's id for an entity-bound API, and the bound entity with
+        // an empty id for an entity-collection-bound API.
+        private static (string, Guid) CustomApiPrimaryEntity(CustomApiDefinition? definition, OrganizationRequest request)
+        {
+            if (definition == null || definition.BindingType == CustomApiBindingType.Global || string.IsNullOrEmpty(definition.BoundEntityLogicalName))
+            {
+                return ("none", Guid.Empty);
+            }
+
+            Guid id = definition.BindingType == CustomApiBindingType.Entity
+                && request.Parameters.TryGetValue("Target", out object? target) && target is EntityReference reference
+                ? reference.Id
+                : Guid.Empty;
+            return (definition.BoundEntityLogicalName!, id);
         }
 
         private static StageInvocation GenericInvocation(string message, PluginStages stage, string entityName, Guid entityId, ParameterCollection inputs, ParameterCollection? outputs)
@@ -1090,6 +1172,13 @@ namespace Vela.Testing
         // Best-effort primary entity for a generic message: an explicit Target, else the first EntityReference /
         // Entity parameter (covers LeadId, Target, EntityMoniker, ...). When nothing resolves, the steps match by
         // (message, stage) alone.
+        private static readonly (string Parameter, string Lookup)[] ClosingActivityPrimaries =
+        {
+            ("OpportunityClose", "opportunityid"),
+            ("QuoteClose", "quoteid"),
+            ("IncidentResolution", "incidentid"),
+        };
+
         private static (string, Guid) DerivePrimaryEntity(OrganizationRequest request)
         {
             if (request.Parameters.TryGetValue("Target", out object? target))
@@ -1105,17 +1194,19 @@ namespace Vela.Testing
                 }
             }
 
-            // Messages whose primary record is not the first entity-typed parameter: derive it explicitly so an
-            // entity-filtered step still matches. WinOpportunity/LoseOpportunity carry an OpportunityClose activity
-            // whose opportunityid points at the real primary (opportunity); the generic scan below would otherwise
-            // pick the activity ("opportunityclose") and the step would silently not fire (A15).
-            if (request.RequestName is "WinOpportunity" or "LoseOpportunity"
-                && request.Parameters.TryGetValue("OpportunityClose", out object? close)
-                && close is Entity closeEntity
-                && closeEntity.Attributes.TryGetValue("opportunityid", out object? opportunityId)
-                && opportunityId is EntityReference opportunityRef)
+            // Messages whose primary record is not the first entity-typed parameter: a closing activity whose lookup
+            // points at the real primary. The generic scan below would otherwise pick the activity
+            // (opportunityclose, incidentresolution, quoteclose) and an entity-filtered step would silently not fire
+            // (A15). Verified live: Win/Lose run with PrimaryEntityName opportunity, Close with incident.
+            foreach ((string parameterName, string lookup) in ClosingActivityPrimaries)
             {
-                return (opportunityRef.LogicalName, opportunityRef.Id);
+                if (request.Parameters.TryGetValue(parameterName, out object? activity)
+                    && activity is Entity activityEntity
+                    && activityEntity.Attributes.TryGetValue(lookup, out object? primary)
+                    && primary is EntityReference primaryRef)
+                {
+                    return (primaryRef.LogicalName, primaryRef.Id);
+                }
             }
 
             foreach (KeyValuePair<string, object> parameter in request.Parameters)
@@ -1224,7 +1315,7 @@ namespace Vela.Testing
 
         private void RunAssociation(string message, string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities, ParameterCollection? sharedVariables = null)
         {
-            RunOperation<object?>(asyncQueue =>
+            RunOperation<object?>(() =>
             {
                 Dictionary<string, object> extra = new Dictionary<string, object>
                 {
@@ -1237,7 +1328,7 @@ namespace Vela.Testing
                 {
                     StageInvocation preInvocation = NewInvocation(message, stage, entityName, entityId, target);
                     preInvocation.ExtraInputs = extra;
-                    FireStage(preInvocation, asyncQueue);
+                    FireStage(preInvocation);
                 }
 
                 // Persist the N:N change so the post stage (and later reads) see the intersect rows. The
@@ -1253,16 +1344,17 @@ namespace Vela.Testing
 
                 StageInvocation postInvocation = NewInvocation(message, PluginStages.PostOperation, entityName, entityId, target);
                 postInvocation.ExtraInputs = extra;
-                FireStage(postInvocation, asyncQueue);
+                FireStage(postInvocation);
 
                 return null;
             }, sharedVariables);
         }
 
-        private T RunOperation<T>(Func<List<Action>, T> body, ParameterCollection? sharedVariables = null)
+        private T RunOperation<T>(Func<T> body, ParameterCollection? sharedVariables = null, bool transactional = true)
         {
             _depth++;
             ParameterCollection previousShared = _sharedVariables;
+            bool previousEnclosed = _operationEnclosedInTransaction;
             // Top-level operation starts from the supplied shared variables (e.g. the request 'tag'); a cascaded
             // write inherits the parent operation's collection so upstream shared variables remain visible.
             _sharedVariables = _depth == 1 ? (sharedVariables ?? new ParameterCollection()) : previousShared;
@@ -1274,45 +1366,175 @@ namespace Vela.Testing
                         $"Vela pipeline stopped at depth {_depth} (cap {_maxDepth}). Likely infinite recursion between plugins.");
                 }
 
-                var snapshot = _store.Snapshot();
-                List<Action> asyncQueue = new List<Action>();
-                T result;
-                try
-                {
-                    result = body(asyncQueue);
-                }
-                catch
-                {
-                    _store.RestoreTo(snapshot);
-                    throw;
-                }
-
-                // Asynchronous steps run after the synchronous transaction "commits"; their failures do not roll
-                // back. Real Dataverse runs them as decoupled system jobs whose failures never surface to the
-                // triggering caller, so record any exception (assert via AsyncStepFailures) instead of throwing
-                // out of the originating operation.
-                foreach (Action pending in asyncQueue)
-                {
-                    try
-                    {
-                        pending();
-                    }
-                    catch (Exception ex)
-                    {
-                        _asyncStepFailures.Add(ex);
-                    }
-                }
-
-                return result;
+                _operationEnclosedInTransaction = _openTransactions > 0;
+                return RunAtomically(body, transactional);
             }
             finally
             {
+                _operationEnclosedInTransaction = previousEnclosed;
                 _sharedVariables = previousShared;
                 _depth--;
             }
         }
 
-        private void FireStage(StageInvocation invocation, List<Action> asyncQueue)
+        // Runs the body all-or-nothing: if it throws, the store is restored and the async steps queued inside it are
+        // dropped. The async steps run only once the outermost scope has committed.
+        private T RunAtomically<T>(Func<T> body, bool transactional)
+        {
+            bool outermost = _openScopes == 0;
+            if (outermost)
+            {
+                _correlationId = Guid.NewGuid();
+            }
+
+            var snapshot = _store.Snapshot();
+            int queued = _pendingAsyncSteps.Count;
+            _openScopes++;
+            if (transactional)
+            {
+                _openTransactions++;
+            }
+
+            T result;
+            try
+            {
+                result = body();
+            }
+            catch
+            {
+                _store.RestoreTo(snapshot);
+                _pendingAsyncSteps.RemoveRange(queued, _pendingAsyncSteps.Count - queued);
+                throw;
+            }
+            finally
+            {
+                _openScopes--;
+                if (transactional)
+                {
+                    _openTransactions--;
+                }
+            }
+
+            if (outermost)
+            {
+                RunPendingAsyncSteps();
+            }
+
+            return result;
+        }
+
+        // Queues an async step with the state it was triggered in, to run once the outermost scope commits.
+        private void QueueAsyncStep(Action dispatch)
+        {
+            _pendingAsyncSteps.Add(new PendingAsyncStep
+            {
+                Dispatch = dispatch,
+                Depth = _depth,
+                SharedVariables = _sharedVariables,
+                Bypass = _bypass,
+                CallerUserId = _callerUserId,
+                InitiatingUserId = _initiatingUserId,
+                CorrelationId = _correlationId,
+                RequestId = _requestId,
+                ParentContext = _contextStack.Count > 0 ? _contextStack.Peek() : null,
+            });
+        }
+
+        // Runs the queued async steps in order. A step's own writes may queue more, which run after it. Real Dataverse
+        // runs async steps as decoupled system jobs whose failures never surface to the triggering caller, so any
+        // exception is recorded (assert via AsyncStepFailures) instead of thrown out of the originating operation.
+        private void RunPendingAsyncSteps()
+        {
+            while (_pendingAsyncSteps.Count > 0)
+            {
+                PendingAsyncStep step = _pendingAsyncSteps[0];
+                _pendingAsyncSteps.RemoveAt(0);
+                RunAsyncStep(step);
+            }
+        }
+
+        // Runs one async step as its own system job: outside any transaction, in its own rollback scope (a failure
+        // undoes its writes and drops the async steps they queued), and with the state captured when it was queued.
+        private void RunAsyncStep(PendingAsyncStep step)
+        {
+            int previousDepth = _depth;
+            ParameterCollection previousShared = _sharedVariables;
+            BypassContext previousBypass = _bypass;
+            Guid? previousCaller = _callerUserId;
+            Guid? previousInitiating = _initiatingUserId;
+            Guid previousCorrelation = _correlationId;
+            Guid previousRequest = _requestId;
+
+            _depth = step.Depth;
+            _sharedVariables = step.SharedVariables;
+            _bypass = step.Bypass;
+            _callerUserId = step.CallerUserId;
+            _initiatingUserId = step.InitiatingUserId;
+            _correlationId = step.CorrelationId;
+            _requestId = step.RequestId;
+            _asyncOperationId = Guid.NewGuid();
+            if (step.ParentContext != null)
+            {
+                _contextStack.Push(step.ParentContext);
+            }
+
+            var snapshot = _store.Snapshot();
+            int queued = _pendingAsyncSteps.Count;
+            _openScopes++;
+            try
+            {
+                if (step.CallerUserId is Guid caller)
+                {
+                    _store.RunAs(caller == SystemUserId ? (Guid?)null : caller, () =>
+                    {
+                        step.Dispatch();
+                        return true;
+                    });
+                }
+                else
+                {
+                    step.Dispatch();
+                }
+            }
+            catch (Exception ex)
+            {
+                _store.RestoreTo(snapshot);
+                _pendingAsyncSteps.RemoveRange(queued, _pendingAsyncSteps.Count - queued);
+                _asyncStepFailures.Add(ex);
+            }
+            finally
+            {
+                _openScopes--;
+                if (step.ParentContext != null)
+                {
+                    _contextStack.Pop();
+                }
+
+                _depth = previousDepth;
+                _sharedVariables = previousShared;
+                _bypass = previousBypass;
+                _callerUserId = previousCaller;
+                _initiatingUserId = previousInitiating;
+                _correlationId = previousCorrelation;
+                _requestId = previousRequest;
+            }
+        }
+
+        // Live, an async step runs outside any transaction. A PreValidation step runs before its operation's
+        // transaction begins, so it is in one only when its operation is nested in another's transaction (verified
+        // live: false at depth 1, true nested). Every other stage runs in the operation's transaction, which the
+        // non-transactional reads do not open.
+        private bool IsInTransactionFor(PluginStages stage, ExecutionMode mode)
+        {
+            if (mode == ExecutionMode.Asynchronous)
+            {
+                return false;
+            }
+
+            return stage == PluginStages.PreValidation ? _operationEnclosedInTransaction : _openTransactions > 0;
+        }
+
+        private void FireStage(StageInvocation invocation)
         {
             List<PipelineRegistration> steps = _registrations
                 // A disabled step (.Disabled()) is registered but dormant: it never fires, as on a real org.
@@ -1339,7 +1561,7 @@ namespace Vela.Testing
                 PipelineRegistration captured = registration;
                 if (captured.Step.Mode == ExecutionMode.Asynchronous)
                 {
-                    asyncQueue.Add(() => Dispatch(captured, invocation));
+                    QueueAsyncStep(() => Dispatch(captured, invocation));
                 }
                 else
                 {
@@ -1351,7 +1573,7 @@ namespace Vela.Testing
         // Fires one stage of a Create/Update batch. The two registration messages are merged: a bulk step
         // (CreateMultiple/UpdateMultiple) fires once with the whole Targets collection; a single step
         // (Create/Update) fires once per row. Both are ordered by execution order and filtered by FilterOn.
-        private void FireBatchStage(string singleMessage, string bulkMessage, PluginStages stage, string entityName, IReadOnlyList<BatchItem> items, List<Action> asyncQueue)
+        private void FireBatchStage(string singleMessage, string bulkMessage, PluginStages stage, string entityName, IReadOnlyList<BatchItem> items)
         {
             bool isUpdate = string.Equals(singleMessage, PluginMessages.Update, StringComparison.OrdinalIgnoreCase);
 
@@ -1385,7 +1607,7 @@ namespace Vela.Testing
                     }
 
                     EntityCollection capturedTargets = targets ??= BuildTargets(entityName, items);
-                    Emit(captured, asyncQueue, () => DispatchBulk(captured, bulkMessage, stage, entityName, capturedTargets, items));
+                    Emit(captured, () => DispatchBulk(captured, bulkMessage, stage, entityName, capturedTargets, items));
                 }
                 else
                 {
@@ -1407,7 +1629,7 @@ namespace Vela.Testing
                         {
                             invocation.Outputs = new ParameterCollection { { "id", capturedItem.Target.Id } };
                         }
-                        Emit(captured, asyncQueue, () => Dispatch(captured, invocation));
+                        Emit(captured, () => Dispatch(captured, invocation));
                     }
                 }
             }
@@ -1415,11 +1637,11 @@ namespace Vela.Testing
 
         // Runs the dispatch now for a synchronous step, or defers it to after the synchronous commit for an
         // asynchronous one — the same sync/async split FireStage applies to single-operation steps.
-        private static void Emit(PipelineRegistration registration, List<Action> asyncQueue, Action dispatch)
+        private void Emit(PipelineRegistration registration, Action dispatch)
         {
             if (registration.Step.Mode == ExecutionMode.Asynchronous)
             {
-                asyncQueue.Add(dispatch);
+                QueueAsyncStep(dispatch);
             }
             else
             {
@@ -1449,6 +1671,7 @@ namespace Vela.Testing
                 PrimaryEntityName = entityName,
                 PrimaryEntityId = Guid.Empty,
                 CorrelationId = _correlationId,
+                IsInTransaction = IsInTransactionFor(stage, registration.Step.Mode),
                 SharedVariables = _sharedVariables
             };
 
@@ -1480,6 +1703,11 @@ namespace Vela.Testing
 
         private void Dispatch(PipelineRegistration registration, StageInvocation invocation)
         {
+            // A global message (Associate/Disassociate) runs on the "none" sdkmessagefilter: on Dataverse its steps
+            // see PrimaryEntityName "none" and an empty PrimaryEntityId, whatever the Target (verified live at s10,
+            // s20, s40 sync and s40 async). The Target input still carries the record.
+            bool globalMessage = PluginMessages.IsGlobalMessage(invocation.Message);
+
             FakePluginExecutionContext context = new FakePluginExecutionContext
             {
                 MessageName = invocation.Message,
@@ -1489,11 +1717,14 @@ namespace Vela.Testing
                 // When the invocation could not resolve a primary entity (a generic message with no Target), use
                 // the step's own entity so the plugin's own step matching (which compares PrimaryEntityName to the
                 // step's EntityLogicalName) still resolves this step.
-                PrimaryEntityName = string.IsNullOrEmpty(invocation.EntityLogicalName)
-                    ? registration.Step.EntityLogicalName
-                    : invocation.EntityLogicalName,
-                PrimaryEntityId = invocation.PrimaryId,
+                PrimaryEntityName = globalMessage
+                    ? "none"
+                    : string.IsNullOrEmpty(invocation.EntityLogicalName)
+                        ? registration.Step.EntityLogicalName
+                        : invocation.EntityLogicalName,
+                PrimaryEntityId = globalMessage ? Guid.Empty : invocation.PrimaryId,
                 CorrelationId = _correlationId,
+                IsInTransaction = IsInTransactionFor(invocation.Stage, registration.Step.Mode),
                 SharedVariables = _sharedVariables
             };
 
@@ -1550,8 +1781,28 @@ namespace Vela.Testing
         // Runs a call as the identity of the service that issued it (see PipelineOrganizationService): the store
         // enforces security as that user (or not at all for SYSTEM), and plugins fired by the call see that user as
         // ctx.UserId. The test-facing service (Caller) keeps whatever identity is in force. The outermost caller is
-        // remembered as the initiating user, which never changes through impersonation or SYSTEM calls.
+        // remembered as the initiating user, which never changes through impersonation or SYSTEM calls. A call that
+        // enters the pipeline from outside (no request in progress) starts a new request id.
         internal T RunAs<T>(PipelineIdentity identity, Func<T> body)
+        {
+            if (_inRequest)
+            {
+                return RunAsCore(identity, body);
+            }
+
+            _inRequest = true;
+            _requestId = Guid.NewGuid();
+            try
+            {
+                return RunAsCore(identity, body);
+            }
+            finally
+            {
+                _inRequest = false;
+            }
+        }
+
+        private T RunAsCore<T>(PipelineIdentity identity, Func<T> body)
         {
             if (identity.IsCaller)
             {
@@ -1597,6 +1848,12 @@ namespace Vela.Testing
             context.OrganizationId = organizationId;
             context.ParentContext = _contextStack.Count > 0 ? _contextStack.Peek() : null;
 
+            // Verified live: every step reports the sandbox isolation mode (2) and "none" as SecondaryEntityName.
+            context.RequestId = _requestId;
+            context.OperationId = context.Mode == (int)ExecutionMode.Asynchronous ? _asyncOperationId : _requestId;
+            context.IsolationMode = 2;
+            context.SecondaryEntityName = "none";
+
             _contextStack.Push(context);
             try
             {
@@ -1618,7 +1875,8 @@ namespace Vela.Testing
             {
                 [typeof(IPluginExecutionContext)] = context,
                 [typeof(IOrganizationServiceFactory)] = factory,
-                [typeof(ITracingService)] = _trace
+                [typeof(ITracingService)] = _trace,
+                [typeof(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger)] = _logger
             };
 
             return new DictionaryServiceProvider(services);
@@ -1769,6 +2027,20 @@ namespace Vela.Testing
             public Entity? PreState;
             public Entity? PostState;
             public ISet<string>? ChangedAttributes;
+        }
+
+        // An async step waiting for the outermost scope to commit, with the state it was triggered in.
+        private sealed class PendingAsyncStep
+        {
+            public Action Dispatch = null!;
+            public int Depth;
+            public ParameterCollection SharedVariables = null!;
+            public BypassContext Bypass = null!;
+            public Guid? CallerUserId;
+            public Guid? InitiatingUserId;
+            public Guid CorrelationId;
+            public Guid RequestId;
+            public FakePluginExecutionContext? ParentContext;
         }
 
         private sealed class StageInvocation

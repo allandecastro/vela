@@ -805,7 +805,7 @@ These are pre-registered for every execution - request them from the resolver (`
 | `ITracingService` | Plugin trace log (`ctx.Trace(...)` wraps it). |
 | `IPluginExecutionContext` | The raw execution context. |
 | `ILocalPluginContext` | The framework context itself. |
-| `ILogger` | Logging abstraction. |
+| `ILogger` | Application Insights logger (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`). |
 | `IEnvironmentVariableReader` | Reads Dataverse environment variables (cached). |
 | `IMessageService` | Localized messages. |
 | `IPluginCacheService` | Cache that survives across executions. |
@@ -1334,7 +1334,7 @@ $$"""
     <PackageReference Include="Microsoft.PowerApps.MSBuild.Plugin" Version="{{PluginSdkVersion}}" PrivateAssets="all" />
     <PackageReference Include="Vela.Plugins" Version="{{coreVersion}}" />
     <!-- HttpClient on net462 binds against this GAC facade; without it, outbound HTTP (e.g. a managed-identity
-         call) fails to compile/load. Harmless when unused. Enable TLS 1.2 once before the call (see the docs). -->
+         call) fails to compile/load. Harmless when unused. -->
     <Reference Include="System.Net.Http" />
   </ItemGroup>
 

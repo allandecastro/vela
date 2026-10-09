@@ -207,6 +207,14 @@ public sealed partial class StepBuilder<TEntity>
         SetHandler(handler.Method.Name);
     }
 
+    // Every trigger records its message here: the request name it was declared with is kept for the typed context,
+    // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win).
+    private void SetMessage(string requestName)
+    {
+        _definition.RequestName = requestName;
+        _definition.Message = SdkMessageNames.ToSdkMessage(requestName);
+    }
+
     // Mutation hooks for the generic typed-message adapter (Vela.Steps.TypedStepAdapter<TEntity, TRequest>),
     // which cannot see the private _definition / helpers directly. Same effect as the explicit-interface
     // stage/mode/handler transitions of the guided chain, just reached from the adapter.
@@ -226,12 +234,6 @@ public sealed partial class StepBuilder<TEntity>
     {
         MarkSetOnce(SetOnceModifier.Description, "WithDescription");
         _definition.Description = description ?? string.Empty;
-    }
-
-    private void SetImpersonation(ImpersonationSource source)
-    {
-        MarkSetOnce(SetOnceModifier.Impersonation, "WithImpersonation");
-        _definition.ImpersonationSource = source;
     }
 
     private void SetImpersonationUser(System.Guid systemUserId)
@@ -343,14 +345,15 @@ public sealed partial class StepBuilder<TEntity>
     {
         string message = _definition.Message ?? string.Empty;
         PluginStages stage = _definition.Stage;
-        if (IsImageAllowed(message, stage, isPreImage))
+        string? reason = StepImageRules.GetRejectionReason(message, (int)stage, isPreImage);
+        if (reason is null)
         {
             return;
         }
 
         string imageType = isPreImage ? "PreImage" : "PostImage";
         throw new InvalidOperationException(
-            $"{imageType} '{alias}' is not supported for message '{message}' at stage '{stage}'.");
+            $"{imageType} '{alias}' is not supported for message '{message}' at stage '{stage}': {reason}.");
     }
 
     private static void EnsureNoDuplicates(string[]? names, string what)
@@ -370,73 +373,5 @@ public sealed partial class StepBuilder<TEntity>
         {
             throw new InvalidOperationException($"Duplicate {what}: '{duplicate}' is specified more than once.");
         }
-    }
-
-    // Encodes the stage/message rules for which entity images a step may capture. This is the runtime
-    // backstop behind the typed builder (the type-state already blocks an invalid image at compile time for
-    // the modelled messages). Only the modelled messages (Create/Update/Delete, and the bulk variants
-    // evaluated as their single-row counterparts) are enforced; any other message is permissive - Vela does
-    // not model its image rules, so the platform arbitrates at deploy time.
-    //   * MainOperation: no step image exists, so none are allowed.
-    //   * PreValidation / PreOperation: only a pre-image (no post-image before the write), and only for
-    //     Update/Delete (Create has no prior state).
-    //   * PostOperation: pre-image for Update/Delete (prior state), post-image for Create/Update
-    //     (committed state; Delete has no post-image because the row is gone).
-    private static bool IsImageAllowed(string message, PluginStages stage, bool isPreImage)
-    {
-        // Bulk messages capture per-target image collections under the same stage/message rules as their
-        // single-row counterparts, so evaluate them as Create/Update.
-        if (string.Equals(message, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase))
-        {
-            message = PluginMessages.Create;
-        }
-        else if (string.Equals(message, PluginMessages.UpdateMultiple, StringComparison.OrdinalIgnoreCase))
-        {
-            message = PluginMessages.Update;
-        }
-
-        // Universal rules (platform-wide, independent of the message): no image exists outside the step
-        // pipeline, and a post-image never exists before the write (Dataverse rejects a post-image on a
-        // PreValidation or PreOperation step with 0x8004416E). These bind even for a non-modelled message, so
-        // they are checked before the permissive short-circuit below.
-        if (stage == PluginStages.MainOperation)
-        {
-            return false;
-        }
-        if ((stage == PluginStages.PreValidation || stage == PluginStages.PreOperation) && !isPreImage)
-        {
-            return false;
-        }
-
-        bool isCreate = string.Equals(message, PluginMessages.Create, StringComparison.OrdinalIgnoreCase);
-        bool isUpdate = string.Equals(message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase);
-        bool isDelete = string.Equals(message, PluginMessages.Delete, StringComparison.OrdinalIgnoreCase);
-
-        // Permissive: a message Vela does not model (custom messages, custom APIs, or platform messages such
-        // as Merge/Route/Send that Vela does not expose as typed methods). The universal rules above still
-        // applied; the message-specific part is trusted here and the platform rejects a genuinely invalid
-        // image at deploy time.
-        if (!isCreate && !isUpdate && !isDelete)
-        {
-            return true;
-        }
-
-        if (stage == PluginStages.PreValidation || stage == PluginStages.PreOperation)
-        {
-            // isPreImage is guaranteed true here (the universal rule rejected a pre-stage post-image).
-            return isUpdate || isDelete;
-        }
-
-        if (stage == PluginStages.PostOperation)
-        {
-            if (isPreImage)
-            {
-                return isUpdate || isDelete;
-            }
-
-            return isCreate || isUpdate;
-        }
-
-        return false;
     }
 }

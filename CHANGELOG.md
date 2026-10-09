@@ -43,11 +43,49 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   a step or Custom API whose type it could not resolve, and `Register<T>()` / `Register(Type)` added nothing for a
   type that declares no step and no Custom API. Both now throw an `InvalidOperationException` naming what was
   skipped.
+- **Removed the 8 typed triggers Dataverse never accepts a custom step on (#461).** `OnReviseQuote()`,
+  `OnFulfillSalesOrder()`, `OnConvertQuoteToSalesOrder()`, `OnGenerateSalesOrderFromOpportunity()`,
+  `OnGenerateInvoiceFromOpportunity()` and the three `OnGet*ProductsFromOpportunity()` are gone, with their typed
+  contexts and `PluginMessages` constants. Their sdkmessage filter has `iscustomprocessingstepallowed = false`, so
+  registering a step fails with 0x80044187 (verified live): code using them could never be deployed.
+- **`ImpersonationSource` and `WithImpersonation(ImpersonationSource)` are removed.** Nothing ever wrote the enum
+  to Dataverse: a step declared `.WithImpersonation(ImpersonationSource.PluginOwner)` ran as the calling user.
+  `StepDefinition.ImpersonationSource` is gone too. Use `.WithImpersonation(Guid systemUserId)` to run a step as a
+  specific user, or drop the call to run as the calling user (the default).
+- **Application Insights goes through the platform's `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, and
+  `Microsoft.Extensions.Logging` is gone.** The sandbox never serves a `Microsoft.Extensions.Logging.ILogger`, and
+  the reflection bridge to the native logger looked up members that don't exist, so `ctx.Log*`, `ctx.LogMetric` and
+  `ctx.BeginLogScope` reached only the plug-in trace log and Application Insights received nothing. The context now
+  calls the platform logger directly, with no reflection. `ctx.Logger` and the injected `ILogger` are
+  `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, and `ctx.Log` takes `Microsoft.Xrm.Sdk.PluginTelemetry.LogLevel`
+  (same member names, so swap the `using`). `Microsoft.Extensions.Logging.Abstractions` is no longer a dependency,
+  so it and `System.Diagnostics.DiagnosticSource` leave the plugin package.
+- **`ctx.LogMetric` takes a `long` and sends its properties.** The platform's metric API only takes integers.
+  The properties now travel as metric dimensions (invariant strings, on top of the default dimensions), and the
+  metric is no longer duplicated as an Information log entry.
+- **Vela.Testing: `RecordingLogger` implements `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`** (the shape the
+  platform serves), `LogEntry.Level` is a `PluginTelemetry.LogLevel`, and metrics are recorded in
+  `RecordingLogger.Metrics`. `WithLogger(...)` takes a `PluginTelemetry.ILogger`. `PluginPipeline.LogCapture` is
+  new and records the whole cascade.
 
 - **`ctx.EnvironmentId` is a `string?`, and now carries the value.** The platform declares
   `IPluginExecutionContext6.EnvironmentId` as a string, but Vela read it as a `Guid?`, so it was always null and the
   execution snapshot always printed `<none>`. It now returns the platform string (null when missing or empty).
   Code that used it as a `Guid` must parse it (`Guid.TryParse(ctx.EnvironmentId, out Guid id)`).
+- **An organization service fault from a plugin reaches the caller unchanged.** `PluginBase` wrapped a
+  `FaultException<OrganizationServiceFault>` (duplicate key, missing record, missing privilege, exhausted
+  throttling...) in an `InvalidPluginExecutionException`, so the caller got the generic `0x80040265` instead of the
+  fault's own code. The fault is now traced and rethrown as is: Dataverse returns its `ErrorCode` to the caller, and
+  the Web API its matching HTTP status (404, 412...). Wrapping it with the error-code constructor of
+  `InvalidPluginExecutionException` would not help: Dataverse still returns `0x80040265` and keeps the code only as a
+  `SubErrorCode` detail (verified live). Tests that expected an `InvalidPluginExecutionException` from a failed
+  service call now get the `FaultException<OrganizationServiceFault>`.
+- **An unexpected exception no longer shows its type or message to the caller.** The message was
+  `Unhandled exception in plugin '{FullName}': {Type}: {Message}`, which exposed the plugin's type name and a raw
+  message that can hold record values, endpoints or query fragments. It is now
+  `An unexpected error occurred. Correlation id: {id}.`; the full exception is still traced (persisted unless the
+  Plugin Trace Log setting is `Off`) and stays the inner exception. Override `FormatUnexpectedErrorMessage` to return
+  a detailed message. A failure while building the execution context gets a generic message too.
 - **A Custom API parameter type with no Dataverse equivalent fails when the step is built.** `long`, `short`,
   `float`, enums, `byte[]`, `List<string>` and other types were registered as a lookalike (Integer, Float or
   String) and then read back as their default value, silently. Building the definition now throws a message naming
@@ -106,6 +144,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ExecuteIdempotentWithRetry(operation)` are removed. Use `RetryPolicy.Execute(ctx, operation, ...)` and
   `ExecuteWithRetry(ctx, operation)` / `ExecuteIdempotentWithRetry(ctx, operation)`: when `ctx.IsInTransaction` is
   true the operation runs once, because a failed call aborts the transaction and a replay cannot succeed.
+- **`PluginPipeline` no longer writes onto the entities you pass it.** `Service.Create(entity)` used to set
+  `entity.Id`, and a plugin's change to `Target` showed up on your object (and survived a rollback). The steps now
+  work on a copy, as on Dataverse where the request is serialized: read the id from the return value of `Create` (or
+  `CreateMultipleResponse.Ids`), and the stored state from `pipeline.GetAll(...)`.
 
 ### Added (Framework)
 
@@ -128,7 +170,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   transaction, so its image can be stale by the main operation: use it for validation and keep a strictly
   consistent read at PreOperation. Verified live: the image arrives at PreValidation for Update and Delete, and once
   per `Targets` entry for UpdateMultiple.
-
+- **`PluginBusinessException(message, errorCode)` and `PluginBusinessException(message, innerException)`.** The error
+  code is passed to `InvalidPluginExecutionException(OperationStatus.Failed, code, message)`, which an SDK caller
+  reads as the fault's `SubErrorCode` detail (the top-level code stays `0x80040265`). The business exception is now
+  traced with its stack trace and inner exception, not just its message.
 - **VELA021 warns when a typed image projection cannot be generated.** A `WithPreImage(...)` / `WithPostImage(...)`
   that lists columns but cannot be projected (a non-constant alias, a selector that is not a column property, or a
   `RegisterStep()` chain whose message or stage is not constant) used to generate nothing silently, leaving only a
@@ -177,6 +222,48 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   failure reaches the caller.
 - **`WithStrictSecurity()` protects Delete (#439).** Without `WithSecurity(...)`, Create, Update and RetrieveMultiple
   failed as documented, but Delete went through.
+- **Typed triggers register on the real sdkmessage (#461).** 15 triggers registered steps on SDK request names that
+  do not exist as sdkmessages, so `vela apply` could not deploy them: `OnSendEmail()` now registers on `Send`,
+  `OnSendEmailFromTemplate()` on `SendFromTemplate`, `OnDeliverIncomingEmail()` / `OnDeliverPromoteEmail()` on
+  `DeliverIncoming` / `DeliverPromote`, `OnWinOpportunity()` / `OnWinQuote()` on `Win`, `OnLoseOpportunity()` on
+  `Lose`, `OnCloseIncident()` on `Close`, `OnCancelContract()` / `OnCloneContract()` on `Cancel` / `Clone`,
+  `OnAddMembersTeam()` / `OnRemoveMembersTeam()` on `AddMembers` / `RemoveMembers`, and `OnAddListMembersList()` /
+  `OnAddMemberList()` / `OnRemoveMemberList()` on `AddListMembers` / `AddMember` / `RemoveMember`. The handler keeps
+  its typed context (one sdkmessage can serve two requests: `Win` on opportunity or quote), and `ctx.MessageName` is
+  the sdkmessage, as on the platform. `OnMessage(PluginMessages.SendEmail)` is translated the same way. Verified
+  live through `vela apply`: each step registers, fires on its SDK request and reaches its typed handler.
+- **The harness runs a request's steps under the sdkmessage.** An executed `SendEmailRequest` runs the `Send` steps
+  and plugins see `MessageName == "Send"`, so a test now catches a step registered under a wrong name.
+  `PluginContext.For<T>().OnMessage(...)` translates request names the same way. `CloseIncidentRequest` and
+  `WinQuoteRequest` resolve their primary entity from the closing activity's lookup (incident, quote), so an
+  entity-bound step fires.
+- **The harness runs async steps only once the outermost operation commits** (#438). Each operation used to run its
+  own async steps as soon as its body returned, so an async step queued by a nested write ran, with its side effects
+  and log entries, even when the outer operation then failed. Live, a rolled-back operation creates no async job
+  (verified 2026-10-07). Async steps now wait for the outermost operation (or `ExecuteTransaction` batch) to commit, are
+  dropped when it rolls back, and each runs in its own rollback scope: a failed async step leaves no writes behind.
+- **`IsInTransaction` follows the stage and mode in the harness** (#438). It was always true. It is now false for
+  async steps and for a depth-1 PreValidation step, and true for PreOperation, sync PostOperation and a nested
+  PreValidation (verified live), so the retry path of `RetryPolicy` can be tested through the pipeline. Retrieve and
+  RetrieveMultiple steps report false, as on Dataverse. `CorrelationId` is now one id per top-level operation, shared
+  by its cascade and its async steps, instead of one id for the whole pipeline.
+- **The harness fills the remaining context fields as Dataverse does** (#438, verified live 2026-10-09). `RequestId`
+  is one id per call into the pipeline (an `ExecuteMultiple` batch is one request) and is kept by async steps.
+  `OperationId` equals `RequestId` on sync steps and is a separate system job id on async steps. `IsolationMode` is 2
+  (sandbox) and `SecondaryEntityName` is "none". The children of an `ExecuteTransaction` share one correlation id and
+  run in its transaction, PreValidation included; the children of an `ExecuteMultiple` each get their own.
+- **Harness Associate/Disassociate steps see `PrimaryEntityName` "none".** The harness reported the Target's entity
+  and id, so a handler branching on `ctx.PrimaryEntityName == "account"` passed in tests and never matched live. On
+  Dataverse both are global messages: every step sees `PrimaryEntityName` "none" and an empty `PrimaryEntityId`, at
+  every stage and mode (verified live), and only the `Target` input names the record. The harness now matches (#459).
+- **Harness Custom APIs see the platform's primary entity.** The harness gave every Custom API an empty
+  `PrimaryEntityName` and no `PrimaryEntityId`. On Dataverse (verified live) a global API sees "none" and an empty id,
+  an entity-bound API sees the bound table and the `Target`'s id, and a collection-bound API sees the bound table and
+  an empty id. The harness now matches.
+
+- **VELA007 flags every image the message can never provide.** It now also reports a pre-image on
+  `OnMessage("CreateMultiple")` and any image on `OnMessage("RouteTo")`, from the same image table the runtime and
+  the CLI use (#435).
 
 - **The harness runs a Delete's PreValidation steps before the cascade.** They used to fire after the cascaded
   children were already deleted, so a PreValidation step could not see them. On Dataverse they still exist at
@@ -338,6 +425,27 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
 
 ### Fixed (CLI)
+
+- **Step descriptions and Custom API display names and descriptions reach Dataverse.** `apply` wrote the step name
+  as every step's description, and the unique name (or the parameter name) as every Custom API's display name and
+  description and every parameter's description, whatever the code declared. It now writes `WithDescription(...)`
+  (followed by the `[vela:stepkey=...]` line, which the step-key lookup now reads from the end of the description),
+  `.DisplayName(...)`, `.Description(...)` and the parameter descriptions, falling back to the previous values when
+  none is declared. These fields are part of the plan diff, so a change shows up and converges (a second plan is
+  empty); Dataverse lets them change in place, so a parameter description is updated without recreating the
+  parameter. Existing deployments that declare none show no change. `plan` rejects, before any write, a value
+  longer than Dataverse stores (step description 256 characters with its step-key line, Custom API display name 100,
+  description 300, request parameter description 300, response property description 100).
+- **Bulk step images deploy, with the right image property for every message.** `plan`/`apply` rejected any image
+  on a `CreateMultiple`/`UpdateMultiple` step, and `apply` registered every image against `Target` (or `id` for a
+  Create post-image), which Dataverse refuses on several messages. Images are now registered against the property
+  the message expects (verified live): `Id` for Create, `Ids` for CreateMultiple, `Targets` for UpdateMultiple
+  (pre- and post-image, pre-image also at PreValidation), `EmailId` for Send/DeliverIncoming/DeliverPromote,
+  `EntityMoniker` for SetState/SetStateDynamicEntity, and `Target` otherwise. `plan` now rejects, with a clear error
+  and before any write, an image Dataverse refuses: a post-image before PostOperation (0x8004416E), a pre-image on
+  Create/CreateMultiple or a post-image on Delete (0x8004416D), or any image on RouteTo (0x80044189). The rules
+  live in one table shared by the fluent API, the harness, VELA007 and the CLI, so none of them accepts what
+  another rejects (#435).
 
 - **Every command has its own `--help`.** `vela init --help`, `sign --help`, `logout --help`, `plan`/`apply`/
   `inspect --help` printed the global usage; they now print the command's usage, options, notes and examples.

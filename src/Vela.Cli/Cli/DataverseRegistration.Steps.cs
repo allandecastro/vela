@@ -381,11 +381,14 @@ internal static partial class DataverseRegistration
     desired.AddRange(preImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 0)));
     desired.AddRange(postImages.Select(x => new StepImageApplyDefinition(x.Alias, x.Attributes, 1)));
 
-    // Dataverse requires different messagepropertyname depending on the message:
-    // Create PostImage → "id" (captures the new record ID); all others → "Target".
-    // Bulk messages (CreateMultiple/UpdateMultiple) never reach here: the platform supports no images on them,
-    // so the scanner rejects a bulk step carrying images before apply (see PackageScanner.IsBulkStepWithImages).
-    bool isCreateMessage = string.Equals(message, "Create", StringComparison.OrdinalIgnoreCase);
+    // The image's messagepropertyname depends on the message (Create → Id, CreateMultiple → Ids, UpdateMultiple →
+    // Targets, Send → EmailId, ...); StepImageRules holds the map shared with the runtime and the scanner. A message
+    // that supports no image (RouteTo) never gets here with images: the scanner rejects it before any write.
+    string? msgPropertyName = Vela.Steps.StepImageRules.GetMessagePropertyName(message);
+    if (msgPropertyName is null && desired.Count > 0)
+    {
+        throw new InvalidOperationException($"Dataverse supports no image on the '{message}' message.");
+    }
 
     QueryExpression query = new QueryExpression("sdkmessageprocessingstepimage")
     {
@@ -405,7 +408,6 @@ internal static partial class DataverseRegistration
         string attributesCsv = desiredImage.Attributes.Length == 0
             ? string.Empty
             : string.Join(",", desiredImage.Attributes.OrderBy(x => x, StringComparer.Ordinal));
-        string msgPropertyName = isCreateMessage && desiredImage.ImageType == 1 ? "id" : "Target";
 
         if (existingByKey.TryGetValue(key, out Entity? existing))
         {
@@ -434,7 +436,7 @@ internal static partial class DataverseRegistration
         create["name"] = desiredImage.Alias;
         create["attributes"] = attributesCsv;
         create["imagetype"] = new OptionSetValue(desiredImage.ImageType);
-        create["messagepropertyname"] = msgPropertyName;
+        create["messagepropertyname"] = msgPropertyName!;
         service.Create(create);
     }
 
@@ -504,14 +506,36 @@ internal static partial class DataverseRegistration
     return DefinitionNormalizer.BuildKeylessStepName(definition.PluginTypeName, definition.Stage, definition.Mode, definition.Message, definition.EntityLogicalName);
 }
 
-    // The step description: the human-readable name plus a stable [vela:stepkey=...] marker (B4). The marker lets a
-    // later read recover the step key even if the display name is changed, so the step's identity survives a rename.
+    // Dataverse's limit on sdkmessageprocessingstep.description.
+    internal const int StepDescriptionMaxLength = 256;
+
+    // The step description: the developer's text (WithDescription), or the step name when none is declared, followed
+    // by a stable [vela:stepkey=...] marker on its own line (B4). The marker lets a later read recover the step key
+    // even if the display name is changed, so the step's identity survives a rename; ExtractStepKeyFromMarker reads
+    // the last marker, so the developer's text may come first.
     internal static string BuildStepDescription(StepApplyDefinition definition)
 {
-    string name = BuildStepName(definition);
+    string text = string.IsNullOrWhiteSpace(definition.Description) ? BuildStepName(definition) : definition.Description.Trim();
     return string.IsNullOrWhiteSpace(definition.StepKey)
-        ? name
-        : $"{name}\n{DefinitionParser.StepKeyMarker(definition.StepKey)}";
+        ? text
+        : $"{text}\n{DefinitionParser.StepKeyMarker(definition.StepKey)}";
+}
+
+    /// <summary>
+    /// The error for a step whose description (with its step-key marker) exceeds what Dataverse stores, or null.
+    /// Checked at scan time so plan fails before any write instead of apply failing mid-run.
+    /// </summary>
+    internal static string? GetStepDescriptionLengthError(StepApplyDefinition definition)
+{
+    int length = BuildStepDescription(definition).Length;
+    if (length <= StepDescriptionMaxLength)
+    {
+        return null;
+    }
+
+    int markerLength = string.IsNullOrWhiteSpace(definition.StepKey) ? 0 : 1 + DefinitionParser.StepKeyMarker(definition.StepKey).Length;
+    return $"step '{BuildStepName(definition)}' has a description of {length - markerLength} characters, but Dataverse stores at most " +
+        $"{StepDescriptionMaxLength - markerLength} once Vela appends its {markerLength}-character step-key marker. Shorten WithDescription(...).";
 }
 
 }

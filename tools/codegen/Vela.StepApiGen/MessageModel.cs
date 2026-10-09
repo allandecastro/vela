@@ -50,11 +50,8 @@ internal static class MessageModel
         new("QualifyLead"),
         new("WinOpportunity"),
         new("LoseOpportunity"),
-        new("ConvertQuoteToSalesOrder"),
         new("ConvertSalesOrderToInvoice"),
         new("GenerateQuoteFromOpportunity"),
-        new("GenerateSalesOrderFromOpportunity"),
-        new("GenerateInvoiceFromOpportunity"),
         // Queues
         new("AddToQueue"),
         new("RemoveFromQueue"),
@@ -80,11 +77,6 @@ internal static class MessageModel
         new("RetrievePrincipalAccess"),
         new("RetrieveSharedPrincipalsAndAccess"),
         new("WinQuote"),
-        new("ReviseQuote"),
-        new("FulfillSalesOrder"),
-        new("GetQuoteProductsFromOpportunity"),
-        new("GetSalesOrderProductsFromOpportunity"),
-        new("GetInvoiceProductsFromOpportunity"),
         new("ModifyAccess"),
         new("Merge"),
     ];

@@ -53,6 +53,45 @@ namespace Vela.Testing.Tests
             Assert.Equal(recordId, response["RecordId"]);
         }
 
+        // --- The primary entity follows the binding type, as on Dataverse ---------------------------------
+
+        // Verified live: a global API sees PrimaryEntityName "none", an entity-bound one the bound entity and the
+        // Target's id, an entity-collection-bound one the bound entity with an empty id.
+        [Fact]
+        public void A_global_api_sees_primary_entity_none()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<PrimaryEntityGlobalApi>();
+
+            OrganizationResponse response = pipeline.Service.Execute(Request("vela_PrimaryGlobal"));
+
+            Assert.Equal("none", response["PrimaryEntityName"]);
+            Assert.Equal(Guid.Empty, response["PrimaryEntityId"]);
+        }
+
+        [Fact]
+        public void An_entity_bound_api_sees_the_bound_entity_and_the_target_id()
+        {
+            Guid recordId = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<PrimaryEntityBoundApi>();
+
+            OrganizationResponse response = pipeline.Service.Execute(
+                Request("vela_PrimaryBound", ("Target", new EntityReference("account", recordId))));
+
+            Assert.Equal("account", response["PrimaryEntityName"]);
+            Assert.Equal(recordId, response["PrimaryEntityId"]);
+        }
+
+        [Fact]
+        public void A_collection_bound_api_sees_the_bound_entity_and_an_empty_id()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<PrimaryEntityCollectionApi>();
+
+            OrganizationResponse response = pipeline.Service.Execute(Request("vela_PrimaryCollection"));
+
+            Assert.Equal("account", response["PrimaryEntityName"]);
+            Assert.Equal(Guid.Empty, response["PrimaryEntityId"]);
+        }
+
         // --- Function returns output --------------------------------------------------------------------
 
         [Fact]
@@ -166,6 +205,43 @@ namespace Vela.Testing.Tests
         {
             EntityReference? target = ctx.GetInputParameter<EntityReference>("Target");
             ctx.SetOutputParameter("RecordId", target!.Id);
+        }
+    }
+
+    // Report the primary entity the main operation sees, per binding type.
+    public sealed class PrimaryEntityGlobalApi : CustomApiBase
+    {
+        public PrimaryEntityGlobalApi(string u, string s) : base(u, s) { }
+
+        protected override void RegisterCustomApi() => RegisterCustomApi("vela_PrimaryGlobal", nameof(Handle)).AsAction();
+
+        private void Handle(ILocalPluginContext ctx) => PrimaryEntityOutputs.Set(ctx);
+    }
+
+    public sealed class PrimaryEntityBoundApi : CustomApiBase
+    {
+        public PrimaryEntityBoundApi(string u, string s) : base(u, s) { }
+
+        protected override void RegisterCustomApi() => RegisterCustomApi("vela_PrimaryBound", nameof(Handle)).AsAction().BoundTo("account");
+
+        private void Handle(ILocalPluginContext ctx) => PrimaryEntityOutputs.Set(ctx);
+    }
+
+    public sealed class PrimaryEntityCollectionApi : CustomApiBase
+    {
+        public PrimaryEntityCollectionApi(string u, string s) : base(u, s) { }
+
+        protected override void RegisterCustomApi() => RegisterCustomApi("vela_PrimaryCollection", nameof(Handle)).AsAction().BoundToCollection("account");
+
+        private void Handle(ILocalPluginContext ctx) => PrimaryEntityOutputs.Set(ctx);
+    }
+
+    internal static class PrimaryEntityOutputs
+    {
+        public static void Set(ILocalPluginContext ctx)
+        {
+            ctx.SetOutputParameter("PrimaryEntityName", ctx.PrimaryEntityName);
+            ctx.SetOutputParameter("PrimaryEntityId", ctx.PrimaryEntityId);
         }
     }
 

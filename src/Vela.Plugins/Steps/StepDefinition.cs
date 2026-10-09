@@ -15,8 +15,19 @@ public sealed class StepDefinition
     /// <summary>The entity logical name.</summary>
     public string EntityLogicalName { get; set; } = string.Empty;
 
-    /// <summary>The SDK message name (Create, Update, Delete, etc.).</summary>
+    /// <summary>
+    /// The sdkmessage the step registers on and sees as <c>MessageName</c> at runtime (Create, Update, Send, Win,
+    /// ...). For a few business messages this differs from the SDK request name the step was declared with
+    /// (<c>OnSendEmail()</c> registers on <c>Send</c>); see <see cref="RequestName"/>.
+    /// </summary>
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The SDK request name the step was declared with (e.g. <c>WinQuote</c>, while <see cref="Message"/> is
+    /// <c>Win</c>). The runtime builds the typed context from it, since one sdkmessage can serve several requests.
+    /// Empty when the step was not declared through the builder; <see cref="Message"/> is then used.
+    /// </summary>
+    internal string RequestName { get; set; } = string.Empty;
 
     /// <summary>The plugin execution stage.</summary>
     public PluginStages Stage { get; set; }
@@ -38,9 +49,6 @@ public sealed class StepDefinition
 
     /// <summary>The plugin method name to invoke for this step.</summary>
     public string HandlerMethodName { get; set; } = string.Empty;
-
-    /// <summary>The impersonation source.</summary>
-    public ImpersonationSource ImpersonationSource { get; set; }
 
     /// <summary>
     /// The specific systemuser to impersonate for this step (Dataverse <c>impersonatinguserid</c>), set with
