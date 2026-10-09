@@ -41,9 +41,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **An unexpected exception no longer shows its type or message to the caller.** The message was
   `Unhandled exception in plugin '{FullName}': {Type}: {Message}`, which exposed the plugin's type name and a raw
   message that can hold record values, endpoints or query fragments. It is now
-  `An unexpected error occurred. Correlation id: {id}. The details are in the plug-in trace log.`; the full exception
-  is still traced and stays the inner exception. Override `FormatUnexpectedErrorMessage` to return a detailed
-  message. A failure while building the execution context gets a generic message too.
+  `An unexpected error occurred. Correlation id: {id}.`; the full exception is still traced (persisted unless the
+  Plugin Trace Log setting is `Off`) and stays the inner exception. Override `FormatUnexpectedErrorMessage` to return
+  a detailed message. A failure while building the execution context gets a generic message too.
 - **A Custom API parameter type with no Dataverse equivalent fails when the step is built.** `long`, `short`,
   `float`, enums, `byte[]`, `List<string>` and other types were registered as a lookalike (Integer, Float or
   String) and then read back as their default value, silently. Building the definition now throws a message naming

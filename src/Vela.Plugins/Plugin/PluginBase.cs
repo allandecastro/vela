@@ -54,7 +54,7 @@ namespace Vela.Plugin
             // Building the context resolves the platform services. A failure here has no context to trace through
             // yet, so trace it best-effort straight to the platform tracing service and surface it as an
             // InvalidPluginExecutionException like any other failure (never a raw framework exception), with a
-            // generic message: the details stay in the trace log.
+            // generic message: the details go to the trace log only.
             LocalPluginContext localContext;
             try
             {
@@ -69,7 +69,7 @@ namespace Vela.Plugin
                 }
 
                 throw new InvalidPluginExecutionException(
-                    "An unexpected error occurred while building the plug-in execution context. The details are in the plug-in trace log.", ex);
+                    "An unexpected error occurred while building the plug-in execution context.", ex);
             }
 
             Stopwatch stopwatch = Stopwatch.StartNew();
@@ -163,8 +163,9 @@ namespace Vela.Plugin
         /// Builds the message the caller sees when the plug-in fails with an unexpected exception (anything other than
         /// an <see cref="InvalidPluginExecutionException"/>, a <see cref="PluginBusinessException"/> or an organization
         /// service fault). The default is generic and gives the correlation id, so it exposes no exception type or raw
-        /// message; the full exception is always written to the plug-in trace log. Override to return a more detailed
-        /// message, for example while developing.
+        /// message. The full exception is traced, best-effort: the plug-in trace log keeps it unless the environment's
+        /// Plugin Trace Log setting is <c>Off</c>. Override to return a more detailed message, for example while
+        /// developing.
         /// </summary>
         /// <param name="context">The execution context.</param>
         /// <param name="exception">The unexpected exception.</param>
@@ -270,7 +271,7 @@ namespace Vela.Plugin
         }
 
         private static string DefaultUnexpectedErrorMessage(ILocalPluginContext context) =>
-            $"An unexpected error occurred. Correlation id: {context.CorrelationId}. The details are in the plug-in trace log.";
+            $"An unexpected error occurred. Correlation id: {context.CorrelationId}.";
 
         // Best-effort trace of a failure that happened before the context existed. Tracing must never mask the
         // original failure, so any error while tracing is swallowed.
