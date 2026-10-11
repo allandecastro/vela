@@ -65,23 +65,53 @@ public sealed class PlanApplyCommandTests : IDisposable
         new(SourceAssemblies: ["Zava.Plugins"], SourceAssemblyPayloads: [], PackagePayloads: packages ?? [],
             GeneratedAtUtc: DateTime.UtcNow, Items: items ?? [], Diagnostics: diagnostics ?? []);
 
-    // An org where the assembly and plugin type exist (assemblyExists) with no steps, messages resolvable.
-    private static FakeOrgService Org(bool assemblyExists = true, bool messageResolves = true)
+    // An org where the assembly and plugin type exist (assemblyExists) with no steps, messages resolvable. The steps
+    // apply creates read back (keepsWrites), so an apply converges; without it, every write is silently dropped.
+    private static FakeOrgService Org(bool assemblyExists = true, bool messageResolves = true, bool keepsWrites = true)
     {
         Guid assemblyId = Guid.NewGuid();
-        return new FakeOrgService
+        Guid pluginTypeId = Guid.NewGuid();
+        Dictionary<Guid, string> messageNames = [];
+        FakeOrgService org = new() { OnRetrieve = (e, id, _) => new Entity(e, id) };
+        org.OnRetrieveMultiple = q => q.EntityName switch
         {
-            OnRetrieveMultiple = q => q.EntityName switch
-            {
-                "pluginassembly" => assemblyExists ? FakeOrgService.Collection(new Entity("pluginassembly", assemblyId) { ["name"] = "Zava.Plugins" }) : new EntityCollection(),
-                "plugintype" => FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = Plugin }),
-                "sdkmessage" => messageResolves
-                    ? FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid()))
-                    : throw new InvalidOperationException("message lookup failed"),
-                _ => new EntityCollection(),
-            },
-            OnRetrieve = (e, id, _) => new Entity(e, id),
+            "pluginassembly" => assemblyExists ? FakeOrgService.Collection(new Entity("pluginassembly", assemblyId) { ["name"] = "Zava.Plugins" }) : new EntityCollection(),
+            "plugintype" => FakeOrgService.Collection(new Entity("plugintype", pluginTypeId) { ["typename"] = Plugin }),
+            "sdkmessage" => messageResolves
+                ? FakeOrgService.Collection(new Entity("sdkmessage", MessageId((string)q.Criteria.Conditions[0].Values[0])))
+                : throw new InvalidOperationException("message lookup failed"),
+            "sdkmessageprocessingstep" when keepsWrites => FakeOrgService.Collection(org.Created
+                .Where(e => e.LogicalName == "sdkmessageprocessingstep")
+                .Select(ReadBack)
+                .ToArray()),
+            _ => new EntityCollection(),
         };
+        return org;
+
+        Guid MessageId(string name)
+        {
+            Guid id = messageNames.FirstOrDefault(x => x.Value == name).Key;
+            if (id == Guid.Empty)
+            {
+                id = Guid.NewGuid();
+                messageNames[id] = name;
+            }
+
+            return id;
+        }
+
+        // A created step as the live read returns it: its columns plus the joined message name (these steps are global).
+        Entity ReadBack(Entity created)
+        {
+            Entity row = new("sdkmessageprocessingstep", created.Id);
+            foreach (KeyValuePair<string, object> attribute in created.Attributes)
+            {
+                row[attribute.Key] = attribute.Value;
+            }
+
+            row["msg.name"] = new AliasedValue("sdkmessage", "name", messageNames[created.GetAttributeValue<EntityReference>("sdkmessageid").Id]);
+            return row;
+        }
     }
 
     private static PlanApplyHost Host(FakeOrgService org, RegistrationState local, bool inputRedirected = true, string? answer = null) => new()
@@ -304,6 +334,25 @@ public sealed class PlanApplyCommandTests : IDisposable
         JsonElement executed = json.GetProperty("executed");
         Assert.Equal(1, executed.GetProperty("created").GetInt32());
         Assert.False(executed.GetProperty("packageRepublished").GetBoolean());
+    }
+
+    [Fact]
+    public void Apply_that_does_not_converge_exits_with_drift_and_says_so()   // #445
+    {
+        // Every write succeeds, yet the re-read still shows the step missing (the platform dropped it): reporting
+        // success would let CI go green on an environment the next apply would change again.
+        FakeOrgService org = Org(keepsWrites: false);
+
+        int exit = Run("apply", Options(autoApprove: true), Host(org, Local([LocalStep()])));
+
+        Assert.Equal(CliExitCodes.ExitDriftDetected, exit);
+        Assert.Single(org.Created, e => e.LogicalName == "sdkmessageprocessingstep");
+        JsonElement json = StdoutJson();
+        Assert.Equal("apply-not-converged", json.GetProperty("mode").GetString());
+        Assert.True(json.GetProperty("hasChanges").GetBoolean());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("added").GetInt32());
+        Assert.Equal(1, json.GetProperty("executed").GetProperty("created").GetInt32());
+        Assert.Contains("Apply did not converge: 1 to create / 0 to update / 0 to delete remain.", _error.ToString());
     }
 
     [Fact]

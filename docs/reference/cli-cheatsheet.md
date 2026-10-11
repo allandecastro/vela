@@ -69,7 +69,7 @@ documented in [Machine-readable output](machine-readable-output.md). `NO_COLOR`/
 | `2` | Invalid arguments |
 | `3` | File not found |
 | `4` | Error, including a `--strict` failure |
-| `5` | Drift detected (`vela models --verify` found the local model out of sync) |
+| `5` | Drift detected (`vela models --verify` found the local model out of sync, or `apply` did not converge) |
 | `6` | Dataverse connection failure |
 | `7` | Partial apply (mid-run failure; re-run `apply` to reconcile) |
 | `8` | Changes pending (`vela plan --detailed-exitcode` only) |

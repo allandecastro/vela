@@ -74,12 +74,23 @@ internal static partial class DataverseRegistration
     SyncCustomApiResponseProperties(service, apiId, definition.UniqueName, definition.OutputParameters, verbose);
 }
 
-    internal static void DeleteCustomApi(IOrganizationService service, JsonElement definitionElement)
+    // Deletes a removed Custom API. Its unique name is environment-wide, so the API is re-checked right before the
+    // delete (as DetachCustomApiImplementation does): it is deleted only while still implemented by a plugin type of the
+    // assemblies being applied (ourPluginTypeIds), never one another solution took over (or detached) since the read.
+    internal static void DeleteCustomApi(IOrganizationService service, JsonElement definitionElement, IReadOnlyDictionary<string, Guid> ourPluginTypeIds)
 {
     CustomApiApplyDefinition definition = ParseCustomApiDefinition(definitionElement);
     Guid? apiId = FindCustomApiId(service, definition.UniqueName);
     if (apiId.HasValue)
     {
+        EntityReference? implementation = service.Retrieve("customapi", apiId.Value, new ColumnSet("plugintypeid"))?.GetAttributeValue<EntityReference>("plugintypeid");
+        if (implementation == null || !ourPluginTypeIds.Values.Contains(implementation.Id))
+        {
+            throw new InvalidOperationException(
+                $"Custom API '{definition.UniqueName}' is no longer implemented by a plugin type of the assemblies being applied, as when the plan was computed. " +
+                "Vela will not delete it; re-run plan/apply against the current environment.");
+        }
+
         DeleteCustomApiRequestParameters(service, apiId.Value);
         DeleteCustomApiResponseProperties(service, apiId.Value);
         DeleteIfExists(service, "customapi", apiId.Value);
