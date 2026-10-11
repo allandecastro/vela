@@ -683,6 +683,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **`plan` and `apply` read large environments without hitting query limits (#452).** The live read put every
+  plugin type, step, secure configuration, Custom API and solution component id in a single `In` condition, one SQL
+  parameter per value, so an assembly with thousands of steps could exceed SQL Server's 2100-parameter cap. The read
+  now splits each list into chunks of 500. Recognizing the platform-managed step of a Custom API no longer reads
+  every `customapi` in the environment once per assembly: only the messages of main-operation steps are looked up,
+  and nothing is read when there are none.
 - **The scaffolded README and next steps pass `--solution` to `plan` and `apply`.** They showed both commands without
   it, and on the scaffolded package (`Zava.Plugins`, which has no publisher prefix) both fail with exit 4.
 
