@@ -13,6 +13,8 @@ internal static class CustomApiShape
     public static object Build(
         string pluginTypeName,
         string uniqueName,
+        string displayName,
+        string description,
         bool isFunction,
         bool isBound,
         string? boundEntityLogicalName,
@@ -27,6 +29,8 @@ internal static class CustomApiShape
         {
             pluginTypeName,
             uniqueName,
+            displayName,
+            description,
             isFunction,
             isBound,
             boundEntityLogicalName,
@@ -42,9 +46,15 @@ internal static class CustomApiShape
     // uniqueName is part of the shape so a parameter/response-property whose live Dataverse uniquename has drifted
     // from the expected bare name (an API deployed by an older CLI that minted dotted names, which Dataverse cannot
     // serve) is detected as a change and reconciled by apply, instead of hiding behind an otherwise-identical shape.
-    public static object InputParameter(string name, bool isOptional, string? parameterTypeName, bool isCollection, string? logicalEntityName, string uniqueName)
-        => new { name, isOptional, parameterTypeName, isCollection, logicalEntityName, uniqueName };
+    // description is the parameter's Dataverse description: the declared one, or the parameter name when none is
+    // declared (what apply writes, and what every parameter deployed before descriptions were written holds).
+    public static object InputParameter(string name, bool isOptional, string? parameterTypeName, bool isCollection, string? logicalEntityName, string uniqueName, string description)
+        => new { name, isOptional, parameterTypeName, isCollection, logicalEntityName, uniqueName, description };
 
-    public static object OutputParameter(string name, string? parameterTypeName, bool isCollection, string? logicalEntityName, string uniqueName)
-        => new { name, parameterTypeName, isCollection, logicalEntityName, uniqueName };
+    public static object OutputParameter(string name, string? parameterTypeName, bool isCollection, string? logicalEntityName, string uniqueName, string description)
+        => new { name, parameterTypeName, isCollection, logicalEntityName, uniqueName, description };
+
+    /// <summary>The value apply writes for a declared label: the trimmed text, or <paramref name="fallback"/> when blank.</summary>
+    public static string LabelOrDefault(string? value, string fallback)
+        => string.IsNullOrWhiteSpace(value) ? fallback : value!.Trim();
 }

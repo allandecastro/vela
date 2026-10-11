@@ -6,8 +6,11 @@ using static Vela.Cli.JsonReader;
 
 namespace Vela.Cli;
 
-/// <summary>A step pre/post image: an alias and the (order-preserving) attribute list it projects.</summary>
-internal readonly record struct StepImage(string Alias, string[] Attributes);
+/// <summary>
+/// A step pre/post image: an alias, the (order-preserving) attribute list it projects, and the request property it is
+/// taken from (Dataverse <c>messagepropertyname</c>; empty in a raw definition means the message's own).
+/// </summary>
+internal readonly record struct StepImage(string Alias, string[] Attributes, string MessagePropertyName = "");
 
 /// <summary>
 /// Produces canonical, order-stable JSON shapes for plugin steps and custom APIs so that
@@ -30,6 +33,7 @@ internal static class DefinitionNormalizer
         string entityLogicalName,
         string stepKey,
         string name,
+        string description,
         int stage,
         int mode,
         int executionOrder,
@@ -41,7 +45,8 @@ internal static class DefinitionNormalizer
         string secureConfigDigest,
         Guid? impersonatingUserId,
         int supportedDeployment,
-        JsonSerializerOptions jsonOptions)
+        JsonSerializerOptions jsonOptions,
+        bool asyncAutoDelete = false)
     {
         // Global (entity-agnostic) messages such as Associate/Disassociate cannot carry a primary entity on
         // their sdkmessagefilter (primaryobjecttypecode is "none"), so the live read always comes back with an
@@ -60,6 +65,9 @@ internal static class DefinitionNormalizer
             entityLogicalName,
             stepKey,
             name,
+            // The step's human-readable description (WithDescription, or the step name when none is declared), without
+            // the [vela:stepkey=...] marker apply appends: the live read strips it (DefinitionParser.StripStepKeyMarker).
+            description,
             stage,
             mode,
             executionOrder,
@@ -75,6 +83,8 @@ internal static class DefinitionNormalizer
             // Supported deployment (Dataverse supporteddeployment): 0 ServerOnly (default), 1 OfflineOnly, 2 Both.
             // Carried so .WithSupportedDeployment(...) is honoured and drift is detected instead of silently ignored.
             supportedDeployment,
+            // Dataverse asyncautodelete: meaningful on an asynchronous step only, so a sync step always reads false.
+            asyncAutoDelete = mode == 1 && asyncAutoDelete,
             // Secure config can hold secrets (API keys, connection strings). It must never appear in the
             // plan/inspect JSON output, but the diff still has to detect when it changes - so the shape carries
             // a digest, not the value. Same value on both sides -> same digest -> no diff; a changed secret
@@ -121,7 +131,7 @@ internal static class DefinitionNormalizer
 
     private static object[] OrderImages(IEnumerable<StepImage> images) =>
         images
-            .Select(image => new { alias = image.Alias, attributes = image.Attributes })
+            .Select(image => new { alias = image.Alias, attributes = image.Attributes, messagePropertyName = image.MessagePropertyName })
             .OrderBy(x => x.alias, StringComparer.Ordinal)
             .ToArray<object>();
 
@@ -157,8 +167,14 @@ internal static class DefinitionNormalizer
     private static string[] LowerSorted(string[] values) =>
         values.Select(v => v.ToLowerInvariant()).OrderBy(v => v, StringComparer.Ordinal).ToArray();
 
-    private static StepImage[] LowerImageAttributes(StepImage[] images) =>
-        images.Select(i => new StepImage(i.Alias, LowerSorted(i.Attributes))).ToArray();
+    // Also resolves each image's request property the way apply registers it (the message's own unless the step chose
+    // one, e.g. SubordinateId on Merge), so the shape matches the live messagepropertyname and a change of property is
+    // a diff.
+    private static StepImage[] NormalizeImages(StepImage[] images, string message) =>
+        images.Select(i => new StepImage(
+            i.Alias,
+            LowerSorted(i.Attributes),
+            Vela.Steps.StepImageRules.ResolveMessagePropertyName(message, i.MessagePropertyName) ?? string.Empty)).ToArray();
 
     public static string BuildKeylessStepName(string pluginTypeName, int stage, int mode, string message, string entityLogicalName)
     {
@@ -183,8 +199,8 @@ internal static class DefinitionNormalizer
         int stage = DataverseRegistration.NormalizeRegistrationStage(TryGetInt(raw, "stage"), mode);
         int executionOrder = DataverseRegistration.NormalizeRegistrationRank(TryGetInt(raw, "executionOrder", defaultValue: 1));
         string[] filteringAttributes = LowerSorted(TryGetStringArray(raw, "filteringAttributes"));
-        StepImage[] preImages = LowerImageAttributes(TryGetStepImages(raw, "preImages"));
-        StepImage[] postImages = LowerImageAttributes(TryGetStepImages(raw, "postImages"));
+        StepImage[] preImages = NormalizeImages(TryGetStepImages(raw, "preImages"), message);
+        StepImage[] postImages = NormalizeImages(TryGetStepImages(raw, "postImages"), message);
         bool enabled = TryGetBool(raw, "enabled", defaultValue: true);
         string unsecureConfig = TryGetString(raw, "unsecureConfig") ?? string.Empty;
         // A definition carries no secret: code only names its secure configuration, and SecureConfigResolver sets the
@@ -200,6 +216,13 @@ internal static class DefinitionNormalizer
         string name = !string.IsNullOrWhiteSpace(stepKey)
             ? $"{pluginTypeName} - {BuildStepLifecycleLabel(stage, mode)}: {stepKey}"
             : BuildKeylessStepName(pluginTypeName, stage, mode, message, entityLogicalName);
+        // Apply writes the step name when no description is declared (DataverseRegistration.BuildStepDescription), so
+        // that is the expected live value; it is also what every step deployed before descriptions were written holds.
+        string description = (TryGetString(raw, "description") ?? string.Empty).Trim();
+        if (description.Length == 0)
+        {
+            description = name;
+        }
 
         return BuildStepShape(
             pluginTypeName,
@@ -207,6 +230,7 @@ internal static class DefinitionNormalizer
             entityLogicalName,
             stepKey,
             name,
+            description,
             stage,
             mode,
             executionOrder,
@@ -218,7 +242,8 @@ internal static class DefinitionNormalizer
             secureConfig,
             impersonatingUserId,
             supportedDeployment,
-            jsonOptions);
+            jsonOptions,
+            TryGetBool(raw, "asyncAutoDelete"));
     }
 
     public static JsonElement NormalizeCustomApiDefinition(JsonElement raw, JsonSerializerOptions jsonOptions)
@@ -227,6 +252,10 @@ internal static class DefinitionNormalizer
             ?? TryGetNestedString(raw, "pluginStep", "pluginTypeName")
             ?? string.Empty;
         string uniqueName = TryGetString(raw, "uniqueName") ?? string.Empty;
+        // Display name and description default to the unique name: what apply writes when none is declared, and what
+        // every Custom API deployed before they were written holds.
+        string displayName = CustomApiShape.LabelOrDefault(TryGetString(raw, "displayName"), uniqueName);
+        string description = CustomApiShape.LabelOrDefault(TryGetString(raw, "description"), uniqueName);
         bool isFunction = TryGetBool(raw, "isFunction");
         bool isBound = TryGetBool(raw, "isBound");
         string? boundEntityLogicalName = TryGetString(raw, "boundEntityLogicalName");
@@ -239,7 +268,7 @@ internal static class DefinitionNormalizer
         object[] outputParameters = TryGetCustomApiOutputShapes(raw, "outputParameters");
 
         object normalized = CustomApiShape.Build(
-            pluginTypeName, uniqueName, isFunction, isBound, boundEntityLogicalName, executePrivilegeName,
+            pluginTypeName, uniqueName, displayName, description, isFunction, isBound, boundEntityLogicalName, executePrivilegeName,
             isPrivate, allowedCustomProcessingStepType, bindingType, workflowSdkStepEnabled, inputParameters, outputParameters);
 
         return JsonSerializer.SerializeToElement(normalized, jsonOptions);

@@ -6,7 +6,7 @@ namespace Vela.Testing
 {
     /// <summary>
     /// The pipeline-aware <see cref="IOrganizationService"/> driven by the test and handed to plugins. Write
-    /// operations run the registered plugin steps (pre/post stages, cascade); reads delegate to the in-memory store.
+    /// operations run the registered plugin steps (pre/post stages, cascade); so do reads (Retrieve/RetrieveMultiple).
     /// Each instance acts as one identity: the test-facing <see cref="PluginPipeline.Service"/> acts as the
     /// configured current user; the services a plugin obtains from <c>IOrganizationServiceFactory</c> act as the
     /// requested user (<c>ctx.Service</c> = the context's UserId, honouring step impersonation) or as SYSTEM
@@ -34,7 +34,8 @@ namespace Vela.Testing
 
         public void Delete(string entityName, Guid id) => Run(() => { _pipeline.ExecuteDelete(entityName, id); return true; });
 
-        public OrganizationResponse Execute(OrganizationRequest request) => Run(() => _pipeline.ExecuteRequest(request));
+        public OrganizationResponse Execute(OrganizationRequest request)
+            => _pipeline.Invoke(_identity, () => _pipeline.ExecuteRequest(request), isWrite: !PluginPipeline.IsReadOnly(request));
 
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
             => Run(() => { _pipeline.ExecuteAssociate(entityName, entityId, relationship, relatedEntities); return true; });
@@ -42,11 +43,14 @@ namespace Vela.Testing
         public void Disassociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
             => Run(() => { _pipeline.ExecuteDisassociate(entityName, entityId, relationship, relatedEntities); return true; });
 
-        public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet) => Run(() => _pipeline.Store.Retrieve(entityName, id, columnSet));
+        public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet) => Read(() => _pipeline.ExecuteRetrieve(entityName, id, columnSet));
 
-        public EntityCollection RetrieveMultiple(QueryBase query) => Run(() => _pipeline.Store.RetrieveMultiple(query));
+        public EntityCollection RetrieveMultiple(QueryBase query) => Read(() => _pipeline.ExecuteRetrieveMultiple(query));
 
-        private T Run<T>(Func<T> body) => _pipeline.RunAs(_identity, body);
+        private T Run<T>(Func<T> body) => _pipeline.Invoke(_identity, body, isWrite: true);
+
+        // A failed read does not end the caller's transaction (verified live), unlike a failed write.
+        private T Read<T>(Func<T> body) => _pipeline.Invoke(_identity, body, isWrite: false);
     }
 
     /// <summary>The identity a <see cref="PipelineOrganizationService"/> acts as.</summary>

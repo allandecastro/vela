@@ -93,7 +93,7 @@ namespace Vela.Testing
                 for (int i = 0; i < query.Attributes.Count; i++)
                 {
                     object? expected = i < query.Values.Count ? query.Values[i] : null;
-                    if (!EntityValues.AreEqual(EntityValues.GetValue(entity, query.Attributes[i]), expected))
+                    if (!EntityValues.ConditionEquals(EntityValues.GetValue(entity, query.Attributes[i]), expected))
                     {
                         return false;
                     }
@@ -946,13 +946,13 @@ namespace Vela.Testing
                 case ConditionOperator.NotNull:
                     return actual != null;
                 case ConditionOperator.Equal:
-                    return EntityValues.AreEqual(actual, Operand(0));
+                    return EntityValues.ConditionEquals(actual, Operand(0));
                 case ConditionOperator.NotEqual:
-                    return !EntityValues.AreEqual(actual, Operand(0));
+                    return !EntityValues.ConditionEquals(actual, Operand(0));
                 case ConditionOperator.In:
-                    return values.Any(v => EntityValues.AreEqual(actual, v));
+                    return values.Any(v => EntityValues.ConditionEquals(actual, v));
                 case ConditionOperator.NotIn:
-                    return !values.Any(v => EntityValues.AreEqual(actual, v));
+                    return !values.Any(v => EntityValues.ConditionEquals(actual, v));
                 case ConditionOperator.GreaterThan:
                     return EntityValues.Compare(actual, Operand(0)) > 0;
                 case ConditionOperator.GreaterEqual:
@@ -1145,7 +1145,7 @@ namespace Vela.Testing
                 {
                     try
                     {
-                        return comparable.CompareTo(Convert.ChangeType(y, x.GetType()));
+                        return comparable.CompareTo(Convert.ChangeType(y, x.GetType(), System.Globalization.CultureInfo.InvariantCulture));
                     }
                     catch (Exception)
                     {

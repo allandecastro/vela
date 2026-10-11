@@ -98,10 +98,8 @@ internal static class ExpressionHelper
     /// Resolves the message name for a typed message type. When <typeparamref name="TMessage"/> is an
     /// <see cref="OrganizationRequest"/>-derived type with a public parameterless constructor (an SDK request,
     /// a generated Custom API request, or a <c>TypedRequest</c>), the name is taken from its
-    /// <see cref="OrganizationRequest.RequestName"/> - so <c>On&lt;XxxRequest&gt;()</c> needs no magic string - mapped
-    /// to the sdkmessage the platform runs it as when the two differ (<c>SendEmail</c> runs as <c>Send</c>, see
-    /// <see cref="SdkMessageNames"/>). It falls back to a <see cref="CustomMessageAttribute"/> marker, then to the
-    /// type name.
+    /// <see cref="OrganizationRequest.RequestName"/> - so <c>On&lt;XxxRequest&gt;()</c> needs no magic string. It
+    /// falls back to a <see cref="CustomMessageAttribute"/> marker, then to the type name.
     /// </summary>
     /// <typeparam name="TMessage">The message type (a request type, or a marker type).</typeparam>
     /// <returns>The message name.</returns>
@@ -113,7 +111,7 @@ internal static class ExpressionHelper
             var request = (OrganizationRequest)Activator.CreateInstance(typeof(TMessage))!;
             if (!string.IsNullOrWhiteSpace(request.RequestName))
             {
-                return SdkMessageNames.ForRequest(request.RequestName);
+                return request.RequestName;
             }
         }
 

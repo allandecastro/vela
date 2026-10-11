@@ -14,9 +14,14 @@ namespace Vela.Steps
     /// <item>Create: <c>Id</c>, post-image only (Learn says <c>Target</c>, which the platform rejects).</item>
     /// <item>CreateMultiple: <c>Ids</c>, post-image only. UpdateMultiple: <c>Targets</c>, pre- and post-image
     /// (<c>Target</c> fails with 0x8004416B).</item>
-    /// <item>Send / DeliverIncoming / DeliverPromote: <c>EmailId</c>. Merge: <c>Target</c> (or
-    /// <c>SubordinateId</c>). SetState / SetStateDynamicEntity: <c>EntityMoniker</c>. RouteTo: no image at all
-    /// (0x80044189). SendFromTemplate: no image at all ("does not support image registration").</item>
+    /// <item>Send / DeliverIncoming / DeliverPromote: <c>EmailId</c>. Merge: <c>Target</c> for the master record, and
+    /// <c>SubordinateId</c> for the record merged away; one step can carry both, at every stage (the
+    /// <c>SubordinateId</c> post-image is the deactivated subordinate). <c>SubordinateId</c> on any other message fails
+    /// with 0x8004416B. SetState / SetStateDynamicEntity:
+    /// <c>EntityMoniker</c>, pre- and post-image (an SDK <c>SetStateRequest</c> on account fires only the
+    /// SetStateDynamicEntity step). RouteTo: no image at all (0x80044189). SendFromTemplate: no image at all
+    /// ("does not support image registration").</item>
+    /// <item>Assign: <c>Target</c>, pre- and post-image (the pre-image holds the old owner, the post-image the new).</item>
     /// <item>A post-image before PostOperation fails with 0x8004416E; a pre-image is fine at PreValidation.</item>
     /// </list>
     /// </remarks>
@@ -26,6 +31,9 @@ namespace Vela.Steps
         internal const int PreOperation = 20;
         internal const int MainOperation = 30;
         internal const int PostOperation = 40;
+
+        /// <summary>The image property of the subordinate record of a Merge (the record merged away).</summary>
+        internal const string SubordinateId = "SubordinateId";
 
         /// <summary>
         /// The <c>messagepropertyname</c> an image on <paramref name="message"/> is registered against, or null when
@@ -55,6 +63,43 @@ namespace Vela.Steps
                 default:
                     return "Target";
             }
+        }
+
+        /// <summary>
+        /// The <c>messagepropertyname</c> an image is registered against: <paramref name="explicitProperty"/> when the
+        /// step chose one (only <c>SubordinateId</c> on Merge today), otherwise the message's own
+        /// (<see cref="GetMessagePropertyName"/>). Null when the message supports no image at all.
+        /// </summary>
+        internal static string? ResolveMessagePropertyName(string? message, string? explicitProperty)
+            => string.IsNullOrWhiteSpace(explicitProperty) ? GetMessagePropertyName(message) : explicitProperty!.Trim();
+
+        /// <summary>
+        /// Why Dataverse rejects an image registered against <paramref name="explicitProperty"/> on
+        /// <paramref name="message"/>, or null when it accepts it. An empty property means the message's own and is
+        /// always accepted here (the message and stage rules still apply). Besides the message's own property, only
+        /// <c>SubordinateId</c> on Merge is accepted.
+        /// </summary>
+        internal static string? GetMessagePropertyRejectionReason(string? message, string? explicitProperty)
+        {
+            if (string.IsNullOrWhiteSpace(explicitProperty))
+            {
+                return null;
+            }
+
+            string property = explicitProperty!.Trim();
+            if (string.Equals(property, GetMessagePropertyName(message), System.StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (string.Equals(property, SubordinateId, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return (message ?? string.Empty).Trim().ToLowerInvariant() == "merge"
+                    ? null
+                    : "only a Merge step can capture an image of its subordinate record (SubordinateId)";
+            }
+
+            return $"Vela registers images on this message against '{GetMessagePropertyName(message) ?? "nothing"}' only, not '{property}'";
         }
 
         /// <summary>

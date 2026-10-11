@@ -77,7 +77,7 @@ internal static class SdkMessageClassResolver
     /// The name of the SDK request that runs as <paramref name="messageName"/> and ships a <c>&lt;name&gt;Request</c>
     /// type, or null when there is none. The message is an <c>sdkmessage</c> name, which is not always the request
     /// name: <c>Send</c> is run by <c>SendEmailRequest</c>, <c>Win</c> by <c>WinOpportunityRequest</c> and
-    /// <c>WinQuoteRequest</c> (see <see cref="Vela.Constants.SdkMessageNames"/>). A request type is found by
+    /// <c>WinQuoteRequest</c> (see <see cref="Vela.Steps.SdkMessageNames"/>). A request type is found by
     /// reflection in <c>Microsoft.Xrm.Sdk.Messages</c> (e.g. <c>"Create"</c> → <c>CreateRequest</c>) or listed in the
     /// curated <c>Microsoft.Crm.Sdk.Messages</c> supplement (e.g. <c>"QualifyLead"</c>). See the class remarks for why
     /// the supplement exists and why it is non-exhaustive.
@@ -89,7 +89,7 @@ internal static class SdkMessageClassResolver
             return null;
         }
 
-        foreach (string requestName in new[] { messageName }.Concat(Vela.Constants.SdkMessageNames.RequestNamesFor(messageName)))
+        foreach (string requestName in new[] { messageName }.Concat(Vela.Steps.SdkMessageNames.RequestNamesFor(messageName)))
         {
             if (SdkAssembly.GetType($"Microsoft.Xrm.Sdk.Messages.{requestName}Request") != null
                 || CrmSdkRequestMessages.Contains(requestName))

@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 
 namespace Vela.Context
 {

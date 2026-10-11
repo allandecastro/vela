@@ -45,13 +45,13 @@ internal static class AddCommand
             return known;
         }
 
-        string[] candidates = Vela.Constants.SdkMessageNames.RequestNamesFor(rawMessage)
+        string[] candidates = Vela.Steps.SdkMessageNames.RequestNamesFor(rawMessage)
             .Select(request => KnownMessages.FirstOrDefault(m => string.Equals(m, request, StringComparison.OrdinalIgnoreCase)))
             .OfType<string>()
             .ToArray();
         return candidates.Length == 1
             ? candidates[0]
-            : candidates.FirstOrDefault(m => string.Equals(Vela.Constants.SdkMessageNames.PrimaryEntityOf(m), entity, StringComparison.OrdinalIgnoreCase));
+            : candidates.FirstOrDefault(m => string.Equals(Vela.Steps.SdkMessageNames.PrimaryEntityOf(m), entity, StringComparison.OrdinalIgnoreCase));
     }
 
     public static int Run(string[] args)

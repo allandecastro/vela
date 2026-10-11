@@ -1,22 +1,25 @@
 using System;
 using System.Collections.Generic;
 
-namespace Vela.Constants
+namespace Vela.Steps
 {
     /// <summary>
-    /// Maps an SDK request name (<c>OrganizationRequest.RequestName</c>) to the <c>sdkmessage</c> a plugin step is
-    /// registered on, for the requests whose two names differ. <c>SendEmailRequest</c> has the RequestName
-    /// <c>SendEmail</c>, but Dataverse has no <c>SendEmail</c> sdkmessage: the platform runs it as <c>Send</c>, so a
-    /// step must be registered on <c>Send</c> and the plugin sees <c>MessageName == "Send"</c>. Shared as linked source
-    /// by the runtime (<c>On&lt;TRequest&gt;()</c>), the test harness (which fires steps the way the platform does) and
-    /// the CLI. Self-contained so it compiles in net462 and net10.0.
+    /// Maps an SDK request name (<c>OrganizationRequest.RequestName</c>, e.g. <c>SendEmail</c>) to the sdkmessage a
+    /// plugin step registers on and sees as <c>MessageName</c> at runtime (e.g. <c>Send</c>), and to the table the
+    /// request runs on. The two names differ for many business messages; registering a step under the request name
+    /// fails because no such sdkmessage exists. The builder applies it to every trigger, so
+    /// <see cref="StepDefinition.Message"/> (what the CLI deploys) is already the sdkmessage; the test harness uses it
+    /// to run a request's steps under the platform's name and on the platform's table. Shared as linked source with
+    /// the CLI.
     /// </summary>
     /// <remarks>
     /// Read from the <c>sdkmessagerequest</c> table of a Dataverse dev environment (9.2, 2026-10-09): every public
-    /// request whose name is not itself an <c>sdkmessage</c>, with the primary table its request is bound to (null
-    /// when it is not bound to one). A request name that is also an sdkmessage name (<c>SetState</c>, <c>Create</c>,
-    /// ...) is not listed, as a step on it is registered under that same name, except the modelled messages bound to
-    /// a single table, listed for their table only. Verified live through deployed steps on every modelled message
+    /// request whose name is not itself an <c>sdkmessage</c>, with the table its request is bound to (null when it is
+    /// not bound to one). A request name that is also an sdkmessage name (<c>SetState</c>, <c>Create</c>, ...) is not
+    /// listed, as a step on it is registered under that same name, except the modelled messages bound to a single
+    /// table, listed for their table only. Several request names share one sdkmessage (<c>Win</c> serves both
+    /// <c>WinOpportunity</c> and <c>WinQuote</c>); the step's table tells them apart, so the runtime keeps the request
+    /// name to build the right typed context. Verified live through deployed steps on every modelled message
     /// (MessageName and PrimaryEntityName as listed here, PrimaryEntityId always empty): the queue messages run on
     /// <c>queueitem</c> whatever their Target.
     /// </remarks>
@@ -156,18 +159,27 @@ namespace Vela.Constants
         };
 
         /// <summary>
-        /// The sdkmessage a step must be registered on to run for <paramref name="requestName"/>: the mapped name, or
-        /// <paramref name="requestName"/> itself when the two are the same.
+        /// The sdkmessage a step for <paramref name="requestName"/> registers on. A name that is already an
+        /// sdkmessage (Create, Win, a custom API, ...) is returned unchanged.
         /// </summary>
-        internal static string ForRequest(string requestName)
-            => requestName != null && ByRequestName.TryGetValue(requestName, out Entry? entry) ? entry.Message : requestName!;
+        internal static string ToSdkMessage(string requestName)
+        {
+            if (requestName == null)
+            {
+                return string.Empty;
+            }
+
+            string trimmed = requestName.Trim();
+            return ByRequestName.TryGetValue(trimmed, out Entry? entry) ? entry.Message : trimmed;
+        }
 
         /// <summary>
-        /// The primary table the request is bound to (for example <c>email</c> for <c>SendEmail</c>, <c>quote</c> for
-        /// <c>WinQuote</c>), or null when the request is not mapped or not bound to one table.
+        /// The table the request runs on (for example <c>email</c> for <c>SendEmail</c>, <c>quote</c> for
+        /// <c>WinQuote</c>, <c>queueitem</c> for <c>AddToQueue</c>), or null when the request is not mapped or not
+        /// bound to one table.
         /// </summary>
         internal static string? PrimaryEntityOf(string requestName)
-            => requestName != null && ByRequestName.TryGetValue(requestName, out Entry? entry) ? entry.PrimaryEntity : null;
+            => requestName != null && ByRequestName.TryGetValue(requestName.Trim(), out Entry? entry) ? entry.PrimaryEntity : null;
 
         /// <summary>
         /// The request names the platform runs as <paramref name="sdkMessage"/> under a different name (for example

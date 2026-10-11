@@ -47,6 +47,25 @@ public sealed class PackageScannerImageGuardTests
         Assert.Contains($"'{message}'", error);
     }
 
+    [Theory]
+    [InlineData("Merge", 10)]
+    [InlineData("Merge", 20)]
+    [InlineData("Merge", 40)]
+    public void Accepts_a_merge_subordinate_image(string message, int stage)   // #462, verified live
+        => Assert.Null(PackageScanner.GetInvalidImageError(JsonDocument.Parse(
+            $"{{\"message\":\"{message}\",\"stage\":{stage},\"preImages\":[{{\"alias\":\"PreImage\"}},{{\"alias\":\"sub\",\"messagePropertyName\":\"SubordinateId\"}}],\"postImages\":[]}}").RootElement));
+
+    [Fact]
+    public void Rejects_a_subordinate_image_outside_merge()   // 0x8004416B, verified live
+    {
+        string? error = PackageScanner.GetInvalidImageError(JsonDocument.Parse(
+            "{\"message\":\"Update\",\"stage\":20,\"preImages\":[{\"alias\":\"PreImage\"},{\"alias\":\"sub\",\"messagePropertyName\":\"SubordinateId\"}],\"postImages\":[]}").RootElement);
+
+        Assert.NotNull(error);
+        Assert.Contains("pre-image 'sub'", error);
+        Assert.Contains("SubordinateId", error);
+    }
+
     [Fact]
     public void Names_the_stage_and_the_reason()
     {

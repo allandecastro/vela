@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.ServiceModel;
@@ -12,6 +13,13 @@ namespace Vela.Retry
     /// Lightweight transient retry policy for sandbox-safe service calls.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// <b>Where it helps.</b> Dataverse service-protection limits don't apply to data operations that originate from
+    /// plug-ins and custom workflow activities, so a call through the plugin's own <c>ctx.Service</c> rarely, if ever,
+    /// gets a throttling fault to retry. The policy earns its keep around calls that leave the sandbox (another
+    /// Dataverse environment, an external service that reports throttling the same way) and in code shared with a
+    /// client application, where the limits do apply.
+    /// </para>
     /// <para>
     /// <b>Idempotency contract.</b> By default this retries only faults that are safe to replay: server-side
     /// throttling / service-protection limits, where the request was rejected <i>before</i> it executed, so no
@@ -35,6 +43,12 @@ namespace Vela.Retry
     /// <c>[0, that]</c>) to avoid a synchronized retry storm, with the same cap.
     /// </para>
     /// <para>
+    /// <b>Time budget.</b> The cap bounds each wait, not their sum: <c>maxAttempts</c> waits of up to
+    /// <see cref="MaxDelay"/> each can consume most of the ~2-minute plugin execution budget. Pass <c>maxElapsed</c>
+    /// to bound the whole call: a retry whose wait would end past that budget (measured from the first attempt) is not
+    /// made, and the last fault propagates.
+    /// </para>
+    /// <para>
     /// <b>Transactions.</b> Inside a database transaction (a synchronous pre/post-operation step), a failed
     /// organization service call aborts the whole transaction, so replaying the call cannot succeed. The policy therefore
     /// always takes the plugin context: when <see cref="ILocalPluginContext.IsInTransaction"/> is true the operation
@@ -54,17 +68,21 @@ namespace Vela.Retry
         // The ErrorDetails key under which a service-protection fault carries the wait the platform asks for.
         private const string RetryAfterKey = "Retry-After";
 
+        // Seeds each thread's Random. On .NET Framework, new Random() is seeded from Environment.TickCount, so threads
+        // that create theirs within the same tick would draw the same jitter; a shared, locked seed source avoids that.
+        private static readonly Random SeedSource = new Random();
+
         [ThreadStatic]
         private static Random? _rng;
 
-        private static Random Rng => _rng ??= new Random();
+        private static Random Rng => _rng ??= new Random(NextSeed());
 
         /// <summary>The longest the policy waits between two attempts (30 seconds).</summary>
         public static TimeSpan MaxDelay { get; } = TimeSpan.FromMilliseconds(MaxBackoffMs);
 
         // The retry loop. Private: every public entry point takes the context, so the transaction check cannot be
         // skipped by accident.
-        private static T ExecuteCore<T>(Func<T> operation, bool retryOnTimeout, int maxAttempts, int initialDelayMs)
+        private static T ExecuteCore<T>(Func<T> operation, bool retryOnTimeout, int maxAttempts, int initialDelayMs, TimeSpan? maxElapsed)
         {
             operation = operation ?? throw new ArgumentNullException(nameof(operation));
             if (maxAttempts < 1)
@@ -77,6 +95,12 @@ namespace Vela.Retry
                 throw new ArgumentOutOfRangeException(nameof(initialDelayMs), "initialDelayMs must be non-negative.");
             }
 
+            if (maxElapsed < TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxElapsed), "maxElapsed must be non-negative.");
+            }
+
+            Stopwatch elapsed = Stopwatch.StartNew();
             Exception? lastException = null;
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -86,7 +110,8 @@ namespace Vela.Retry
                 }
                 catch (Exception ex) when (attempt < maxAttempts
                     && ShouldRetry(ex, retryOnTimeout)
-                    && TryComputeDelay(ex, attempt, initialDelayMs, out TimeSpan delay))
+                    && TryComputeDelay(ex, attempt, initialDelayMs, out TimeSpan delay)
+                    && (!maxElapsed.HasValue || elapsed.Elapsed + delay <= maxElapsed.Value))
                 {
                     lastException = ex;
                     Thread.Sleep(delay);
@@ -110,13 +135,19 @@ namespace Vela.Retry
         /// </param>
         /// <param name="maxAttempts">Maximum attempts outside a transaction (must be at least 1).</param>
         /// <param name="initialDelayMs">Base backoff delay in milliseconds (must be non-negative).</param>
+        /// <param name="maxElapsed">
+        /// Optional time budget for the whole call, measured from the first attempt (must be non-negative). A retry
+        /// whose wait would end past it is not made and the last fault propagates. Null (the default) bounds only each
+        /// wait, by <see cref="MaxDelay"/>.
+        /// </param>
         /// <returns>Operation result.</returns>
         public static T Execute<T>(
             ILocalPluginContext context,
             Func<T> operation,
             bool retryOnTimeout = false,
             int maxAttempts = 3,
-            int initialDelayMs = 100)
+            int initialDelayMs = 100,
+            TimeSpan? maxElapsed = null)
         {
             context = context ?? throw new ArgumentNullException(nameof(context));
             if (context.IsInTransaction && maxAttempts > 1)
@@ -125,7 +156,7 @@ namespace Vela.Retry
                 maxAttempts = 1;
             }
 
-            return ExecuteCore(operation, retryOnTimeout, maxAttempts, initialDelayMs);
+            return ExecuteCore(operation, retryOnTimeout, maxAttempts, initialDelayMs, maxElapsed);
         }
 
         private static bool ShouldRetry(Exception exception, bool retryOnTimeout)
@@ -196,6 +227,14 @@ namespace Vela.Retry
             }
 
             return null;
+        }
+
+        private static int NextSeed()
+        {
+            lock (SeedSource)
+            {
+                return SeedSource.Next();
+            }
         }
 
         private static TimeSpan ComputeDelay(int attempt, int initialDelayMs)

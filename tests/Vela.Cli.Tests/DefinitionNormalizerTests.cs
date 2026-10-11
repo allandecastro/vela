@@ -19,7 +19,7 @@ public class DefinitionNormalizerTests
         Guid user = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
         JsonElement live = DefinitionNormalizer.BuildStepShape(
-            "P", "Update", "account", "k", "n", 40, 0, 1,
+            "P", "Update", "account", "k", "n", "n", 40, 0, 1,
             new string[0], new StepImage[0], new StepImage[0], true, "", "", user, 0, Options);
         JsonElement code = DefinitionNormalizer.NormalizeStepDefinition(
             Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0, impersonatingUserId = user.ToString() }),
@@ -28,7 +28,7 @@ public class DefinitionNormalizerTests
         Assert.Equal(user.ToString(), code.GetProperty("impersonatingUserId").GetString());
 
         JsonElement other = DefinitionNormalizer.BuildStepShape(
-            "P", "Update", "account", "k", "n", 40, 0, 1,
+            "P", "Update", "account", "k", "n", "n", 40, 0, 1,
             new string[0], new StepImage[0], new StepImage[0], true, "", "", Guid.NewGuid(), 0, Options);
         Assert.NotEqual(JsonSerializer.Serialize(live), JsonSerializer.Serialize(other));
 
@@ -36,6 +36,36 @@ public class DefinitionNormalizerTests
             Json(new { pluginTypeName = "P", message = "Update", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0 }),
             Options);
         Assert.Equal(string.Empty, absent.GetProperty("impersonatingUserId").GetString());
+    }
+
+    [Fact]
+    public void Step_image_message_property_matches_the_live_read_and_a_change_is_a_diff()   // #462
+    {
+        // The code side resolves each image's request property the way apply registers it: the message's own (Target on
+        // Merge) unless the step chose one (SubordinateId). The live read carries messagepropertyname as stored, so the
+        // same images compare equal, and an image moved from the master to the subordinate is "changed".
+        JsonElement code = DefinitionNormalizer.NormalizeStepDefinition(
+            Json(new
+            {
+                pluginTypeName = "P", message = "Merge", entityLogicalName = "account", stepKey = "k", stage = 40, mode = 0,
+                preImages = new object[]
+                {
+                    new { alias = "PreImage", attributes = new[] { "name" } },
+                    new { alias = "SubordinatePreImage", attributes = new[] { "name" }, messagePropertyName = "SubordinateId" },
+                },
+            }),
+            Options);
+        JsonElement live = DefinitionNormalizer.BuildStepShape(
+            "P", "Merge", "account", "k", code.GetProperty("name").GetString()!, code.GetProperty("description").GetString()!, 40, 0, 1, new string[0],
+            new[] { new StepImage("PreImage", new[] { "name" }, "Target"), new StepImage("SubordinatePreImage", new[] { "name" }, "SubordinateId") },
+            new StepImage[0], true, "", "", null, 0, Options);
+        Assert.Equal(JsonSerializer.Serialize(live), JsonSerializer.Serialize(code));
+
+        JsonElement moved = DefinitionNormalizer.BuildStepShape(
+            "P", "Merge", "account", "k", code.GetProperty("name").GetString()!, code.GetProperty("description").GetString()!, 40, 0, 1, new string[0],
+            new[] { new StepImage("PreImage", new[] { "name" }, "Target"), new StepImage("SubordinatePreImage", new[] { "name" }, "Target") },
+            new StepImage[0], true, "", "", null, 0, Options);
+        Assert.NotEqual(JsonSerializer.Serialize(moved), JsonSerializer.Serialize(code));
     }
 
     [Fact]
@@ -106,12 +136,12 @@ public class DefinitionNormalizerTests
         // sdkmessagefilter carries no primary entity), so a local declaration of "account" must not produce a
         // perpetual "changed" diff. The live side and the local side must yield the same shape.
         JsonElement local = DefinitionNormalizer.BuildStepShape(
-            "P", "Associate", "account", stepKey: "", name: "P - PostOpSync: Associate of account",
+            "P", "Associate", "account", stepKey: "", name: "P - PostOpSync: Associate of account", description: "P - PostOpSync: Associate of account",
             stage: 40, mode: 0, executionOrder: 1,
             filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
             enabled: true, unsecureConfig: "", secureConfigDigest: "", impersonatingUserId: null, supportedDeployment: 0, Options);
         JsonElement live = DefinitionNormalizer.BuildStepShape(
-            "P", "Associate", "", stepKey: "", name: "P - PostOpSync: Associate of account",
+            "P", "Associate", "", stepKey: "", name: "P - PostOpSync: Associate of account", description: "P - PostOpSync: Associate of account",
             stage: 40, mode: 0, executionOrder: 1,
             filteringAttributes: new string[0], preImages: new StepImage[0], postImages: new StepImage[0],
             enabled: true, unsecureConfig: "", secureConfigDigest: "", impersonatingUserId: null, supportedDeployment: 0, Options);
@@ -124,10 +154,10 @@ public class DefinitionNormalizerTests
     {
         // Entity-specific messages (Create/Update/...) must keep entityLogicalName in the compared shape.
         JsonElement a = DefinitionNormalizer.BuildStepShape(
-            "P", "Update", "account", "", "n", 40, 0, 1,
+            "P", "Update", "account", "", "n", "n", 40, 0, 1,
             new string[0], new StepImage[0], new StepImage[0], true, "", "", null, 0, Options);
         JsonElement b = DefinitionNormalizer.BuildStepShape(
-            "P", "Update", "", "", "n", 40, 0, 1,
+            "P", "Update", "", "", "n", "n", 40, 0, 1,
             new string[0], new StepImage[0], new StepImage[0], true, "", "", null, 0, Options);
 
         Assert.NotEqual(JsonSerializer.Serialize(a), JsonSerializer.Serialize(b));

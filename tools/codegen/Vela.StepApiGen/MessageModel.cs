@@ -16,15 +16,23 @@ internal enum Images
 /// in <c>Context/MessageContexts.cs</c>) and the <c>PluginMessages.{Name}</c> constant.</param>
 /// <param name="FilterOn">Whether the stage configs expose <c>FilterOn(...)</c> (filtering attributes).</param>
 /// <param name="Images">Which images the stage configs expose (<c>WithPreImage</c> / <c>WithPostImage</c>).</param>
+/// <param name="SubordinateImages">Whether the stage configs also expose images of the Merge subordinate record
+/// (<c>WithSubordinatePreImage</c> / <c>WithSubordinatePostImage</c>, registered against <c>SubordinateId</c>), under the
+/// same stage rules as <paramref name="Images"/>.</param>
+/// <param name="Relationship">Whether the stage configs expose <c>ForRelationship(...)</c> (Associate / Disassociate).</param>
 /// <param name="Entity">The only table Dataverse accepts a step on for this message (its single sdkmessagefilter that
 /// allows custom steps), or null when it is not limited to one. <c>Build()</c> rejects the trigger on any other
 /// table. The step registers on the sdkmessage held by the <c>PluginMessages.{Name}</c> constant, which differs from
 /// <c>Name</c> when the SDK request name is not the sdkmessage name (<c>OnWinQuote()</c> registers on <c>Win</c>).</param>
-internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None, string? Entity = null)
+internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None, bool SubordinateImages = false, bool Relationship = false, string? Entity = null)
 {
     public bool HasPreImage(Stage stage) => Images is Images.Pre or Images.PreAndPost;
 
     public bool HasPostImage(Stage stage) => stage == Stage.PostOperation && Images is Images.Post or Images.PreAndPost;
+
+    public bool HasSubordinatePreImage(Stage stage) => SubordinateImages && HasPreImage(stage);
+
+    public bool HasSubordinatePostImage(Stage stage) => SubordinateImages && HasPostImage(stage);
 }
 
 /// <summary>
@@ -45,10 +53,10 @@ internal static class MessageModel
         new("Retrieve"),
         new("RetrieveMultiple"),
         // Relationships, sharing and ownership
-        new("Associate"),
-        new("Disassociate"),
+        new("Associate", Relationship: true),
+        new("Disassociate", Relationship: true),
         new("GrantAccess"),
-        new("Assign"),
+        new("Assign", Images: Images.PreAndPost),
         new("RevokeAccess"),
         // Sales lifecycle
         new("QualifyLead", Entity: "lead"),
@@ -82,7 +90,8 @@ internal static class MessageModel
         new("RetrieveSharedPrincipalsAndAccess"),
         new("WinQuote", Entity: "quote"),
         new("ModifyAccess"),
-        new("Merge"),
+        // Verified live: one Merge step takes images of the master (Target) and of the subordinate (SubordinateId).
+        new("Merge", Images: Images.PreAndPost, SubordinateImages: true),
     ];
 
     /// <summary>

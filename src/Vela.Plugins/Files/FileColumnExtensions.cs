@@ -134,15 +134,29 @@ namespace Vela.Files
                 byte[] data = (byte[])service.Execute(download).Results["Data"];
                 if (data == null || data.Length == 0)
                 {
-                    break;
+                    // An empty block before the announced size is a failed read, not the end of the file: returning
+                    // what was collected so far would hand the caller a silently truncated file.
+                    throw SizeMismatch(target, fileAttributeName, size, offset);
                 }
 
                 content.Write(data, 0, data.Length);
                 offset += data.Length;
             }
 
+            // A block longer than requested overshoots the announced size; never return more (or fewer) bytes than
+            // the platform said the file holds.
+            if (content.Length != size)
+            {
+                throw SizeMismatch(target, fileAttributeName, size, content.Length);
+            }
+
             return content.ToArray();
         }
+
+        private static InvalidPluginExecutionException SizeMismatch(EntityReference target, string fileAttributeName, long expected, long received) =>
+            new InvalidPluginExecutionException(
+                $"Download of column '{fileAttributeName}' on '{target.LogicalName}' ({target.Id}) received {received} " +
+                $"byte(s) but the file is {expected} byte(s). The file was not returned.");
 
         // A non-positive size means "use the default"; anything above the platform maximum is capped, because
         // Dataverse rejects a block larger than 4 MB.

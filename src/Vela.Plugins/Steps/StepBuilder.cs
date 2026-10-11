@@ -45,6 +45,8 @@ public sealed partial class StepBuilder<TEntity>
         SupportedDeployment = 32,
         UnsecureConfig = 64,
         SecureConfig = 128,
+        Relationship = 256,
+        SkipDepth = 512,
     }
 
     private void MarkSetOnce(SetOnceModifier modifier, string method)
@@ -107,7 +109,7 @@ public sealed partial class StepBuilder<TEntity>
             !string.Equals(_definition.EntityLogicalName, _requiredEntity, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"On{_definition.ModelledMessage}() registers on the '{_definition.Message}' message of table '{_requiredEntity}', " +
+                $"On{_definition.RequestName}() registers on the '{_definition.Message}' message of table '{_requiredEntity}', " +
                 $"but this plugin's table is '{_definition.EntityLogicalName}'. Register the step from an EntityPluginBase<T> " +
                 $"whose T is the '{_requiredEntity}' table.");
         }
@@ -134,34 +136,28 @@ public sealed partial class StepBuilder<TEntity>
         // modelled message string is still validated here.
         foreach (ImageDefinition image in _preImages)
         {
-            EnsureImageAllowed(isPreImage: true, image.Alias);
+            EnsureImageAllowed(isPreImage: true, image);
         }
         foreach (ImageDefinition image in _postImages)
         {
-            EnsureImageAllowed(isPreImage: false, image.Alias);
+            EnsureImageAllowed(isPreImage: false, image);
         }
 
         EnsureNoDuplicates(_definition.FilteringAttributes, "filtering attribute");
+        EnsureNoDuplicates(_definition.Relationships, "relationship");
         foreach (ImageDefinition img in _preImages.Concat(_postImages))
         {
             EnsureNoDuplicates(img.Attributes, $"attribute in image '{img.Alias}'");
         }
+        // Aliases are unique across every image of the step, whatever record each one targets: Dataverse accepts a
+        // Merge step with the same alias on a Target and a SubordinateId image, then delivers only one of them
+        // (verified live), so the duplicate is rejected here.
         EnsureNoDuplicates(_preImages.Concat(_postImages).Select(i => i.Alias).ToArray(), "image alias");
 
         return _definition;
     }
 
     // ---- Private mutation helpers ------------------------------------------------------------------
-
-    // A typed On{Message}() trigger: the sdkmessage the step registers on, the modelled message that picks the
-    // typed handler context (OnWinQuote() registers on Win but hands the handler a WinQuote context), and the only
-    // table Dataverse accepts the step on (null when it is not limited to one).
-    private void SetModelledMessage(string message, string modelledMessage, string? requiredEntity)
-    {
-        _definition.Message = message;
-        _definition.ModelledMessage = modelledMessage;
-        _requiredEntity = requiredEntity;
-    }
 
     private void SetFilteringAttributes(
         Expression<Func<TEntity, object?>> attribute,
@@ -231,11 +227,22 @@ public sealed partial class StepBuilder<TEntity>
         SetHandler(handler.Method.Name);
     }
 
+    // Every trigger records its message here: the request name it was declared with is kept for the typed context,
+    // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win). A typed trigger
+    // whose message Dataverse accepts on a single table also passes that table, checked by Build().
+    private void SetMessage(string requestName, string? requiredEntity = null)
+    {
+        _definition.RequestName = requestName;
+        _definition.Message = SdkMessageNames.ToSdkMessage(requestName);
+        _requiredEntity = requiredEntity;
+    }
+
     // Mutation hooks for the generic typed-message adapter (Vela.Steps.TypedStepAdapter<TEntity, TRequest>),
     // which cannot see the private _definition / helpers directly. Same effect as the explicit-interface
     // stage/mode/handler transitions of the guided chain, just reached from the adapter.
     internal void SetStageInternal(PluginStages stage) => _definition.Stage = stage;
     internal void SetModeInternal(ExecutionMode mode) => _definition.Mode = mode;
+    internal void SetAsyncModeInternal(bool deleteJobOnSuccess) => SetAsyncMode(deleteJobOnSuccess);
     internal void SetHandlerInternal(Delegate handler) => SetHandler(handler);
 
     // Setting mutations centralised so the interface implementations stay in lockstep (each explicit
@@ -246,16 +253,47 @@ public sealed partial class StepBuilder<TEntity>
         _definition.ExecutionOrder = order;
     }
 
+    private void SetAsyncMode(bool deleteJobOnSuccess)
+    {
+        _definition.Mode = ExecutionMode.Asynchronous;
+        _definition.AsyncAutoDelete = deleteJobOnSuccess;
+    }
+
+    private void SetSkipWhenDepthAbove(int maxDepth)
+    {
+        MarkSetOnce(SetOnceModifier.SkipDepth, "SkipWhenDepthAbove");
+        if (maxDepth < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDepth), maxDepth, "SkipWhenDepthAbove requires a depth of at least 1.");
+        }
+
+        _definition.SkipWhenDepthAbove = maxDepth;
+    }
+
+    private void SetRelationships(string schemaName, string[] additionalSchemaNames)
+    {
+        MarkSetOnce(SetOnceModifier.Relationship, "ForRelationship");
+        List<string> names = new() { schemaName };
+        if (additionalSchemaNames != null)
+        {
+            names.AddRange(additionalSchemaNames);
+        }
+
+        foreach (string name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("ForRelationship requires non-empty relationship schema names.", nameof(schemaName));
+            }
+        }
+
+        _definition.Relationships = names.Select(n => n.Trim()).ToArray();
+    }
+
     private void SetDescription(string description)
     {
         MarkSetOnce(SetOnceModifier.Description, "WithDescription");
         _definition.Description = description ?? string.Empty;
-    }
-
-    private void SetImpersonation(ImpersonationSource source)
-    {
-        MarkSetOnce(SetOnceModifier.Impersonation, "WithImpersonation");
-        _definition.ImpersonationSource = source;
     }
 
     private void SetImpersonationUser(System.Guid systemUserId)
@@ -318,16 +356,23 @@ public sealed partial class StepBuilder<TEntity>
         return true;
     }
 
-    private void StartImage(string alias, bool isPre)
+    private void StartImage(string alias, bool isPre, string messagePropertyName)
     {
         FinalizeCurrentImage();
-        _currentImage = new ImageDefinition { Alias = alias };
+        _currentImage = new ImageDefinition { Alias = alias, MessagePropertyName = messagePropertyName };
         _isPreImage = isPre;
     }
 
     private void AddImageNow(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes)
+        => AddImageNow(alias, isPre, string.Empty, attributes);
+
+    // An image of the subordinate record of a Merge (the record merged away), registered against SubordinateId.
+    private void AddSubordinateImageNow(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes)
+        => AddImageNow(alias, isPre, StepImageRules.SubordinateId, attributes);
+
+    private void AddImageNow(string alias, bool isPre, string messagePropertyName, Expression<Func<TEntity, object?>>[] attributes)
     {
-        StartImage(alias, isPre);
+        StartImage(alias, isPre, messagePropertyName);
         if (attributes != null && attributes.Length > 0)
         {
             SetCurrentImageAttributes(attributes);
@@ -363,11 +408,12 @@ public sealed partial class StepBuilder<TEntity>
         }
     }
 
-    private void EnsureImageAllowed(bool isPreImage, string alias)
+    private void EnsureImageAllowed(bool isPreImage, ImageDefinition image)
     {
         string message = _definition.Message ?? string.Empty;
         PluginStages stage = _definition.Stage;
-        string? reason = StepImageRules.GetRejectionReason(message, (int)stage, isPreImage);
+        string? reason = StepImageRules.GetRejectionReason(message, (int)stage, isPreImage)
+            ?? StepImageRules.GetMessagePropertyRejectionReason(message, image.MessagePropertyName);
         if (reason is null)
         {
             return;
@@ -375,7 +421,7 @@ public sealed partial class StepBuilder<TEntity>
 
         string imageType = isPreImage ? "PreImage" : "PostImage";
         throw new InvalidOperationException(
-            $"{imageType} '{alias}' is not supported for message '{message}' at stage '{stage}': {reason}.");
+            $"{imageType} '{image.Alias}' is not supported for message '{message}' at stage '{stage}': {reason}.");
     }
 
     private static void EnsureNoDuplicates(string[]? names, string what)

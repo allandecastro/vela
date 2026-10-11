@@ -26,32 +26,73 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
-- **Typed steps register on the sdkmessage Dataverse runs, so they can be deployed.** Seventeen typed triggers
-  registered on the SDK request name, which is not an `sdkmessage`, so `vela apply` could never deploy them:
-  `OnSendEmail()` now registers on `Send`, `OnSendEmailFromTemplate()` on `SendFromTemplate`,
-  `OnDeliverIncomingEmail()` / `OnDeliverPromoteEmail()` on `DeliverIncoming` / `DeliverPromote`,
-  `OnWinOpportunity()` / `OnWinQuote()` on `Win`, `OnLoseOpportunity()` on `Lose`, `OnAddMembersTeam()` /
-  `OnRemoveMembersTeam()` on `AddMembers` / `RemoveMembers`, `OnAddListMembersList()` / `OnAddMemberList()` /
-  `OnRemoveMemberList()` on `AddListMembers` / `AddMember` / `RemoveMember`, `OnCloseIncident()` on `Close`,
-  `OnCancelContract()` on `Cancel` and `OnCloneContract()` on `Clone`. The `PluginMessages` constants of the same
-  names now hold these values, so `OnMessage(PluginMessages.SendEmail)` registers on `Send` too, and `ctx.MessageName`
-  is the sdkmessage name (`Send`), as on the platform. `On<TRequest>()` maps the request the same way
-  (`On<SendEmailRequest>()` registers on `Send`, `On<CloseQuoteRequest>()` on `Close`). A step under the old names
-  could never be registered, so no deployed step changes. Verified live: every typed trigger was deployed by
-  `vela apply` and reached its typed handler with the request parameters unchanged.
-- **A typed trigger bound to one table is rejected on any other.** `OnWinQuote()` and `OnWinOpportunity()` both
-  register on `Win`, on quote and opportunity, so on the wrong table a step would run with the wrong typed request.
-  The step builder now rejects a typed trigger on a table its message does not run on: `OnQualifyLead()` (lead),
-  `OnWinOpportunity()` / `OnLoseOpportunity()` (opportunity), `OnWinQuote()` / `OnGenerateQuoteFromOpportunity()`
-  (quote), `OnConvertSalesOrderToInvoice()` (salesorder), the queue triggers (queueitem), the email triggers
-  (email), the team triggers (team), the list triggers (list), `OnCloseIncident()` (incident) and the contract
-  triggers (contract). Apply already failed on most of these (no message filter for the table).
-- **Typed triggers that Dataverse never accepts a step on are removed.** `OnReviseQuote()`, `OnFulfillSalesOrder()`,
-  `OnConvertQuoteToSalesOrder()`, `OnGenerateSalesOrderFromOpportunity()`, `OnGenerateInvoiceFromOpportunity()`,
-  `OnGetQuoteProductsFromOpportunity()`, `OnGetSalesOrderProductsFromOpportunity()` and
-  `OnGetInvoiceProductsFromOpportunity()` are gone, with their contexts and `PluginMessages` constants: Dataverse
-  refuses a custom step on these messages, with or without a table (0x80044187, verified live). The SDK requests
-  stay callable from a handler.
+- **A typed trigger bound to one table is rejected on any other (#461).** `OnWinQuote()` and `OnWinOpportunity()`
+  both register on `Win`, on quote and opportunity, so on the wrong table a step would run with the wrong typed
+  request. The step builder now rejects a typed trigger on a table its message does not run on: `OnQualifyLead()`
+  (lead), `OnWinOpportunity()` / `OnLoseOpportunity()` (opportunity), `OnWinQuote()` /
+  `OnGenerateQuoteFromOpportunity()` (quote), `OnConvertSalesOrderToInvoice()` (salesorder), the queue triggers
+  (queueitem), the email triggers (email), the team triggers (team), the list triggers (list), `OnCloseIncident()`
+  (incident) and the contract triggers (contract). Apply already failed on most of these (no message filter for the
+  table). Verified live through `vela plan` and `vela apply`.
+- **Every SDK request is translated to its sdkmessage, not only the modelled ones (#461).** The request-name table
+  now holds the 118 public requests whose name is not an sdkmessage, read from `sdkmessagerequest` (for example
+  `CloseQuote` → `Close`, `CancelSalesOrder` → `Cancel`, `SendFax` → `Send`), so `On<CloseQuoteRequest>()` and
+  `OnMessage("CloseQuote")` register on `Close` too.
+- **Several steps may share a trigger, and the rank is no longer part of a step's identity.** Two steps on the same
+  message, stage, mode and entity were rejected; they are now allowed when their filtering attributes, images,
+  relationship scope or step key tell them apart, and the executing step (`OwningExtension`, resolved by id for an
+  async step, whose name Dataverse leaves null) selects its handler. The automatic step key no longer includes the
+  rank, so a rank change updates the step in place; the first step of a trigger keeps its earlier key at the default
+  rank, and a keyless step deployed at another rank gets a new key once (the first `vela plan` shows an update).
+  Two steps that still cannot be told apart need a `WithStepKey(...)`. VELA008 flags only those.
+- **`ISyncAsyncMode<T>` and `IAsyncMode<T>` gain `Async(bool deleteJobOnSuccess)`.** A class implementing them must
+  add it.
+
+- **`PluginPipeline` caps the cascade at the Dataverse depth (#450).** The default `WithMaxDepth` cap was 16; it is
+  now `PluginBase.DefaultMaxDepth` (8), the depth at which Dataverse aborts a chain as an infinite loop. A test whose
+  cascade runs deeper than 8 (a plugin with a raised `maxDepth`, or a classic `IPlugin`) now fails with the pipeline's
+  error. Call `WithMaxDepth(16)` to keep the old cap.
+- **An unset `HookOrganizationService` hook throws (#439).** `Create`, `Retrieve`, `Execute`, `RetrieveMultiple`,
+  `Update`, `Delete`, `Associate` and `Disassociate` used to return `Guid.Empty`, `null` or an empty collection, or
+  do nothing, when their `On...` delegate was not set, so the plugin failed later with a `NullReferenceException`
+  (or passed without the write it needed). Each now throws a `NotSupportedException` naming the hook to set. This
+  includes the default services of `PluginContextBuilder`: set the hook, or inject a store with
+  `WithOrganizationService(...)`.
+- **The pipeline fires the steps Dataverse fires for owner and state changes (#439, verified live).** An `Update`
+  that mixes `ownerid` or `statecode`/`statuscode` with other fields is one execution, no longer two (Microsoft Learn
+  describes a split that the platform does not do). An `AssignRequest` fires the `Assign` steps around an `ownerid`
+  Update; it used to fire no Update step at all, and with an `Assign` step registered, ran that step without the
+  Update. A `SetStateRequest`, and an `Update` that sets `statecode`, fire the `SetStateDynamicEntity` steps (nested
+  at depth + 1 for the Update). The Update inside Assign or SetState has no PreValidation stage. Steps on `SetState`
+  never fire, as on the platform.
+- **A pipeline registration that would never fire fails the setup (#439).** `PluginPipeline.FromAssembly` threw away
+  a step or Custom API whose type it could not resolve, and `Register<T>()` / `Register(Type)` added nothing for a
+  type that declares no step and no Custom API. Both now throw an `InvalidOperationException` naming what was
+  skipped.
+- **Removed the 8 typed triggers Dataverse never accepts a custom step on (#461).** `OnReviseQuote()`,
+  `OnFulfillSalesOrder()`, `OnConvertQuoteToSalesOrder()`, `OnGenerateSalesOrderFromOpportunity()`,
+  `OnGenerateInvoiceFromOpportunity()` and the three `OnGet*ProductsFromOpportunity()` are gone, with their typed
+  contexts and `PluginMessages` constants. Their sdkmessage filter has `iscustomprocessingstepallowed = false`, so
+  registering a step fails with 0x80044187 (verified live): code using them could never be deployed.
+- **`ImpersonationSource` and `WithImpersonation(ImpersonationSource)` are removed.** Nothing ever wrote the enum
+  to Dataverse: a step declared `.WithImpersonation(ImpersonationSource.PluginOwner)` ran as the calling user.
+  `StepDefinition.ImpersonationSource` is gone too. Use `.WithImpersonation(Guid systemUserId)` to run a step as a
+  specific user, or drop the call to run as the calling user (the default).
+- **Application Insights goes through the platform's `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, and
+  `Microsoft.Extensions.Logging` is gone.** The sandbox never serves a `Microsoft.Extensions.Logging.ILogger`, and
+  the reflection bridge to the native logger looked up members that don't exist, so `ctx.Log*`, `ctx.LogMetric` and
+  `ctx.BeginLogScope` reached only the plug-in trace log and Application Insights received nothing. The context now
+  calls the platform logger directly, with no reflection. `ctx.Logger` and the injected `ILogger` are
+  `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, and `ctx.Log` takes `Microsoft.Xrm.Sdk.PluginTelemetry.LogLevel`
+  (same member names, so swap the `using`). `Microsoft.Extensions.Logging.Abstractions` is no longer a dependency,
+  so it and `System.Diagnostics.DiagnosticSource` leave the plugin package.
+- **`ctx.LogMetric` takes a `long` and sends its properties.** The platform's metric API only takes integers.
+  The properties now travel as metric dimensions (invariant strings, on top of the default dimensions), and the
+  metric is no longer duplicated as an Information log entry.
+- **Vela.Testing: `RecordingLogger` implements `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`** (the shape the
+  platform serves), `LogEntry.Level` is a `PluginTelemetry.LogLevel`, and metrics are recorded in
+  `RecordingLogger.Metrics`. `WithLogger(...)` takes a `PluginTelemetry.ILogger`. `PluginPipeline.LogCapture` is
+  new and records the whole cascade.
 
 - **`ctx.EnvironmentId` is a `string?`, and now carries the value.** The platform declares
   `IPluginExecutionContext6.EnvironmentId` as a string, but Vela read it as a `Guid?`, so it was always null and the
@@ -87,6 +128,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `AsCallingUser()`, `AsSystem()`, `CreateOrganizationService(Guid?)` and the injected
   `Func<Guid?, IOrganizationService>` factory are removed. Migrate `ctx.UserService` to `ctx.Service`,
   `ctx.AsSystem()` to `ctx.SystemService`, and `ctx.AsInitiatingUser()` to `ctx.AsUser(ctx.InitiatingUserId)`.
+- **The test pipeline reuses one plugin instance per step (and per Custom API).** It constructed a fresh instance
+  for every execution, which hid plugins that keep state in fields; the platform caches and reuses instances, so such
+  a plugin now misbehaves in the test as it would in production.
 - **A Custom API request parameter you declare is required unless you say otherwise.** `Add(x => x.Foo)` and
   `Add(x => x.Foo, optional: false)` registered an optional parameter unless the property carried `[Required]`,
   contrary to the documentation, so the handler read a default value when a caller left it out. They are now
@@ -129,9 +173,49 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ExecuteIdempotentWithRetry(operation)` are removed. Use `RetryPolicy.Execute(ctx, operation, ...)` and
   `ExecuteWithRetry(ctx, operation)` / `ExecuteIdempotentWithRetry(ctx, operation)`: when `ctx.IsInTransaction` is
   true the operation runs once, because a failed call aborts the transaction and a replay cannot succeed.
+- **`PluginPipeline` no longer writes onto the entities you pass it.** `Service.Create(entity)` used to set
+  `entity.Id`, and a plugin's change to `Target` showed up on your object (and survived a rollback). The steps now
+  work on a copy, as on Dataverse where the request is serialized: read the id from the return value of `Create` (or
+  `CreateMultipleResponse.Ids`), and the stored state from `pipeline.GetAll(...)`.
 
 ### Added (Framework)
 
+- **`Async(deleteJobOnSuccess: true)`** deletes an asynchronous step's system job once it succeeds (Dataverse
+  `asyncautodelete`), carried on `StepDefinition.AsyncAutoDelete`.
+- **`ForRelationship("schema_name", ...)` on `OnAssociate()` / `OnDisassociate()`.** Dataverse fires these steps for
+  every relationship; the handler now runs only for the named ones (`StepDefinition.Relationships`), and any other
+  relationship is skipped with a trace line.
+- **`SkipWhenDepthAbove(n)`** skips a step's handler (with a trace line) when the execution depth is above `n`,
+  replacing the plugin-level depth guard, which throws, for that step only. `n` must be at least 1. Runtime-only.
+- **Typed bulk images.** A typed step context of a `CreateMultiple` / `UpdateMultiple` handler exposes `PreImages` /
+  `PostImages`: one projection per target, aligned with `ctx.GetTargets()`, read by the step's own alias.
+
+- **`RetryPolicy.Execute(..., maxElapsed:)` bounds the whole call (#450).** Each wait was capped at
+  `RetryPolicy.MaxDelay` (30 s) but their sum was not, so a few attempts could consume most of the ~2-minute plugin
+  budget. With `maxElapsed`, a retry whose wait would end past the budget is not made and the last fault propagates.
+  The default (null) keeps the previous behaviour.
+- **`OnAssign()` steps can capture images (#439).** `WithPreImage(...)` is offered at every stage and
+  `WithPostImage(...)` at PostOperation, as Dataverse accepts them on the Assign `Target` (verified live: the
+  pre-image holds the old owner, the post-image the new one). They are read with the typed `ctx.PreImage` /
+  `ctx.PostImage` on `IAssignPreContext<T>` / `IAssignPostContext<T>`, and a named handler gets generated
+  projections of the captured columns, like Update and Merge (#475). A capture on `OnAssign()` no longer reports
+  VELA021.
+- **VELA022 warns on a step registered on `SetState` (#439).** Dataverse accepts the registration but never runs
+  it: a `SetStateRequest` and an Update of `statecode` fire `SetStateDynamicEntity` (verified live). Register on
+  `OnUpdate().FilterOn(x => x.StateCode)` or `OnMessage(PluginMessages.SetStateDynamicEntity)` instead.
+
+- **`WithDefaultStatus(table, state, status)` on `InMemoryOrganizationService` and `PluginPipeline` (#439).** It
+  sets the status a record gets when a write changes `statecode` without `statuscode`, or a SetState passes status
+  -1; the store now applies that default (state 0 gets status 1, any other state status 2, when undeclared).
+  `InMemoryOrganizationService.Execute` also runs a `SetStateRequest`.
+
+- **Merge steps capture images of the master and of the subordinate record (#462).** `OnMerge()` now offers
+  `WithPreImage` / `WithPostImage` (the master, `Target`) and `WithSubordinatePreImage` /
+  `WithSubordinatePostImage` (the record merged away, registered against `SubordinateId`), with typed
+  `ctx.PreImage` / `ctx.PostImage` / `ctx.SubordinatePreImage` / `ctx.SubordinatePostImage` and generated
+  projections. `ImageDefinition.MessagePropertyName` records the request property. The harness delivers both
+  images on a `MergeRequest`, and its Merge now sets the subordinate's `masterid`. Verified live: both kinds on one
+  step at every stage, and the subordinate's post-image is the deactivated record.
 - **PreValidation steps can capture a pre-image (#436).** `WithPreImage(...)` is now offered at PreValidation on
   `OnUpdate()`, `OnDelete()`, `OnUpdateMultiple()`, `OnMessage(...)` and `On<TRequest>()`, as Microsoft Learn
   recommends over an extra Retrieve. A post-image is still not offered before PostOperation, and Create never has
@@ -159,9 +243,19 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`PluginBase.DefaultMaxDepth` (8) is the one depth guard default.** The constructors of `PluginBase`,
   `EntityPluginBase<TEntity>`, `CustomApiBase` and `CustomApiBase<TRequest, TResponse>` default their `maxDepth` to it
   instead of repeating the literal.
+- **`PluginPipeline.WithStrictSecurity()`, `WithAccessTeamTemplate(...)` and `WithSharedRecord(...)`.** The
+  pipeline forwards the in-memory store's configuration by hand, and these three were missing, so a pipeline
+  scenario could not opt into strict security, register an access-team template or pre-share a record. A test now
+  fails if any store configuration method has no pipeline counterpart.
 
 ### Changed (Framework)
 
+- **The depth guard and `RetryPolicy` are documented as Microsoft describes them (#450).** The `maxDepth` guard is a
+  last-resort backstop (at the default it only stops a chain Dataverse aborts anyway; Microsoft advises against logic
+  that depends on `Depth`), and the plugins guide has a new [Preventing recursion](docs/guides/plugins.md#preventing-recursion)
+  section on `FilterOn`, `HasChanged` and shared-variable flags. `RetryPolicy` notes that service-protection limits
+  don't apply to data operations from a plugin, so it is meant for calls that leave the sandbox and for code shared
+  with a client.
 - **Automatic execution snapshots no longer trace record data.** The `start` / `success` / failure snapshots wrote
   every Target, image and parameter value on every execution, and also sent them to `ILogger` / Application
   Insights. They now list only metadata (message, stage, ids, parameter/attribute names), the redundant `success`
@@ -178,11 +272,83 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
-- **The test harness fires a message's steps the way Dataverse does.** An executed `SendEmailRequest` fired the
-  steps registered on `SendEmail`, which Dataverse does not have, so a test passed while the deploy failed. The
-  harness now matches steps on the sdkmessage the request runs as (`Send`), on the table it runs on (email for
-  SendEmail, queueitem for AddToQueue whatever its `Target`, incident for CloseIncident, quote for WinQuote), and
-  leaves `ctx.PrimaryEntityId` empty on these messages, as the platform does (verified live).
+- **The harness runs a table-bound request on its table, with an empty `PrimaryEntityId` (#461, verified live).**
+  The queue messages (`AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`) run on
+  `queueitem` whatever their `Target`, the email requests on email, the team and list requests on team and list,
+  `CloseIncident` on incident and `WinQuote` on quote, so a step on the wrong table does not fire in a test either.
+  The platform leaves `PrimaryEntityId` empty on all of these, at PreValidation and PostOperation, and so does the
+  harness now (it used to take the id of the closing activity's lookup or of the `Target`).
+- **The in-memory pipeline fills a bulk step's image collections as Dataverse does** (verified live): each target's
+  collection also holds the images of the plugin type's other steps on the message and the platform's
+  `PreBusinessEntity` / `PostBusinessEntity`, so a test of access by alias is real. It also seeds the
+  `sdkmessageprocessingstep` rows an async step's `OwningExtension` points at, so several async steps on one trigger
+  dispatch as on Dataverse.
+
+- **`RetryPolicy` jitter is independent across threads (#450).** Each thread's `Random` was seeded from the tick
+  count on .NET Framework, so threads that started retrying in the same tick drew the same backoff. The seeds now come
+  from one shared generator.
+- **The harness refuses to download an Image column that does not store full images (#458, verified live).**
+  Dataverse keeps only a thumbnail for such a column (`account.entityimage` is one), so `InitializeFileBlocksDownload`
+  fails with `0x80040217` ("No FileAttachment records found ..."); the harness served the stored bytes, so a plugin
+  calling `DownloadFile` on it passed its tests and failed in production. When the table's metadata declares the
+  column as an Image column with `CanStoreFullImage` not `true`, the download now throws that fault. Without metadata
+  for the column the stored bytes are still served. New builder method: `FakeEntityMetadata.Image(name,
+  canStoreFullImage)`.
+- **`DownloadFile` no longer returns a truncated file (#440).** An empty block before the announced
+  `FileSizeInBytes` used to end the loop and return the bytes read so far, with no error. It now throws an
+  `InvalidPluginExecutionException` naming the table, record, column, the bytes received and the announced size.
+  The same check rejects a download whose total differs from the announced size.
+- **FetchXML condition values compare as the column's type (#439).** A `<value>` was kept as text and compared with
+  the stored value's string form, so `eq` on a date (`2026-10-09`), a money with another scale (`10.50`) or a braced
+  guid matched nothing, and `ne` matched everything. Values (FetchXML, and text values in a `QueryExpression` or
+  `QueryByAttribute`) are now read as the column's type in the invariant culture, and a value that is not valid for
+  it throws. Ordered operators (`gt`, `lt`, `between`, ...) no longer depend on the machine's culture, and no longer
+  throw `InvalidCastException` on a lookup.
+- **A store-side rejection of a modelled message fails the operation (#439).** With a step registered on the
+  message, a failure such as `Merge` on a table that cannot merge was caught as "message not modelled": the call
+  returned an empty response and the PostOperation steps still fired. Only a message the store does not simulate is
+  now treated that way (it throws the new `MessageNotModelledException`, a `NotSupportedException`); every other
+  failure reaches the caller.
+- **`WithStrictSecurity()` protects Delete (#439).** Without `WithSecurity(...)`, Create, Update and RetrieveMultiple
+  failed as documented, but Delete went through.
+- **Typed triggers register on the real sdkmessage (#461).** 15 triggers registered steps on SDK request names that
+  do not exist as sdkmessages, so `vela apply` could not deploy them: `OnSendEmail()` now registers on `Send`,
+  `OnSendEmailFromTemplate()` on `SendFromTemplate`, `OnDeliverIncomingEmail()` / `OnDeliverPromoteEmail()` on
+  `DeliverIncoming` / `DeliverPromote`, `OnWinOpportunity()` / `OnWinQuote()` on `Win`, `OnLoseOpportunity()` on
+  `Lose`, `OnCloseIncident()` on `Close`, `OnCancelContract()` / `OnCloneContract()` on `Cancel` / `Clone`,
+  `OnAddMembersTeam()` / `OnRemoveMembersTeam()` on `AddMembers` / `RemoveMembers`, and `OnAddListMembersList()` /
+  `OnAddMemberList()` / `OnRemoveMemberList()` on `AddListMembers` / `AddMember` / `RemoveMember`. The handler keeps
+  its typed context (one sdkmessage can serve two requests: `Win` on opportunity or quote), and `ctx.MessageName` is
+  the sdkmessage, as on the platform. `OnMessage(PluginMessages.SendEmail)` is translated the same way. Verified
+  live through `vela apply`: each step registers, fires on its SDK request and reaches its typed handler.
+- **The harness runs a request's steps under the sdkmessage.** An executed `SendEmailRequest` runs the `Send` steps
+  and plugins see `MessageName == "Send"`, so a test now catches a step registered under a wrong name.
+  `PluginContext.For<T>().OnMessage(...)` translates request names the same way. `CloseIncidentRequest` and
+  `WinQuoteRequest` resolve their primary entity from the closing activity's lookup (incident, quote), so an
+  entity-bound step fires.
+- **The harness runs async steps only once the outermost operation commits** (#438). Each operation used to run its
+  own async steps as soon as its body returned, so an async step queued by a nested write ran, with its side effects
+  and log entries, even when the outer operation then failed. Live, a rolled-back operation creates no async job
+  (verified 2026-10-07). Async steps now wait for the outermost operation (or `ExecuteTransaction` batch) to commit, are
+  dropped when it rolls back, and each runs in its own rollback scope: a failed async step leaves no writes behind.
+- **`IsInTransaction` follows the stage and mode in the harness** (#438). It was always true. It is now false for
+  async steps and for a depth-1 PreValidation step, and true for PreOperation, sync PostOperation and a nested
+  PreValidation (verified live), so the retry path of `RetryPolicy` can be tested through the pipeline. Retrieve and
+  RetrieveMultiple steps report false, as on Dataverse. `CorrelationId` is now one id per top-level operation, shared
+  by its cascade and its async steps, instead of one id for the whole pipeline.
+- **The harness fills the remaining context fields as Dataverse does** (#438, verified live 2026-10-09). `RequestId`
+  is one id per call into the pipeline (an `ExecuteMultiple` batch is one request) and is kept by async steps.
+  `OperationId` equals `RequestId` on sync steps and is a separate system job id on async steps. `IsolationMode` is 2
+  (sandbox) and `SecondaryEntityName` is "none". The children of an `ExecuteTransaction` share one correlation id and
+  run in its transaction, PreValidation included; the children of an `ExecuteMultiple` each get their own.
+- **Harness Associate/Disassociate steps see `PrimaryEntityName` "none".** The harness reported the Target's entity
+  and id, so a handler branching on `ctx.PrimaryEntityName == "account"` passed in tests and never matched live. On
+  Dataverse both are global messages: every step sees `PrimaryEntityName` "none" and an empty `PrimaryEntityId`, at
+  every stage and mode (verified live), and only the `Target` input names the record. The harness now matches (#459).
+- **Harness Custom APIs see the platform's primary entity.** The harness gave every Custom API an empty
+  `PrimaryEntityName` and no `PrimaryEntityId`. On Dataverse (verified live) a global API sees "none" and an empty id,
+  an entity-bound API sees the bound table and the `Target`'s id, and a collection-bound API sees the bound table and
+  an empty id. The harness now matches.
 
 - **VELA007 flags every image the message can never provide.** It now also reports a pre-image on
   `OnMessage("CreateMultiple")` and any image on `OnMessage("RouteTo")`, from the same image table the runtime and
@@ -249,6 +415,43 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   failed). Upsert now resolves the id or alternate key and runs the Create steps (new record) or the Update steps
   (existing record), returning `RecordCreated` and `Target`; Update and Delete by alternate key fire their steps with
   the resolved id.
+- **The test pipeline models the rest of Dataverse's transaction scope** (verified live). The initial
+  PreValidation stage runs before the transaction, so a write a PreValidation step makes commits on its own even
+  if the operation fails later; nested operations join the caller's transaction. A plugin that catches a failed
+  **write** can no longer let the operation commit: returning fails it with "ISV code reduced the open transaction
+  count" (`0x8009000C`) and a further call gets "There is no active transaction"; a caught failed **read** does not
+  end the transaction. A plugin's own operations carry `InputParameters["FromSandbox"] = true` at PreValidation.
+  An async step's context has an unnamed `OwningExtension` and the `AsynchronousStepPrimaryName` post image.
+  Shared variables set at PreValidation of a Create/Update/Delete reach the later stages only through
+  `ParentContext.SharedVariables`, their ParentContext being the operation's stage-30 context.
+- **A Retrieve/RetrieveMultiple Post step's typed `ctx.Response` reads the result.** The platform hands the step
+  the result as `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]` (verified on a live
+  environment), but `RetrieveResponse.Entity` / `RetrieveMultipleResponse.EntityCollection` read `Entity` /
+  `EntityCollection`, so `ctx.Response.Entity` was missing. `GetResponse<T>()` now exposes the platform value under
+  the SDK key.
+- **Reads run through the test pipeline.** `PluginPipeline.Service.Retrieve`/`RetrieveMultiple` read the store
+  directly, so `OnRetrieve()`/`OnRetrieveMultiple()` steps never fired, and a PreOperation step that replaced
+  `InputParameters["Query"]` (or any input of a modelled message) was ignored. Reads now fire their steps, a Pre
+  step's change to `ColumnSet`/`Target`/`Query` changes what is read, and a Post step sees and can change the result
+  under `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]`. For every message, a synchronous
+  step's changes to the inputs reach the main operation and its changes to the outputs reach the caller.
+- **Harness reads return the platform's record shape.** A retrieved or queried record now always includes its
+  primary key column (`accountid`, `activityid` for activities, or the metadata's primary id), a lookup carries the
+  referenced record's name (`EntityReference.Name` and `FormattedValues`), and a choice carries its label in
+  `FormattedValues` when its metadata is registered.
+- **Custom APIs run the whole pipeline in the harness.** Only the API's own plugin ran: steps registered on its
+  message never fired, and inputs of the wrong type reached the handler. Now PreValidation, PreOperation and
+  PostOperation steps fire around the main operation as far as the API's `AllowedCustomProcessingSteps(...)` allows
+  (a step it forbids fails the call), and the main operation runs at stage 30 under the
+  `CustomApi '<name>' implementation` step. Before any step runs, a missing required input fails with `0x80040203`
+  and a wrong-typed or undeclared input with `0x80040315`, with the platform's messages (verified live).
+- **The test pipeline's steps work on a deep copy of every request.** The values of a request (entities,
+  references and their keys, column sets, queries) were shared with the caller, so a step editing one in place
+  changed the caller's objects; an Upsert step's change to `Target` never reached the main operation; and a step
+  could not remove an input or output. All of these now behave as on the platform.
+- **`ctx.SystemService` over an `InMemoryOrganizationService` is SYSTEM in a context-builder test.**
+  `PluginContext...WithOrganizationService(store)` used the store as its calling user for both services, so under
+  `WithSecurity` `ctx.SystemService` was denied what SYSTEM may do. It is now the store's SYSTEM view.
 - **A nested request's own bypass parameters are honoured by the test pipeline.** Bypass parameters were read only
   from the outermost request, so a plugin's own write with `BypassCustomPluginExecution` (the usual way to avoid
   re-entering itself) re-fired the plugin, and `ExecuteMultiple`/`ExecuteTransaction` children's own parameters were
@@ -329,6 +532,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **`apply` writes `asyncautodelete`** for a step declared `Async(deleteJobOnSuccess: true)`, and `plan` diffs it.
+- **Several steps on one trigger** are created, updated and deleted as separate steps. A changed step that pairs
+  with its live step under another key carries `liveStepKey` in its `after` definition, so `apply` updates that step.
+
+- **Image request property in plan and apply (#462).** The step shape compares each image's `messagepropertyname`,
+  so `plan` shows an image moved between the Merge master and subordinate as a change and `apply` recreates it.
+  The scanner rejects `SubordinateId` on any message other than Merge (the platform fails with 0x8004416B).
 - **`vela help <command>` and `vela help --json`.** The help is generated from one command table that is also the
   option allowlist of `plan`, `apply`, `inspect`, `sign`, `logout`, `update`, `solution`, `logs` and `models`, so it
   lists every command (`solution` was missing) and every option a command accepts. `vela help --json` describes the
@@ -349,17 +559,28 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
-- **`vela add` and `vela models` know the sdkmessage names.** `vela add --message Send` (or `Win`, `Close`, ...) now
-  renders the typed trigger (`OnSendEmail()`, and `OnWinQuote()` or `OnWinOpportunity()` from the table), and no
-  longer offers the triggers removed from the framework. `vela models --messages` without a value skipped a message
-  only when its sdkmessage name was a request class name, so it generated duplicate `SendRequest`, `WinRequest`,
-  `CloseRequest`... wrappers for messages the SDK already covers; it now skips them. `--messages` now takes SDK request names,
-  the names Dataverse executes: `--messages SendEmail` generates `SendEmailRequest`. It used to take sdkmessage
-  names and emit, for `Send`, a `SendRequest` with `RequestName = "Send"`, which Dataverse refuses ("Request not
-  supported", verified live). `--messages Send` now fails and names the requests to generate (`SendEmail`, `SendFax`,
-  `SendTemplate`); without a value, one class is generated per request, bound to the request's table. `plan` / `apply` also reject any image on `SendFromTemplate`, which Dataverse does
-  not support (verified live).
+- **`vela add` and `vela models` use the real message names (#461).** `vela add --message Send` (or `Win`,
+  `Close`, ...) now renders the typed trigger (`OnSendEmail()`, and `OnWinQuote()` or `OnWinOpportunity()` from the
+  table). `vela models --messages` takes SDK request names, the names Dataverse executes: `--messages SendEmail`
+  generates `SendEmailRequest`. It used to take sdkmessage names and emit, for `Send`, a `SendRequest` with
+  `RequestName = "Send"`, which Dataverse refuses ("Request not supported", verified live); `--messages Send` now
+  fails and names the requests to generate (`SendEmail`, `SendFax`, `SendTemplate`). Without a value, one class is
+  generated per request, bound to the request's table, and the requests the SDK already ships are skipped
+  (`SendRequest`, `WinRequest`... duplicates are gone). `plan` / `apply` also reject any image on
+  `SendFromTemplate`, which Dataverse does not support (verified live).
+- **An added step no longer takes over another step registered on the same trigger.** `apply` adopted any single
+  live step on the trigger for a step whose key it did not find; it now adopts only the step the diff paired.
 
+- **Step descriptions and Custom API display names and descriptions reach Dataverse.** `apply` wrote the step name
+  as every step's description, and the unique name (or the parameter name) as every Custom API's display name and
+  description and every parameter's description, whatever the code declared. It now writes `WithDescription(...)`
+  (followed by the `[vela:stepkey=...]` line, which the step-key lookup now reads from the end of the description),
+  `.DisplayName(...)`, `.Description(...)` and the parameter descriptions, falling back to the previous values when
+  none is declared. These fields are part of the plan diff, so a change shows up and converges (a second plan is
+  empty); Dataverse lets them change in place, so a parameter description is updated without recreating the
+  parameter. Existing deployments that declare none show no change. `plan` rejects, before any write, a value
+  longer than Dataverse stores (step description 256 characters with its step-key line, Custom API display name 100,
+  description 300, request parameter description 300, response property description 100).
 - **Bulk step images deploy, with the right image property for every message.** `plan`/`apply` rejected any image
   on a `CreateMultiple`/`UpdateMultiple` step, and `apply` registered every image against `Target` (or `id` for a
   Create post-image), which Dataverse refuses on several messages. Images are now registered against the property

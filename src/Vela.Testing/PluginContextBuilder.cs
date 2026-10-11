@@ -22,7 +22,7 @@ namespace Vela.Testing
         private readonly RecordingTracingService _recorder = new RecordingTracingService();
         private readonly RecordingLogger _loggerRecorder = new RecordingLogger();
         private ITracingService _tracingService;
-        private Microsoft.Extensions.Logging.ILogger _logger;
+        private Microsoft.Xrm.Sdk.PluginTelemetry.ILogger _logger;
         private IManagedIdentityService? _managedIdentityService;
         private bool _triggerConfigured;
 
@@ -50,7 +50,7 @@ namespace Vela.Testing
         /// <summary>The default recording tracer. Captures traces unless <see cref="WithTracingService"/> overrides it.</summary>
         public RecordingTracingService TraceCapture => _recorder;
 
-        /// <summary>The default recording logger. Captures <c>ctx.LogInformation</c>/<c>LogError</c>/... entries unless <see cref="WithLogger"/> overrides it.</summary>
+        /// <summary>The default recording logger. Captures <c>ctx.LogInformation</c>/<c>LogError</c>/... entries and <c>ctx.LogMetric</c> metrics unless <see cref="WithLogger"/> overrides it.</summary>
         public RecordingLogger LogCapture => _loggerRecorder;
 
         /// <summary>Sets the message to <c>Create</c>.</summary>
@@ -62,10 +62,13 @@ namespace Vela.Testing
         /// <summary>Sets the message to <c>Delete</c>.</summary>
         public PluginContextBuilder<TEntity> OnDelete() => OnMessage(PluginMessages.Delete);
 
-        /// <summary>Sets an arbitrary message name.</summary>
+        /// <summary>
+        /// Sets the message. An SDK request name whose sdkmessage differs is translated to what the platform sends as
+        /// <c>MessageName</c> (<c>SendEmail</c> becomes <c>Send</c>, <c>WinQuote</c> becomes <c>Win</c>).
+        /// </summary>
         public PluginContextBuilder<TEntity> OnMessage(string messageName)
         {
-            Context.MessageName = messageName;
+            Context.MessageName = SdkMessageNames.ToSdkMessage(messageName);
             _triggerConfigured = true;
             return this;
         }
@@ -227,11 +230,15 @@ namespace Vela.Testing
             return WithSharedVariable("tag", tag);
         }
 
-        /// <summary>Uses the given organization service for both user and system contexts.</summary>
+        /// <summary>
+        /// Uses the given organization service for both user and system contexts. For an
+        /// <see cref="InMemoryOrganizationService"/>, <c>ctx.SystemService</c> is its SYSTEM view: not subject to the
+        /// store's security model (<c>WithSecurity</c>), as on a real org, while <c>ctx.Service</c> is.
+        /// </summary>
         public PluginContextBuilder<TEntity> WithOrganizationService(IOrganizationService service)
         {
             Factory.UserService = service;
-            Factory.SystemService = service;
+            Factory.SystemService = service is InMemoryOrganizationService store ? new SystemStoreView(store) : service;
             return this;
         }
 
@@ -264,7 +271,7 @@ namespace Vela.Testing
         }
 
         /// <summary>Overrides the logger (disables the default <see cref="LogCapture"/> recorder).</summary>
-        public PluginContextBuilder<TEntity> WithLogger(Microsoft.Extensions.Logging.ILogger logger)
+        public PluginContextBuilder<TEntity> WithLogger(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger logger)
         {
             _logger = logger;
             return this;
@@ -299,7 +306,7 @@ namespace Vela.Testing
                 [typeof(IPluginExecutionContext)] = Context,
                 [typeof(IOrganizationServiceFactory)] = Factory,
                 [typeof(ITracingService)] = _tracingService,
-                [typeof(Microsoft.Extensions.Logging.ILogger)] = _logger
+                [typeof(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger)] = _logger
             };
 
             if (_managedIdentityService != null)
@@ -376,10 +383,10 @@ namespace Vela.Testing
                 return (TPlugin)Activator.CreateInstance(type)!;
             }
 
-            ConstructorInfo? configCtor = type.GetConstructor(new[] { typeof(string), typeof(string) });
+            ConstructorInfo? configCtor = PluginActivator.FindConfigurationConstructor(type);
             if (configCtor is not null)
             {
-                return (TPlugin)configCtor.Invoke(new object?[] { string.Empty, string.Empty });
+                return (TPlugin)PluginActivator.Create(configCtor, string.Empty, string.Empty);
             }
 
             throw new InvalidOperationException(

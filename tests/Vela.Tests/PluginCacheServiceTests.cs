@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Vela.Caching;
 using Vela.Context;
 using Vela.DI;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Moq;
 using Xunit;
@@ -342,7 +341,7 @@ public sealed class PluginCacheServiceTests
         context.SetupGet(c => c.PluginExecutionContext).Returns(executionContext.Object);
         context.SetupGet(c => c.Service).Returns(organizationService.Object);
         context.SetupGet(c => c.TracingService).Returns(tracingService.Object);
-        context.SetupGet(c => c.Logger).Returns(NullLogger.Instance);
+        context.SetupGet(c => c.Logger).Returns(NullPluginTelemetryLogger.Instance);
         context.SetupGet(c => c.ManagedIdentityService).Returns((IManagedIdentityService?)null);
 
         return context.Object;

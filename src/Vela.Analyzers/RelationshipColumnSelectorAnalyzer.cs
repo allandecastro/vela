@@ -32,7 +32,7 @@ namespace Vela.Analyzers
         // The column-selector methods on Vela's step builder and typed query. A relationship in any of these is wrong.
         private static readonly ImmutableHashSet<string> SelectorMethods = ImmutableHashSet.Create(
             "FilterOn", "Select", "Where", "WhereAll", "WhereAny", "WhereColumns",
-            "OrderBy", "OrderByDescending", "WithPreImage", "WithPostImage");
+            "OrderBy", "OrderByDescending", "WithPreImage", "WithPostImage", "WithSubordinatePreImage", "WithSubordinatePostImage");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 

@@ -215,7 +215,7 @@ public sealed class DataverseRegistrationReadShapeTests
 
         Assert.NotNull(captured);
         Assert.Equal(
-            new[] { "sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment" },
+            new[] { "sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment", "asyncautodelete" },
             captured!.ColumnSet.Columns);
         ConditionExpression c = Assert.Single(captured.Criteria.Conditions);
         Assert.Equal("eventhandler", c.AttributeName);
@@ -341,7 +341,7 @@ public sealed class DataverseRegistrationReadShapeTests
         Assert.NotNull(captured);
         Assert.Equal("customapi", captured!.EntityName);
         Assert.Equal(
-            new[] { "customapiid", "uniquename", "isfunction", "boundentitylogicalname", "executeprivilegename", "isprivate", "allowedcustomprocessingsteptype", "bindingtype", "workflowsdkstepenabled", "plugintypeid" },
+            new[] { "customapiid", "uniquename", "displayname", "description", "isfunction", "boundentitylogicalname", "executeprivilegename", "isprivate", "allowedcustomprocessingsteptype", "bindingtype", "workflowsdkstepenabled", "plugintypeid" },
             captured.ColumnSet.Columns);
         ConditionExpression c = Assert.Single(captured.Criteria.Conditions);
         Assert.Equal("plugintypeid", c.AttributeName);
@@ -424,7 +424,7 @@ public sealed class DataverseRegistrationReadShapeTests
         DataverseRegistration.GetStepImages(svc, new[] { stepId });
 
         Assert.Equal("sdkmessageprocessingstepimage", captured!.EntityName);
-        Assert.Equal(new[] { "sdkmessageprocessingstepid", "imagetype", "entityalias", "attributes" }, captured.ColumnSet.Columns);
+        Assert.Equal(new[] { "sdkmessageprocessingstepid", "imagetype", "entityalias", "attributes", "messagepropertyname" }, captured.ColumnSet.Columns);
         Assert.Equal("sdkmessageprocessingstepid", captured.Criteria.Conditions.Single().AttributeName);
     }
 
@@ -491,7 +491,7 @@ public sealed class DataverseRegistrationReadShapeTests
         Assert.True(p.IsOptional);
         Assert.Equal("System.Int32", p.ParameterTypeName);
         Assert.Equal("customapirequestparameter", captured!.EntityName);
-        Assert.Equal(new[] { "customapiid", "name", "isoptional", "type", "logicalentityname", "uniquename" }, captured.ColumnSet.Columns);
+        Assert.Equal(new[] { "customapiid", "name", "isoptional", "type", "logicalentityname", "uniquename", "description" }, captured.ColumnSet.Columns);
         Assert.Equal("customapiid", captured.Criteria.Conditions.Single().AttributeName);
     }
 
@@ -524,7 +524,7 @@ public sealed class DataverseRegistrationReadShapeTests
         Assert.False(p.IsOptional); // response properties are never optional
         Assert.True(p.IsCollection); // EntityCollection type code
         Assert.Equal("customapiresponseproperty", captured!.EntityName);
-        Assert.Equal(new[] { "customapiid", "name", "type", "logicalentityname", "uniquename" }, captured.ColumnSet.Columns);
+        Assert.Equal(new[] { "customapiid", "name", "type", "logicalentityname", "uniquename", "description" }, captured.ColumnSet.Columns);
         Assert.Equal("customapiid", captured.Criteria.Conditions.Single().AttributeName);
     }
 

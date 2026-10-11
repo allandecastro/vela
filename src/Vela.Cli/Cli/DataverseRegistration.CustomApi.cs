@@ -42,8 +42,10 @@ internal static partial class DataverseRegistration
     Entity api = new Entity("customapi");
     api["uniquename"] = definition.UniqueName;
     api["name"] = definition.UniqueName;
-    api["displayname"] = definition.UniqueName;
-    api["description"] = definition.UniqueName;
+    // Display name and description are updatable (unlike the create-only fields guarded below); both default to the
+    // unique name when the code declares none (DefinitionParser).
+    api["displayname"] = CustomApiShape.LabelOrDefault(definition.DisplayName, definition.UniqueName);
+    api["description"] = CustomApiShape.LabelOrDefault(definition.Description, definition.UniqueName);
     api["isfunction"] = definition.IsFunction;
     api["boundentitylogicalname"] = string.IsNullOrWhiteSpace(definition.BoundEntityLogicalName) ? null : definition.BoundEntityLogicalName;
     api["executeprivilegename"] = string.IsNullOrWhiteSpace(definition.ExecutePrivilegeName) ? null : definition.ExecutePrivilegeName;
@@ -129,6 +131,44 @@ internal static partial class DataverseRegistration
                 "would report success but never converge. Delete the Custom API and re-apply to recreate it with " +
                 "the new shape, or revert the change.");
         }
+    }
+
+    // Dataverse column lengths (Custom API table reference): customapi.displayname 100 / description 300,
+    // customapirequestparameter.description 300, customapiresponseproperty.description 100.
+    internal const int CustomApiDisplayNameMaxLength = 100;
+    internal const int CustomApiDescriptionMaxLength = 300;
+    internal const int CustomApiRequestParameterDescriptionMaxLength = 300;
+    internal const int CustomApiResponsePropertyDescriptionMaxLength = 100;
+
+    /// <summary>
+    /// The error for a Custom API whose display name or descriptions exceed what Dataverse stores, or null. Checked at
+    /// scan time so plan fails before any write instead of apply failing mid-run.
+    /// </summary>
+    internal static string? GetCustomApiLabelLengthError(CustomApiApplyDefinition definition)
+    {
+        List<string> problems = [];
+        void Check(string what, string? value, int max)
+        {
+            if (value != null && value.Length > max)
+            {
+                problems.Add($"{what} has {value.Length} characters (Dataverse stores at most {max})");
+            }
+        }
+
+        Check("the display name", definition.DisplayName, CustomApiDisplayNameMaxLength);
+        Check("the description", definition.Description, CustomApiDescriptionMaxLength);
+        foreach (CustomApiParameterApplyDefinition parameter in definition.InputParameters)
+        {
+            Check($"the description of request parameter '{parameter.Name}'", parameter.Description, CustomApiRequestParameterDescriptionMaxLength);
+        }
+        foreach (CustomApiParameterApplyDefinition parameter in definition.OutputParameters)
+        {
+            Check($"the description of response property '{parameter.Name}'", parameter.Description, CustomApiResponsePropertyDescriptionMaxLength);
+        }
+
+        return problems.Count == 0
+            ? null
+            : $"Custom API '{definition.UniqueName}': {string.Join("; ", problems)}. Shorten them.";
     }
 
     // Dataverse requires a Custom API's unique name to carry the solution publisher's customization prefix (like
@@ -296,7 +336,7 @@ internal static partial class DataverseRegistration
         ParameterSyncSpec spec,
         bool verbose)
     {
-        List<string> columns = new() { spec.IdColumn, "name", "uniquename", "type", "logicalentityname" };
+        List<string> columns = new() { spec.IdColumn, "name", "uniquename", "type", "logicalentityname", "description" };
         if (spec.IncludeIsOptional)
         {
             columns.Add("isoptional");
@@ -316,6 +356,7 @@ internal static partial class DataverseRegistration
         foreach (CustomApiParameterApplyDefinition parameter in desired)
         {
             int typeCode = ResolveCustomApiTypeCode(parameter.ParameterTypeName, parameter.IsCollection);
+            string description = CustomApiShape.LabelOrDefault(parameter.Description, parameter.Name);
             string details = spec.IncludeIsOptional
                 ? $"[{parameter.ParameterTypeName}{(parameter.IsOptional ? ", optional" : "")}]"
                 : $"[{parameter.ParameterTypeName}]";
@@ -339,7 +380,16 @@ internal static partial class DataverseRegistration
                     StringComparison.OrdinalIgnoreCase);
                 if (existingType == typeCode && !uniqueNameMismatch && !optionalChanged && !entityChanged)
                 {
-                    continue; // nothing Vela manages differs: no write
+                    // The description is updatable in place: no need to recreate the parameter for it.
+                    if (!string.Equals(existing.GetAttributeValue<string>("description"), description, StringComparison.Ordinal))
+                    {
+                        Entity update = new Entity(spec.EntityName) { Id = existing.Id };
+                        update["description"] = description;
+                        service.Update(update);
+                        LogOperation(spec.LogTag, "update", parameter.Name, details, verbose, indent: true);
+                    }
+
+                    continue; // nothing else Vela manages differs
                 }
 
                 // A parameter's type (which also encodes collection-ness), uniquename, isoptional and logicalentityname are create-only:
@@ -356,7 +406,7 @@ internal static partial class DataverseRegistration
             create["customapiid"] = new EntityReference("customapi", apiId);
             create["name"] = parameter.Name;
             create["displayname"] = parameter.Name;
-            create["description"] = parameter.Name;
+            create["description"] = description;
             create["uniquename"] = parameter.Name;
             if (spec.IncludeIsOptional)
             {

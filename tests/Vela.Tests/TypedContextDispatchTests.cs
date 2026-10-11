@@ -83,7 +83,9 @@ namespace Vela.Tests
                 .WithPrimaryEntity(TestAccount.EntityLogicalNameValue, Guid.NewGuid())
                 .Execute(probe);
 
-            Assert.Equal(message, probe.Seen);
+            // The platform sends the sdkmessage, which differs from the request name for some messages
+            // (SendEmail runs as Send); the context builder translates it the same way.
+            Assert.Equal(SdkMessageNames.ToSdkMessage(message), probe.Seen);
         }
 
         // A table-bound message: one plugin on its table, whose step must be the one that runs and must hand its

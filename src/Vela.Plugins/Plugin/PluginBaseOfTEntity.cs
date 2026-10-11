@@ -165,33 +165,18 @@ namespace Vela.Plugin
                 foreach (StepDefinition definition in definitions)
                 {
                     definition.PluginTypeName = pluginTypeName;
-                    if (string.IsNullOrWhiteSpace(definition.StepKey))
-                    {
-                        definition.StepKey = GenerateAutoStepKey(definition);
-                    }
                 }
 
-                if (definitions.Count > 1)
+                // Several steps may share a trigger (message + stage + mode + entity) when their filters, images,
+                // relationship scope or step keys tell them apart; two that resolve to the same step key cannot be
+                // deployed or dispatched separately, so fail fast.
+                try
                 {
-                    // Two steps with the same trigger (message + stage + mode + entity) can't be told apart at
-                    // runtime: ResolveSingleMatchingStep would find both and throw, and at registration their
-                    // auto step-keys collide so one silently overwrites the other. Fail fast with a clear message.
-                    HashSet<string> triggers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (StepDefinition definition in definitions)
-                    {
-                        string trigger = string.Join("|",
-                            definition.Message ?? string.Empty,
-                            (int)definition.Stage,
-                            (int)definition.Mode,
-                            definition.EntityLogicalName ?? string.Empty);
-                        if (!triggers.Add(trigger))
-                        {
-                            throw new InvalidPluginExecutionException(
-                                $"Plugin '{GetType().FullName}' registers more than one step for the same trigger " +
-                                $"(message '{definition.Message}', stage {(int)definition.Stage}, mode {(int)definition.Mode}). " +
-                                "Merge them into a single step (combine the filtering attributes) or use a different stage/mode.");
-                        }
-                    }
+                    StepIdentity.AssignStepKeys(definitions, pluginTypeName);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new InvalidPluginExecutionException(ex.Message, ex);
                 }
 
                 // Every step must bind a handler with .Handle(...). There is no Execute(ctx) fallback, so a step
@@ -248,12 +233,28 @@ namespace Vela.Plugin
         protected sealed override void ExecuteDataversePlugin(ILocalPluginContext ctx)
         {
             StepDefinition[] definitions = GetStepDefinitions();
-            StepDefinition? matchedDefinition = ResolveSingleMatchingStep(ctx, definitions);
+            StepDefinition? matchedDefinition = ResolveSingleMatchingStep(ctx, definitions, out bool outOfRelationshipScope);
 
             if (matchedDefinition == null)
             {
+                if (outOfRelationshipScope)
+                {
+                    // An Associate/Disassociate step fires for every relationship in Dataverse; .ForRelationship(...)
+                    // scopes it, so another relationship is not an error, just not this step's business.
+                    ctx.Trace("Vela: relationship outside the step's ForRelationship scope; nothing to run.");
+                    return;
+                }
+
                 throw new InvalidPluginExecutionException(
                     $"Plugin '{GetType().FullName}' has no registered step matching message '{ctx.MessageName}'.");
+            }
+
+            // A step-level depth limit (.SkipWhenDepthAbove(n)) replaces the plugin-level guard: past it, the handler is
+            // skipped rather than the execution failing.
+            if (matchedDefinition.SkipWhenDepthAbove is int stepMaxDepth && ctx.Depth > stepMaxDepth)
+            {
+                ctx.Trace("Vela: step skipped by SkipWhenDepthAbove. Depth={0}, MaxDepth={1}", ctx.Depth, stepMaxDepth);
+                return;
             }
 
             // Prefer invoking the retained delegate directly: it supports lambda handlers (including ones that
@@ -266,7 +267,7 @@ namespace Vela.Plugin
                 Type parameterType = runtimeHandler.Method.GetParameters()[0].ParameterType;
                 object delegateArgument = BuildDerivedStepContext(parameterType, ctx)
                     ?? BuildGenericMessageContextForType(parameterType, ctx)
-                    ?? BuildTypedContext(matchedDefinition, ctx)
+                    ?? BuildTypedContext(TypedMessageOf(matchedDefinition), matchedDefinition.Stage, ctx)
                     ?? ctx;
                 (ctx as LocalPluginContext)?.SetCurrentHandler(runtimeHandler.Method.Name);
                 TraceHandlerEntry(ctx, runtimeHandler.Method.Name);
@@ -280,27 +281,11 @@ namespace Vela.Plugin
             // implement, so the generic message context (built from the handler's own parameter type) is tried
             // first, then the per-message modelled context, then the plain ILocalPluginContext.
             object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
-                ?? BuildTypedContext(matchedDefinition, ctx)
+                ?? BuildTypedContext(TypedMessageOf(matchedDefinition), matchedDefinition.Stage, ctx)
                 ?? ctx;
             (ctx as LocalPluginContext)?.SetCurrentHandler(matchedDefinition.HandlerMethodName);
             TraceHandlerEntry(ctx, matchedDefinition.HandlerMethodName);
             InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
-        }
-
-        private static string GenerateAutoStepKey(StepDefinition definition)
-        {
-            string seed = string.Join("|",
-                definition.PluginTypeName ?? string.Empty,
-                definition.Message ?? string.Empty,
-                (int)definition.Stage,
-                (int)definition.Mode,
-                definition.EntityLogicalName ?? string.Empty,
-                definition.ExecutionOrder);
-
-            using SHA256 sha = SHA256.Create();
-            byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(seed));
-            string hex = BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
-            return "dv-" + hex.Substring(0, 12);
         }
 
         private void RegisterFluentStep(StepBuilder<TEntity> stepBuilder)
@@ -319,8 +304,22 @@ namespace Vela.Plugin
             _registeredSteps.Add(stepBuilder);
         }
 
-        private StepDefinition? ResolveSingleMatchingStep(ILocalPluginContext ctx, StepDefinition[] definitions)
+        private protected override bool HasStepDepthLimit(ILocalPluginContext ctx)
         {
+            try
+            {
+                return ResolveSingleMatchingStep(ctx, GetStepDefinitions(), out _)?.SkipWhenDepthAbove != null;
+            }
+            catch (InvalidPluginExecutionException)
+            {
+                // No single step resolves: the dispatch reports it; the plugin-level guard applies meanwhile.
+                return false;
+            }
+        }
+
+        private StepDefinition? ResolveSingleMatchingStep(ILocalPluginContext ctx, StepDefinition[] definitions, out bool outOfRelationshipScope)
+        {
+            outOfRelationshipScope = false;
             List<StepDefinition> matches = new List<StepDefinition>();
             foreach (StepDefinition definition in definitions)
             {
@@ -356,13 +355,16 @@ namespace Vela.Plugin
                 return null;
             }
 
-            if (matches.Count > 1)
+            // Drop relationship-scoped steps for another relationship; when several steps share the trigger, the
+            // executing step (OwningExtension) picks its own.
+            List<StepDefinition> selected = StepIdentity.Select(matches, ctx, GetType().FullName ?? GetType().Name);
+            if (selected.Count == 0)
             {
-                throw new InvalidPluginExecutionException(
-                    $"Plugin '{GetType().FullName}' has {matches.Count} matching step definitions for the current pipeline execution.");
+                outOfRelationshipScope = true;
+                return null;
             }
 
-            return matches[0];
+            return selected[0];
         }
 
         // A generated per-step context (typed step contexts) is a concrete subclass of a Vela step context
@@ -393,56 +395,58 @@ namespace Vela.Plugin
             }
         }
 
+        // The request name the step was declared with picks its typed context: one sdkmessage can serve several
+        // requests (Win is WinOpportunity on opportunity and WinQuote on quote).
+        private static string TypedMessageOf(StepDefinition definition)
+            => string.IsNullOrEmpty(definition.RequestName) ? definition.Message : definition.RequestName;
+
         // Messages Vela models with a typed context: build the per-message context so its handler receives a
-        // single strongly-typed argument (e.g. IMergeContext<TEntity>). Keyed by the typed trigger's modelled
-        // message, not the sdkmessage: OnWinOpportunity() and OnWinQuote() both register on "Win" but take different
-        // requests. A permissive OnMessage("Merge") step falls back to its message name. Returns null for a message
-        // Vela does not model, so its handler receives the plain ILocalPluginContext.
-        private static object? BuildTypedContext(StepDefinition definition, ILocalPluginContext ctx)
+        // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for a permissive
+        // OnMessage(...) step that Vela does not model, so its handler receives the plain ILocalPluginContext.
+        private static object? BuildTypedContext(string? message, PluginStages stage, ILocalPluginContext ctx)
         {
-            bool post = definition.Stage == PluginStages.PostOperation;
-            string message = string.IsNullOrEmpty(definition.ModelledMessage) ? definition.Message : definition.ModelledMessage;
+            bool post = stage == PluginStages.PostOperation;
             return message switch
             {
-                "Create" => post ? (object)new CreatePostContext<TEntity>(ctx) : new CreatePreContext<TEntity>(ctx),
-                "Update" => post ? (object)new UpdatePostContext<TEntity>(ctx) : new UpdatePreContext<TEntity>(ctx),
-                "Delete" => post ? (object)new DeletePostContext<TEntity>(ctx) : new DeletePreContext<TEntity>(ctx),
-                "CreateMultiple" => post ? (object)new CreateMultiplePostContext<TEntity>(ctx) : new CreateMultiplePreContext<TEntity>(ctx),
-                "UpdateMultiple" => post ? (object)new UpdateMultiplePostContext<TEntity>(ctx) : new UpdateMultiplePreContext<TEntity>(ctx),
-                "Retrieve" => post ? (object)new RetrievePostContext<TEntity>(ctx) : new RetrievePreContext<TEntity>(ctx),
-                "RetrieveMultiple" => post ? (object)new RetrieveMultiplePostContext<TEntity>(ctx) : new RetrieveMultiplePreContext<TEntity>(ctx),
-                "Associate" => post ? (object)new AssociatePostContext<TEntity>(ctx) : new AssociatePreContext<TEntity>(ctx),
-                "Disassociate" => post ? (object)new DisassociatePostContext<TEntity>(ctx) : new DisassociatePreContext<TEntity>(ctx),
-                "Merge" => post ? (object)new MergePostContext<TEntity>(ctx) : new MergePreContext<TEntity>(ctx),
-                "GrantAccess" => post ? (object)new GrantAccessPostContext<TEntity>(ctx) : new GrantAccessPreContext<TEntity>(ctx),
-                "Assign" => post ? (object)new AssignPostContext<TEntity>(ctx) : new AssignPreContext<TEntity>(ctx),
-                "ModifyAccess" => post ? (object)new ModifyAccessPostContext<TEntity>(ctx) : new ModifyAccessPreContext<TEntity>(ctx),
-                "RevokeAccess" => post ? (object)new RevokeAccessPostContext<TEntity>(ctx) : new RevokeAccessPreContext<TEntity>(ctx),
-                "QualifyLead" => post ? (object)new QualifyLeadPostContext<TEntity>(ctx) : new QualifyLeadPreContext<TEntity>(ctx),
-                "WinOpportunity" => post ? (object)new WinOpportunityPostContext<TEntity>(ctx) : new WinOpportunityPreContext<TEntity>(ctx),
-                "LoseOpportunity" => post ? (object)new LoseOpportunityPostContext<TEntity>(ctx) : new LoseOpportunityPreContext<TEntity>(ctx),
-                "ConvertSalesOrderToInvoice" => post ? (object)new ConvertSalesOrderToInvoicePostContext<TEntity>(ctx) : new ConvertSalesOrderToInvoicePreContext<TEntity>(ctx),
-                "GenerateQuoteFromOpportunity" => post ? (object)new GenerateQuoteFromOpportunityPostContext<TEntity>(ctx) : new GenerateQuoteFromOpportunityPreContext<TEntity>(ctx),
-                "AddToQueue" => post ? (object)new AddToQueuePostContext<TEntity>(ctx) : new AddToQueuePreContext<TEntity>(ctx),
-                "RemoveFromQueue" => post ? (object)new RemoveFromQueuePostContext<TEntity>(ctx) : new RemoveFromQueuePreContext<TEntity>(ctx),
-                "PickFromQueue" => post ? (object)new PickFromQueuePostContext<TEntity>(ctx) : new PickFromQueuePreContext<TEntity>(ctx),
-                "RouteTo" => post ? (object)new RouteToPostContext<TEntity>(ctx) : new RouteToPreContext<TEntity>(ctx),
-                "ReleaseToQueue" => post ? (object)new ReleaseToQueuePostContext<TEntity>(ctx) : new ReleaseToQueuePreContext<TEntity>(ctx),
-                "SendEmail" => post ? (object)new SendEmailPostContext<TEntity>(ctx) : new SendEmailPreContext<TEntity>(ctx),
-                "SendEmailFromTemplate" => post ? (object)new SendEmailFromTemplatePostContext<TEntity>(ctx) : new SendEmailFromTemplatePreContext<TEntity>(ctx),
-                "DeliverIncomingEmail" => post ? (object)new DeliverIncomingEmailPostContext<TEntity>(ctx) : new DeliverIncomingEmailPreContext<TEntity>(ctx),
-                "DeliverPromoteEmail" => post ? (object)new DeliverPromoteEmailPostContext<TEntity>(ctx) : new DeliverPromoteEmailPreContext<TEntity>(ctx),
-                "AddMembersTeam" => post ? (object)new AddMembersTeamPostContext<TEntity>(ctx) : new AddMembersTeamPreContext<TEntity>(ctx),
-                "RemoveMembersTeam" => post ? (object)new RemoveMembersTeamPostContext<TEntity>(ctx) : new RemoveMembersTeamPreContext<TEntity>(ctx),
-                "AddListMembersList" => post ? (object)new AddListMembersListPostContext<TEntity>(ctx) : new AddListMembersListPreContext<TEntity>(ctx),
-                "AddMemberList" => post ? (object)new AddMemberListPostContext<TEntity>(ctx) : new AddMemberListPreContext<TEntity>(ctx),
-                "RemoveMemberList" => post ? (object)new RemoveMemberListPostContext<TEntity>(ctx) : new RemoveMemberListPreContext<TEntity>(ctx),
-                "CloseIncident" => post ? (object)new CloseIncidentPostContext<TEntity>(ctx) : new CloseIncidentPreContext<TEntity>(ctx),
-                "CancelContract" => post ? (object)new CancelContractPostContext<TEntity>(ctx) : new CancelContractPreContext<TEntity>(ctx),
-                "CloneContract" => post ? (object)new CloneContractPostContext<TEntity>(ctx) : new CloneContractPreContext<TEntity>(ctx),
-                "RetrievePrincipalAccess" => post ? (object)new RetrievePrincipalAccessPostContext<TEntity>(ctx) : new RetrievePrincipalAccessPreContext<TEntity>(ctx),
-                "RetrieveSharedPrincipalsAndAccess" => post ? (object)new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(ctx) : new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(ctx),
-                "WinQuote" => post ? (object)new WinQuotePostContext<TEntity>(ctx) : new WinQuotePreContext<TEntity>(ctx),
+                PluginMessages.Create => post ? (object)new CreatePostContext<TEntity>(ctx) : new CreatePreContext<TEntity>(ctx),
+                PluginMessages.Update => post ? (object)new UpdatePostContext<TEntity>(ctx) : new UpdatePreContext<TEntity>(ctx),
+                PluginMessages.Delete => post ? (object)new DeletePostContext<TEntity>(ctx) : new DeletePreContext<TEntity>(ctx),
+                PluginMessages.CreateMultiple => post ? (object)new CreateMultiplePostContext<TEntity>(ctx) : new CreateMultiplePreContext<TEntity>(ctx),
+                PluginMessages.UpdateMultiple => post ? (object)new UpdateMultiplePostContext<TEntity>(ctx) : new UpdateMultiplePreContext<TEntity>(ctx),
+                PluginMessages.Retrieve => post ? (object)new RetrievePostContext<TEntity>(ctx) : new RetrievePreContext<TEntity>(ctx),
+                PluginMessages.RetrieveMultiple => post ? (object)new RetrieveMultiplePostContext<TEntity>(ctx) : new RetrieveMultiplePreContext<TEntity>(ctx),
+                PluginMessages.Associate => post ? (object)new AssociatePostContext<TEntity>(ctx) : new AssociatePreContext<TEntity>(ctx),
+                PluginMessages.Disassociate => post ? (object)new DisassociatePostContext<TEntity>(ctx) : new DisassociatePreContext<TEntity>(ctx),
+                PluginMessages.Merge => post ? (object)new MergePostContext<TEntity>(ctx) : new MergePreContext<TEntity>(ctx),
+                PluginMessages.GrantAccess => post ? (object)new GrantAccessPostContext<TEntity>(ctx) : new GrantAccessPreContext<TEntity>(ctx),
+                PluginMessages.Assign => post ? (object)new AssignPostContext<TEntity>(ctx) : new AssignPreContext<TEntity>(ctx),
+                PluginMessages.ModifyAccess => post ? (object)new ModifyAccessPostContext<TEntity>(ctx) : new ModifyAccessPreContext<TEntity>(ctx),
+                PluginMessages.RevokeAccess => post ? (object)new RevokeAccessPostContext<TEntity>(ctx) : new RevokeAccessPreContext<TEntity>(ctx),
+                PluginMessages.QualifyLead => post ? (object)new QualifyLeadPostContext<TEntity>(ctx) : new QualifyLeadPreContext<TEntity>(ctx),
+                PluginMessages.WinOpportunity => post ? (object)new WinOpportunityPostContext<TEntity>(ctx) : new WinOpportunityPreContext<TEntity>(ctx),
+                PluginMessages.LoseOpportunity => post ? (object)new LoseOpportunityPostContext<TEntity>(ctx) : new LoseOpportunityPreContext<TEntity>(ctx),
+                PluginMessages.ConvertSalesOrderToInvoice => post ? (object)new ConvertSalesOrderToInvoicePostContext<TEntity>(ctx) : new ConvertSalesOrderToInvoicePreContext<TEntity>(ctx),
+                PluginMessages.GenerateQuoteFromOpportunity => post ? (object)new GenerateQuoteFromOpportunityPostContext<TEntity>(ctx) : new GenerateQuoteFromOpportunityPreContext<TEntity>(ctx),
+                PluginMessages.AddToQueue => post ? (object)new AddToQueuePostContext<TEntity>(ctx) : new AddToQueuePreContext<TEntity>(ctx),
+                PluginMessages.RemoveFromQueue => post ? (object)new RemoveFromQueuePostContext<TEntity>(ctx) : new RemoveFromQueuePreContext<TEntity>(ctx),
+                PluginMessages.PickFromQueue => post ? (object)new PickFromQueuePostContext<TEntity>(ctx) : new PickFromQueuePreContext<TEntity>(ctx),
+                PluginMessages.RouteTo => post ? (object)new RouteToPostContext<TEntity>(ctx) : new RouteToPreContext<TEntity>(ctx),
+                PluginMessages.ReleaseToQueue => post ? (object)new ReleaseToQueuePostContext<TEntity>(ctx) : new ReleaseToQueuePreContext<TEntity>(ctx),
+                PluginMessages.SendEmail => post ? (object)new SendEmailPostContext<TEntity>(ctx) : new SendEmailPreContext<TEntity>(ctx),
+                PluginMessages.SendEmailFromTemplate => post ? (object)new SendEmailFromTemplatePostContext<TEntity>(ctx) : new SendEmailFromTemplatePreContext<TEntity>(ctx),
+                PluginMessages.DeliverIncomingEmail => post ? (object)new DeliverIncomingEmailPostContext<TEntity>(ctx) : new DeliverIncomingEmailPreContext<TEntity>(ctx),
+                PluginMessages.DeliverPromoteEmail => post ? (object)new DeliverPromoteEmailPostContext<TEntity>(ctx) : new DeliverPromoteEmailPreContext<TEntity>(ctx),
+                PluginMessages.AddMembersTeam => post ? (object)new AddMembersTeamPostContext<TEntity>(ctx) : new AddMembersTeamPreContext<TEntity>(ctx),
+                PluginMessages.RemoveMembersTeam => post ? (object)new RemoveMembersTeamPostContext<TEntity>(ctx) : new RemoveMembersTeamPreContext<TEntity>(ctx),
+                PluginMessages.AddListMembersList => post ? (object)new AddListMembersListPostContext<TEntity>(ctx) : new AddListMembersListPreContext<TEntity>(ctx),
+                PluginMessages.AddMemberList => post ? (object)new AddMemberListPostContext<TEntity>(ctx) : new AddMemberListPreContext<TEntity>(ctx),
+                PluginMessages.RemoveMemberList => post ? (object)new RemoveMemberListPostContext<TEntity>(ctx) : new RemoveMemberListPreContext<TEntity>(ctx),
+                PluginMessages.CloseIncident => post ? (object)new CloseIncidentPostContext<TEntity>(ctx) : new CloseIncidentPreContext<TEntity>(ctx),
+                PluginMessages.CancelContract => post ? (object)new CancelContractPostContext<TEntity>(ctx) : new CancelContractPreContext<TEntity>(ctx),
+                PluginMessages.CloneContract => post ? (object)new CloneContractPostContext<TEntity>(ctx) : new CloneContractPreContext<TEntity>(ctx),
+                PluginMessages.RetrievePrincipalAccess => post ? (object)new RetrievePrincipalAccessPostContext<TEntity>(ctx) : new RetrievePrincipalAccessPreContext<TEntity>(ctx),
+                PluginMessages.RetrieveSharedPrincipalsAndAccess => post ? (object)new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(ctx) : new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(ctx),
+                PluginMessages.WinQuote => post ? (object)new WinQuotePostContext<TEntity>(ctx) : new WinQuotePreContext<TEntity>(ctx),
                 _ => null,
             };
         }

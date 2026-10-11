@@ -46,8 +46,8 @@ internal static class StepBuilderImplEmitter
         // Triggers: record the message, return the builder as the stage selector.
         foreach (var message in messages)
         {
-            string entity = message.Entity is null ? "null" : $"\"{message.Entity}\"";
-            w.Line($"        {StepConfig.StagesType(message.Name)} IStepTrigger<TEntity>.On{message.Name}() {{ SetModelledMessage(PluginMessages.{message.Name}, \"{message.Name}\", {entity}); return this; }}");
+            string entity = message.Entity is null ? string.Empty : $", \"{message.Entity}\"";
+            w.Line($"        {StepConfig.StagesType(message.Name)} IStepTrigger<TEntity>.On{message.Name}() {{ SetMessage(PluginMessages.{message.Name}{entity}); return this; }}");
         }
         w.Block(UnmodelledTriggers);
 
@@ -123,6 +123,7 @@ internal static class StepBuilderImplEmitter
             if (stage == Stage.PostOperation)
             {
                 w.Line($"        {config} {mode}.Async() {{ _definition.Mode = ExecutionMode.Asynchronous; return this; }}");
+                w.Line($"        {config} {mode}.Async(bool deleteJobOnSuccess) {{ SetAsyncMode(deleteJobOnSuccess); return this; }}");
             }
         }
     }
@@ -153,10 +154,10 @@ internal static class StepBuilderImplEmitter
         """;
 
     private const string UnmodelledTriggers = """
-                IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) { if (string.IsNullOrWhiteSpace(messageName)) throw new ArgumentNullException(nameof(messageName)); _definition.Message = messageName; return this; }
-                IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { _definition.Message = ExpressionHelper.GetMessageName<TMessage>(); return this; }
-                ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { _definition.Message = ExpressionHelper.GetMessageName<TRequest>(); return new TypedStepAdapter<TEntity, TRequest>(this); }
-                IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { _definition.Message = ExpressionHelper.GetMessageName<TRequest>(); return new TypedStepAdapter<TEntity, TRequest>(this); }
+                IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) { if (string.IsNullOrWhiteSpace(messageName)) throw new ArgumentNullException(nameof(messageName)); SetMessage(messageName); return this; }
+                IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { SetMessage(ExpressionHelper.GetMessageName<TMessage>()); return this; }
+                ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetMessage(ExpressionHelper.GetMessageName<TRequest>()); return new TypedStepAdapter<TEntity, TRequest>(this); }
+                IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetMessage(ExpressionHelper.GetMessageName<TRequest>()); return new TypedStepAdapter<TEntity, TRequest>(this); }
 
         """;
 
@@ -164,8 +165,8 @@ internal static class StepBuilderImplEmitter
                 internal void AddImageInternal(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes) => AddImageNow(alias, isPre, attributes);
                 internal void SetExecutionOrderInternal(int order) => SetExecutionOrder(order);
                 internal void SetStepKeyInternal(string key) => SetKey(key);
+                internal void SetSkipWhenDepthAboveInternal(int maxDepth) => SetSkipWhenDepthAbove(maxDepth);
                 internal void SetDescriptionInternal(string description) => SetDescription(description);
-                internal void SetImpersonationInternal(ImpersonationSource source) => SetImpersonation(source);
                 internal void SetImpersonationUserInternal(System.Guid systemUserId) => SetImpersonationUser(systemUserId);
                 internal void SetSupportedDeploymentInternal(SupportedDeployment deployment) => SetSupportedDeployment(deployment);
                 internal void SetUnsecureConfigInternal(string configuration) => SetUnsecureConfig(configuration);

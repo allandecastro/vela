@@ -14,5 +14,16 @@ namespace Vela.Constants
         /// Default post-image alias.
         /// </summary>
         public const string PostImage = "PostImage";
+
+        /// <summary>
+        /// Default alias of a Merge step's pre-image of the subordinate record (the record merged away).
+        /// </summary>
+        public const string SubordinatePreImage = "SubordinatePreImage";
+
+        /// <summary>
+        /// Default alias of a Merge step's post-image of the subordinate record: the deactivated record, whose
+        /// <c>masterid</c> points at the master.
+        /// </summary>
+        public const string SubordinatePostImage = "SubordinatePostImage";
     }
 }

@@ -46,9 +46,14 @@ namespace Vela.Testing.Tests
 
             private void OnCreated(ICreatePostContext<FakeTask> ctx)
             {
-                IPluginExecutionContext? parent = ctx.PluginExecutionContext.ParentContext;
+                // As on the platform, a Create step's ParentContext is the Create's own stage-30 (MainOperation)
+                // context; the context of the plugin whose write triggered it is the next level up.
+                IPluginExecutionContext? main = ctx.PluginExecutionContext.ParentContext;
+                IPluginExecutionContext? parent = main?.ParentContext;
                 ctx.SystemService.Create(new Entity("vela_capture")
                 {
+                    ["mainstage"] = main?.Stage ?? -1,
+                    ["mainentity"] = main?.PrimaryEntityName ?? "<null>",
                     ["parentnull"] = parent == null,
                     ["parentmessage"] = parent?.MessageName ?? "<null>",
                     ["parententity"] = parent?.PrimaryEntityName ?? "<null>",
@@ -88,6 +93,8 @@ namespace Vela.Testing.Tests
             pipeline.Service.Create(new FakeAccount { Name = "Zava" });
 
             Entity capture = Assert.Single(pipeline.Service.RetrieveMultiple(new QueryExpression("vela_capture") { ColumnSet = new ColumnSet(true) }).Entities);
+            Assert.Equal(30, capture.GetAttributeValue<int>("mainstage"));
+            Assert.Equal("task", capture.GetAttributeValue<string>("mainentity"));
             Assert.False(capture.GetAttributeValue<bool>("parentnull"));
             Assert.Equal(PluginMessages.Create, capture.GetAttributeValue<string>("parentmessage"));
             Assert.Equal("account", capture.GetAttributeValue<string>("parententity"));

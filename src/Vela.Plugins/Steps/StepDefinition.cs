@@ -15,14 +15,47 @@ public sealed class StepDefinition
     /// <summary>The entity logical name.</summary>
     public string EntityLogicalName { get; set; } = string.Empty;
 
-    /// <summary>The SDK message name (Create, Update, Delete, etc.).</summary>
+    /// <summary>
+    /// The sdkmessage the step registers on and sees as <c>MessageName</c> at runtime (Create, Update, Send, Win,
+    /// ...). For a few business messages this differs from the SDK request name the step was declared with
+    /// (<c>OnSendEmail()</c> registers on <c>Send</c>); see <see cref="RequestName"/>.
+    /// </summary>
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The SDK request name the step was declared with (e.g. <c>WinQuote</c>, while <see cref="Message"/> is
+    /// <c>Win</c>). The runtime builds the typed context from it, since one sdkmessage can serve several requests.
+    /// Empty when the step was not declared through the builder; <see cref="Message"/> is then used.
+    /// </summary>
+    internal string RequestName { get; set; } = string.Empty;
 
     /// <summary>The plugin execution stage.</summary>
     public PluginStages Stage { get; set; }
 
     /// <summary>The execution mode (sync or async).</summary>
     public ExecutionMode Mode { get; set; }
+
+    /// <summary>
+    /// Whether the system job of an asynchronous step is deleted once it succeeds (Dataverse
+    /// <c>asyncautodelete</c>), set with <c>.Async(deleteJobOnSuccess: true)</c>. Always <c>false</c> on a
+    /// synchronous step.
+    /// </summary>
+    public bool AsyncAutoDelete { get; set; }
+
+    /// <summary>
+    /// The relationship schema names an Associate / Disassociate step is scoped to, set with
+    /// <c>.ForRelationship(...)</c>. Dataverse registers these steps for every relationship, so the scope is
+    /// enforced at dispatch: the handler runs only when the request's <c>Relationship</c> is one of these. Empty
+    /// (the default) means every relationship.
+    /// </summary>
+    public string[] Relationships { get; set; } = [];
+
+    /// <summary>
+    /// The pipeline depth above which this step's handler is skipped (with a trace line) instead of run, set with
+    /// <c>.SkipWhenDepthAbove(n)</c>. It replaces the plugin-level depth guard (which throws) for this step only.
+    /// Runtime-only: it is not deployed to Dataverse. <c>null</c> (the default) keeps the plugin-level guard.
+    /// </summary>
+    public int? SkipWhenDepthAbove { get; set; }
 
     /// <summary>The filtering attributes (triggers plugin only when these change).</summary>
     public string[] FilteringAttributes { get; set; } = [];
@@ -38,9 +71,6 @@ public sealed class StepDefinition
 
     /// <summary>The plugin method name to invoke for this step.</summary>
     public string HandlerMethodName { get; set; } = string.Empty;
-
-    /// <summary>The impersonation source.</summary>
-    public ImpersonationSource ImpersonationSource { get; set; }
 
     /// <summary>
     /// The specific systemuser to impersonate for this step (Dataverse <c>impersonatinguserid</c>), set with
@@ -73,13 +103,6 @@ public sealed class StepDefinition
     /// constructor at runtime, so the secret is never compiled into the assembly.
     /// </summary>
     public string SecureConfigName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// The modelled message of a typed <c>On{Message}()</c> trigger (<c>WinQuote</c> for <c>OnWinQuote()</c>), which
-    /// picks the handler's typed context. It differs from <see cref="Message"/> (the sdkmessage, <c>Win</c>) when
-    /// several SDK requests share one sdkmessage. Empty for a permissive or <c>On&lt;TRequest&gt;()</c> step.
-    /// </summary>
-    internal string ModelledMessage { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -92,4 +115,12 @@ public sealed class ImageDefinition
 
     /// <summary>The attributes to include in the image.</summary>
     public string[] Attributes { get; set; } = [];
+
+    /// <summary>
+    /// The request property the image is taken from (Dataverse <c>messagepropertyname</c>), or empty for the message's
+    /// own (the primary record: <c>Target</c>, <c>Id</c> on Create, ...). Set to <c>SubordinateId</c> by
+    /// <c>WithSubordinatePreImage</c> / <c>WithSubordinatePostImage</c> on a Merge step, for an image of the record
+    /// merged away.
+    /// </summary>
+    public string MessagePropertyName { get; set; } = string.Empty;
 }
