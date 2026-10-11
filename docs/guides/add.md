@@ -34,10 +34,11 @@ vela add --interactive
   call - the CRUD/bulk set (`Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`,
   `RetrieveMultiple`), relationships/sharing (`Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`,
   `RevokeAccess`, `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`), sales lifecycle (`QualifyLead`,
-  `WinOpportunity`, `LoseOpportunity`, the `Convert*`/`Generate*` messages), queues (`AddToQueue`, `RouteTo`, …),
-  email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and case/contract messages (see the full
-  list in [Write a plugin](plugins.md)); any other name is
-  registered as a custom SDK message via `OnMessage("...")`. The deprecated `SetState` / `SetStateDynamicEntity`
+  `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`),
+  queues (`AddToQueue`, `RouteTo`, …), email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and
+  case/contract messages (see the full list in [Write a plugin](plugins.md)). The sdkmessage name works too:
+  `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or `OnWinOpportunity()`
+  from `--entity`. Any other name is registered as a custom SDK message via `OnMessage("...")`. The deprecated `SetState` / `SetStateDynamicEntity`
   messages have no typed method (update `statecode`/`statuscode` with `Update` instead), and `add` does not
   emit the typed `OnAssign()` either, so these render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
   current directory), `--force` (overwrite an existing file).

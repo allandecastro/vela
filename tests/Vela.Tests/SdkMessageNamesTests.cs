@@ -1,3 +1,6 @@
+using System.Linq;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Client;
 using Vela.Plugin;
 using Vela.Steps;
 using Vela.Tests.TestSupport;
@@ -9,7 +12,11 @@ namespace Vela.Tests
     // messages (verified live on 2026-10-09: none of the request names exists as an sdkmessage).
     public sealed class SdkMessageNamesTests
     {
-        private sealed class QuoteWon : EntityPluginBase<TestAccount>
+        // OnWinQuote() is accepted on the quote table only.
+        [EntityLogicalName("quote")]
+        private sealed class Quote() : Entity("quote");
+
+        private sealed class QuoteWon : EntityPluginBase<Quote>
         {
             public QuoteWon() : base(string.Empty, string.Empty) { }
 
@@ -34,6 +41,11 @@ namespace Vela.Tests
         [InlineData("AddMemberList", "AddMember")]
         [InlineData("RemoveMemberList", "RemoveMember")]
         [InlineData("sendemail", "Send")]
+        // Requests no typed trigger models, read from sdkmessagerequest too: On<CloseQuoteRequest>() registers on Close.
+        [InlineData("CloseQuote", "Close")]
+        [InlineData("CancelSalesOrder", "Cancel")]
+        [InlineData("SendFax", "Send")]
+        [InlineData("PublishXml", "Publish")]
         [InlineData("Create", "Create")]
         [InlineData("Win", "Win")]
         [InlineData("acme_DoThing", "acme_DoThing")]
@@ -49,5 +61,23 @@ namespace Vela.Tests
             Assert.Equal("WinQuote", definition.RequestName);
         }
 
+        // The table each request runs on (verified live for the modelled ones): the harness and the typed triggers
+        // rely on it to tell WinQuote (quote) from WinOpportunity (opportunity), and the queue messages run on
+        // queueitem whatever their Target.
+        [Theory]
+        [InlineData("SendEmail", "email")]
+        [InlineData("WinQuote", "quote")]
+        [InlineData("WinOpportunity", "opportunity")]
+        [InlineData("CloseIncident", "incident")]
+        [InlineData("AddToQueue", "queueitem")]
+        [InlineData("QualifyLead", "lead")]
+        [InlineData("Create", null)]
+        [InlineData("acme_DoThing", null)]
+        public void Request_names_map_to_their_table(string requestName, string? table)
+            => Assert.Equal(table, SdkMessageNames.PrimaryEntityOf(requestName));
+
+        [Fact]
+        public void An_sdkmessage_lists_the_requests_it_runs()
+            => Assert.Equal(new[] { "WinOpportunity", "WinQuote" }, SdkMessageNames.RequestNamesFor("Win").OrderBy(n => n).ToArray());
     }
 }
