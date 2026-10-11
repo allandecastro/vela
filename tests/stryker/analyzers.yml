@@ -1,6 +1,6 @@
 # Mutation area: the whole Vela.Analyzers project (the diagnostics shipped in the Vela.Plugins package and the typed
 # image projection generator). Run from tests/Vela.Analyzers.Tests (net10, no solution needed).
-# Measured at ~86.1% after W1 (#479) grew the step-shape logic; break stays at 85. The
+# Measured at ~86.3% after #479 and #482 grew the step-shape logic; break stays at 85. The
 # remaining survivors are mostly equivalent: GetHashCode arithmetic of the generator models, EnableConcurrentExecution,
 # and unreachable variance handling.
 stryker-config:
