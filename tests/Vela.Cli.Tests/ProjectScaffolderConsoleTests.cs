@@ -20,7 +20,7 @@ public class ProjectScaffolderConsoleTests
         CoreVersion: "1.0.0",
         Force: false,
         Interactive: false,
-        IncludeDemos: true);
+        IncludeSamples: true);
 
     [Fact]
     public void Generate_NextSteps_PackageWithBuild_NotPack()
