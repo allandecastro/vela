@@ -189,7 +189,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **Trace volume controls (#449).** The plug-in trace log keeps about 10 KB per execution, and the automatic traces
   could crowd a plugin's own lines out of it. `protected override bool AutoTraceServiceCalls => false;` stops the
   wrapped services (`Service`, `SystemService`, `AsUser`) from writing two lines per Dataverse call; a failed call is
-  still traced, on one line with its scope, depth, table or request, and exception type.
+  still traced, on one line with its scope, depth, table or request, and exception type (an indented FetchXML query
+  is collapsed onto that line, in every `RetrieveMultiple` trace).
   `TraceSnapshotDetail.None` (`AutoSnapshotDetail`, or an explicit `TraceExecutionSnapshot`) writes no snapshot.
   Both are opt-in, per plugin class (a shared abstract base class applies them to a whole project): the defaults are
   unchanged.

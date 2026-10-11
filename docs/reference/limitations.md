@@ -19,7 +19,8 @@ change.
 - **DI lifetimes: transient and scoped only.** `SimpleServiceResolver` has no singleton lifetime - a
   singleton would leak across plugin executions sharing a sandbox process. The scope is one execution.
 - **No runtime verbosity switch.** You decide *whether* to trace at the call site (`TraceMethod` /
-  `TraceExecutionSnapshot`); *whether traces are persisted* is the environment's **Plugin Trace Log** setting
+  `TraceExecutionSnapshot`) and turn the automatic traces down per plugin class (`AutoSnapshotDetail`,
+  `AutoTraceServiceCalls`, `AutoTraceHandlerEntry`); *whether traces are persisted* is the environment's **Plugin Trace Log** setting
   (`Off`/`Exception`/`All`). Server-side plugins can't read OS env vars, so a runtime flag would be inert.
 - **Managed identity is host-dependent.** `AcquireManagedIdentityToken(...)` works only where the runtime
   exposes `IManagedIdentityService`; otherwise it throws at call time (no early validation). Extended context

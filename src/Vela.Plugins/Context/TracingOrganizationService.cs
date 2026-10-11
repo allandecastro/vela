@@ -90,7 +90,7 @@ public sealed class TracingOrganizationService : IOrganizationService
         string details = query switch
         {
             QueryExpression expression => $"query=QueryExpression; entity={expression.EntityName}; top={expression.TopCount?.ToString() ?? "null"}",
-            FetchExpression fetch => $"query=FetchExpression; fetchxml={RedactFetchXmlValues(fetch.Query)}",
+            FetchExpression fetch => $"query=FetchExpression; fetchxml={ToSingleLine(RedactFetchXmlValues(fetch.Query))}",
             QueryByAttribute byAttribute => $"query=QueryByAttribute; entity={byAttribute.EntityName}",
             _ => $"query={query?.GetType().Name ?? "null"}"
         };
@@ -112,6 +112,10 @@ public sealed class TracingOrganizationService : IOrganizationService
         redacted = Regex.Replace(redacted, "(<value[^>]*>)[^<]*(</value>)", "$1***$2");
         return redacted;
     }
+
+    // FetchXML is usually written indented over several lines; collapse each line break (and the indentation around
+    // it) to one space so the call's trace stays on a single line, as the trace format promises.
+    private static string ToSingleLine(string text) => Regex.Replace(text, "\\s*[\\r\\n]+\\s*", " ").Trim();
 
     // An early-bound entity (a subclass of Entity, e.g. a generated Account) fails to serialize into the
     // Dataverse sandbox unless the plugin assembly is a proxy-types assembly, throwing a SerializationException

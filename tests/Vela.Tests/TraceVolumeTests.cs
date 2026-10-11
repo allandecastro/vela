@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 using Moq;
 using Vela.Constants;
 using Vela.Context;
@@ -81,6 +82,23 @@ public sealed class TraceVolumeTests
         Assert.Contains("Dataverse.Delete fail", failure);
         Assert.Contains("System.InvalidOperationException scope=User depth=1 entity=contact", failure);
         Assert.DoesNotContain("missing", failure);
+    }
+
+    [Fact]
+    public void A_failed_call_with_indented_FetchXml_stays_on_one_line()
+    {
+        Mock<IOrganizationService> inner = new Mock<IOrganizationService>();
+        inner.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>())).Throws(new InvalidOperationException("boom"));
+        PluginContextBuilder<TestAccount> builder = Update();
+        TracingOrganizationService traced = new TracingOrganizationService(inner.Object, builder.Build(), "User", traceEachCall: false);
+        string fetch = "<fetch>\r\n  <entity name='contact'>\n    <attribute name='fullname' />\n  </entity>\r\n</fetch>";
+
+        Assert.Throws<InvalidOperationException>(() => traced.RetrieveMultiple(new FetchExpression(fetch)));
+
+        string failure = Assert.Single(builder.TraceCapture.Traces, t => t.Contains("Dataverse."));
+        Assert.DoesNotContain("\n", failure);
+        Assert.DoesNotContain("\r", failure);
+        Assert.Contains("fetchxml=<fetch> <entity name='contact'> <attribute name='fullname' /> </entity> </fetch>", failure);
     }
 
     [Fact]
