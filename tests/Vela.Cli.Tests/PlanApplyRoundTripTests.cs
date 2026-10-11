@@ -82,8 +82,8 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         Assert.Equal(1, created.GetAttributeValue<OptionSetValue>("statecode").Value);
         Assert.Equal(2, created.GetAttributeValue<OptionSetValue>("supporteddeployment").Value);
 
-        // The global Associate step carries no message filter at all.
-        Assert.False(Step(steps, "contact-associate").Contains("sdkmessagefilterid"));
+        // The global Associate step carries no message filter: apply clears the lookup explicitly (#445).
+        Assert.Null(Step(steps, "contact-associate").GetAttributeValue<EntityReference>("sdkmessagefilterid"));
 
         Entity[] images = _org.Rows("sdkmessageprocessingstepimage").ToArray();
         Assert.Equal(
