@@ -55,16 +55,16 @@ namespace Vela.Constants
         /// <summary>
         /// SetState message. Deprecated by the platform, and a step registered on it never fires: Dataverse runs a
         /// <c>SetStateRequest</c> and an Update of <c>statecode</c> as <see cref="SetStateDynamicEntity"/> (verified
-        /// live). Register on <c>OnUpdate().FilterOn(x =&gt; x.StateCode)</c> or on
-        /// <c>OnMessage(PluginMessages.SetStateDynamicEntity)</c> instead (analyzer VELA022).
+        /// live). <c>On&lt;SetStateRequest&gt;()</c> therefore registers on SetStateDynamicEntity; register on
+        /// <c>OnUpdate().FilterOn(x =&gt; x.StateCode)</c> to also catch an Update of the state (analyzer VELA022).
         /// </summary>
         public const string SetState = "SetState";
 
         /// <summary>
         /// SetStateDynamicEntity message: the one a state change fires (a <c>SetStateRequest</c>, or an Update of
         /// <c>statecode</c>, where it runs nested at depth + 1). Its inputs are <c>EntityMoniker</c>, <c>State</c> and
-        /// <c>Status</c> (-1 for the state's default). No typed method - register via
-        /// <c>OnMessage(PluginMessages.SetStateDynamicEntity)</c>.
+        /// <c>Status</c> (-1 for the state's default). No curated method - register via
+        /// <c>On&lt;SetStateRequest&gt;()</c>, which lands here.
         /// </summary>
         public const string SetStateDynamicEntity = "SetStateDynamicEntity";
 

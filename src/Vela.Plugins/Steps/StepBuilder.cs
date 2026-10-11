@@ -7,6 +7,7 @@ using Vela.Context;
 using Vela.Constants;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
+using Vela.Messages;
 
 namespace Vela.Steps;
 
@@ -128,12 +129,12 @@ public sealed partial class StepBuilder<TEntity>
                 $"Step on message '{_definition.Message}' must declare at least one filtering attribute via " +
                 "FilterOn(...). An unfiltered Create/Update step fires on every change. Use the typed " +
                 "OnCreate() / OnUpdate() / OnCreateMultiple() / OnUpdateMultiple() methods (which require the " +
-                "filtering attribute) rather than the permissive OnMessage(\"...\").");
+                "filtering attribute) rather than a request-typed On<CreateRequest>() / OnMessage<T>().");
         }
 
         // Image backstop: the typed chain already prevents an invalid image at compile time, but a step
-        // assembled out of order (reflection) or via the permissive OnMessage(...) escape hatch with a
-        // modelled message string is still validated here.
+        // assembled out of order (reflection) or via a request-typed On<TRequest>() / OnMessage<T>() on a
+        // modelled message is still validated here.
         foreach (ImageDefinition image in _preImages)
         {
             EnsureImageAllowed(isPreImage: true, image);
@@ -230,25 +231,34 @@ public sealed partial class StepBuilder<TEntity>
     // Every trigger records its message here: the request name it was declared with is kept for the typed context,
     // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win). A typed trigger
     // whose message Dataverse accepts on a single table also passes that table, checked by Build().
-    // On<TRequest>() / OnAsyncOnly<TRequest>() serve the messages without a typed trigger only: a message with one is
-    // registered through it (one way per message), so the chain fails here with the trigger to use.
-    private void SetTypedRequestMessage(string requestName, Type requestType, string trigger)
-    {
-        if (TypedTriggers.Find(requestName) is string typed)
-        {
-            throw new InvalidOperationException(
-                $"{requestName} has a typed trigger: register the step with {typed}() instead of {trigger}<{requestType.Name}>(). " +
-                $"{trigger}<TRequest>() is only for messages without one.");
-        }
-
-        SetMessage(requestName);
-    }
-
     private void SetMessage(string requestName, string? requiredEntity = null)
     {
         _definition.RequestName = requestName;
         _definition.Message = SdkMessageNames.ToSdkMessage(requestName);
         _requiredEntity = requiredEntity;
+    }
+
+    // A trigger stated by type (On<TRequest>(), OnMessage<TMarker>()): the request name comes from the type, and
+    // a [SdkMessage] on it (emitted by `vela models --messages`) names the sdkmessage when the table does not.
+    // On<TRequest>() / OnAsyncOnly<TRequest>() / OnMessage<TMessage>() pass their name as trigger: they are for Custom
+    // APIs and messages without a typed On{Message}() trigger, so a request that has one is rejected (one way per
+    // message), naming the trigger to use.
+    private void SetMessageFrom<TMessage>(string? trigger = null) where TMessage : class
+    {
+        string requestName = ExpressionHelper.GetMessageName<TMessage>();
+        if (trigger != null && TypedTriggers.Find(requestName) is string typed)
+        {
+            throw new InvalidOperationException(
+                $"{requestName} has a typed trigger: register the step with {typed}() instead of {trigger}<{typeof(TMessage).Name}>(). " +
+                $"{trigger}<TRequest>() is only for messages without one.");
+        }
+
+        SetMessage(requestName);
+        SdkMessageAttribute? declared = typeof(TMessage).GetCustomAttribute<SdkMessageAttribute>(inherit: true);
+        if (declared != null)
+        {
+            _definition.Message = declared.MessageName;
+        }
     }
 
     // Mutation hooks for the generic typed-message adapter (Vela.Steps.TypedStepAdapter<TEntity, TRequest>),

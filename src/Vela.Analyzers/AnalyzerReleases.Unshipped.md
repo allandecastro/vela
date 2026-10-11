@@ -9,3 +9,9 @@ VELA020 | Vela.Usage | Error | MissingFilterAnalyzer
 VELA021 | Vela.Usage | Warning | ImageProjectionGenerator
 VELA022 | Vela.Reliability | Warning | SetStateStepAnalyzer
 VELA023 | Vela.Usage | Error | TypedTriggerRequiredAnalyzer
+
+### Removed Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA006 | Vela.Usage | Warning | PreferTypedMessageAnalyzer

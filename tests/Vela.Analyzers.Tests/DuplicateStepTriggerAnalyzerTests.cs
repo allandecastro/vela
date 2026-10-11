@@ -14,7 +14,8 @@ namespace Vela.Steps
     public interface IFluentStep { }
     public interface ITrigger : IFluentStep
     {
-        IStages OnMessage(string message);
+        IStages OnMessage<TMessage>() where TMessage : class;
+        IStages On<TRequest>();
         IStages OnCreate();
         IStages OnUpdate();
         IStages OnAssign();
@@ -23,6 +24,9 @@ namespace Vela.Steps
     public interface IMode : IFluentStep { IConfig Sync(); IConfig Async(); }
     public interface IConfig : IFluentStep { void Handle(); }
 }
+
+namespace Microsoft.Xrm.Sdk.Messages { public class CreateRequest { } }
+namespace Microsoft.Crm.Sdk.Messages { public class AssignRequest { } }
 
 namespace Demo
 {
@@ -54,20 +58,20 @@ namespace Demo
     }
 
     [Fact]
-    public async Task Flags_typed_and_permissive_forms_of_the_same_trigger()
+    public async Task Flags_guided_and_request_typed_forms_of_the_same_trigger()
     {
         string code = InRegister(
             "RegisterStep().OnCreate().PreOperation().Sync().Handle();\n" +
-            "            RegisterStep().{|#0:OnMessage|}(\"Create\").PreOperation().Sync().Handle();");
+            "            RegisterStep().{|#0:On<Microsoft.Xrm.Sdk.Messages.CreateRequest>|}().PreOperation().Sync().Handle();");
         await Verify.VerifyAnalyzerAsync(code, Expected("message 'create' at preoperation (sync)"));
     }
 
     [Fact]
-    public async Task Flags_typed_and_permissive_forms_of_assign()
+    public async Task Flags_guided_and_marker_forms_of_assign()
     {
         string code = InRegister(
             "RegisterStep().OnAssign().PostOperation().Sync().Handle();\n" +
-            "            RegisterStep().{|#0:OnMessage|}(\"Assign\").PostOperation().Sync().Handle();");
+            "            RegisterStep().{|#0:OnMessage<Microsoft.Crm.Sdk.Messages.AssignRequest>|}().PostOperation().Sync().Handle();");
         await Verify.VerifyAnalyzerAsync(code, Expected("message 'assign' at postoperation (sync)"));
     }
 

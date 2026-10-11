@@ -122,7 +122,9 @@ namespace {{ns}}
 """;
     }
 
-    public static string AddCustomApiTestFile(string ns, string apiNamespace, string testClass, string apiType, string uniqueName) =>
+    // A typed (bound) Custom API has a generated request type, so its test builds the context from it (message and
+    // inputs, no strings); a lightweight (global) one has none and keeps the message name.
+    public static string AddCustomApiTestFile(string ns, string apiNamespace, string testClass, string apiType, string uniqueName, string? requestType = null) =>
 $$"""
 namespace {{ns}}
 {
@@ -153,9 +155,17 @@ namespace {{ns}}
             {{apiType}} api = new {{apiType}}(string.Empty, string.Empty);
             CustomApiDefinition definition = api.GetCustomApiDefinition();
 
+{{(requestType is null ? $$"""
             // Arrange: supply the input parameters the Custom API reads, e.g.
             //   .WithInputParameter("AccountId", Guid.NewGuid())
             PluginContextBuilder builder = PluginContext.ForMessage("{{uniqueName}}");
+""" : $$"""
+            // Arrange: the typed request carries the message and the inputs the Custom API reads.
+            PluginContextBuilder builder = PluginContext.ForRequest(new {{requestType}}
+            {
+                // TODO: set the inputs, e.g. AccountId = Guid.NewGuid(),
+            });
+""")}}
 
             builder.Execute(api);
 

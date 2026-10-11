@@ -164,7 +164,7 @@ namespace Vela.Tests
         public void StepBuilder_AllowsPreImageForPreValidationPermissiveMessage()
         {
             StepBuilder<TestAccount> builder = New();
-            Trigger(builder).OnMessage("Assign")
+            Trigger(builder).OnMessage<AcmeDoThing>()
                 .PreValidation()
                 .Sync()
                 .WithPreImage(a => a.Name);
@@ -209,7 +209,7 @@ namespace Vela.Tests
         public void StepBuilder_Build_RejectsPostImage_AtPreValidation()
         {
             StepBuilder<TestAccount> builder = New();
-            Trigger(builder).OnMessage("acme_DoThing").PreValidation().Sync();
+            Trigger(builder).OnMessage<AcmeDoThing>().PreValidation().Sync();
             ((IPermissivePostOperationConfig<TestAccount>)builder).WithPostImage(a => a.Name);
 
             InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
@@ -258,27 +258,24 @@ namespace Vela.Tests
             Assert.Single(definition.PreImages);
         }
 
-        // Runtime backstop: the permissive OnMessage(...) escape hatch exposes both images at PostOperation, so
+        // Runtime backstop: the permissive OnMessage<TMessage>() path exposes both images at PostOperation, so
         // a step assembled with a modelled message that the platform does not support at that stage is still
         // caught at Build() (regardless of how it was assembled). A non-modelled message is left permissive.
 
         [Fact]
-        public void StepBuilder_Build_RejectsPostImageOnDelete_ViaPermissiveMessage()
+        public void StepBuilder_RejectsAModelledMessage_ViaPermissiveMessage()
         {
+            // One way per message: Delete has OnDelete(), which the permissive path names instead of registering.
             StepBuilder<TestAccount> builder = New();
-            Trigger(builder).OnMessage(PluginMessages.Delete)
-                .PostOperation()
-                .Sync()
-                .WithPostImage();
-
-            Assert.Throws<InvalidOperationException>(() => builder.Build());
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Trigger(builder).OnMessage<Microsoft.Xrm.Sdk.Messages.DeleteRequest>());
+            Assert.Contains("OnDelete()", ex.Message);
         }
 
         [Fact]
         public void StepBuilder_Build_AllowsImagesOnUnmodelledMessage()
         {
             StepBuilder<TestAccount> builder = New();
-            Trigger(builder).OnMessage("acme_DoThing")
+            Trigger(builder).OnMessage<AcmeDoThing>()
                 .PostOperation()
                 .Sync()
                 .WithPreImage(a => a.Name)
@@ -290,18 +287,14 @@ namespace Vela.Tests
             Assert.Single(definition.PostImages);
         }
 
-        // A filtering-required message reached through the permissive OnMessage(...) escape hatch cannot supply
+        // A filtering-required message reached through the permissive OnMessage<TMessage>() path cannot supply
         // its filtering attribute (the permissive terminal has no FilterOn), so Build() rejects it and
         // the error points at the typed OnUpdate()/OnCreate()/... methods instead.
         [Fact]
         public void StepBuilder_Build_RejectsFilteringMessageReachedViaOnMessage_AndSignpostsTypedMethods()
         {
             StepBuilder<TestAccount> builder = New();
-            Trigger(builder).OnMessage(PluginMessages.Update)
-                .PostOperation()
-                .Sync();
-
-            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Trigger(builder).OnMessage<Microsoft.Xrm.Sdk.Messages.UpdateRequest>());
             Assert.Contains("OnUpdate()", ex.Message);
         }
 

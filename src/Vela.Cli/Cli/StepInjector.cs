@@ -114,19 +114,17 @@ internal static class StepInjector
             filtering +
             $"                .Handle({handlerName});";
 
-        // A modelled message binds the strongly-typed stage context (pre or post to match the step's stage);
-        // a custom OnMessage step is untyped.
-        string handlerContextType = registrationCall.StartsWith("OnMessage(", StringComparison.Ordinal)
-            ? "ILocalPluginContext"
-            : $"I{message}{(postStage ? "Post" : "Pre")}Context<{entityType}>";
+        // A modelled message binds the strongly-typed stage context (pre or post to match the step's stage); an
+        // On<XxxRequest>() step binds the request-typed IMessagePre/PostContext<XxxRequest>.
+        string handlerContextType = AddCommand.HandlerContextType(registrationCall, message, entityType, postStage);
 
         // Point the author at the idiomatic, typed access for this message rather than the low-level
         // ctx.GetTarget<T>(): a single record is ctx.Request.Target, a bulk message is ctx.Request.Targets,
-        // and a custom message reads its own input parameters.
+        // and any other message reads its typed request.
         // Only CreateMultiple/UpdateMultiple carry a Targets collection; RetrieveMultiple is query-based.
         bool isMultiple = message == "CreateMultiple" || message == "UpdateMultiple";
-        string accessHint = registrationCall.StartsWith("OnMessage(", StringComparison.Ordinal)
-            ? "read the message inputs via ctx.PluginExecutionContext.InputParameters"
+        string accessHint = AddCommand.TryGetRequestType(registrationCall, out _)
+            ? "read the typed request via ctx.Request"
             : isMultiple
                 ? "read the records via ctx.Request.Targets"
                 : "read the record via ctx.Request.Target";

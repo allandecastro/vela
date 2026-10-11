@@ -16,7 +16,7 @@ namespace Vela.Analyzers
     /// <c>ILocalPluginContext</c>. A context for a different message or stage (or an unrelated type) is reported.
     ///
     /// Scope (known limitation, #309 M1): only the guided single Create/Update/Delete path is validated. The typed
-    /// <c>On&lt;TRequest&gt;()</c> and permissive <c>OnMessage(...)</c> paths, and the CreateMultiple/UpdateMultiple
+    /// <c>On&lt;TRequest&gt;()</c> and permissive <c>OnMessage&lt;TMessage&gt;()</c> paths, and the CreateMultiple/UpdateMultiple
     /// variants, are intentionally left alone - their expected context is the generated per-step context
     /// (<c>MessagePre/PostContext&lt;TRequest,TEntity&gt;</c>), which is not derivable from the guided message/stage
     /// resolution used here. A wrong context on those paths compiles through <c>Handle(Delegate)</c> and is caught at
@@ -211,7 +211,7 @@ namespace Vela.Analyzers
         }
 
         // Minimal guided-chain resolver: the message from OnCreate/OnUpdate/OnDelete and whether the stage is
-        // PostOperation. Returns (null, null) for anything else (typed On<TRequest>(), permissive OnMessage(...), or
+        // PostOperation. Returns (null, null) for anything else (typed On<TRequest>(), permissive OnMessage<TMessage>(), or
         // an unresolved chain), so those paths are left alone.
         private static (string? Message, bool? IsPost) ResolveGuidedMessageAndStage(ExpressionSyntax? receiver)
         {

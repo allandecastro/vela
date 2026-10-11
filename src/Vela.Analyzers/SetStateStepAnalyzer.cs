@@ -8,10 +8,12 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Vela.Analyzers
 {
     /// <summary>
-    /// Warns on a step registered on the SetState message (<c>OnMessage("SetState")</c> or
-    /// <c>OnMessage(PluginMessages.SetState)</c>). Dataverse accepts the registration but never runs it: a
+    /// Warns on a step registered on the SetState message. Dataverse accepts the registration but never runs it: a
     /// <c>SetStateRequest</c> and an Update of <c>statecode</c> both fire SetStateDynamicEntity instead (verified live),
-    /// so the step's logic silently never executes.
+    /// so the step's logic silently never executes. The builder already registers <c>On&lt;SetStateRequest&gt;()</c>
+    /// and a <c>[CustomMessage("SetState")]</c> marker on SetStateDynamicEntity (see SdkMessageNames); the one way left
+    /// to land on SetState is a request or marker type that pins it with <c>[SdkMessage("SetState")]</c>, which is
+    /// what this reports.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class SetStateStepAnalyzer : DiagnosticAnalyzer
@@ -21,7 +23,7 @@ namespace Vela.Analyzers
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
             title: "A step on SetState never fires",
-            messageFormat: "A step on SetState never fires: Dataverse runs a state change as SetStateDynamicEntity. Register on OnUpdate().FilterOn(statecode) or on OnMessage(PluginMessages.SetStateDynamicEntity).",
+            messageFormat: "A step on SetState never fires: Dataverse runs a state change as SetStateDynamicEntity. Drop [SdkMessage(\"SetState\")] from '{0}' (On<SetStateRequest>() registers on SetStateDynamicEntity), or register on OnUpdate().FilterOn(statecode).",
             category: "Vela.Reliability",
             defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
@@ -49,16 +51,11 @@ namespace Vela.Analyzers
         {
             InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
             if (invocation.Expression is not MemberAccessExpressionSyntax member
-                || member.Name.Identifier.ValueText != "OnMessage"
-                || invocation.ArgumentList.Arguments.Count != 1)
-            {
-                return;
-            }
-
-            // A literal or a constant (PluginMessages.SetState) both carry a compile-time value.
-            Optional<object?> value = context.SemanticModel.GetConstantValue(invocation.ArgumentList.Arguments[0].Expression, context.CancellationToken);
-            if (!value.HasValue || value.Value is not string message
-                || !string.Equals(message.Trim(), "SetState", StringComparison.OrdinalIgnoreCase))
+                || member.Name is not GenericNameSyntax generic
+                || generic.Identifier.ValueText is not ("On" or "OnAsyncOnly" or "OnMessage")
+                || generic.TypeArgumentList.Arguments.Count != 1
+                || context.SemanticModel.GetTypeInfo(generic.TypeArgumentList.Arguments[0], context.CancellationToken).Type is not INamedTypeSymbol type
+                || !PinsSetState(type))
             {
                 return;
             }
@@ -68,7 +65,23 @@ namespace Vela.Analyzers
                 return;
             }
 
-            context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation()));
+            context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), type.Name));
+        }
+
+        private static bool PinsSetState(INamedTypeSymbol type)
+        {
+            foreach (AttributeData attribute in type.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() == "Vela.Messages.SdkMessageAttribute"
+                    && attribute.ConstructorArguments.Length == 1
+                    && attribute.ConstructorArguments[0].Value is string message
+                    && string.Equals(message.Trim(), "SetState", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

@@ -30,7 +30,7 @@ A step handler is an instance method returning `void` with one parameter, bound 
   PreValidation/PreOperation (it has `ctx.Request` but no `ctx.Response`);
 - the generated `{Handler}Context` (here `OnUpdatedContext`), which adds the typed `ctx.PreImage` / `ctx.PostImage`
   (the plugin must be `partial`, [VELA014](analyzers.md#vela014));
-- `ILocalPluginContext`, for `OnMessage("...")` steps or when you need nothing typed.
+- `ILocalPluginContext`, for `OnMessage<TMarker>()` steps or when you need nothing typed.
 
 A context for another message or stage is a build error ([VELA015](analyzers.md#vela015)), and every step chain
 must end with `.Handle(...)` ([VELA002](analyzers.md#vela002)). A lightweight Custom API handler is

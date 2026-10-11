@@ -8,7 +8,7 @@ namespace Vela.Cli.Tests;
 public class SdkMessageGeneratorTests
 {
     private static string Generate(SdkMessage message) =>
-        SdkMessageGenerator.Generate(new[] { message }, "Acme.Shared.Models.Generated").Single().Code;
+        SdkMessageGenerator.Generate(new[] { message }, "Acme.Shared.Models.Generated").Code();
 
     [Fact]
     public void Generates_TypedRequestAndResponse()
@@ -36,6 +36,56 @@ public class SdkMessageGeneratorTests
         Assert.Contains("public partial class QualifyLeadResponse : Vela.Messages.TypedResponse", code);
         Assert.DoesNotContain("From(OrganizationResponse", code);   // wrap via ToResponse<T>() instead
         Assert.Contains("public EntityCollection CreatedEntities => Get<EntityCollection>();", code);
+    }
+
+    [Fact]
+    public void Request_IsNamedAfterItsRequest_WithNoSdkMessageAttribute()
+    {
+        // CloseQuote runs on Close (verified live 2026-10-09); the framework's request table routes it, so the
+        // generated class mentions only its real name.
+        string code = Generate(new SdkMessage("CloseQuote", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+        {
+            Entities = new[] { "quote" },
+        });
+
+        Assert.DoesNotContain("SdkMessage(", code);
+        Assert.Contains("RequestName = \"CloseQuote\";", code);
+        Assert.Contains("public static Vela.Steps.ITypedStages<Quote, CloseQuoteRequest> OnCloseQuote(this Vela.Steps.IStepTrigger<Quote> builder)", code);
+    }
+
+    [Fact]
+    public void StepExtension_GoesToItsOwnFile_OutOfTheSharedContract()
+    {
+        var models = SdkMessageGenerator.Generate(new[]
+        {
+            new SdkMessage("CalculatePrice", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) { Entities = new[] { "quote" } },
+        }, "Acme.Shared.Models.Generated");
+
+        Assert.Equal(new[] { "Messages/CalculatePrice.cs", "Messages/CalculatePrice.Steps.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.DoesNotContain("Vela.Steps", models[0].Code);
+        Assert.Contains("internal static class CalculatePriceStepExtensions", models[1].Code);
+    }
+
+    [Fact]
+    public void SdkBackedRequest_EmitsOnlyTheStepExtension_OverTheSdkType()
+    {
+        string code = Generate(new SdkMessage("CloseQuote", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+        {
+            Entities = new[] { "quote" },
+            SdkRequestType = "Microsoft.Crm.Sdk.Messages.CloseQuoteRequest",
+        });
+
+        Assert.DoesNotContain("class CloseQuoteRequest", code);
+        Assert.DoesNotContain("class CloseQuoteResponse", code);
+        Assert.Contains("public static Vela.Steps.ITypedStages<Quote, Microsoft.Crm.Sdk.Messages.CloseQuoteRequest> OnCloseQuote(this Vela.Steps.IStepTrigger<Quote> builder) => builder.On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>();", code);
+    }
+
+    [Fact]
+    public void Request_OnItsOwnSdkMessage_HasNoSdkMessageAttribute()
+    {
+        string code = Generate(new SdkMessage("QualifyLead", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()));
+
+        Assert.DoesNotContain("SdkMessage(", code);
     }
 
     [Fact]
@@ -79,7 +129,7 @@ public class SdkMessageGeneratorTests
     {
         GeneratedModel model = SdkMessageGenerator
             .Generate(new[] { new SdkMessage("AddToQueue", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) }, "N")
-            .Single();
+            .First();
 
         Assert.Equal("Messages/AddToQueue.cs", model.FileName);
     }
@@ -95,7 +145,7 @@ public class SdkMessageGeneratorTests
             },
             "N");
 
-        Assert.Equal(new[] { "Messages/Alpha.cs", "Messages/Zeta.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.Equal(new[] { "Messages/Alpha.cs", "Messages/Alpha.Steps.cs", "Messages/Zeta.cs", "Messages/Zeta.Steps.cs" }, models.Select(m => m.FileName).ToArray());
     }
 
     [Fact]
@@ -109,7 +159,7 @@ public class SdkMessageGeneratorTests
             },
             "N");
 
-        Assert.Equal(new[] { "Messages/Real.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.Equal(new[] { "Messages/Real.cs", "Messages/Real.Steps.cs" }, models.Select(m => m.FileName).ToArray());
     }
 
     [Fact]
@@ -123,7 +173,7 @@ public class SdkMessageGeneratorTests
             Entities = new[] { "lead" },
         });
 
-        Assert.Contains("public static class CalculatePriceStepExtensions", code);
+        Assert.Contains("internal static class CalculatePriceStepExtensions", code);
         Assert.Contains(
             "public static Vela.Steps.ITypedStages<Lead, CalculatePriceRequest> OnCalculatePrice(this Vela.Steps.IStepTrigger<Lead> builder) => builder.On<CalculatePriceRequest>();",
             code);
@@ -179,7 +229,7 @@ public class SdkMessageGeneratorTests
             },
             "N",
             entityTypeNames: null,
-            generatedEntityLogicalNames: new[] { "account" }).Single().Code;
+            generatedEntityLogicalNames: new[] { "account" }).Code();
 
         Assert.Contains("IStepTrigger<Account>", code);       // the generated entity keeps its overload
         Assert.DoesNotContain("IStepTrigger<Contact>", code); // the absent one is dropped (no dangling reference)
@@ -198,7 +248,7 @@ public class SdkMessageGeneratorTests
             },
             "N",
             entityTypeNames: null,
-            generatedEntityLogicalNames: Array.Empty<string>()).Single().Code;
+            generatedEntityLogicalNames: Array.Empty<string>()).Code();
 
         Assert.Contains("OnBookAppointment<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
         Assert.DoesNotContain("IStepTrigger<Account>", code);
@@ -283,4 +333,10 @@ public class SdkMessageGeneratorTests
         Assert.Throws<ArgumentException>(() =>
             SdkMessageGenerator.Generate(new[] { new SdkMessage("X", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) }, "  "));
     }
+}
+
+internal static class GeneratedCode
+{
+    // A message's contract and its .Steps.cs extension file, read together.
+    public static string Code(this System.Collections.Generic.IEnumerable<GeneratedModel> models) => string.Join("\n", models.Select(m => m.Code));
 }

@@ -12,6 +12,9 @@ using Xunit;
 
 namespace Vela.Testing.Tests
 {
+    [Vela.Constants.CustomMessage("vela_RiApi")]
+    public sealed class RiApiMessage { }
+
     // Review follow-ups on #432: steps work on a deep copy of the request, their changes (removals included) flow to
     // the next phase, Upsert honours a pre-step's Target, and a nested read's steps report IsInTransaction = false.
     public sealed class PipelineRequestIsolationTests
@@ -159,7 +162,7 @@ namespace Vela.Testing.Tests
         public RiUpsertEditsTarget(string u, string s) : base(u, s) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage("Upsert").PreOperation().Sync().Handle(ctx =>
+            => RegisterStep().OnMessage<UpsertRequest>().PreOperation().Sync().Handle(ctx =>
             {
                 Entity target = (Entity)ctx.PluginExecutionContext.InputParameters["Target"];
                 target["vela_name"] = target["vela_name"] + " (edited)";
@@ -171,7 +174,7 @@ namespace Vela.Testing.Tests
         public RiUpsertReplacesTarget(string u, string s) : base(u, s) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage("Upsert").PreOperation().Sync().Handle(ctx =>
+            => RegisterStep().OnMessage<UpsertRequest>().PreOperation().Sync().Handle(ctx =>
             {
                 Entity target = (Entity)ctx.PluginExecutionContext.InputParameters["Target"];
                 ctx.PluginExecutionContext.InputParameters["Target"] = new Entity(target.LogicalName, target.Id) { ["vela_name"] = "replaced" };
@@ -205,7 +208,7 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterStep().OnMessage("vela_RiApi").PreOperation().Sync().Handle(ctx =>
+            RegisterStep().OnMessage<RiApiMessage>().PreOperation().Sync().Handle(ctx =>
             {
                 ParameterCollection inputs = ctx.PluginExecutionContext.InputParameters;
                 ((EntityReference)inputs["Ref"]).KeyAttributes["accountnumber"] = "A-2";
@@ -213,7 +216,7 @@ namespace Vela.Testing.Tests
                 payload["name"] = payload["name"] + "!";
                 inputs.Remove("Nickname");
             });
-            RegisterStep().OnMessage("vela_RiApi").PostOperation().Sync().Handle(ctx =>
+            RegisterStep().OnMessage<RiApiMessage>().PostOperation().Sync().Handle(ctx =>
                 ctx.PluginExecutionContext.OutputParameters.Remove("Internal"));
         }
     }

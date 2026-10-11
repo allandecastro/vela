@@ -11,6 +11,11 @@ using Xunit;
 
 namespace Vela.Testing.Tests
 {
+    // SetStateRequest registers on SetStateDynamicEntity (the message a state change fires); pinning SetState is
+    // the only way left to land on the SetState sdkmessage, whose steps never run.
+    [Vela.Messages.SdkMessage("SetState")]
+    public sealed class PinnedSetState { }
+
     // #439 row 6: Assign, SetState and owner/state Updates fire the steps the platform fires. Each expectation below was
     // verified live (Dataverse 9.2, account and contact, 2026-10-09):
     //   - AssignRequest: Assign s10, s20, then an inner Update at the same depth (s20, s40 only), then Assign s40.
@@ -200,11 +205,11 @@ namespace Vela.Testing.Tests
                 RegisterStep().OnAssign().PreValidation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
                 RegisterStep().OnAssign().PreOperation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
                 RegisterStep().OnAssign().PostOperation().Sync().WithPreImage().WithPostImage().Handle((Action<ILocalPluginContext>)Record);
-                RegisterStep().OnMessage(PluginMessages.SetStateDynamicEntity).PreValidation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
-                RegisterStep().OnMessage(PluginMessages.SetStateDynamicEntity).PreOperation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
-                RegisterStep().OnMessage(PluginMessages.SetStateDynamicEntity).PostOperation().Sync().WithPreImage().WithPostImage().Handle((Action<ILocalPluginContext>)Record);
+                RegisterStep().OnMessage<SetStateRequest>().PreValidation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
+                RegisterStep().OnMessage<SetStateRequest>().PreOperation().Sync().WithPreImage().Handle((Action<ILocalPluginContext>)Record);
+                RegisterStep().OnMessage<SetStateRequest>().PostOperation().Sync().WithPreImage().WithPostImage().Handle((Action<ILocalPluginContext>)Record);
 #pragma warning disable VELA022 // Deliberate: proves the SetState step never fires.
-                RegisterStep().OnMessage(PluginMessages.SetState).PreOperation().Sync().Handle((Action<ILocalPluginContext>)Record);
+                RegisterStep().OnMessage<PinnedSetState>().PreOperation().Sync().Handle((Action<ILocalPluginContext>)Record);
 #pragma warning restore VELA022
             }
 
@@ -263,7 +268,7 @@ namespace Vela.Testing.Tests
             public RejectDeactivation(string unsecure, string secure) : base(unsecure, secure) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnMessage(PluginMessages.SetStateDynamicEntity).PreOperation().Sync()
+                => RegisterStep().OnMessage<SetStateRequest>().PreOperation().Sync()
                     .Handle((Action<ILocalPluginContext>)Reject);
 
             private void Reject(ILocalPluginContext ctx) => throw new InvalidPluginExecutionException("Deactivation rejected.");

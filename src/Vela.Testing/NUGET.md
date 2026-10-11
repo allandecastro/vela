@@ -46,14 +46,15 @@ public class AccountPostCreateTests
 }
 ```
 
-Custom APIs and message-only plugins use `PluginContext.ForMessage("vela_DoThing")`, or
-`pipeline.Service.Execute(new OrganizationRequest("vela_DoThing") { ... })` for the full pipeline.
+Custom APIs and message-only plugins use `PluginContext.ForRequest(new DoThingRequest { ... })` (message and inputs
+from the typed request; `PluginContext.ForMessage("vela_DoThing")` for a message with no request type), or
+`pipeline.Service.Execute(new DoThingRequest { ... })` for the full pipeline.
 
 ## What you get
 
-- **Fluent context builder** - `PluginContext.For<T>()` / `ForMessage(...)` with `OnCreate/OnUpdate/OnDelete/OnMessage`,
+- **Fluent context builder** - `PluginContext.For<T>()` / `ForRequest(...)` / `ForMessage(...)` with `OnCreate/OnUpdate/OnDelete/OnMessage`,
   `Stage(...)`, `Sync()`/`Async()`, `Depth(...)`, `WithTarget`, `WithPreImage`/`WithPostImage`, `WithTargets` (bulk),
-  `WithInputParameter`, `WithSharedVariable`, and `TraceCapture` / `LogCapture` for asserting traces and logs.
+  `WithRequest`, `WithInputParameter`, `WithSharedVariable`, and `TraceCapture` / `LogCapture` for asserting traces and logs.
   Run with `Execute(plugin)` or `Execute<TPlugin>()`, or `Build()` a `LocalPluginContext`.
 - **Test doubles** - `FakePluginExecutionContext` (the full `IPluginExecutionContext2..7` chain),
   `HookOrganizationService` / `HookOrganizationServiceFactory` (delegate hooks `OnCreate`/`OnRetrieve`/...; an unset

@@ -1,71 +1,26 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Microsoft.Xrm.Sdk.Messages;
 
 namespace Vela.Cli;
 
 /// <summary>
-/// Detects whether an SDK message already has a strongly-typed request class shipped by the Dataverse SDK, so the
-/// message generator can skip it (generating a wrapper would only duplicate the SDK type and risk a CS0104 name
-/// collision). Detection is by reflection over the loaded <c>Microsoft.Xrm.Sdk</c> assembly (a message
-/// <c>&lt;Name&gt;</c> is SDK-backed when <c>Microsoft.Xrm.Sdk.Messages.&lt;Name&gt;Request</c> exists), plus a
-/// curated supplement for the Sales/business messages that live in <c>Microsoft.Crm.Sdk.Messages.*</c>.
+/// Detects whether an SDK request already ships a strongly-typed class in the Dataverse SDK, so the message
+/// generator does not duplicate it (a duplicate risks a CS0104 name collision) and can instead point the
+/// <c>On&lt;Message&gt;()</c> extension at the SDK type. Detection is by reflection over the two SDK message
+/// assemblies the CLI already loads through <c>Microsoft.PowerPlatform.Dataverse.Client</c>: <c>Microsoft.Xrm.Sdk</c>
+/// (<c>Microsoft.Xrm.Sdk.Messages.CreateRequest</c>, ...) and <c>Microsoft.Crm.Sdk.Proxy</c>
+/// (<c>Microsoft.Crm.Sdk.Messages.QualifyLeadRequest</c>, ...). The generated project compiles against the same two
+/// namespaces (<c>Microsoft.CrmSdk.CoreAssemblies</c> on net462, the Dataverse client on net10.0).
 /// </summary>
-/// <remarks>
-/// The Sales/business messages in <c>Microsoft.Crm.Sdk.Messages.*</c> (e.g. <c>QualifyLeadRequest</c>,
-/// <c>WinOpportunityRequest</c>) cannot be found by reflection, because <c>Vela.Cli</c> deliberately does not
-/// reference <c>Microsoft.CrmSdk.CoreAssemblies</c> and so that assembly is never loaded. To still skip them in
-/// ALL mode we keep the curated <see cref="CrmSdkRequestMessages"/> supplement below. It is a pragmatic,
-/// <b>non-exhaustive</b> list (the union of the Crm.Sdk-backed messages Vela already curates and the backlog's
-/// candidate typed messages, all verified to ship a <c>*Request</c> class in <c>Microsoft.Crm.Sdk.Proxy</c>); a
-/// Crm.Sdk message not listed here simply generates a harmless duplicate wrapper, which the developer can ignore
-/// in favour of the real SDK type via <c>OnMessage&lt;XxxRequest&gt;()</c>.
-/// </remarks>
 internal static class SdkMessageClassResolver
 {
-    // The assembly that carries the core SDK request types (CreateRequest, UpdateRequest, ...). Resolved from a
-    // known type rather than by name so it tracks whatever Microsoft.Xrm.Sdk version Vela.Cli references.
-    private static readonly System.Reflection.Assembly SdkAssembly = typeof(CreateRequest).Assembly;
-
-    // Curated supplement of well-known Microsoft.Crm.Sdk.Messages business messages that each ship a *Request class
-    // in Microsoft.Crm.Sdk.Proxy. Reflection can't see these (the CrmSdk assembly isn't referenced — see remarks),
-    // so listing them here lets ALL mode skip them instead of emitting a duplicate wrapper. Non-exhaustive by design.
-    private static readonly HashSet<string> CrmSdkRequestMessages = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Crm.Sdk-backed messages Vela already curates (On<Message>() surface).
-        "QualifyLead", "WinOpportunity", "LoseOpportunity",
-        "ConvertQuoteToSalesOrder", "ConvertSalesOrderToInvoice",
-        "GenerateQuoteFromOpportunity", "GenerateSalesOrderFromOpportunity", "GenerateInvoiceFromOpportunity",
-        "AddToQueue", "RemoveFromQueue", "PickFromQueue", "RouteTo", "ReleaseToQueue",
-        "SendEmail", "SendEmailFromTemplate", "DeliverIncomingEmail", "DeliverPromoteEmail",
-        "AddMembersTeam", "RemoveMembersTeam",
-        "AddListMembersList", "AddMemberList", "RemoveMemberList",
-        "CloseIncident", "CancelContract", "CloneContract",
-        "GrantAccess", "ModifyAccess", "RevokeAccess", "Merge",
-        "RetrievePrincipalAccess", "RetrieveSharedPrincipalsAndAccess", "WhoAmI",
-        "WinQuote", "ReviseQuote", "FulfillSalesOrder",
-        "GetQuoteProductsFromOpportunity", "GetSalesOrderProductsFromOpportunity", "GetInvoiceProductsFromOpportunity",
-
-        // Backlog "candidate typed messages" — all Microsoft.Crm.Sdk.Messages.*Request (see BACKLOG.md P3).
-        "RenewContract", "RenewEntitlement",
-        "QualifyMemberList", "AddItemCampaign", "RemoveItemCampaign", "CopyCampaignResponse",
-        "ExecuteWorkflow", "SetProcess", "Recalculate",
-        "LockSalesOrderPricing", "UnlockSalesOrderPricing", "LockInvoicePricing", "UnlockInvoicePricing",
-        "Reschedule", "ImmediateBook",
-        "SendTemplate", "SendBulkMail", "SendFax",
-        "ReassignObjectsOwner", "InitializeFrom",
-        "AddProductToKit", "RemoveProductFromKit", "ConvertProductToKit", "ConvertKitToProduct",
-
-        // Additional well-known Microsoft.Crm.Sdk.Messages.*Request business messages (still non-exhaustive).
-        "Assign", "SetState", "Book", "Reschedule",
-        "PublishXml", "PublishAllXml", "PublishDuplicateRule",
-        "InstantiateTemplate", "BackgroundSendEmail", "DeliverImmediatePromoteEmail",
-        "CalculatePrice", "CalculateActualValueOpportunity", "GetTrackingToken", "RetrieveExchangeRate",
-        "AddPrivilegesRole", "RemovePrivilegeRole", "ReplacePrivilegesRole", "RetrieveRolePrivilegesRole",
-        "AddUserToRecordTeam", "RemoveUserFromRecordTeam",
-        "GrantAccessUsingConnectionRole", "ImportSolution", "ExportSolution", "AddSolutionComponent",
-    };
+    private static readonly (Assembly Assembly, string Namespace)[] SdkMessageNamespaces =
+    [
+        (typeof(CreateRequest).Assembly, "Microsoft.Xrm.Sdk.Messages"),
+        (typeof(Microsoft.Crm.Sdk.Messages.WhoAmIRequest).Assembly, "Microsoft.Crm.Sdk.Messages"),
+    ];
 
     /// <summary>
     /// True when the Dataverse SDK already ships a request type for <paramref name="messageName"/>: see
@@ -75,12 +30,9 @@ internal static class SdkMessageClassResolver
 
     /// <summary>
     /// The name of the SDK request that runs as <paramref name="messageName"/> and ships a <c>&lt;name&gt;Request</c>
-    /// type, or null when there is none. The message is an <c>sdkmessage</c> name, which is not always the request
-    /// name: <c>Send</c> is run by <c>SendEmailRequest</c>, <c>Win</c> by <c>WinOpportunityRequest</c> and
-    /// <c>WinQuoteRequest</c> (see <see cref="Vela.Steps.SdkMessageNames"/>). A request type is found by
-    /// reflection in <c>Microsoft.Xrm.Sdk.Messages</c> (e.g. <c>"Create"</c> → <c>CreateRequest</c>) or listed in the
-    /// curated <c>Microsoft.Crm.Sdk.Messages</c> supplement (e.g. <c>"QualifyLead"</c>). See the class remarks for why
-    /// the supplement exists and why it is non-exhaustive.
+    /// type, or null when there is none. The message is a request name or an <c>sdkmessage</c> name, which is not
+    /// always the request name: <c>Send</c> is run by <c>SendEmailRequest</c>, <c>Win</c> by
+    /// <c>WinOpportunityRequest</c> and <c>WinQuoteRequest</c> (see <see cref="Vela.Steps.SdkMessageNames"/>).
     /// </summary>
     public static string? SdkRequestName(string messageName)
     {
@@ -89,15 +41,40 @@ internal static class SdkMessageClassResolver
             return null;
         }
 
-        foreach (string requestName in new[] { messageName }.Concat(Vela.Steps.SdkMessageNames.RequestNamesFor(messageName)))
+        foreach (string requestName in new[] { messageName.Trim() }.Concat(Vela.Steps.SdkMessageNames.RequestNamesFor(messageName.Trim())))
         {
-            if (SdkAssembly.GetType($"Microsoft.Xrm.Sdk.Messages.{requestName}Request") != null
-                || CrmSdkRequestMessages.Contains(requestName))
+            if (TryGetSdkRequestTypeName(requestName, out string typeName))
             {
-                return requestName;
+                return typeName.Substring(typeName.LastIndexOf('.') + 1, typeName.Length - typeName.LastIndexOf('.') - 1 - "Request".Length);
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The fully-qualified SDK request type for the request <paramref name="requestName"/> (case-insensitive), with
+    /// the SDK's own casing: <c>Microsoft.Xrm.Sdk.Messages.CreateRequest</c>,
+    /// <c>Microsoft.Crm.Sdk.Messages.CloseQuoteRequest</c>.
+    /// </summary>
+    public static bool TryGetSdkRequestTypeName(string requestName, out string typeName)
+    {
+        typeName = string.Empty;
+        if (string.IsNullOrWhiteSpace(requestName))
+        {
+            return false;
+        }
+
+        foreach ((Assembly assembly, string ns) in SdkMessageNamespaces)
+        {
+            Type? type = assembly.GetType($"{ns}.{requestName.Trim()}Request", throwOnError: false, ignoreCase: true);
+            if (type != null && typeof(Microsoft.Xrm.Sdk.OrganizationRequest).IsAssignableFrom(type))
+            {
+                typeName = type.FullName!;
+                return true;
+            }
+        }
+
+        return false;
     }
 }

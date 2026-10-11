@@ -334,10 +334,9 @@ namespace Vela.Steps
         IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() { SetMessage(PluginMessages.WinQuote, "quote"); return this; }
         IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() { SetMessage(PluginMessages.ModifyAccess); return this; }
         IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() { SetMessage(PluginMessages.Merge); return this; }
-        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) { if (string.IsNullOrWhiteSpace(messageName)) throw new ArgumentNullException(nameof(messageName)); SetMessage(messageName); return this; }
-        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { SetMessage(ExpressionHelper.GetMessageName<TMessage>()); return this; }
-        ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetTypedRequestMessage(ExpressionHelper.GetMessageName<TRequest>(), typeof(TRequest), "On"); return new TypedStepAdapter<TEntity, TRequest>(this); }
-        IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetTypedRequestMessage(ExpressionHelper.GetMessageName<TRequest>(), typeof(TRequest), "OnAsyncOnly"); return new TypedStepAdapter<TEntity, TRequest>(this); }
+        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { SetMessageFrom<TMessage>("OnMessage"); return this; }
+        ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetMessageFrom<TRequest>("On"); return new TypedStepAdapter<TEntity, TRequest>(this); }
+        IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetMessageFrom<TRequest>("OnAsyncOnly"); return new TypedStepAdapter<TEntity, TRequest>(this); }
 
         ISyncMode<IPermissivePreValidationConfig<TEntity>> IPermissiveStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IPermissivePreOperationConfig<TEntity>> IPermissiveStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
@@ -2048,7 +2047,6 @@ namespace Vela.Plugin
         IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() => ((IStepTrigger<TEntity>)BeginStep()).OnWinQuote();
         IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() => ((IStepTrigger<TEntity>)BeginStep()).OnModifyAccess();
         IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() => ((IStepTrigger<TEntity>)BeginStep()).OnMerge();
-        IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) => ((IStepTrigger<TEntity>)BeginStep()).OnMessage(messageName);
         IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() => ((IStepTrigger<TEntity>)BeginStep()).OnMessage<TMessage>();
         ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() => ((IStepTrigger<TEntity>)BeginStep()).On<TRequest>();
         IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() => ((IStepTrigger<TEntity>)BeginStep()).OnAsyncOnly<TRequest>();

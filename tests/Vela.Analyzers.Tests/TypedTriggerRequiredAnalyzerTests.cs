@@ -39,7 +39,7 @@ namespace Vela.Steps
         IConfig OnUpdate();
         IConfig OnCreateMultiple();
         IConfig OnAssign();
-        IConfig OnMessage(string message);
+        IConfig OnMessage<TMessage>() where TMessage : class;
         IConfig On<TRequest>() where TRequest : Microsoft.Xrm.Sdk.OrganizationRequest, new();
         IConfig OnAsyncOnly<TRequest>() where TRequest : Microsoft.Xrm.Sdk.OrganizationRequest, new();
     }
@@ -89,6 +89,14 @@ namespace Demo
             Expected("Create", "OnCreate", "On", "CreateRequest"),
             new DiagnosticResult(TypedTriggerRequiredAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
                 .WithLocation(1).WithArguments("CreateMultiple", "OnCreateMultiple", "On", "CreateMultipleRequest"));
+    }
+
+    // The permissive marker/request trigger is the last other path, so it follows the same rule.
+    [Fact]
+    public async Task Flags_the_permissive_request_trigger()
+    {
+        string code = InMethod("RegisterStep().{|#0:OnMessage<Microsoft.Xrm.Sdk.Messages.UpdateRequest>|}().Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("Update", "OnUpdate", "OnMessage", "UpdateRequest"));
     }
 
     [Fact]
