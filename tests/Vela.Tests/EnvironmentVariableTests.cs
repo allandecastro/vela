@@ -192,4 +192,16 @@ public sealed class EnvironmentVariableTests
 
         public string? Name { get; set; }
     }
+
+    [Fact]
+    public void Secret_type_is_rejected_by_the_injected_reader_too()
+    {
+        Guid def = Guid.NewGuid();
+        ILocalPluginContext ctx = Context(Definition(def, "adc_ApiKey", TypeSecret, "kv-ref"));
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
+            () => ctx.GetRequiredService<IEnvironmentVariableReader>().Resolve("adc_ApiKey"));
+        Assert.Contains("Secret", ex.Message);
+        Assert.DoesNotContain("kv-ref", ex.Message);
+    }
 }

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
+using Vela.Constants;
 using Vela.DI;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.PluginTelemetry;
@@ -493,15 +494,22 @@ namespace Vela.Context
             return value is bool flag && flag;
         }
 
+        // Only the bulk table messages carry their rows in Targets. Any other message (a Custom API, a custom
+        // action) can have an EntityCollection input that happens to be named Targets: that is not a bulk operation.
         private static EntityCollection? ResolveBulkTargets(IPluginExecutionContext context)
         {
-            if (!context.InputParameters.Contains("Targets"))
+            if (!IsBulkMessage(context.MessageName) || !context.InputParameters.Contains("Targets"))
             {
                 return null;
             }
 
             return context.InputParameters["Targets"] as EntityCollection;
         }
+
+        private static bool IsBulkMessage(string? messageName) =>
+            string.Equals(messageName, PluginMessages.CreateMultiple, StringComparison.Ordinal)
+            || string.Equals(messageName, PluginMessages.UpdateMultiple, StringComparison.Ordinal)
+            || string.Equals(messageName, "UpsertMultiple", StringComparison.Ordinal);
 
         private static IReadOnlyList<EntityImageCollection> ResolveBulkEntityImages(IPluginExecutionContext context, string propertyName)
         {

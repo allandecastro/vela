@@ -6,7 +6,8 @@ namespace Vela.Messages
     // Vela-owned typed message requests (typed-requests design). Unlike the SDK request types (sealed, Target
     // typed as the base Entity), a Vela request is generic over the entity, so ctx.Request exposes an early-bound
     // Target - the single typed accessor for the primary record. The Target getter mirrors GetTarget<T>() exactly
-    // (Parameters["Target"].ToEntity<TEntity>()), so the two accessors can never disagree.
+    // (Parameters["Target"].ToEntity<TEntity>(), and the same InvalidPluginExecutionException when Target is absent
+    // or not an Entity), so the two accessors can never disagree.
 
     /// <summary>
     /// Base class for a Vela-owned typed request. Each typed property is a one-liner over the underlying
@@ -101,7 +102,7 @@ namespace Vela.Messages
         /// <summary>The record being created, early-bound. Reads/writes <c>Parameters["Target"]</c>.</summary>
         public TEntity Target
         {
-            get => Parameters.Contains("Target") && Parameters["Target"] is Entity entity ? entity.ToEntity<TEntity>() : null!;
+            get => TypedValue.ReadTarget<TEntity>(Parameters);
             set => Parameters["Target"] = value;
         }
     }
@@ -119,7 +120,7 @@ namespace Vela.Messages
         /// <summary>The record being updated, early-bound. Reads/writes <c>Parameters["Target"]</c>.</summary>
         public TEntity Target
         {
-            get => Parameters.Contains("Target") && Parameters["Target"] is Entity entity ? entity.ToEntity<TEntity>() : null!;
+            get => TypedValue.ReadTarget<TEntity>(Parameters);
             set => Parameters["Target"] = value;
         }
     }
@@ -137,7 +138,7 @@ namespace Vela.Messages
         /// <summary>The email record, early-bound. Reads/writes <c>Parameters["Target"]</c>.</summary>
         public TEntity Target
         {
-            get => Parameters.Contains("Target") && Parameters["Target"] is Entity entity ? entity.ToEntity<TEntity>() : null!;
+            get => TypedValue.ReadTarget<TEntity>(Parameters);
             set => Parameters["Target"] = value;
         }
 
@@ -164,7 +165,7 @@ namespace Vela.Messages
         /// <summary>The record being upserted, early-bound. Reads/writes <c>Parameters["Target"]</c>.</summary>
         public TEntity Target
         {
-            get => Parameters.Contains("Target") && Parameters["Target"] is Entity entity ? entity.ToEntity<TEntity>() : null!;
+            get => TypedValue.ReadTarget<TEntity>(Parameters);
             set => Parameters["Target"] = value;
         }
     }
@@ -183,6 +184,13 @@ namespace Vela.Messages
     internal static class TypedValue
     {
         private static readonly System.Reflection.MethodInfo ToEntity = typeof(Entity).GetMethod(nameof(Entity.ToEntity))!;
+
+        // The typed requests' Target getter: the same conversion and the same error as ctx.GetTarget<T>().
+        internal static TEntity ReadTarget<TEntity>(ParameterCollection parameters)
+            where TEntity : Entity =>
+            parameters.Contains("Target") && parameters["Target"] is Entity entity
+                ? entity.ToEntity<TEntity>()
+                : throw new InvalidPluginExecutionException("Input parameter 'Target' is not an Entity.");
 
         internal static T Read<T>(bool present, object? value, string name)
         {

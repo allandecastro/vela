@@ -142,4 +142,23 @@ public sealed class CustomApiExecutionCoverageTests
         Assert.All(results, d => Assert.Same(results[0], d)); // one shared, fully-built definition
         Assert.Equal("vela_Greet", results[0].UniqueName);
     }
+
+    private sealed class ConcreteContextApi : CustomApiBase
+    {
+        public ConcreteContextApi() : base(string.Empty, string.Empty) { }
+        protected override void RegisterCustomApi() => RegisterCustomApi("vela_Concrete", nameof(Handle));
+        private void Handle(LocalPluginContext ctx) => ctx.SetOutputParameter("Message", "hi");
+    }
+
+    [Fact]
+    public void A_handler_taking_a_concrete_context_type_is_rejected_with_the_expected_signature()
+    {
+        // The handler is invoked with whatever ILocalPluginContext the runtime built, so only the interface itself
+        // is a safe parameter type.
+        ConcreteContextApi api = new ConcreteContextApi();
+        LocalPluginContext context = PluginContext.ForMessage("vela_Concrete").Build();
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => api.Execute(context.ServiceProvider));
+        Assert.Contains("void Handle(ILocalPluginContext)", ex.Message);
+    }
 }

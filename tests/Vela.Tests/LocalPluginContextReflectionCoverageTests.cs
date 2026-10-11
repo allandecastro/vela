@@ -34,6 +34,7 @@ public sealed class LocalPluginContextReflectionCoverageTests
 
         FakePluginExecutionContext fake = new FakePluginExecutionContext
         {
+            MessageName = "UpdateMultiple",
             IsPortalsClientCall = true,
             PortalsContactId = portalsContact,
             InitiatingUserAgent = "vela-agent/1.0",

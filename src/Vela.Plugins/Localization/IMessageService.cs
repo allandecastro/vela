@@ -38,7 +38,8 @@ namespace Vela.Localization
 
         /// <summary>
         /// Tries to get the message for the key in the current user's language (falling back to the
-        /// organization language, then <see cref="DefaultLanguageCode"/>). Returns false when no template exists.
+        /// organization language, then <see cref="DefaultLanguageCode"/>). Returns false when no template exists; a
+        /// template that does not match <paramref name="args"/> still throws.
         /// </summary>
         bool TryGetMessage(string key, out string? message, params object[] args);
 

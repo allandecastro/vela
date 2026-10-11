@@ -168,11 +168,14 @@ namespace Vela.CustomApi
             return _activeBuilder;
         }
 
+        // The handler is invoked with whatever ILocalPluginContext the runtime built, so its parameter must be exactly
+        // ILocalPluginContext: a derived type (LocalPluginContext, a custom subclass) would pass a "derives from"
+        // check here and then fail at invocation with an argument-type mismatch.
         private static bool IsSupportedHandlerSignature(MethodInfo method)
         {
             return HandlerSignature.IsSupported(
                 method,
-                contextType => typeof(ILocalPluginContext).IsAssignableFrom(contextType));
+                contextType => contextType == typeof(ILocalPluginContext));
         }
     }
 }

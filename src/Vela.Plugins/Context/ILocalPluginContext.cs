@@ -155,8 +155,8 @@ namespace Vela.Context
         Guid? PortalsContactId { get; }
 
         /// <summary>
-        /// Gets the bulk operation targets for messages such as CreateMultiple and UpdateMultiple.
-        /// Returns null when the current execution is not a bulk operation.
+        /// Gets the bulk operation targets of a CreateMultiple, UpdateMultiple or UpsertMultiple execution.
+        /// Returns null when the current execution is not one of those messages.
         /// </summary>
         EntityCollection? BulkTargets { get; }
 
@@ -171,7 +171,8 @@ namespace Vela.Context
         IReadOnlyList<EntityImageCollection> BulkPostEntityImagesCollection { get; }
 
         /// <summary>
-        /// Gets a value indicating whether the current message is a bulk operation.
+        /// Gets a value indicating whether the current message is a bulk operation (CreateMultiple, UpdateMultiple or
+        /// UpsertMultiple with a <c>Targets</c> collection).
         /// </summary>
         bool IsBulkOperation { get; }
 
