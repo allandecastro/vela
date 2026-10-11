@@ -71,13 +71,21 @@ jobs:
       # seven times: a plain `dotnet test Vela.sln`, then each gated project again for its coverage). The gates are on
       # branch coverage (not line coverage). Thresholds sit just below measured coverage so they catch regressions
       # without churn; raise them as coverage improves. Every test project must reference coverlet.msbuild, or its
-      # threshold is silently ignored, and must be listed here: the guard below fails when one is not.
+      # threshold is silently ignored, and must be listed here: the guard below fails when one is not. A test project
+      # is any project of the solution that references Microsoft.NET.Test.Sdk, wherever it lives (tests/, docs/samples/).
       - name: Every test project is run below
         run: |
-          $listed = 'Vela.Tests', 'Vela.Testing.Tests', 'Vela.Cli.Tests', 'Vela.Analyzers.Tests', 'Vela.CodeFixes.Tests'
-          $found = Get-ChildItem tests -Recurse -Filter *.Tests.csproj | ForEach-Object { $_.BaseName }
+          $listed = 'Vela.Tests', 'Vela.Testing.Tests', 'Vela.Cli.Tests', 'Vela.Analyzers.Tests', 'Vela.CodeFixes.Tests', 'Vela.DocSamples'
+          $found = dotnet sln Vela.sln list | Where-Object { $_ -like '*.csproj' } |
+            Where-Object { (Get-Content $_ -Raw) -match 'Microsoft\.NET\.Test\.Sdk' } |
+            ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) }
           $missing = $found | Where-Object { $listed -notcontains $_ }
           if ($missing) { Write-Error "Test project(s) not run by CI: $($missing -join ', ')"; exit 1 }
+          Write-Host "Test projects: $($found -join ', ')"
+      # The documentation samples (docs/samples): their tests keep the snippets the pages include working. No gate.
+      - name: Test - documentation samples
+        if: ${{ !cancelled() }} # run every project even when an earlier gate failed
+        run: dotnet test docs/samples/Vela.DocSamples/Vela.DocSamples.csproj -c Release --no-build
       - name: Test + coverage gate (branch) - diff engine
         if: ${{ !cancelled() }} # run every project even when an earlier gate failed
         run: >
