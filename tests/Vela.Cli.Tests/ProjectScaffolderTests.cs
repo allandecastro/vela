@@ -912,9 +912,11 @@ public class ProjectScaffolderTests
             Assert.Fail($"'{fileName} {arguments}' did not finish within {limit.TotalMinutes:0.#} minutes and was killed. Output so far:\n{captured}");
         }
 
-        // The exit is in; give the async readers a bounded moment to flush (a grandchild still holding the pipes must
-        // not turn into a hang here either).
-        process.WaitForExit(TimeSpan.FromSeconds(30));
+        // The exit is in; give the async readers a bounded moment to flush. Only the parameterless WaitForExit() waits
+        // for the redirected streams to reach end-of-file (the timed overload returns once the process exits, so the
+        // last lines could still be in flight); it runs on a task with a bound, so a grandchild still holding the pipes
+        // cannot turn into a hang here either.
+        System.Threading.Tasks.Task.Run(process.WaitForExit).Wait(TimeSpan.FromSeconds(30));
         lock (gate)
         {
             return (process.ExitCode, output.ToString());
