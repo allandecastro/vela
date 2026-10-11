@@ -25,7 +25,7 @@ public sealed class OneWayStepTriggerTests
     }
 
     public static IEnumerable<object[]> TypedTriggerMessages()
-        => StepBuilder<TestAccount>.TypedTriggerMessages.Select(m => new object[] { m });
+        => TypedTriggers.Messages.Select(m => new object[] { m });
 
     [Theory]
     [MemberData(nameof(TypedTriggerMessages))]
@@ -59,7 +59,7 @@ public sealed class OneWayStepTriggerTests
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(triggers, StepBuilder<TestAccount>.TypedTriggerMessages.OrderBy(n => n, StringComparer.Ordinal));
+        Assert.Equal(triggers, TypedTriggers.Messages.OrderBy(n => n, StringComparer.Ordinal));
     }
 
     [Fact]

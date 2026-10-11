@@ -50,16 +50,6 @@ internal static class StepBuilderImplEmitter
         }
         w.Block(UnmodelledTriggers);
 
-        // The messages registered through their dedicated On{Message}() trigger only: On<TRequest>() rejects them.
-        w.Line("        /// <summary>The request names of the messages with a typed <c>On{Message}()</c> trigger (from the generator's message model).</summary>");
-        w.Line("        internal static readonly string[] TypedTriggerMessages =");
-        w.Line("        {");
-        foreach (var message in messages)
-        {
-            w.Line($"            \"{message.Name}\",");
-        }
-        w.Line("        };");
-        w.Line();
 
         // Permissive surface.
         WriteStages(w, "IPermissiveStages<TEntity>", stage => StepConfig.ForPermissive(stage).Type);

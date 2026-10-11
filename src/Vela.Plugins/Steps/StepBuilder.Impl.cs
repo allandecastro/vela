@@ -339,50 +339,6 @@ namespace Vela.Steps
         ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetTypedRequestMessage(ExpressionHelper.GetMessageName<TRequest>(), typeof(TRequest), "On"); return new TypedStepAdapter<TEntity, TRequest>(this); }
         IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetTypedRequestMessage(ExpressionHelper.GetMessageName<TRequest>(), typeof(TRequest), "OnAsyncOnly"); return new TypedStepAdapter<TEntity, TRequest>(this); }
 
-        /// <summary>The request names of the messages with a typed <c>On{Message}()</c> trigger (from the generator's message model).</summary>
-        internal static readonly string[] TypedTriggerMessages =
-        {
-            "Create",
-            "Update",
-            "CreateMultiple",
-            "UpdateMultiple",
-            "Delete",
-            "Retrieve",
-            "RetrieveMultiple",
-            "Associate",
-            "Disassociate",
-            "GrantAccess",
-            "Assign",
-            "RevokeAccess",
-            "QualifyLead",
-            "WinOpportunity",
-            "LoseOpportunity",
-            "ConvertSalesOrderToInvoice",
-            "GenerateQuoteFromOpportunity",
-            "AddToQueue",
-            "RemoveFromQueue",
-            "PickFromQueue",
-            "RouteTo",
-            "ReleaseToQueue",
-            "SendEmail",
-            "SendEmailFromTemplate",
-            "DeliverIncomingEmail",
-            "DeliverPromoteEmail",
-            "AddMembersTeam",
-            "RemoveMembersTeam",
-            "AddListMembersList",
-            "AddMemberList",
-            "RemoveMemberList",
-            "CloseIncident",
-            "CancelContract",
-            "CloneContract",
-            "RetrievePrincipalAccess",
-            "RetrieveSharedPrincipalsAndAccess",
-            "WinQuote",
-            "ModifyAccess",
-            "Merge",
-        };
-
         ISyncMode<IPermissivePreValidationConfig<TEntity>> IPermissiveStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IPermissivePreOperationConfig<TEntity>> IPermissiveStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IPermissivePostOperationConfig<TEntity>> IPermissiveStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }

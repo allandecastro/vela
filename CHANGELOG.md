@@ -502,6 +502,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (CLI, breaking)
 
+- **`vela models --messages` no longer emits an `On{Message}()` step extension for a message with a typed trigger.**
+  The step builder's own `OnQualifyLead()`, `OnMerge()`, ... registers those messages (one way per message), so the
+  extension was dead code and a second path; the typed request and response are still generated, and messages without
+  a typed trigger keep their extension. The list is the one generated from the message model.
 - **Steps deployed by very old Vela versions (named `df:<plugin type>:<step key>`) are no longer recognised by
   their step key.** The live read no longer parses that name format. Such a step is matched like a keyless step
   (plugin type, message, stage, mode and table) and renamed on the next `apply`; when it cannot be matched that way,

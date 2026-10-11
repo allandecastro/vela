@@ -219,14 +219,11 @@ public sealed partial class StepBuilder<TEntity>
     // registered through it (one way per message), so the chain fails here with the trigger to use.
     private void SetTypedRequestMessage(string requestName, Type requestType, string trigger)
     {
-        foreach (string typed in TypedTriggerMessages)
+        if (TypedTriggers.Find(requestName) is string typed)
         {
-            if (string.Equals(typed, requestName, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"{requestName} has a typed trigger: register the step with On{typed}() instead of {trigger}<{requestType.Name}>(). " +
-                    $"{trigger}<TRequest>() is only for messages without one.");
-            }
+            throw new InvalidOperationException(
+                $"{requestName} has a typed trigger: register the step with {typed}() instead of {trigger}<{requestType.Name}>(). " +
+                $"{trigger}<TRequest>() is only for messages without one.");
         }
 
         SetMessage(requestName);
