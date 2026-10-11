@@ -28,5 +28,6 @@ namespace Vela
         public const string MissingFilter = "VELA020";
         public const string ImageProjectionNotGenerated = "VELA021";
         public const string SetStateNeverFires = "VELA022";
+        public const string TypedTriggerRequired = "VELA023";
     }
 }

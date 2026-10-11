@@ -486,6 +486,9 @@ is modelled by `Update`-ing the lookup column. For anything else, inject your ow
 The harness does **not** simulate the server-side **data effect** of non-CRUD "modelled" messages
 (`QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident`, and the like): it fires the steps registered on
 those messages so you can test your own logic, but the record changes the platform would make are not produced.
+Like the platform, it fires the steps of the sdkmessage the request runs as (`Send` for a `SendEmailRequest`), on
+the table the message runs on (queueitem for `AddToQueue`, whatever its `Target`), with an empty
+`ctx.PrimaryEntityId`, so a step registered on the wrong message or table does not fire in a test either.
 The faults the harness raises itself carry the platform `ErrorCode`: not found (`0x80040217`), duplicate key
 (`0x80040237`), missing privilege (`0x80040220`), aggregate limit (`0x8004E023`), the transaction faults above and
 the Custom API input checks. An `ExecuteMultiple` child fault keeps its inner fault's code; any other exception

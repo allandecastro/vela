@@ -27,10 +27,11 @@ these, in this order:
    implementations (including the terminal `Handle(Action<I<Message>PreContext/PostContext<TEntity>>)` and the
    registrar delegation) are **generated** into `src/Vela.Plugins/Steps/StepApi.cs` and
    `src/Vela.Plugins/Steps/StepBuilder.Impl.cs` (both committed). Add **one line** to the generator's model,
-   `tools/codegen/Vela.StepApiGen/MessageModel.cs`, stating whether the message supports `FilterOn(...)` and which
+   `tools/codegen/Vela.StepApiGen/MessageModel.cs`, stating whether the message supports `FilterOn(...)`, which
    images it allows (`Images.Pre`, `Images.Post`, `Images.PreAndPost`; pre-images are offered at every stage,
-   PreValidation included, post-images at PostOperation only), for example
-   `new("QualifyLead"),` or `new("Update", FilterOn: true, Images: Images.PreAndPost),`. Then regenerate:
+   PreValidation included, post-images at PostOperation only) and, when Dataverse runs it on a single table, that
+   table (`Entity:`, checked by `Build()`), for example `new("QualifyLead", Entity: "lead"),` or
+   `new("Update", FilterOn: true, Images: Images.PreAndPost),`. Then regenerate:
 
    ```bash
    dotnet run --project tools/codegen/Vela.StepApiGen
@@ -38,10 +39,11 @@ these, in this order:
 
    Do not hand-edit the generated files - they are overwritten on the next run, and CI runs the generator with
    `-- --check`, which fails the build when the committed files differ from its output.
-3. **`src/Vela.Plugins/Plugin/PluginBaseOfTEntity.cs`** - a `case` in `BuildTypedContext(message, stage, ctx)` that
-   builds `<Message>PostContext` for a PostOperation step and `<Message>PreContext` otherwise, so the runtime hands
-   the handler the stage-correct typed argument.
-4. **`src/Vela.Plugins/Constants/PluginMessages.cs`** - the message-name constant, if it does not already exist.
+3. **`src/Vela.Plugins/Plugin/PluginBaseOfTEntity.cs`** - a `case` in `BuildTypedContext`, keyed by the step's
+   request name, that builds `<Message>PostContext` for a PostOperation step and `<Message>PreContext` otherwise, so
+   the runtime hands the handler the stage-correct typed argument.
+4. **`src/Vela.Plugins/Constants/PluginMessages.cs`** - the message-name constant (the request name), if it does not
+   already exist.
 5. **`src/Vela.Cli/Cli/AddCommand.cs` - `KnownMessages`** - the easy-to-forget one. This array is the CLI's list of
    messages that render a typed `On<Message>()` call from `vela add plugin --message <Message>`. **It must stay in
    sync with the framework's typed methods**: leave the message out and the scaffold silently falls back to the
@@ -49,7 +51,9 @@ these, in this order:
 6. **Check the sdkmessage on a live environment first.** The trigger is named after the SDK request, but the step
    registers on the sdkmessage, and for some business messages the two differ (`SendEmail` is `Send`, `WinQuote` is
    `Win`). Query `sdkmessage` / `sdkmessagefilter` for the request name: if it does not exist, add the mapping to
-   `src/Vela.Plugins/Steps/SdkMessageNames.cs`. If the filter for your entity has
+   `src/Vela.Plugins/Steps/SdkMessageNames.cs` (it lists every request of `sdkmessagerequest` whose name is not an
+   sdkmessage, with the table it runs on). When the message runs on a single table, set `Entity:` in
+   `MessageModel.cs` and list it there with its table. If the filter for your entity has
    `iscustomprocessingstepallowed = false`, do not model the message at all: Dataverse rejects every custom step on
    it (0x80044187).
 

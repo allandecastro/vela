@@ -146,7 +146,9 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   (the latter rolls the whole batch back on failure). For any other message, inject your own service.
 - **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on
   `QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident` and the like fires so you can test your own
-  logic, but the record changes the platform would make are not simulated.
+  logic, but the record changes the platform would make are not simulated. The steps fire as on the platform:
+  on the sdkmessage the request runs as (`Send` for `SendEmailRequest`), on the message's table, with an empty
+  `ctx.PrimaryEntityId`.
 - **Transactions are simulated with store snapshots.** The stage model (PreValidation of the initial operation
   outside the transaction, non-transactional reads, async steps after the commit, a swallowed failed write ending the
   transaction while a swallowed failed read does not) follows the platform as verified on a live environment, but

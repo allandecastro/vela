@@ -18,30 +18,17 @@ namespace Vela.Analyzers
     {
         public const string DiagnosticId = DiagnosticIds.PreferTypedMessage;
 
+        /// <summary>The diagnostic property carrying the typed trigger to use (for the code fix).</summary>
+        public const string TriggerProperty = "Trigger";
+
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
             title: "Prefer the typed step trigger over OnMessage(string)",
-            messageFormat: "Prefer {0}() over OnMessage(\"{1}\") for a modelled message - it gives a typed handler context and compile-time entity applicability",
+            messageFormat: "{1} has a typed trigger: register the step with {0}() instead of OnMessage(\"{1}\"); OnMessage(...) is only for messages without one",
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
-            description: "For a message Vela models there is a typed trigger (OnCreate, OnUpdate, ...) that is safer than the permissive OnMessage(\"...\") string form. OnMessage stays valid for messages Vela does not model, so this is a warning, not an error.");
-
-        // Modelled messages with a canonical typed On<Message>() trigger. Keyed lower-case; value is the method.
-        private static readonly ImmutableDictionary<string, string> TypedTriggers = new Dictionary<string, string>
-        {
-            ["create"] = "OnCreate",
-            ["update"] = "OnUpdate",
-            ["delete"] = "OnDelete",
-            ["createmultiple"] = "OnCreateMultiple",
-            ["updatemultiple"] = "OnUpdateMultiple",
-            ["retrieve"] = "OnRetrieve",
-            ["retrievemultiple"] = "OnRetrieveMultiple",
-            ["associate"] = "OnAssociate",
-            ["disassociate"] = "OnDisassociate",
-            ["assign"] = "OnAssign",
-            ["merge"] = "OnMerge",
-        }.ToImmutableDictionary();
+            description: "Each message is registered one way. A message with a typed trigger (OnCreate, OnUpdate, ...) is registered through it, which also gives a typed handler context and compile-time entity applicability; OnMessage(\"...\") is for messages without one. A warning: the string form still deploys.");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -82,17 +69,16 @@ namespace Vela.Analyzers
             }
 
             string message = literal.Token.ValueText;
-            if (!TypedTriggers.TryGetValue(message.Trim().ToLowerInvariant(), out string? suggestion))
+            if (message.Trim().Length == 0 ||
+                context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken).Symbol is not IMethodSymbol method ||
+                !FluentStep.ImplementsFluent(method.ContainingType, fluent) ||
+                FluentStep.FindTypedTrigger(method.ContainingType, message) is not { } suggestion)
             {
                 return;
             }
 
-            if (!FluentStep.IsFluentMethod(context.SemanticModel, invocation, fluent, context.CancellationToken))
-            {
-                return;
-            }
-
-            context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), suggestion, message));
+            ImmutableDictionary<string, string?> properties = ImmutableDictionary<string, string?>.Empty.Add(TriggerProperty, suggestion);
+            context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), properties, suggestion, message));
         }
     }
 }

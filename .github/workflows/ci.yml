@@ -52,6 +52,8 @@ jobs:
       - name: Scaffold build smoke
         env:
           VELA_BUILD_SMOKE: '1'
+          # A failed scaffold build keeps its binlog here (uploaded below), e.g. to diagnose a pack race (#406).
+          VELA_SMOKE_LOG_DIR: ${{ github.workspace }}/smoke-logs
         run: |
           $cache = Join-Path $env:USERPROFILE '.nuget\packages'
           foreach ($p in 'vela.plugins', 'vela.testing', 'vela.messages') {
@@ -60,6 +62,13 @@ jobs:
           dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release --no-build `
             --filter "FullyQualifiedName~ProjectScaffolderTests.Generate_ThenDotnetBuild_Succeeds"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload scaffold build binlog
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scaffold-build-binlog
+          path: smoke-logs/
+          if-no-files-found: ignore
 
       # Branch-coverage gates (not line coverage): diff engine, test harness, analyzers, code fixes and the plugin
       # runtime (below). coverlet.msbuild fails the run if branch coverage drops below the threshold; every gated

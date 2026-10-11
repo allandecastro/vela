@@ -23,3 +23,4 @@
    - Dataverse did not expose the plugin type from the published package. Dataverse caches plugin assemblies by
      version, so changed code under the same assembly version can keep serving the old assembly: bump the
      assembly version and rebuild. Projects scaffolded by `vela init` use `AssemblyVersion` `1.0.*` for this reason.
+   - If `dotnet build` of the solution fails with `The process cannot access the file '...<Plugin>.1.0.0.nupkg' because it is being used by another process`, a test project's reference built the plugin project a second time (in Debug) alongside the solution's Release build, and both packed into the same file. Add `<ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>` to the test projects' `<PropertyGroup>` (projects scaffolded by `vela init` already set it).

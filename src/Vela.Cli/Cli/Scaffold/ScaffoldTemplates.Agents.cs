@@ -82,7 +82,9 @@ public sealed partial class AccountCreditPlugin(string unsecureConfig, string se
 ```
 
 - Use the typed trigger (`OnCreate()`, `OnUpdate()`, `OnDelete()`, `OnAssociate()`...), then the stage, then
-  `Sync()` / `Async()` (async is PostOperation only), then modifiers, and end with `Handle(...)`.
+  `Sync()` / `Async()` (async is PostOperation only), then modifiers, and end with `Handle(...)`. A message has one
+  way in: `On<TRequest>()` is only for Custom APIs and messages without a typed trigger (VELA023 rejects
+  `On<UpdateRequest>()`).
 - One class can register several steps, even on the same trigger; give them different filters or images, or a
   `WithStepKey(...)`.
 - Images: a post-image only at PostOperation, never a pre-image on Create. The analyzers reject the rest at build time.
@@ -99,7 +101,7 @@ public sealed class EstimateValueApi(string unsecureConfig, string secureConfig)
 {
     protected override void RegisterCustomApi()
     {
-        RegisterCustomApi("{{ApiPrefix(prefix)}}_EstimateValue")
+        RegisterCustomApi("{{options.EffectivePublisherPrefix}}_EstimateValue")
             .DisplayName("Estimate value")
             .Description("Estimates the value of an account.")
             .AsFunction()
@@ -115,7 +117,7 @@ public sealed class EstimateValueApi(string unsecureConfig, string secureConfig)
 
 public sealed class EstimateValueRequest : CustomApiRequest
 {
-    public EstimateValueRequest() : base("{{ApiPrefix(prefix)}}_EstimateValue") { }
+    public EstimateValueRequest() : base("{{options.EffectivePublisherPrefix}}_EstimateValue") { }
 
     public Guid AccountId { get => Get<Guid>(); set => Set(value); }
 
@@ -124,7 +126,7 @@ public sealed class EstimateValueRequest : CustomApiRequest
 
 public sealed class EstimateValueResponse : CustomApiResponse
 {
-    public EstimateValueResponse() : base("{{ApiPrefix(prefix)}}_EstimateValue") { }
+    public EstimateValueResponse() : base("{{options.EffectivePublisherPrefix}}_EstimateValue") { }
 
     public decimal Value { get => Get<decimal>(); set => Set(value); }
 }

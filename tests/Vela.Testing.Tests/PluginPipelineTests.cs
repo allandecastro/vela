@@ -377,26 +377,27 @@ namespace Vela.Testing.Tests
         [Fact]
         public void ModelledMessage_WithoutDataSimulation_StillFiresRegisteredSteps()
         {
-            // SendEmail has no data simulation in the fake, but a registered SendEmail step must still fire like
-            // any other plugin when the message is executed, with ctx.Request typed as the SendEmailRequest.
+            // SendEmail has no data simulation in the fake, but a registered SendEmail step must still fire like any
+            // other plugin when the message is executed. Like the platform, the SendEmailRequest runs as the "Send"
+            // sdkmessage on email, with no PrimaryEntityId, and ctx.Request is the typed SendEmailRequest.
             Guid emailId = Guid.NewGuid();
-            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnAccountEmailSent>();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnEmailSent>();
 
             pipeline.Service.Execute(new SendEmailRequest { EmailId = emailId, IssueSend = true });
 
             Entity task = Assert.Single(pipeline.GetAll("task"));
-            Assert.Equal($"sent:{emailId}", task.GetAttributeValue<string>("subject"));
-            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("OnAccountEmailSent"));
+            Assert.Equal($"sent:{emailId}:Send:email:{Guid.Empty}", task.GetAttributeValue<string>("subject"));
+            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("OnEmailSent"));
         }
 
         [Fact]
-        public void ModelledMessage_WithTargetReference_DerivesEntityAndFires()
+        public void ModelledMessage_RunsOnTheTableOfItsMessage_NotOnItsTarget()
         {
-            // AddToQueue carries a Target EntityReference; the primary entity is derived from it and
-            // ctx.Request.Target / ctx.Request.DestinationQueueId are typed.
+            // AddToQueue carries a Target of any table, but the platform runs it on queueitem (verified live), so a
+            // queueitem step fires and ctx.Request.Target / ctx.Request.DestinationQueueId are typed.
             Guid recordId = Guid.NewGuid();
             Guid queueId = Guid.NewGuid();
-            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnAccountAddedToQueue>();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnQueueItemAdded>();
 
             pipeline.Service.Execute(new AddToQueueRequest
             {
@@ -405,7 +406,24 @@ namespace Vela.Testing.Tests
             });
 
             Entity task = Assert.Single(pipeline.GetAll("task"));
-            Assert.Equal($"queue:{recordId}:{queueId}", task.GetAttributeValue<string>("subject"));
+            Assert.Equal($"queue:{recordId}:{queueId}:queueitem", task.GetAttributeValue<string>("subject"));
+        }
+
+        [Fact]
+        public void ModelledMessage_SharingAnSdkMessage_FiresOnlyTheStepOfItsTable()
+        {
+            // WinOpportunity and WinQuote both run as "Win": a WinQuoteRequest must fire the quote step, not the
+            // opportunity one, as the step's table tells them apart.
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnQuoteWon>().Register<OnOpportunityWon>();
+
+            pipeline.Service.Execute(new WinQuoteRequest
+            {
+                QuoteClose = new Entity("quoteclose") { ["quoteid"] = new EntityReference("quote", Guid.NewGuid()) },
+                Status = new OptionSetValue(4)
+            });
+
+            Entity task = Assert.Single(pipeline.GetAll("task"));
+            Assert.Equal("win:quote:Win", task.GetAttributeValue<string>("subject"));
         }
 
         [Fact]

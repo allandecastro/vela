@@ -26,21 +26,29 @@ vela add --interactive
   type and the `<Table>/` folder. Required for a plugin and a service; omit on a Custom API to generate a global one.
 - **Custom API ergonomics:** `--function`/`--action` choose the operation type (default `Action`), and
   `--bound`/`--global` make the binding explicit instead of inferring it from `--entity` (`--bound` requires
-  `--entity`; `--global` is unbound). The generated unique name is `<prefix>_<Name>`; `<prefix>` defaults to a
-  lower-cased form of the project prefix, but that must match your target solution's **publisher prefix** or
-  `apply --solution` rejects it. Override it with `--prefix <publisherprefix>` (for example `--prefix dv` renders
-  `dv_<Name>`). See [the publisher prefix](custom-apis.md#the-publisher-prefix).
+  `--entity`; `--global` is unbound). The generated unique name is `<prefix>_<Name>`, where `<prefix>` must match
+  your target solution's **publisher prefix** or `apply --solution` rejects it. It is, in order: `--prefix
+  <publisherprefix>` (for example `--prefix dv` renders `dv_<Name>`); the `VelaPublisherPrefix` that
+  `vela init --publisher-prefix` recorded in the project; or a lower-cased form of the project prefix, with a note.
+  A value that is not a valid publisher prefix (2-8 characters, letter first, alphanumeric) is refused rather than
+  written into a name Dataverse would reject. See [the publisher prefix](custom-apis.md#the-publisher-prefix).
+  `--function` adds a placeholder `Result` response (a function must return a value) and sets it in the handler.
 - `--message <Message>` (plugin, default `Create`): the messages Vela models get a strongly-typed `On...()`
   call - the CRUD/bulk set (`Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`,
   `RetrieveMultiple`), relationships/sharing (`Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`,
   `RevokeAccess`, `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`), sales lifecycle (`QualifyLead`,
-  `WinOpportunity`, `WinQuote`, `LoseOpportunity`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`), queues (`AddToQueue`, `RouteTo`, …),
-  email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and case/contract messages (see the full
-  list in [Write a plugin](plugins.md)); any other name is
-  registered as a custom SDK message via `OnMessage("...")`. `SetState` / `SetStateDynamicEntity` have no typed
-  method (a `SetState` step never fires, VELA022: react to `Update` filtered on `statecode` instead), and `add` does not
-  emit the typed `OnAssign()` either, so these render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in the
-  current directory), `--force` (overwrite an existing file).
+  `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`),
+  queues (`AddToQueue`, `RouteTo`, …), email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and
+  case/contract messages (see the full list in [Write a plugin](plugins.md)). The sdkmessage name works too:
+  `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or `OnWinOpportunity()`
+  from `--entity`. Any other name is registered as a custom SDK message via `OnMessage("...")`. `Assign` gets the
+  typed `OnAssign()` too. The deprecated `SetState` / `SetStateDynamicEntity` messages have no typed method (a `SetState` step never fires, VELA022: react
+  to `Update` filtered on `statecode` instead), so they render `OnMessage("...")`. `--project <csproj>` (default:
+  the single `.csproj` in the current directory), `--force` (overwrite an existing file), `--json` (machine-readable
+  report).
+- **Each kind takes only its own options.** An option the kind does not use (for example `add service --message`
+  or `add step --force`) is rejected with a message rather than silently ignored. `vela add --help` lists each
+  kind's options.
 - **Filtering attributes on a `Create`/`Update` plugin or step** (also `CreateMultiple`/`UpdateMultiple`):
   these steps require a `FilterOn`, so `--filtering-attributes <Col1,Col2>` is **required** for them. Pass the
   early-bound property name(s) (for example `--filtering-attributes Name,Telephone1` renders
@@ -62,9 +70,13 @@ vela add --interactive
   the human prose.
 - `vela add test <ClassUnderTest>` scaffolds a `Vela.Testing` test (`<ClassUnderTest>Tests`) pre-wired with
   `PluginContext.For<…>()…Execute(…)`. Run it inside the test project (its `RootNamespace` must end in `.Tests`);
-  use `--kind customapi` for a Custom API test (and omit `--entity` for a global one). For a `*Multiple` plugin
-  pass `--message CreateMultiple`/`--message UpdateMultiple` so the generated test seeds `WithTargets(...)` (the
-  handler reads `ctx.Request.Targets`) instead of `WithTarget(...)`.
+  use `--kind customapi` for a Custom API test (and omit `--entity` for a global one; `--prefix` names the Custom
+  API as for `add customapi`). For a `*Multiple` plugin pass `--message CreateMultiple`/`--message UpdateMultiple`
+  so the generated test seeds `WithTargets(...)` (the handler reads `ctx.Request.Targets`) instead of
+  `WithTarget(...)`. The generated tests pass as generated and assert something real: a plugin test checks that
+  the handler ran (the trace line the `add plugin` handler writes); a Custom API test checks the registered unique
+  name and that every declared output parameter is set, with a `WithInputParameter(...)` example for the inputs.
+  Replace those assertions with your plugin's own behaviour.
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
   method, e.g. `OnUpdate()`, or `OnMessage("...")` for an unmodelled message, not the generic `On<TRequest>()`
@@ -74,7 +86,12 @@ vela add --interactive
   accepts the same `--stage`/`--mode` and `--filtering-attributes` options as `add plugin`: pass
   `--filtering-attributes <Col1,Col2>` to emit `FilterOn(e => e.Col1, e => e.Col2)` (identifiers validated and
   wrong casing corrected against the model, as above). As for `add plugin`, the option is required on a
-  `Create`/`Update` (or `*Multiple`) step and rejected on any other message. The handler body's TODO
+  `Create`/`Update` (or `*Multiple`) step and rejected on any other message. A plugin may have several
+  steps on one trigger (message, stage and mode) when they are told apart by their `FilterOn` columns, images,
+  `WithStepKey` or `ForRelationship`. `add step` refuses only an exact duplicate - an existing step on the same
+  trigger with the same filtering columns and nothing else to tell them apart (the add-step defaults `Create`,
+  `PostOperation`, `Sync` are what `add plugin` emits). A step that shares a trigger but filters on other columns
+  is added, with a note suggesting `.WithStepKey("...")` to name both. The handler body's TODO
   points at the typed access for the message (`ctx.Request.Target`, or `ctx.Request.Targets` for a `*Multiple`
   step).
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +

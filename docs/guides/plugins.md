@@ -46,7 +46,7 @@ The `using` directives sit inside the namespace so that `Account` resolves to th
 | Do slow or non-critical work after the commit | `PostOperation().Async()` | Runs in its own execution; a Target write has no effect ([VELA018](../reference/analyzers.md#vela018)). |
 | Compare with the previous values | add `WithPreImage(...)` | Never on Create. |
 | Read the saved values | add `WithPostImage(...)` | PostOperation only, never on Delete. |
-| React to a message with no typed trigger | `On<TRequest>()` or `OnMessage("...")` | See [Other messages](#other-messages). |
+| React to a message with no typed trigger (a Custom API, an unmodelled message) | `On<TRequest>()` or `OnMessage("...")` | See [Other messages](#other-messages). A message with a typed trigger is registered only through it ([VELA023](../reference/analyzers.md#vela023)). |
 | Change a record's state | `OnUpdate().FilterOn(x => x.StateCode)` or `OnMessage(PluginMessages.SetStateDynamicEntity)` | A step on `SetState` never fires ([VELA022](../reference/analyzers.md#vela022)). |
 
 ## Several steps in one class
@@ -203,7 +203,7 @@ and stage support, so an invalid image does not compile:
 
 Through `OnMessage("...")` and `On<TRequest>()` both images are offered, and the same rule table is checked when
 the step is built: a post-image before PostOperation, a pre-image on Create/CreateMultiple, a post-image on Delete
-and any image on `RouteTo` throw. Images on `Send` / `DeliverIncoming` / `DeliverPromote` register against
+and any image on `RouteTo` or `SendFromTemplate` throw. Images on `Send` / `DeliverIncoming` / `DeliverPromote` register against
 `EmailId`, on `SetState` / `SetStateDynamicEntity` against `EntityMoniker`, and on any other message against
 `Target`. `vela plan` checks the same table before writing anything, and [VELA007](../reference/analyzers.md#vela007)
 reports what it can see at build.
@@ -331,12 +331,23 @@ Typed triggers exist for:
 - **CRUD and bulk:** `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`.
 - **Relationships, sharing, ownership:** `Associate`, `Disassociate`, `Merge`, `Assign`, `GrantAccess`,
   `ModifyAccess`, `RevokeAccess`, `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`.
-- **Sales:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`,
-  `GenerateQuoteFromOpportunity` (on `quote`, the only entity Dataverse filters it on).
-- **Queues:** `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
-- **Email:** `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
-- **Membership:** `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`, `AddMemberList`, `RemoveMemberList`.
-- **Case and contract:** `CloseIncident`, `CancelContract`, `CloneContract`.
+- **Sales:** `QualifyLead` (lead), `WinOpportunity` / `LoseOpportunity` (opportunity), `WinQuote` and
+  `GenerateQuoteFromOpportunity` (quote), `ConvertSalesOrderToInvoice` (salesorder).
+- **Queues** (queueitem): `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
+- **Email** (email): `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
+- **Membership:** `AddMembersTeam`, `RemoveMembersTeam` (team), `AddListMembersList`, `AddMemberList`,
+  `RemoveMemberList` (list).
+- **Case and contract:** `CloseIncident` (incident), `CancelContract`, `CloneContract` (contract).
+
+A message with a table in parentheses runs on that table only: register its trigger from an `EntityPluginBase<T>` on
+that table (the builder rejects any other). That is what tells `OnWinQuote()` from `OnWinOpportunity()`, which share
+`Win`. The queue messages run on `queueitem` whatever their `Target`. On all of these `ctx.PrimaryEntityId` is empty:
+read the record from `ctx.Request` (`ctx.Request.EmailId`, `ctx.Request.TeamId`, ...).
+
+**One way per message.** A message with a typed trigger is registered through it. `On<TRequest>()` and
+`OnAsyncOnly<TRequest>()` are only for messages without one: `On<UpdateRequest>()` throws when the step is
+registered, naming the trigger to use, and [VELA023](../reference/analyzers.md#vela023) reports it at build with a
+code fix to `OnUpdate()`. `OnMessage("update")` is flagged by [VELA006](../reference/analyzers.md#vela006).
 
 **A trigger is named after the SDK request; the step registers on the sdkmessage.** Where they differ, Dataverse only
 knows the sdkmessage, and the handler sees it in `ctx.MessageName`: `SendEmail` → `Send`, `SendEmailFromTemplate` →
@@ -344,7 +355,8 @@ knows the sdkmessage, and the handler sees it in `ctx.MessageName`: `SendEmail` 
 `WinOpportunity` / `WinQuote` → `Win`, `LoseOpportunity` → `Lose`, `CloseIncident` → `Close`, `CancelContract` →
 `Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
 `AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`.
-`OnMessage(PluginMessages.SendEmail)` and the test harness translate the same way.
+`OnMessage(PluginMessages.SendEmail)` and the test harness translate the same way. The translation covers every SDK
+request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on `Close` too.
 
 `ReviseQuote`, `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`,
 `GenerateInvoiceFromOpportunity` and the three `Get*ProductsFromOpportunity` accept no custom step (Dataverse fails
@@ -354,10 +366,13 @@ call them from a handler (`service.Execute(new WhoAmIRequest())`).
 `OnAssign()` is entity-bound and fires on reassignment, with the new owner in `ctx.Request.Assignee`. An Update of
 `ownerid` fires Update steps only, never Assign.
 
+`vela init --samples` generates an `AccountMessageReference.cs` cheat sheet with one handler per message, to copy
+the shape you need. It is an `abstract` class, so it compiles but is never deployed.
+
 ### Other messages
 
-When you have a request type (an SDK request, or one generated by [`vela models --messages` / `--custom-apis`](models.md)),
-use `On<TRequest>()`. The message name comes from the request's `RequestName`, and the handler gets
+For a message without a typed trigger, when you have a request type (an SDK request, or one generated by
+[`vela models --messages` / `--custom-apis`](models.md)), use `On<TRequest>()`. The message name comes from the request's `RequestName`, and the handler gets
 `IMessagePreContext<TRequest>` / `IMessagePostContext<TRequest>` with a typed `ctx.Request`:
 
 ```csharp
@@ -476,7 +491,7 @@ as unchanged. Strings compare exactly (case included) and multi-select choices a
 - The runtime traces an `Executing ...` line and `Entering handler '<Name>' for message '<Message>'.` for each named
   handler (`protected override bool AutoTraceHandlerEntry => false;` silences the latter).
 - Each Dataverse call through the context services is traced as one line when it starts and one when it ends,
-  metadata only:
+  metadata only (`protected override bool AutoTraceServiceCalls => false;` keeps only failed calls, on one line):
 
   ```text
   Dataverse.Update start scope=User depth=1 entity=account; id=3a0b9d52-1e44-4c8a-b1f0-7d2c5a9e6b41
@@ -493,6 +508,21 @@ as unchanged. Strings compare exactly (case included) and multi-select choices a
 > [!WARNING]
 > A full snapshot writes record values into the Plugin Trace Log. Keep it out of plugins handling sensitive data
 > when the Plugin Trace Log is `All`.
+
+**Keep the trace budget for your own lines.** Dataverse persists only about 10 KB of trace text per execution and
+drops the rest. A metadata snapshot is about 20 lines and each Dataverse call adds two, so a plugin that makes many
+calls can turn the automatic traces down (`TraceSnapshotDetail.None` writes no snapshot, failures included):
+
+```csharp
+protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.None;
+protected override bool AutoTraceServiceCalls => false;
+protected override bool AutoTraceHandlerEntry => false;
+```
+
+The `Executing ...` and `Execution completed in N ms.` lines and the exception traces are always written. An override
+applies to one plugin class and the classes that derive from it; to quiet every plugin of a project, put the
+overrides on your own abstract base classes (for example a `QuietEntityPluginBase<TEntity>` deriving from
+`EntityPluginBase<TEntity>`) and derive your plugins from them.
 
 ## Preventing recursion
 
