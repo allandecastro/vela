@@ -305,6 +305,20 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   context properties read by name, the telemetry logger and `LogMetric` lookups) is resolved once per process. A typed
   Custom API finds its request type's auto-properties once per type instead of reflecting over every input parameter
   on every execution.
+- **The newer context members are read through their SDK interfaces (#448).** `EnvironmentId`, `TenantId`,
+  `InitiatingUserAgent`, `IsPortalsClientCall`, `PortalsContactId`, `IsApplicationUser` and the bulk image
+  collections were read by reflection on a public property of the concrete context class, so a context that
+  implements `IPluginExecutionContext2..7` explicitly returned nothing. They are now read through the interfaces,
+  which also lets the compiler check each member's type. Whether the platform's own context class implements them
+  explicitly is not verified live; this removes the dependency on it, and the last per-process reflection cache.
+- **VELA011 catches more mutable plugin state (#448).** Besides a writable field, it now warns on a writable
+  auto-property, a `readonly` field holding a mutable collection (`List<T>`, `Dictionary<,>`, `HashSet<T>`, the
+  `IList<T>` / `IDictionary<,>` / `ICollection<T>` / `ISet<T>` interfaces, the non-generic collections) and a
+  primary-constructor parameter captured by a member. Arrays, read-only views, concurrent and immutable collections
+  are left alone.
+- **VELA013 is scoped to plugin code and reads constants (#448).** It warns only inside a plugin / Custom API type,
+  like VELA019, so test projects and tools are no longer flagged, and `new ColumnSet(AllColumns)` over a
+  `const bool` no longer slips through.
 
 ### Fixed (Framework)
 

@@ -18,9 +18,9 @@ VELA021 and VELA022) are **warnings**.
 | [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share a trigger and nothing tells them apart (same filters and images, no step key) |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
 | [VELA010](#vela010) | Vela.Usage | Error | A generated relationship navigation property used in a column selector |
-| [VELA011](#vela011) | Vela.Reliability | Warning | A writable field (mutable state) on a plugin type |
+| [VELA011](#vela011) | Vela.Reliability | Warning | Mutable state on a plugin type: a writable field or auto-property, a `readonly` mutable collection, a captured primary-constructor parameter |
 | [VELA012](#vela012) | Vela.Usage | Warning | Throwing an exception other than `InvalidPluginExecutionException` from a plugin |
-| [VELA013](#vela013) | Vela.Performance | Warning | `new ColumnSet(true)` retrieves every column |
+| [VELA013](#vela013) | Vela.Performance | Warning | `new ColumnSet(true)` in a plugin type retrieves every column |
 | [VELA014](#vela014) | Vela.Usage | Error | A plugin with a generated context or typed image must be declared `partial` |
 | [VELA015](#vela015) | Vela.Usage | Error | A step handler's context does not match the step's message/stage |
 | [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
@@ -167,13 +167,25 @@ or load related records with a deep insert / relationship-aware read rather than
 
 ## VELA011
 
-**Mutable plugin state.** A writable field on a plugin / Custom API type is shared state: the Dataverse sandbox
-caches and reuses plugin instances across executions and calls them concurrently, so a mutable field leaks data
-between unrelated operations and races. Only writable fields are flagged; `const`, `readonly` and `static readonly`
-(immutable configuration) are fine. Plugin types are recognised by symbol (`Microsoft.Xrm.Sdk.IPlugin`,
+**Mutable plugin state.** The Dataverse sandbox caches and reuses plugin instances across executions and calls them
+concurrently, so state stored on a plugin / Custom API type leaks data between unrelated operations and races. Four
+shapes are flagged:
+
+- a writable field (instance or `static`);
+- a writable auto-property (`{ get; set; }`, also with a `private set`): its backing field is a writable field;
+- a `readonly` field holding a mutable collection (`List<T>`, `Dictionary<TKey, TValue>`, `HashSet<T>`, the other
+  `System.Collections.Generic` collections, `IList<T>` / `ICollection<T>` / `IDictionary<TKey, TValue>` / `ISet<T>`,
+  and the non-generic `ArrayList` / `Hashtable`): `readonly` freezes the reference, not the contents;
+- a primary-constructor parameter that a member reads or writes: the compiler stores it in a writable field.
+
+`const`, `readonly` and `static readonly` fields of immutable values, get-only and `init` auto-properties, arrays (the
+usual fixed column lists), read-only views (`IReadOnlyList<T>`, `ReadOnlyCollection<T>`), the concurrent collections
+(thread-safe, the deliberate cache) and a primary-constructor parameter used only in an initializer or a base
+constructor call are fine. Plugin types are recognised by symbol (`Microsoft.Xrm.Sdk.IPlugin`,
 `Vela.Plugin.PluginBase`, `EntityPluginBase<T>`, `Vela.CustomApi.CustomApiBase`), never by a look-alike name.
 
-**Fix:** keep per-execution state in locals or on the execution context; make constants `const` / `readonly`.
+**Fix:** keep per-execution state in locals or on the execution context; make constants `const` / `readonly` and
+expose collections as read-only.
 
 ## VELA012
 
@@ -205,6 +217,9 @@ user-facing failures.
 
 **Retrieving all columns.** `new ColumnSet(true)` fetches every column, moving far more data than a plugin needs.
 Request only the columns you use (the explicit `SelectAll()` on a typed query states the intent and is left alone).
+The argument is read as a constant, so `new ColumnSet(AllColumns)` over a `const bool` and `AllColumns = true` in an
+object initializer are caught too. Like VELA019, the rule applies inside a plugin / Custom API type only: a test
+class or a tool in the same solution is not flagged.
 
 **Fix:** pass the specific columns to `ColumnSet`, or use the typed `Select(...)`.
 

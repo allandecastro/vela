@@ -1,4 +1,6 @@
+using System.Threading;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Vela.Analyzers
 {
@@ -69,6 +71,24 @@ namespace Vela.Analyzers
                 if (Is(definition, _pluginBase) || Is(definition, _entityPluginBase) || Is(definition, _customApiBase))
                 {
                     return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// True when the innermost type declaration around <paramref name="node"/> is a plugin type. Scopes the
+        /// syntax-level plugin analyzers (filesystem access, retrieve-all-columns) to plugin code, so a test or tool
+        /// in the same solution is left alone.
+        /// </summary>
+        public bool Encloses(SyntaxNode node, SemanticModel model, CancellationToken cancellationToken)
+        {
+            for (SyntaxNode? current = node; current is not null; current = current.Parent)
+            {
+                if (current is TypeDeclarationSyntax type)
+                {
+                    return IsPluginType(model.GetDeclaredSymbol(type, cancellationToken) as INamedTypeSymbol);
                 }
             }
 

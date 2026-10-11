@@ -8,8 +8,9 @@ using Xunit;
 
 namespace Vela.Tests;
 
-// Constructs LocalPluginContext directly over a fully-populated execution context so the reflection-based
-// context-property resolvers (bool/guid/string + bulk targets/images) hit their value-present branches.
+// Constructs LocalPluginContext directly over a fully-populated execution context so the extended context members
+// (read through the IPluginExecutionContext2..7 interfaces, plus bulk targets/images) hit their value-present
+// branches. SdkContractTests covers the same reads against an explicitly implemented context.
 public sealed class LocalPluginContextReflectionCoverageTests
 {
     private static IServiceProvider Provider(IPluginExecutionContext context)
@@ -25,7 +26,7 @@ public sealed class LocalPluginContextReflectionCoverageTests
     }
 
     [Fact]
-    public void Reflection_resolvers_read_present_values_from_the_context()
+    public void Extended_members_read_present_values_from_the_context()
     {
         Guid tenant = Guid.NewGuid();
         Guid portalsContact = Guid.NewGuid();
@@ -47,34 +48,34 @@ public sealed class LocalPluginContextReflectionCoverageTests
 
         LocalPluginContext ctx = new LocalPluginContext(Provider(fake));
 
-        Assert.True(ctx.IsPortalsClientCall);                       // ResolveContextBool -> true
-        Assert.Equal(portalsContact, ctx.PortalsContactId);        // ResolveContextGuid -> non-empty
-        Assert.Equal("vela-agent/1.0", ctx.InitiatingUserAgent);  // ResolveContextString -> value
-        Assert.True(ctx.IsApplicationUser);                        // ResolveContextBool -> true
-        Assert.Equal(tenant, ctx.TenantId);                        // ResolveContextGuid -> non-empty
-        Assert.Equal("env-42", ctx.EnvironmentId);                 // ResolveContextNonEmptyString -> value
+        Assert.True(ctx.IsPortalsClientCall);
+        Assert.Equal(portalsContact, ctx.PortalsContactId);
+        Assert.Equal("vela-agent/1.0", ctx.InitiatingUserAgent);
+        Assert.True(ctx.IsApplicationUser);
+        Assert.Equal(tenant, ctx.TenantId);
+        Assert.Equal("env-42", ctx.EnvironmentId);
         Assert.True(ctx.IsBulkOperation);                          // ResolveBulkTargets -> Targets present
-        Assert.Single(ctx.BulkPreEntityImagesCollection);         // ResolveBulkEntityImages -> array as IReadOnlyList
+        Assert.Single(ctx.BulkPreEntityImagesCollection);
     }
 
     [Fact]
-    public void Reflection_resolvers_fall_back_when_the_context_lacks_the_extended_properties()
+    public void Extended_members_fall_back_when_the_context_lacks_the_newer_interfaces()
     {
-        // A base IPluginExecutionContext mock has none of the IPluginExecutionContext6/7 members, so the
-        // reflection lookups miss and every resolver returns its default.
+        // A base IPluginExecutionContext mock implements none of IPluginExecutionContext2..7, so every extended
+        // member returns its default.
         Mock<IPluginExecutionContext> bare = new Mock<IPluginExecutionContext>();
         bare.SetupGet(c => c.InputParameters).Returns(new ParameterCollection()); // no "Targets"
 
         LocalPluginContext ctx = new LocalPluginContext(Provider(bare.Object));
 
-        Assert.Null(ctx.TenantId);                         // ResolveContextGuid -> property missing
-        Assert.Null(ctx.EnvironmentId);                    // ResolveContextNonEmptyString -> property missing
+        Assert.Null(ctx.TenantId);
+        Assert.Null(ctx.EnvironmentId);
         Assert.Null(ctx.PortalsContactId);
-        Assert.False(ctx.IsPortalsClientCall);             // ResolveContextBool -> property missing
+        Assert.False(ctx.IsPortalsClientCall);
         Assert.False(ctx.IsApplicationUser);
-        Assert.Equal(string.Empty, ctx.InitiatingUserAgent); // ResolveContextString missing -> "" fallback
+        Assert.Equal(string.Empty, ctx.InitiatingUserAgent);
         Assert.False(ctx.IsBulkOperation);
-        Assert.Empty(ctx.BulkPreEntityImagesCollection);   // ResolveBulkEntityImages -> empty
+        Assert.Empty(ctx.BulkPreEntityImagesCollection);
     }
 
     [Fact]
