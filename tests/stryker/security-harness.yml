@@ -1,7 +1,8 @@
 # Mutation area: the harness security model's decision logic (roles, privileges, depth, sharing, access teams,
 # hierarchy, FLS, 1:N cascade configuration). Run from tests/Vela.Testing.Tests.
-# Measured at ~86.2% after killing the real survivors; break is ratcheted to 84 (~2 pts below). The remaining
+# Earlier measured at ~86.2% after killing the real survivors; break was ratcheted to 84 (~2 pts below). The remaining
 # survivors are equivalent (exception-message strings, comparer internals, cycle guards).
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 89.87%; break ratcheted to 87 (~2 pts below).
 stryker-config:
   solution: ../../Vela.sln
   project: Vela.Testing.csproj
@@ -13,5 +14,5 @@ stryker-config:
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90
-    low: 84
-    break: 84
+    low: 87
+    break: 87

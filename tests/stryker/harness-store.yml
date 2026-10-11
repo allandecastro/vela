@@ -1,7 +1,8 @@
 # Mutation area: the in-memory store core (InMemoryOrganizationService.cs, #448): CRUD, Execute dispatch, versioning,
 # seeding and relationships. Its security partial is the security-enforcement area and its query engine the
 # harness-query area. Run from tests/Vela.Testing.Tests. net462: Windows only. First Windows measurement (2026-10,
-# Stryker 4.16): ~68.9%; the #448 mutation tests target those survivors. Ratchet once the first full run is in.
+# Stryker 4.16): ~68.9%; the #448 mutation tests target those survivors.
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 89.93%; break ratcheted to 87 (~2 pts below).
 stryker-config:
   solution: ../../Vela.sln
   project: Vela.Testing.csproj
@@ -10,5 +11,5 @@ stryker-config:
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90
-    low: 80
-    break: 80
+    low: 87
+    break: 87

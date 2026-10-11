@@ -1,12 +1,14 @@
 # Prints the mutation areas to run, as the JSON matrix of .github/workflows/mutation.yml (Windows PowerShell 5.1).
 #
 #   select-areas.ps1                     every area (scheduled and manual runs)
+#   select-areas.ps1 -Only "a,b"         the named areas only (a manual run with the `areas` input); an unknown
+#                                        name fails, so a typo cannot silently run nothing
 #   select-areas.ps1 -ChangedFiles FILE  the areas with a changed source file or Stryker configuration (pull requests);
 #                                        FILE lists one repository path per line (git diff --name-only).
 #
 # The areas are declared in areas.json next to this script: `sources` is the regex of the source paths an area
 # mutates, `exclude` (optional) the paths it leaves out, and tests/stryker/<area>.yml its Stryker configuration.
-param([string] $ChangedFiles)
+param([string] $ChangedFiles, [string] $Only)
 
 $ErrorActionPreference = 'Stop'
 # Windows PowerShell 5.1's ConvertFrom-Json emits a JSON array as ONE object, so @(...) alone would wrap the whole
@@ -23,6 +25,15 @@ if ($ChangedFiles) {
             (($_ -match $area.sources) -and -not ($area.exclude -and ($_ -match $area.exclude)))
         }).Count -gt 0
     })
+}
+
+if ($Only) {
+    $names = @($Only -split '[,\s]+' | Where-Object { $_ })
+    $unknown = @($names | Where-Object { $name = $_; -not @($areas | Where-Object { $_.area -eq $name }).Count })
+    if ($unknown.Count -gt 0) {
+        throw "Unknown mutation area(s): $($unknown -join ', '). Known: $(($areas | ForEach-Object { $_.area }) -join ', ')"
+    }
+    $areas = @($areas | Where-Object { $names -contains $_.area })
 }
 
 $matrix = @($areas | ForEach-Object { [pscustomobject]@{ area = $_.area; tests = $_.tests; timeout = $_.timeout } })

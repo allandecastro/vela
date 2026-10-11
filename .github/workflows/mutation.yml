@@ -5,7 +5,8 @@ name: Mutation Testing
 # area's Stryker configuration: the files it mutates, its thresholds and why they sit where they do. See
 # docs/advanced/mutation-testing.md.
 #
-# - Weekly and on demand: every area, on all of its files, gated by the area's `break` threshold.
+# - Weekly and on demand: every area, on all of its files, gated by the area's `break` threshold. A manual run can
+#   name the areas to run (the `areas` input, e.g. `gh workflow run mutation.yml -f areas=analyzers`).
 # - On a pull request: only the areas whose files the PR changes, and only the mutants of the changed files
 #   (`--since:main`), gated at the 80 floor. An incremental run scores a handful of mutants, so it is gated at the
 #   floor rather than at the area's ratcheted threshold.
@@ -15,6 +16,11 @@ name: Mutation Testing
 # net462 projects only build on Windows. The runner is a single machine, so the areas run one after another.
 on:
   workflow_dispatch:
+    inputs:
+      areas:
+        description: 'Areas to run, comma-separated (e.g. analyzers,plugins-steps); empty runs every area'
+        required: false
+        default: ''
   schedule:
     - cron: '0 4 * * 1' # Mondays 04:00 UTC
   pull_request:
@@ -48,6 +54,9 @@ jobs:
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - name: Select areas
         id: select
+        env:
+          # Passed through the environment, never interpolated into the script.
+          ONLY_AREAS: ${{ github.event.inputs.areas }}
         run: |
           if ('${{ github.event_name }}' -eq 'pull_request') {
             git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
@@ -55,6 +64,8 @@ jobs:
             $changed = Join-Path $env:RUNNER_TEMP 'changed.txt'
             git diff --name-only "origin/${{ github.base_ref }}...HEAD" | Set-Content -Path $changed
             $areas = & ./tests/stryker/select-areas.ps1 -ChangedFiles $changed
+          } elseif ($env:ONLY_AREAS) {
+            $areas = & ./tests/stryker/select-areas.ps1 -Only $env:ONLY_AREAS
           } else {
             $areas = & ./tests/stryker/select-areas.ps1
           }

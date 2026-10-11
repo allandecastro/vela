@@ -1,6 +1,7 @@
 # Mutation area: role generation in the CLI (the metadata-to-code generator and the privilege mapper). Run from
-# tests/Vela.Cli.Tests. A full-output snapshot test pins the emitted strings; break is held at the 80 floor (the
+# tests/Vela.Cli.Tests. A full-output snapshot test pins the emitted strings; break was held at the 80 floor (the
 # remaining survivors are equivalent whitespace/statement mutations of the generated text).
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 87.65%; break ratcheted to 85 (~2 pts below).
 stryker-config:
   project: Vela.Cli.csproj
   mutate:
@@ -9,5 +10,5 @@ stryker-config:
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90
-    low: 80
-    break: 80
+    low: 85
+    break: 85

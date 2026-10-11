@@ -1,6 +1,7 @@
 # Mutation area: the plugin runtime services (Vela.Plugins/DI, Caching and Localization): the service resolver and
 # registrars, the bounded TTL cache, and the message sources. Run from tests/Vela.Tests, with Vela.Testing.Tests as
 # a second test project. net462: Windows only.
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 86.20%; break ratcheted to 84 (~2 pts below).
 stryker-config:
   solution: ../../Vela.sln
   project: Vela.Plugins.csproj
@@ -14,5 +15,5 @@ stryker-config:
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90
-    low: 80
-    break: 80
+    low: 84
+    break: 84

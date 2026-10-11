@@ -30,7 +30,8 @@ its thresholds, and why they sit where they do. Stryker is pinned in
 The workflow runs in two modes, and each run reports into the job summary and an HTML
 artifact:
 
-- **Weekly and on demand:** every area, on all of its files, gated by the area's
+- **Weekly and on demand:** every area (or, on a manual run, the areas named in the
+  `areas` input: `gh workflow run mutation.yml -f areas=analyzers,plugins-steps`), on all of its files, gated by the area's
   `break` threshold.
 - **On a pull request that touches `src/`:** only the areas whose files the PR changes,
   and only the mutants in the changed files (`--since:main`), gated at the **80**
@@ -80,27 +81,30 @@ To add an area, add its `tests/stryker/<area>.yml` and its row in
 
 All jobs run on the self-hosted Windows runner (like `ci.yml`, to avoid GitHub Actions billing), so the areas run one after another.
 
-## Gated cores and approximate scores
+## Gated cores and scores
 
-| Job | Core | Approx. score | `--break-at` |
+Scores from the full run on the self-hosted Windows runner on 2026-10-11 (Stryker 4.15, every area on all of its
+files), unless noted.
+
+| Area | Core | Score | `break` |
 | --- | --- | --- | --- |
-| `diff-engine` | `DiffEngine` + `DefinitionNormalizer` | ~86.3% | 85 |
-| harness query core | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | ~91.6% | 89 |
-| security enforcement wiring | `InMemoryOrganizationService.Security.cs` | ~84.8% | 82 |
-| security model | `Security/SecurityModel.cs` (+ sharing, access teams, 1:N) | ~86.2% | 84 |
-| `cli-apply` | `DataverseRegistration.Apply.cs` (web resources excluded) | ~80.3% | 80 |
-| `cli-customapi` | `DataverseRegistration.CustomApi.cs` | ~82.7% | 80 |
-| `cli-reader` | `DataverseRegistration.cs` | ~85.3% | 83 |
-| `cli-steps` | `DataverseRegistration.Steps.cs` | ~89.4% | 87 |
-| `cli-scanner` | `PackageScanner.cs` | ~81.6% | 80 |
-| `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | ~89.4% | 80 |
-| `analyzers` | the whole `Vela.Analyzers` project (diagnostics + image projection generator) | ~86.3% | 85 |
-| `plugins-steps` | `Vela.Plugins/Steps` (generated `StepApi.cs` / `StepBuilder.Impl.cs` and the `SdkMessageNames.cs` data table excluded) | ~86% (net10 proxy, see note) | 80 |
-| `plugins-context` | `Vela.Plugins/Context` | ~88% (net10 proxy, see note) | 80 |
-| `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | ~85% (net10 proxy, see note) | 80 |
-| `plugins-runtime` | `Vela.Plugins/Plugin` (PluginBase, EntityPluginBase, handler invocation) and `Retry` | ~66.7% / ~70.8% before the #448 tests (Windows, partial globs) | 80 |
-| `harness-store` | `InMemoryOrganizationService.cs` (the store core) | ~68.9% before the #448 tests (Windows) | 80 |
-| `harness-pipeline` | `PluginPipeline.cs`, `.Stages.cs`, `.Execution.cs` | ~71.3% before the #448 tests (Windows) | 80 |
+| `diff-engine` | `DiffEngine` + `DefinitionNormalizer` | 87.0% | 85 |
+| `harness-query` | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | 94.1% | 92 |
+| `security-enforcement` | `InMemoryOrganizationService.Security.cs` | 83.8% | 82 |
+| `security-harness` | `Security/SecurityModel.cs` (+ sharing, access teams, 1:N) | 89.9% | 87 |
+| `cli-apply` | `DataverseRegistration.Apply.cs` (web resources excluded) | 83.8% | 81 |
+| `cli-customapi` | `DataverseRegistration.CustomApi.cs` | ~82.7% (earlier run) | 80 |
+| `cli-reader` | `DataverseRegistration.cs` | 86.9% | 84 |
+| `cli-steps` | `DataverseRegistration.Steps.cs` | 90.1% | 88 |
+| `cli-scanner` | `PackageScanner.cs` | 84.2% | 82 |
+| `security-cli` | `RoleGenerator.cs` + `RolePrivilegeMapper.cs` | 87.7% | 85 |
+| `analyzers` | the whole `Vela.Analyzers` project (diagnostics + image projection generator) | ~86.3% (earlier run; timed out at 45 min on 2026-10-11) | 85 |
+| `plugins-steps` | `Vela.Plugins/Steps` (generated `StepApi.cs` / `StepBuilder.Impl.cs` and the `SdkMessageNames.cs` data table excluded) | ~86% (net10 proxy; the 2026-10-11 run lost the runner) | 80 |
+| `plugins-context` | `Vela.Plugins/Context` | 91.9% | 89 |
+| `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | 86.2% | 84 |
+| `plugins-runtime` | `Vela.Plugins/Plugin` (PluginBase, EntityPluginBase, handler invocation) and `Retry` | 90.7% | 88 |
+| `harness-store` | `InMemoryOrganizationService.cs` (the store core) | 89.9% | 87 |
+| `harness-pipeline` | `PluginPipeline.cs`, `.Stages.cs`, `.Execution.cs` | 95.2% | 93 |
 
 Notes on the scores:
 
@@ -112,10 +116,9 @@ Notes on the scores:
   can't run offline (the `cli-reader` live-connection methods). The scanner's
   `BuildLocalStateFromPackages` used to as well; it is now driven end-to-end by
   `PackageScannerBuildStateTests` on a real compiled plugin fixture.
-- The **#448 areas** (`plugins-runtime`, `harness-store`, `harness-pipeline`) were measured once on a Windows
-  runner (Stryker 4.16, a single test project) before their mutation tests landed, which is why they sit under
-  the floor above. That run also put `LocalPluginContext` + `TracingOrganizationService` at ~69.3%, well under the
-  net10 proxy of `plugins-context`. Ratchet all four once a full Windows run is in.
-- The **plugin runtime** areas are net462, so their scores above are estimates from a
-  throwaway net10 build of `Vela.Plugins` and its tests (same mutate globs, both test
-  projects), not the Windows run. Ratchet each area once its first Windows run is in.
+- The **#448 areas** (`plugins-runtime`, `harness-store`, `harness-pipeline`) measured 66.7-71.3% on a first
+  Windows run before their mutation tests landed; the full run above has them at 89.9-95.2%. The **plugin runtime**
+  areas used to carry estimates from a throwaway net10 build; `plugins-context`, `plugins-services` and
+  `plugins-runtime` now have their Windows scores. `plugins-steps` still needs one (its 2026-10-11 job lost the
+  runner), and so does `analyzers`, whose timeout went from 45 to 90 minutes after it ran out on the self-hosted
+  runner (`diff-engine`, done in 28 of its 30 minutes, went to 60).

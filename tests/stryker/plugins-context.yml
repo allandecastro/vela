@@ -2,6 +2,7 @@
 # change/image/relationship/environment-variable helpers, AttributeValueComparer and the tracing service wrapper.
 # Run from tests/Vela.Tests, with Vela.Testing.Tests as a second test project (it drives the runtime through the
 # harness). net462: Windows only.
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 91.92%; break ratcheted to 89 (~2 pts below).
 stryker-config:
   solution: ../../Vela.sln
   project: Vela.Plugins.csproj
@@ -12,6 +13,6 @@ stryker-config:
     - "**/Vela.Plugins/Context/**/*.cs"
   reporters: [cleartext, markdown, html, json]
   thresholds:
-    high: 90
-    low: 80
-    break: 80
+    high: 91
+    low: 89
+    break: 89
