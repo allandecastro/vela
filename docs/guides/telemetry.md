@@ -61,7 +61,8 @@ strings. Scope properties from `BeginLogScope` are not copied onto metrics; pass
 at Information level, to Application Insights. Use the leveled helpers when you want a severity other than
 Information, an attached exception, or metrics. Execution snapshots (the automatic ones and
 `ctx.TraceExecutionSnapshot(...)`) are the exception: they go to the plug-in trace log only, never to Application
-Insights (see [Write a plugin](plugins.md)).
+Insights, and the automatic ones list only metadata (message, stage, ids, column names) unless the plugin overrides
+`AutoSnapshotDetail` (see [Write a plugin](plugins.md)).
 
 ## Whether Application Insights is set up or not
 

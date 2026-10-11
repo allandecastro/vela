@@ -1,53 +1,31 @@
 # Plan & Apply
 
-```powershell
-# 1) Compare local package(s) with live Dataverse state (client id / client secret)
-vela plan `
-  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret>
+This page is the reference for `vela plan`, `vela apply` and `vela inspect`; other pages link here rather than
+repeating the commands. `vela help plan` (or `vela plan --help`) lists every option, and each command accepts only
+its own options (an unknown or misplaced one, such as `plan --auto-approve`, exits `2`).
 
-# 2) Multiple packages
-vela plan `
-  --packages-dir .\artifacts `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret>
+```bash
+# Local: browser login, preview then apply into your solution (prompts for confirmation)
+vela plan  --packages-dir ./artifacts --solution ZavaSales --interactive
+vela apply --packages-dir ./artifacts --solution ZavaSales --interactive
 
-# 3) Preview the apply operations without writing (dry-run) - use plan
-vela plan `
-  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret>
-
-# 3b) Apply (idempotent upsert/delete) into an existing Dataverse solution.
-#     On a terminal, apply shows the plan and asks for confirmation; add --auto-approve for CI / unattended runs.
-vela apply `
-  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret> `
-  --solution ZavaSales `
+# CI: app registration, secret from the environment (never on the command line)
+export DATAVERSE_CLIENT_SECRET=...   # set by the pipeline's secret store
+vela plan --package ./artifacts/Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
+  --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id> \
+  --strict --detailed-exitcode
+vela apply --package ./artifacts/Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
+  --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id> \
   --auto-approve
-
-# 4) Interactive local mode (wizard prompts)
-vela plan --interactive
-
-# 5) CI strict mode (fail on any warning; info such as "assembly not found" on a first deployment never fails)
-vela plan `
-  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret> `
-  --strict
 ```
+
+Always pass `--solution <uniqueName>` to `plan` and `apply`: Dataverse imports a plugin package only when its name
+carries a publisher prefix (`pfx_Name`), and Vela takes that prefix from the solution (`apply` renames `Zava.Plugins`
+to `zava_Zava.Plugins` in memory). Without `--solution`, `plan` and `apply` both fail on a package whose name has no
+prefix, before anything is written (exit 4). `inspect` is read-only and does not check this.
+`--solution` also places every written component in that solution. See [Authentication](../configuration/authentication.md)
+for the other ways to connect.
+
 
 `plan` compares local plugin/custom-api metadata extracted from `.nupkg` against Dataverse and returns a preview of the ordered `create` / `update` / `delete` / `add-to-solution` operations plus a detailed diff. At a terminal this is a colorized human summary; piped, redirected, or with `--json`, it is a versioned JSON document (`schemaVersion`, `hasChanges`, `summary`, `operations`, `diff`, `diagnostics`, `info`, ...) documented in [Machine-readable output](../reference/machine-readable-output.md). Notices and the `--verbose` summary go to stderr, so `--verbose --json` still writes the JSON. With `--detailed-exitcode`, `plan` exits `8` when there are changes to apply and `0` when there is nothing to do.
 

@@ -16,7 +16,7 @@ vela models --forms --tables --out src/generated --overwrite   # 2. generate for
 vela add form-script <entity>     # 3. scaffold + register a form script for a table (repeat per form)
 # 4. fill in the form script against the model, in your editor
 npm run build                     # 5. bundle with tsup (not the CLI)
-vela apply --webresources ...     # 6. deploy the bundle + static assets, published
+vela apply --webresources <dist> --solution <name>  # 6. deploy the bundle + static assets, published
 ```
 
 Each form web resource is one entry in `web-resources.entries.ts` (`<prefix>_/js/<entity>/Forms/main` -> its

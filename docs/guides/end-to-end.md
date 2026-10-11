@@ -1,63 +1,62 @@
 # End-to-end example
 
-A complete loop from plugin code to a registered, running step, using a solution scaffolded by
-[`vela init`](scaffold.md).
+From plugin code to a registered, running step, in a solution scaffolded by [`vela init`](scaffold.md).
 
-**1. Write a plugin** in your plugin-package project (`Zava.Plugins`, which references `Vela.Plugins`):
+**1. Write a plugin** in the plugin-package project (`Zava.Plugins`, which references `Vela.Plugins`):
 
 ```csharp
-using Vela.Context;
-using Vela.Constants;
-using Vela.Plugin;
-using Vela.Steps;
-using Zava.Shared.Models.Generated;
-
-public partial class AccountPostUpdate : EntityPluginBase<Account>
+namespace Zava.Plugins.Account
 {
-    public AccountPostUpdate(string unsecure, string secure) : base(unsecure, secure) { }
+    using Vela.Plugin;
+    using Zava.Shared.Models.Generated;
 
-    protected override void RegisterPluginSteps()
+    public sealed partial class AccountPostUpdate(string unsecureConfig, string secureConfig)
+        : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
-        RegisterStep().OnUpdate()
-            .PostOperation()
-            .Sync()
-            .FilterOn(a => a.Name)         // only fire when Name changes
-            .WithPreImage(a => a.Name)
-            .Handle(OnAccountUpdated);          // stage-typed handler, bound by method group
-    }
+        protected override void RegisterPluginSteps() =>
+            RegisterStep().OnUpdate()
+                .PostOperation()
+                .Sync()
+                .FilterOn(a => a.Name)          // fire only when Name is sent
+                .WithPreImage(a => a.Name)
+                .Handle(OnAccountUpdated);
 
-    private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
-    {
-        var target = ctx.Request.Target;
-        var before = ctx.PreImage;   // typed Account? for the default alias
-        ctx.Trace($"Account renamed from '{before?.Name}' to '{target.Name}'");
+        private void OnAccountUpdated(OnAccountUpdatedContext ctx) =>
+            ctx.Trace("Account renamed from '{0}' to '{1}'", ctx.PreImage?.Name, ctx.Request.Target.Name);
     }
 }
 ```
 
-**2. Build the plugin package** into a `.nupkg` (the Release build packages it into `artifacts/` via
-`GeneratePackageOnBuild` + `PackageOutputPath` - use `dotnet build`, not `dotnet pack`, which on a cold tree
-emits an assembly-less package):
+See [Write a plugin](plugins.md) for the step chain and the generated `OnAccountUpdatedContext`.
 
-```powershell
-dotnet build .\src\Zava.Plugins -c Release
+**2. Build the plugin package.** Use `dotnet build`, not `dotnet pack`: the build runs `GeneratePackageOnBuild` and
+drops the `.nupkg` into `artifacts/`, while a cold `dotnet pack` emits a package with no assembly.
+
+```bash
+dotnet build src/Zava.Plugins -c Release
 ```
 
-**3. Preview** what would change in the target environment (read-only):
+**3. Preview** the changes (read-only). `--solution` names an existing unmanaged solution: Dataverse imports a plugin
+package only when its name carries the publisher prefix, which Vela takes from that solution, and every component is
+added to it.
 
-```powershell
-vela plan --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
+```bash
+vela plan --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
-At a terminal `plan` prints a colorized preview - e.g. `summary: +1 -0 ~0` plus an ordered `operations` list -
-and makes no changes. Piped or redirected (or with `--json`), it emits JSON instead.
+At a terminal `plan` prints a colorized preview (`summary: +1 -0 ~0` and the ordered operations); piped, or with
+`--json`, it prints JSON.
 
-**4. Apply** the changes (idempotent create/update/delete):
+**4. Apply** the same plan:
 
-```powershell
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --solution ZavaSales --interactive
+```bash
+vela apply --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
-`apply` writes by default: on a terminal it shows the plan and asks you to confirm (type `yes`); add `--auto-approve` to skip the prompt in CI. `--solution` is an existing unmanaged Dataverse solution: importing a plugin package requires it, both because the package name is prefixed with the solution publisher's customization prefix and because every registered component (package, assembly, steps, Custom APIs) is added to that solution. `apply` uploads the plugin package into it, ensures the plugin type exists, then registers the step and its image. Re-running with no local changes is a no-op. If a run fails partway, the resume report on stderr lists which operations completed and which did not - fix the cause and re-run (upserts are idempotent).
+At a terminal `apply` shows the plan and asks you to type `yes` (`--auto-approve` in CI). It publishes the package,
+waits for the plugin type, then registers the step and its image. A second run with no change does nothing. If a
+run fails partway, the resume report on stderr lists what completed; fix the cause and re-run. See
+[Plan and apply](plan-apply.md) for authentication and options.
 
-**5. Verify** in Dataverse: update an account's name and confirm the step fires (its message appears in the plugin trace log).
+**5. Verify** in Dataverse: rename an account and look for the trace line in the plug-in trace log (the
+environment's Plugin Trace Log setting must not be `Off`).

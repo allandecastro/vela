@@ -19,6 +19,7 @@ ZavaSales/
   tests/
     Zava.Plugins.Tests/     # xunit tests using Vela.Testing - no connection (omit with --no-tests)
   .vela/scaffold-manifest.json  # lets `vela init --force` regenerate without touching your code
+  AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
   Directory.Build.props        # shared build settings for src/ and tests/
 ```
 

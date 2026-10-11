@@ -42,8 +42,8 @@ vela add --interactive
   case/contract messages (see the full list in [Write a plugin](plugins.md)). The sdkmessage name works too:
   `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or `OnWinOpportunity()`
   from `--entity`. Any other name is registered as a custom SDK message via `OnMessage("...")`. `Assign` gets the
-  typed `OnAssign()` too. The deprecated `SetState` / `SetStateDynamicEntity` messages have no typed method (update
-  `statecode`/`statuscode` with `Update` instead), so they render `OnMessage("...")`. `--project <csproj>` (default:
+  typed `OnAssign()` too. The deprecated `SetState` / `SetStateDynamicEntity` messages have no typed method (a `SetState` step never fires, VELA022: react
+  to `Update` filtered on `statecode` instead), so they render `OnMessage("...")`. `--project <csproj>` (default:
   the single `.csproj` in the current directory), `--force` (overwrite an existing file), `--json` (machine-readable
   report).
 - **Each kind takes only its own options.** An option the kind does not use (for example `add service --message`

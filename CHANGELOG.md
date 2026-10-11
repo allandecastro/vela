@@ -587,6 +587,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **`vela init` writes an `AGENTS.md`** at the solution root: instructions for AI coding agents on how to write a step
+  (typed trigger, required `FilterOn`, images, `WithStepKey`, `ctx.Service` / `SystemService` / `AsUser`), a typed
+  Custom API and a `PluginPipeline` test in this solution, and how to drive `vela models`, `vela add`,
+  `vela plan --json` and `vela apply`. Like the README, it is written only when absent, so `--force` keeps your edits.
 - **`apply` writes `asyncautodelete`** for a step declared `Async(deleteJobOnSuccess: true)`, and `plan` diffs it.
 - **Several steps on one trigger** are created, updated and deleted as separate steps. A changed step that pairs
   with its live step under another key carries `liveStepKey` in its `after` definition, so `apply` updates that step.
@@ -640,6 +644,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   it, and `add step` no longer accepts `--force`, which it never used.
 
 ### Fixed (CLI)
+
+- **The scaffolded README and next steps pass `--solution` to `plan` and `apply`.** They showed both commands without
+  it, and on the scaffolded package (`Zava.Plugins`, which has no publisher prefix) both fail with exit 4.
 
 - **The `vela init` samples no longer teach risky patterns (#444).** `AccountRelatedContactsPlugin` counted contacts
   with a `RetrieveMultiple` capped at one page and cached the result in the organization-wide plugin cache, so one
@@ -1160,7 +1167,7 @@ Framework line, published as `framework-v0.28.2`. Second pass of the analyzer/ge
 
 ### Fixed
 
-- **Code fixes for VELA002 (remove `static`) and VELA015 (use the step context type) now edit the file that owns the handler.** When the handler method was declared in a different file from the `.Handle(...)` call (a partial class, or a handler defined elsewhere), the fix operated on the wrong document and threw "node not in tree". Both are now Solution-based and edit the handler's own document.
+- **Code fixes for VELA004 (remove `static`) and VELA015 (use the step context type) now edit the file that owns the handler.** When the handler method was declared in a different file from the `.Handle(...)` call (a partial class, or a handler defined elsewhere), the fix operated on the wrong document and threw "node not in tree". Both are now Solution-based and edit the handler's own document.
 - **A generated image projection on a value-type column is nullable.** A non-nullable value-type column (for example an authored `int` model property) was projected as a non-nullable field, so an absent image column read its default (`0`) - indistinguishable from a real value. Value-type projected members are now `T?` (early-bound models are already nullable, so this only changes an authored non-nullable value-type selector).
 - **On a projection-name collision, the first shape keeps the plain name.** When two steps produced the same projection name with different captured columns, every shape got a hash suffix, making a lambda-handler projection unnameable. The first shape (ordered deterministically) now keeps the plain, guessable name; only later colliding shapes are hash-suffixed.
 

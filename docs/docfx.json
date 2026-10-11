@@ -6,12 +6,13 @@
         "exclude": [
           "_site/**",
           "obj/**",
+          "samples/**",
           "templates/**"
         ]
       }
     ],
     "resource": [
-      { "files": ["images/**", "favicon.ico"] }
+      { "files": ["images/**", "favicon.ico", "llms.txt"] }
     ],
     "output": "_site",
     "template": ["default", "modern", "templates/vela"],
