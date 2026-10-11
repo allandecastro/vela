@@ -62,18 +62,18 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void NotIn_excludes_listed_values_and_null_rows()
+        public void NotIn_excludes_listed_values_and_matches_null_rows()
         {
             InMemoryOrganizationService svc = Service();
             svc.Create(Account(Guid.NewGuid(), "A", category: "gold"));
             svc.Create(Account(Guid.NewGuid(), "B", category: "silver"));
-            svc.Create(Account(Guid.NewGuid(), "C")); // category is null -> excluded (SQL three-valued logic)
+            svc.Create(Account(Guid.NewGuid(), "C")); // category is null -> matches (verified live, #451)
 
             EntityCollection result = svc.RetrieveMultiple(Query(
                 new ConditionExpression("category", ConditionOperator.NotIn, new object[] { "gold" })));
 
-            // Only "B" — the null-category row does NOT match a negative operator, like real Dataverse.
-            Assert.Equal(new[] { "B" }, Names(result));
+            // "B" and the null-category "C": Dataverse adds "OR column IS NULL" to a negative operator.
+            Assert.Equal(new[] { "B", "C" }, Names(result));
         }
 
         // --- Null / NotNull -----------------------------------------------------------------------------
@@ -91,10 +91,10 @@ namespace Vela.Testing.Tests
                 new ConditionExpression("category", ConditionOperator.Null)))));
         }
 
-        // --- Negative string operators exclude null rows ------------------------------------------------
+        // --- Negative string operators match null rows (verified live, #451) ------------------------------
 
         [Fact]
-        public void DoesNotBeginWith_and_DoesNotEndWith_and_NotLike_exclude_null_rows()
+        public void DoesNotBeginWith_and_DoesNotEndWith_and_NotLike_match_null_rows()
         {
             InMemoryOrganizationService svc = Service();
             svc.Create(Account(Guid.NewGuid(), "Contoso"));
@@ -102,12 +102,21 @@ namespace Vela.Testing.Tests
             Entity noName = new Entity("account", Guid.NewGuid()); // name is null
             svc.Create(noName);
 
-            Assert.Equal(new[] { "Fabrikam" }, Names(svc.RetrieveMultiple(Query(
+            Assert.Equal(new[] { null, "Fabrikam" }, Names(svc.RetrieveMultiple(Query(
                 new ConditionExpression("name", ConditionOperator.DoesNotBeginWith, "Cont")))));
-            Assert.Equal(new[] { "Contoso" }, Names(svc.RetrieveMultiple(Query(
+            Assert.Equal(new[] { null, "Contoso" }, Names(svc.RetrieveMultiple(Query(
                 new ConditionExpression("name", ConditionOperator.DoesNotEndWith, "am")))));
-            Assert.Equal(new[] { "Fabrikam" }, Names(svc.RetrieveMultiple(Query(
+            Assert.Equal(new[] { null, "Fabrikam" }, Names(svc.RetrieveMultiple(Query(
                 new ConditionExpression("name", ConditionOperator.NotLike, "Cont%")))));
+
+            // not-like '%' matches only the null row; like '%' matches every row but that one.
+            Assert.Equal(new string?[] { null }, Names(svc.RetrieveMultiple(Query(
+                new ConditionExpression("name", ConditionOperator.NotLike, "%")))));
+            Assert.Equal(new[] { "Contoso", "Fabrikam" }, Names(svc.RetrieveMultiple(Query(
+                new ConditionExpression("name", ConditionOperator.Like, "%")))));
+            Assert.Equal(new[] { "Contoso" }, Names(svc.RetrieveMultiple(Query(
+                new ConditionExpression("name", ConditionOperator.BeginsWith, string.Empty),
+                new ConditionExpression("name", ConditionOperator.EndsWith, "so")))));
         }
 
         // --- Like with a %contains% pattern (the way "contains" is expressed) ----------------------------

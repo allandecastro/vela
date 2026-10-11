@@ -100,7 +100,7 @@ namespace Vela.Testing.Tests
             EntityReference key = new EntityReference("account", new KeyAttributeCollection { { "accountnumber", "missing" } });
             FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Execute(new DeleteRequest { Target = key }));
-            Assert.Contains("alternate key", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(unchecked((int)0x80060891), ex.Detail.ErrorCode);
         }
 
         // --- Upsert by composite key via Execute: create then update ------------------------------------

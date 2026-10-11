@@ -295,6 +295,12 @@ CompareColumns), conditions on linked entities (records-not-in-a-set), link-enti
 ordering (incl. linked columns), TopCount, paging, Distinct, total record count, column aliases, and
 aggregates (count/countcolumn/sum/avg/min/max + group-by, also on linked columns and over joins).
 
+Null and paging follow what Dataverse does (verified live): `ne`, `not-in`, `not-like`, `not-begin-with` and
+`not-end-with` match a row whose column is null, while the comparisons, `not-between`, `like` (even `'%'`) and
+`ne-userid` do not. Distinct compares text case-insensitively. A query with no page size returns a page of at most
+5,000 rows with `MoreRecords`, and no page is larger. The engine pages by page number: the paging cookie is not read,
+and Dataverse also returns the same page again when the page number is not incremented.
+
 FetchXML is parsed into the equivalent `QueryExpression` and runs through the same engine path, so a query and
 its `ToFetchXml()` return the same rows. The parser is strict: anything it does not model throws
 `NotSupportedException` naming the element or attribute, never silently ignored. A condition `<value>` is read
@@ -457,7 +463,9 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
 - **Upsert and alternate keys.** `Execute(new UpsertRequest { ... })` matches the target by id or alternate key
   (declared with `WithAlternateKey(...)`): an existing record runs the Update steps, a new one runs the Create steps,
   and the response reports `RecordCreated` and `Target`. `Update`/`Delete` addressed by `KeyAttributes` resolve the
-  key first, so their steps see the real record id.
+  key first, so their steps see the real record id. The `KeyAttributes` must be exactly one declared key, as on
+  Dataverse: any other set of columns faults with `0x80060889`, and a declared key that matches nothing with
+  `0x80060891`.
 - **Reads run through the pipeline.** `Retrieve`/`RetrieveMultiple` (the shortcut methods and the
   `RetrieveRequest`/`RetrieveMultipleRequest` messages) fire their registered steps. A PreValidation/PreOperation step
   that replaces `InputParameters["ColumnSet"]`, `["Target"]` or `["Query"]` changes what is read, and a PostOperation

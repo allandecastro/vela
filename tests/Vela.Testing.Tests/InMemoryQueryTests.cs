@@ -367,9 +367,10 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void NotEqual_ExcludesRowsWhereAttributeIsNull()
+        public void NotEqual_MatchesRowsWhereAttributeIsNull()
         {
-            // Dataverse three-valued logic: a row with no value for the attribute must NOT match a "ne" filter.
+            // #451, verified live: Dataverse runs "ne" as "column <> value OR column IS NULL", so a row with no
+            // value for the attribute matches.
             Guid named = Guid.NewGuid();
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
                 new Entity("account") { Id = named, ["name"] = "Zava" },
@@ -378,8 +379,8 @@ namespace Vela.Testing.Tests
             QueryExpression query = new QueryExpression("account") { ColumnSet = new ColumnSet("name") };
             query.Criteria.AddCondition("name", ConditionOperator.NotEqual, "Other");
 
-            Entity match = Assert.Single(crm.RetrieveMultiple(query).Entities);
-            Assert.Equal(named, match.Id); // the null-name row is excluded, not returned
+            Assert.Equal(2, crm.RetrieveMultiple(query).Entities.Count); // the null-name row is returned too
+            Assert.Contains(crm.RetrieveMultiple(query).Entities, e => e.Id == named);
         }
 
         [Fact]

@@ -101,10 +101,11 @@ namespace Vela.Testing.Tests
 
             Entity stored = crm.Retrieve("account", id, new ColumnSet("vela_document"));
             Assert.False(stored.Contains("vela_document"));
-            Assert.Throws<InvalidOperationException>(() => crm.Execute(new OrganizationRequest("InitializeFileBlocksDownload")
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(() => crm.Execute(new OrganizationRequest("InitializeFileBlocksDownload")
             {
                 Parameters = { ["Target"] = new EntityReference("account", id), ["FileAttributeName"] = "vela_document" }
             }));
+            Assert.Equal(unchecked((int)0x80040217), ex.Detail.ErrorCode);
         }
 
         [Fact]

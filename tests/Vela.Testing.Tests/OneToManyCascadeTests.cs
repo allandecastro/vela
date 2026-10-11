@@ -61,7 +61,9 @@ namespace Vela.Testing.Tests
                 .WithReferentialRelationship("account", "contact", "parentcustomerid", restrictDelete: true)
                 .Seed(Account(account), ContactOf(contact, account));
 
-            Assert.Throws<InvalidOperationException>(() => svc.Delete("account", account));
+            // 0x80040227, the platform's fault (verified live, #451), not a bare InvalidOperationException.
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Delete("account", account));
+            Assert.Equal(unchecked((int)0x80040227), ex.Detail.ErrorCode);
             Assert.Single(svc.GetAll("account"));  // parent untouched
             Assert.Single(svc.GetAll("contact"));  // child untouched
         }

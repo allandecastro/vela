@@ -429,28 +429,33 @@ namespace Vela.Testing
                 return;
             }
 
+            MethodInfo? method = plugin.GetType().GetMethod("GetStepDefinitions", Type.EmptyTypes);
+            object? registration;
             try
             {
-                MethodInfo? method = plugin.GetType().GetMethod("GetStepDefinitions", Type.EmptyTypes);
-                if (method == null || method.Invoke(plugin, null) is not StepDefinition[] definitions || definitions.Length != 1)
-                {
-                    return;
-                }
-
-                StepDefinition step = definitions[0];
-                if (!string.IsNullOrWhiteSpace(step.Message))
-                {
-                    Context.MessageName = step.Message;
-                }
-
-                Context.Stage = (int)step.Stage;
-                Context.Mode = (int)step.Mode;
+                registration = method?.Invoke(plugin, null);
             }
-            catch
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
-                // Best-effort: if the registration can't be read, keep the configured defaults and let the
-                // plugin's own Execute surface any real error.
+                // A registration that cannot be read would not deploy either: fail here, naming the plugin, rather
+                // than run it under the default trigger.
+                throw new InvalidOperationException(
+                    $"Could not read the step registration of {plugin.GetType().FullName}: {ex.InnerException.Message}", ex.InnerException);
             }
+
+            if (registration is not StepDefinition[] definitions || definitions.Length != 1)
+            {
+                return;
+            }
+
+            StepDefinition step = definitions[0];
+            if (!string.IsNullOrWhiteSpace(step.Message))
+            {
+                Context.MessageName = step.Message;
+            }
+
+            Context.Stage = (int)step.Stage;
+            Context.Mode = (int)step.Mode;
         }
 
         // A Create/CreateMultiple Post step sees the created id(s) as OutputParameters (as Dataverse surfaces them),

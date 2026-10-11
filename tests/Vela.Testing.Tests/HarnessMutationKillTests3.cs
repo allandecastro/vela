@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.ServiceModel;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Xunit;
@@ -56,12 +57,13 @@ namespace Vela.Testing.Tests
             Assert.Equal("Zava", match.GetAttributeValue<string>("name"));
         }
 
-        // With fewer Values than Attributes, the missing value is compared as null (kills the off-by-one
-        // `i <= query.Values.Count` and the `(true ? Values[i] : null)` conditional, both of which would index
-        // past the end of Values and throw).
+        // With fewer Values than Attributes, the query faults instead of comparing the missing value as null; with
+        // the missing value given as null, the null column matches.
         [Fact]
-        public void QueryByAttribute_treats_a_missing_value_as_null()
+        public void QueryByAttribute_rejects_fewer_values_than_attributes()
         {
+            // #451, verified live: a value count that differs from the attribute count is 0x8004110F, not a null
+            // comparison.
             InMemoryOrganizationService crm = Crm(
                 new Entity("account") { Id = Guid.NewGuid(), ["name"] = "Zava" }); // no statecode -> null
 
@@ -70,8 +72,11 @@ namespace Vela.Testing.Tests
             query.Attributes.Add("statecode");
             query.Values.Add("Zava"); // deliberately one fewer value than attributes
 
-            Entity match = Assert.Single(crm.RetrieveMultiple(query).Entities);
-            Assert.Equal("Zava", match.GetAttributeValue<string>("name"));
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(() => crm.RetrieveMultiple(query));
+            Assert.Equal(unchecked((int)0x8004110F), ex.Detail.ErrorCode);
+
+            query.Values.Add(null);
+            Assert.Single(crm.RetrieveMultiple(query).Entities); // one value per attribute: null compares as null
         }
 
         // NotBetween is inclusive on both bounds: a value equal to the lower/upper bound IS "between", so

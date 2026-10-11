@@ -171,16 +171,19 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   its message is declared through `EntityPluginBase<TEntity>` and so carries a table; the harness gives that step's
   context the step's table so the runtime still matches it. Vela has no entity-less step declaration yet.
 - **Fault codes are partial.** The faults the harness raises itself carry the platform code (not found
-  `0x80040217`, duplicate key `0x80040237`, privilege denial `0x80040220`, the transaction faults, the Custom API
-  input checks); any other exception surfaces as an `OrganizationServiceFault` with no `ErrorCode`. No
+  `0x80040217`, duplicate key `0x80040237`, privilege denial `0x80040220`, undeclared key `0x80060889`, no record for
+  a key `0x80060891`, delete blocked by Restrict `0x80040227`, invalid argument `0x80040203`, the transaction faults,
+  the Custom API input checks); any other exception surfaces as an `OrganizationServiceFault` with no `ErrorCode`. No
   formula/rollup/calculated columns, business rules, or duplicate-detection.
 - **N:N `Associate`/`Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or via a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise); then Associate/
   Disassociate persist the intersect rows and `RetrieveMultiple` joins through them. Re-associating an
   existing pair throws a `DuplicateRecord` (`0x80040237`) fault, as Dataverse does, and a self-referential N:N maps
-  its two columns positionally. A 1:N relationship is modelled by `Update`-ing the lookup column.
+  its two columns positionally. A 1:N relationship is modelled by `Update`-ing the lookup column. `Merge` moves the
+  subordinate's N:N rows and reparents its 1:N children, except over a relationship whose Merge behaviour is
+  `NoCascade` (verified live).
 - **`RetrieveMultiple` is a common subset.** No query hints, `NoLock`, `FilterHint=union`, or faithful paging
-  cookies. FetchXML support covers a common subset (incl. aggregates); anything outside it throws
+  cookies: pages are read by page number (5,000 rows at most, as on Dataverse). FetchXML support covers a common subset (incl. aggregates); anything outside it throws
   `NotSupportedException` naming the element or attribute (see [Testing](../guides/testing.md#queries)).
 - **System columns are a simplified model.** `createdon`/`createdby`/`modifiedon`/`modifiedby`, the owner
   columns and `organizationid` are stamped from the configured actor (`WithCurrentUser` /
@@ -195,7 +198,8 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   rows and lets you read/write them - full external-data-provider semantics aren't modelled.
 - **Metadata is opt-in.** Table metadata is returned only for what you register with `WithEntityMetadata(...)`
   (build it with `FakeEntityMetadata`); `RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute` read it back.
-  Alternate keys and auto-numbers only behave as you declare them (`WithAlternateKey` / `WithAutoNumber`).
+  Alternate keys and auto-numbers only behave as you declare them (`WithAlternateKey` / `WithAutoNumber`): a
+  record addressed by `KeyAttributes` that are not a declared key faults, as on Dataverse.
 - **The security model is opt-in and off by default.** With no `WithSecurity(...)` call there are no
   privilege/access checks (full access), exactly as before. When enabled it models security roles, privileges at
   the four access levels, business units, teams (incl. the Member's-privilege-inheritance mode), record sharing
@@ -204,7 +208,10 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   read-trimming (a join to a record the caller can't read drops the primary row on an inner join, or omits the
   linked columns on a left-outer join, recursively through nested joins). A parent's Delete PreValidation steps
   still see its cascaded children; by PreOperation they are gone (the children's Delete plugins run in between), as
-  on Dataverse (verified live).
+  on Dataverse (verified live). With security on, a lookup set by id must point at an existing record, as on
+  Dataverse; with it off, a lookup may point at a record the test never seeded. Step images are built from the
+  stored row without field-level-security masking; whether Dataverse masks secured columns in images is not
+  verified.
 
 ---
 
