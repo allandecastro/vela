@@ -52,6 +52,19 @@ namespace Vela.Steps
         IWinQuoteStages<TEntity>,
         IModifyAccessStages<TEntity>,
         IMergeStages<TEntity>,
+        IAddItemCampaignStages<TEntity>,
+        IRemoveItemCampaignStages<TEntity>,
+        IRecalculateStages<TEntity>,
+        ILockSalesOrderPricingStages<TEntity>,
+        IUnlockSalesOrderPricingStages<TEntity>,
+        ILockInvoicePricingStages<TEntity>,
+        IUnlockInvoicePricingStages<TEntity>,
+        IRescheduleStages<TEntity>,
+        IImmediateBookStages<TEntity>,
+        ISendTemplateStages<TEntity>,
+        ISendFaxStages<TEntity>,
+        IAddProductToKitStages<TEntity>,
+        IRemoveProductFromKitStages<TEntity>,
         ISyncMode<ICreatePreValidationConfig<TEntity>>,
         ICreatePreValidationConfig<TEntity>,
         ISyncMode<ICreatePreOperationConfig<TEntity>>,
@@ -286,6 +299,84 @@ namespace Vela.Steps
         IMergePreOperationConfig<TEntity>,
         ISyncAsyncMode<IMergePostOperationConfig<TEntity>>,
         IMergePostOperationConfig<TEntity>,
+        ISyncMode<IAddItemCampaignPreValidationConfig<TEntity>>,
+        IAddItemCampaignPreValidationConfig<TEntity>,
+        ISyncMode<IAddItemCampaignPreOperationConfig<TEntity>>,
+        IAddItemCampaignPreOperationConfig<TEntity>,
+        ISyncAsyncMode<IAddItemCampaignPostOperationConfig<TEntity>>,
+        IAddItemCampaignPostOperationConfig<TEntity>,
+        ISyncMode<IRemoveItemCampaignPreValidationConfig<TEntity>>,
+        IRemoveItemCampaignPreValidationConfig<TEntity>,
+        ISyncMode<IRemoveItemCampaignPreOperationConfig<TEntity>>,
+        IRemoveItemCampaignPreOperationConfig<TEntity>,
+        ISyncAsyncMode<IRemoveItemCampaignPostOperationConfig<TEntity>>,
+        IRemoveItemCampaignPostOperationConfig<TEntity>,
+        ISyncMode<IRecalculatePreValidationConfig<TEntity>>,
+        IRecalculatePreValidationConfig<TEntity>,
+        ISyncMode<IRecalculatePreOperationConfig<TEntity>>,
+        IRecalculatePreOperationConfig<TEntity>,
+        ISyncAsyncMode<IRecalculatePostOperationConfig<TEntity>>,
+        IRecalculatePostOperationConfig<TEntity>,
+        ISyncMode<ILockSalesOrderPricingPreValidationConfig<TEntity>>,
+        ILockSalesOrderPricingPreValidationConfig<TEntity>,
+        ISyncMode<ILockSalesOrderPricingPreOperationConfig<TEntity>>,
+        ILockSalesOrderPricingPreOperationConfig<TEntity>,
+        ISyncAsyncMode<ILockSalesOrderPricingPostOperationConfig<TEntity>>,
+        ILockSalesOrderPricingPostOperationConfig<TEntity>,
+        ISyncMode<IUnlockSalesOrderPricingPreValidationConfig<TEntity>>,
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity>,
+        ISyncMode<IUnlockSalesOrderPricingPreOperationConfig<TEntity>>,
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity>,
+        ISyncAsyncMode<IUnlockSalesOrderPricingPostOperationConfig<TEntity>>,
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity>,
+        ISyncMode<ILockInvoicePricingPreValidationConfig<TEntity>>,
+        ILockInvoicePricingPreValidationConfig<TEntity>,
+        ISyncMode<ILockInvoicePricingPreOperationConfig<TEntity>>,
+        ILockInvoicePricingPreOperationConfig<TEntity>,
+        ISyncAsyncMode<ILockInvoicePricingPostOperationConfig<TEntity>>,
+        ILockInvoicePricingPostOperationConfig<TEntity>,
+        ISyncMode<IUnlockInvoicePricingPreValidationConfig<TEntity>>,
+        IUnlockInvoicePricingPreValidationConfig<TEntity>,
+        ISyncMode<IUnlockInvoicePricingPreOperationConfig<TEntity>>,
+        IUnlockInvoicePricingPreOperationConfig<TEntity>,
+        ISyncAsyncMode<IUnlockInvoicePricingPostOperationConfig<TEntity>>,
+        IUnlockInvoicePricingPostOperationConfig<TEntity>,
+        ISyncMode<IReschedulePreValidationConfig<TEntity>>,
+        IReschedulePreValidationConfig<TEntity>,
+        ISyncMode<IReschedulePreOperationConfig<TEntity>>,
+        IReschedulePreOperationConfig<TEntity>,
+        ISyncAsyncMode<IReschedulePostOperationConfig<TEntity>>,
+        IReschedulePostOperationConfig<TEntity>,
+        ISyncMode<IImmediateBookPreValidationConfig<TEntity>>,
+        IImmediateBookPreValidationConfig<TEntity>,
+        ISyncMode<IImmediateBookPreOperationConfig<TEntity>>,
+        IImmediateBookPreOperationConfig<TEntity>,
+        ISyncAsyncMode<IImmediateBookPostOperationConfig<TEntity>>,
+        IImmediateBookPostOperationConfig<TEntity>,
+        ISyncMode<ISendTemplatePreValidationConfig<TEntity>>,
+        ISendTemplatePreValidationConfig<TEntity>,
+        ISyncMode<ISendTemplatePreOperationConfig<TEntity>>,
+        ISendTemplatePreOperationConfig<TEntity>,
+        ISyncAsyncMode<ISendTemplatePostOperationConfig<TEntity>>,
+        ISendTemplatePostOperationConfig<TEntity>,
+        ISyncMode<ISendFaxPreValidationConfig<TEntity>>,
+        ISendFaxPreValidationConfig<TEntity>,
+        ISyncMode<ISendFaxPreOperationConfig<TEntity>>,
+        ISendFaxPreOperationConfig<TEntity>,
+        ISyncAsyncMode<ISendFaxPostOperationConfig<TEntity>>,
+        ISendFaxPostOperationConfig<TEntity>,
+        ISyncMode<IAddProductToKitPreValidationConfig<TEntity>>,
+        IAddProductToKitPreValidationConfig<TEntity>,
+        ISyncMode<IAddProductToKitPreOperationConfig<TEntity>>,
+        IAddProductToKitPreOperationConfig<TEntity>,
+        ISyncAsyncMode<IAddProductToKitPostOperationConfig<TEntity>>,
+        IAddProductToKitPostOperationConfig<TEntity>,
+        ISyncMode<IRemoveProductFromKitPreValidationConfig<TEntity>>,
+        IRemoveProductFromKitPreValidationConfig<TEntity>,
+        ISyncMode<IRemoveProductFromKitPreOperationConfig<TEntity>>,
+        IRemoveProductFromKitPreOperationConfig<TEntity>,
+        ISyncAsyncMode<IRemoveProductFromKitPostOperationConfig<TEntity>>,
+        IRemoveProductFromKitPostOperationConfig<TEntity>,
         IPermissiveStages<TEntity>,
         ISyncMode<IPermissivePreValidationConfig<TEntity>>,
         IPermissivePreValidationConfig<TEntity>,
@@ -334,6 +425,19 @@ namespace Vela.Steps
         IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() { SetMessage(PluginMessages.WinQuote, "quote"); return this; }
         IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() { SetMessage(PluginMessages.ModifyAccess); return this; }
         IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() { SetMessage(PluginMessages.Merge); return this; }
+        IAddItemCampaignStages<TEntity> IStepTrigger<TEntity>.OnAddItemCampaign() { SetMessage(PluginMessages.AddItemCampaign, "campaign"); return this; }
+        IRemoveItemCampaignStages<TEntity> IStepTrigger<TEntity>.OnRemoveItemCampaign() { SetMessage(PluginMessages.RemoveItemCampaign, "campaign"); return this; }
+        IRecalculateStages<TEntity> IStepTrigger<TEntity>.OnRecalculate() { SetMessage(PluginMessages.Recalculate, "goal"); return this; }
+        ILockSalesOrderPricingStages<TEntity> IStepTrigger<TEntity>.OnLockSalesOrderPricing() { SetMessage(PluginMessages.LockSalesOrderPricing, "salesorder"); return this; }
+        IUnlockSalesOrderPricingStages<TEntity> IStepTrigger<TEntity>.OnUnlockSalesOrderPricing() { SetMessage(PluginMessages.UnlockSalesOrderPricing); return this; }
+        ILockInvoicePricingStages<TEntity> IStepTrigger<TEntity>.OnLockInvoicePricing() { SetMessage(PluginMessages.LockInvoicePricing, "invoice"); return this; }
+        IUnlockInvoicePricingStages<TEntity> IStepTrigger<TEntity>.OnUnlockInvoicePricing() { SetMessage(PluginMessages.UnlockInvoicePricing); return this; }
+        IRescheduleStages<TEntity> IStepTrigger<TEntity>.OnReschedule() { SetMessage(PluginMessages.Reschedule); return this; }
+        IImmediateBookStages<TEntity> IStepTrigger<TEntity>.OnImmediateBook() { SetMessage(PluginMessages.ImmediateBook, "appointment"); return this; }
+        ISendTemplateStages<TEntity> IStepTrigger<TEntity>.OnSendTemplate() { SetMessage(PluginMessages.SendTemplate, "template"); return this; }
+        ISendFaxStages<TEntity> IStepTrigger<TEntity>.OnSendFax() { SetMessage(PluginMessages.SendFax, "fax"); return this; }
+        IAddProductToKitStages<TEntity> IStepTrigger<TEntity>.OnAddProductToKit() { SetMessage(PluginMessages.AddProductToKit, "product"); return this; }
+        IRemoveProductFromKitStages<TEntity> IStepTrigger<TEntity>.OnRemoveProductFromKit() { SetMessage(PluginMessages.RemoveProductFromKit); return this; }
         IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { SetMessageFrom<TMessage>("OnMessage"); return this; }
         ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetMessageFrom<TRequest>("On"); return new TypedStepAdapter<TEntity, TRequest>(this); }
         IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetMessageFrom<TRequest>("OnAsyncOnly"); return new TypedStepAdapter<TEntity, TRequest>(this); }
@@ -523,6 +627,45 @@ namespace Vela.Steps
         ISyncMode<IMergePreValidationConfig<TEntity>> IMergeStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
         ISyncMode<IMergePreOperationConfig<TEntity>> IMergeStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
         ISyncAsyncMode<IMergePostOperationConfig<TEntity>> IMergeStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IAddItemCampaignPreValidationConfig<TEntity>> IAddItemCampaignStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IAddItemCampaignPreOperationConfig<TEntity>> IAddItemCampaignStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IAddItemCampaignPostOperationConfig<TEntity>> IAddItemCampaignStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IRemoveItemCampaignPreValidationConfig<TEntity>> IRemoveItemCampaignStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IRemoveItemCampaignPreOperationConfig<TEntity>> IRemoveItemCampaignStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IRemoveItemCampaignPostOperationConfig<TEntity>> IRemoveItemCampaignStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IRecalculatePreValidationConfig<TEntity>> IRecalculateStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IRecalculatePreOperationConfig<TEntity>> IRecalculateStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IRecalculatePostOperationConfig<TEntity>> IRecalculateStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<ILockSalesOrderPricingPreValidationConfig<TEntity>> ILockSalesOrderPricingStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<ILockSalesOrderPricingPreOperationConfig<TEntity>> ILockSalesOrderPricingStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<ILockSalesOrderPricingPostOperationConfig<TEntity>> ILockSalesOrderPricingStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IUnlockSalesOrderPricingPreValidationConfig<TEntity>> IUnlockSalesOrderPricingStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IUnlockSalesOrderPricingPreOperationConfig<TEntity>> IUnlockSalesOrderPricingStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IUnlockSalesOrderPricingPostOperationConfig<TEntity>> IUnlockSalesOrderPricingStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<ILockInvoicePricingPreValidationConfig<TEntity>> ILockInvoicePricingStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<ILockInvoicePricingPreOperationConfig<TEntity>> ILockInvoicePricingStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<ILockInvoicePricingPostOperationConfig<TEntity>> ILockInvoicePricingStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IUnlockInvoicePricingPreValidationConfig<TEntity>> IUnlockInvoicePricingStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IUnlockInvoicePricingPreOperationConfig<TEntity>> IUnlockInvoicePricingStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IUnlockInvoicePricingPostOperationConfig<TEntity>> IUnlockInvoicePricingStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IReschedulePreValidationConfig<TEntity>> IRescheduleStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IReschedulePreOperationConfig<TEntity>> IRescheduleStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IReschedulePostOperationConfig<TEntity>> IRescheduleStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IImmediateBookPreValidationConfig<TEntity>> IImmediateBookStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IImmediateBookPreOperationConfig<TEntity>> IImmediateBookStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IImmediateBookPostOperationConfig<TEntity>> IImmediateBookStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<ISendTemplatePreValidationConfig<TEntity>> ISendTemplateStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<ISendTemplatePreOperationConfig<TEntity>> ISendTemplateStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<ISendTemplatePostOperationConfig<TEntity>> ISendTemplateStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<ISendFaxPreValidationConfig<TEntity>> ISendFaxStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<ISendFaxPreOperationConfig<TEntity>> ISendFaxStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<ISendFaxPostOperationConfig<TEntity>> ISendFaxStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IAddProductToKitPreValidationConfig<TEntity>> IAddProductToKitStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IAddProductToKitPreOperationConfig<TEntity>> IAddProductToKitStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IAddProductToKitPostOperationConfig<TEntity>> IAddProductToKitStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
+        ISyncMode<IRemoveProductFromKitPreValidationConfig<TEntity>> IRemoveProductFromKitStages<TEntity>.PreValidation() { _definition.Stage = PluginStages.PreValidation; return this; }
+        ISyncMode<IRemoveProductFromKitPreOperationConfig<TEntity>> IRemoveProductFromKitStages<TEntity>.PreOperation() { _definition.Stage = PluginStages.PreOperation; return this; }
+        ISyncAsyncMode<IRemoveProductFromKitPostOperationConfig<TEntity>> IRemoveProductFromKitStages<TEntity>.PostOperation() { _definition.Stage = PluginStages.PostOperation; return this; }
 
         ICreatePreValidationConfig<TEntity> ISyncMode<ICreatePreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         ICreatePreOperationConfig<TEntity> ISyncMode<ICreatePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
@@ -719,6 +862,71 @@ namespace Vela.Steps
         IMergePostOperationConfig<TEntity> ISyncAsyncMode<IMergePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
         IMergePostOperationConfig<TEntity> ISyncAsyncMode<IMergePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
         IMergePostOperationConfig<TEntity> ISyncAsyncMode<IMergePostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> ISyncMode<IAddItemCampaignPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> ISyncMode<IAddItemCampaignPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> ISyncAsyncMode<IAddItemCampaignPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> ISyncAsyncMode<IAddItemCampaignPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> ISyncAsyncMode<IAddItemCampaignPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> ISyncMode<IRemoveItemCampaignPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> ISyncMode<IRemoveItemCampaignPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> ISyncAsyncMode<IRemoveItemCampaignPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> ISyncAsyncMode<IRemoveItemCampaignPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> ISyncAsyncMode<IRemoveItemCampaignPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IRecalculatePreValidationConfig<TEntity> ISyncMode<IRecalculatePreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRecalculatePreOperationConfig<TEntity> ISyncMode<IRecalculatePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRecalculatePostOperationConfig<TEntity> ISyncAsyncMode<IRecalculatePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRecalculatePostOperationConfig<TEntity> ISyncAsyncMode<IRecalculatePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IRecalculatePostOperationConfig<TEntity> ISyncAsyncMode<IRecalculatePostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ISyncMode<ILockSalesOrderPricingPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ISyncMode<ILockSalesOrderPricingPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ISyncAsyncMode<ILockSalesOrderPricingPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ISyncAsyncMode<ILockSalesOrderPricingPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ISyncAsyncMode<ILockSalesOrderPricingPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> ISyncMode<IUnlockSalesOrderPricingPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> ISyncMode<IUnlockSalesOrderPricingPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> ISyncAsyncMode<IUnlockSalesOrderPricingPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> ISyncAsyncMode<IUnlockSalesOrderPricingPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> ISyncAsyncMode<IUnlockSalesOrderPricingPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ISyncMode<ILockInvoicePricingPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ISyncMode<ILockInvoicePricingPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ISyncAsyncMode<ILockInvoicePricingPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ISyncAsyncMode<ILockInvoicePricingPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ISyncAsyncMode<ILockInvoicePricingPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> ISyncMode<IUnlockInvoicePricingPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> ISyncMode<IUnlockInvoicePricingPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> ISyncAsyncMode<IUnlockInvoicePricingPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> ISyncAsyncMode<IUnlockInvoicePricingPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> ISyncAsyncMode<IUnlockInvoicePricingPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IReschedulePreValidationConfig<TEntity> ISyncMode<IReschedulePreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IReschedulePreOperationConfig<TEntity> ISyncMode<IReschedulePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IReschedulePostOperationConfig<TEntity> ISyncAsyncMode<IReschedulePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IReschedulePostOperationConfig<TEntity> ISyncAsyncMode<IReschedulePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IReschedulePostOperationConfig<TEntity> ISyncAsyncMode<IReschedulePostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IImmediateBookPreValidationConfig<TEntity> ISyncMode<IImmediateBookPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IImmediateBookPreOperationConfig<TEntity> ISyncMode<IImmediateBookPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IImmediateBookPostOperationConfig<TEntity> ISyncAsyncMode<IImmediateBookPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IImmediateBookPostOperationConfig<TEntity> ISyncAsyncMode<IImmediateBookPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IImmediateBookPostOperationConfig<TEntity> ISyncAsyncMode<IImmediateBookPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISyncMode<ISendTemplatePreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISyncMode<ISendTemplatePreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISyncAsyncMode<ISendTemplatePostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISyncAsyncMode<ISendTemplatePostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISyncAsyncMode<ISendTemplatePostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISyncMode<ISendFaxPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ISendFaxPreOperationConfig<TEntity> ISyncMode<ISendFaxPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ISendFaxPostOperationConfig<TEntity> ISyncAsyncMode<ISendFaxPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        ISendFaxPostOperationConfig<TEntity> ISyncAsyncMode<ISendFaxPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        ISendFaxPostOperationConfig<TEntity> ISyncAsyncMode<ISendFaxPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> ISyncMode<IAddProductToKitPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAddProductToKitPreOperationConfig<TEntity> ISyncMode<IAddProductToKitPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAddProductToKitPostOperationConfig<TEntity> ISyncAsyncMode<IAddProductToKitPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IAddProductToKitPostOperationConfig<TEntity> ISyncAsyncMode<IAddProductToKitPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IAddProductToKitPostOperationConfig<TEntity> ISyncAsyncMode<IAddProductToKitPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> ISyncMode<IRemoveProductFromKitPreValidationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> ISyncMode<IRemoveProductFromKitPreOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> ISyncAsyncMode<IRemoveProductFromKitPostOperationConfig<TEntity>>.Sync() { _definition.Mode = ExecutionMode.Synchronous; return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> ISyncAsyncMode<IRemoveProductFromKitPostOperationConfig<TEntity>>.Async() { _definition.Mode = ExecutionMode.Asynchronous; return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> ISyncAsyncMode<IRemoveProductFromKitPostOperationConfig<TEntity>>.Async(bool deleteJobOnSuccess) { SetAsyncMode(deleteJobOnSuccess); return this; }
 
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.FilterOn(Expression<Func<TEntity, object?>> attribute, params Expression<Func<TEntity, object?>>[] additionalAttributes) { SetFilteringAttributes(attribute, additionalAttributes); return this; }
         ICreatePreValidationConfig<TEntity> ICreatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
@@ -2001,6 +2209,409 @@ namespace Vela.Steps
         IMergePostOperationConfig<TEntity> IMergePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
         void IMergePostOperationConfig<TEntity>.Handle(Action<IMergePostContext<TEntity>> handler) { SetHandler(handler); }
 
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IAddItemCampaignPreValidationConfig<TEntity> IAddItemCampaignPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAddItemCampaignPreValidationConfig<TEntity>.Handle(Action<IAddItemCampaignPreContext<TEntity>> handler) { SetHandler(handler); }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IAddItemCampaignPreOperationConfig<TEntity> IAddItemCampaignPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAddItemCampaignPreOperationConfig<TEntity>.Handle(Action<IAddItemCampaignPreContext<TEntity>> handler) { SetHandler(handler); }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IAddItemCampaignPostOperationConfig<TEntity> IAddItemCampaignPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAddItemCampaignPostOperationConfig<TEntity>.Handle(Action<IAddItemCampaignPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRemoveItemCampaignPreValidationConfig<TEntity> IRemoveItemCampaignPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRemoveItemCampaignPreValidationConfig<TEntity>.Handle(Action<IRemoveItemCampaignPreContext<TEntity>> handler) { SetHandler(handler); }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRemoveItemCampaignPreOperationConfig<TEntity> IRemoveItemCampaignPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRemoveItemCampaignPreOperationConfig<TEntity>.Handle(Action<IRemoveItemCampaignPreContext<TEntity>> handler) { SetHandler(handler); }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRemoveItemCampaignPostOperationConfig<TEntity> IRemoveItemCampaignPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRemoveItemCampaignPostOperationConfig<TEntity>.Handle(Action<IRemoveItemCampaignPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRecalculatePreValidationConfig<TEntity> IRecalculatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRecalculatePreValidationConfig<TEntity>.Handle(Action<IRecalculatePreContext<TEntity>> handler) { SetHandler(handler); }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRecalculatePreOperationConfig<TEntity> IRecalculatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRecalculatePreOperationConfig<TEntity>.Handle(Action<IRecalculatePreContext<TEntity>> handler) { SetHandler(handler); }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRecalculatePostOperationConfig<TEntity> IRecalculatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRecalculatePostOperationConfig<TEntity>.Handle(Action<IRecalculatePostContext<TEntity>> handler) { SetHandler(handler); }
+
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ILockSalesOrderPricingPreValidationConfig<TEntity> ILockSalesOrderPricingPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ILockSalesOrderPricingPreValidationConfig<TEntity>.Handle(Action<ILockSalesOrderPricingPreContext<TEntity>> handler) { SetHandler(handler); }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ILockSalesOrderPricingPreOperationConfig<TEntity> ILockSalesOrderPricingPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ILockSalesOrderPricingPreOperationConfig<TEntity>.Handle(Action<ILockSalesOrderPricingPreContext<TEntity>> handler) { SetHandler(handler); }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ILockSalesOrderPricingPostOperationConfig<TEntity> ILockSalesOrderPricingPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ILockSalesOrderPricingPostOperationConfig<TEntity>.Handle(Action<ILockSalesOrderPricingPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> IUnlockSalesOrderPricingPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IUnlockSalesOrderPricingPreValidationConfig<TEntity>.Handle(Action<IUnlockSalesOrderPricingPreContext<TEntity>> handler) { SetHandler(handler); }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> IUnlockSalesOrderPricingPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IUnlockSalesOrderPricingPreOperationConfig<TEntity>.Handle(Action<IUnlockSalesOrderPricingPreContext<TEntity>> handler) { SetHandler(handler); }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> IUnlockSalesOrderPricingPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IUnlockSalesOrderPricingPostOperationConfig<TEntity>.Handle(Action<IUnlockSalesOrderPricingPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ILockInvoicePricingPreValidationConfig<TEntity> ILockInvoicePricingPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ILockInvoicePricingPreValidationConfig<TEntity>.Handle(Action<ILockInvoicePricingPreContext<TEntity>> handler) { SetHandler(handler); }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ILockInvoicePricingPreOperationConfig<TEntity> ILockInvoicePricingPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ILockInvoicePricingPreOperationConfig<TEntity>.Handle(Action<ILockInvoicePricingPreContext<TEntity>> handler) { SetHandler(handler); }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ILockInvoicePricingPostOperationConfig<TEntity> ILockInvoicePricingPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ILockInvoicePricingPostOperationConfig<TEntity>.Handle(Action<ILockInvoicePricingPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IUnlockInvoicePricingPreValidationConfig<TEntity> IUnlockInvoicePricingPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IUnlockInvoicePricingPreValidationConfig<TEntity>.Handle(Action<IUnlockInvoicePricingPreContext<TEntity>> handler) { SetHandler(handler); }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IUnlockInvoicePricingPreOperationConfig<TEntity> IUnlockInvoicePricingPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IUnlockInvoicePricingPreOperationConfig<TEntity>.Handle(Action<IUnlockInvoicePricingPreContext<TEntity>> handler) { SetHandler(handler); }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IUnlockInvoicePricingPostOperationConfig<TEntity> IUnlockInvoicePricingPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IUnlockInvoicePricingPostOperationConfig<TEntity>.Handle(Action<IUnlockInvoicePricingPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IReschedulePreValidationConfig<TEntity> IReschedulePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IReschedulePreValidationConfig<TEntity>.Handle(Action<IReschedulePreContext<TEntity>> handler) { SetHandler(handler); }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IReschedulePreOperationConfig<TEntity> IReschedulePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IReschedulePreOperationConfig<TEntity>.Handle(Action<IReschedulePreContext<TEntity>> handler) { SetHandler(handler); }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IReschedulePostOperationConfig<TEntity> IReschedulePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IReschedulePostOperationConfig<TEntity>.Handle(Action<IReschedulePostContext<TEntity>> handler) { SetHandler(handler); }
+
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IImmediateBookPreValidationConfig<TEntity> IImmediateBookPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IImmediateBookPreValidationConfig<TEntity>.Handle(Action<IImmediateBookPreContext<TEntity>> handler) { SetHandler(handler); }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IImmediateBookPreOperationConfig<TEntity> IImmediateBookPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IImmediateBookPreOperationConfig<TEntity>.Handle(Action<IImmediateBookPreContext<TEntity>> handler) { SetHandler(handler); }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IImmediateBookPostOperationConfig<TEntity> IImmediateBookPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IImmediateBookPostOperationConfig<TEntity>.Handle(Action<IImmediateBookPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ISendTemplatePreValidationConfig<TEntity> ISendTemplatePreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ISendTemplatePreValidationConfig<TEntity>.Handle(Action<ISendTemplatePreContext<TEntity>> handler) { SetHandler(handler); }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ISendTemplatePreOperationConfig<TEntity> ISendTemplatePreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ISendTemplatePreOperationConfig<TEntity>.Handle(Action<ISendTemplatePreContext<TEntity>> handler) { SetHandler(handler); }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ISendTemplatePostOperationConfig<TEntity> ISendTemplatePostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ISendTemplatePostOperationConfig<TEntity>.Handle(Action<ISendTemplatePostContext<TEntity>> handler) { SetHandler(handler); }
+
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ISendFaxPreValidationConfig<TEntity> ISendFaxPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ISendFaxPreValidationConfig<TEntity>.Handle(Action<ISendFaxPreContext<TEntity>> handler) { SetHandler(handler); }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ISendFaxPreOperationConfig<TEntity> ISendFaxPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ISendFaxPreOperationConfig<TEntity>.Handle(Action<ISendFaxPreContext<TEntity>> handler) { SetHandler(handler); }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        ISendFaxPostOperationConfig<TEntity> ISendFaxPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void ISendFaxPostOperationConfig<TEntity>.Handle(Action<ISendFaxPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IAddProductToKitPreValidationConfig<TEntity> IAddProductToKitPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAddProductToKitPreValidationConfig<TEntity>.Handle(Action<IAddProductToKitPreContext<TEntity>> handler) { SetHandler(handler); }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IAddProductToKitPreOperationConfig<TEntity> IAddProductToKitPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAddProductToKitPreOperationConfig<TEntity>.Handle(Action<IAddProductToKitPreContext<TEntity>> handler) { SetHandler(handler); }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IAddProductToKitPostOperationConfig<TEntity> IAddProductToKitPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IAddProductToKitPostOperationConfig<TEntity>.Handle(Action<IAddProductToKitPostContext<TEntity>> handler) { SetHandler(handler); }
+
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRemoveProductFromKitPreValidationConfig<TEntity> IRemoveProductFromKitPreValidationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRemoveProductFromKitPreValidationConfig<TEntity>.Handle(Action<IRemoveProductFromKitPreContext<TEntity>> handler) { SetHandler(handler); }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRemoveProductFromKitPreOperationConfig<TEntity> IRemoveProductFromKitPreOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRemoveProductFromKitPreOperationConfig<TEntity>.Handle(Action<IRemoveProductFromKitPreContext<TEntity>> handler) { SetHandler(handler); }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.WithDescription(string description) { SetDescription(description); return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.WithExecutionOrder(int order) { SetExecutionOrder(order); return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.WithStepKey(string key) { SetKey(key); return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.SkipWhenDepthAbove(int maxDepth) { SetSkipWhenDepthAbove(maxDepth); return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.WithImpersonation(Guid systemUserId) { SetImpersonationUser(systemUserId); return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.WithSupportedDeployment(SupportedDeployment deployment) { SetSupportedDeployment(deployment); return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.WithUnsecureConfig(string configuration) { SetUnsecureConfig(configuration); return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.WithSecureConfigFrom(string name) { SetSecureConfigName(name); return this; }
+        IRemoveProductFromKitPostOperationConfig<TEntity> IRemoveProductFromKitPostOperationConfig<TEntity>.Disabled() { SetDisabled(); return this; }
+        void IRemoveProductFromKitPostOperationConfig<TEntity>.Handle(Action<IRemoveProductFromKitPostContext<TEntity>> handler) { SetHandler(handler); }
+
     }
 }
 
@@ -2047,6 +2658,19 @@ namespace Vela.Plugin
         IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() => ((IStepTrigger<TEntity>)BeginStep()).OnWinQuote();
         IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() => ((IStepTrigger<TEntity>)BeginStep()).OnModifyAccess();
         IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() => ((IStepTrigger<TEntity>)BeginStep()).OnMerge();
+        IAddItemCampaignStages<TEntity> IStepTrigger<TEntity>.OnAddItemCampaign() => ((IStepTrigger<TEntity>)BeginStep()).OnAddItemCampaign();
+        IRemoveItemCampaignStages<TEntity> IStepTrigger<TEntity>.OnRemoveItemCampaign() => ((IStepTrigger<TEntity>)BeginStep()).OnRemoveItemCampaign();
+        IRecalculateStages<TEntity> IStepTrigger<TEntity>.OnRecalculate() => ((IStepTrigger<TEntity>)BeginStep()).OnRecalculate();
+        ILockSalesOrderPricingStages<TEntity> IStepTrigger<TEntity>.OnLockSalesOrderPricing() => ((IStepTrigger<TEntity>)BeginStep()).OnLockSalesOrderPricing();
+        IUnlockSalesOrderPricingStages<TEntity> IStepTrigger<TEntity>.OnUnlockSalesOrderPricing() => ((IStepTrigger<TEntity>)BeginStep()).OnUnlockSalesOrderPricing();
+        ILockInvoicePricingStages<TEntity> IStepTrigger<TEntity>.OnLockInvoicePricing() => ((IStepTrigger<TEntity>)BeginStep()).OnLockInvoicePricing();
+        IUnlockInvoicePricingStages<TEntity> IStepTrigger<TEntity>.OnUnlockInvoicePricing() => ((IStepTrigger<TEntity>)BeginStep()).OnUnlockInvoicePricing();
+        IRescheduleStages<TEntity> IStepTrigger<TEntity>.OnReschedule() => ((IStepTrigger<TEntity>)BeginStep()).OnReschedule();
+        IImmediateBookStages<TEntity> IStepTrigger<TEntity>.OnImmediateBook() => ((IStepTrigger<TEntity>)BeginStep()).OnImmediateBook();
+        ISendTemplateStages<TEntity> IStepTrigger<TEntity>.OnSendTemplate() => ((IStepTrigger<TEntity>)BeginStep()).OnSendTemplate();
+        ISendFaxStages<TEntity> IStepTrigger<TEntity>.OnSendFax() => ((IStepTrigger<TEntity>)BeginStep()).OnSendFax();
+        IAddProductToKitStages<TEntity> IStepTrigger<TEntity>.OnAddProductToKit() => ((IStepTrigger<TEntity>)BeginStep()).OnAddProductToKit();
+        IRemoveProductFromKitStages<TEntity> IStepTrigger<TEntity>.OnRemoveProductFromKit() => ((IStepTrigger<TEntity>)BeginStep()).OnRemoveProductFromKit();
         IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() => ((IStepTrigger<TEntity>)BeginStep()).OnMessage<TMessage>();
         ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() => ((IStepTrigger<TEntity>)BeginStep()).On<TRequest>();
         IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() => ((IStepTrigger<TEntity>)BeginStep()).OnAsyncOnly<TRequest>();

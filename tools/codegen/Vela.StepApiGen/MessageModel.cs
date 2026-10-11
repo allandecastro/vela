@@ -92,6 +92,22 @@ internal static class MessageModel
         new("ModifyAccess"),
         // Verified live: one Merge step takes images of the master (Target) and of the subordinate (SubordinateId).
         new("Merge", Images: Images.PreAndPost, SubordinateImages: true),
+        // Marketing, pricing, goals, scheduling, email and product kits (#405). The tables are the sdkmessagefilters
+        // that allow custom steps on a 9.2 environment. Reschedule runs on several tables; UnlockSalesOrderPricing,
+        // UnlockInvoicePricing and RemoveProductFromKit on none (PluginMessages.GlobalMessages).
+        new("AddItemCampaign", Entity: "campaign"),
+        new("RemoveItemCampaign", Entity: "campaign"),
+        new("Recalculate", Entity: "goal"),
+        new("LockSalesOrderPricing", Entity: "salesorder"),
+        new("UnlockSalesOrderPricing"),
+        new("LockInvoicePricing", Entity: "invoice"),
+        new("UnlockInvoicePricing"),
+        new("Reschedule"),
+        new("ImmediateBook", Entity: "appointment"),
+        new("SendTemplate", Entity: "template"),
+        new("SendFax", Entity: "fax"),
+        new("AddProductToKit", Entity: "product"),
+        new("RemoveProductFromKit"),
     ];
 
     /// <summary>

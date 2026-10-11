@@ -33,11 +33,16 @@ namespace Vela.Steps
         private static readonly Dictionary<string, Entry> ByRequestName = new Dictionary<string, Entry>(StringComparer.OrdinalIgnoreCase)
         {
             // Modelled messages whose name is the sdkmessage, listed for the single table they run on.
+            ["AddProductToKit"] = new Entry("AddProductToKit", "product"),
             ["AddToQueue"] = new Entry("AddToQueue", "queueitem"),
             ["ConvertSalesOrderToInvoice"] = new Entry("ConvertSalesOrderToInvoice", "salesorder"),
             ["GenerateQuoteFromOpportunity"] = new Entry("GenerateQuoteFromOpportunity", "quote"),
+            ["ImmediateBook"] = new Entry("ImmediateBook", "appointment"),
+            ["LockInvoicePricing"] = new Entry("LockInvoicePricing", "invoice"),
+            ["LockSalesOrderPricing"] = new Entry("LockSalesOrderPricing", "salesorder"),
             ["PickFromQueue"] = new Entry("PickFromQueue", "queueitem"),
             ["QualifyLead"] = new Entry("QualifyLead", "lead"),
+            ["Recalculate"] = new Entry("Recalculate", "goal"),
             ["ReleaseToQueue"] = new Entry("ReleaseToQueue", "queueitem"),
             ["RemoveFromQueue"] = new Entry("RemoveFromQueue", "queueitem"),
             ["RouteTo"] = new Entry("RouteTo", "queueitem"),
