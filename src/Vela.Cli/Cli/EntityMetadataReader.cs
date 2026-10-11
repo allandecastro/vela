@@ -52,7 +52,7 @@ internal static class EntityMetadataReader
             }
             catch (Exception ex)
             {
-                onSkip?.Invoke($"Warning: skipping intersect table '{intersect}' (could not read its metadata): {ex.Message}");
+                onSkip?.Invoke($"Warning: skipping intersect table '{intersect}' (could not read its metadata): {OutputWriter.RedactSecrets(ex.Message)}");
             }
         }
 

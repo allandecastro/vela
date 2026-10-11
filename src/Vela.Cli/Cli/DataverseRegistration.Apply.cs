@@ -201,7 +201,7 @@ internal static partial class DataverseRegistration
     }
     catch (Exception ex)
     {
-        foreach (string line in progress.BuildReport(ex.Message))
+        foreach (string line in progress.BuildReport(OutputWriter.RedactSecrets(ex.Message)))
         {
             Console.Error.WriteLine(line);
         }

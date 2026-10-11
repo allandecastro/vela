@@ -497,5 +497,8 @@ internal sealed record SignOptions(
     bool Json = false,
     bool SecretsOnCommandLine = false)
 {
+    // Plain http on purpose: DigiCert's TSA has no TLS listener (an https request is reset at the handshake), and an
+    // RFC 3161 exchange needs none - the request carries only the package hash and the reply is signed by the TSA,
+    // whose certificate chain the signer verifies. No secret crosses this hop. (#446)
     public const string DefaultTimestampUrl = "http://timestamp.digicert.com";
 }
