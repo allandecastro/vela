@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -21,10 +22,35 @@ namespace Vela.Context
 
         /// <summary>
         /// Includes the records reachable through a generated relationship navigation property (for example
-        /// <c>o =&gt; o.Order_Details</c> or <c>o =&gt; o.Parent_Account</c>). They are hydrated onto that typed
-        /// property after the retrieve.
+        /// <c>o =&gt; o.Order_Details</c> or <c>o =&gt; o.Parent_Account</c>), with all their columns. They are
+        /// hydrated onto that typed property after the retrieve. Including the same relationship twice throws.
         /// </summary>
-        public RelationshipIncludeBuilder<TEntity> Include(Expression<Func<TEntity, object?>> navigation)
+        public RelationshipIncludeBuilder<TEntity> Include(Expression<Func<TEntity, object?>> navigation) =>
+            Add(navigation, columns: null);
+
+        /// <summary>
+        /// Includes the 1:N or N:N records of a generated collection navigation property (for example
+        /// <c>o =&gt; o.Order_Details</c>), reading only <paramref name="columns"/> (all columns when none are
+        /// given). Including the same relationship twice throws.
+        /// </summary>
+        public RelationshipIncludeBuilder<TEntity> Include<TRelated>(
+            Expression<Func<TEntity, IEnumerable<TRelated>?>> navigation,
+            params Expression<Func<TRelated, object?>>[] columns)
+            where TRelated : Entity =>
+            Add(navigation, columns);
+
+        /// <summary>
+        /// Includes the N:1 parent of a generated navigation property (for example <c>o =&gt; o.Parent_Account</c>),
+        /// reading only <paramref name="columns"/> (all columns when none are given). Including the same
+        /// relationship twice throws.
+        /// </summary>
+        public RelationshipIncludeBuilder<TEntity> Include<TRelated>(
+            Expression<Func<TEntity, TRelated?>> navigation,
+            params Expression<Func<TRelated, object?>>[] columns)
+            where TRelated : Entity =>
+            Add(navigation, columns);
+
+        private RelationshipIncludeBuilder<TEntity> Add(LambdaExpression navigation, LambdaExpression[]? columns)
         {
             if (navigation == null)
             {
@@ -40,12 +66,22 @@ namespace Vela.Context
                     nameof(navigation));
             }
 
+            // A second Include of the same relationship would silently replace the first one's query.
+            Relationship relationship = new Relationship(nav.SchemaName);
+            if (Query.Contains(relationship))
+            {
+                throw new ArgumentException($"'{property.Name}' is already included.", nameof(navigation));
+            }
+
             string childLogicalName = ((Entity)Activator.CreateInstance(nav.ElementType)!).LogicalName;
-            Query[new Relationship(nav.SchemaName)] = new QueryExpression(childLogicalName) { ColumnSet = new ColumnSet(true) };
+            ColumnSet columnSet = columns is { Length: > 0 }
+                ? new ColumnSet(columns.Select(ExpressionHelper.GetAttributeLogicalName).ToArray())
+                : new ColumnSet(true);
+            Query[relationship] = new QueryExpression(childLogicalName) { ColumnSet = columnSet };
             return this;
         }
 
-        private static PropertyInfo ResolveProperty(Expression<Func<TEntity, object?>> navigation)
+        private static PropertyInfo ResolveProperty(LambdaExpression navigation)
         {
             Expression body = navigation.Body;
             if (body is UnaryExpression unary && (unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked))

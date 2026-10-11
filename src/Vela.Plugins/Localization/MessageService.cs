@@ -57,7 +57,7 @@ namespace Vela.Localization
 
             if (TryResolveTemplate(key, languageCode, out string? template))
             {
-                return Format(template!, languageCode, args);
+                return Format(key, template!, languageCode, args);
             }
 
             throw new InvalidPluginExecutionException(
@@ -77,7 +77,7 @@ namespace Vela.Localization
             int languageCode = ResolveUserLanguageCode();
             if (TryResolveTemplate(key, languageCode, out string? template))
             {
-                message = Format(template!, languageCode, args);
+                message = Format(key, template!, languageCode, args);
                 return true;
             }
 
@@ -187,14 +187,26 @@ namespace Vela.Localization
             return false;
         }
 
-        private static string Format(string template, int languageCode, object[]? args)
+        // A template whose placeholders do not match the arguments (an index past the last argument, an unbalanced
+        // brace) is a defect in the message catalog, not a missing message: it throws even from TryGetMessage, as an
+        // InvalidPluginExecutionException naming the key and the language instead of a bare FormatException.
+        private static string Format(string key, string template, int languageCode, object[]? args)
         {
             if (args == null || args.Length == 0)
             {
                 return template;
             }
 
-            return string.Format(ResolveCulture(languageCode), template, args);
+            try
+            {
+                return string.Format(ResolveCulture(languageCode), template, args);
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidPluginExecutionException(
+                    $"The message template for key '{key}' in language {languageCode} does not match its {args.Length} argument(s): {ex.Message}",
+                    ex);
+            }
         }
 
         // The culture for {0} formatting (numbers/dates). Falls back to the invariant culture for an unknown LCID

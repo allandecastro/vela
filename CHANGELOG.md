@@ -26,6 +26,26 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Runtime edge cases that were silent now fail or behave as documented (#447).**
+  - The typed requests' `Target` (`CreateRequest<T>`, `UpdateRequest<T>`, `UpsertRequest<T>`,
+    `SendEmailFromTemplateRequest<T>`) throws the same `InvalidPluginExecutionException` as `ctx.GetTarget<T>()`
+    when `Target` is absent or not an entity, instead of returning null.
+  - `AssociateRelated` throws, naming each offending entry, when a related record has no id, and associates nothing.
+    It used to skip those records.
+  - `RetrieveWithRelated`: including the same relationship twice throws. The second `Include` used to replace the first.
+  - `UpsertByKey` upserts a copy keyed by exactly the given key. It no longer merges into the entity's existing
+    `KeyAttributes` or modifies the entity, and it rejects an entity with an id or a key without key attributes.
+  - A lightweight Custom API handler must take exactly `ILocalPluginContext`. A derived parameter type was accepted
+    and then failed at invocation.
+  - `StepDefinitionReader.GetStepDefinitions(assembly)` throws, listing every plugin or type it could not read. It
+    used to skip them silently. The new overload with a diagnostics collection keeps the best-effort scan.
+  - `IsBulkOperation` and `BulkTargets` are set only for CreateMultiple, UpdateMultiple and UpsertMultiple, not for
+    any message with an `EntityCollection` input named `Targets`.
+  - The injected `IEnvironmentVariableReader` rejects Secret-type variables, like the context extensions did.
+  - An explicit `ctx.TraceExecutionSnapshot(phase)` defaults to `TraceSnapshotDetail.Metadata`, like the automatic
+    snapshot. Pass `TraceSnapshotDetail.Full` to trace values.
+  - A message template whose placeholders do not match its arguments throws an `InvalidPluginExecutionException`
+    naming the key and the language, from `TryGetMessage` too, instead of a bare `FormatException`.
 - **One way to register a step per message.** `On<TRequest>()` and `OnAsyncOnly<TRequest>()` now reject a request
   whose message has a typed trigger (`On<UpdateRequest>()`, `On<AssignRequest>()`, `On<CreateMultipleRequest>()`,
   `On<Vela.Messages.CreateRequest<T>>()`, ...): registering the step throws, naming the trigger to use (`OnUpdate()`).
@@ -186,10 +206,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **`Include` takes column selectors (#447):** `q.Include(o => o.Order_Details, l => l.LineTotal)` reads only those
+  columns of the related records.
 - **Trace volume controls (#449).** The plug-in trace log keeps about 10 KB per execution, and the automatic traces
   could crowd a plugin's own lines out of it. `protected override bool AutoTraceServiceCalls => false;` stops the
   wrapped services (`Service`, `SystemService`, `AsUser`) from writing two lines per Dataverse call; a failed call is
-  still traced, on one line with its scope, depth, table or request, and exception type.
+  still traced, on one line with its scope, depth, table or request, and exception type (an indented FetchXML query
+  is collapsed onto that line, in every `RetrieveMultiple` trace).
   `TraceSnapshotDetail.None` (`AutoSnapshotDetail`, or an explicit `TraceExecutionSnapshot`) writes no snapshot.
   Both are opt-in, per plugin class (a shared abstract base class applies them to a whole project): the defaults are
   unchanged.
@@ -285,6 +308,15 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **Early-bound entities are downcast deeply, and the caller's request is left untouched (#447).** `ctx.Service`
+  now also downcasts early-bound entities nested in `RelatedEntities` (deep insert) and in `EntityCollection`
+  attributes (activity parties), which failed with the same `SerializationException`. `Execute` sends a copy of the
+  request instead of replacing the parameters of the caller's request object.
+- **`TypedQuery.Select` / `SelectAll` keep the group-by and aggregate columns added before them (#447).**
+- **`Clone()` drops only the real primary key (#447).** Another `*id` Guid column holding the same value as `Id`
+  is kept; an early-bound model's key column is read from its `Id` property.
+- **FetchXML value redaction covers CDATA values (#447).**
+- **The manifest scanner reports the real cause of a discovery failure (#447),** not the reflection wrapper's message.
 - **`ctx.Response.id` resolves in a post-create test with an explicit trigger.** `PluginContextBuilder` filled
   `OutputParameters["id"]` (and `Ids` for `CreateMultiple`) from the Target only when it derived the trigger from a
   single-step plugin. A multi-step router, whose test states `OnCreate().Stage(PluginStages.PostOperation)`, saw

@@ -204,11 +204,29 @@ public sealed class LocalPluginContextCoverageTests
         EntityImageCollection images = new EntityImageCollection();
         images["PreImage"] = new Entity("account", Guid.NewGuid());
         LocalPluginContext bulk = new PluginContextBuilder()
+            .OnMessage("UpdateMultiple")
             .WithTargets(new EntityCollection())
             .WithBulkPreImages(images)
             .Build();
 
         Assert.True(bulk.IsBulkOperation);
         Assert.Single(bulk.BulkPreEntityImagesCollection);
+    }
+
+    [Theory]
+    [InlineData("CreateMultiple", true)]
+    [InlineData("UpdateMultiple", true)]
+    [InlineData("UpsertMultiple", true)]
+    [InlineData("vela_ImportRows", false)]   // a Custom API whose EntityCollection input is named Targets
+    [InlineData("Update", false)]
+    public void Only_the_bulk_messages_are_bulk_operations(string message, bool bulk)
+    {
+        LocalPluginContext ctx = new PluginContextBuilder()
+            .OnMessage(message)
+            .WithTargets(new EntityCollection(new List<Entity> { new Entity("account", Guid.NewGuid()) }))
+            .Build();
+
+        Assert.Equal(bulk, ctx.IsBulkOperation);
+        Assert.Equal(bulk, ctx.BulkTargets != null);
     }
 }

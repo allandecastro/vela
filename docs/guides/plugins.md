@@ -321,7 +321,8 @@ and queue messages) and `ctx.Request.Targets` the `EntityCollection` of CreateMu
 | `OnGrantAccess()` / `OnModifyAccess()` / `OnRevokeAccess()` | the SDK request | `ctx.Request.Target` |
 
 To **call** Upsert from plugin code, use `UpsertRequest<TEntity>` / `UpsertResponse`, or
-`service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))`, which returns `(Created, Target)` (see
+`service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))`, which upserts a copy of `account` keyed by exactly
+that key (`account` itself is not modified and must not have an id) and returns `(Created, Target)` (see
 [alternate keys](models.md#what-the-generated-table-classes-contain)).
 
 ## Messages
@@ -429,8 +430,10 @@ is still ahead:
 - `ctx.GetRequiredService<T>()`: see [Dependency injection](dependency-injection.md).
 - `ctx.GetTarget<T>()`, `ctx.GetTargetRef()`, `ctx.GetTargets()` / `ctx.TryGetTargets(...)`.
 - `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` (optional alias), and the bulk `ctx.GetPreImage(index, alias)`.
-- `ctx.GetPreImageMerged()` / `ctx.GetPostImageMerged()`: the image's captured columns overlaid with the Target's.
-  A column in neither is absent, not the stored value. The result is a detached copy.
+- `ctx.GetPreImageMerged()` / `ctx.GetPostImageMerged()` (typed: `GetPreImageMerged<Account>()`): the image's
+  captured columns overlaid with the Target's. A column in neither is absent, not the stored value. The result is a
+  detached copy: writing to it does not persist. On a bulk step, `ctx.GetPreImageMerged(index)` /
+  `ctx.GetPostImageMerged(index)` merge one row's Target with its image.
 - `target.Contains(x => x.Name)` (all of), `target.ContainsAny(x => x.A, x => x.B)` (any of).
 - `ctx.HasChanged<Account>(x => x.Name)` / `ctx.HasAnyChanged<Account>(...)`: see below.
 - `entity.GetFormattedValue(x => x.StatusCode)`: the display value, or `null`.
@@ -472,8 +475,11 @@ private void OnCreditLimit(OnCreditLimitContext ctx)
 }
 ```
 
-It needs an entity Target and a pre-image holding the column, or it throws; a column absent from the Target counts
-as unchanged. Strings compare exactly (case included) and multi-select choices as sets.
+It needs an entity Target (Create/Update; Delete, Assign and SetState carry an `EntityReference` and throw) and a
+pre-image holding the column, or it throws; a column absent from the Target counts as unchanged. It works at
+PreOperation and PostOperation alike. It never compares with a post-image, which already holds the new value, and
+it is unavailable on Create, which has no prior state. Strings compare exactly (case included) and multi-select
+choices as sets.
 [VELA009](../reference/analyzers.md#vela009) flags a `HasChanged` with no pre-image or on an uncaptured column.
 
 ### FilterOn on a bulk write
@@ -481,13 +487,15 @@ as unchanged. Strings compare exactly (case included) and multi-select choices a
 - A single `OnCreate()` / `OnUpdate()` step also runs under `CreateMultiple` / `UpdateMultiple`, once per row whose
   Target carries a filtered column.
 - An `OnCreateMultiple()` / `OnUpdateMultiple()` step fires once for the batch if at least one row carries a
-  filtered column, and receives **every** row of `ctx.Request.Targets`. Re-check each row
+  filtered column (not at all if none do), and receives **every** row of `ctx.Request.Targets`, including the rows
+  without it: the filter gates the batch, not each row. Re-check each row
   (`target.Contains(...)`) before acting on it.
 
 ## Tracing
 
 - Whether a trace is persisted is the environment's **Plugin Trace Log** setting (`Off` / `Exception` / `All`), not
-  code. `ctx.Trace(...)` also goes to the platform's Application Insights logger at Information level.
+  code; there is no runtime verbosity switch (the sandbox has no environment variables to set). In code you control
+  each plugin class's automatic traces (below) and what you trace yourself. `ctx.Trace(...)` also goes to the platform's Application Insights logger at Information level.
 - The runtime traces an `Executing ...` line and `Entering handler '<Name>' for message '<Message>'.` for each named
   handler (`protected override bool AutoTraceHandlerEntry => false;` silences the latter).
 - Each Dataverse call through the context services is traced as one line when it starts and one when it ends,
@@ -502,8 +510,9 @@ as unchanged. Strings compare exactly (case included) and multi-select choices a
   parameters, images and columns, never their values. To include values (and a success snapshot) while debugging:
   `protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full;`. Snapshots go to the
   trace log only, never to Application Insights.
-- `ctx.TraceExecutionSnapshot("phase")` traces a snapshot with values at a point you choose
-  (`TraceSnapshotDetail.Metadata` for names only), and `ctx.TraceMethod("details")` a light checkpoint.
+- `ctx.TraceExecutionSnapshot("phase")` traces a snapshot at a point you choose, names, ids and counts only like the
+  automatic one; pass `TraceSnapshotDetail.Full` to include the values. `ctx.TraceMethod("details")` traces a light
+  checkpoint (method, message, stage, depth).
 
 > [!WARNING]
 > A full snapshot writes record values into the Plugin Trace Log. Keep it out of plugins handling sensitive data

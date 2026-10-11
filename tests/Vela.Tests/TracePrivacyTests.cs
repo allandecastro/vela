@@ -65,7 +65,7 @@ public sealed class TracePrivacyTests
         PluginContextBuilder<TestAccount> builder = Update();
         LocalPluginContext ctx = builder.Build();
 
-        ctx.TraceExecutionSnapshot("explicit"); // an explicit snapshot is Full...
+        ctx.TraceExecutionSnapshot("explicit", TraceSnapshotDetail.Full); // a Full snapshot...
         builder.Execute<DebugAccountPlugin>();
 
         Assert.Contains("Jane Doe", builder.TraceCapture.Output);  // ...in the trace log
@@ -96,6 +96,18 @@ public sealed class TracePrivacyTests
 
         Assert.Contains("Dataverse.Create fail", builder.TraceCapture.Output);
         Assert.Contains("System.InvalidOperationException", builder.TraceCapture.Output);
+        Assert.DoesNotContain("Jane Doe", builder.TraceCapture.Output);
+    }
+
+    [Fact]
+    public void An_explicit_snapshot_defaults_to_metadata_like_the_automatic_one()
+    {
+        PluginContextBuilder<TestAccount> builder = Update();
+        LocalPluginContext ctx = builder.Build();
+
+        ctx.TraceExecutionSnapshot("explicit");
+
+        Assert.Contains("[name]", builder.TraceCapture.Output);
         Assert.DoesNotContain("Jane Doe", builder.TraceCapture.Output);
     }
 }

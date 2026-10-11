@@ -104,4 +104,99 @@ public sealed class EarlyBoundDowncastTests
 
         Assert.Same(original, captured);
     }
+
+    [EntityLogicalName("contact")]
+    private sealed class FakeContact : Entity
+    {
+        public FakeContact()
+            : base("contact")
+        {
+        }
+    }
+
+    [EntityLogicalName("activityparty")]
+    private sealed class FakeParty : Entity
+    {
+        public FakeParty()
+            : base("activityparty")
+        {
+        }
+    }
+
+    [Fact]
+    public void Create_downcasts_early_bound_entities_nested_in_related_entities()
+    {
+        (TracingOrganizationService svc, Mock<IOrganizationService> inner) = Build();
+        Entity? captured = null;
+        inner.Setup(s => s.Create(It.IsAny<Entity>())).Callback<Entity>(e => captured = e).Returns(Guid.NewGuid());
+
+        // A base root carrying early-bound children (deep insert) must still be sanitized.
+        Entity account = new Entity("account");
+        FakeContact child = new FakeContact();
+        child["firstname"] = "Ada";
+        account.RelatedEntities[new Relationship("contact_customer_accounts")] = new EntityCollection { Entities = { child } };
+
+        svc.Create(account);
+
+        Entity sentChild = captured!.RelatedEntities[new Relationship("contact_customer_accounts")].Entities[0];
+        Assert.Equal(typeof(Entity), sentChild.GetType());
+        Assert.Equal("Ada", sentChild.GetAttributeValue<string>("firstname"));
+        // The caller's graph is untouched.
+        Assert.Same(child, account.RelatedEntities[new Relationship("contact_customer_accounts")].Entities[0]);
+    }
+
+    [Fact]
+    public void Create_downcasts_early_bound_entities_in_an_entity_collection_attribute()
+    {
+        (TracingOrganizationService svc, Mock<IOrganizationService> inner) = Build();
+        Entity? captured = null;
+        inner.Setup(s => s.Create(It.IsAny<Entity>())).Callback<Entity>(e => captured = e).Returns(Guid.NewGuid());
+
+        FakeParty party = new FakeParty();
+        party["partyid"] = new EntityReference("contact", Guid.NewGuid());
+        EntityCollection to = new EntityCollection { Entities = { party } };
+        Entity email = new Entity("email") { ["to"] = to, ["subject"] = "Hi" };
+
+        svc.Create(email);
+
+        EntityCollection sentTo = captured!.GetAttributeValue<EntityCollection>("to");
+        Assert.Equal(typeof(Entity), sentTo.Entities[0].GetType());
+        Assert.Equal("Hi", captured.GetAttributeValue<string>("subject"));
+        Assert.Same(to, email["to"]);
+        Assert.Same(party, to.Entities[0]);
+    }
+
+    [Fact]
+    public void Execute_leaves_the_callers_request_untouched_and_keeps_its_type()
+    {
+        (TracingOrganizationService svc, Mock<IOrganizationService> inner) = Build();
+        OrganizationRequest? captured = null;
+        inner.Setup(s => s.Execute(It.IsAny<OrganizationRequest>()))
+            .Callback<OrganizationRequest>(r => captured = r)
+            .Returns(new OrganizationResponse());
+
+        FakeAccount account = new FakeAccount { Name = "A" };
+        UpsertRequest request = new UpsertRequest { Target = account };
+        svc.Execute(request);
+
+        Assert.IsType<UpsertRequest>(captured);
+        Assert.NotSame(request, captured);
+        Assert.Equal(typeof(Entity), ((UpsertRequest)captured!).Target.GetType());
+        Assert.Same(account, request.Target);
+    }
+
+    [Fact]
+    public void Execute_passes_a_request_without_early_bound_values_through()
+    {
+        (TracingOrganizationService svc, Mock<IOrganizationService> inner) = Build();
+        OrganizationRequest? captured = null;
+        inner.Setup(s => s.Execute(It.IsAny<OrganizationRequest>()))
+            .Callback<OrganizationRequest>(r => captured = r)
+            .Returns(new OrganizationResponse());
+
+        UpsertRequest request = new UpsertRequest { Target = new Entity("account") };
+        svc.Execute(request);
+
+        Assert.Same(request, captured);
+    }
 }

@@ -128,6 +128,9 @@ string customer = order.Parent_Account?.Name;
 decimal total = order.Order_Details.Sum(l => l.LineTotal ?? 0);
 ```
 
+Each `Include` reads all the related columns by default; pass column selectors to read fewer, for example
+`q.Include(o => o.Order_Details, l => l.LineTotal)`. Including the same relationship twice throws.
+
 This is a **single-record** read: Dataverse nests related records on `Retrieve` (not `RetrieveMultiple`), **one
 level deep**, and each related query is subject to the **5000-row page cap**, so use it for bounded relationships.
 For a set of records, or deeper graphs, run a second query on the children and stitch by the parent lookup.
@@ -135,7 +138,8 @@ For a set of records, or deeper graphs, run a second query on the children and s
 
 **Associate (N:N).** An N:N link connects records that already exist, so you associate rather than create: populate
 the N:N collection with existing records (each with its id) and call `ctx.Service.AssociateRelated(account)`,
-which associates every populated N:N collection. (`CreateWithRelated` deliberately ignores N:N collections - it only
+which associates every populated N:N collection. A related record without an id throws, naming each one, before
+anything is associated. (`CreateWithRelated` deliberately ignores N:N collections - it only
 deep-inserts 1:N children.)
 
 ## Verify drift against the live schema (`--verify`)
