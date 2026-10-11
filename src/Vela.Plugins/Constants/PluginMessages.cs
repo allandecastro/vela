@@ -171,13 +171,53 @@ namespace Vela.Constants
         /// </summary>
         public const string Merge = "Merge";
 
+        /// <summary>AddItemCampaign message (the <c>AddItem</c> sdkmessage on campaign).</summary>
+        public const string AddItemCampaign = "AddItemCampaign";
+
+        /// <summary>RemoveItemCampaign message (the <c>RemoveItem</c> sdkmessage on campaign).</summary>
+        public const string RemoveItemCampaign = "RemoveItemCampaign";
+
+        /// <summary>Recalculate message.</summary>
+        public const string Recalculate = "Recalculate";
+
+        /// <summary>LockSalesOrderPricing message.</summary>
+        public const string LockSalesOrderPricing = "LockSalesOrderPricing";
+
+        /// <summary>LockInvoicePricing message.</summary>
+        public const string LockInvoicePricing = "LockInvoicePricing";
+
+        /// <summary>Reschedule message.</summary>
+        public const string Reschedule = "Reschedule";
+
+        /// <summary>ImmediateBook message.</summary>
+        public const string ImmediateBook = "ImmediateBook";
+
+        /// <summary>SendTemplate message (the <c>Send</c> sdkmessage on template).</summary>
+        public const string SendTemplate = "SendTemplate";
+
+        /// <summary>SendFax message (the <c>Send</c> sdkmessage on fax).</summary>
+        public const string SendFax = "SendFax";
+
+        /// <summary>AddProductToKit message.</summary>
+        public const string AddProductToKit = "AddProductToKit";
+
+        /// <summary>UnlockSalesOrderPricing message.</summary>
+        public const string UnlockSalesOrderPricing = "UnlockSalesOrderPricing";
+
+        /// <summary>UnlockInvoicePricing message.</summary>
+        public const string UnlockInvoicePricing = "UnlockInvoicePricing";
+
+        /// <summary>RemoveProductFromKit message.</summary>
+        public const string RemoveProductFromKit = "RemoveProductFromKit";
+
         /// <summary>
-        /// The messages that are not bound to a primary entity: their sdkmessagefilter has primaryobjecttypecode
-        /// "none", so a step registered on them fires for every relationship regardless of the entity it was declared
-        /// on (Associate/Disassociate). The single source of truth shared by the runtime step resolution, the
-        /// in-memory test pipeline and the CLI (which links this file).
+        /// The messages that are not bound to a primary entity: their only sdkmessagefilter has primaryobjecttypecode
+        /// "none", so a step registered on them fires regardless of the entity it was declared on (Associate and
+        /// Disassociate for every relationship; UnlockSalesOrderPricing, UnlockInvoicePricing and RemoveProductFromKit).
+        /// The single source of truth shared by the step builder, the runtime step resolution, the in-memory test
+        /// pipeline and the CLI (which links this file).
         /// </summary>
-        public static readonly string[] GlobalMessages = { Associate, Disassociate };
+        public static readonly string[] GlobalMessages = { Associate, Disassociate, UnlockSalesOrderPricing, UnlockInvoicePricing, RemoveProductFromKit };
 
         /// <summary>
         /// Whether <paramref name="message"/> is one of the <see cref="GlobalMessages"/> (compared case-insensitively),

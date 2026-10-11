@@ -247,7 +247,7 @@ non-private messages with a visible, custom-step-allowed `sdkmessagefilter`), sk
 Custom API (owned by `--custom-apis`).
 
 **A request the SDK already ships keeps its SDK class.** For a request with a class in `Microsoft.Xrm.Sdk.Messages`
-or `Microsoft.Crm.Sdk.Messages` (found by reflection, so `CloseQuote`, `SetState`, `Recalculate`, ... are all
+or `Microsoft.Crm.Sdk.Messages` (found by reflection, so `CloseQuote`, `SetState`, `CalculateRollupField`, ... are all
 recognised), `--messages` generates no duplicate request/response, only its entity-constrained `On<Message>()`
 extension over the SDK type (`OnCloseQuote()` → `On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>()`, compiling on
 `Quote` only). A request with a curated trigger (`Create`, `QualifyLead`, `WinOpportunity`, ...) generates nothing:

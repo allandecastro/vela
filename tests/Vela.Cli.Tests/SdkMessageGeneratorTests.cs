@@ -259,12 +259,12 @@ public class SdkMessageGeneratorTests
     public void NoEntities_EmitsGenericExtension()
     {
         string code = Generate(new SdkMessage(
-            "Recalculate",
+            "CalculateRollupField",
             Array.Empty<SdkMessageField>(),
             Array.Empty<SdkMessageField>()));   // Entities defaults to empty -> all-entity message.
 
         Assert.Contains(
-            "public static Vela.Steps.ITypedStages<TEntity, RecalculateRequest> OnRecalculate<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<RecalculateRequest>();",
+            "public static Vela.Steps.ITypedStages<TEntity, CalculateRollupFieldRequest> OnCalculateRollupField<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<CalculateRollupFieldRequest>();",
             code);
     }
 

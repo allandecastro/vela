@@ -79,11 +79,18 @@ public class AddCommandTests
     [InlineData("Win", "Quote", "WinQuote")]
     [InlineData("Win", "Opportunity", "WinOpportunity")]
     [InlineData("Close", "Incident", "CloseIncident")]
+    [InlineData("Send", "Fax", "SendFax")]
+    [InlineData("Send", "Template", "SendTemplate")]
+    [InlineData("AddItem", "Campaign", "AddItemCampaign")]
+    [InlineData("RemoveItem", "Campaign", "RemoveItemCampaign")]
+    [InlineData("LockSalesOrderPricing", "SalesOrder", "LockSalesOrderPricing")]
     public void ResolveKnownMessage_maps_an_sdkmessage_to_its_typed_trigger(string message, string entity, string expected)
         => Assert.Equal(expected, AddCommand.ResolveKnownMessage(message, entity));
 
     [Theory]
     [InlineData("Win", "Account")]          // Win runs on opportunity or quote only
+    [InlineData("Send", "Account")]         // Send runs on email, fax or template only
+    [InlineData("Renew", "Contract")]       // no custom step is possible on Renew (RenewContract)
     [InlineData("acme_DoThing", "Account")] // a custom message
     [InlineData("Revise", "Quote")]         // no custom step is possible on Revise, so it has no typed trigger
     public void ResolveKnownMessage_returns_null_without_a_typed_trigger(string message, string entity)
@@ -361,6 +368,8 @@ public class AddCommandTests
     [InlineData("ModifyAccess")]
     [InlineData("RevokeAccess")]
     [InlineData("Delete")]
+    [InlineData("Reschedule")]
+    [InlineData("UnlockSalesOrderPricing")]
     public void Add_Plugin_KnownMessage_RendersTypedOnCall(string message)
     {
         RunInProject("Acme.Plugins", (project, dir) =>

@@ -333,9 +333,9 @@ namespace Vela.Plugin
                     continue;
                 }
 
-                // Associate/Disassociate are relationship-global messages: the step definition carries TEntity's
-                // logical name (stamped by the builder from EntityLogicalNameAttribute), but the runtime context of
-                // an (Dis)Associate has no matching single primary entity, so an entity filter here would never
+                // Associate/Disassociate (and the other PluginMessages.GlobalMessages) are global messages: the step
+                // definition may carry TEntity's logical name (stamped by the builder from EntityLogicalNameAttribute),
+                // but their runtime context has no matching single primary entity, so an entity filter here would never
                 // match and the step would be dropped. Skip the entity check for these messages. (For sync steps
                 // this previously surfaced as "no registered step matching message 'Associate'"; async hid it.)
                 bool relationshipMessage = PluginMessages.IsGlobalMessage(ctx.MessageName);
@@ -447,6 +447,19 @@ namespace Vela.Plugin
                 PluginMessages.RetrievePrincipalAccess => post ? (object)new RetrievePrincipalAccessPostContext<TEntity>(ctx) : new RetrievePrincipalAccessPreContext<TEntity>(ctx),
                 PluginMessages.RetrieveSharedPrincipalsAndAccess => post ? (object)new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(ctx) : new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(ctx),
                 PluginMessages.WinQuote => post ? (object)new WinQuotePostContext<TEntity>(ctx) : new WinQuotePreContext<TEntity>(ctx),
+                PluginMessages.AddItemCampaign => post ? (object)new AddItemCampaignPostContext<TEntity>(ctx) : new AddItemCampaignPreContext<TEntity>(ctx),
+                PluginMessages.RemoveItemCampaign => post ? (object)new RemoveItemCampaignPostContext<TEntity>(ctx) : new RemoveItemCampaignPreContext<TEntity>(ctx),
+                PluginMessages.Recalculate => post ? (object)new RecalculatePostContext<TEntity>(ctx) : new RecalculatePreContext<TEntity>(ctx),
+                PluginMessages.LockSalesOrderPricing => post ? (object)new LockSalesOrderPricingPostContext<TEntity>(ctx) : new LockSalesOrderPricingPreContext<TEntity>(ctx),
+                PluginMessages.UnlockSalesOrderPricing => post ? (object)new UnlockSalesOrderPricingPostContext<TEntity>(ctx) : new UnlockSalesOrderPricingPreContext<TEntity>(ctx),
+                PluginMessages.LockInvoicePricing => post ? (object)new LockInvoicePricingPostContext<TEntity>(ctx) : new LockInvoicePricingPreContext<TEntity>(ctx),
+                PluginMessages.UnlockInvoicePricing => post ? (object)new UnlockInvoicePricingPostContext<TEntity>(ctx) : new UnlockInvoicePricingPreContext<TEntity>(ctx),
+                PluginMessages.Reschedule => post ? (object)new ReschedulePostContext<TEntity>(ctx) : new ReschedulePreContext<TEntity>(ctx),
+                PluginMessages.ImmediateBook => post ? (object)new ImmediateBookPostContext<TEntity>(ctx) : new ImmediateBookPreContext<TEntity>(ctx),
+                PluginMessages.SendTemplate => post ? (object)new SendTemplatePostContext<TEntity>(ctx) : new SendTemplatePreContext<TEntity>(ctx),
+                PluginMessages.SendFax => post ? (object)new SendFaxPostContext<TEntity>(ctx) : new SendFaxPreContext<TEntity>(ctx),
+                PluginMessages.AddProductToKit => post ? (object)new AddProductToKitPostContext<TEntity>(ctx) : new AddProductToKitPreContext<TEntity>(ctx),
+                PluginMessages.RemoveProductFromKit => post ? (object)new RemoveProductFromKitPostContext<TEntity>(ctx) : new RemoveProductFromKitPreContext<TEntity>(ctx),
                 _ => null,
             };
         }
