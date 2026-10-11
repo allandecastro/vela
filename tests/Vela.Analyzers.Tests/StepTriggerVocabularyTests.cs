@@ -155,10 +155,6 @@ namespace Demo
         await VerifyDuplicate.VerifyAnalyzerAsync(code);
     }
 
-    private static string InMethod(string body) => (string)typeof(PreferTypedMessageAnalyzerTests)
-        .GetMethod("InMethod", BindingFlags.NonPublic | BindingFlags.Static)!
-        .Invoke(null, new object[] { body })!;
-
     [Theory]
     [InlineData("create", "OnCreate")]
     [InlineData("update", "OnUpdate")]
@@ -173,12 +169,13 @@ namespace Demo
     [InlineData("Merge", "OnMerge")]
     public async Task OnMessage_of_a_modelled_message_suggests_its_typed_trigger(string message, string suggestion)
     {
-        string code = InMethod("RegisterStep().{|#0:OnMessage|}(\"" + message + "\").Handle();");
+        // The analyzer finds the typed trigger on the trigger type itself (#482), here the harness's full IStep.
+        string code = InRegister("RegisterStep().{|#0:OnMessage|}(\"" + message + "\").Handle();");
 
         await VerifyPreferTyped.VerifyAnalyzerAsync(code,
             new DiagnosticResult(PreferTypedMessageAnalyzer.DiagnosticId, DiagnosticSeverity.Warning)
                 .WithLocation(0)
                 .WithArguments(suggestion, message)
-                .WithMessage($"Prefer {suggestion}() over OnMessage(\"{message}\") for a modelled message - it gives a typed handler context and compile-time entity applicability"));
+                .WithMessage($"{message} has a typed trigger: register the step with {suggestion}() instead of OnMessage(\"{message}\"); OnMessage(...) is only for messages without one"));
     }
 }
