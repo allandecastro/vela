@@ -46,7 +46,8 @@ internal static class StepBuilderImplEmitter
         // Triggers: record the message, return the builder as the stage selector.
         foreach (var message in messages)
         {
-            w.Line($"        {StepConfig.StagesType(message.Name)} IStepTrigger<TEntity>.On{message.Name}() {{ SetMessage(PluginMessages.{message.Name}); return this; }}");
+            string entity = message.Entity is null ? string.Empty : $", \"{message.Entity}\"";
+            w.Line($"        {StepConfig.StagesType(message.Name)} IStepTrigger<TEntity>.On{message.Name}() {{ SetMessage(PluginMessages.{message.Name}{entity}); return this; }}");
         }
         w.Block(UnmodelledTriggers);
 

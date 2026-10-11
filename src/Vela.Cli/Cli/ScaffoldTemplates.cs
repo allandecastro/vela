@@ -1616,8 +1616,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
             RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Disabled().Handle(OnRetrieveSharedPrincipalsAndAccess);
 
             // Many more messages are modelled but belong to other tables, so they are not shown here on account:
-            // e.g. QualifyLead (lead); WinOpportunity / LoseOpportunity / Generate*/Convert* (opportunity / quote /
-            // order); AddToQueue / RouteTo (queue items); SendEmail / SendEmailFromTemplate (email); AddMembersTeam /
+            // e.g. QualifyLead (lead); WinOpportunity / LoseOpportunity (opportunity); WinQuote (quote);
+            // ConvertSalesOrderToInvoice (order); AddToQueue / RouteTo (queue items); SendEmail / SendEmailFromTemplate (email); AddMembersTeam /
             // AddListMembersList (team / marketing list); CloseIncident (case); CancelContract / CloneContract
             // (contract). Register them the same way from the matching EntityPluginBase<T> with RegisterStep().On<Message>().
         }
@@ -1953,6 +1953,12 @@ $$"""
     <RootNamespace>{{testProjectName}}</RootNamespace>
     <AssemblyName>{{testProjectName}}</AssemblyName>
     <IsPackable>false</IsPackable>
+    <!-- In a solution build, a ProjectReference that MSBuild cannot match to the solution configuration (its path
+         differs in form, e.g. through a symlink) is otherwise built WITHOUT Configuration/Platform, i.e. a second,
+         Debug build of the plugin project running in parallel with the solution's Release one. Both pack into the
+         same artifacts/<Plugin>.1.0.0.nupkg and fail with "being used by another process". Inheriting this
+         project's Configuration/Platform makes it the same build, run once. -->
+    <ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>
   </PropertyGroup>
 
   <ItemGroup>

@@ -8,7 +8,8 @@ namespace Vela.Cli;
 /// <summary>A single SDK message request/response field: its name and the resolved C# type string.</summary>
 public sealed record SdkMessageField(string Name, string CSharpType);
 
-/// <summary>An SDK message (<c>sdkmessage</c>) to generate typed Request/Response classes for.</summary>
+/// <summary>An SDK request to generate typed Request/Response classes for, named after the request (its
+/// <c>sdkmessagerequest</c> name, which Dataverse executes).</summary>
 public sealed record SdkMessage(
     string Name,
     IReadOnlyList<SdkMessageField> RequestFields,

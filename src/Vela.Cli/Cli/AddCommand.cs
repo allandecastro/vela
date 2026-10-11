@@ -23,14 +23,31 @@ internal static class AddCommand
     // shared models namespace ({prefix}.Shared.Models.Generated, where `vela models` writes) can be inferred.
 
     // SDK messages that have a dedicated On...() builder method, matched case-insensitively so the
-    // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("...").
-    private static readonly string[] KnownMessages =
-    [
-        "Create", "Update", "CreateMultiple", "UpdateMultiple", "Delete", "Retrieve", "RetrieveMultiple",
-        "Associate", "Disassociate", "Merge", "GrantAccess", "ModifyAccess", "RevokeAccess",
-        "QualifyLead", "WinOpportunity", "LoseOpportunity", "ConvertSalesOrderToInvoice", "GenerateQuoteFromOpportunity", "AddToQueue", "RemoveFromQueue", "PickFromQueue", "RouteTo", "ReleaseToQueue", "SendEmail", "SendEmailFromTemplate", "DeliverIncomingEmail", "DeliverPromoteEmail", "AddMembersTeam", "RemoveMembersTeam", "AddListMembersList", "AddMemberList", "RemoveMemberList", "CloseIncident", "CancelContract", "CloneContract", "RetrievePrincipalAccess", "RetrieveSharedPrincipalsAndAccess",
-        "WinQuote",
-    ];
+    // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("..."). They are SDK
+    // request names: the sdkmessage a step registers on can be shorter (SendEmail runs as Send), see
+    // ResolveKnownMessage.
+    // The list is generated from the step builder's message model (Vela.Steps.TypedTriggers, linked as source).
+    private static readonly string[] KnownMessages = Vela.Steps.TypedTriggers.Messages;
+
+    // The typed On...() trigger for --message: a request name (SendEmail), or the sdkmessage it runs as (Send),
+    // resolved through the table when several requests share it (Win is WinQuote on quote, WinOpportunity on
+    // opportunity). Null for a message with no typed trigger, registered with OnMessage("...").
+    internal static string? ResolveKnownMessage(string rawMessage, string entity)
+    {
+        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        if (known is not null)
+        {
+            return known;
+        }
+
+        string[] candidates = Vela.Steps.SdkMessageNames.RequestNamesFor(rawMessage)
+            .Select(request => KnownMessages.FirstOrDefault(m => string.Equals(m, request, StringComparison.OrdinalIgnoreCase)))
+            .OfType<string>()
+            .ToArray();
+        return candidates.Length == 1
+            ? candidates[0]
+            : candidates.FirstOrDefault(m => string.Equals(Vela.Steps.SdkMessageNames.PrimaryEntityOf(m), entity, StringComparison.OrdinalIgnoreCase));
+    }
 
     public static int Run(string[] args)
     {
@@ -360,7 +377,7 @@ internal static class AddCommand
             return Fail($"Invalid --message '{rawMessage}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).", ExitInvalidArguments, includeUsage: false);
         }
 
-        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        string? known = ResolveKnownMessage(rawMessage, entity);
         string message = known ?? rawMessage;
         string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
 
@@ -504,7 +521,7 @@ internal static class AddCommand
 
         // Messages with a dedicated On...() builder method get the strongly-typed call; any other name is
         // treated as a custom SDK message and registered through .OnMessage("...").
-        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        string? known = ResolveKnownMessage(rawMessage, entity);
         string message = known ?? rawMessage;
         string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
 
