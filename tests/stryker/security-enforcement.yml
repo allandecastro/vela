@@ -1,9 +1,10 @@
 # Mutation area: the harness security ENFORCEMENT wiring (DemandAccess/CanAccess, cascade delete/assign/share, FLS
 # masking and write rejection, inherited access, share clamping, owner-BU realign, the read filter and the membership
 # tables), isolated in the InMemoryOrganizationService.Security.cs partial. Run from tests/Vela.Testing.Tests.
-# Measured at ~84.8%; break is ratcheted to 82 (~2 pts below). The remaining survivors are mostly equivalent:
+# Earlier measured at ~84.8%; break was ratcheted to 82 (~2 pts below). The remaining survivors are mostly equivalent:
 # guard-clause early returns whose downstream also guards, fault-message strings, owner columns the system field
 # applier re-derives.
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 83.76%; break stays at 82.
 stryker-config:
   solution: ../../Vela.sln
   project: Vela.Testing.csproj

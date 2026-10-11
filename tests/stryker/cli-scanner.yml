@@ -1,7 +1,8 @@
 # Mutation area: the package scanner (PackageScanner.cs): .nupkg extraction, nuspec id/version, and the reflection
 # over plugin/Custom API types. Run from tests/Vela.Cli.Tests. Driven by crafted packages, the compiled
 # Sample/BrokenPluginFixture, and the real Vela.Plugins contract fixture (PluginContractScanTests). Measured at
-# ~81.6%; break is held at 80.
+# ~81.6%; break was held at 80.
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 84.20%; break ratcheted to 82 (~2 pts below).
 stryker-config:
   project: Vela.Cli.csproj
   mutate:
@@ -9,5 +10,5 @@ stryker-config:
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90
-    low: 80
-    break: 80
+    low: 82
+    break: 82

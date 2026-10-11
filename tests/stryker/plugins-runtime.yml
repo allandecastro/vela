@@ -3,7 +3,8 @@
 # tests/Vela.Tests, with Vela.Testing.Tests as a second test project (it drives the runtime through the harness).
 # net462: Windows only. First Windows measurement (2026-10, Stryker 4.16, Vela.Tests only, PluginBase +
 # PluginBaseOfTEntity + HandlerInvoker): ~66.7%, RetryPolicy (with the cache): ~70.8%; the #448 mutation tests target
-# those survivors. Ratchet once the first full run of this area is in.
+# those survivors.
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 90.74%; break ratcheted to 88 (~2 pts below).
 stryker-config:
   solution: ../../Vela.sln
   project: Vela.Plugins.csproj
@@ -16,5 +17,5 @@ stryker-config:
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90
-    low: 80
-    break: 80
+    low: 88
+    break: 88

@@ -1,6 +1,7 @@
 # Mutation area: the plan diff engine and the definition normalizer. Run from tests/Vela.Cli.Tests.
 # net10-only: no solution, so Stryker builds the CLI test project and what it references. `project` disambiguates
 # the mutation target, since the CLI test project also references the plugin fixtures.
+# Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 87.04%; break stays at 85.
 stryker-config:
   project: Vela.Cli.csproj
   mutate:
