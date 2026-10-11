@@ -26,6 +26,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **One way to register a step per message.** `On<TRequest>()` and `OnAsyncOnly<TRequest>()` now reject a request
+  whose message has a typed trigger (`On<UpdateRequest>()`, `On<AssignRequest>()`, `On<CreateMultipleRequest>()`,
+  `On<Vela.Messages.CreateRequest<T>>()`, ...): registering the step throws, naming the trigger to use (`OnUpdate()`).
+  They stay the way to register Custom APIs and messages without a typed trigger. The new analyzer **VELA023** (error)
+  reports it at build with a code fix to the typed trigger, and **VELA006** now finds every typed trigger on the step
+  builder instead of a fixed list. The list of typed triggers is generated from the message model.
 - **Several steps may share a trigger, and the rank is no longer part of a step's identity.** Two steps on the same
   message, stage, mode and entity were rejected; they are now allowed when their filtering attributes, images,
   relationship scope or step key tell them apart, and the executing step (`OwningExtension`, resolved by id for an

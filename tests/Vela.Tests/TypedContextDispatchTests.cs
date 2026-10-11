@@ -199,10 +199,8 @@ namespace Vela.Tests
             Assert.Equal(message, probe.Seen);
         }
 
-        // Regression: On<TRequest>() where the request's RequestName collides with a modelled message (MergeRequest
-        // -> "Merge"). The handler's parameter is IMessagePreContext<MergeRequest>, which the modelled
-        // MergePreContext<TEntity> does NOT implement, so dispatch must build the generic MessagePreContext<TRequest>
-        // (from the handler's parameter type), not the modelled per-message context, or the handler never matches.
+        // One way per message: a request whose message has a typed trigger (MergeRequest -> OnMerge()) cannot be
+        // registered through On<TRequest>().
         private sealed class TypedRequestProbe : EntityPluginBase<TestAccount>
         {
             public string? Seen { get; private set; }
@@ -250,18 +248,12 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void Typed_request_colliding_with_a_modelled_message_dispatches_to_its_generic_handler()
+        public void A_typed_request_whose_message_has_a_typed_trigger_is_rejected()
         {
-            TypedRequestProbe probe = new TypedRequestProbe();
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => new TypedRequestProbe().GetStepDefinitions());
 
-            PluginContext.For<TestAccount>()
-                .OnMessage(PluginMessages.Merge)
-                .Stage(PluginStages.PreOperation)
-                .Mode(ExecutionMode.Synchronous)
-                .WithPrimaryEntity(TestAccount.EntityLogicalNameValue, Guid.NewGuid())
-                .Execute(probe);
-
-            Assert.Equal(PluginMessages.Merge, probe.Seen);
+            Assert.Contains("OnMerge()", ex.Message);
+            Assert.Contains("On<MergeRequest>()", ex.Message);
         }
     }
 }

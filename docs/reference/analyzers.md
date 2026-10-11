@@ -16,7 +16,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA003](#vela003) | Vela.Usage | Error | A single-value step modifier is set more than once |
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
 | [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
-| [VELA006](#vela006) | Vela.Usage | Warning | Prefer the typed trigger (`OnCreate()`) over `OnMessage("create")` for a modelled message |
+| [VELA006](#vela006) | Vela.Usage | Warning | A message with a typed trigger is registered through it, not `OnMessage("create")` |
 | [VELA007](#vela007) | Vela.Usage | Error | A pre-image on Create, or a post-image on Delete (the message can never provide it) |
 | [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share a trigger and nothing tells them apart (same filters and images, no step key) |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
@@ -33,9 +33,10 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA020](#vela020) | Vela.Usage | Error | A Create/Update (or bulk) step reaches `Handle(...)` without `FilterOn(...)` |
 | [VELA021](#vela021) | Vela.Usage | Warning | An image capture lists columns but no typed projection can be generated for it |
 | [VELA022](#vela022) | Vela.Reliability | Warning | A step on the `SetState` message never fires |
+| [VELA023](#vela023) | Vela.Usage | Error | A message with a typed trigger is registered through it, not `On<UpdateRequest>()` |
 
 Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
-VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
+VELA006, VELA007, VELA012, VELA014, VELA015 and VELA023. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
 alongside the analyzers.
 
 Plus the [typed image projection generator](#typed-image-projection-generator) that ships in the same assembly.
@@ -95,14 +96,13 @@ selectors are compared, so a leading image alias string is ignored, and the same
 
 ## VELA006
 
-**Prefer the typed step trigger over the permissive `OnMessage(string)` for a message Vela models.** For a modelled
-message there is a typed trigger - `OnCreate()`, `OnUpdate()`, `OnDelete()`, the `*Multiple` variants,
-`OnRetrieve()` / `OnRetrieveMultiple()`, `OnAssociate()` / `OnDisassociate()`, `OnMerge()` - that gives a typed
-handler context and compile-time entity applicability, so `OnMessage("create")` is flagged. Unlike the other
-rules this is a **warning**, not an error: `OnMessage("...")` stays valid and is the right tool for a message Vela
-does not model (only a literal message string with a modelled name is flagged).
+**A message with a typed trigger is registered through it.** Each message is registered one way: a message with a
+typed trigger - any `On{Message}()` of the step builder (`OnCreate()`, `OnUpdate()`, `OnAssign()`, ...) - uses it,
+which also gives a typed handler context and compile-time entity applicability, so `OnMessage("create")` is flagged.
+The trigger is looked up on the step builder itself, so every typed trigger counts. This is a **warning**: the string
+form still deploys, and `OnMessage("...")` is the right tool for a message without a typed trigger.
 
-**Fix:** switch to the typed trigger, for example `OnCreate()` instead of `OnMessage("create")`.
+**Fix:** switch to the typed trigger, for example `OnCreate()` instead of `OnMessage("create")` (code fix available).
 
 ## VELA007
 
@@ -353,3 +353,15 @@ Key points:
   typed to the captured columns, so the handler can read them as members instead of `ctx.PreImageAs<T>()`. See
   [Typed step context](../guides/plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage) and the
   VELA015 / VELA016 guard rails.
+
+## VELA023
+
+**A message with a typed trigger is registered through it, not `On<TRequest>()`.** `On<TRequest>()` and
+`OnAsyncOnly<TRequest>()` are for messages without a typed trigger (Custom APIs, messages Vela does not model). A
+request from the SDK or from `Vela.Messages` whose message has one - `On<UpdateRequest>()` when `OnUpdate()` exists,
+`On<AssignRequest>()`, `On<CreateMultipleRequest>()`, ... - is an **error**, and the runtime rejects the same
+registration (so the rule holds without analyzers). The trigger is looked up on the step builder, which is generated
+from the message model, so there is no separate list.
+
+**Fix:** use the typed trigger: the code fix rewrites `On<UpdateRequest>()` to `OnUpdate()`. Then give the handler the
+trigger's context (`IUpdatePostContext<Account>` instead of `IMessagePostContext<UpdateRequest>`).
