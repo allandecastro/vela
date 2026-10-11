@@ -209,9 +209,10 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   linked columns on a left-outer join, recursively through nested joins). A parent's Delete PreValidation steps
   still see its cascaded children; by PreOperation they are gone (the children's Delete plugins run in between), as
   on Dataverse (verified live). With security on, a lookup set by id must point at an existing record, as on
-  Dataverse; with it off, a lookup may point at a record the test never seeded. Step images are built from the
-  stored row without field-level-security masking; whether Dataverse masks secured columns in images is not
-  verified.
+  Dataverse; with it off, a lookup may point at a record the test never seeded. Step images carry only the columns
+  the calling user may read, like a Retrieve: a secured column without field read permission is absent from them,
+  as on Dataverse (verified live). For a step that impersonates another user, the calling user's permissions still
+  apply; that case was not probed.
 
 ---
 

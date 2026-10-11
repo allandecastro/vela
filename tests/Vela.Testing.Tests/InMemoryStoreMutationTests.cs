@@ -205,16 +205,18 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Retrieve_by_an_unknown_alternate_key_faults_with_ObjectDoesNotExist()
+        public void Retrieve_by_an_unknown_alternate_key_faults_with_RecordNotFoundByEntityKey()
         {
+            // 0x80060891 for a declared key that matches nothing (verified live, #451).
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithAlternateKey("account", "accountnumber")
                 .Seed(new Entity("account", Guid.NewGuid()) { ["accountnumber"] = "A-1" });
 
             EntityReference byKey = new EntityReference("account", "accountnumber", "A-404");
             FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Execute(new RetrieveRequest { Target = byKey, ColumnSet = new ColumnSet(true) }));
 
-            Assert.Equal(ObjectDoesNotExist, fault.Detail.ErrorCode);
+            Assert.Equal(unchecked((int)0x80060891), fault.Detail.ErrorCode);
         }
 
         // ---- Upsert ----------------------------------------------------------------------------------------
@@ -240,6 +242,7 @@ namespace Vela.Testing.Tests
         {
             Guid existing = Guid.NewGuid();
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithAlternateKey("account", "name", "accountnumber")
                 .Seed(new Entity("account", existing) { ["name"] = "Zava", ["accountnumber"] = "1" });
 
             Entity target = new Entity("account");

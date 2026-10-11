@@ -60,6 +60,8 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
     `SequentialIds.MaxIndex` throws `ArgumentOutOfRangeException` instead of `FormatException`.
   - `PluginContextBuilder.Execute` throws, naming the plugin, when reading the plugin's step registration fails. It
     used to run the plugin under the default trigger.
+  - Step pre- and post-images (bulk image collections included) leave out a secured column the calling user has no
+    field read permission on, as a `Retrieve` does. They carried the stored value.
 - **Runtime edge cases that were silent now fail or behave as documented (#447).**
   - The typed requests' `Target` (`CreateRequest<T>`, `UpdateRequest<T>`, `UpsertRequest<T>`,
     `SendEmailFromTemplateRequest<T>`) throws the same `InvalidPluginExecutionException` as `ctx.GetTarget<T>()`

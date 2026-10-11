@@ -129,6 +129,58 @@ namespace Vela.Testing.Tests
             return record;
         }
 
+        // --- 3: images carry only the columns the caller may read -----------------------------------------
+
+        [Theory]
+        [InlineData(false, "s20 pre:absent|s40 pre:absent post:absent")]
+        [InlineData(true, "s20 pre:50000|s40 pre:50000 post:50000")]
+        public void Step_images_mask_a_secured_column_the_caller_cannot_read(bool canRead, string expected)
+        {
+            Guid account = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s =>
+                {
+                    s.BusinessUnit(SalesBu)
+                        .Role("editor", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write))
+                        .User(Alice, SalesBu, "editor")
+                        .SecureColumn("account", "creditlimit");
+                    if (canRead)
+                    {
+                        s.FieldPermission(Alice, "account", "creditlimit", read: true);
+                    }
+                })
+                .Register<GapSecuredImages>()
+                .Seed(OwnedBy(new Entity("account", account) { ["name"] = "Zava", ["creditlimit"] = new Money(50000m) }, Alice));
+            GapSecuredImages.Seen.Clear();
+
+            pipeline.Service.Update(new Entity("account", account) { ["name"] = "Renamed" });
+
+            Assert.Equal(expected, string.Join("|", GapSecuredImages.Seen));
+        }
+
+        [Fact]
+        public void Bulk_step_images_mask_a_secured_column_the_caller_cannot_read()
+        {
+            Guid account = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("editor", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write))
+                    .User(Alice, SalesBu, "editor")
+                    .SecureColumn("account", "creditlimit"))
+                .Register<GapSecuredBulkImages>()
+                .Seed(OwnedBy(new Entity("account", account) { ["name"] = "Zava", ["creditlimit"] = new Money(50000m) }, Alice));
+            GapSecuredBulkImages.Seen.Clear();
+
+            pipeline.Service.Update(new Entity("account", account) { ["name"] = "Renamed" });
+
+            // Every image of the collections, the platform's PreBusinessEntity / PostBusinessEntity included.
+            Assert.NotEmpty(GapSecuredBulkImages.Seen);
+            Assert.All(GapSecuredBulkImages.Seen, seen => Assert.EndsWith(":absent", seen, StringComparison.Ordinal));
+        }
+
         // --- 4: DeleteFile clears its own column and checks access -----------------------------------------
 
         [Fact]
@@ -348,6 +400,49 @@ namespace Vela.Testing.Tests
             Assert.Contains("bad registration", ex.Message, StringComparison.Ordinal);
             Assert.False(GapBrokenRegistration.Ran);
         }
+    }
+
+    public sealed class GapSecuredImages : EntityPluginBase<FakeAccount>
+    {
+        public static readonly List<string> Seen = new List<string>();
+
+        public GapSecuredImages(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(a => a.Name).WithPreImage()
+                .Handle(ctx => Seen.Add("s20 pre:" + Secured(ctx.PluginExecutionContext.PreEntityImages)));
+            RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).WithPreImage().WithPostImage()
+                .Handle(ctx => Seen.Add("s40 pre:" + Secured(ctx.PluginExecutionContext.PreEntityImages)
+                    + " post:" + Secured(ctx.PluginExecutionContext.PostEntityImages)));
+        }
+
+        private static string Secured(EntityImageCollection images)
+        {
+            Entity image = images.Values.Single();
+            return image.Contains("creditlimit") ? image.GetAttributeValue<Money>("creditlimit").Value.ToString("0", System.Globalization.CultureInfo.InvariantCulture) : "absent";
+        }
+    }
+
+    public sealed class GapSecuredBulkImages : EntityPluginBase<FakeAccount>
+    {
+        public static readonly List<string> Seen = new List<string>();
+
+        public GapSecuredBulkImages(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdateMultiple().PostOperation().Sync().FilterOn(a => a.Name).WithPreImage().WithPostImage()
+                .Handle(ctx =>
+                {
+                    IPluginExecutionContext4 context = (IPluginExecutionContext4)ctx.PluginExecutionContext;
+                    foreach (EntityImageCollection images in context.PreEntityImagesCollection.Concat(context.PostEntityImagesCollection))
+                    {
+                        foreach (KeyValuePair<string, Entity> image in images)
+                        {
+                            Seen.Add(image.Key + ":" + (image.Value.Contains("creditlimit") ? "has" : "absent"));
+                        }
+                    }
+                });
     }
 
     public sealed class GapDeletePreValidation : EntityPluginBase<FakeAccount>
