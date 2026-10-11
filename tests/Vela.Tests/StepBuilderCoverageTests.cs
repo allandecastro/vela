@@ -103,22 +103,14 @@ public sealed class StepBuilderCoverageTests
         Assert.Empty(withAttrs.PostImages[0].Attributes);
     }
 
-    // Build() image backstop. The typed chain already prevents an invalid image at compile time for the
-    // modelled messages; the backstop catches the same rules when the modelled message reaches the builder
-    // through the permissive OnMessage<TMessage>() path (or reflection). Delete carries no attribute payload,
-    // so no filtering requirement masks the image check.
+    // A modelled message never reaches the permissive path: the typed chain prevents an invalid image at compile
+    // time, and OnMessage<TMessage>() on a modelled message is rejected with the typed trigger to use (one way per
+    // message), so the Build() image backstop only serves reflection-built steps.
     [Fact]
-    public void Build_backstop_rejects_an_unsupported_image_on_a_modelled_message()
+    public void A_modelled_message_cannot_take_the_permissive_path()
     {
-        // Delete has a pre-image but no post-image.
-        StepBuilder<TestAccount> bad = New();
-        Trigger(bad).OnMessage<Microsoft.Xrm.Sdk.Messages.DeleteRequest>().PostOperation().Sync().WithPostImage();
-        Assert.Throws<InvalidOperationException>(() => bad.Build());
-
-        StepBuilder<TestAccount> good = New();
-        Trigger(good).OnMessage<Microsoft.Xrm.Sdk.Messages.DeleteRequest>().PostOperation().Sync().WithPreImage();
-        StepDefinition ok = good.Build();
-        Assert.Single(ok.PreImages);
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Trigger(New()).OnMessage<Microsoft.Xrm.Sdk.Messages.DeleteRequest>());
+        Assert.Contains("OnDelete()", ex.Message);
     }
 
     [Fact]

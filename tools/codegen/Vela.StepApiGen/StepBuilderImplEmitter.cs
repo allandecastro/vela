@@ -51,6 +51,7 @@ internal static class StepBuilderImplEmitter
         }
         w.Block(UnmodelledTriggers);
 
+
         // Permissive surface.
         WriteStages(w, "IPermissiveStages<TEntity>", stage => StepConfig.ForPermissive(stage).Type);
         w.Line();
@@ -154,9 +155,9 @@ internal static class StepBuilderImplEmitter
         """;
 
     private const string UnmodelledTriggers = """
-                IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { SetMessageFrom<TMessage>(); return this; }
-                ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetMessageFrom<TRequest>(); return new TypedStepAdapter<TEntity, TRequest>(this); }
-                IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetMessageFrom<TRequest>(); return new TypedStepAdapter<TEntity, TRequest>(this); }
+                IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { SetMessageFrom<TMessage>("OnMessage"); return this; }
+                ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetMessageFrom<TRequest>("On"); return new TypedStepAdapter<TEntity, TRequest>(this); }
+                IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetMessageFrom<TRequest>("OnAsyncOnly"); return new TypedStepAdapter<TEntity, TRequest>(this); }
 
         """;
 

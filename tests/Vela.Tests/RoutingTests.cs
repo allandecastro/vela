@@ -164,7 +164,7 @@ namespace Vela.Tests
         public void StepBuilder_AllowsPreImageForPreValidationPermissiveMessage()
         {
             StepBuilder<TestAccount> builder = New();
-            Trigger(builder).OnMessage<Microsoft.Crm.Sdk.Messages.AssignRequest>()
+            Trigger(builder).OnMessage<AcmeDoThing>()
                 .PreValidation()
                 .Sync()
                 .WithPreImage(a => a.Name);
@@ -263,15 +263,12 @@ namespace Vela.Tests
         // caught at Build() (regardless of how it was assembled). A non-modelled message is left permissive.
 
         [Fact]
-        public void StepBuilder_Build_RejectsPostImageOnDelete_ViaPermissiveMessage()
+        public void StepBuilder_RejectsAModelledMessage_ViaPermissiveMessage()
         {
+            // One way per message: Delete has OnDelete(), which the permissive path names instead of registering.
             StepBuilder<TestAccount> builder = New();
-            Trigger(builder).OnMessage<Microsoft.Xrm.Sdk.Messages.DeleteRequest>()
-                .PostOperation()
-                .Sync()
-                .WithPostImage();
-
-            Assert.Throws<InvalidOperationException>(() => builder.Build());
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Trigger(builder).OnMessage<Microsoft.Xrm.Sdk.Messages.DeleteRequest>());
+            Assert.Contains("OnDelete()", ex.Message);
         }
 
         [Fact]
@@ -297,11 +294,7 @@ namespace Vela.Tests
         public void StepBuilder_Build_RejectsFilteringMessageReachedViaOnMessage_AndSignpostsTypedMethods()
         {
             StepBuilder<TestAccount> builder = New();
-            Trigger(builder).OnMessage<Microsoft.Xrm.Sdk.Messages.UpdateRequest>()
-                .PostOperation()
-                .Sync();
-
-            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => builder.Build());
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Trigger(builder).OnMessage<Microsoft.Xrm.Sdk.Messages.UpdateRequest>());
             Assert.Contains("OnUpdate()", ex.Message);
         }
 

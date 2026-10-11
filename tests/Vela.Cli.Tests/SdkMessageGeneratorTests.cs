@@ -58,12 +58,12 @@ public class SdkMessageGeneratorTests
     {
         var models = SdkMessageGenerator.Generate(new[]
         {
-            new SdkMessage("QualifyLead", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) { Entities = new[] { "lead" } },
+            new SdkMessage("CalculatePrice", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) { Entities = new[] { "quote" } },
         }, "Acme.Shared.Models.Generated");
 
-        Assert.Equal(new[] { "Messages/QualifyLead.cs", "Messages/QualifyLead.Steps.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.Equal(new[] { "Messages/CalculatePrice.cs", "Messages/CalculatePrice.Steps.cs" }, models.Select(m => m.FileName).ToArray());
         Assert.DoesNotContain("Vela.Steps", models[0].Code);
-        Assert.Contains("internal static class QualifyLeadStepExtensions", models[1].Code);
+        Assert.Contains("internal static class CalculatePriceStepExtensions", models[1].Code);
     }
 
     [Fact]
@@ -166,26 +166,26 @@ public class SdkMessageGeneratorTests
     public void SingleEntity_EmitsEntityConstrainedOnExtension()
     {
         string code = Generate(new SdkMessage(
-            "QualifyLead",
+            "CalculatePrice",
             Array.Empty<SdkMessageField>(),
             Array.Empty<SdkMessageField>())
         {
             Entities = new[] { "lead" },
         });
 
-        Assert.Contains("internal static class QualifyLeadStepExtensions", code);
+        Assert.Contains("internal static class CalculatePriceStepExtensions", code);
         Assert.Contains(
-            "public static Vela.Steps.ITypedStages<Lead, QualifyLeadRequest> OnQualifyLead(this Vela.Steps.IStepTrigger<Lead> builder) => builder.On<QualifyLeadRequest>();",
+            "public static Vela.Steps.ITypedStages<Lead, CalculatePriceRequest> OnCalculatePrice(this Vela.Steps.IStepTrigger<Lead> builder) => builder.On<CalculatePriceRequest>();",
             code);
         // A concrete single-entity message does not emit the generic <TEntity> form.
-        Assert.DoesNotContain("OnQualifyLead<TEntity>", code);
+        Assert.DoesNotContain("OnCalculatePrice<TEntity>", code);
     }
 
     [Fact]
     public void TwoEntities_EmitsTwoOverloads_PascalCased()
     {
         string code = Generate(new SdkMessage(
-            "Merge",
+            "BookAppointment",
             Array.Empty<SdkMessageField>(),
             Array.Empty<SdkMessageField>())
         {
@@ -193,10 +193,10 @@ public class SdkMessageGeneratorTests
         });
 
         Assert.Contains(
-            "public static Vela.Steps.ITypedStages<Account, MergeRequest> OnMerge(this Vela.Steps.IStepTrigger<Account> builder) => builder.On<MergeRequest>();",
+            "public static Vela.Steps.ITypedStages<Account, BookAppointmentRequest> OnBookAppointment(this Vela.Steps.IStepTrigger<Account> builder) => builder.On<BookAppointmentRequest>();",
             code);
         Assert.Contains(
-            "public static Vela.Steps.ITypedStages<Contact, MergeRequest> OnMerge(this Vela.Steps.IStepTrigger<Contact> builder) => builder.On<MergeRequest>();",
+            "public static Vela.Steps.ITypedStages<Contact, BookAppointmentRequest> OnBookAppointment(this Vela.Steps.IStepTrigger<Contact> builder) => builder.On<BookAppointmentRequest>();",
             code);
     }
 
@@ -222,7 +222,7 @@ public class SdkMessageGeneratorTests
         string code = SdkMessageGenerator.Generate(
             new[]
             {
-                new SdkMessage("Merge", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+                new SdkMessage("BookAppointment", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
                 {
                     Entities = new[] { "account", "contact" },
                 },
@@ -241,7 +241,7 @@ public class SdkMessageGeneratorTests
         string code = SdkMessageGenerator.Generate(
             new[]
             {
-                new SdkMessage("Merge", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+                new SdkMessage("BookAppointment", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
                 {
                     Entities = new[] { "account", "contact" },
                 },
@@ -250,7 +250,7 @@ public class SdkMessageGeneratorTests
             entityTypeNames: null,
             generatedEntityLogicalNames: Array.Empty<string>()).Code();
 
-        Assert.Contains("OnMerge<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
+        Assert.Contains("OnBookAppointment<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
         Assert.DoesNotContain("IStepTrigger<Account>", code);
         Assert.DoesNotContain("IStepTrigger<Contact>", code);
     }
@@ -259,12 +259,12 @@ public class SdkMessageGeneratorTests
     public void NoEntities_EmitsGenericExtension()
     {
         string code = Generate(new SdkMessage(
-            "Create",
+            "Recalculate",
             Array.Empty<SdkMessageField>(),
             Array.Empty<SdkMessageField>()));   // Entities defaults to empty -> all-entity message.
 
         Assert.Contains(
-            "public static Vela.Steps.ITypedStages<TEntity, CreateRequest> OnCreate<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<CreateRequest>();",
+            "public static Vela.Steps.ITypedStages<TEntity, RecalculateRequest> OnRecalculate<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity => builder.On<RecalculateRequest>();",
             code);
     }
 
@@ -274,14 +274,14 @@ public class SdkMessageGeneratorTests
         string[] many = Enumerable.Range(0, 9).Select(i => "entity" + i).ToArray();
 
         string code = Generate(new SdkMessage(
-            "Update",
+            "Reprice",
             Array.Empty<SdkMessageField>(),
             Array.Empty<SdkMessageField>())
         {
             Entities = many,
         });
 
-        Assert.Contains("OnUpdate<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
+        Assert.Contains("OnReprice<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
         // No per-entity overload was emitted.
         Assert.DoesNotContain("IStepTrigger<Entity0>", code);
     }
@@ -292,15 +292,33 @@ public class SdkMessageGeneratorTests
         string[] eight = Enumerable.Range(0, 8).Select(i => "entity" + i).ToArray();
 
         string code = Generate(new SdkMessage(
-            "Assign",
+            "Escalate",
             Array.Empty<SdkMessageField>(),
             Array.Empty<SdkMessageField>())
         {
             Entities = eight,
         });
 
-        Assert.Contains("ITypedStages<Entity0, AssignRequest> OnAssign(this Vela.Steps.IStepTrigger<Entity0> builder)", code);
-        Assert.DoesNotContain("OnAssign<TEntity>", code);
+        Assert.Contains("ITypedStages<Entity0, EscalateRequest> OnEscalate(this Vela.Steps.IStepTrigger<Entity0> builder)", code);
+        Assert.DoesNotContain("OnEscalate<TEntity>", code);
+    }
+
+    [Theory]
+    [InlineData("QualifyLead")]
+    [InlineData("Merge")]
+    [InlineData("Create")]
+    public void A_message_with_a_typed_trigger_gets_its_types_but_no_step_extension(string message)
+    {
+        // One way per message: the step builder's typed On{Message}() registers it, so an extension would be a second,
+        // dead path (the builder's own method wins). The typed request and response are still generated.
+        string code = Generate(new SdkMessage(message, Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+        {
+            Entities = new[] { "account" },
+        });
+
+        Assert.Contains($"public partial class {message}Request : Vela.Messages.TypedRequest", code);
+        Assert.DoesNotContain("StepExtensions", code);
+        Assert.Contains($"No On{message}() step extension: the step builder's typed On{message}() registers this message.", code);
     }
 
     [Fact]

@@ -66,9 +66,11 @@ From an empty folder to registered, running steps in five commands:
 # 1. Install the CLI (.NET global tool - exposes the `vela` command)
 dotnet tool install --global Vela.Cli
 
-# 2. Scaffold a complete, build-ready solution
-vela init --name ZavaSales --prefix Zava
+# 2. Scaffold a build-ready solution (minimal; add --samples for worked examples), then add a plugin
+vela init --name ZavaSales --prefix Zava --publisher-prefix zava
 cd ZavaSales
+vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated --interactive
+vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins
 
 # 3. Build the plugin package into a .nupkg (the build packages it into artifacts/; not dotnet pack)
 dotnet build ZavaSales.sln -c Release

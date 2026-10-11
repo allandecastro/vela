@@ -37,6 +37,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `On<SetStateRequest>()` registers on `SetStateDynamicEntity`, the message a state change fires, so VELA022 now
   reports only a type pinned with `[SdkMessage("SetState")]`. The test harness keeps
   `PluginContext.For<T>().OnMessage(...)` and `PluginContext.ForMessage(...)`.
+- **One way to register a step per message.** `On<TRequest>()`, `OnAsyncOnly<TRequest>()` and `OnMessage<TMessage>()` now reject a request
+  whose message has a typed trigger (`On<UpdateRequest>()`, `On<AssignRequest>()`, `On<CreateMultipleRequest>()`,
+  `On<Vela.Messages.CreateRequest<T>>()`, ...): registering the step throws, naming the trigger to use (`OnUpdate()`).
+  They stay the way to register Custom APIs and messages without a typed trigger. The new analyzer **VELA023** (error)
+  reports it at build with a code fix to the typed trigger. The list of typed triggers is generated from the message
+  model.
 - **A typed trigger bound to one table is rejected on any other (#461).** `OnWinQuote()` and `OnWinOpportunity()`
   both register on `Win`, on quote and opportunity, so on the wrong table a step would run with the wrong typed
   request. The step builder now rejects a typed trigger on a table its message does not run on: `OnQualifyLead()`
@@ -197,6 +203,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **Vela.Testing: `PluginContext.ForRequest(request)` and `.WithRequest(request)`.** The fake context takes its
   message (the sdkmessage the platform runs the request on) and its input parameters from a typed request, so a
   Custom API or message test states no message name or parameter key.
+- **Trace volume controls (#449).** The plug-in trace log keeps about 10 KB per execution, and the automatic traces
+  could crowd a plugin's own lines out of it. `protected override bool AutoTraceServiceCalls => false;` stops the
+  wrapped services (`Service`, `SystemService`, `AsUser`) from writing two lines per Dataverse call; a failed call is
+  still traced, on one line with its scope, depth, table or request, and exception type.
+  `TraceSnapshotDetail.None` (`AutoSnapshotDetail`, or an explicit `TraceExecutionSnapshot`) writes no snapshot.
+  Both are opt-in, per plugin class (a shared abstract base class applies them to a whole project): the defaults are
+  unchanged.
 - **`Async(deleteJobOnSuccess: true)`** deletes an asynchronous step's system job once it succeeds (Dataverse
   `asyncautodelete`), carried on `StepDefinition.AsyncAutoDelete`.
 - **`ForRelationship("schema_name", ...)` on `OnAssociate()` / `OnDisassociate()`.** Dataverse fires these steps for
@@ -288,6 +301,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   on every execution.
 
 ### Fixed (Framework)
+
+- **`ctx.Response.id` resolves in a post-create test with an explicit trigger.** `PluginContextBuilder` filled
+  `OutputParameters["id"]` (and `Ids` for `CreateMultiple`) from the Target only when it derived the trigger from a
+  single-step plugin. A multi-step router, whose test states `OnCreate().Stage(PluginStages.PostOperation)`, saw
+  `Guid.Empty`, although Dataverse always sets it. The builder now fills them for any Create/CreateMultiple PostOperation
+  context, and keeps a value the test sets with `WithOutputParameter`.
 
 - **The harness runs a table-bound request on its table, with an empty `PrimaryEntityId` (#461, verified live).**
   The queue messages (`AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`) run on
@@ -537,8 +556,6 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   extension failed to build in a scaffolded solution (`CS0234: 'Steps' does not exist in the namespace 'Vela'`, found
   on a live run). `vela init` now excludes `*.Steps.cs` from Shared and links it into the plugin projects, and the
   extension classes are `internal`. An existing solution needs the two `.csproj` lines shown in the models guide.
-
-
 - **`vela models --messages` generates one class per request, not per sdkmessage (#403).** A shared sdkmessage has one
   request per entity, each with its own fields (verified live: `Close` serves `CloseIncident` and `CloseQuote`,
   `Cancel` serves `CancelContract` and `CancelSalesOrder`, `Send` serves `SendEmail`, `SendFax` and `SendTemplate`).
@@ -549,8 +566,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `--messages` generates every request of every registerable message. A request the framework's table does not route
   is marked `[SdkMessage("...")]`. A request the SDK already ships (found by reflection over `Microsoft.Xrm.Sdk` and
   `Microsoft.Crm.Sdk.Proxy`, replacing the hand-kept list) gets no duplicate class, only its entity-constrained
-  `On<Message>()` over the SDK type (`OnCloseQuote()` → `On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>()`); a
-  curated trigger gets nothing. The "already has an SDK request class" check now uses the request name, so the bare `--messages` no longer generates duplicates such as
+  `On<Message>()` over the SDK type (`OnCloseQuote()` → `On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>()`). A
+  message with a typed trigger on the step builder (`OnQualifyLead()`, `OnMerge()`, ...) gets nothing: the builder's
+  own method registers it (one way per message), and the SDK ships its request. The "already has an SDK request class" check now uses the request name, so the bare `--messages` no longer generates duplicates such as
   `WinRequest` or `SendRequest` next to the SDK's `WinOpportunityRequest` and `SendEmailRequest`.
 - **`vela add` registers an unmodelled message through its request type.** `--message <Name>` outside the curated set
   renders `On<NameRequest>()` with an `IMessagePost/PreContext<NameRequest>` handler instead of `OnMessage("Name")`:
@@ -599,8 +617,47 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   compiles a `WithSecureConfig` literal no longer has that value deployed: the environment keeps its current value.
 - **`vela models --custom-apis` keeps a parameter's table.** A parameter with a `logicalentityname` gets
   `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
+- **`vela init --samples`** opts in to the demo code (sample models, services, plugins and Custom APIs, and the
+  Integrations and ConsoleApp projects). See "Changed (CLI)" for the new minimal default.
+- **`vela init --publisher-prefix <prefix>`** sets the Dataverse publisher prefix of the Custom API unique names,
+  separately from the .NET `--prefix`. It is validated (2-8 characters, letter first, alphanumeric) and recorded in
+  the generated projects as `VelaPublisherPrefix`, which `vela add customapi` and `vela add test --kind customapi`
+  then use when `--prefix` is not passed.
+- **`vela sign --pfx-base64-env <VAR>` / `--pfx-password-env <VAR>`** read the certificate and its password from a
+  named environment variable, so neither appears on the command line where other users of the host can read it.
+  The generated signing target passes the password this way.
+
+### Changed (CLI)
+
+- **`vela init` is minimal by default (breaking).** It now writes the `Shared` and `Plugins` projects and an empty
+  `Plugins.Tests` project (unless `--no-tests`), with no sample code, so a new solution deploys nothing until you
+  add your own plugin. It builds, tests and plans unedited. The previous rich scaffold is `vela init --samples`;
+  `--minimal`/`--no-demos` are kept as aliases of the default. The interactive wizard asks for samples first
+  (default: no). Even with `--samples`, the `AccountMessageReference` cheat-sheet (one step per typed message) is
+  now an `abstract` class: it compiles but is never registered, so its 16 disabled steps are no longer deployed.
+- **`vela init --force` keeps your code.** It used to delete every managed project folder, user plugins included.
+  `init` now records the files it writes, with a content hash, in `.vela/scaffold-manifest.json` (commit it). A
+  `--force` regeneration overwrites or removes only listed files you have not edited since; your own files, edited
+  samples and files from a scaffold without a manifest are kept and reported (`kept`/`removed` in `--json`).
+- **`vela add step` allows several steps on one trigger.** Following the step-identity rule (steps told apart by
+  `FilterOn`, images, `WithStepKey` or `ForRelationship`), it refuses only an exact duplicate: the same message,
+  stage and mode with the same filtering columns. Otherwise it adds the step and suggests `WithStepKey` for clarity.
+- **`vela add` rejects an option the kind does not use** (for example `add service --message`) instead of ignoring
+  it, and `add step` no longer accepts `--force`, which it never used.
 
 ### Fixed (CLI)
+
+- **The `vela init` samples no longer teach risky patterns (#444).** `AccountRelatedContactsPlugin` counted contacts
+  with a `RetrieveMultiple` capped at one page and cached the result in the organization-wide plugin cache, so one
+  user could read another user's privilege-filtered count. It now runs an aggregate count built with
+  `Query.For<Contact>().Count(...).ToFetchXml()` (what the README and the test already claimed), without caching,
+  and the [caching guide](docs/guides/caching.md) says what not to cache. The samples trace record ids instead of
+  names, emails and greetings, the tests select the columns they assert instead of `new ColumnSet(true)` (VELA013),
+  and each Custom API declares its unique name once as `UniqueName` (the estimate is the `PlaceholderEstimate`
+  constant). The router test seeds the new contact, so the duplicate check's self-exclusion is tested, and the router
+  uses `ctx.Response.id` for it. A new `PluginPipeline` test shows the step registration under test: it fails when
+  `FilterOn` names the wrong column. A stale comment about the initiating-user service now describes the current
+  user.
 
 - **`vela add` and `vela models` use the real message names (#461).** `vela add --message Send` (or `Win`,
   `Close`, ...) now renders the typed trigger (`OnSendEmail()`, and `OnWinQuote()` or `OnWinOpportunity()` from the
@@ -726,6 +783,34 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   (completed / failed / not applied), and a step is named with its step key. `--verbose` progress lines
   (`[step] create ...`) were printed before the batch ran; they are now printed after it, and a failed one ends with
   `(not applied)`.
+
+- **`vela init --core-version=X` is honoured.** The latest-version lookup checked the raw arguments for
+  `--core-version`, so the inline form was overwritten with the latest nuget.org version. `init` also accepts
+  `--verbose`, which it rejected as unknown.
+- **`vela add plugin --message Assign` emits `OnAssign()`.** It used `OnMessage("Assign")`, which analyzer VELA006
+  flags; the list of typed triggers is now pinned to the step API.
+- **`vela add step` refuses an exact duplicate step.** With its defaults it could add a second step with the trigger
+  and filtering columns `vela add plugin` already registered, which no registration can tell apart. It now names the
+  existing step and writes nothing.
+- **`vela add customapi` no longer emits an unregistrable unique name.** A project prefix that is not a valid
+  publisher prefix (more than 8 characters, for example) was used as is; the command now asks for `--prefix`.
+- **Generated tests assert something.** `vela add test` produced tests whose assertions were commented out. A
+  plugin test now checks that its handler ran; a Custom API test checks the unique name and that every declared
+  output is set (supplying inputs with `WithInputParameter`). A bound Custom API function sets its placeholder
+  `Result`.
+- **`vela sign` no longer exposes the certificate or its password.** The temporary `.pfx` from `--pfx-base64` was
+  written and then restricted, leaving a window where it was world-readable on Unix; it is now created owner-only.
+  The PFX password was passed to `dotnet nuget sign` on its command line; `vela sign` now opens the PFX itself and
+  hands the tool a passwordless copy in that owner-only temp file, deleted after signing. The generated signing
+  target quotes every MSBuild property.
+- **`vela models` no longer collides a global choice with a table class.** A global option set named like a
+  generated table (even only by case) produced a duplicate type and a file that overwrote the class on a
+  case-insensitive file system; the enum is now suffixed.
+- **The `vela init --samples` docs match the code**: the related-contacts sample runs a `QueryExpression`, not
+  FetchXML, and steps end with `Handle(...)`, not `Handler(...)`. The sample tests request explicit columns
+  (VELA013). The offline fallback framework version is now 0.31.0 (it was 0.28.0), pinned to the CHANGELOG by a test.
+- **`vela add test` and the step injector handle more source.** The injector skips raw (`"""`) and `@$` verbatim
+  strings when matching braces and ignores commented-out registrations.
 
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

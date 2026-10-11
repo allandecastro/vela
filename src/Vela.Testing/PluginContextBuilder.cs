@@ -325,6 +325,7 @@ namespace Vela.Testing
         /// <summary>Builds the fake <see cref="IServiceProvider"/> a plugin's <c>Execute</c> consumes.</summary>
         public IServiceProvider BuildServiceProvider()
         {
+            ApplyCreatedIdOutputs();
             Dictionary<Type, object> services = new Dictionary<Type, object>
             {
                 [typeof(IPluginExecutionContext)] = Context,
@@ -444,38 +445,44 @@ namespace Vela.Testing
 
                 Context.Stage = (int)step.Stage;
                 Context.Mode = (int)step.Mode;
-
-                // A Create/CreateMultiple Post step sees the created id(s) as OutputParameters (as Dataverse
-                // surfaces them), so a post-create handler's ctx.Response.id / ctx.Response.Ids resolves from the
-                // auto-derived single-step trigger without the caller restating the output.
-                if (step.Stage == PluginStages.PostOperation)
-                {
-                    if (string.Equals(Context.MessageName, PluginMessages.Create, StringComparison.OrdinalIgnoreCase)
-                        && !Context.OutputParameters.Contains("id")
-                        && Context.InputParameters.Contains("Target")
-                        && Context.InputParameters["Target"] is Entity createTarget)
-                    {
-                        Context.OutputParameters["id"] = createTarget.Id;
-                    }
-                    else if (string.Equals(Context.MessageName, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase)
-                        && !Context.OutputParameters.Contains("Ids")
-                        && Context.InputParameters.Contains("Targets")
-                        && Context.InputParameters["Targets"] is EntityCollection createTargets)
-                    {
-                        Guid[] ids = new Guid[createTargets.Entities.Count];
-                        for (int index = 0; index < ids.Length; index++)
-                        {
-                            ids[index] = createTargets.Entities[index].Id;
-                        }
-
-                        Context.OutputParameters["Ids"] = ids;
-                    }
-                }
             }
             catch
             {
                 // Best-effort: if the registration can't be read, keep the configured defaults and let the
                 // plugin's own Execute surface any real error.
+            }
+        }
+
+        // A Create/CreateMultiple Post step sees the created id(s) as OutputParameters (as Dataverse surfaces them),
+        // so a post-create handler's ctx.Response.id / ctx.Response.Ids resolves whether the trigger was stated
+        // explicitly (a multi-step router) or auto-derived from a single-step plugin, without the caller restating
+        // the output. An output the caller set is kept.
+        private void ApplyCreatedIdOutputs()
+        {
+            if (Context.Stage != (int)PluginStages.PostOperation)
+            {
+                return;
+            }
+
+            if (string.Equals(Context.MessageName, PluginMessages.Create, StringComparison.OrdinalIgnoreCase)
+                && !Context.OutputParameters.Contains("id")
+                && Context.InputParameters.Contains("Target")
+                && Context.InputParameters["Target"] is Entity createTarget)
+            {
+                Context.OutputParameters["id"] = createTarget.Id;
+            }
+            else if (string.Equals(Context.MessageName, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase)
+                && !Context.OutputParameters.Contains("Ids")
+                && Context.InputParameters.Contains("Targets")
+                && Context.InputParameters["Targets"] is EntityCollection createTargets)
+            {
+                Guid[] ids = new Guid[createTargets.Entities.Count];
+                for (int index = 0; index < ids.Length; index++)
+                {
+                    ids[index] = createTargets.Entities[index].Id;
+                }
+
+                Context.OutputParameters["Ids"] = ids;
             }
         }
 

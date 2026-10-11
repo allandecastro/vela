@@ -240,9 +240,20 @@ public sealed partial class StepBuilder<TEntity>
 
     // A trigger stated by type (On<TRequest>(), OnMessage<TMarker>()): the request name comes from the type, and
     // a [SdkMessage] on it (emitted by `vela models --messages`) names the sdkmessage when the table does not.
-    private void SetMessageFrom<TMessage>() where TMessage : class
+    // On<TRequest>() / OnAsyncOnly<TRequest>() / OnMessage<TMessage>() pass their name as trigger: they are for Custom
+    // APIs and messages without a typed On{Message}() trigger, so a request that has one is rejected (one way per
+    // message), naming the trigger to use.
+    private void SetMessageFrom<TMessage>(string? trigger = null) where TMessage : class
     {
-        SetMessage(ExpressionHelper.GetMessageName<TMessage>());
+        string requestName = ExpressionHelper.GetMessageName<TMessage>();
+        if (trigger != null && TypedTriggers.Find(requestName) is string typed)
+        {
+            throw new InvalidOperationException(
+                $"{requestName} has a typed trigger: register the step with {typed}() instead of {trigger}<{typeof(TMessage).Name}>(). " +
+                $"{trigger}<TRequest>() is only for messages without one.");
+        }
+
+        SetMessage(requestName);
         SdkMessageAttribute? declared = typeof(TMessage).GetCustomAttribute<SdkMessageAttribute>(inherit: true);
         if (declared != null)
         {

@@ -34,6 +34,7 @@ var outputs = new (string Path, string Content)[]
 {
     (StepApiEmitter.RelativePath, StepApiEmitter.Emit()),
     (StepBuilderImplEmitter.RelativePath, StepBuilderImplEmitter.Emit()),
+    (TypedTriggersEmitter.RelativePath, TypedTriggersEmitter.Emit()),
 };
 
 int stale = 0;
