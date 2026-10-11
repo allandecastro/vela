@@ -1,10 +1,10 @@
 # Analyzers and generators
 
-Vela ships 23 Roslyn **analyzers** (VELA001 to VELA023), one **source generator** and a set of IDE **code fixes**
+Vela ships 24 Roslyn **analyzers** (VELA001 to VELA024), one **source generator** and a set of IDE **code fixes**
 inside the `Vela.Plugins` package (assemblies `Vela.Analyzers` and `Vela.CodeFixes`). There is nothing else to
 reference: they run in the editor and at build with no configuration. A mistake that would fail at registration
 or silently do nothing is an **error**; advisory rules (VELA006, VELA011, VELA012, VELA013, VELA018, VELA019,
-VELA021 and VELA022) are **warnings**.
+VELA021, VELA022 and VELA024) are **warnings**.
 
 | Rule | Category | Severity | What it catches |
 | --- | --- | --- | --- |
@@ -31,6 +31,7 @@ VELA021 and VELA022) are **warnings**.
 | [VELA021](#vela021) | Vela.Usage | Warning | An image capture lists columns but no typed projection can be generated for it |
 | [VELA022](#vela022) | Vela.Reliability | Warning | A step on the `SetState` message never fires |
 | [VELA023](#vela023) | Vela.Usage | Error | A message with a typed trigger is registered through it, not `On<UpdateRequest>()` |
+| [VELA024](#vela024) | Vela.Reliability | Warning | A plugin runs work in parallel (`Task.Run`, `Parallel.*`, `new Thread`, ...) or blocks on a task (`.Result`, `.Wait()`) |
 
 Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA006, VELA007, VELA012, VELA014, VELA015 and VELA023. The
 [typed image projection generator](#typed-image-projection-generator) ships in the same assembly as the analyzers.
@@ -380,3 +381,22 @@ Key points:
   and Custom API handlers get none. See
   [Typed step context](../guides/plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage) and the
   VELA015 / VELA016 guard rails.
+
+## VELA024
+
+**Parallel execution in a plugin.** Microsoft's guidance is
+[not to use parallel execution in plug-ins](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/do-not-use-parallel-execution-in-plug-ins):
+the execution context and the organization services are not thread-safe, work on another thread runs outside the
+step's transaction and can outlive the step, and blocking on a task risks deadlocks and timeouts. Reported inside a
+plugin / Custom API type on:
+
+- work started on another thread: `Task.Run`, `Task.Factory.StartNew`, `Parallel.For` / `ForEach` / `Invoke`, PLINQ
+  `AsParallel()`, `ThreadPool.QueueUserWorkItem`, `new Thread(...)`;
+- blocking on a task: `.Result`, `.Wait()`, `Task.WaitAll` / `WaitAny`, `GetAwaiter().GetResult()`.
+
+Types are matched by namespace (`System.Threading`, `System.Threading.Tasks`, `System.Linq`), so a look-alike
+`Task` of another library is not flagged. Like VELA019, code outside a plugin type (tests, tools, a nested helper
+type) is left alone.
+
+**Fix:** run the work sequentially on the calling thread (batch Dataverse calls with `ExecuteMultipleRequest` if
+needed), or move it out of the sandbox: an asynchronous step, a Power Automate flow or an Azure function.

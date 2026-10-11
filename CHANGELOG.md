@@ -236,6 +236,11 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `ctx.PostImage` on `IAssignPreContext<T>` / `IAssignPostContext<T>`, and a named handler gets generated
   projections of the captured columns, like Update and Merge (#475). A capture on `OnAssign()` no longer reports
   VELA021.
+- **VELA024 warns on parallel execution in a plugin (#448).** `Task.Run`, `Task.Factory.StartNew`, `Parallel.*`,
+  `AsParallel()`, `ThreadPool.QueueUserWorkItem` and `new Thread(...)` inside a plugin / Custom API type, and
+  blocking on a task there (`.Result`, `.Wait()`, `Task.WaitAll` / `WaitAny`, `GetAwaiter().GetResult()`), following
+  Microsoft's guidance not to use parallel execution in plug-ins. Code outside a plugin type is not flagged.
+
 - **VELA022 warns on a step registered on `SetState` (#439).** Dataverse accepts the registration but never runs
   it: a `SetStateRequest` and an Update of `statecode` fire `SetStateDynamicEntity` (verified live). Register on
   `OnUpdate().FilterOn(x => x.StateCode)` or `OnMessage(PluginMessages.SetStateDynamicEntity)` instead.
