@@ -9,7 +9,10 @@
 param([string] $ChangedFiles)
 
 $ErrorActionPreference = 'Stop'
-$areas = @(Get-Content -Raw -Path (Join-Path $PSScriptRoot 'areas.json') | ConvertFrom-Json)
+# Windows PowerShell 5.1's ConvertFrom-Json emits a JSON array as ONE object, so @(...) alone would wrap the whole
+# list as a single area (its fields then become arrays and the matrix is unusable). ForEach-Object { $_ } enumerates
+# it on 5.1 and is a pass-through on PowerShell 7.
+$areas = @(Get-Content -Raw -Path (Join-Path $PSScriptRoot 'areas.json') | ConvertFrom-Json | ForEach-Object { $_ })
 
 if ($ChangedFiles) {
     $changed = @(Get-Content -Path $ChangedFiles | ForEach-Object { $_.Trim() } | Where-Object { $_ })
