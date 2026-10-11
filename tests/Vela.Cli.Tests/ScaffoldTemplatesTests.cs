@@ -115,6 +115,15 @@ public class ScaffoldTemplatesTests
         Assert.Contains("<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>", props);
     }
 
+    // The generated On<Message>() step extensions need Vela.Plugins: the Shared project (Vela.Messages only) leaves
+    // them out and every plugin project compiles them.
+    [Fact]
+    public void StepExtensions_AreCompiledByThePluginProject_NotByShared()
+    {
+        Assert.Contains("<Compile Remove=\"Models\\Generated\\Messages\\*.Steps.cs\" />", ScaffoldTemplates.SharedCsproj(Options()));
+        Assert.Contains("<Compile Include=\"..\\Acme.Shared\\Models\\Generated\\Messages\\*.Steps.cs\"", ScaffoldTemplates.PluginCsproj("Acme.Plugins", "Acme.Shared", "1.0.0"));
+    }
+
     [Fact]
     public void PluginCsproj_OmitsSigningTarget_ByDefault_AndIncludesItWhenRequested()
     {

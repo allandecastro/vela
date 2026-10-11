@@ -39,7 +39,6 @@ namespace Vela.Steps
         IStepConfig<TEntity> OnMerge();
         IStepConfig<TEntity> OnRecalc();
         IStepConfig<TEntity> On<TRequest>();
-        IStepConfig<TEntity> OnMessage(string messageName);
         IStepConfig<TEntity> OnMessage<TMessage>();
         IStepConfig<TEntity> PreValidation();
         IStepConfig<TEntity> PreOperation();
@@ -364,54 +363,6 @@ namespace Demo
     }
 
     [Fact]
-    public void Emits_a_projection_for_the_permissive_string_message_path()
-    {
-        // OnMessage("update") is the permissive/string trigger: the message is the string literal, capitalized
-        // into the type-name segment (update -> Update), so a string-triggered step still gets a typed image.
-        string output = RunAndConcat(@"
-namespace Demo
-{
-    using Vela.Plugin;
-    public sealed class PermissiveAudit : EntityPluginBase<Account>
-    {
-        protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage(""update"").PostOperation().Sync()
-                .FilterOn(a => a.Name)
-                .WithPostImage(a => a.Name)
-                .Handle(() => { });
-    }
-}
-");
-
-        Assert.Contains("partial class PermissiveAudit", output);
-        Assert.Contains("class UpdatePostOp_PostImage", output);
-        Assert.Contains("AttributeLogicalName(\"name\")", output);
-    }
-
-    [Fact]
-    public void Emits_a_projection_for_a_custom_message_string()
-    {
-        // A non-standard message string (a custom message) sanitizes and capitalizes into a legal type-name
-        // segment, so custom-message steps get a typed image too.
-        string output = RunAndConcat(@"
-namespace Demo
-{
-    using Vela.Plugin;
-    public sealed class CustomMessageAudit : EntityPluginBase<Account>
-    {
-        protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage(""gh_recalculate"").PostOperation().Sync()
-                .WithPostImage(a => a.Name)
-                .Handle(() => { });
-    }
-}
-");
-
-        Assert.Contains("partial class CustomMessageAudit", output);
-        Assert.Contains("class Gh_recalculatePostOp_PostImage", output);
-    }
-
-    [Fact]
     public void Emits_a_projection_for_the_permissive_generic_message_path()
     {
         // OnMessage<TMessage>() derives the message from the marker type name, same rule as On<TRequest>().
@@ -432,29 +383,6 @@ namespace Demo
 
         Assert.Contains("partial class GenericMessageAudit", output);
         Assert.Contains("class MergePostOp_PostImage", output);
-    }
-
-    [Fact]
-    public void Emits_nothing_for_a_non_constant_message()
-    {
-        // A message passed as a non-constant field is not statically resolvable, so no projection is generated
-        // (the developer keeps the full early-bound image), consistent with the unresolved-capture fallback.
-        string output = RunAndConcat(@"
-namespace Demo
-{
-    using Vela.Plugin;
-    public sealed class DynamicMessageAudit : EntityPluginBase<Account>
-    {
-        private static readonly string Msg = ""update"";
-        protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage(Msg).PostOperation().Sync()
-                .WithPostImage(a => a.Name)
-                .Handle(() => { });
-    }
-}
-");
-
-        Assert.True(string.IsNullOrWhiteSpace(output));
     }
 
     [Fact]
@@ -1337,7 +1265,7 @@ namespace Demo
     }
 
     [Fact]
-    public void Reports_VELA021_when_the_message_of_a_RegisterStep_chain_is_not_constant()
+    public void Reports_VELA021_when_the_message_of_a_RegisterStep_chain_cannot_be_read()
     {
         ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
 namespace Demo
@@ -1345,9 +1273,8 @@ namespace Demo
     using Vela.Plugin;
     public sealed partial class AccountVar : EntityPluginBase<Account>
     {
-        private static readonly string Message = ""update"";
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage(Message).PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+            => RegisterStep().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
     }
 }
 ");
@@ -1466,17 +1393,17 @@ namespace Demo
     }
 
     [Fact]
-    public void Emits_a_projection_for_a_constant_OnMessage_name_without_VELA021()
+    public void Emits_a_projection_for_a_marker_OnMessage_without_VELA021()
     {
         ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
 namespace Demo
 {
     using Vela.Plugin;
+    public sealed class Update { }
     public sealed partial class AccountConstMessage : EntityPluginBase<Account>
     {
-        private const string Message = ""update"";
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage(Message).PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+            => RegisterStep().OnMessage<Update>().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
         private static string Read(UpdatePostOp_PostImage image) => image.Name;
     }
 }

@@ -128,8 +128,8 @@ internal static partial class DataverseRegistration
         StepMetadataCache metadataCache = new StepMetadataCache();
 
         // Custom APIs and steps are written via chunked ExecuteMultiple, dependency-tiered so a child never precedes
-        // its just-created parent: tier 1 upserts the step/custom-API rows, tier 2 writes their images, parameters,
-        // response properties, secure config and state.
+        // its just-created parent: tier 1 upserts the step/custom-API rows (and disables a just-created step, see
+        // ApplyUpsertsBatched), tier 2 writes their images, parameters, response properties and secure config.
         ApplyUpsertsBatched(service, solutionUniqueName, pluginTypeIds, addedApis, changedApis, addedSteps, changedSteps,
             customApiSolutionPrefix, secureConfigByStepKey, metadataCache, verbose, batchChunkSize, progress);
 
@@ -359,12 +359,9 @@ internal static partial class DataverseRegistration
         return service.Create(create);
     }
 
-    // Skip a no-op Update: if the stored version and content already match, updating would only bump
-    // modifiedon (Last Modified) on every apply, making the package look churned when nothing changed.
-    string existingVersion = existing.GetAttributeValue<string>("version") ?? string.Empty;
-    string existingContent = existing.GetAttributeValue<string>("content") ?? string.Empty;
-    if (string.Equals(existingVersion, package.Version, StringComparison.Ordinal) &&
-        string.Equals(existingContent, packageContent, StringComparison.Ordinal))
+    // Skip a no-op Update: if the stored package is already this one, updating would only bump modifiedon (Last
+    // Modified) and re-import the package on every apply, making it look churned when nothing changed.
+    if (PluginPackageMatches(service, existing, package.Version, packageBytes))
     {
         LogOperation("package", "unchanged", desiredPackageName, $"v{package.Version}", verbose);
         return existing.Id;
@@ -422,7 +419,6 @@ internal static partial class DataverseRegistration
         }
 
         byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName);
-        string packageContent = Convert.ToBase64String(packageBytes);
         Entity? existing = GetPluginPackage(service, desiredPackageName);
         if (existing == null)
         {
@@ -430,12 +426,8 @@ internal static partial class DataverseRegistration
             continue;
         }
 
-        // UpsertPluginPackage skips only when BOTH the stored version and content match; otherwise it updates.
-        // Compare both so a version-only difference is not mistaken for "no change".
-        string existingVersion = existing.GetAttributeValue<string>("version") ?? string.Empty;
-        string existingContent = existing.GetAttributeValue<string>("content") ?? string.Empty;
-        if (!string.Equals(existingVersion, package.Version, StringComparison.Ordinal) ||
-            !string.Equals(existingContent, packageContent, StringComparison.Ordinal))
+        // Same decision as UpsertPluginPackage: update unless the stored package is already this one.
+        if (!PluginPackageMatches(service, existing, package.Version, packageBytes))
         {
             actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: false));
         }
@@ -591,13 +583,68 @@ internal static partial class DataverseRegistration
     return archive.GetEntry(".signature.p7s") != null;
 }
 
+    // Whether the stored package is already this version with these bytes. Dataverse keeps the uploaded .nupkg in the
+    // `package` file column and empties `content` once it has processed it (verified live: content reads back empty
+    // right after the create, and the package file is byte-identical to the upload), so the file is what is compared.
+    // Its size is checked first, so a changed package is usually told apart without a download.
+    internal static bool PluginPackageMatches(IOrganizationService service, Entity existing, string version, byte[] packageBytes)
+{
+    if (!string.Equals(existing.GetAttributeValue<string>("version") ?? string.Empty, version, StringComparison.Ordinal))
+    {
+        return false;
+    }
+
+    InitializeFileBlocksDownloadResponse download;
+    try
+    {
+        download = (InitializeFileBlocksDownloadResponse)service.Execute(new InitializeFileBlocksDownloadRequest
+        {
+            Target = new EntityReference("pluginpackage", existing.Id),
+            FileAttributeName = "package",
+        });
+    }
+    catch (FaultException<OrganizationServiceFault> ex) when (ex.Detail?.ErrorCode == ObjectDoesNotExistErrorCode)
+    {
+        return false; // no stored file ("No FileAttachment records found"): publishing stores one
+    }
+
+    if (download.FileSizeInBytes != packageBytes.LongLength)
+    {
+        return false;
+    }
+
+    long offset = 0;
+    while (offset < packageBytes.LongLength)
+    {
+        long length = Math.Min(PackageDownloadBlockSize, packageBytes.LongLength - offset);
+        DownloadBlockResponse block = (DownloadBlockResponse)service.Execute(new DownloadBlockRequest
+        {
+            FileContinuationToken = download.FileContinuationToken,
+            Offset = offset,
+            BlockLength = length,
+        });
+        byte[] data = block.Data ?? [];
+        if (data.Length == 0 || data.Length > length || !data.AsSpan().SequenceEqual(packageBytes.AsSpan((int)offset, data.Length)))
+        {
+            return false;
+        }
+
+        offset += data.Length;
+    }
+
+    return true;
+}
+
+    // The largest block DownloadBlock serves (4 MB).
+    private const long PackageDownloadBlockSize = 4L * 1024 * 1024;
+
     internal static Entity? GetPluginPackage(IOrganizationService service, string packageName)
 {
     QueryExpression query = new QueryExpression("pluginpackage")
     {
-        // version + content are read so UpsertPluginPackage can skip a no-op Update (which would otherwise
-        // bump modifiedon on every apply even when nothing changed).
-        ColumnSet = new ColumnSet("pluginpackageid", "name", "version", "content"),
+        // The version is read so a no-op Update can be skipped (PluginPackageMatches); content is not, it reads back
+        // empty.
+        ColumnSet = new ColumnSet("pluginpackageid", "name", "version"),
         TopCount = 1
     };
     query.Criteria.AddCondition("name", ConditionOperator.Equal, packageName);

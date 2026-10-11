@@ -5,7 +5,7 @@
 2. **A step handler does not compile or does not bind**
    - Bind it by method group (`.Handle(OnUpdated)`) and give it the step's context: the generated
      `OnUpdatedContext`, or the message context such as `IUpdatePostContext<TEntity>` (`ILocalPluginContext` for an
-     `OnMessage("...")` step). [VELA015](../reference/analyzers.md#vela015) names the expected type. A generated
+     `OnMessage<TMarker>()` step). [VELA015](../reference/analyzers.md#vela015) names the expected type. A generated
      context also needs the plugin class to be `partial` ([VELA014](../reference/analyzers.md#vela014)).
 3. **A Create/Update step does not build**
    - It needs `FilterOn(...)` ([VELA020](../reference/analyzers.md#vela020)).

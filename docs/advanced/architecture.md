@@ -117,8 +117,9 @@ flowchart TB
    `ctx.Request.Target` / `ctx.Request.Targets` (an early-bound `TEntity` on `Create` / `Update`; the SDK's `Entity` /
    `EntityReference` / `EntityCollection` otherwise). The
    handler is bound by **method group**, so the message and the handler's context type are checked at build time:
-   an `OnUpdate()` step bound to an `ICreatePostContext<T>` handler is a VELA015 error. A non-modelled `OnMessage("...")` step
-   receives the plain `ILocalPluginContext`.
+   an `OnUpdate()` step bound to an `ICreatePostContext<T>` handler is a VELA015 error. A non-modelled `On<TRequest>()` step
+   receives the request-typed `IMessagePre/PostContext<TRequest>`, and an `OnMessage<TMarker>()` step the plain
+   `ILocalPluginContext`.
 
 ### Why this shape
 

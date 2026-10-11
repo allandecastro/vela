@@ -102,7 +102,7 @@ public class ApplyEngineTests
         // New steps have no secure config: the reconcile reads the (empty) link and does nothing.
         mock.Setup(s => s.Retrieve("sdkmessageprocessingstep", It.IsAny<Guid>(), It.IsAny<ColumnSet>()))
             .Returns((string e, Guid id, ColumnSet _) => new Entity(e, id));
-        // SetState transition for the enabled/disabled reconcile.
+        // Any other request.
         mock.Setup(s => s.Execute(It.IsAny<OrganizationRequest>())).Returns(new OrganizationResponse());
 
         RegistrationDiff diff = DiffWithAddedSteps("dv-a", "dv-b", "dv-c");
@@ -137,7 +137,7 @@ public class ApplyEngineTests
     public void ApplyDiff_disables_step_and_reconciles_configuration()
     {
         // Driven through the batched write path (FakeOrgService dispatches each ExecuteMultiple child), so the step
-        // row, its secure-config row + link, and the disable SetState still all land.
+        // row, its secure-config row + link, and the disabling update still all land.
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = q => q.EntityName switch
@@ -173,12 +173,77 @@ public class ApplyEngineTests
         Assert.Contains(svc.Updated, e => e.LogicalName == "sdkmessageprocessingstep"
             && e.GetAttributeValue<EntityReference>("sdkmessageprocessingstepsecureconfigid")?.Id == secure.Id);
 
-        // Disabled step transitions to the inactive state (via a batched SetState in tier 2).
-        SetStateRequest? setState = FindBatchedSetState(svc);
-        Assert.NotNull(setState);
-        Assert.Equal(step.Id, setState!.EntityMoniker.Id);
-        Assert.Equal(1, setState.State.Value);
-        Assert.Equal(2, setState.Status.Value);
+        // Disabled step transitions to the inactive state through a batched, state-only update.
+        Entity? disable = FindBatchedStateUpdate(svc);
+        Assert.NotNull(disable);
+        Assert.Equal(step.Id, disable!.Id);
+        Assert.Equal(1, disable.GetAttributeValue<OptionSetValue>("statecode").Value);
+        Assert.Equal(2, disable.GetAttributeValue<OptionSetValue>("statuscode").Value);
+    }
+
+    [Fact]
+    public void ApplyDiff_disables_a_created_step_in_the_same_batch_right_behind_its_create()   // #445
+    {
+        // Dataverse ignores statecode on Create, so a .Disabled() step is born enabled. The update that disables it must
+        // not wait for tier 2 (images, secure config): it runs in tier 1, immediately after the create.
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType }),
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+        };
+
+        JsonElement def = Json(new
+        {
+            pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", enabled = false,
+            preImages = new[] { new { alias = "pre", attributes = new[] { "name" } } },
+        });
+        var diff = new RegistrationDiff(["Zava.Plugins"], ["Zava.Plugins"], [new RegistrationItem("step", PluginType, def)], [], [], [], []);
+
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
+
+        Assert.Equal(2, svc.Batches.Count);
+        OrganizationRequest[] tier1 = svc.Batches[0].Requests.ToArray();
+        Assert.Collection(tier1,
+            r => Assert.Equal("sdkmessageprocessingstep", Assert.IsType<CreateRequest>(r).Target.LogicalName),
+            r => Assert.Equal(1, Assert.IsType<UpdateRequest>(r).Target.GetAttributeValue<OptionSetValue>("statecode").Value));
+        Assert.All(svc.Batches[1].Requests, r => Assert.Equal("sdkmessageprocessingstepimage", Assert.IsType<CreateRequest>(r).Target.LogicalName));
+    }
+
+    [Fact]
+    public void ApplyDiff_disables_an_existing_step_in_the_same_update_as_its_other_columns()   // #445
+    {
+        // An existing step needs no separate state write: its update carries statecode/statuscode with the rest.
+        Guid existingStep = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType }),
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
+                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", existingStep) { ["name"] = $"{PluginType} - PostOpSync: dv-x" }),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+        };
+
+        JsonElement before = Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x" });
+        JsonElement after = Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", enabled = false });
+        var diff = new RegistrationDiff(["Zava.Plugins"], ["Zava.Plugins"], [], [], [new RegistrationChange("step", PluginType, before, after)], [], []);
+
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
+
+        Entity update = Assert.IsType<UpdateRequest>(Assert.Single(Assert.Single(svc.Batches).Requests)).Target;
+        Assert.Equal(existingStep, update.Id);
+        Assert.Equal(1, update.GetAttributeValue<OptionSetValue>("statecode").Value);
+        Assert.Equal(2, update.GetAttributeValue<OptionSetValue>("statuscode").Value);
+        Assert.True(update.Contains("rank"));
     }
 
     [Fact]
@@ -437,21 +502,12 @@ public class ApplyEngineTests
     public void IsCustomApiImplementationChange_compares_the_plugin_type_names(string before, string after, bool expected)
         => Assert.Equal(expected, DataverseRegistration.IsCustomApiImplementationChange(CustomApiChange(before, after)));
 
-    private static SetStateRequest? FindBatchedSetState(TestSupport.FakeOrgService svc)
-    {
-        foreach (ExecuteMultipleRequest batch in svc.Batches)
-        {
-            foreach (OrganizationRequest child in batch.Requests)
-            {
-                if (child is SetStateRequest setState)
-                {
-                    return setState;
-                }
-            }
-        }
-
-        return null;
-    }
+    // The state-only update that disables a step just created, wherever it was batched.
+    private static Entity? FindBatchedStateUpdate(TestSupport.FakeOrgService svc) => svc.Batches
+        .SelectMany(batch => batch.Requests)
+        .OfType<UpdateRequest>()
+        .Select(update => update.Target)
+        .FirstOrDefault(target => target.Attributes.Count == 2 && target.Contains("statecode"));
 
     [Fact]
     public void ApplyDiff_on_midrun_failure_writes_resume_report_and_rethrows()

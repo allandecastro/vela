@@ -32,14 +32,16 @@ public sealed class ResolverAndTypedQueryCoverageTests
     {
         Assert.Throws<ArgumentNullException>(() => SimpleServiceResolver.CreateDefault(null!));
 
-        SimpleServiceResolver without = SimpleServiceResolver.CreateDefault(new PluginContextBuilder().Build());
-        Assert.NotNull(without.GetService(typeof(ITracingService)));
+        LocalPluginContext plain = new PluginContextBuilder().Build();
+        SimpleServiceResolver without = SimpleServiceResolver.CreateDefault(plain);
+        Assert.Same(plain.TracingService, without.GetService(typeof(ITracingService)));
         Assert.Null(without.GetService(typeof(IManagedIdentityService)));
 
+        IManagedIdentityService managedIdentity = Moq.Mock.Of<IManagedIdentityService>();
         LocalPluginContext withMi = new PluginContextBuilder()
-            .WithManagedIdentityService(Moq.Mock.Of<IManagedIdentityService>())
+            .WithManagedIdentityService(managedIdentity)
             .Build();
-        Assert.NotNull(SimpleServiceResolver.CreateDefault(withMi).GetService(typeof(IManagedIdentityService)));
+        Assert.Same(managedIdentity, SimpleServiceResolver.CreateDefault(withMi).GetService(typeof(IManagedIdentityService)));
     }
 
     [Fact]
@@ -220,7 +222,15 @@ public sealed class ResolverAndTypedQueryCoverageTests
         QueryExpression related = Query.For<TestAccount>()
             .WhereRelated<TestAccount>(a => a.AccountId, c => c.AccountId, JoinOperator.Any, l => l.Where(c => c.Name, ConditionOperator.NotNull))
             .Build();
-        Assert.NotNull(related.Criteria.Filters[0].AnyAllFilterLinkEntity);
+        LinkEntity anyLink = related.Criteria.Filters[0].AnyAllFilterLinkEntity;
+        Assert.Equal("account", anyLink.LinkFromEntityName);
+        Assert.Equal("account", anyLink.LinkToEntityName);
+        Assert.Equal("accountid", anyLink.LinkFromAttributeName);
+        Assert.Equal("accountid", anyLink.LinkToAttributeName);
+        Assert.Equal(JoinOperator.Any, anyLink.JoinOperator);
+        ConditionExpression linked = Assert.Single(anyLink.LinkCriteria.Conditions);
+        Assert.Equal("name", linked.AttributeName);
+        Assert.Equal(ConditionOperator.NotNull, linked.Operator);
 
         QueryExpression agg = Query.For<TestAccount>()
             .GroupBy(a => a.Name, "byname")

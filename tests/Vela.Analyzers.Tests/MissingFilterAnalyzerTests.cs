@@ -14,9 +14,11 @@ public sealed class MissingFilterAnalyzerTests
 namespace Vela.Steps
 {
     public interface IFluentStep { }
-    public interface ITrigger : IFluentStep { IStage OnCreate(); IStage OnUpdate(); IStage OnCreateMultiple(); IDeleteStage OnDelete(); IPermissiveStage OnMessage(string message); }
+    public interface ITrigger : IFluentStep { IStage OnCreate(); IStage OnUpdate(); IStage OnCreateMultiple(); IDeleteStage OnDelete(); IPermissiveStage OnMessage<TMessage>() where TMessage : class; ITypedStage On<TRequest>(); }
     public interface IPermissiveStage : IFluentStep { IPermissivePostOperationConfig PostOperation(); }
     public interface IPermissivePostOperationConfig : IFluentStep { void Handle(System.Action h); }
+    public interface ITypedStage : IFluentStep { ITypedPostOperationConfig PostOperation(); }
+    public interface ITypedPostOperationConfig : IFluentStep { void Handle(System.Action h); }
     public interface IStage : IFluentStep { ICreatePostOperationConfig PostOperation(); IUpdatePreOperationConfig PreOperation(); ICreateMultiplePreValidationConfig PreValidation(); }
     public interface IDeleteStage : IFluentStep { IDeletePostOperationConfig PostOperation(); }
     public interface ICreatePostOperationConfig : IFluentStep { ICreatePostOperationConfig FilterOn(string a); ICreatePostOperationConfig Disabled(); void Handle(System.Action h); }
@@ -25,9 +27,26 @@ namespace Vela.Steps
     public interface IDeletePostOperationConfig : IFluentStep { void Handle(System.Action h); }
 }
 
+namespace Microsoft.Xrm.Sdk.Messages
+{
+    public class CreateRequest { }
+    public class UpdateRequest { }
+    public class DeleteRequest { }
+}
+
+namespace Vela.Constants
+{
+    public sealed class CustomMessageAttribute : System.Attribute { public CustomMessageAttribute(string messageName) { } }
+}
+
 namespace Demo
 {
     using Vela.Steps;
+
+    // A marker naming a filter-required message.
+    [Vela.Constants.CustomMessage(""Update"")]
+    public class UpdateMarker { }
+
     public class Plugin
     {
         protected ITrigger RegisterStep() => null!;
@@ -85,18 +104,19 @@ namespace Demo
     }
 
     [Fact]
-    public async Task Flags_a_filter_required_message_on_the_permissive_path()
+    public async Task Flags_a_filter_required_message_on_the_type_stated_paths()
     {
-        // OnMessage("create") (any casing, literal or const) has no FilterOn, so building the step always fails.
+        // On<CreateRequest>() / OnMessage<TMarker>() have no FilterOn, so building a Create/Update step always fails.
         string code = InMethod(@"
-            const string Msg = ""Update"";
-            RegisterStep().OnMessage(""create"").PostOperation().{|#0:Handle|}(H);
-            RegisterStep().OnMessage(Msg).PostOperation().{|#1:Handle|}(H);
-            RegisterStep().OnMessage(""Delete"").PostOperation().Handle(H);");
+            RegisterStep().On<Microsoft.Xrm.Sdk.Messages.CreateRequest>().PostOperation().{|#0:Handle|}(H);
+            RegisterStep().OnMessage<UpdateMarker>().PostOperation().{|#1:Handle|}(H);
+            RegisterStep().On<Microsoft.Xrm.Sdk.Messages.UpdateRequest>().PostOperation().{|#2:Handle|}(H);
+            RegisterStep().OnMessage<Microsoft.Xrm.Sdk.Messages.DeleteRequest>().PostOperation().Handle(H);");
+        const string createHint = "use the typed OnCreate() trigger, which offers .FilterOn(...), instead of a request-typed trigger";
+        const string updateHint = "use the typed OnUpdate() trigger, which offers .FilterOn(...), instead of a request-typed trigger";
         await Verify.VerifyAnalyzerAsync(code,
-            new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(0)
-                .WithArguments("Create", "use the typed OnCreate() trigger, which offers .FilterOn(...), instead of OnMessage(...)"),
-            new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(1)
-                .WithArguments("Update", "use the typed OnUpdate() trigger, which offers .FilterOn(...), instead of OnMessage(...)"));
+            new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(0).WithArguments("Create", createHint),
+            new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(1).WithArguments("Update", updateHint),
+            new DiagnosticResult(MissingFilterAnalyzer.DiagnosticId, DiagnosticSeverity.Error).WithLocation(2).WithArguments("Update", updateHint));
     }
 }

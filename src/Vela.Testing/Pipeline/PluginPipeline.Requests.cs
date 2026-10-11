@@ -256,7 +256,7 @@ namespace Vela.Testing
         {
             // Steps register on the sdkmessage, which differs from the request name for some business messages
             // (SendEmailRequest runs the Send steps, WinQuoteRequest the Win steps), and plugins see that name.
-            string message = SdkMessageNames.ToSdkMessage(request.RequestName);
+            string message = SdkMessageNames.ToSdkMessage(request);
             bool hasSteps = _registrations.Any(registration => registration.Step.Enabled
                 && string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
             if (!hasSteps)
@@ -403,11 +403,17 @@ namespace Vela.Testing
             // is a Guid), CloseIncident on incident (not its IncidentResolution activity), WinOpportunity on
             // opportunity (not its OpportunityClose), AddToQueue on queueitem (not its Target). The platform leaves
             // PrimaryEntityId empty on these (verified live at PreValidation and PostOperation), and so does the
-            // harness, so a handler reading it fails here as it would there.
+            // harness, so a handler reading it fails here as it would there. Only a Target that is a record of that
+            // table gives the id (Recalculate on goal, verified live at PreValidation).
             string? primaryEntity = SdkMessageNames.PrimaryEntityOf(request.RequestName);
             if (primaryEntity != null)
             {
-                return (primaryEntity, Guid.Empty);
+                Guid primaryId = request.Parameters.TryGetValue("Target", out object? boundTarget)
+                    && boundTarget is EntityReference boundReference
+                    && string.Equals(boundReference.LogicalName, primaryEntity, StringComparison.OrdinalIgnoreCase)
+                        ? boundReference.Id
+                        : Guid.Empty;
+                return (primaryEntity, primaryId);
             }
 
             if (request.Parameters.TryGetValue("Target", out object? target))

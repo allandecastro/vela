@@ -2,14 +2,15 @@
 
 Vela models a fixed set of Dataverse messages with a strongly-typed step context - the CRUD/bulk, sharing, sales
 lifecycle, queue, email, membership and case/contract families (the full list is in
-[Write a plugin](../guides/plugins.md)). Any other SDK message is reachable through the permissive `OnMessage("...")`
-escape hatch, which hands the handler a plain `ILocalPluginContext`.
+[Write a plugin](../guides/plugins.md)). Any other SDK message is reachable through its request type,
+`On<XxxRequest>()` (an SDK request, or one `vela models --messages` generates), which hands the handler the
+request-typed `IMessagePre/PostContext<XxxRequest>`. There is no string form.
 
 Contexts are **split by stage**: each message has an `I<Message>PreContext<TEntity>` (pre-stage handler:
 `ctx.Request` + the typed target, no `ctx.Response`) and an `I<Message>PostContext<TEntity>` (post-stage handler:
 `ctx.Request` + `ctx.Response`). Adding a new **modelled** message (so it gets its own `On<Message>()` builder
 method plus those two contexts) is a small but **multi-file** change. Miss one step and the feature is only
-half-wired - most commonly the CLI keeps generating `OnMessage("...")` instead of the typed call. Touch all of
+half-wired - most commonly the CLI keeps generating `On<XxxRequest>()` instead of the typed call. Touch all of
 these, in this order:
 
 1. **`src/Vela.Plugins/Context/MessageContexts.cs`** - add **two** interfaces (`I<Message>PreContext<TEntity>` over
@@ -44,16 +45,17 @@ these, in this order:
    the runtime hands the handler the stage-correct typed argument.
 4. **`src/Vela.Plugins/Constants/PluginMessages.cs`** - the message-name constant (the request name), if it does not
    already exist.
-5. **`src/Vela.Cli/Cli/AddCommand.cs` - `KnownMessages`** - the easy-to-forget one. This array is the CLI's list of
-   messages that render a typed `On<Message>()` call from `vela add plugin --message <Message>`. **It must stay in
-   sync with the framework's typed methods**: leave the message out and the scaffold silently falls back to the
-   permissive `OnMessage("<Message>")` even though the typed builder now exists.
+5. **`vela add` needs nothing.** `AddCommand.KnownMessages` is the generated `TypedTriggers.Messages`, so
+   `vela add plugin --message <Message>` renders the typed `On<Message>()` call as soon as the generator has run.
+   Add the message to `Add_Plugin_KnownMessage_RendersTypedOnCall` or `ResolveKnownMessage_maps_an_sdkmessage_to_its_typed_trigger`.
 6. **Check the sdkmessage on a live environment first.** The trigger is named after the SDK request, but the step
    registers on the sdkmessage, and for some business messages the two differ (`SendEmail` is `Send`, `WinQuote` is
    `Win`). Query `sdkmessage` / `sdkmessagefilter` for the request name: if it does not exist, add the mapping to
    `src/Vela.Plugins/Steps/SdkMessageNames.cs` (it lists every request of `sdkmessagerequest` whose name is not an
    sdkmessage, with the table it runs on). When the message runs on a single table, set `Entity:` in
-   `MessageModel.cs` and list it there with its table. If the filter for your entity has
+   `MessageModel.cs` and list it there with its table. When its only filter is `none` (a global message), leave
+`Entity:` unset and add it to `PluginMessages.GlobalMessages`: the builder then registers the step on no table. If the
+filter for your entity has
    `iscustomprocessingstepallowed = false`, do not model the message at all: Dataverse rejects every custom step on
    it (0x80044187).
 
@@ -68,5 +70,5 @@ these, in this order:
 ## Deprecated messages are intentionally not modelled
 
 `SetState` and `SetStateDynamicEntity` are deprecated by the platform. They deliberately get **no** typed
-method: they are not in `KnownMessages` and have no `I<Message>Pre`/`PostContext`, so they render `OnMessage("...")`. Update
+method: they are not in `KnownMessages` and have no `I<Message>Pre`/`PostContext`, so they render `On<SetStateRequest>()`. Update
 `statecode` / `statuscode` through an `Update` instead. (`Assign` is supported: use `OnAssign()`.) Do not add typed support for them.

@@ -1,0 +1,17 @@
+# Mutation area: the in-memory harness query core (operators, value comparison, FetchXML parsing). Run from
+# tests/Vela.Testing.Tests. The solution lets Stryker build the net462 projects (Windows only).
+# Measured at ~91.6% after killing the behavioural survivors (NotBetween upper-bound inclusivity, FetchXML
+# named-attribute projection, ...); break is ratcheted to 89 (~2 pts below). The remaining survivors are equivalent
+# mutants (exception-message strings, never-null/never-empty edges).
+stryker-config:
+  solution: ../../Vela.sln
+  project: Vela.Testing.csproj
+  mutate:
+    - "**/InMemoryQueryEngine.cs"
+    - "**/FetchXmlParser.cs"
+    - "**/EntityValues.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 95
+    low: 89
+    break: 89

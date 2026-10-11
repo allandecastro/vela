@@ -46,8 +46,8 @@ The `using` directives sit inside the namespace so that `Account` resolves to th
 | Do slow or non-critical work after the commit | `PostOperation().Async()` | Runs in its own execution; a Target write has no effect ([VELA018](../reference/analyzers.md#vela018)). |
 | Compare with the previous values | add `WithPreImage(...)` | Never on Create. |
 | Read the saved values | add `WithPostImage(...)` | PostOperation only, never on Delete. |
-| React to a message with no typed trigger (a Custom API, an unmodelled message) | `On<TRequest>()` or `OnMessage("...")` | See [Other messages](#other-messages). A message with a typed trigger is registered only through it ([VELA023](../reference/analyzers.md#vela023)). |
-| Change a record's state | `OnUpdate().FilterOn(x => x.StateCode)` or `OnMessage(PluginMessages.SetStateDynamicEntity)` | A step on `SetState` never fires ([VELA022](../reference/analyzers.md#vela022)). |
+| React to a message with no typed trigger (a Custom API, an unmodelled message) | `On<TRequest>()` (or a marker, `OnMessage<TMarker>()`) | See [Other messages](#other-messages). A message with a typed trigger is registered only through it ([VELA023](../reference/analyzers.md#vela023)). |
+| Change a record's state | `OnUpdate().FilterOn(x => x.StateCode)` or `On<SetStateRequest>()` (registers on `SetStateDynamicEntity`) | A step on `SetState` never fires ([VELA022](../reference/analyzers.md#vela022)). |
 
 ## Several steps in one class
 
@@ -87,7 +87,8 @@ step to a handler taking `ICreatePostContext<Account>` is a [VELA015](../referen
 The builder enforces this order (the type-state makes any other order a compile error):
 
 1. **Message**: a typed trigger such as `OnCreate()`, `OnUpdate()`, `OnDelete()`, `OnAssign()`, `OnMerge()`
-   (see [Messages](#messages)), `On<TRequest>()`, or `OnMessage("...")`.
+   (see [Messages](#messages)), `On<TRequest>()`, or `OnMessage<TMarker>()`. There is no string form: a message is
+   always named by a type.
 2. **Stage**: `PreValidation()`, `PreOperation()` or `PostOperation()`. The stage decides which images the rest of
    the chain offers.
 3. **Mode**: `Sync()`, or `Async()` on PostOperation only. `Async(deleteJobOnSuccess: true)` deletes the system job
@@ -201,7 +202,7 @@ and stage support, so an invalid image does not compile:
 | `Merge` | every stage | PostOperation | `Target` (master), `SubordinateId` (subordinate) |
 | other typed triggers | no | no | |
 
-Through `OnMessage("...")` and `On<TRequest>()` both images are offered, and the same rule table is checked when
+Through `OnMessage<TMarker>()` and `On<TRequest>()` both images are offered, and the same rule table is checked when
 the step is built: a post-image before PostOperation, a pre-image on Create/CreateMultiple, a post-image on Delete
 and any image on `RouteTo` or `SendFromTemplate` throw. Images on `Send` / `DeliverIncoming` / `DeliverPromote` register against
 `EmailId`, on `SetState` / `SetStateDynamicEntity` against `EntityMoniker`, and on any other message against
@@ -273,8 +274,8 @@ public sealed partial class AccountAudit(string unsecureConfig, string secureCon
 Outside a generated context, read a projection with `ctx.PreImageAs<T>()` / `ctx.PostImageAs<T>()` (pass an alias
 for a custom one). The generator names the projection after the handler: `OnUpdated_PreImage`,
 `OnUpdated_PostImage`, plus `_{Alias}` for a custom alias; a lambda handler gets `{Message}{Stage}_PreImage`. On the
-`OnMessage("...")` path a string literal message names it (`OnMessage("update")` gives `UpdatePostOp_PostImage`),
-and a message passed as a variable generates nothing. See
+`On<TRequest>()` / `OnMessage<TMarker>()` paths the request or marker type names it, minus a `Request` suffix
+(`On<acme_DoThingRequest>()` gives `acme_DoThingPostOp_PostImage`). See
 [Typed image projection generator](../reference/analyzers.md#typed-image-projection-generator).
 
 #### Need the whole entity (for a service)?
@@ -339,29 +340,46 @@ Typed triggers exist for:
 - **Membership:** `AddMembersTeam`, `RemoveMembersTeam` (team), `AddListMembersList`, `AddMemberList`,
   `RemoveMemberList` (list).
 - **Case and contract:** `CloseIncident` (incident), `CancelContract`, `CloneContract` (contract).
+- **Marketing:** `AddItemCampaign`, `RemoveItemCampaign` (campaign).
+- **Pricing and goals:** `LockSalesOrderPricing` (salesorder), `LockInvoicePricing` (invoice), `Recalculate` (goal),
+  and the global `UnlockSalesOrderPricing`, `UnlockInvoicePricing`.
+- **Scheduling:** `ImmediateBook` (appointment), `Reschedule` (appointment, serviceappointment,
+  recurringappointmentmaster).
+- **Fax and templates:** `SendFax` (fax), `SendTemplate` (template).
+- **Product kits:** `AddProductToKit` (product), and the global `RemoveProductFromKit`.
 
 A message with a table in parentheses runs on that table only: register its trigger from an `EntityPluginBase<T>` on
 that table (the builder rejects any other). That is what tells `OnWinQuote()` from `OnWinOpportunity()`, which share
-`Win`. The queue messages run on `queueitem` whatever their `Target`. On all of these `ctx.PrimaryEntityId` is empty:
-read the record from `ctx.Request` (`ctx.Request.EmailId`, `ctx.Request.TeamId`, ...).
+`Win`. The queue messages run on `queueitem` whatever their `Target`. On all of these `ctx.PrimaryEntityId` is empty
+unless the request's `Target` is a record of that table (`Recalculate`): read the record from `ctx.Request`
+(`ctx.Request.EmailId`, `ctx.Request.TeamId`, ...).
+
+A **global** message (`Associate`, `Disassociate`, `UnlockSalesOrderPricing`, `UnlockInvoicePricing`,
+`RemoveProductFromKit`) has no per-table filter: its step registers on no table, whatever the plugin's `T`, and
+`ctx.PrimaryEntityName` is `none`.
 
 **One way per message.** A message with a typed trigger is registered through it. `On<TRequest>()` and
 `OnAsyncOnly<TRequest>()` are only for messages without one: `On<UpdateRequest>()` throws when the step is
 registered, naming the trigger to use, and [VELA023](../reference/analyzers.md#vela023) reports it at build with a
-code fix to `OnUpdate()`. `OnMessage("update")` is flagged by [VELA006](../reference/analyzers.md#vela006).
+code fix to `OnUpdate()`. `OnMessage<UpdateRequest>()` is rejected the same way.
 
 **A trigger is named after the SDK request; the step registers on the sdkmessage.** Where they differ, Dataverse only
 knows the sdkmessage, and the handler sees it in `ctx.MessageName`: `SendEmail` → `Send`, `SendEmailFromTemplate` →
 `SendFromTemplate`, `DeliverIncomingEmail` → `DeliverIncoming`, `DeliverPromoteEmail` → `DeliverPromote`,
 `WinOpportunity` / `WinQuote` → `Win`, `LoseOpportunity` → `Lose`, `CloseIncident` → `Close`, `CancelContract` →
 `Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
-`AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`.
-`OnMessage(PluginMessages.SendEmail)` and the test harness translate the same way. The translation covers every SDK
-request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on `Close` too.
+`AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`,
+`AddItemCampaign` → `AddItem`, `RemoveItemCampaign` → `RemoveItem`, `SendFax` / `SendTemplate` → `Send`.
+The test harness (`For<T>().OnMessage(...)`, `WithRequest(...)`) translates the same way. The translation covers every
+SDK request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on `Close` too, and
+`On<SetStateRequest>()` on `SetStateDynamicEntity` (a step on `SetState` never fires). A request type outside the table
+states its sdkmessage with `[SdkMessage("...")]` (`Vela.Messages`).
 
 `ReviseQuote`, `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`,
 `GenerateInvoiceFromOpportunity` and the three `Get*ProductsFromOpportunity` accept no custom step (Dataverse fails
-with 0x80044187), so they have no trigger. Global messages such as `WhoAmI` cannot carry an entity-bound step either;
+with 0x80044187), so they have no trigger. Neither do `RenewContract`, `RenewEntitlement`, `QualifyMemberList`,
+`CopyCampaignResponse`, `ExecuteWorkflow`, `SetProcess`, `SendBulkMail`, `ReassignObjectsOwner`, `InitializeFrom`,
+`ConvertProductToKit` and `ConvertKitToProduct`, for the same reason. Global messages such as `WhoAmI` cannot carry an entity-bound step either;
 call them from a handler (`service.Execute(new WhoAmIRequest())`).
 
 `OnAssign()` is entity-bound and fires on reassignment, with the new owner in `ctx.Request.Assignee`. An Update of
@@ -388,7 +406,8 @@ private void OnScore(IMessagePostContext<CalculateAccountScoreRequest> ctx)
 }
 ```
 
-Without a request type, use `OnMessage("...")` (or a marker type, `OnMessage<TMarker>()`) and bind either
+Without a request type, generate one (`vela models --messages <name>` / `--custom-apis <name>`), or use a marker type,
+`OnMessage<TMarker>()` (a class marked `[CustomMessage("...")]`), and bind either
 `.Handle(OnX)` with `void OnX(ILocalPluginContext ctx)`, or `.Handle<TRequest>(OnX)` with
 `IMessagePreContext<TRequest>` / `IMessagePostContext<TRequest>`. The two-argument forms
 `IMessagePreContext<TRequest, TEntity>` / `IMessagePostContext<TRequest, TEntity>` add `ctx.PreImage` /

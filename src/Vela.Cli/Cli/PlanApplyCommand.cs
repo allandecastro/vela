@@ -303,13 +303,17 @@ internal static class PlanApplyCommand
 
         RegistrationState after = ReadCurrent(service, local, options, jsonOptions, out _);
         RegistrationDiff afterDiff = BuildDiff(local, after);
-        PlanPreview result = BuildPlanPreview("apply-execute", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics, unmanaged: unmanaged, info: [.. local.Info ?? [], .. after.Info ?? []]) with
+        // Every write succeeded, yet the environment can still differ (the platform silently ignored or normalized a
+        // value). That is not a success: the next apply would plan the same change again.
+        bool converged = afterDiff.Summary.Added == 0 && afterDiff.Summary.Changed == 0 && afterDiff.Summary.Removed == 0;
+        PlanPreview result = BuildPlanPreview(converged ? "apply-execute" : "apply-not-converged", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics, unmanaged: unmanaged, info: [.. local.Info ?? [], .. after.Info ?? []]) with
         {
             Notes =
             [
                 "Compared local .nupkg plugin metadata with live Dataverse state.",
                 "Dataverse changes were executed.",
                 $"Executed operations: create={diff.Added.Length}, update={diff.Changed.Length}, delete={diff.Removed.Length}",
+                .. converged ? Array.Empty<string>() : ["The environment still differs from the packages after apply; summary and diff show what did not converge."],
             ],
             // What was DONE, from the pre-apply diff: Summary above is the post-apply remaining diff (0 on success).
             Executed = ExecutedCounts.FromDiff(diff, packageNeedsPublish) with { AddedToSolution = addedToSolution },
@@ -323,16 +327,15 @@ internal static class PlanApplyCommand
         Emit(result, options, jsonOptions, host, humanBody: writer =>
         {
             bool color = ConsoleTheme.StdoutColor;
-            writer.WriteLine(ConsoleTheme.Success("Apply complete.", color));
+            writer.WriteLine(converged ? ConsoleTheme.Success("Apply complete.", color) : "Apply finished, but did not converge.");
             writer.WriteLine(
                 $"Executed against {options.Environment ?? "Dataverse"}: {diff.Added.Length} created, " +
                 $"{diff.Changed.Length} updated, {diff.Removed.Length} deleted" +
                 (packageNeedsPublish ? ", plugin package re-published" : string.Empty) +
                 (addedToSolution > 0 ? $", {addedToSolution} component(s) added to solution '{options.SolutionUniqueName}'" : string.Empty) + ".");
-            if (result.HasChanges)
+            if (!converged)
             {
-                // Unexpected: the environment still differs after a successful apply - surface it.
-                writer.WriteLine("Note: the environment still shows differences after apply:");
+                writer.WriteLine("The environment still shows differences after apply:");
                 WritePlanSummary(result, writer, color);
             }
             else
@@ -343,7 +346,13 @@ internal static class PlanApplyCommand
                 WriteInfo(result.Info, writer, color);
             }
         });
-        return ExitSuccess;
+
+        return converged
+            ? ExitSuccess
+            : Fail(
+                $"Apply did not converge: {afterDiff.Summary.Added} to create / {afterDiff.Summary.Changed} to update / {afterDiff.Summary.Removed} to delete remain. " +
+                "Dataverse accepted the writes but did not keep them; re-running apply would plan the same changes.",
+                ExitDriftDetected, includeUsage: false);
     }
 
     private static bool FailsStrict(SharedOptions options, string[] diagnostics, bool afterApply, out int exitCode)

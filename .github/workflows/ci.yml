@@ -45,9 +45,6 @@ jobs:
       # when the committed files differ from the generator output (a hand edit, or a model change not regenerated).
       - name: Generated step API is up to date
         run: dotnet run --project tools/codegen/Vela.StepApiGen -c Release --no-build -- --check
-      - name: Test
-        run: dotnet test Vela.sln -c Release --no-build
-
       # The only check that compiles what `vela init` generates: scaffold a solution, pack the repo's
       # Vela.Plugins / Vela.Testing / Vela.Messages into a local feed, then restore + build it. Opt-in locally
       # (skipped without VELA_BUILD_SMOKE=1), always on in CI. The packs are version 1.0.0, and a 1.0.0 left in the
@@ -73,47 +70,75 @@ jobs:
           path: smoke-logs/
           if-no-files-found: ignore
 
-      # Branch-coverage gates (not line coverage): diff engine, test harness, analyzers, code fixes and the plugin
-      # runtime (below). coverlet.msbuild fails the run if branch coverage drops below the threshold; every gated
-      # test project must reference coverlet.msbuild, or the threshold is silently ignored. Thresholds sit just
-      # below measured coverage so they catch regressions without churn; raise them as coverage improves.
-      - name: Coverage gate (branch) — diff engine
+      # Each test project runs ONCE, with coverage collection on that same run (A-80: CI used to run the suite up to
+      # seven times: a plain `dotnet test Vela.sln`, then each gated project again for its coverage). The gates are on
+      # branch coverage (not line coverage). Thresholds sit just below measured coverage so they catch regressions
+      # without churn; raise them as coverage improves. Every test project must reference coverlet.msbuild, or its
+      # threshold is silently ignored, and must be listed here: the guard below fails when one is not. A test project
+      # is any project of the solution that references Microsoft.NET.Test.Sdk, wherever it lives (tests/, docs/samples/).
+      - name: Every test project is run below
+        run: |
+          $listed = 'Vela.Tests', 'Vela.Testing.Tests', 'Vela.Cli.Tests', 'Vela.Analyzers.Tests', 'Vela.CodeFixes.Tests', 'Vela.DocSamples'
+          $found = dotnet sln Vela.sln list | Where-Object { $_ -like '*.csproj' } |
+            Where-Object { (Get-Content $_ -Raw) -match 'Microsoft\.NET\.Test\.Sdk' } |
+            ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) }
+          $missing = $found | Where-Object { $listed -notcontains $_ }
+          if ($missing) { Write-Error "Test project(s) not run by CI: $($missing -join ', ')"; exit 1 }
+          Write-Host "Test projects: $($found -join ', ')"
+      # The documentation samples (docs/samples): their tests keep the snippets the pages include working. No gate.
+      - name: Test - documentation samples
+        if: ${{ !cancelled() }} # run every project even when an earlier gate failed
+        run: dotnet test docs/samples/Vela.DocSamples/Vela.DocSamples.csproj -c Release --no-build
+      - name: Test + coverage gate (branch) - diff engine
+        if: ${{ !cancelled() }} # run every project even when an earlier gate failed
         run: >
-          dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release
+          dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release --no-build
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
           -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=90
           -p:Include="[Vela.Cli]Vela.Cli.DiffEngine%2c[Vela.Cli]Vela.Cli.DefinitionNormalizer"
-      - name: Coverage gate (branch) — test harness
+      - name: Test + coverage gate (branch) - analyzers
+        if: ${{ !cancelled() }} # run every project even when an earlier gate failed
         run: >
-          dotnet test tests/Vela.Testing.Tests/Vela.Testing.Tests.csproj -c Release
-          -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
-          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=87
-          -p:Include="[Vela.Testing]*"
-      - name: Coverage gate (branch) — analyzers
-        run: >
-          dotnet test tests/Vela.Analyzers.Tests/Vela.Analyzers.Tests.csproj -c Release
+          dotnet test tests/Vela.Analyzers.Tests/Vela.Analyzers.Tests.csproj -c Release --no-build
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
           -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=80
           -p:Include="[Vela.Analyzers]*"
-      - name: Coverage gate (branch) — code fixes
+      - name: Test + coverage gate (branch) - code fixes
+        if: ${{ !cancelled() }} # run every project even when an earlier gate failed
         run: >
-          dotnet test tests/Vela.CodeFixes.Tests/Vela.CodeFixes.Tests.csproj -c Release
+          dotnet test tests/Vela.CodeFixes.Tests/Vela.CodeFixes.Tests.csproj -c Release --no-build
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
           -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=82
           -p:Include="[Vela.CodeFixes]*"
 
-      # Vela.Plugins (the plugin runtime) is exercised by BOTH Vela.Tests and Vela.Testing.Tests, so its
-      # coverage is the merge of the two: collect the first run to JSON, then merge the second over it and
-      # apply the branch threshold to the combined result.
-      - name: Coverage (collect) — plugin runtime
+      # Vela.Plugins (the plugin runtime) is exercised by BOTH Vela.Tests and Vela.Testing.Tests, so its coverage is the
+      # merge of the two: the Vela.Tests run collects the runtime to JSON, and the Vela.Testing.Tests run (which also
+      # collects the harness) merges over it. A coverlet threshold is one number for every module, so the gate below
+      # reads each module's branch-rate from the merged Cobertura report instead (the same figure coverlet prints).
+      - name: Test + coverage (collect) - plugin runtime
+        if: ${{ !cancelled() }} # run every project even when an earlier gate failed
         run: >
-          dotnet test tests/Vela.Tests/Vela.Tests.csproj -c Release
+          dotnet test tests/Vela.Tests/Vela.Tests.csproj -c Release --no-build
           -p:CollectCoverage=true -p:CoverletOutputFormat=json
           -p:Include="[Vela.Plugins]*" -p:CoverletOutput=./plugins-coverage.json
-      - name: Coverage gate (branch) — plugin runtime
+      - name: Test + coverage (collect) - test harness, merged with the plugin runtime
+        if: ${{ !cancelled() }} # run every project even when an earlier gate failed
         run: >
-          dotnet test tests/Vela.Testing.Tests/Vela.Testing.Tests.csproj -c Release
+          dotnet test tests/Vela.Testing.Tests/Vela.Testing.Tests.csproj -c Release --no-build
           -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura
           -p:MergeWith="${{ github.workspace }}/tests/Vela.Tests/plugins-coverage.json"
-          -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=83
-          -p:Include="[Vela.Plugins]*" -p:CoverletOutput=./plugins-merged.xml
+          -p:Include="[Vela.Testing]*%2c[Vela.Plugins]*" -p:CoverletOutput=./merged-coverage.xml
+      - name: Coverage gate (branch) - test harness and plugin runtime
+        if: ${{ !cancelled() }} # run every project even when an earlier gate failed
+        run: |
+          [xml]$report = Get-Content tests/Vela.Testing.Tests/merged-coverage.xml
+          $gates = [ordered]@{ 'Vela.Testing' = 87; 'Vela.Plugins' = 83 }
+          $failed = $false
+          foreach ($module in $gates.Keys) {
+            $package = $report.coverage.packages.package | Where-Object { $_.name -eq $module }
+            if (-not $package) { Write-Error "No coverage collected for $module"; $failed = $true; continue }
+            $branch = [math]::Round([double]::Parse($package.'branch-rate', [Globalization.CultureInfo]::InvariantCulture) * 100, 2)
+            Write-Host "$module branch coverage: $branch% (threshold $($gates[$module])%)"
+            if ($branch -lt $gates[$module]) { Write-Error "$module branch coverage $branch% is below $($gates[$module])%"; $failed = $true }
+          }
+          if ($failed) { exit 1 }

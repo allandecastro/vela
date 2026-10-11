@@ -1,0 +1,19 @@
+[
+  { "area": "diff-engine", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/(DiffEngine|DefinitionNormalizer)\\.cs$" },
+  { "area": "cli-apply", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.Apply\\.cs$" },
+  { "area": "cli-customapi", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.CustomApi\\.cs$" },
+  { "area": "cli-reader", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.cs$" },
+  { "area": "cli-steps", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.Steps\\.cs$" },
+  { "area": "cli-scanner", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/PackageScanner\\.cs$" },
+  { "area": "security-cli", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/(RoleGenerator|RolePrivilegeMapper)\\.cs$" },
+  { "area": "harness-query", "tests": "tests/Vela.Testing.Tests", "timeout": 30, "sources": "^src/Vela\\.Testing/(.*/)?(InMemoryQueryEngine|FetchXmlParser|EntityValues)\\.cs$" },
+  { "area": "security-harness", "tests": "tests/Vela.Testing.Tests", "timeout": 45, "sources": "^src/Vela\\.Testing/(Security/(SecurityModel|SharingTable|AccessTeamGrants)|Fakes/OneToManyRegistry)\\.cs$" },
+  { "area": "security-enforcement", "tests": "tests/Vela.Testing.Tests", "timeout": 30, "sources": "^src/Vela\\.Testing/Fakes/InMemoryOrganizationService\\.Security\\.cs$" },
+  { "area": "analyzers", "tests": "tests/Vela.Analyzers.Tests", "timeout": 45, "sources": "^src/Vela\\.Analyzers/.*\\.cs$" },
+  { "area": "plugins-steps", "tests": "tests/Vela.Tests", "timeout": 120, "sources": "^src/Vela\\.Plugins/Steps/.*\\.cs$", "exclude": "^src/Vela\\.Plugins/Steps/(StepApi|StepBuilder\\.Impl|SdkMessageNames)\\.cs$" },
+  { "area": "plugins-context", "tests": "tests/Vela.Tests", "timeout": 150, "sources": "^src/Vela\\.Plugins/Context/.*\\.cs$" },
+  { "area": "plugins-services", "tests": "tests/Vela.Tests", "timeout": 90, "sources": "^src/Vela\\.Plugins/(DI|Caching|Localization)/.*\\.cs$" },
+  { "area": "plugins-runtime", "tests": "tests/Vela.Tests", "timeout": 120, "sources": "^src/Vela\\.Plugins/(Plugin|Retry)/.*\\.cs$" },
+  { "area": "harness-store", "tests": "tests/Vela.Testing.Tests", "timeout": 60, "sources": "^src/Vela\\.Testing/Fakes/InMemoryOrganizationService\\.cs$" },
+  { "area": "harness-pipeline", "tests": "tests/Vela.Testing.Tests", "timeout": 60, "sources": "^src/Vela\\.Testing/Pipeline/PluginPipeline(\\.Stages|\\.Execution)?\\.cs$" }
+]

@@ -1,6 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using Vela.Cli;
+using Vela.Cli.Tests.TestSupport;
 using Xunit;
 using static Vela.Cli.Tests.TestSupport.RegistrationFactory;
 
@@ -11,7 +14,8 @@ namespace Vela.Cli.Tests;
 /// persists the platform-coerced values (async → PostOperation, rank ≥ 1) and the lifecycle-formatted name —
 /// exactly what the local normalizer computes — so re-reading and re-diffing must report no change. These run a
 /// spread of step/Custom API shapes (sync/async, with/without step key, global/entity-bound, messy input order)
-/// through both the normalizer and the diff engine.
+/// through the apply write path and the live read of a stateful fake (<see cref="StatefulOrgService"/>). The full
+/// command round trip on a real plugin package is <see cref="PlanApplyRoundTripTests"/>.
 /// </summary>
 public class IdempotenceTests
 {
@@ -51,16 +55,22 @@ public class IdempotenceTests
     [Fact]
     public void Plan_apply_plan_is_empty_for_every_step_shape()
     {
-        foreach (object manifest in StepManifests())
+        // local = what `plan` computes from the declared definition; current = what the live read returns after the
+        // apply write path stored it. Both go through the stateful fake, so a field the writer coerces differently
+        // from the normalizer (or one the reader drops) shows up as a change.
+        StatefulOrgService org = Environment(out Dictionary<string, Guid> typeIds);
+        RegistrationItem[] local = StepManifests().Select(NormalizedStep).ToArray();
+        foreach (RegistrationItem step in local)
         {
-            // local = what `plan` computes from the declared definition; current = the read-back after `apply`,
-            // which stores the same coerced values, so normalizing the same manifest models GetStepItems.
-            RegistrationDiff diff = DiffEngine.BuildDiff(State(NormalizedStep(manifest)), State(NormalizedStep(manifest)));
-
-            Assert.Empty(diff.Added);
-            Assert.Empty(diff.Removed);
-            Assert.Empty(diff.Changed);
+            DataverseRegistration.UpsertStep(org, typeIds, step.Definition, verbose: false);
         }
+
+        RegistrationDiff diff = DiffEngine.BuildDiff(State(local), State([.. ReadBack(org)]));
+
+        Assert.Equal(local.Length, diff.CurrentItems.Length);
+        Assert.Empty(diff.Added);
+        Assert.Empty(diff.Removed);
+        Assert.Empty(diff.Changed);
     }
 
     [Fact]
@@ -114,18 +124,44 @@ public class IdempotenceTests
     [Fact]
     public void Plan_apply_plan_is_empty_for_every_custom_api_shape()
     {
-        foreach (object manifest in CustomApiManifests())
+        StatefulOrgService org = Environment(out Dictionary<string, Guid> typeIds);
+        RegistrationItem[] local = CustomApiManifests()
+            .Select(m => new RegistrationItem("custom-api", TypeOf(m), DefinitionNormalizer.NormalizeCustomApiDefinition(Json(m), Web)))
+            .ToArray();
+        foreach (RegistrationItem api in local)
         {
-            RegistrationItem Item() => new RegistrationItem("custom-api", TypeOf(manifest),
-                DefinitionNormalizer.NormalizeCustomApiDefinition(Json(manifest), Web));
-
-            RegistrationDiff diff = DiffEngine.BuildDiff(State(Item()), State(Item()));
-
-            Assert.Empty(diff.Added);
-            Assert.Empty(diff.Removed);
-            Assert.Empty(diff.Changed);
+            DataverseRegistration.UpsertCustomApi(org, typeIds, api.Definition, verbose: false);
         }
+
+        RegistrationDiff diff = DiffEngine.BuildDiff(State(local), State([.. ReadBack(org)]));
+
+        Assert.Equal(local.Length, diff.CurrentItems.Length);
+        Assert.Empty(diff.Added);
+        Assert.Empty(diff.Removed);
+        Assert.Empty(diff.Changed);
     }
+
+    private const string Assembly = "Zava.Plugins";
+
+    // An environment where the Zava.Plugins package is imported (its plugin types exist) and the messages used above
+    // have their filters.
+    private static StatefulOrgService Environment(out Dictionary<string, Guid> typeIds)
+    {
+        StatefulOrgService org = new();
+        foreach (string message in new[] { "Create", "Update", "Delete" })
+        {
+            org.SeedMessage(message, "account", "contact");
+        }
+
+        org.DefinePackage("zava_Plugins", Assembly,
+            "Zava.Plugins.AccountPlugin", "Zava.Plugins.ContactPlugin", "Zava.Plugins.GlobalPlugin", "Zava.Plugins.RecalcApi", "Zava.Plugins.PingApi");
+        org.Create(new Microsoft.Xrm.Sdk.Entity("pluginpackage") { ["name"] = "zava_Plugins", ["version"] = "1.0.0", ["content"] = "" });
+        typeIds = DataverseRegistration.GetPluginTypeIdByNameForAssemblies(org, [Assembly]);
+        return org;
+    }
+
+    private static IEnumerable<RegistrationItem> ReadBack(StatefulOrgService org) =>
+        DataverseRegistration.ReadAssembliesState(org, [Assembly], Web).Items;
 
     [Fact]
     public void Normalize_custom_api_is_a_fixed_point_for_every_shape()

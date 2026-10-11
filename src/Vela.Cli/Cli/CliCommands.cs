@@ -89,7 +89,7 @@ internal static class CliCommands
 
     private static readonly string[] ExitCodeNotes =
     [
-        "Exit codes: 0 success, 2 invalid arguments, 3 file not found, 4 error (incl. --strict), 5 drift (models --verify),",
+        "Exit codes: 0 success, 2 invalid arguments, 3 file not found, 4 error (incl. --strict), 5 drift (models --verify, apply not converged),",
         "6 connection failure, 7 partial apply (re-run apply), 8 changes pending (plan --detailed-exitcode only).",
     ];
 

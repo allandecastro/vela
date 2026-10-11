@@ -41,6 +41,14 @@ internal sealed class FakeOrgService : IOrganizationService
     /// after the server executed it), so the one-by-one fallback replays writes that already landed.</summary>
     public bool ThrowAfterBatchRuns { get; set; }
 
+    /// <summary>When true, an <see cref="ExecuteMultipleRequest"/> RUNS but its response carries no item at all, so no
+    /// request has a known outcome.</summary>
+    public bool OmitResponseItems { get; set; }
+
+    /// <summary>The plugin packages' stored files (written by a pluginpackage create/update with `content`, or seeded),
+    /// served through InitializeFileBlocksDownload / DownloadBlock.</summary>
+    public PackageFileStore PackageFiles { get; } = new();
+
     /// <summary>Routes <see cref="RetrieveMultiple"/> by entity name; the default lambda returns an empty page.</summary>
     public void RouteRetrieveMultiple(Func<string, EntityCollection> byEntity)
         => OnRetrieveMultiple = q => byEntity(q.EntityName);
@@ -65,13 +73,16 @@ internal sealed class FakeOrgService : IOrganizationService
 
         Created.Add(entity);
         Writes.Add("create:" + entity.LogicalName);
-        return OnCreate(entity);
+        Guid id = OnCreate(entity);
+        PackageFiles.StoreUpload(id, entity);
+        return id;
     }
 
     public void Update(Entity entity)
     {
         Updated.Add(entity);
         Writes.Add("update:" + entity.LogicalName);
+        PackageFiles.StoreUpload(entity.Id, entity);
     }
 
     /// <summary>Called before a delete is recorded; throw from it to fault that delete.</summary>
@@ -96,6 +107,11 @@ internal sealed class FakeOrgService : IOrganizationService
     public OrganizationResponse Execute(OrganizationRequest request)
     {
         Executed.Add(request);
+        if (PackageFiles.TryExecute(request, out OrganizationResponse fileResponse))
+        {
+            return fileResponse;
+        }
+
         return request switch
         {
             ExecuteMultipleRequest batch => RunExecuteMultiple(batch),
@@ -152,7 +168,7 @@ internal sealed class FakeOrgService : IOrganizationService
 
         ExecuteMultipleResponse response = new ExecuteMultipleResponse();
         response.Results["IsFaulted"] = faulted;
-        response.Results["Responses"] = items;
+        response.Results["Responses"] = OmitResponseItems ? new ExecuteMultipleResponseItemCollection() : items;
         return response;
     }
 

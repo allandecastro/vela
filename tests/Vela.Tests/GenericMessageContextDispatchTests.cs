@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Vela.Tests
 {
-    // Proves Phase 1: a permissive OnMessage(...) step bound with the generic Handler<TRequest>(...) overload gets a
+    // Proves Phase 1: a permissive OnMessage<TMessage>() step bound with the generic Handler<TRequest>(...) overload gets a
     // strongly-typed ctx.Request (and, at post-stage, ctx.Response) without a hand-authored per-message context. The
     // request type is any OrganizationRequest-derived type with a parameterless ctor; dispatch resolves it from the
     // handler method's parameter (IMessagePreContext<TRequest> / IMessagePostContext<TRequest>) and builds the
@@ -43,7 +43,7 @@ namespace Vela.Tests
             public PostProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle<DoThingRequest>(OnDoThing);
+                => RegisterStep().OnMessage<DoThingRequest>().PostOperation().Sync().Handle<DoThingRequest>(OnDoThing);
 
             private void OnDoThing(IMessagePostContext<DoThingRequest> ctx)
             {
@@ -59,7 +59,7 @@ namespace Vela.Tests
             public PreProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnMessage(CustomMessage).PreOperation().Sync().Handle<DoThingRequest>(OnDoThing);
+                => RegisterStep().OnMessage<DoThingRequest>().PreOperation().Sync().Handle<DoThingRequest>(OnDoThing);
 
             private void OnDoThing(IMessagePreContext<DoThingRequest> ctx)
                 => CapturedPayload = ctx.Request.Payload;   // typed, inferred, Request-side data in pre
@@ -78,7 +78,7 @@ namespace Vela.Tests
             public TypedTargetPostProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle<DoThingRequest>(OnDoThing);
+                => RegisterStep().OnMessage<DoThingRequest>().PostOperation().Sync().Handle<DoThingRequest>(OnDoThing);
 
             private void OnDoThing(IMessagePostContext<DoThingRequest, TestAccount> ctx)
             {
@@ -97,7 +97,7 @@ namespace Vela.Tests
             public TypedTargetPreProbe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnMessage(CustomMessage).PreOperation().Sync().Handle<DoThingRequest>(OnDoThing);
+                => RegisterStep().OnMessage<DoThingRequest>().PreOperation().Sync().Handle<DoThingRequest>(OnDoThing);
 
             private void OnDoThing(IMessagePreContext<DoThingRequest, TestAccount> ctx)
             {

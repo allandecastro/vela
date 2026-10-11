@@ -219,11 +219,15 @@ public sealed class PluginHelpersCoverageTests
     public void Tracing_service_handles_a_null_request_name()
     {
         Mock<ILocalPluginContext> ctx = TraceContext();
-        ctx.Setup(c => c.Trace(It.IsAny<string>(), It.IsAny<object[]>()));
+        List<string> lines = new List<string>();
+        ctx.Setup(c => c.Trace(It.IsAny<string>(), It.IsAny<object[]>()))
+            .Callback<string, object[]>((format, args) => lines.Add(string.Format(format, args)));
         Mock<IOrganizationService> inner = new Mock<IOrganizationService>();
-        inner.Setup(s => s.Execute(It.IsAny<OrganizationRequest>())).Returns(new OrganizationResponse());
+        OrganizationResponse response = new OrganizationResponse();
+        inner.Setup(s => s.Execute(It.IsAny<OrganizationRequest>())).Returns(response);
 
         TracingOrganizationService svc = new TracingOrganizationService(inner.Object, ctx.Object, "S");
-        Assert.NotNull(svc.Execute(new OrganizationRequest())); // RequestName null -> "UnknownRequest"
+        Assert.Same(response, svc.Execute(new OrganizationRequest()));
+        Assert.Equal("Dataverse.Execute start scope=S depth=1 request=UnknownRequest", lines[0]); // RequestName null
     }
 }

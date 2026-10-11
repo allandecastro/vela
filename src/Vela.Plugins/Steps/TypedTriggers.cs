@@ -51,6 +51,19 @@ namespace Vela.Steps
             "WinQuote",
             "ModifyAccess",
             "Merge",
+            "AddItemCampaign",
+            "RemoveItemCampaign",
+            "Recalculate",
+            "LockSalesOrderPricing",
+            "UnlockSalesOrderPricing",
+            "LockInvoicePricing",
+            "UnlockInvoicePricing",
+            "Reschedule",
+            "ImmediateBook",
+            "SendTemplate",
+            "SendFax",
+            "AddProductToKit",
+            "RemoveProductFromKit",
         };
 
         /// <summary>The typed trigger of <paramref name="message"/> (<c>On{Name}</c>), or null when it has none.</summary>

@@ -15,24 +15,34 @@ namespace Vela.Steps
     /// <remarks>
     /// Read from the <c>sdkmessagerequest</c> table of a Dataverse dev environment (9.2, 2026-10-09): every public
     /// request whose name is not itself an <c>sdkmessage</c>, with the table its request is bound to (null when it is
-    /// not bound to one). A request name that is also an sdkmessage name (<c>SetState</c>, <c>Create</c>, ...) is not
-    /// listed, as a step on it is registered under that same name, except the modelled messages bound to a single
-    /// table, listed for their table only. Several request names share one sdkmessage (<c>Win</c> serves both
+    /// not bound to one). A request name that is also an sdkmessage name (<c>Create</c>, ...) is not listed, as a step
+    /// on it is registered under that same name, except the modelled messages bound to a single table, listed for their
+    /// table only, and <c>SetState</c>: its request also lives under <c>SetStateDynamicEntity</c>, and a step on the
+    /// <c>SetState</c> sdkmessage never fires, so <c>On&lt;SetStateRequest&gt;()</c> registers on
+    /// <c>SetStateDynamicEntity</c> (verified live: a <c>SetStateRequest</c> fires that step with its typed
+    /// <c>EntityMoniker</c>, <c>State</c> and <c>Status</c>). Only a type pinned with <c>[SdkMessage("SetState")]</c>
+    /// still lands on <c>SetState</c> (analyzer VELA022). A request type outside this table states its sdkmessage with
+    /// <c>[SdkMessage("...")]</c> (<c>Vela.Messages</c>). Several request names share one sdkmessage (<c>Win</c> serves both
     /// <c>WinOpportunity</c> and <c>WinQuote</c>); the step's table tells them apart, so the runtime keeps the request
     /// name to build the right typed context. Verified live through deployed steps on every modelled message
     /// (MessageName and PrimaryEntityName as listed here, PrimaryEntityId always empty): the queue messages run on
     /// <c>queueitem</c> whatever their Target.
     /// </remarks>
-    internal static class SdkMessageNames
+    internal static partial class SdkMessageNames
     {
         private static readonly Dictionary<string, Entry> ByRequestName = new Dictionary<string, Entry>(StringComparer.OrdinalIgnoreCase)
         {
             // Modelled messages whose name is the sdkmessage, listed for the single table they run on.
+            ["AddProductToKit"] = new Entry("AddProductToKit", "product"),
             ["AddToQueue"] = new Entry("AddToQueue", "queueitem"),
             ["ConvertSalesOrderToInvoice"] = new Entry("ConvertSalesOrderToInvoice", "salesorder"),
             ["GenerateQuoteFromOpportunity"] = new Entry("GenerateQuoteFromOpportunity", "quote"),
+            ["ImmediateBook"] = new Entry("ImmediateBook", "appointment"),
+            ["LockInvoicePricing"] = new Entry("LockInvoicePricing", "invoice"),
+            ["LockSalesOrderPricing"] = new Entry("LockSalesOrderPricing", "salesorder"),
             ["PickFromQueue"] = new Entry("PickFromQueue", "queueitem"),
             ["QualifyLead"] = new Entry("QualifyLead", "lead"),
+            ["Recalculate"] = new Entry("Recalculate", "goal"),
             ["ReleaseToQueue"] = new Entry("ReleaseToQueue", "queueitem"),
             ["RemoveFromQueue"] = new Entry("RemoveFromQueue", "queueitem"),
             ["RouteTo"] = new Entry("RouteTo", "queueitem"),
@@ -149,6 +159,7 @@ namespace Vela.Steps
             ["SetParentBusinessUnit"] = new Entry("SetParent", "businessunit"),
             ["SetParentSystemUser"] = new Entry("SetParent", "systemuser"),
             ["SetParentTeam"] = new Entry("SetParent", "team"),
+            ["SetState"] = new Entry("SetStateDynamicEntity", null),
             ["TransformImport"] = new Entry("Transform", "import"),
             ["UnpublishDuplicateRule"] = new Entry("Unpublish", "duplicaterule"),
             ["UpdateUserSettingsSystemUser"] = new Entry("UpdateUserSettings", "systemuser"),

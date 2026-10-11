@@ -13,7 +13,7 @@ using Xunit;
 namespace Vela.Tests
 {
     // Proves the runtime dispatch builds the right per-message context for every modelled message (each arm of
-    // EntityPluginBase.BuildTypedContext), and that a permissive OnMessage(...) step binds and runs an untyped
+    // EntityPluginBase.BuildTypedContext), and that a permissive OnMessage<TMessage>() step binds and runs an untyped
     // handler. One plugin registers a step for every modelled message any table accepts plus a custom message, and
     // one plugin per table covers the messages Dataverse accepts on a single table (OnSendEmail() on email, ...).
     // Each step is bound to a single ILocalPluginContext handler (assignable to every typed context by
@@ -23,6 +23,11 @@ namespace Vela.Tests
         private sealed class AllMessagesProbe : EntityPluginBase<TestAccount>
         {
             public const string CustomMessage = "vela_custom";
+
+            [CustomMessage(CustomMessage)]
+            private sealed class CustomMarker
+            {
+            }
 
             public string? Seen { get; private set; }
 
@@ -44,9 +49,13 @@ namespace Vela.Tests
                 RegisterStep().OnModifyAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRevokeAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnMessage<CustomMarker>().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrievePrincipalAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnReschedule().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnUnlockSalesOrderPricing().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnUnlockInvoicePricing().PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnRemoveProductFromKit().PostOperation().Sync().Handle(OnAny);
             }
 
             // Bound to every step: contravariantly assignable to each Action<I{Msg}Context<TestAccount>> and to
@@ -71,6 +80,10 @@ namespace Vela.Tests
         [InlineData(PluginMessages.Assign)]
         [InlineData(PluginMessages.RetrievePrincipalAccess)]
         [InlineData(PluginMessages.RetrieveSharedPrincipalsAndAccess)]
+        [InlineData(PluginMessages.Reschedule)]
+        [InlineData(PluginMessages.UnlockSalesOrderPricing)]
+        [InlineData(PluginMessages.UnlockInvoicePricing)]
+        [InlineData(PluginMessages.RemoveProductFromKit)]
         [InlineData(AllMessagesProbe.CustomMessage)]
         public void Each_message_dispatches_to_its_handler(string message)
         {
@@ -128,6 +141,15 @@ namespace Vela.Tests
             { "CancelContract", "Cancel", "contract" },
             { "CloneContract", "Clone", "contract" },
             { "WinQuote", "Win", "quote" },
+            { "AddItemCampaign", "AddItem", "campaign" },
+            { "RemoveItemCampaign", "RemoveItem", "campaign" },
+            { "Recalculate", "Recalculate", "goal" },
+            { "LockSalesOrderPricing", "LockSalesOrderPricing", "salesorder" },
+            { "LockInvoicePricing", "LockInvoicePricing", "invoice" },
+            { "ImmediateBook", "ImmediateBook", "appointment" },
+            { "SendTemplate", "Send", "template" },
+            { "SendFax", "Send", "fax" },
+            { "AddProductToKit", "AddProductToKit", "product" },
         };
 
         [Fact]
@@ -155,11 +177,14 @@ namespace Vela.Tests
         // step's TEntity (the message is relationship-global), so a sync step must still match. Before the fix this
         // threw "Plugin '...' has no registered step matching message 'Associate'." A non-matching primary entity
         // reproduces the real pipeline; the earlier Each_message test masked it by driving Associate with the
-        // step's own entity.
+        // step's own entity. The other global messages (sdkmessagefilter "none") match the same way.
         [Theory]
         [InlineData(PluginMessages.Associate)]
         [InlineData(PluginMessages.Disassociate)]
-        public void Relationship_message_dispatches_when_primary_entity_does_not_match_the_step_entity(string message)
+        [InlineData(PluginMessages.UnlockSalesOrderPricing)]
+        [InlineData(PluginMessages.UnlockInvoicePricing)]
+        [InlineData(PluginMessages.RemoveProductFromKit)]
+        public void Global_message_dispatches_when_primary_entity_does_not_match_the_step_entity(string message)
         {
             AllMessagesProbe probe = new AllMessagesProbe();
 
@@ -253,6 +278,13 @@ namespace Vela.Tests
             [EntityLogicalName("list")] public sealed class List() : Entity("list");
             [EntityLogicalName("incident")] public sealed class Incident() : Entity("incident");
             [EntityLogicalName("contract")] public sealed class Contract() : Entity("contract");
+            [EntityLogicalName("campaign")] public sealed class Campaign() : Entity("campaign");
+            [EntityLogicalName("goal")] public sealed class Goal() : Entity("goal");
+            [EntityLogicalName("invoice")] public sealed class Invoice() : Entity("invoice");
+            [EntityLogicalName("appointment")] public sealed class Appointment() : Entity("appointment");
+            [EntityLogicalName("template")] public sealed class Template() : Entity("template");
+            [EntityLogicalName("fax")] public sealed class Fax() : Entity("fax");
+            [EntityLogicalName("product")] public sealed class Product() : Entity("product");
         }
 
         private static class TableProbe
@@ -269,6 +301,13 @@ namespace Vela.Tests
                 "list" => new TableProbe<TableEntity.List>(trigger),
                 "incident" => new TableProbe<TableEntity.Incident>(trigger),
                 "contract" => new TableProbe<TableEntity.Contract>(trigger),
+                "campaign" => new TableProbe<TableEntity.Campaign>(trigger),
+                "goal" => new TableProbe<TableEntity.Goal>(trigger),
+                "invoice" => new TableProbe<TableEntity.Invoice>(trigger),
+                "appointment" => new TableProbe<TableEntity.Appointment>(trigger),
+                "template" => new TableProbe<TableEntity.Template>(trigger),
+                "fax" => new TableProbe<TableEntity.Fax>(trigger),
+                "product" => new TableProbe<TableEntity.Product>(trigger),
                 _ => throw new ArgumentOutOfRangeException(nameof(table), table, null),
             };
         }
@@ -319,6 +358,15 @@ namespace Vela.Tests
                     case "CancelContract": step.OnCancelContract().PostOperation().Sync().Handle(OnAny); break;
                     case "CloneContract": step.OnCloneContract().PostOperation().Sync().Handle(OnAny); break;
                     case "WinQuote": step.OnWinQuote().PostOperation().Sync().Handle(OnAny); break;
+                    case "AddItemCampaign": step.OnAddItemCampaign().PostOperation().Sync().Handle(OnAny); break;
+                    case "RemoveItemCampaign": step.OnRemoveItemCampaign().PostOperation().Sync().Handle(OnAny); break;
+                    case "Recalculate": step.OnRecalculate().PostOperation().Sync().Handle(OnAny); break;
+                    case "LockSalesOrderPricing": step.OnLockSalesOrderPricing().PostOperation().Sync().Handle(OnAny); break;
+                    case "LockInvoicePricing": step.OnLockInvoicePricing().PostOperation().Sync().Handle(OnAny); break;
+                    case "ImmediateBook": step.OnImmediateBook().PostOperation().Sync().Handle(OnAny); break;
+                    case "SendTemplate": step.OnSendTemplate().PostOperation().Sync().Handle(OnAny); break;
+                    case "SendFax": step.OnSendFax().PostOperation().Sync().Handle(OnAny); break;
+                    case "AddProductToKit": step.OnAddProductToKit().PostOperation().Sync().Handle(OnAny); break;
                     default: throw new ArgumentOutOfRangeException(nameof(trigger), trigger, null);
                 }
             }

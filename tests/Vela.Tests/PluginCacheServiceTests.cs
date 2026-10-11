@@ -15,32 +15,28 @@ public sealed class PluginCacheServiceTests
     [Fact]
     public void GetOrCreate_CachesValue_UntilExpiration()
     {
-        PluginCacheService cache = new PluginCacheService();
+        // A manual clock: the boundary is checked exactly, with no sleep a slow runner could overshoot.
+        DateTimeOffset now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        PluginCacheService cache = new PluginCacheService(PluginCacheService.DefaultMaxEntries, () => now);
+        TimeSpan ttl = TimeSpan.FromSeconds(30);
         int calls = 0;
 
-        int first = cache.GetOrCreate("account:score", TimeSpan.FromMilliseconds(40), () =>
-        {
-            calls++;
-            return 42;
-        });
+        int first = cache.GetOrCreate("account:score", ttl, () => { calls++; return 42; });
 
-        int second = cache.GetOrCreate("account:score", TimeSpan.FromMilliseconds(40), () =>
-        {
-            calls++;
-            return 99;
-        });
+        now = now.AddSeconds(30).AddTicks(-1); // one tick before expiry: still cached
+        int beforeExpiry = cache.GetOrCreate("account:score", ttl, () => { calls++; return 99; });
 
-        Thread.Sleep(70);
-
-        int third = cache.GetOrCreate("account:score", TimeSpan.FromMilliseconds(40), () =>
-        {
-            calls++;
-            return 100;
-        });
+        now = now.AddTicks(1); // exactly at expiry: an entry is live only while ExpiresAt > now, so it is rebuilt
+        int atExpiry = cache.GetOrCreate("account:score", ttl, () => { calls++; return 100; });
 
         Assert.Equal(42, first);
-        Assert.Equal(42, second);
-        Assert.Equal(100, third);
+        Assert.Equal(42, beforeExpiry);
+        Assert.Equal(100, atExpiry);
+        Assert.Equal(2, calls);
+
+        // The rebuilt entry carries a fresh TTL from the moment it was built.
+        now = now.AddSeconds(29);
+        Assert.Equal(100, cache.GetOrCreate("account:score", ttl, () => { calls++; return -1; }));
         Assert.Equal(2, calls);
     }
 
@@ -307,12 +303,13 @@ public sealed class PluginCacheServiceTests
     public void GetOrCreate_SweepsExpiredEntries_BeforeEvictingLiveOnes()
     {
         // With expired entries present, the over-cap sweep drops those first, so the live entries survive.
-        PluginCacheService cache = new PluginCacheService(maxEntries: 3);
+        DateTimeOffset now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        PluginCacheService cache = new PluginCacheService(3, () => now);
 
         cache.GetOrCreate("live:a", TimeSpan.FromMinutes(5), () => 1);
         cache.GetOrCreate("live:b", TimeSpan.FromMinutes(5), () => 2);
-        cache.GetOrCreate("stale:a", TimeSpan.FromMilliseconds(20), () => 3);
-        Thread.Sleep(50); // stale:a is now expired but still resident (lazy expiry)
+        cache.GetOrCreate("stale:a", TimeSpan.FromSeconds(20), () => 3);
+        now = now.AddSeconds(20); // stale:a is now exactly at expiry (expired) but still resident (lazy expiry)
 
         // This insert pushes count over the cap; the sweep should drop the expired stale:a, sparing the live ones.
         cache.GetOrCreate("live:c", TimeSpan.FromMinutes(5), () => 4);
