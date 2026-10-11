@@ -200,7 +200,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void A_cyclic_business_unit_tree_denies_deep_access_instead_of_looping()
+        public async Task A_cyclic_business_unit_tree_denies_deep_access_instead_of_looping()
         {
             // SubBu and OtherBu name each other as parent; Alice's Deep grant from SalesBu never reaches either.
             Guid record = Guid.NewGuid();
@@ -215,10 +215,13 @@ namespace Vela.Testing.Tests
                     .User(Stranger, SubBu))
                 .Seed(AccountOwnedBy(record, Stranger, SubBu));
 
-            Task<Exception?> read = Task.Run(() => Record.Exception(() => svc.Retrieve("account", record, new ColumnSet("name"))));
+            // Run off the test thread with a deadline, so a mutant that loops on the cycle fails the test instead of
+            // hanging the run.
+            Task<Exception?> read = Task.Run<Exception?>(() => Record.Exception(() => svc.Retrieve("account", record, new ColumnSet("name"))));
 
-            Assert.True(read.Wait(TimeSpan.FromSeconds(10)), "the business-unit walk did not terminate on a cycle");
-            Assert.IsType<FaultException<OrganizationServiceFault>>(read.Result);
+            Task finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(10)));
+            Assert.True(finished == read, "the business-unit walk did not terminate on a cycle");
+            Assert.IsType<FaultException<OrganizationServiceFault>>(await read);
         }
 
         // ---- Rollback restores what existed before the transaction ------------------------------------------
