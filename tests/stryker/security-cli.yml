@@ -1,0 +1,13 @@
+# Mutation area: role generation in the CLI (the metadata-to-code generator and the privilege mapper). Run from
+# tests/Vela.Cli.Tests. A full-output snapshot test pins the emitted strings; break is held at the 80 floor (the
+# remaining survivors are equivalent whitespace/statement mutations of the generated text).
+stryker-config:
+  project: Vela.Cli.csproj
+  mutate:
+    - "**/RoleGenerator.cs"
+    - "**/RolePrivilegeMapper.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 90
+    low: 80
+    break: 80

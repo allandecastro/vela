@@ -34,5 +34,17 @@
     <ProjectReference Include="..\SamplePluginFixture\SamplePluginFixture.csproj" />
     <!-- Its counterpart: a non-introspectable plugin assembly, to cover the BuildIntrospectionFailure path. -->
     <ProjectReference Include="..\BrokenPluginFixture\BrokenPluginFixture.csproj" />
+    <!-- The CLI/framework contract fixture: a net462 plugin assembly on the real Vela.Plugins. Built first but not
+         referenced (net462); PluginContractScanTests packs its output folder, located through the assembly metadata
+         below, into a .nupkg and scans it with the CLI's PackageScanner. -->
+    <ProjectReference Include="..\ContractPluginFixture\ContractPluginFixture.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ContractPluginFixtureDir</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)../ContractPluginFixture/bin/$(Configuration)/net462/</_Parameter2>
+    </AssemblyAttribute>
+    <None Include="..\contracts\plugin-contract.golden.json" Link="contracts\plugin-contract.golden.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

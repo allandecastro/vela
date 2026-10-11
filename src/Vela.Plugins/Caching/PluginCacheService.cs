@@ -33,6 +33,7 @@ namespace Vela.Caching
             new ConcurrentDictionary<string, Slot>(StringComparer.Ordinal);
 
         private readonly int _maxEntries;
+        private readonly Func<DateTimeOffset> _clock;
         private long _sequence;
 
         /// <summary>
@@ -48,6 +49,12 @@ namespace Vela.Caching
         /// </summary>
         /// <param name="maxEntries">Maximum number of live entries (must be at least 1).</param>
         public PluginCacheService(int maxEntries)
+            : this(maxEntries, () => DateTimeOffset.UtcNow)
+        {
+        }
+
+        // Testability hook: the clock that stamps and checks expiry, so TTL tests advance time instead of sleeping.
+        internal PluginCacheService(int maxEntries, Func<DateTimeOffset> clock)
         {
             if (maxEntries < 1)
             {
@@ -55,6 +62,7 @@ namespace Vela.Caching
             }
 
             _maxEntries = maxEntries;
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         }
 
         /// <summary>Gets the maximum number of live entries this cache retains.</summary>
@@ -99,7 +107,7 @@ namespace Vela.Caching
                     throw;
                 }
 
-                if (entry.ExpiresAtUtc > DateTimeOffset.UtcNow)
+                if (entry.ExpiresAtUtc > _clock())
                 {
                     return Cast<T>(entry, key);
                 }
@@ -168,7 +176,7 @@ namespace Vela.Caching
         {
             long sequence = Interlocked.Increment(ref _sequence);
             Lazy<CacheEntry> lazy = new Lazy<CacheEntry>(
-                () => new CacheEntry(factory(), DateTimeOffset.UtcNow.Add(ttl)),
+                () => new CacheEntry(factory(), _clock().Add(ttl)),
                 LazyThreadSafetyMode.ExecutionAndPublication);
             return new Slot(lazy, sequence);
         }
@@ -183,7 +191,7 @@ namespace Vela.Caching
 
             // First pass: drop materialized entries that have already expired. Skip pending (not-yet-built) slots so
             // the sweep never forces a factory to run, and drop a slot whose factory threw (a poisoned Lazy).
-            DateTimeOffset now = DateTimeOffset.UtcNow;
+            DateTimeOffset now = _clock();
             foreach (KeyValuePair<string, Slot> pair in _cache)
             {
                 if (_cache.Count <= _maxEntries)

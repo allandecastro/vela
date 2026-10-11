@@ -636,6 +636,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   publish`.
 - **The scan no longer accepts a non-array `GetStepDefinitions()` result.** A single returned object used to be
   wrapped into a one-element set (a pre-array framework shape); it now fails the scan with a clear message.
+- **An `apply` that does not converge exits 5 (#445).** After its writes, `apply` re-reads the environment; when it
+  still differs from the packages (the platform ignored or normalized a value), the run used to print a note and exit
+  0, so CI went green on an environment the next `apply` would change again. It now exits 5 (drift), with mode
+  `apply-not-converged` and the remaining diff in `summary` / `diff`.
 
 ### Added (CLI)
 
@@ -697,6 +701,25 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **`apply` convergence and reporting gaps (#445).**
+  - A step declared `.Disabled()` no longer runs enabled while `apply` writes the other components, and the step
+    state is written with `Update` instead of the deprecated `SetStateRequest`. An existing step gets its state in the
+    same update as its other columns. Dataverse ignores `statecode` on create (verified live: the step reads back
+    enabled), so a new disabled step is updated to inactive right after its create, in the same `ExecuteMultiple`
+    request, rather than after every other step and Custom API. Verified end to end through `vela apply`.
+  - A step whose table is removed (it becomes global) has its message filter cleared. The update left the old
+    filter in place, so every later plan showed the same change (clearing it verified live).
+  - A batched write with no response item is reported as failed (outcome unknown), not as applied.
+  - When a whole `ExecuteMultiple` request fails and the one-by-one replay fails too, the report and the resume
+    summary keep the batch-level error (an expired token, a timeout) next to the replay's fault.
+  - A removed Custom API is re-checked right before its delete and is deleted only while a plugin type of the
+    applied assemblies still implements it, as the detach before a rename already did.
+- **`plan` and `apply` read large environments without hitting query limits (#452).** The live read put every
+  plugin type, step, secure configuration, Custom API and solution component id in a single `In` condition, one SQL
+  parameter per value, so an assembly with thousands of steps could exceed SQL Server's 2100-parameter cap. The read
+  now splits each list into chunks of 500. Recognizing the platform-managed step of a Custom API no longer reads
+  every `customapi` in the environment once per assembly: only the messages of main-operation steps are looked up,
+  and nothing is read when there are none.
 - **The scaffolded README and next steps pass `--solution` to `plan` and `apply`.** They showed both commands without
   it, and on the scaffolded package (`Zava.Plugins`, which has no publisher prefix) both fail with exit 4.
 

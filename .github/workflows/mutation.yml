@@ -1,656 +1,142 @@
 name: Mutation Testing
 
-# Mutation testing (Stryker.NET) is much slower than the unit suite, so it does NOT run on every PR: it runs
-# weekly and on demand. Each job mutates a correctness core and publishes the rendered report to the run summary
-# plus an HTML artifact.
+# Mutation testing (Stryker.NET) of the correctness cores, split into areas. tests/stryker/areas.json lists them
+# (the test project each runs from, its timeout, the source paths it covers), and tests/stryker/<area>.yml holds each
+# area's Stryker configuration: the files it mutates, its thresholds and why they sit where they do. See
+# docs/advanced/mutation-testing.md.
 #
-# Jobs run on GitHub-hosted windows-latest runners (reliable for long runs, unlike the personal self-hosted box
-# that can sleep or drop its connection mid-run). The harness (net462) needs Windows, and Stryker's VsTest
-# launches an x64 test host, which windows-latest (x64) provides. The diff-engine's explicit x64-runtime install
-# below is a leftover from the arm64 self-hosted runner; harmless on x64.
+# - Weekly and on demand: every area, on all of its files, gated by the area's `break` threshold.
+# - On a pull request: only the areas whose files the PR changes, and only the mutants of the changed files
+#   (`--since:main`), gated at the 80 floor. An incremental run scores a handful of mutants, so it is gated at the
+#   floor rather than at the area's ratcheted threshold.
+#
+# Stryker is pinned in .config/dotnet-tools.json (`dotnet tool restore`), so a Stryker release cannot move the scores
+# on its own. Every job runs on the self-hosted Windows runner, like ci.yml, to avoid GitHub Actions billing: the
+# net462 projects only build on Windows. The runner is a single machine, so the areas run one after another.
 on:
   workflow_dispatch:
   schedule:
     - cron: '0 4 * * 1' # Mondays 04:00 UTC
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/stryker/**'
 
-# Use Windows PowerShell 5.1 (always present) rather than pwsh: the runner's pwsh is the WindowsApps stub,
-# which the service account can't execute ("EACCES ... pwsh.EXE"), intermittently failing steps.
+# A newer push to the same PR cancels its running mutation jobs; scheduled and manual runs never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+# Windows PowerShell 5.1 is always present on the Windows runner (its pwsh is the WindowsApps stub, which the service
+# account can't execute), so it is the default shell for run steps.
 defaults:
   run:
     shell: powershell
 
 jobs:
-  diff-engine:
-    runs-on: windows-latest
-    timeout-minutes: 30 # a normal run is ~12min; cap a hung restore/build (the runner is a personal machine that can sleep)
+  # Picks the areas to run: all of them, or on a pull request those whose files it changes.
+  plan:
+    # Same-repo pull requests, scheduled and manual runs only; fork PRs are skipped, like the CI workflow.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 5
+    outputs:
+      areas: ${{ steps.select.outputs.areas }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      - name: Select areas
+        id: select
+        run: |
+          if ('${{ github.event_name }}' -eq 'pull_request') {
+            git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $changed = Join-Path $env:RUNNER_TEMP 'changed.txt'
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" | Set-Content -Path $changed
+            $areas = & ./tests/stryker/select-areas.ps1 -ChangedFiles $changed
+          } else {
+            $areas = & ./tests/stryker/select-areas.ps1
+          }
+          "areas=$areas" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Areas: $areas"
+
+  mutation:
+    name: ${{ matrix.area }}
+    needs: plan
+    if: needs.plan.outputs.areas != '[]'
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.areas) }}
     env:
-      # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
+      # The service account can't write to the default install root 'C:\Program Files\dotnet', so setup-dotnet
+      # installs into the workspace instead (it adds this to PATH for the run steps).
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
     steps:
       - uses: actions/checkout@v4
+        with:
+          # --since:main diffs against main, so a pull request run needs the history back to it.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      - name: Make the base branch available as main
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/heads/main"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
       - name: Install x64 .NET runtime for the VsTest test host
         # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime so it can start
         # and expose it via DOTNET_ROOT_X64 (the arch-specific lookup the x64 apphost uses).
-        shell: powershell
         run: |
           $dir = "$env:RUNNER_TEMP\dotnet-x64"
           & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # net10-only project: no --solution, so Stryker builds just the CLI test project (+ its referenced Vela.Cli)
-      # and never drags the net462 projects into the build. --project disambiguates the mutation target: the CLI test
-      # project also references the compiled plugin fixtures (Sample/BrokenPluginFixture), so Stryker can't auto-pick.
-      - name: Mutation test - diff engine + normalizer
-        working-directory: tests/Vela.Cli.Tests
-        run: >
-          dotnet-stryker
-          --project Vela.Cli.csproj
-          --mutate "**/DiffEngine.cs" --mutate "**/DefinitionNormalizer.cs"
-          --reporter cleartext --reporter markdown --reporter html
-          --break-at 85 --threshold-low 85 --threshold-high 90
+      - name: Install Stryker (pinned in .config/dotnet-tools.json)
+        run: dotnet tool restore
+
+      - name: Mutation test - ${{ matrix.area }}
+        if: github.event_name != 'pull_request'
+        working-directory: ${{ matrix.tests }}
+        run: dotnet tool run dotnet-stryker --config-file ../stryker/${{ matrix.area }}.yml
+      - name: Mutation test - ${{ matrix.area }} (changed files only)
+        if: github.event_name == 'pull_request'
+        working-directory: ${{ matrix.tests }}
+        run: dotnet tool run dotnet-stryker --config-file ../stryker/${{ matrix.area }}.yml --since:main --break-at 80
+
+      # Dumps every survivor so the next round can keep killing rather than lowering the gate. The newest report is
+      # read: the runner's workspace persists between runs.
+      - name: List surviving mutants
+        if: always()
+        run: |
+          $f = Get-ChildItem ${{ matrix.tests }}/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $f) { Write-Host 'no json report'; exit 0 }
+          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
+          $n = 0
+          foreach ($p in $j.files.PSObject.Properties) {
+            $short = Split-Path $p.Name -Leaf
+            foreach ($m in $p.Value.mutants) {
+              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
+                $n++
+                $repl = ($m.replacement -replace '\s+', ' ')
+                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
+                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
+              }
+            }
+          }
+          Write-Host "TOTAL survivors/no-coverage: $n"
       - name: Publish report to job summary
         if: always()
         run: >
-          Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
+          Get-ChildItem ${{ matrix.tests }}/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
+          | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
       - name: Upload HTML report
         if: always()
         continue-on-error: true # artifact storage quota must not fail the mutation gate; the report is also in the summary
         uses: actions/upload-artifact@v4
         with:
-          name: mutation-report-diff-engine
-          path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  harness:
-    runs-on: windows-latest
-    timeout-minutes: 30 # a normal run is ~12min; cap a hung restore/build (the runner is a personal machine that can sleep)
-    env:
-      # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install Stryker
-        # Idempotent: the self-hosted runner persists the global tool between runs, so a plain
-        # `tool install` would fail on the second run once it is already present.
-        run: dotnet tool update -g dotnet-stryker
-      # The harness query core (operators, value comparison, FetchXML parsing). --solution lets Stryker build the
-      # net462 projects through the solution. Measured at ~91.6% after killing the behavioural survivors (NotBetween
-      # upper-bound inclusivity, FetchXML named-attribute projection, …); --break-at is ratcheted to 89 (~2pts below).
-      # The remaining survivors are equivalent mutants (exception-message strings, never-null/never-empty edges); the
-      # "List surviving mutants" step dumps them so the next round can keep killing rather than lowering the gate.
-      - name: Mutation test - in-memory harness query core
-        working-directory: tests/Vela.Testing.Tests
-        run: >
-          dotnet-stryker
-          --solution ../../Vela.sln
-          --mutate "**/InMemoryQueryEngine.cs" --mutate "**/FetchXmlParser.cs" --mutate "**/EntityValues.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 89 --threshold-low 89 --threshold-high 95
-      - name: List surviving mutants
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        run: >
-          Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true # artifact storage quota must not fail the mutation gate; the report is also in the summary
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-harness
-          path: tests/Vela.Testing.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  security-harness:
-    runs-on: windows-latest
-    timeout-minutes: 45 # more files than the query-core job
-    env:
-      # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # The opt-in security model's decision logic (roles/privileges/depth/sharing/access-teams/hierarchy/FLS,
-      # 1:N cascade config). Measured at ~86.2% after killing the real survivors; --break-at is ratcheted to 84
-      # (~2pts below), the remaining survivors being equivalents (exception-message strings, comparer internals,
-      # cycle guards). The enforcement wiring in InMemoryOrganizationService is a whole-file surface, left for a
-      # separate pass. The "List surviving mutants" step dumps what remains.
-      - name: Mutation test - harness security model
-        working-directory: tests/Vela.Testing.Tests
-        run: >
-          dotnet-stryker
-          --solution ../../Vela.sln
-          --mutate "**/Security/SecurityModel.cs" --mutate "**/Security/SharingTable.cs"
-          --mutate "**/Security/AccessTeamGrants.cs" --mutate "**/Fakes/OneToManyRegistry.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 84 --threshold-low 84 --threshold-high 90
-      - name: List surviving mutants
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        run: >
-          Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-security-harness
-          path: tests/Vela.Testing.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  security-cli:
-    runs-on: windows-latest
-    timeout-minutes: 30
-    env:
-      # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install x64 .NET runtime for the VsTest test host
-        shell: powershell
-        run: |
-          $dir = "$env:RUNNER_TEMP\dotnet-x64"
-          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
-          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # Role generation (net10, CLI): the pure metadata->code generator and the privilege mapper. A full-output
-      # snapshot test pins the generator's emitted strings; --break-at is ratcheted to 80 (the remaining survivors
-      # are equivalent whitespace/statement mutations of the generated text).
-      - name: Mutation test - role generation
-        working-directory: tests/Vela.Cli.Tests
-        run: >
-          dotnet-stryker
-          --project Vela.Cli.csproj
-          --mutate "**/RoleGenerator.cs" --mutate "**/RolePrivilegeMapper.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 80 --threshold-low 80 --threshold-high 90
-      - name: List surviving mutants
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        run: >
-          Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-security-cli
-          path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  security-enforcement:
-    runs-on: windows-latest
-    timeout-minutes: 30
-    env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # The security ENFORCEMENT wiring (DemandAccess/CanAccess, cascade delete/assign/share, FLS masking + write
-      # rejection, inherited access, share clamping, owner-BU realign, the read filter and the membership tables) is
-      # isolated in the InMemoryOrganizationService.Security.cs partial, so the gate measures only that surface - not
-      # the store's query/versioning/seed code. Measured at ~84.8% after killing the real survivors (FLS aggregate/
-      # group-by, cascade owner/scope/recursion, cascade share/unshare recursion+scope); --break-at is ratcheted to 82
-      # (~2pts below). Remaining survivors are mostly equivalent - guard-clause early returns whose downstream also
-      # guards, fault-message / entity-name strings, and owner-column removals the system field applier re-derives; the
-      # "List surviving mutants" step dumps them for future triage.
-      - name: Mutation test - enforcement wiring (InMemoryOrganizationService.Security)
-        working-directory: tests/Vela.Testing.Tests
-        run: >
-          dotnet-stryker
-          --solution ../../Vela.sln
-          --mutate "**/Fakes/InMemoryOrganizationService.Security.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 82 --threshold-low 82 --threshold-high 90
-      - name: List surviving mutants
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        shell: powershell
-        run: >
-          Get-ChildItem tests/Vela.Testing.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-security-enforcement
-          path: tests/Vela.Testing.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  cli-apply:
-    runs-on: windows-latest
-    timeout-minutes: 60 # apply reconciliation is a large net10 surface
-    env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install x64 .NET runtime for the VsTest test host
-        # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime.
-        shell: powershell
-        run: |
-          $dir = "$env:RUNNER_TEMP\dotnet-x64"
-          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
-          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # The apply reconciliation core (DataverseRegistration.Apply): package/assembly/type sync, the resume report,
-      # the stale-assembly-version guard, and the ApplyDiff step/Custom-API orchestration (create/update/delete +
-      # the ignorable-stage-fault skip), all driven through the IOrganizationService seam. net10-only, so no
-      # --solution. The web-resource branches (a work-in-progress preview) are excluded with Stryker comments.
-      # Measured at ~80.3% after covering the package publish/compare paths, the deterministic repack, the
-      # solution-scoped package import and the assembly update rules; --break-at is held at the 80 floor.
-      # The remaining survivors are equivalent (log-arg/culture/version fallbacks, polling-loop timing bounds,
-      # temp-dir path strings, columnsets the fake ignores).
-      - name: Mutation test - CLI apply reconciliation
-        working-directory: tests/Vela.Cli.Tests
-        run: >
-          dotnet-stryker
-          --project Vela.Cli.csproj
-          --mutate "**/DataverseRegistration.Apply.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 80 --threshold-low 80 --threshold-high 88
-      - name: List surviving mutants (apply)
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        shell: powershell
-        run: >
-          Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-cli-apply
-          path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  cli-customapi:
-    runs-on: windows-latest
-    timeout-minutes: 60
-    env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install x64 .NET runtime for the VsTest test host
-        # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime.
-        shell: powershell
-        run: |
-          $dir = "$env:RUNNER_TEMP\dotnet-x64"
-          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
-          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # The Custom API reconciliation core (DataverseRegistration.CustomApi): the customapi entity build, request/
-      # response parameter reconciliation (create/update/delete-orphan), the uniquename lookup, and the parameter
-      # type-code resolver - all driven through the IOrganizationService seam. Measured at ~82.7%; --break-at is
-      # ratcheted to 80. Remaining survivors are equivalent (LogOperation arg strings, the static ParameterSyncSpec
-      # record literals, and read-only ColumnSet columns).
-      - name: Mutation test - CLI Custom API reconciliation
-        working-directory: tests/Vela.Cli.Tests
-        run: >
-          dotnet-stryker
-          --project Vela.Cli.csproj
-          --mutate "**/DataverseRegistration.CustomApi.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 80 --threshold-low 80 --threshold-high 90
-      - name: List surviving mutants (custom-api)
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        shell: powershell
-        run: >
-          Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-cli-customapi
-          path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  cli-reader:
-    runs-on: windows-latest
-    timeout-minutes: 60
-    env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install x64 .NET runtime for the VsTest test host
-        # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime.
-        shell: powershell
-        run: |
-          $dir = "$env:RUNNER_TEMP\dotnet-x64"
-          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
-          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # The plan reader (DataverseRegistration.cs): reads plugin assemblies/types, steps (+ message/filter links,
-      # images, secure config) and Custom APIs (+ request/response parameters) out of Dataverse and maps them to the
-      # diff shape. Driven through the IOrganizationService seam. Measured at ~85.3%; --break-at is ratcheted to 83.
-      # The live-connection methods (CreateDataverseClient*, BuildDataverseState) carry a `// Stryker disable all`
-      # block - they construct a real ServiceClient and can't run offline.
-      - name: Mutation test - CLI plan reader
-        working-directory: tests/Vela.Cli.Tests
-        run: >
-          dotnet-stryker
-          --project Vela.Cli.csproj
-          --mutate "**/DataverseRegistration.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 83 --threshold-low 83 --threshold-high 92
-      - name: List surviving mutants (reader)
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        shell: powershell
-        run: >
-          Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-cli-reader
-          path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  cli-steps:
-    runs-on: windows-latest
-    timeout-minutes: 60
-    env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install x64 .NET runtime for the VsTest test host
-        # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime.
-        shell: powershell
-        run: |
-          $dir = "$env:RUNNER_TEMP\dotnet-x64"
-          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
-          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # The step reconciliation core (DataverseRegistration.Steps): the step entity build, step lookup by key or
-      # (message, entity, stage, mode) signature, message/filter id resolution, secure-config + state reconcile,
-      # image reconcile (create/update/delete + Create-message property), and the stage/rank/name normalizers.
-      # Driven through the IOrganizationService seam. Measured at ~89.4%; --break-at is ratcheted to 87. Remaining
-      # survivors are equivalent (LogOperation arg strings, aliased-value reads Stryker can't attribute, ternaries
-      # whose branches match on the tested inputs).
-      - name: Mutation test - CLI step reconciliation
-        working-directory: tests/Vela.Cli.Tests
-        run: >
-          dotnet-stryker
-          --project Vela.Cli.csproj
-          --mutate "**/DataverseRegistration.Steps.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 87 --threshold-low 87 --threshold-high 94
-      - name: List surviving mutants (steps)
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        shell: powershell
-        run: >
-          Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-cli-steps
-          path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
-          if-no-files-found: ignore
-
-  cli-scanner:
-    runs-on: windows-latest
-    timeout-minutes: 60
-    env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Install x64 .NET runtime for the VsTest test host
-        # The runner is arm64 but Stryker's VsTest spawns an x64 test host; install the x64 runtime.
-        shell: powershell
-        run: |
-          $dir = "$env:RUNNER_TEMP\dotnet-x64"
-          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
-          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
-      # The package scanner (PackageScanner.cs): extracts plugin .nupkg packages (lib/*.dll selection, primary
-      # pick, registrable filtering), reads nuspec id/version, and reflects over plugin/Custom-API types to read
-      # their definitions. Driven with crafted .nupkg fixtures + stub plugin types, plus PackageScannerBuildStateTests
-      # which runs BuildLocalStateFromPackages end-to-end on a real compiled plugin fixture (Sample/BrokenPluginFixture),
-      # so the former `// Stryker disable all` block is gone. Measured at ~81.6%; --break-at is ratcheted to 80.
-      - name: Mutation test - CLI package scanner
-        working-directory: tests/Vela.Cli.Tests
-        run: >
-          dotnet-stryker
-          --project Vela.Cli.csproj
-          --mutate "**/PackageScanner.cs"
-          --reporter cleartext --reporter markdown --reporter html --reporter json
-          --break-at 80 --threshold-low 80 --threshold-high 90
-      - name: List surviving mutants (scanner)
-        if: always()
-        shell: powershell
-        run: |
-          $f = Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $f) { Write-Host 'no json report'; exit 0 }
-          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-          $n = 0
-          foreach ($p in $j.files.PSObject.Properties) {
-            $short = Split-Path $p.Name -Leaf
-            foreach ($m in $p.Value.mutants) {
-              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
-                $n++
-                $repl = ($m.replacement -replace '\s+', ' ')
-                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
-                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
-              }
-            }
-          }
-          Write-Host "TOTAL survivors/no-coverage: $n"
-      - name: Publish report to job summary
-        if: always()
-        shell: powershell
-        run: >
-          Get-ChildItem tests/Vela.Cli.Tests/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
-          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-      - name: Upload HTML report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutation-report-cli-scanner
-          path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
+          name: mutation-report-${{ matrix.area }}
+          path: ${{ matrix.tests }}/StrykerOutput/**/reports/mutation-report.html
           if-no-files-found: ignore

@@ -5,6 +5,7 @@ using Microsoft.Xrm.Sdk;
 using Vela;
 using Vela.Constants;
 using Vela.Context;
+using Vela.CustomApi;
 using Vela.Querying;
 using Vela.Retry;
 using Vela.Steps;
@@ -78,7 +79,11 @@ public sealed class SmallClassesCoverageTests
     [Fact]
     public void Register_entry_points()
     {
-        Assert.NotNull(Register.RegisterCustomApi());
+        // The lightweight entry point is a fresh, independent builder each call.
+        ICustomApiBuilder first = Register.RegisterCustomApi();
+        Assert.IsType<CustomApiLightBuilder>(first);
+        Assert.NotSame(first, Register.RegisterCustomApi());
+        Assert.Equal("zava_Ping", first.UniqueName("zava_Ping").Handler(_ => { }).Build().UniqueName);
     }
 
     // ---- TypedFilterBuilder null guards --------------------------------------------------------------

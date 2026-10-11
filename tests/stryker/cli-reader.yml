@@ -1,0 +1,13 @@
+# Mutation area: the plan reader (DataverseRegistration.cs): plugin assemblies/types, steps (message/filter links,
+# images, secure config) and Custom APIs (request/response parameters) read out of Dataverse into the diff shape. Run
+# from tests/Vela.Cli.Tests. Measured at ~85.3%; break is ratcheted to 83. The live-connection methods carry a
+# `// Stryker disable all` block: they construct a real ServiceClient and can't run offline.
+stryker-config:
+  project: Vela.Cli.csproj
+  mutate:
+    - "**/DataverseRegistration.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 92
+    low: 83
+    break: 83

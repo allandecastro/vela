@@ -31,5 +31,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Vela.Plugins\Vela.Plugins.csproj" />
     <ProjectReference Include="..\..\src\Vela.Testing\Vela.Testing.csproj" />
+    <!-- The CLI/framework contract fixture and its golden file (PluginContractGoldenTests). -->
+    <ProjectReference Include="..\ContractPluginFixture\ContractPluginFixture.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\contracts\plugin-contract.golden.json" Link="contracts\plugin-contract.golden.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -86,6 +86,43 @@ public class BatchReportingTests
     }
 
     [Fact]
+    public void A_request_with_no_response_item_is_a_failure_not_a_success()   // #445
+    {
+        // With ReturnResponses every request gets an item; one without an item has no known outcome and must not be
+        // reported as applied.
+        FakeOrgService svc = Org();
+        svc.OmitResponseItems = true;
+
+        string stderr = RunCapturingStderr(() =>
+        {
+            var ex = Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a")), [], null, [], verbose: false));
+            Assert.Contains("outcome is unknown", ex.Message);
+        });
+
+        Assert.Contains($"failed at: create step {Account} (a)", stderr);
+        Assert.Contains("1 step FAILED", stderr);
+    }
+
+    [Fact]
+    public void A_failed_replay_reports_why_the_whole_batch_failed_first()   // #445
+    {
+        // The batch call fails as a whole, then the one-by-one replay fails too: the replay's fault alone would hide
+        // the root cause, so the batch-level error is carried into the report and the thrown message.
+        FakeOrgService svc = Org(onCreate: e => e.LogicalName == "sdkmessageprocessingstep"
+            ? throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault { ErrorCode = -1, Message = "rejected" }, "rejected")
+            : e.Id);
+        svc.FailWholeBatch = true;
+
+        string stderr = RunCapturingStderr(() =>
+        {
+            var ex = Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a")), [], null, [], verbose: false));
+            Assert.Contains("rejected (replayed one by one after the batch request failed: ExecuteMultiple is not supported (simulated).)", ex.Message);
+        });
+
+        Assert.Contains("after the batch request failed: ExecuteMultiple is not supported (simulated).", stderr);
+    }
+
+    [Fact]
     public void The_fake_rejects_a_duplicate_id_only_within_one_table()
     {
         // Record ids are unique per table: the same id in another table is a different record.

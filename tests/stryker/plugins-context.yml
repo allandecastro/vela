@@ -1,0 +1,17 @@
+# Mutation area: the plugin runtime context (Vela.Plugins/Context): LocalPluginContext, the typed step contexts, the
+# change/image/relationship/environment-variable helpers, AttributeValueComparer and the tracing service wrapper.
+# Run from tests/Vela.Tests, with Vela.Testing.Tests as a second test project (it drives the runtime through the
+# harness). net462: Windows only.
+stryker-config:
+  solution: ../../Vela.sln
+  project: Vela.Plugins.csproj
+  test-projects:
+    - ./Vela.Tests.csproj
+    - ../Vela.Testing.Tests/Vela.Testing.Tests.csproj
+  mutate:
+    - "**/Vela.Plugins/Context/**/*.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 90
+    low: 80
+    break: 80

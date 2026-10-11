@@ -105,7 +105,7 @@ public sealed class PluginContextExtensionsCoverageTests
     public void GetService_resolves_on_local_context_and_returns_null_otherwise()
     {
         LocalPluginContext ctx = Ctx();
-        Assert.NotNull(ctx.GetService<ITracingService>());
+        Assert.Same(ctx.TracingService, ctx.GetService<ITracingService>());
 
         // A non-LocalPluginContext implementation cannot expose the resolver.
         Assert.Null(Mock.Of<ILocalPluginContext>().GetService<ITracingService>());
@@ -114,7 +114,8 @@ public sealed class PluginContextExtensionsCoverageTests
     [Fact]
     public void GetRequiredService_resolves_on_local_context_and_throws_otherwise()
     {
-        Assert.NotNull(Ctx().GetRequiredService<ITracingService>());
+        LocalPluginContext ctx = Ctx();
+        Assert.Same(ctx.TracingService, ctx.GetRequiredService<ITracingService>());
         Assert.Throws<InvalidPluginExecutionException>(() => Mock.Of<ILocalPluginContext>().GetRequiredService<ITracingService>());
     }
 

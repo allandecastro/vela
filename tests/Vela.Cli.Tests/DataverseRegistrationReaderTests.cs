@@ -656,42 +656,6 @@ public class DataverseRegistrationReaderTests
             () => DataverseRegistration.DeleteIfExists(mock.Object, "customapi", id));
     }
 
-    // --- SyncStepState (write) -----------------------------------------------------------------
-
-    [Fact]
-    public void SyncStepState_enabled_transitions_to_active()
-    {
-        Guid stepId = Guid.NewGuid();
-        SetStateRequest? captured = null;
-        var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
-        mock.Setup(s => s.Execute(It.IsAny<OrganizationRequest>()))
-            .Callback((OrganizationRequest r) => captured = r as SetStateRequest)
-            .Returns(new OrganizationResponse());
-
-        DataverseRegistration.SyncStepState(mock.Object, stepId, enabled: true);
-
-        Assert.NotNull(captured);
-        Assert.Equal(stepId, captured!.EntityMoniker.Id);
-        Assert.Equal(0, captured.State.Value);
-        Assert.Equal(1, captured.Status.Value);
-    }
-
-    [Fact]
-    public void SyncStepState_disabled_transitions_to_inactive()
-    {
-        Guid stepId = Guid.NewGuid();
-        SetStateRequest? captured = null;
-        var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
-        mock.Setup(s => s.Execute(It.IsAny<OrganizationRequest>()))
-            .Callback((OrganizationRequest r) => captured = r as SetStateRequest)
-            .Returns(new OrganizationResponse());
-
-        DataverseRegistration.SyncStepState(mock.Object, stepId, enabled: false);
-
-        Assert.Equal(1, captured!.State.Value);
-        Assert.Equal(2, captured.Status.Value);
-    }
-
     // --- SyncStepSecureConfig (write) ----------------------------------------------------------
 
     [Fact]
@@ -1035,9 +999,12 @@ public class DataverseRegistrationReaderTests
                 };
             });
 
+        Guid ourType = Guid.NewGuid();
+        mock.Setup(s => s.Retrieve("customapi", apiId, It.IsAny<ColumnSet>()))
+            .Returns(new Entity("customapi", apiId) { ["plugintypeid"] = new EntityReference("plugintype", ourType) });
         JsonElement def = Json(new { pluginTypeName = "Zava.Plugins.MyApi", uniqueName = "zava_DoThing" });
 
-        DataverseRegistration.DeleteCustomApi(mock.Object, def);
+        DataverseRegistration.DeleteCustomApi(mock.Object, def, new Dictionary<string, Guid> { ["Zava.Plugins.MyApi"] = ourType });
 
         mock.Verify(s => s.Delete("customapirequestparameter", reqParamId), Times.Once);
         mock.Verify(s => s.Delete("customapiresponseproperty", respParamId), Times.Once);
@@ -1050,8 +1017,30 @@ public class DataverseRegistrationReaderTests
         var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
         mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>())).Returns(new EntityCollection());
 
-        DataverseRegistration.DeleteCustomApi(mock.Object, Json(new { uniqueName = "zava_Absent" }));
+        DataverseRegistration.DeleteCustomApi(mock.Object, Json(new { uniqueName = "zava_Absent" }), new Dictionary<string, Guid>());
 
+        mock.Verify(s => s.Delete(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Theory]   // #445
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DeleteCustomApi_refuses_an_api_no_longer_implemented_by_our_types(bool implementedElsewhere)
+    {
+        // The unique name is environment-wide: between the read and the delete another solution can take the API over
+        // (or detach it). It is re-checked right before the delete, as the detach does, and never deleted then.
+        Guid apiId = Guid.NewGuid();
+        var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
+        mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
+            .Returns((QueryBase q) => (q as QueryExpression)?.EntityName == "customapi" ? Collection(new Entity("customapi", apiId)) : new EntityCollection());
+        mock.Setup(s => s.Retrieve("customapi", apiId, It.IsAny<ColumnSet>()))
+            .Returns(new Entity("customapi", apiId) { ["plugintypeid"] = implementedElsewhere ? new EntityReference("plugintype", Guid.NewGuid()) : null });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.DeleteCustomApi(
+            mock.Object, Json(new { pluginTypeName = "Zava.Plugins.MyApi", uniqueName = "zava_DoThing" }),
+            new Dictionary<string, Guid> { ["Zava.Plugins.MyApi"] = Guid.NewGuid() }));
+
+        Assert.Contains("will not delete it", ex.Message);
         mock.Verify(s => s.Delete(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
     }
 

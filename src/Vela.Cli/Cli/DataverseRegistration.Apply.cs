@@ -128,8 +128,8 @@ internal static partial class DataverseRegistration
         StepMetadataCache metadataCache = new StepMetadataCache();
 
         // Custom APIs and steps are written via chunked ExecuteMultiple, dependency-tiered so a child never precedes
-        // its just-created parent: tier 1 upserts the step/custom-API rows, tier 2 writes their images, parameters,
-        // response properties, secure config and state.
+        // its just-created parent: tier 1 upserts the step/custom-API rows (and disables a just-created step, see
+        // ApplyUpsertsBatched), tier 2 writes their images, parameters, response properties and secure config.
         ApplyUpsertsBatched(service, solutionUniqueName, pluginTypeIds, addedApis, changedApis, addedSteps, changedSteps,
             customApiSolutionPrefix, secureConfigByStepKey, metadataCache, verbose, batchChunkSize, progress);
 

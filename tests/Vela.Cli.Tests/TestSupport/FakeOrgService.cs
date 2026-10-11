@@ -41,6 +41,10 @@ internal sealed class FakeOrgService : IOrganizationService
     /// after the server executed it), so the one-by-one fallback replays writes that already landed.</summary>
     public bool ThrowAfterBatchRuns { get; set; }
 
+    /// <summary>When true, an <see cref="ExecuteMultipleRequest"/> RUNS but its response carries no item at all, so no
+    /// request has a known outcome.</summary>
+    public bool OmitResponseItems { get; set; }
+
     /// <summary>Routes <see cref="RetrieveMultiple"/> by entity name; the default lambda returns an empty page.</summary>
     public void RouteRetrieveMultiple(Func<string, EntityCollection> byEntity)
         => OnRetrieveMultiple = q => byEntity(q.EntityName);
@@ -152,7 +156,7 @@ internal sealed class FakeOrgService : IOrganizationService
 
         ExecuteMultipleResponse response = new ExecuteMultipleResponse();
         response.Results["IsFaulted"] = faulted;
-        response.Results["Responses"] = items;
+        response.Results["Responses"] = OmitResponseItems ? new ExecuteMultipleResponseItemCollection() : items;
         return response;
     }
 

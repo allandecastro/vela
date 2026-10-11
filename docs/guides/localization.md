@@ -98,13 +98,8 @@ execution), then to `DefaultLanguageCode` (1033 by default; set it to change the
 // 1) Required: throws InvalidPluginExecutionException when no template exists (user, organization or default language).
 string text = ctx.GetMessage("ERR_REQUIRED", "name");
 
-<<<<<<< HEAD
-// 2) Try: branch on presence.
-if (ctx.TryGetMessage("ERR_REQUIRED", out string? text, "name"))
-=======
 // 2) Try: branch on presence. A template whose placeholders do not match the arguments still throws.
-if (context.TryGetMessage("ERR_REQUIRED", out string? text, "name"))
->>>>>>> origin/main
+if (ctx.TryGetMessage("ERR_REQUIRED", out string? text, "name"))
 {
     // text is set
 }
