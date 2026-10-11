@@ -180,6 +180,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **Trace volume controls (#449).** The plug-in trace log keeps about 10 KB per execution, and the automatic traces
+  could crowd a plugin's own lines out of it. `protected override bool AutoTraceServiceCalls => false;` stops the
+  wrapped services (`Service`, `SystemService`, `AsUser`) from writing two lines per Dataverse call; a failed call is
+  still traced, on one line with its scope, depth, table or request, and exception type.
+  `TraceSnapshotDetail.None` (`AutoSnapshotDetail`, or an explicit `TraceExecutionSnapshot`) writes no snapshot.
+  Both are opt-in, per plugin class (a shared abstract base class applies them to a whole project): the defaults are
+  unchanged.
 - **`Async(deleteJobOnSuccess: true)`** deletes an asynchronous step's system job once it succeeds (Dataverse
   `asyncautodelete`), carried on `StepDefinition.AsyncAutoDelete`.
 - **`ForRelationship("schema_name", ...)` on `OnAssociate()` / `OnDisassociate()`.** Dataverse fires these steps for
