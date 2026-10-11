@@ -120,11 +120,17 @@ public sealed class PluginRuntimeCoverageTests
         // The injected service is the current user's, never SYSTEM (both used to be registered; the last one won).
         Assert.Same(context.Object.Service, provider.GetService<IOrganizationService>());
         Assert.NotSame(context.Object.SystemService, provider.GetService<IOrganizationService>());
-        Assert.NotNull(provider.GetService<ILogger>());
-        Assert.NotNull(provider.GetService<IManagedIdentityService>());
-        Assert.NotNull(provider.GetService<IPluginCacheService>());
-        Assert.NotNull(provider.GetService<IEnvironmentVariableReader>());
-        Assert.NotNull(provider.GetService<IMessageService>());
+        Assert.Same(context.Object.Logger, provider.GetService<ILogger>());
+        Assert.Same(context.Object.ManagedIdentityService, provider.GetService<IManagedIdentityService>());
+        // The cache is scoped to the organization; the environment-variable reader and message service are the
+        // runtime implementations. One organization-scoped cache serves the whole execution, in every DI scope.
+        Assert.IsType<OrganizationScopedCacheService>(provider.GetService<IPluginCacheService>());
+        Assert.IsType<EnvironmentVariableReader>(provider.GetService<IEnvironmentVariableReader>());
+        Assert.IsType<MessageService>(provider.GetService<IMessageService>());
+        using (IServiceScope scope = provider.CreateScope())
+        {
+            Assert.Same(provider.GetService<IPluginCacheService>(), scope.ServiceProvider.GetService<IPluginCacheService>());
+        }
     }
 
     [Fact]
@@ -136,8 +142,13 @@ public sealed class PluginRuntimeCoverageTests
 
         foreach (KeyValuePair<Type, Func<object>> registration in SimpleServiceResolver.DefaultServices(context))
         {
-            Assert.NotNull(provider.GetService(registration.Key));
-            Assert.NotNull(resolver.GetService(registration.Key));
+            // Both containers build the same implementation for every runtime service.
+            object? fromDi = provider.GetService(registration.Key);
+            object? fromResolver = resolver.GetService(registration.Key);
+            Assert.NotNull(fromDi);
+            Assert.NotNull(fromResolver);
+            Assert.Equal(fromResolver!.GetType(), fromDi!.GetType());
+            Assert.IsAssignableFrom(registration.Key, fromDi);
         }
 
         Assert.Same(context.Service, resolver.GetService(typeof(IOrganizationService)));

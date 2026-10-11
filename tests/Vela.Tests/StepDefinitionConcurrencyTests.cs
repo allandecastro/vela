@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,21 +24,8 @@ public sealed class StepDefinitionConcurrencyTests
 
         const int threadCount = 32;
         StepDefinition[]?[] results = new StepDefinition[threadCount][];
-        ConcurrentBag<Exception> failures = new ConcurrentBag<Exception>();
-        using Barrier gate = new Barrier(threadCount);
-
-        Parallel.For(0, threadCount, i =>
-        {
-            try
-            {
-                gate.SignalAndWait(); // release all threads together to maximize the race on the first build
-                results[i] = plugin.GetStepDefinitions();
-            }
-            catch (Exception ex)
-            {
-                failures.Add(ex);
-            }
-        });
+        // Dedicated threads released together (maximizes the race on the first build); fails rather than hangs.
+        IReadOnlyCollection<Exception> failures = ConcurrentStart.Run(threadCount, i => results[i] = plugin.GetStepDefinitions(), TimeSpan.FromSeconds(30));
 
         Assert.Empty(failures);
 

@@ -89,7 +89,9 @@ dotnet test .\tests\Vela.Tests\Vela.Tests.csproj `
 
 CI enforces a **branch-coverage gate** (via `coverlet.msbuild`) on five areas: the **diff engine** (plan/apply
 idempotence), the **in-memory harness**, the **plugin runtime** (`Vela.Plugins`), the **analyzers** and the **code
-fixes**. The run fails if branch coverage drops below the threshold. A gated test project must reference
+fixes**. The run fails if branch coverage drops below the threshold. CI runs each test project once and collects
+its coverage on that same run (the plugin runtime merges the `Vela.Tests` and `Vela.Testing.Tests` runs); a new
+`*.Tests` project must be added to `ci.yml`, or the job fails. A gated test project must reference
 `coverlet.msbuild`, otherwise the threshold is silently ignored. Reproduce a gate locally, e.g. the diff engine:
 
 ```bash
@@ -107,7 +109,9 @@ Two gate families guard the correctness-critical cores, and both follow the same
 - **Branch coverage** (`ci.yml`) - diff engine, in-memory harness, plugin runtime (`Vela.Plugins`), analyzers and
   code fixes.
 - **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine + normalizer, the harness query core and
-  security model, and the CLI apply / Custom API / reader / steps / scanner / role-generation cores (see
+  security model, the CLI apply / Custom API / reader / steps / scanner / role-generation cores, the analyzers and
+  the plugin runtime (steps, context, DI / caching / localization). Weekly on every file; on a pull request, on the
+  files it changes (`--since:main`, 80 floor). Each area's configuration is `tests/stryker/<area>.yml` (see
   [Mutation testing](docs/advanced/mutation-testing.md) for the per-core scores).
 
 **Policy - 80% floor, ratcheted above it.** Every gated core stays at **≥ 80%** on *both* metrics; `80` is a hard

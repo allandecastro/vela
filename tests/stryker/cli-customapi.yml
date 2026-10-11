@@ -1,0 +1,13 @@
+# Mutation area: the Custom API reconciliation core (DataverseRegistration.CustomApi): the customapi entity build,
+# request/response parameter reconciliation, the uniquename lookup and the parameter type-code resolver. Run from
+# tests/Vela.Cli.Tests. Measured at ~82.7%; break is held at 80. The remaining survivors are equivalent
+# (LogOperation arg strings, the static ParameterSyncSpec record literals, read-only ColumnSet columns).
+stryker-config:
+  project: Vela.Cli.csproj
+  mutate:
+    - "**/DataverseRegistration.CustomApi.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 90
+    low: 80
+    break: 80

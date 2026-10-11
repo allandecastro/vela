@@ -72,7 +72,7 @@ public sealed class LocalPluginContextCoverageTests
         IServiceProvider provider = Provider(new FakePluginExecutionContext(), StubFactory(), tracing: null);
         LocalPluginContext context = new LocalPluginContext(provider);
 
-        Assert.NotNull(context.TracingService); // NullTracingService fallback
+        Assert.IsType<NullTracingService>(context.TracingService);
         context.Trace("anything"); // must not throw with the fallback tracer
     }
 

@@ -1,0 +1,18 @@
+# Mutation area: the plugin runtime services (Vela.Plugins/DI, Caching and Localization): the service resolver and
+# registrars, the bounded TTL cache, and the message sources. Run from tests/Vela.Tests, with Vela.Testing.Tests as
+# a second test project. net462: Windows only.
+stryker-config:
+  solution: ../../Vela.sln
+  project: Vela.Plugins.csproj
+  test-projects:
+    - ./Vela.Tests.csproj
+    - ../Vela.Testing.Tests/Vela.Testing.Tests.csproj
+  mutate:
+    - "**/Vela.Plugins/DI/**/*.cs"
+    - "**/Vela.Plugins/Caching/**/*.cs"
+    - "**/Vela.Plugins/Localization/**/*.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 90
+    low: 80
+    break: 80

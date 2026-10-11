@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Test fixture only: a plugin assembly built on the REAL Vela.Plugins framework (net462, like a consumer's plugin
+    project). It declares one of each registration shape the CLI deploys: steps with images, filters, both modes,
+    every stage, a rank, an impersonated user, explicit and generated step keys, configs, a disabled step, a global
+    message, and Custom APIs (typed and lightweight) with every parameter kind.
+
+    The contract tests on both sides of the CLI/framework boundary read it against one checked-in file,
+    tests/contracts/plugin-contract.golden.json:
+      - Vela.Tests (net462) scans it with the framework's own FrameworkManifestScanner and the typed definitions;
+      - Vela.Cli.Tests (net10) packs this output into a .nupkg and scans it with the CLI's PackageScanner.
+    A rename on either side (a StepDefinition property, the reflection names the CLI looks for) then fails a test
+    instead of silently deploying a different registration.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <AssemblyName>ContractPluginFixture</AssemblyName>
+    <RootNamespace>ContractPluginFixture</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Copy Vela.Plugins and its dependencies next to the fixture, so the CLI test can pack a self-contained
+         plugin package from this output folder. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Vela.Plugins\Vela.Plugins.csproj" />
+  </ItemGroup>
+</Project>
