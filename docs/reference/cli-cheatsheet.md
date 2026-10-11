@@ -49,7 +49,7 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `--solution <uniquename>` | Early-bound classes for the solution's tables |
 | `--entities a,b,c` | Early-bound classes for the named tables |
 | `--custom-apis [a,b,c]` | Typed request/response classes (no value = every Custom API in the environment, with a warning) |
-| `--messages [a,b,c]` | Typed request/response classes for SDK messages (no value = all consumable messages) |
+| `--messages [a,b,c]` | Typed request/response classes for SDK requests, by request name (e.g. `SendEmail`; no value = every request of the consumable messages) |
 | `--roles "A,B"` | A dependency-light `Roles` class (missing names are skipped with a warning) |
 | `--solution-roles` | Every security role in `--solution` |
 | `--forms` / `--tables` | TypeScript FormModel files / Web API record interfaces (preview) |

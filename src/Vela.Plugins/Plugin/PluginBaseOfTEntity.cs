@@ -165,33 +165,18 @@ namespace Vela.Plugin
                 foreach (StepDefinition definition in definitions)
                 {
                     definition.PluginTypeName = pluginTypeName;
-                    if (string.IsNullOrWhiteSpace(definition.StepKey))
-                    {
-                        definition.StepKey = GenerateAutoStepKey(definition);
-                    }
                 }
 
-                if (definitions.Count > 1)
+                // Several steps may share a trigger (message + stage + mode + entity) when their filters, images,
+                // relationship scope or step keys tell them apart; two that resolve to the same step key cannot be
+                // deployed or dispatched separately, so fail fast.
+                try
                 {
-                    // Two steps with the same trigger (message + stage + mode + entity) can't be told apart at
-                    // runtime: ResolveSingleMatchingStep would find both and throw, and at registration their
-                    // auto step-keys collide so one silently overwrites the other. Fail fast with a clear message.
-                    HashSet<string> triggers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (StepDefinition definition in definitions)
-                    {
-                        string trigger = string.Join("|",
-                            definition.Message ?? string.Empty,
-                            (int)definition.Stage,
-                            (int)definition.Mode,
-                            definition.EntityLogicalName ?? string.Empty);
-                        if (!triggers.Add(trigger))
-                        {
-                            throw new InvalidPluginExecutionException(
-                                $"Plugin '{GetType().FullName}' registers more than one step for the same trigger " +
-                                $"(message '{definition.Message}', stage {(int)definition.Stage}, mode {(int)definition.Mode}). " +
-                                "Merge them into a single step (combine the filtering attributes) or use a different stage/mode.");
-                        }
-                    }
+                    StepIdentity.AssignStepKeys(definitions, pluginTypeName);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new InvalidPluginExecutionException(ex.Message, ex);
                 }
 
                 // Every step must bind a handler with .Handle(...). There is no Execute(ctx) fallback, so a step
@@ -248,12 +233,28 @@ namespace Vela.Plugin
         protected sealed override void ExecuteDataversePlugin(ILocalPluginContext ctx)
         {
             StepDefinition[] definitions = GetStepDefinitions();
-            StepDefinition? matchedDefinition = ResolveSingleMatchingStep(ctx, definitions);
+            StepDefinition? matchedDefinition = ResolveSingleMatchingStep(ctx, definitions, out bool outOfRelationshipScope);
 
             if (matchedDefinition == null)
             {
+                if (outOfRelationshipScope)
+                {
+                    // An Associate/Disassociate step fires for every relationship in Dataverse; .ForRelationship(...)
+                    // scopes it, so another relationship is not an error, just not this step's business.
+                    ctx.Trace("Vela: relationship outside the step's ForRelationship scope; nothing to run.");
+                    return;
+                }
+
                 throw new InvalidPluginExecutionException(
                     $"Plugin '{GetType().FullName}' has no registered step matching message '{ctx.MessageName}'.");
+            }
+
+            // A step-level depth limit (.SkipWhenDepthAbove(n)) replaces the plugin-level guard: past it, the handler is
+            // skipped rather than the execution failing.
+            if (matchedDefinition.SkipWhenDepthAbove is int stepMaxDepth && ctx.Depth > stepMaxDepth)
+            {
+                ctx.Trace("Vela: step skipped by SkipWhenDepthAbove. Depth={0}, MaxDepth={1}", ctx.Depth, stepMaxDepth);
+                return;
             }
 
             // Prefer invoking the retained delegate directly: it supports lambda handlers (including ones that
@@ -287,22 +288,6 @@ namespace Vela.Plugin
             InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
         }
 
-        private static string GenerateAutoStepKey(StepDefinition definition)
-        {
-            string seed = string.Join("|",
-                definition.PluginTypeName ?? string.Empty,
-                definition.Message ?? string.Empty,
-                (int)definition.Stage,
-                (int)definition.Mode,
-                definition.EntityLogicalName ?? string.Empty,
-                definition.ExecutionOrder);
-
-            using SHA256 sha = SHA256.Create();
-            byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(seed));
-            string hex = BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
-            return "dv-" + hex.Substring(0, 12);
-        }
-
         private void RegisterFluentStep(StepBuilder<TEntity> stepBuilder)
         {
             if (stepBuilder == null)
@@ -319,8 +304,22 @@ namespace Vela.Plugin
             _registeredSteps.Add(stepBuilder);
         }
 
-        private StepDefinition? ResolveSingleMatchingStep(ILocalPluginContext ctx, StepDefinition[] definitions)
+        private protected override bool HasStepDepthLimit(ILocalPluginContext ctx)
         {
+            try
+            {
+                return ResolveSingleMatchingStep(ctx, GetStepDefinitions(), out _)?.SkipWhenDepthAbove != null;
+            }
+            catch (InvalidPluginExecutionException)
+            {
+                // No single step resolves: the dispatch reports it; the plugin-level guard applies meanwhile.
+                return false;
+            }
+        }
+
+        private StepDefinition? ResolveSingleMatchingStep(ILocalPluginContext ctx, StepDefinition[] definitions, out bool outOfRelationshipScope)
+        {
+            outOfRelationshipScope = false;
             List<StepDefinition> matches = new List<StepDefinition>();
             foreach (StepDefinition definition in definitions)
             {
@@ -356,13 +355,16 @@ namespace Vela.Plugin
                 return null;
             }
 
-            if (matches.Count > 1)
+            // Drop relationship-scoped steps for another relationship; when several steps share the trigger, the
+            // executing step (OwningExtension) picks its own.
+            List<StepDefinition> selected = StepIdentity.Select(matches, ctx, GetType().FullName ?? GetType().Name);
+            if (selected.Count == 0)
             {
-                throw new InvalidPluginExecutionException(
-                    $"Plugin '{GetType().FullName}' has {matches.Count} matching step definitions for the current pipeline execution.");
+                outOfRelationshipScope = true;
+                return null;
             }
 
-            return matches[0];
+            return selected[0];
         }
 
         // A generated per-step context (typed step contexts) is a concrete subclass of a Vela step context
@@ -400,7 +402,7 @@ namespace Vela.Plugin
 
         // Messages Vela models with a typed context: build the per-message context so its handler receives a
         // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for a permissive
-        // OnMessage(...) step that Vela does not model, so its handler receives the plain ILocalPluginContext.
+        // OnMessage<TMessage>() step that Vela does not model, so its handler receives the plain ILocalPluginContext.
         private static object? BuildTypedContext(string? message, PluginStages stage, ILocalPluginContext ctx)
         {
             bool post = stage == PluginStages.PostOperation;
@@ -449,7 +451,7 @@ namespace Vela.Plugin
             };
         }
 
-        // A permissive OnMessage(...) step whose handler takes a generic message context
+        // A permissive OnMessage<TMessage>() step whose handler takes a generic message context
         // (IMessagePreContext<TRequest> / IMessagePostContext<TRequest>) does not carry TRequest in the message
         // name, so it is resolved from the handler method's single parameter type. The matching concrete context
         // (MessagePreContext<TRequest> / MessagePostContext<TRequest>) is then built over the live pipeline

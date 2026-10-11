@@ -165,8 +165,8 @@ namespace Vela.Testing
             }
 
             StampOwningExtension(context, registration.Step);
-            context.PreEntityImagesCollection = items.Select(item => BuildImageCollection(registration.Step.PreImages, item.PreState)).ToArray();
-            context.PostEntityImagesCollection = items.Select(item => BuildImageCollection(registration.Step.PostImages, item.PostState)).ToArray();
+            context.PreEntityImagesCollection = items.Select(item => BuildBulkImageCollection(registration, message, isPre: true, item.PreState)).ToArray();
+            context.PostEntityImagesCollection = items.Select(item => BuildBulkImageCollection(registration, message, isPre: false, item.PostState)).ToArray();
 
             // A CreateMultiple Post step sees the created ids as OutputParameters["Ids"], exactly as Dataverse
             // surfaces them, so ctx.Response.Ids resolves in a post-create-multiple handler.
@@ -181,10 +181,45 @@ namespace Vela.Testing
             ExecuteWithContext(context, plugin, registration.Step);
         }
 
-        private static EntityImageCollection BuildImageCollection(ImageDefinition[] definitions, Entity? state)
+        // One target's image collection for a bulk step, as Dataverse fills it (verified live): the step's own images,
+        // then those of the other steps of the same plugin type on the same message (aliases already taken are not
+        // overwritten), then the platform's full-record image (PreBusinessEntity / PostBusinessEntity), in the Pre and
+        // the Post collection alike. A handler must therefore read its image by its own alias, never "the first one".
+        private EntityImageCollection BuildBulkImageCollection(PipelineRegistration registration, string message, bool isPre, Entity? state)
         {
             EntityImageCollection collection = new EntityImageCollection();
-            BuildImages(collection, definitions, state);
+            if (state == null)
+            {
+                return collection;
+            }
+
+            BuildImages(collection, isPre ? registration.Step.PreImages : registration.Step.PostImages, state);
+            foreach (PipelineRegistration sibling in _registrations)
+            {
+                if (ReferenceEquals(sibling, registration)
+                    || sibling.PluginType != registration.PluginType
+                    || !string.Equals(sibling.Step.Message, message, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                EntityImageCollection siblingImages = new EntityImageCollection();
+                BuildImages(siblingImages, isPre ? sibling.Step.PreImages : sibling.Step.PostImages, state);
+                foreach (KeyValuePair<string, Entity> image in siblingImages)
+                {
+                    if (!collection.ContainsKey(image.Key))
+                    {
+                        collection[image.Key] = image.Value;
+                    }
+                }
+            }
+
+            string platformAlias = isPre ? "PreBusinessEntity" : "PostBusinessEntity";
+            if (!collection.ContainsKey(platformAlias))
+            {
+                collection[platformAlias] = ProjectImage(state, Array.Empty<string>());
+            }
+
             return collection;
         }
 
@@ -370,6 +405,18 @@ namespace Vela.Testing
             }
 
             return copy;
+        }
+
+        // The sdkmessageprocessingstep row an asynchronous step's OwningExtension points at (by id only), so the runtime
+        // can read the step's name when several steps of the plugin share the trigger, as it does on Dataverse.
+        private void SeedStepRow(StepDefinition step)
+        {
+            string name = StepName(step);
+            Guid id = Security.DeterministicGuid.From("sdkmessageprocessingstep", name);
+            if (!_store.TryGet("sdkmessageprocessingstep", id, out _))
+            {
+                _store.Seed(new Entity("sdkmessageprocessingstep", id) { ["name"] = name });
+            }
         }
 
         // The step registration the context runs under, as the platform reports it in OwningExtension: the step's id,

@@ -394,18 +394,22 @@ namespace Vela.Testing
             };
         }
 
-        // Best-effort primary entity for a generic message: an explicit Target, else the first EntityReference /
-        // Entity parameter (covers LeadId, Target, EntityMoniker, ...). When nothing resolves, the steps match by
-        // (message, stage) alone.
-        private static readonly (string Parameter, string Lookup)[] ClosingActivityPrimaries =
-        {
-            ("OpportunityClose", "opportunityid"),
-            ("QuoteClose", "quoteid"),
-            ("IncidentResolution", "incidentid"),
-        };
-
+        // Best-effort primary entity for a generic message: the table the request is bound to, else an explicit
+        // Target, else the first EntityReference / Entity parameter (covers EntityMoniker, ...). When nothing
+        // resolves, the steps match by (message, stage) alone.
         private static (string, Guid) DerivePrimaryEntity(OrganizationRequest request)
         {
+            // A request bound to one table runs on that table, whatever its parameters: SendEmail on email (its EmailId
+            // is a Guid), CloseIncident on incident (not its IncidentResolution activity), WinOpportunity on
+            // opportunity (not its OpportunityClose), AddToQueue on queueitem (not its Target). The platform leaves
+            // PrimaryEntityId empty on these (verified live at PreValidation and PostOperation), and so does the
+            // harness, so a handler reading it fails here as it would there.
+            string? primaryEntity = SdkMessageNames.PrimaryEntityOf(request.RequestName);
+            if (primaryEntity != null)
+            {
+                return (primaryEntity, Guid.Empty);
+            }
+
             if (request.Parameters.TryGetValue("Target", out object? target))
             {
                 if (target is Entity targetEntity)
@@ -416,21 +420,6 @@ namespace Vela.Testing
                 if (target is EntityReference targetReference)
                 {
                     return (targetReference.LogicalName, targetReference.Id);
-                }
-            }
-
-            // Messages whose primary record is not the first entity-typed parameter: a closing activity whose lookup
-            // points at the real primary. The generic scan below would otherwise pick the activity
-            // (opportunityclose, incidentresolution, quoteclose) and an entity-filtered step would silently not fire
-            // (A15). Verified live: Win/Lose run with PrimaryEntityName opportunity, Close with incident.
-            foreach ((string parameterName, string lookup) in ClosingActivityPrimaries)
-            {
-                if (request.Parameters.TryGetValue(parameterName, out object? activity)
-                    && activity is Entity activityEntity
-                    && activityEntity.Attributes.TryGetValue(lookup, out object? primary)
-                    && primary is EntityReference primaryRef)
-                {
-                    return (primaryRef.LogicalName, primaryRef.Id);
                 }
             }
 

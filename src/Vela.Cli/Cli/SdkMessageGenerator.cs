@@ -8,25 +8,13 @@ namespace Vela.Cli;
 /// <summary>A single SDK message request/response field: its name and the resolved C# type string.</summary>
 public sealed record SdkMessageField(string Name, string CSharpType);
 
-/// <summary>An SDK message request (<c>sdkmessagerequest</c>) to generate typed Request/Response classes for.
-/// <see cref="Name"/> is the request name (what <c>Execute</c> takes, e.g. <c>CloseQuote</c>).</summary>
+/// <summary>An SDK request to generate typed Request/Response classes for, named after the request (its
+/// <c>sdkmessagerequest</c> name, which Dataverse executes).</summary>
 public sealed record SdkMessage(
     string Name,
     IReadOnlyList<SdkMessageField> RequestFields,
     IReadOnlyList<SdkMessageField> ResponseFields)
 {
-    private readonly string? _messageName;
-
-    /// <summary>The sdkmessage the request runs on and plugin steps register on (e.g. <c>Close</c> for
-    /// <c>CloseQuote</c>). Defaults to <see cref="Name"/>. The framework's request table already routes every
-    /// platform request whose sdkmessage differs; only a request it does not know is marked
-    /// <c>[Vela.Messages.SdkMessage("...")]</c> so <c>On&lt;XxxRequest&gt;()</c> still registers on it.</summary>
-    public string MessageName
-    {
-        get => string.IsNullOrWhiteSpace(_messageName) ? Name : _messageName!;
-        init => _messageName = value;
-    }
-
     /// <summary>The fully-qualified SDK request type when the SDK already ships one
     /// (<c>Microsoft.Crm.Sdk.Messages.CloseQuoteRequest</c>). The generator then emits only the entity-constrained
     /// <c>On&lt;Message&gt;()</c> extension over that type - no duplicate request/response classes.</summary>
@@ -118,14 +106,7 @@ public static class SdkMessageGenerator
         sb.AppendLine();
 
         // Request
-        bool divergent = !string.Equals(message.MessageName, message.Name, StringComparison.Ordinal);
-        bool routedByTable = !string.Equals(Vela.Steps.SdkMessageNames.ToSdkMessage(message.Name), message.Name, StringComparison.OrdinalIgnoreCase);
-        sb.AppendLine($"    /// <summary>Typed request for the <c>{message.Name}</c> {(divergent ? "request" : "message")}.</summary>");
-        if (divergent && !routedByTable)
-        {
-            sb.AppendLine($"    [Vela.Messages.SdkMessage(\"{message.MessageName}\")]");
-        }
-
+        sb.AppendLine($"    /// <summary>Typed request for the <c>{message.Name}</c> request.</summary>");
         sb.AppendLine($"    public partial class {request} : Vela.Messages.TypedRequest");
         sb.AppendLine("    {");
         sb.AppendLine($"        public {request}()");
@@ -142,7 +123,7 @@ public static class SdkMessageGenerator
         sb.AppendLine();
 
         // Response
-        sb.AppendLine($"    /// <summary>Typed response for the <c>{message.Name}</c> {(divergent ? "request" : "message")}.</summary>");
+        sb.AppendLine($"    /// <summary>Typed response for the <c>{message.Name}</c> request.</summary>");
         sb.AppendLine($"    public partial class {response} : Vela.Messages.TypedResponse");
         sb.AppendLine("    {");
 

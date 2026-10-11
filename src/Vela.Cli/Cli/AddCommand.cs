@@ -24,6 +24,8 @@ internal static class AddCommand
 
     // SDK messages that have a dedicated On...() builder method, matched case-insensitively so the
     // scaffold emits the strongly-typed call. Any other name is registered via its request type, On<XxxRequest>().
+    // They are SDK request names: the sdkmessage a step registers on can be shorter (SendEmail runs as Send), see
+    // ResolveKnownMessage.
     internal static readonly string[] KnownMessages =
     [
         "Create", "Update", "CreateMultiple", "UpdateMultiple", "Delete", "Retrieve", "RetrieveMultiple",
@@ -31,6 +33,26 @@ internal static class AddCommand
         "QualifyLead", "WinOpportunity", "LoseOpportunity", "ConvertSalesOrderToInvoice", "GenerateQuoteFromOpportunity", "AddToQueue", "RemoveFromQueue", "PickFromQueue", "RouteTo", "ReleaseToQueue", "SendEmail", "SendEmailFromTemplate", "DeliverIncomingEmail", "DeliverPromoteEmail", "AddMembersTeam", "RemoveMembersTeam", "AddListMembersList", "AddMemberList", "RemoveMemberList", "CloseIncident", "CancelContract", "CloneContract", "RetrievePrincipalAccess", "RetrieveSharedPrincipalsAndAccess",
         "WinQuote",
     ];
+
+    // The typed On...() trigger for --message: a request name (SendEmail), or the sdkmessage it runs as (Send),
+    // resolved through the table when several requests share it (Win is WinQuote on quote, WinOpportunity on
+    // opportunity). Null for a message with no curated trigger, registered through its request type (RegistrationCall).
+    internal static string? ResolveKnownMessage(string rawMessage, string entity)
+    {
+        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        if (known is not null)
+        {
+            return known;
+        }
+
+        string[] candidates = Vela.Steps.SdkMessageNames.RequestNamesFor(rawMessage)
+            .Select(request => KnownMessages.FirstOrDefault(m => string.Equals(m, request, StringComparison.OrdinalIgnoreCase)))
+            .OfType<string>()
+            .ToArray();
+        return candidates.Length == 1
+            ? candidates[0]
+            : candidates.FirstOrDefault(m => string.Equals(Vela.Steps.SdkMessageNames.PrimaryEntityOf(m), entity, StringComparison.OrdinalIgnoreCase));
+    }
 
     public static int Run(string[] args)
     {
@@ -402,7 +424,7 @@ internal static class AddCommand
             return Fail($"Invalid --message '{rawMessage}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).", ExitInvalidArguments, includeUsage: false);
         }
 
-        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        string? known = ResolveKnownMessage(rawMessage, entity);
         string message = known ?? rawMessage;
         string registrationCall = RegistrationCall(known, message);
 
@@ -546,7 +568,7 @@ internal static class AddCommand
 
         // Messages with a dedicated On...() builder method get the strongly-typed call; any other name is
         // registered through its request type, On<XxxRequest>() (see RegistrationCall).
-        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        string? known = ResolveKnownMessage(rawMessage, entity!);
         string message = known ?? rawMessage;
         string registrationCall = RegistrationCall(known, message);
 

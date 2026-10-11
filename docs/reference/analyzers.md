@@ -16,7 +16,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
 | [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
 | [VELA007](#vela007) | Vela.Usage | Error | A pre-image on Create, or a post-image on Delete (the message can never provide it) |
-| [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share the same trigger (message + stage + mode) |
+| [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share a trigger and nothing tells them apart (same filters and images, no step key) |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
 | [VELA010](#vela010) | Vela.Usage | Error | A generated relationship navigation property used in a column selector |
 | [VELA011](#vela011) | Vela.Reliability | Warning | A writable field (mutable state) on a plugin type |
@@ -111,34 +111,34 @@ message Vela does not model, or a type whose message is only set in its construc
 
 ## VELA008
 
-**Register at most one step per trigger in a plugin.** Dataverse allows a single step per trigger - message + stage
-+ mode + entity - and the runtime throws at registration when a plugin defines two. Two `RegisterStep()` chains in
-the same `RegisterPluginSteps()` with the same message, stage, and mode are flagged (the entity is fixed per
-plugin). Only complete chains whose message and stage are statically determinable are compared.
+**Two steps on one trigger must be told apart.** Several steps in a plugin may share a trigger - message + stage +
+mode (the entity is fixed per plugin) - when their **filtering attributes**, their **images**, their relationship
+scope (`ForRelationship(...)`) or an explicit **`WithStepKey(...)`** differ: each is deployed as its own Dataverse
+step, and the executing step selects its handler. Two chains in the same `RegisterPluginSteps()` that share the
+trigger, list the same `FilterOn(...)` columns and the same images (alias and columns, in any order), and carry
+neither `WithStepKey(...)` nor `ForRelationship(...)` resolve to the same step key, and the runtime rejects them at
+registration; those are flagged. The rank (`WithExecutionOrder`) does not tell steps apart.
 
-**Different filtering attributes do not make the steps distinct.** The trigger is message + stage + mode + entity;
-filtering attributes are not part of it. At runtime the framework resolves a *single* step for the executing
-message, and it never re-evaluates filtering attributes itself - Dataverse applies the step's registered filter
-upstream, before the plugin runs. So two steps that differ only by `FilterOn(...)` are indistinguishable once the
-plugin executes (Dataverse does not tell the plugin which step row fired), their auto step-keys collide, and the
-runtime throws `registers more than one step for the same trigger`. Splitting the logic across two steps is not a
-way to react to different column sets.
+Only complete chains whose message, stage, filters and images are statically readable are compared: a chain whose
+`FilterOn` or image takes something other than a literal column selector (`a => a.Name`) is skipped rather than
+guessed.
 
-**Fix:** keep one step with the **union** of the filtering attributes, then branch inside the handler on what
+**Fix:** give one of the steps a `WithStepKey("...")`, or keep one step and branch inside the handler on what
 actually changed:
 
 ```csharp
 RegisterStep().OnUpdate().PostOperation().Sync()
-    .FilterOn(a => a.CreditLimit, a => a.Name)   // union of both triggers' columns
-    .WithPreImage(a => a.CreditLimit, a => a.Name)
-    .Handle(ctx =>
-    {
-        if (ctx.HasChanged<Account>(a => a.CreditLimit)) { /* credit path */ }
-        if (ctx.HasChanged<Account>(a => a.Name)) { /* rename path */ }
-    });
-```
+    .FilterOn(a => a.Name)
+    .WithExecutionOrder(10)
+    .WithStepKey("normalize-name")
+    .Handle(NormalizeName);
 
-If the two really are unrelated, move one to a different stage/mode, or put it in a separate plugin class.
+RegisterStep().OnUpdate().PostOperation().Sync()
+    .FilterOn(a => a.Name)
+    .WithExecutionOrder(20)
+    .WithStepKey("validate-name")
+    .Handle(ValidateName);
+```
 
 ## VELA009
 

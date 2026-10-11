@@ -46,7 +46,8 @@ internal static class StepBuilderImplEmitter
         // Triggers: record the message, return the builder as the stage selector.
         foreach (var message in messages)
         {
-            w.Line($"        {StepConfig.StagesType(message.Name)} IStepTrigger<TEntity>.On{message.Name}() {{ SetMessage(PluginMessages.{message.Name}); return this; }}");
+            string entity = message.Entity is null ? string.Empty : $", \"{message.Entity}\"";
+            w.Line($"        {StepConfig.StagesType(message.Name)} IStepTrigger<TEntity>.On{message.Name}() {{ SetMessage(PluginMessages.{message.Name}{entity}); return this; }}");
         }
         w.Block(UnmodelledTriggers);
 
@@ -122,6 +123,7 @@ internal static class StepBuilderImplEmitter
             if (stage == Stage.PostOperation)
             {
                 w.Line($"        {config} {mode}.Async() {{ _definition.Mode = ExecutionMode.Asynchronous; return this; }}");
+                w.Line($"        {config} {mode}.Async(bool deleteJobOnSuccess) {{ SetAsyncMode(deleteJobOnSuccess); return this; }}");
             }
         }
     }
@@ -162,6 +164,7 @@ internal static class StepBuilderImplEmitter
                 internal void AddImageInternal(string alias, bool isPre, Expression<Func<TEntity, object?>>[] attributes) => AddImageNow(alias, isPre, attributes);
                 internal void SetExecutionOrderInternal(int order) => SetExecutionOrder(order);
                 internal void SetStepKeyInternal(string key) => SetKey(key);
+                internal void SetSkipWhenDepthAboveInternal(int maxDepth) => SetSkipWhenDepthAbove(maxDepth);
                 internal void SetDescriptionInternal(string description) => SetDescription(description);
                 internal void SetImpersonationUserInternal(System.Guid systemUserId) => SetImpersonationUser(systemUserId);
                 internal void SetSupportedDeploymentInternal(SupportedDeployment deployment) => SetSupportedDeployment(deployment);

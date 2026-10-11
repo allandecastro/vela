@@ -10,11 +10,12 @@ using Xunit;
 namespace Vela.Cli.Tests;
 
 // NOTE: the sdkmessage* schema was validated live against two environments. Findings baked into these tests:
-// table/column names are as used here; a message has one pair per SOAP contract version and the field CLR types
-// differ by pair (legacy crm/2007/WebServices carries null/pre-Xrm types; crm/2011/Contracts and
+// table/column names are as used here; each request has one sdkmessagepair per SOAP contract version and the
+// field CLR types differ by pair (legacy crm/2007/WebServices carries null/pre-Xrm types; crm/2011/Contracts and
 // xrm/7.1/Contracts carry the modern Microsoft.Xrm.Sdk.* types), and the pair order is not stable across
-// environments - so the reader prefers the 2011/Contracts pair. Request/response fields order by `position`
-// and key by `name`.
+// environments - so the reader prefers the 2011/Contracts pair. A request is executed under its own name
+// (SendEmail), not under the sdkmessage it runs as (Send). Request/response fields order by `position` and key by
+// `name`.
 public class SdkMessageReaderTests
 {
     private const string Asm = ", Microsoft.Xrm.Sdk, Version=9.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35";
@@ -31,37 +32,48 @@ public class SdkMessageReaderTests
         return e;
     }
 
-    // The contract of one request, read by its real name.
-    private static SdkMessage ReadSingle(FakeOrgService svc, string name) => SdkMessageReader.ReadRequest(svc, name);
+    private static readonly Guid MessageId = Guid.NewGuid();
+    private const string Modern = "http://schemas.microsoft.com/crm/2011/Contracts";
 
-    // A request row per pair whose id IS the pair id, so a field query on the request tells which pair won.
-    private static Entity RequestOfPair(QueryExpression q) =>
-        new Entity("sdkmessagerequest", (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagepairid").Values[0]);
+    // A sdkmessagerequest row joined to its pair (alias "pair"), as ReadSdkMessage queries it.
+    private static Entity RequestRow(string name, string pairNamespace, string? table = null)
+    {
+        Entity row = Row("sdkmessagerequest",
+            ("name", name),
+            ("pair.namespace", new AliasedValue("sdkmessagepair", "namespace", pairNamespace)),
+            ("pair.sdkmessageid", new AliasedValue("sdkmessagepair", "sdkmessageid", new EntityReference("sdkmessage", MessageId))));
+        if (table != null)
+        {
+            row["primaryobjecttypecode"] = table;
+        }
 
-    private static Guid PairOfRequest(QueryExpression q) =>
-        (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagerequestid").Values[0];
+        return row;
+    }
+
+    // The ReadSdkMessage request lookup filters on the request name; ListRequestNames joins to the sdkmessage.
+    private static bool IsRequestLookup(QueryExpression q) => q.Criteria.Conditions.Any(c => c.AttributeName == "name");
+
+    private static FakeOrgService Service(Func<QueryExpression, EntityCollection?> route) => new FakeOrgService
+    {
+        OnRetrieveMultiple = q => route(q) ?? new EntityCollection(),
+    };
 
     [Fact]
     public void ReadSdkMessage_MapsRequestAndResponseFields()
     {
-        var svc = new FakeOrgService
+        var svc = Service(q => q.EntityName switch
         {
-            OnRetrieveMultiple = q => q.EntityName switch
-            {
-                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "QualifyLead"))),
-                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
-                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
-                "sdkmessagerequestfield" => FakeOrgService.Collection(
-                    Row("sdkmessagerequestfield", ("name", "CreateAccount"), ("clrparser", "System.Boolean" + Cor), ("position", 1)),
-                    Row("sdkmessagerequestfield", ("name", "LeadId"), ("clrparser", "Microsoft.Xrm.Sdk.EntityReference" + Asm), ("position", 0))),
-                "sdkmessageresponse" => FakeOrgService.Collection(Row("sdkmessageresponse")),
-                "sdkmessageresponsefield" => FakeOrgService.Collection(
-                    Row("sdkmessageresponsefield", ("name", "CreatedEntities"), ("clrformatter", "Microsoft.Xrm.Sdk.EntityCollection" + Asm), ("position", 0))),
-                _ => new EntityCollection(),
-            },
-        };
+            "sdkmessagerequest" => FakeOrgService.Collection(RequestRow("QualifyLead", Modern)),
+            "sdkmessagerequestfield" => FakeOrgService.Collection(
+                Row("sdkmessagerequestfield", ("name", "CreateAccount"), ("clrparser", "System.Boolean" + Cor), ("position", 1)),
+                Row("sdkmessagerequestfield", ("name", "LeadId"), ("clrparser", "Microsoft.Xrm.Sdk.EntityReference" + Asm), ("position", 0))),
+            "sdkmessageresponse" => FakeOrgService.Collection(Row("sdkmessageresponse")),
+            "sdkmessageresponsefield" => FakeOrgService.Collection(
+                Row("sdkmessageresponsefield", ("name", "CreatedEntities"), ("clrformatter", "Microsoft.Xrm.Sdk.EntityCollection" + Asm), ("position", 0))),
+            _ => null,
+        });
 
-        SdkMessage message = ReadSingle(svc, "QualifyLead");
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "QualifyLead");
 
         Assert.Equal("QualifyLead", message.Name);
 
@@ -73,100 +85,59 @@ public class SdkMessageReaderTests
         SdkMessageField response = Assert.Single(message.ResponseFields);
         Assert.Equal("CreatedEntities", response.Name);
         Assert.Equal("EntityCollection", response.CSharpType);
+
+        // The request is looked up by its own name, joined to its pair.
+        QueryExpression lookup = svc.Queries.First(q => q.EntityName == "sdkmessagerequest");
+        Assert.Equal("QualifyLead", lookup.Criteria.Conditions.Single(c => c.AttributeName == "name").Values.Single());
+        Assert.Equal("sdkmessagepair", lookup.LinkEntities.Single().LinkToEntityName);
     }
 
-    [Fact]
-    public void ReadSdkMessage_Prefers2011ContractsPair_OverLegacyAndRegardlessOfOrder()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ReadSdkMessage_PrefersTheModernContractsPair_RegardlessOfOrder(bool with2011)
     {
-        // Legacy pair listed first (as happens in some environments); the modern 2011/Contracts pair must win.
-        Entity legacy = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2007/WebServices"));
-        Entity modern = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"));
-        Entity xrm = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/xrm/7.1/Contracts"));
-        Guid usedPairId = Guid.Empty;
+        // Legacy pair listed first (as happens in some environments); 2011/Contracts wins, else xrm/*/Contracts.
+        Entity legacy = RequestRow("Whatever", "http://schemas.microsoft.com/crm/2007/WebServices");
+        Entity xrm = RequestRow("Whatever", "http://schemas.microsoft.com/xrm/7.1/Contracts");
+        Entity modern = RequestRow("Whatever", Modern);
+        Guid usedRequestId = Guid.Empty;
 
-        var svc = new FakeOrgService
+        var svc = Service(q =>
         {
-            OnRetrieveMultiple = q =>
+            switch (q.EntityName)
             {
-                switch (q.EntityName)
-                {
-                    case "sdkmessage":
-                        return FakeOrgService.Collection(Row("sdkmessage", ("name", "Whatever")));
-                    case "sdkmessagepair":
-                        return FakeOrgService.Collection(legacy, xrm, modern);
-                    case "sdkmessagerequest":
-                        return FakeOrgService.Collection(RequestOfPair(q));
-                    case "sdkmessagerequestfield":
-                        // Capture which pair's request the fields were read from.
-                        usedPairId = PairOfRequest(q);
-                        return new EntityCollection();
-                    default:
-                        return new EntityCollection();
-                }
-            },
-        };
+                case "sdkmessagerequest":
+                    return with2011 ? FakeOrgService.Collection(legacy, xrm, modern) : FakeOrgService.Collection(legacy, xrm);
+                case "sdkmessagerequestfield":
+                    usedRequestId = (Guid)q.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessagerequestid").Values[0];
+                    return null;
+                default:
+                    return null;
+            }
+        });
 
-        SdkMessage message = ReadSingle(svc, "Whatever");
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "Whatever");
 
         Assert.Equal("Whatever", message.Name);
-        Assert.Equal(modern.Id, usedPairId);
+        Assert.Equal(with2011 ? modern.Id : xrm.Id, usedRequestId);
         Assert.Empty(message.ResponseFields);
-    }
-
-    [Fact]
-    public void ReadSdkMessage_FallsBackToContractsPair_WhenNo2011()
-    {
-        // No 2011/Contracts present: an xrm/*/Contracts pair is preferred over the legacy WebServices pair.
-        Entity legacy = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2007/WebServices"));
-        Entity xrm = Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/xrm/7.1/Contracts"));
-        Guid usedPairId = Guid.Empty;
-
-        var svc = new FakeOrgService
-        {
-            OnRetrieveMultiple = q =>
-            {
-                switch (q.EntityName)
-                {
-                    case "sdkmessage":
-                        return FakeOrgService.Collection(Row("sdkmessage", ("name", "Whatever")));
-                    case "sdkmessagepair":
-                        return FakeOrgService.Collection(legacy, xrm);
-                    case "sdkmessagerequest":
-                        return FakeOrgService.Collection(RequestOfPair(q));
-                    case "sdkmessagerequestfield":
-                        // Capture which pair's request the fields were read from.
-                        usedPairId = PairOfRequest(q);
-                        return new EntityCollection();
-                    default:
-                        return new EntityCollection();
-                }
-            },
-        };
-
-        ReadSingle(svc, "Whatever");
-
-        Assert.Equal(xrm.Id, usedPairId);
     }
 
     [Fact]
     public void ReadSdkMessage_DedupesAndSkipsBlankRequestFields()
     {
-        var svc = new FakeOrgService
+        var svc = Service(q => q.EntityName switch
         {
-            OnRetrieveMultiple = q => q.EntityName switch
-            {
-                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "M"))),
-                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
-                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
-                "sdkmessagerequestfield" => FakeOrgService.Collection(
-                    Row("sdkmessagerequestfield", ("name", "Dup"), ("clrparser", "System.String" + Cor), ("position", 1)),
-                    Row("sdkmessagerequestfield", ("name", "Dup"), ("clrparser", "System.String" + Cor), ("position", 2)),
-                    Row("sdkmessagerequestfield", ("name", "  "), ("clrparser", "System.String" + Cor), ("position", 0))),
-                _ => new EntityCollection(),
-            },
-        };
+            "sdkmessagerequest" => FakeOrgService.Collection(RequestRow("M", Modern)),
+            "sdkmessagerequestfield" => FakeOrgService.Collection(
+                Row("sdkmessagerequestfield", ("name", "Dup"), ("clrparser", "System.String" + Cor), ("position", 1)),
+                Row("sdkmessagerequestfield", ("name", "Dup"), ("clrparser", "System.String" + Cor), ("position", 2)),
+                Row("sdkmessagerequestfield", ("name", "  "), ("clrparser", "System.String" + Cor), ("position", 0))),
+            _ => null,
+        });
 
-        SdkMessage message = ReadSingle(svc, "M");
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
 
         SdkMessageField only = Assert.Single(message.RequestFields);
         Assert.Equal("Dup", only.Name);
@@ -245,188 +216,113 @@ public class SdkMessageReaderTests
     [Fact]
     public void ReadSdkMessage_PopulatesApplicableEntities_FromSdkMessageFilter_DedupedAndOrdered()
     {
-        var svc = new FakeOrgService
+        var svc = Service(q => q.EntityName switch
         {
-            OnRetrieveMultiple = q => q.EntityName switch
-            {
-                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "QualifyLead"))),
-                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
-                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
-                // Two filter rows for 'lead' (deduped), one for 'account', one blank (skipped), one "none"
-                // (the global sentinel - skipped so the message falls into the generic On<TEntity>() path).
-                "sdkmessagefilter" => FakeOrgService.Collection(
-                    Row("sdkmessagefilter", ("primaryobjecttypecode", "lead")),
-                    Row("sdkmessagefilter", ("primaryobjecttypecode", "account")),
-                    Row("sdkmessagefilter", ("primaryobjecttypecode", "lead")),
-                    Row("sdkmessagefilter", ("primaryobjecttypecode", "none")),
-                    Row("sdkmessagefilter", ("primaryobjecttypecode", "  "))),
-                _ => new EntityCollection(),
-            },
-        };
+            "sdkmessagerequest" => FakeOrgService.Collection(RequestRow("M", Modern)),
+            // Two filter rows for 'lead' (deduped), one for 'account', one blank (skipped), one "none"
+            // (the global sentinel - skipped so the message falls into the generic On<TEntity>() path).
+            "sdkmessagefilter" => FakeOrgService.Collection(
+                Row("sdkmessagefilter", ("primaryobjecttypecode", "lead")),
+                Row("sdkmessagefilter", ("primaryobjecttypecode", "account")),
+                Row("sdkmessagefilter", ("primaryobjecttypecode", "lead")),
+                Row("sdkmessagefilter", ("primaryobjecttypecode", "none")),
+                Row("sdkmessagefilter", ("primaryobjecttypecode", "  "))),
+            _ => null,
+        });
 
-        SdkMessage message = ReadSingle(svc, "QualifyLead");
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
 
         Assert.Equal(new[] { "account", "lead" }, message.Entities.ToArray());
 
-        // The filter query carries the sdkmessageid plus the step-eligibility conditions (mirrors the ALL-mode list).
+        // The filter query carries the request's sdkmessageid plus the step-eligibility conditions (mirrors the
+        // ALL-mode list).
         QueryExpression filterQuery = svc.Queries.Single(q => q.EntityName == "sdkmessagefilter");
-        Assert.Contains(filterQuery.Criteria.Conditions, c => c.AttributeName == "sdkmessageid");
+        Assert.Equal(MessageId, filterQuery.Criteria.Conditions.Single(c => c.AttributeName == "sdkmessageid").Values.Single());
         Assert.Equal(true, filterQuery.Criteria.Conditions.Single(c => c.AttributeName == "iscustomprocessingstepallowed").Values.Single());
         Assert.Equal(true, filterQuery.Criteria.Conditions.Single(c => c.AttributeName == "isvisible").Values.Single());
     }
 
     [Fact]
+    public void ReadSdkMessage_RequestBoundToATable_AppliesToThatTableOnly()
+    {
+        // WinQuote runs as the Win sdkmessage, whose filters are opportunity and quote; the request is quote's.
+        var svc = Service(q => q.EntityName switch
+        {
+            "sdkmessagerequest" => FakeOrgService.Collection(RequestRow("WinQuote", Modern, table: "quote")),
+            "sdkmessagefilter" => FakeOrgService.Collection(
+                Row("sdkmessagefilter", ("primaryobjecttypecode", "opportunity")),
+                Row("sdkmessagefilter", ("primaryobjecttypecode", "quote"))),
+            _ => null,
+        });
+
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "WinQuote");
+
+        Assert.Equal("WinQuote", message.Name);
+        Assert.Equal(new[] { "quote" }, message.Entities.ToArray());
+    }
+
+    [Fact]
     public void ReadSdkMessage_NoSdkMessageFilter_YieldsEmptyEntities()
     {
-        var svc = new FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName switch
-            {
-                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "M"))),
-                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
-                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
-                _ => new EntityCollection(),
-            },
-        };
+        var svc = Service(q => q.EntityName == "sdkmessagerequest" ? FakeOrgService.Collection(RequestRow("M", Modern)) : null);
 
-        SdkMessage message = ReadSingle(svc, "M");
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
 
         Assert.Empty(message.Entities);
     }
 
     [Fact]
-    public void ReadSdkMessage_UnknownMessage_Throws()
+    public void ReadSdkMessage_UnknownRequest_Throws()
     {
         var svc = new FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => SdkMessageReader.ReadRequest(svc, "Nope"));
-        Assert.Contains("Nope", ex.Message);
+            () => SdkMessageReader.ReadSdkMessage(svc, "Nope"));
+        Assert.Contains("SDK request 'Nope' was not found", ex.Message);
+    }
+
+    // "Send" is the sdkmessage, which Dataverse does not execute ("Request not supported", verified live): the reader
+    // refuses it and names the requests to generate instead, rather than generating several classes.
+    [Fact]
+    public void ReadSdkMessage_AnSdkMessageName_IsRejected_WithTheRequestNames()
+    {
+        var svc = Service(q => q.EntityName == "sdkmessagerequest" && !IsRequestLookup(q)
+            ? FakeOrgService.Collection(
+                Row("sdkmessagerequest", ("name", "SendTemplate")),
+                Row("sdkmessagerequest", ("name", "SendEmail")),
+                Row("sdkmessagerequest", ("name", "SendEmail")),
+                Row("sdkmessagerequest", ("name", "SendFax")))
+            : null);
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => SdkMessageReader.ReadSdkMessage(svc, "Send"));
+        Assert.Contains("'Send' is the sdkmessage a step registers on, not a request Dataverse executes. Generate SendEmail, SendFax, SendTemplate instead.", ex.Message);
+    }
+
+    [Fact]
+    public void ListRequestNames_ReturnsTheRequestsOfTheMessage_SkippingPlaceholders()
+    {
+        var svc = Service(q => q.EntityName == "sdkmessagerequest"
+            ? FakeOrgService.Collection(
+                Row("sdkmessagerequest", ("name", "SetState{Entity.PrimaryEntityName}")),
+                Row("sdkmessagerequest", ("name", "SetState")))
+            : null);
+
+        Assert.Equal(new[] { "SetState" }, SdkMessageReader.ListRequestNames(svc, "SetState").ToArray());
+
+        LinkEntity message = svc.Queries.Single().LinkEntities.Single().LinkEntities.Single();
+        Assert.Equal("sdkmessage", message.LinkToEntityName);
+        Assert.Equal("SetState", message.LinkCriteria.Conditions.Single(c => c.AttributeName == "name").Values.Single());
     }
 
     [Fact]
     public void ReadSdkMessage_NoResponse_YieldsEmptyResponseFields()
     {
-        var svc = new FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName switch
-            {
-                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "M"))),
-                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
-                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
-                _ => new EntityCollection(),
-            },
-        };
+        var svc = Service(q => q.EntityName == "sdkmessagerequest" ? FakeOrgService.Collection(RequestRow("M", Modern)) : null);
 
-        SdkMessage message = ReadSingle(svc, "M");
+        SdkMessage message = SdkMessageReader.ReadSdkMessage(svc, "M");
 
         Assert.Empty(message.RequestFields);
         Assert.Empty(message.ResponseFields);
-    }
-
-    // Verified live 2026-10-09: the Close sdkmessage has one request per entity, each with its own fields, on its
-    // own pairs (CloseIncident: incident + IncidentResolution; CloseQuote: quote + QuoteClose).
-    private static FakeOrgService SharedCloseMessage()
-    {
-        Guid incident2011 = Guid.NewGuid(), incidentLegacy = Guid.NewGuid(), quote2011 = Guid.NewGuid();
-        return new FakeOrgService
-        {
-            OnRetrieveMultiple = q =>
-            {
-                switch (q.EntityName)
-                {
-                    case "sdkmessage":
-                        // By name (the sdkmessage itself), or through pair -> request for one of its two request names.
-                        bool byName = q.Criteria.Conditions.Any(c => c.AttributeName == "name" && (string)c.Values[0] == "Close");
-                        bool byRequest = q.LinkEntities.SelectMany(p => p.LinkEntities).SelectMany(r => r.LinkCriteria.Conditions)
-                            .Any(c => c.AttributeName == "name" && (string)c.Values[0] is "CloseIncident" or "CloseQuote");
-                        return byName || byRequest ? FakeOrgService.Collection(Row("sdkmessage", ("name", "Close"))) : new EntityCollection();
-                    case "sdkmessagepair":
-                        return FakeOrgService.Collection(
-                            new Entity("sdkmessagepair", incidentLegacy) { ["namespace"] = "http://schemas.microsoft.com/crm/2007/WebServices" },
-                            new Entity("sdkmessagepair", incident2011) { ["namespace"] = "http://schemas.microsoft.com/crm/2011/Contracts" },
-                            new Entity("sdkmessagepair", quote2011) { ["namespace"] = "http://schemas.microsoft.com/crm/2011/Contracts" });
-                    case "sdkmessagerequest":
-                        Entity request = RequestOfPair(q);
-                        bool isQuote = request.Id == quote2011;
-                        request["name"] = isQuote ? "CloseQuote" : "CloseIncident";
-                        request["primaryobjecttypecode"] = request.Id == incidentLegacy ? null : (isQuote ? "quote" : "incident");
-                        return FakeOrgService.Collection(request);
-                    case "sdkmessagerequestfield":
-                        Guid pair = PairOfRequest(q);
-                        return pair == quote2011
-                            ? FakeOrgService.Collection(Row("sdkmessagerequestfield", ("name", "QuoteClose"), ("clrparser", "Microsoft.Xrm.Sdk.Entity" + Asm), ("position", 0)))
-                            : pair == incident2011
-                                ? FakeOrgService.Collection(Row("sdkmessagerequestfield", ("name", "IncidentResolution"), ("clrparser", "Microsoft.Xrm.Sdk.Entity" + Asm), ("position", 0)))
-                                : FakeOrgService.Collection(Row("sdkmessagerequestfield", ("name", "Legacy"), ("clrparser", null!), ("position", 0)));
-                    case "sdkmessagefilter":
-                        return FakeOrgService.Collection(
-                            Row("sdkmessagefilter", ("primaryobjecttypecode", "incident")),
-                            Row("sdkmessagefilter", ("primaryobjecttypecode", "quote")));
-                    default:
-                        return new EntityCollection();
-                }
-            },
-        };
-    }
-
-    [Fact]
-    public void ReadMessageRequests_SharedMessage_YieldsOneContractPerRequest_WithItsOwnFieldsAndEntity()
-    {
-        // The bare --messages reads every request an sdkmessage serves.
-        IReadOnlyList<SdkMessage> contracts = SdkMessageReader.ReadMessageRequests(SharedCloseMessage(), "Close");
-
-        Assert.Equal(new[] { "CloseIncident", "CloseQuote" }, contracts.Select(c => c.Name).ToArray());
-        Assert.All(contracts, c => Assert.Equal("Close", c.MessageName));
-
-        SdkMessage incident = contracts[0];
-        Assert.Equal("IncidentResolution", Assert.Single(incident.RequestFields).Name); // the 2011 pair, not the legacy one
-        Assert.Equal(new[] { "incident" }, incident.Entities.ToArray());
-
-        SdkMessage quote = contracts[1];
-        Assert.Equal("QuoteClose", Assert.Single(quote.RequestFields).Name);
-        Assert.Equal(new[] { "quote" }, quote.Entities.ToArray());
-    }
-
-    [Fact]
-    public void ReadRequest_YieldsJustThatRequest_OnItsSdkMessage()
-    {
-        SdkMessage quote = SdkMessageReader.ReadRequest(SharedCloseMessage(), "CloseQuote");
-
-        Assert.Equal("CloseQuote", quote.Name);
-        Assert.Equal("Close", quote.MessageName);
-        Assert.Equal("QuoteClose", Assert.Single(quote.RequestFields).Name);
-    }
-
-    // A targeted name must be the request the user executes: an sdkmessage alias is rejected with the real names,
-    // never expanded into several classes.
-    [Fact]
-    public void ReadRequest_SdkMessageAlias_IsRejectedWithTheRequestNames()
-    {
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => SdkMessageReader.ReadRequest(SharedCloseMessage(), "Close"));
-
-        Assert.Contains("'Close' is an sdkmessage, not a request", ex.Message);
-        Assert.Contains("CloseIncident, CloseQuote", ex.Message);
-    }
-
-    [Fact]
-    public void ReadSdkMessages_UnnamedRequest_IsNamedAfterItsMessage()
-    {
-        var svc = new FakeOrgService
-        {
-            OnRetrieveMultiple = q => q.EntityName switch
-            {
-                "sdkmessage" => FakeOrgService.Collection(Row("sdkmessage", ("name", "M"))),
-                "sdkmessagepair" => FakeOrgService.Collection(Row("sdkmessagepair", ("namespace", "http://schemas.microsoft.com/crm/2011/Contracts"))),
-                "sdkmessagerequest" => FakeOrgService.Collection(Row("sdkmessagerequest")),
-                _ => new EntityCollection(),
-            },
-        };
-
-        SdkMessage message = ReadSingle(svc, "M");
-
-        Assert.Equal("M", message.Name);
-        Assert.Equal("M", message.MessageName);
     }
 }

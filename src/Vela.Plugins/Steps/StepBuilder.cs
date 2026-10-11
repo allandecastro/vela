@@ -28,6 +28,7 @@ public sealed partial class StepBuilder<TEntity>
     private ImageDefinition? _currentImage;
     private bool _isPreImage;
     private SetOnceModifier _setOnce;
+    private string? _requiredEntity;
 
     // The single-value modifiers on the fluent chain: each is a "last wins" overwrite if called twice, which
     // silently drops the earlier value. They may be set at most once per step; a second call throws (and the
@@ -45,6 +46,8 @@ public sealed partial class StepBuilder<TEntity>
         SupportedDeployment = 32,
         UnsecureConfig = 64,
         SecureConfig = 128,
+        Relationship = 256,
+        SkipDepth = 512,
     }
 
     private void MarkSetOnce(SetOnceModifier modifier, string method)
@@ -99,6 +102,19 @@ public sealed partial class StepBuilder<TEntity>
             _definition.EntityLogicalName = string.Empty;
         }
 
+        // A typed trigger whose message Dataverse accepts on one table only (OnSendEmail() on email, OnWinQuote() on
+        // quote) cannot be registered on another one. Apply would at best fail on the missing sdkmessagefilter; for
+        // an sdkmessage shared by several requests (Win, Close, Cancel) it would register on the sibling table and
+        // hand the handler the wrong typed request.
+        if (_requiredEntity != null &&
+            !string.Equals(_definition.EntityLogicalName, _requiredEntity, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"On{_definition.RequestName}() registers on the '{_definition.Message}' message of table '{_requiredEntity}', " +
+                $"but this plugin's table is '{_definition.EntityLogicalName}'. Register the step from an EntityPluginBase<T> " +
+                $"whose T is the '{_requiredEntity}' table.");
+        }
+
         // Hard guarantee (the type-state only forces filtering when the fluent chain is consumed; the
         // RegisterStep() pattern registers by side-effect and discards it, so the framework calls Build()).
         // Create/Update must declare at least one filtering attribute — an unfiltered step fires on every change.
@@ -113,12 +129,12 @@ public sealed partial class StepBuilder<TEntity>
                 $"Step on message '{_definition.Message}' must declare at least one filtering attribute via " +
                 "FilterOn(...). An unfiltered Create/Update step fires on every change. Use the typed " +
                 "OnCreate() / OnUpdate() / OnCreateMultiple() / OnUpdateMultiple() methods (which require the " +
-                "filtering attribute) rather than the permissive OnMessage(\"...\").");
+                "filtering attribute) rather than a request-typed On<CreateRequest>() / OnMessage<T>().");
         }
 
         // Image backstop: the typed chain already prevents an invalid image at compile time, but a step
-        // assembled out of order (reflection) or via the permissive OnMessage(...) escape hatch with a
-        // modelled message string is still validated here.
+        // assembled out of order (reflection) or via a request-typed On<TRequest>() / OnMessage<T>() on a
+        // modelled message is still validated here.
         foreach (ImageDefinition image in _preImages)
         {
             EnsureImageAllowed(isPreImage: true, image);
@@ -129,6 +145,7 @@ public sealed partial class StepBuilder<TEntity>
         }
 
         EnsureNoDuplicates(_definition.FilteringAttributes, "filtering attribute");
+        EnsureNoDuplicates(_definition.Relationships, "relationship");
         foreach (ImageDefinition img in _preImages.Concat(_postImages))
         {
             EnsureNoDuplicates(img.Attributes, $"attribute in image '{img.Alias}'");
@@ -212,11 +229,13 @@ public sealed partial class StepBuilder<TEntity>
     }
 
     // Every trigger records its message here: the request name it was declared with is kept for the typed context,
-    // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win).
-    private void SetMessage(string requestName)
+    // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win). A typed trigger
+    // whose message Dataverse accepts on a single table also passes that table, checked by Build().
+    private void SetMessage(string requestName, string? requiredEntity = null)
     {
         _definition.RequestName = requestName;
         _definition.Message = SdkMessageNames.ToSdkMessage(requestName);
+        _requiredEntity = requiredEntity;
     }
 
     // A trigger stated by type (On<TRequest>(), OnMessage<TMarker>()): the request name comes from the type, and
@@ -236,6 +255,7 @@ public sealed partial class StepBuilder<TEntity>
     // stage/mode/handler transitions of the guided chain, just reached from the adapter.
     internal void SetStageInternal(PluginStages stage) => _definition.Stage = stage;
     internal void SetModeInternal(ExecutionMode mode) => _definition.Mode = mode;
+    internal void SetAsyncModeInternal(bool deleteJobOnSuccess) => SetAsyncMode(deleteJobOnSuccess);
     internal void SetHandlerInternal(Delegate handler) => SetHandler(handler);
 
     // Setting mutations centralised so the interface implementations stay in lockstep (each explicit
@@ -244,6 +264,43 @@ public sealed partial class StepBuilder<TEntity>
     {
         MarkSetOnce(SetOnceModifier.ExecutionOrder, "WithExecutionOrder");
         _definition.ExecutionOrder = order;
+    }
+
+    private void SetAsyncMode(bool deleteJobOnSuccess)
+    {
+        _definition.Mode = ExecutionMode.Asynchronous;
+        _definition.AsyncAutoDelete = deleteJobOnSuccess;
+    }
+
+    private void SetSkipWhenDepthAbove(int maxDepth)
+    {
+        MarkSetOnce(SetOnceModifier.SkipDepth, "SkipWhenDepthAbove");
+        if (maxDepth < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDepth), maxDepth, "SkipWhenDepthAbove requires a depth of at least 1.");
+        }
+
+        _definition.SkipWhenDepthAbove = maxDepth;
+    }
+
+    private void SetRelationships(string schemaName, string[] additionalSchemaNames)
+    {
+        MarkSetOnce(SetOnceModifier.Relationship, "ForRelationship");
+        List<string> names = new() { schemaName };
+        if (additionalSchemaNames != null)
+        {
+            names.AddRange(additionalSchemaNames);
+        }
+
+        foreach (string name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("ForRelationship requires non-empty relationship schema names.", nameof(schemaName));
+            }
+        }
+
+        _definition.Relationships = names.Select(n => n.Trim()).ToArray();
     }
 
     private void SetDescription(string description)

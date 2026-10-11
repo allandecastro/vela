@@ -37,6 +37,28 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `On<SetStateRequest>()` registers on `SetStateDynamicEntity`, the message a state change fires, so VELA022 now
   reports only a type pinned with `[SdkMessage("SetState")]`. The test harness keeps
   `PluginContext.For<T>().OnMessage(...)` and `PluginContext.ForMessage(...)`.
+- **A typed trigger bound to one table is rejected on any other (#461).** `OnWinQuote()` and `OnWinOpportunity()`
+  both register on `Win`, on quote and opportunity, so on the wrong table a step would run with the wrong typed
+  request. The step builder now rejects a typed trigger on a table its message does not run on: `OnQualifyLead()`
+  (lead), `OnWinOpportunity()` / `OnLoseOpportunity()` (opportunity), `OnWinQuote()` /
+  `OnGenerateQuoteFromOpportunity()` (quote), `OnConvertSalesOrderToInvoice()` (salesorder), the queue triggers
+  (queueitem), the email triggers (email), the team triggers (team), the list triggers (list), `OnCloseIncident()`
+  (incident) and the contract triggers (contract). Apply already failed on most of these (no message filter for the
+  table). Verified live through `vela plan` and `vela apply`.
+- **Every SDK request is translated to its sdkmessage, not only the modelled ones (#461).** The request-name table
+  now holds the 118 public requests whose name is not an sdkmessage, read from `sdkmessagerequest` (for example
+  `CloseQuote` → `Close`, `CancelSalesOrder` → `Cancel`, `SendFax` → `Send`), so `On<CloseQuoteRequest>()`
+  registers on `Close` too.
+- **Several steps may share a trigger, and the rank is no longer part of a step's identity.** Two steps on the same
+  message, stage, mode and entity were rejected; they are now allowed when their filtering attributes, images,
+  relationship scope or step key tell them apart, and the executing step (`OwningExtension`, resolved by id for an
+  async step, whose name Dataverse leaves null) selects its handler. The automatic step key no longer includes the
+  rank, so a rank change updates the step in place; the first step of a trigger keeps its earlier key at the default
+  rank, and a keyless step deployed at another rank gets a new key once (the first `vela plan` shows an update).
+  Two steps that still cannot be told apart need a `WithStepKey(...)`. VELA008 flags only those.
+- **`ISyncAsyncMode<T>` and `IAsyncMode<T>` gain `Async(bool deleteJobOnSuccess)`.** A class implementing them must
+  add it.
+
 - **`PluginPipeline` caps the cascade at the Dataverse depth (#450).** The default `WithMaxDepth` cap was 16; it is
   now `PluginBase.DefaultMaxDepth` (8), the depth at which Dataverse aborts a chain as an infinite loop. A test whose
   cascade runs deeper than 8 (a plugin with a raised `maxDepth`, or a classic `IPlugin`) now fails with the pipeline's
@@ -170,15 +192,21 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 ### Added (Framework)
 
 
-- **Every request whose sdkmessage has another name registers on the right one (#403).** The request-to-sdkmessage
-  table grew from the 15 curated triggers to the 40 step-eligible requests read from Dataverse metadata, so
-  `On<CloseQuoteRequest>()` registers on `Close`, `On<CancelSalesOrderRequest>()` on `Cancel`, `On<SendFaxRequest>()`
-  on `Send` and `On<PublishXmlRequest>()` on `Publish` instead of on an sdkmessage that does not exist. A request type
-  outside the table states its sdkmessage with the new `[SdkMessage("...")]` attribute (`Vela.Messages`), honoured by
-  `On<TRequest>()`, `OnMessage<TMarker>()` and the test harness.
+- **`[SdkMessage("...")]` (`Vela.Messages`) (#403).** A request type outside the request-name table states the
+  sdkmessage its steps register on; honoured by `On<TRequest>()`, `OnMessage<TMarker>()` and the test harness.
 - **Vela.Testing: `PluginContext.ForRequest(request)` and `.WithRequest(request)`.** The fake context takes its
   message (the sdkmessage the platform runs the request on) and its input parameters from a typed request, so a
   Custom API or message test states no message name or parameter key.
+- **`Async(deleteJobOnSuccess: true)`** deletes an asynchronous step's system job once it succeeds (Dataverse
+  `asyncautodelete`), carried on `StepDefinition.AsyncAutoDelete`.
+- **`ForRelationship("schema_name", ...)` on `OnAssociate()` / `OnDisassociate()`.** Dataverse fires these steps for
+  every relationship; the handler now runs only for the named ones (`StepDefinition.Relationships`), and any other
+  relationship is skipped with a trace line.
+- **`SkipWhenDepthAbove(n)`** skips a step's handler (with a trace line) when the execution depth is above `n`,
+  replacing the plugin-level depth guard, which throws, for that step only. `n` must be at least 1. Runtime-only.
+- **Typed bulk images.** A typed step context of a `CreateMultiple` / `UpdateMultiple` handler exposes `PreImages` /
+  `PostImages`: one projection per target, aligned with `ctx.GetTargets()`, read by the step's own alias.
+
 - **`RetryPolicy.Execute(..., maxElapsed:)` bounds the whole call (#450).** Each wait was capped at
   `RetryPolicy.MaxDelay` (30 s) but their sum was not, so a few attempts could consume most of the ~2-minute plugin
   budget. With `maxElapsed`, a retry whose wait would end past the budget is not made and the last fault propagates.
@@ -260,6 +288,18 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   on every execution.
 
 ### Fixed (Framework)
+
+- **The harness runs a table-bound request on its table, with an empty `PrimaryEntityId` (#461, verified live).**
+  The queue messages (`AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`) run on
+  `queueitem` whatever their `Target`, the email requests on email, the team and list requests on team and list,
+  `CloseIncident` on incident and `WinQuote` on quote, so a step on the wrong table does not fire in a test either.
+  The platform leaves `PrimaryEntityId` empty on all of these, at PreValidation and PostOperation, and so does the
+  harness now (it used to take the id of the closing activity's lookup or of the `Target`).
+- **The in-memory pipeline fills a bulk step's image collections as Dataverse does** (verified live): each target's
+  collection also holds the images of the plugin type's other steps on the message and the platform's
+  `PreBusinessEntity` / `PostBusinessEntity`, so a test of access by alias is real. It also seeds the
+  `sdkmessageprocessingstep` rows an async step's `OwningExtension` points at, so several async steps on one trigger
+  dispatch as on Dataverse.
 
 - **`RetryPolicy` jitter is independent across threads (#450).** Each thread's `Random` was seeded from the tick
   count on .NET Framework, so threads that started retrying in the same tick drew the same backoff. The seeds now come
@@ -535,6 +575,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (CLI)
 
+- **`apply` writes `asyncautodelete`** for a step declared `Async(deleteJobOnSuccess: true)`, and `plan` diffs it.
+- **Several steps on one trigger** are created, updated and deleted as separate steps. A changed step that pairs
+  with its live step under another key carries `liveStepKey` in its `after` definition, so `apply` updates that step.
+
 - **Image request property in plan and apply (#462).** The step shape compares each image's `messagepropertyname`,
   so `plan` shows an image moved between the Merge master and subordinate as a change and `apply` recreates it.
   The scanner rejects `SubordinateId` on any message other than Merge (the platform fails with 0x8004416B).
@@ -557,6 +601,26 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
 
 ### Fixed (CLI)
+
+- **`vela add` and `vela models` use the real message names (#461).** `vela add --message Send` (or `Win`,
+  `Close`, ...) now renders the typed trigger (`OnSendEmail()`, and `OnWinQuote()` or `OnWinOpportunity()` from the
+  table). `vela models --messages` takes SDK request names, the names Dataverse executes: `--messages SendEmail`
+  generates `SendEmailRequest`. It used to take sdkmessage names and emit, for `Send`, a `SendRequest` with
+  `RequestName = "Send"`, which Dataverse refuses ("Request not supported", verified live); `--messages Send` now
+  fails and names the requests to generate (`SendEmail`, `SendFax`, `SendTemplate`). Without a value, one class is
+  generated per request, bound to the request's table, and the requests the SDK already ships are skipped
+  (`SendRequest`, `WinRequest`... duplicates are gone). `plan` / `apply` also reject any image on
+  `SendFromTemplate`, which Dataverse does not support (verified live).
+- **A scaffolded solution's parallel build no longer packs a plugin twice.** When MSBuild could not match a test
+  project's reference to the solution configuration (the path reaches it in a different form, e.g. through a
+  symlink), it built the referenced plugin project a second time, without Configuration/Platform (Debug), in
+  parallel with the solution's Release build. Both packed into the same `artifacts/<Plugin>.1.0.0.nupkg`, so the
+  build failed with "being used by another process", or the Debug package could overwrite the Release one. `vela
+  init` now sets `ShouldUnsetParentConfigurationAndPlatform=false` in the test projects, so such a reference
+  inherits their configuration and is the same build, run once. Existing solutions can add the property to their
+  test projects (#406).
+- **An added step no longer takes over another step registered on the same trigger.** `apply` adopted any single
+  live step on the trigger for a step whose key it did not find; it now adopts only the step the diff paired.
 
 - **Step descriptions and Custom API display names and descriptions reach Dataverse.** `apply` wrote the step name
   as every step's description, and the unique name (or the parameter name) as every Custom API's display name and

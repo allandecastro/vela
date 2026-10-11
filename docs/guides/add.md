@@ -34,11 +34,13 @@ vela add --interactive
   call - the CRUD/bulk set (`Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`,
   `RetrieveMultiple`), relationships/sharing (`Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`,
   `RevokeAccess`, `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`), sales lifecycle (`QualifyLead`,
-  `WinOpportunity`, `LoseOpportunity`, the `Convert*`/`Generate*` messages), queues (`AddToQueue`, `RouteTo`, …),
-  email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and case/contract messages (see the full
-  list in [Write a plugin](plugins.md), `Assign` included); any other name is registered through its request
-  type, `On<XxxRequest>()`, with a handler taking `IMessagePostContext<XxxRequest>` (`IMessagePreContext` at a
-  pre-stage). When the SDK ships the request class it is used fully qualified (`--message SetState` renders
+  `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`),
+  queues (`AddToQueue`, `RouteTo`, …), email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and
+  case/contract messages (see the full list in [Write a plugin](plugins.md), `Assign` included). The sdkmessage name
+  works too: `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or
+  `OnWinOpportunity()` from `--entity`. Any other name is registered through its request type, `On<XxxRequest>()`,
+  with a handler taking `IMessagePostContext<XxxRequest>` (`IMessagePreContext` at a pre-stage). When the SDK ships
+  the request class it is used fully qualified (`--message SetState` renders
   `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a
   state change fires); otherwise `add` references the request
   [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`) generates and prints a note to generate it.

@@ -332,10 +332,16 @@ internal static class ModelsCommand
                     string name = candidate.Name;
                     try
                     {
-                        sdkMessages.AddRange(SdkMessageReader.ReadMessageRequests(service, name)
-                            .Select(PreferSdkType)
-                            .Where(contract => contract is not null)
-                            .Select(contract => contract!));
+                        // The classes are generated per request, under the name Dataverse executes: the Send
+                        // sdkmessage is executed as SendEmail, SendFax and SendTemplate. A request the SDK already
+                        // ships gets only its step extension over the SDK type (PreferSdkType).
+                        foreach (string requestName in SdkMessageReader.ListRequestNames(service, name))
+                        {
+                            if (PreferSdkType(SdkMessageReader.ReadSdkMessage(service, requestName)) is { } contract)
+                            {
+                                sdkMessages.Add(contract);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -348,13 +354,14 @@ internal static class ModelsCommand
             else if (scope.Messages.Length > 0)
             {
                 // Targeted: the user asked for these requests by their real name (what Execute takes), so generate
-                // exactly them — never silently skipped, never expanded. An sdkmessage alias (Send, Close) is
-                // rejected by the reader with the request names it serves. If one already has an SDK request class,
-                // warn (suggest the SDK type) but still generate the wrapper.
+                // exactly them — never silently skipped, never expanded. A request the SDK already ships gets only its
+                // step extension over the SDK type; a curated trigger gets nothing.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
+                // The names are SDK request names (SendEmail), the ones Dataverse executes; an sdkmessage name whose
+                // requests are named otherwise (Send) is rejected by the reader with the names to use.
                 foreach (string name in scope.Messages.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
-                    SdkMessage? contract = PreferSdkType(SdkMessageReader.ReadRequest(service, name));
+                    SdkMessage? contract = PreferSdkType(SdkMessageReader.ReadSdkMessage(service, name));
                     if (contract is null)
                     {
                         Console.Error.WriteLine($"Note: '{name}' has a curated trigger (On{name}()) and an SDK request class; nothing to generate.");

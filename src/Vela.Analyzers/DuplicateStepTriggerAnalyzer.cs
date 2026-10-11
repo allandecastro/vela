@@ -9,11 +9,12 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Vela.Analyzers
 {
     /// <summary>
-    /// Flags two step registrations in one plugin that share the same trigger - message + stage + mode (the entity
-    /// is fixed per plugin). Dataverse allows only one step per trigger, and the runtime throws
-    /// ("registers more than one step for the same trigger"); this surfaces it at build. Only complete chains
-    /// (ending in <c>Handle</c>) whose message and stage are statically determinable are compared; anything the
-    /// analyzer cannot read is skipped, so it never guesses.
+    /// Flags two step registrations in one plugin that share a trigger - message + stage + mode (the entity is fixed
+    /// per plugin) - and cannot be told apart: the same <c>FilterOn(...)</c> columns, the same images, and neither
+    /// carries a <c>WithStepKey(...)</c> or <c>ForRelationship(...)</c>. Several steps may share a trigger when one of
+    /// those differs; two that do not resolve to the same step key and the runtime rejects them ("cannot be told
+    /// apart"). Only complete chains (ending in <c>Handle</c>) whose message, stage, filters and images are statically
+    /// readable are compared; anything the analyzer cannot read is skipped, so it never guesses.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class DuplicateStepTriggerAnalyzer : DiagnosticAnalyzer
@@ -23,11 +24,11 @@ namespace Vela.Analyzers
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
             title: "Duplicate step trigger in a plugin",
-            messageFormat: "This plugin already registers a step for {0}; merge them (combine filtering attributes) or use a different stage/mode",
+            messageFormat: "This plugin already registers a step for {0} with the same filtering attributes and images; give one a WithStepKey(...), or merge them",
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Dataverse allows only one plugin step per trigger (message + stage + mode + entity). Two RegisterStep() chains with the same trigger in one plugin fail at registration. Filtering attributes are NOT part of the trigger: the runtime resolves a single step and never re-evaluates filters itself (Dataverse applies the registered filter upstream), so two steps that differ only by FilterOn(...) are indistinguishable and their step keys collide. Keep one step with the union of the filtering attributes and branch in the handler with HasChanged(...).");
+            description: "Several steps may share a trigger (message + stage + mode + entity) when their filtering attributes, images, relationship scope or step key tell them apart. Two RegisterStep() chains on one trigger that differ in none of these resolve to the same step key and fail at registration. The rank (WithExecutionOrder) does not tell steps apart. Give one a WithStepKey(\"...\"), or keep one step and branch in the handler.");
 
         private static readonly ImmutableDictionary<string, string> TypedTriggerMessage = new Dictionary<string, string>
         {
@@ -101,7 +102,12 @@ namespace Vela.Analyzers
                     continue; // undeterminable trigger - skip rather than guess
                 }
 
-                string key = message + "|" + stage + "|" + mode;
+                if (!TryResolveShape(member.Expression, out string shape))
+                {
+                    continue; // explicitly told apart (step key / relationship), or filters/images not readable
+                }
+
+                string key = message + "|" + stage + "|" + mode + "|" + shape;
                 if (seen.ContainsKey(key))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(Rule, location, display));
@@ -159,6 +165,80 @@ namespace Vela.Analyzers
             }
 
             display = $"message '{message}' at {stage} ({mode})";
+            return true;
+        }
+
+        // What tells a step apart from another on the same trigger: its FilterOn(...) columns and its images (alias and
+        // columns). Returns false - never compared - for a chain with WithStepKey(...) or ForRelationship(...), which
+        // the author distinguished explicitly, or whose filters/images are not literal column selectors.
+        private static bool TryResolveShape(ExpressionSyntax? receiver, out string shape)
+        {
+            shape = string.Empty;
+            var filters = new List<string>();
+            var images = new List<string>();
+            foreach (ChainCall call in FluentStep.Spine(receiver))
+            {
+                switch (call.MethodName)
+                {
+                    case "WithStepKey":
+                    case "ForRelationship":
+                        return false;
+                    case "FilterOn":
+                        if (!TryReadColumns(call.Invocation.ArgumentList.Arguments, 0, filters))
+                        {
+                            return false;
+                        }
+
+                        break;
+                    case "WithPreImage":
+                    case "WithPostImage":
+                    case "WithSubordinatePreImage":
+                    case "WithSubordinatePostImage":
+                        string kind = call.MethodName.Replace("With", string.Empty).Replace("Image", string.Empty).ToLowerInvariant();
+                        SeparatedSyntaxList<ArgumentSyntax> arguments = call.Invocation.ArgumentList.Arguments;
+                        string alias = call.MethodName.Replace("With", string.Empty);
+                        int first = 0;
+                        if (arguments.Count > 0 && arguments[0].Expression is not LambdaExpressionSyntax)
+                        {
+                            if (arguments[0].Expression is not LiteralExpressionSyntax literal || !literal.IsKind(SyntaxKind.StringLiteralExpression))
+                            {
+                                return false;
+                            }
+
+                            alias = literal.Token.ValueText;
+                            first = 1;
+                        }
+
+                        var columns = new List<string>();
+                        if (!TryReadColumns(arguments, first, columns))
+                        {
+                            return false;
+                        }
+
+                        columns.Sort(System.StringComparer.Ordinal);
+                        images.Add(kind + ":" + alias.ToLowerInvariant() + ":" + string.Join(",", columns));
+                        break;
+                }
+            }
+
+            filters.Sort(System.StringComparer.Ordinal);
+            images.Sort(System.StringComparer.Ordinal);
+            shape = "filter=" + string.Join(",", filters) + "|images=" + string.Join(";", images);
+            return true;
+        }
+
+        private static bool TryReadColumns(SeparatedSyntaxList<ArgumentSyntax> arguments, int first, List<string> columns)
+        {
+            for (int i = first; i < arguments.Count; i++)
+            {
+                if (arguments[i].Expression is not LambdaExpressionSyntax lambda || FluentStep.SelectedMember(lambda) is not MemberAccessExpressionSyntax column)
+                {
+                    return false;
+                }
+
+                columns.Add(column.Name.Identifier.ValueText.ToLowerInvariant());
+            }
+
             return true;
         }
     }

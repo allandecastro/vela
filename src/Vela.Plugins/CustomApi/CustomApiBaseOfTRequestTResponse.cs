@@ -19,7 +19,7 @@ namespace Vela.CustomApi
     /// The request and response are <see cref="OrganizationRequest"/>/<see cref="OrganizationResponse"/>-derived
     /// types whose typed properties read and write the underlying <c>Parameters</c>/<c>Results</c> bags. A single
     /// generated type therefore serves all three usages: authoring the Custom API (this base), calling it
-    /// (<c>service.Execute(new XxxRequest { ... })</c>), and reacting to it (<c>OnMessage(...).Handler&lt;XxxRequest&gt;()</c>).
+    /// (<c>service.Execute(new XxxRequest { ... })</c>), and reacting to it (<c>On&lt;XxxRequest&gt;()</c>).
     /// </para>
     /// Initializes a new instance of the <see cref="CustomApiBase{TRequest, TResponse}"/> class.
     /// </remarks>

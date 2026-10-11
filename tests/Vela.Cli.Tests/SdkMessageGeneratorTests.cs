@@ -39,30 +39,18 @@ public class SdkMessageGeneratorTests
     }
 
     [Fact]
-    public void Request_TheFrameworkTableRoutes_HasNoSdkMessageAttribute()
+    public void Request_IsNamedAfterItsRequest_WithNoSdkMessageAttribute()
     {
-        // CloseQuote runs on Close (verified live 2026-10-09); the framework's request table already routes it, so the
+        // CloseQuote runs on Close (verified live 2026-10-09); the framework's request table routes it, so the
         // generated class mentions only its real name.
         string code = Generate(new SdkMessage("CloseQuote", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
         {
-            MessageName = "Close",
             Entities = new[] { "quote" },
         });
 
         Assert.DoesNotContain("SdkMessage(", code);
         Assert.Contains("RequestName = \"CloseQuote\";", code);
         Assert.Contains("public static Vela.Steps.ITypedStages<Quote, CloseQuoteRequest> OnCloseQuote(this Vela.Steps.IStepTrigger<Quote> builder)", code);
-    }
-
-    [Fact]
-    public void Request_OnAnUnknownDifferentSdkMessage_CarriesSdkMessageAttribute()
-    {
-        string code = Generate(new SdkMessage("acme_CloseThing", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
-        {
-            MessageName = "acme_Close",
-        });
-
-        Assert.Contains("[Vela.Messages.SdkMessage(\"acme_Close\")]\n    public partial class acme_CloseThingRequest : Vela.Messages.TypedRequest", code.Replace("\r\n", "\n"));
     }
 
     [Fact]
@@ -83,7 +71,6 @@ public class SdkMessageGeneratorTests
     {
         string code = Generate(new SdkMessage("CloseQuote", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
         {
-            MessageName = "Close",
             Entities = new[] { "quote" },
             SdkRequestType = "Microsoft.Crm.Sdk.Messages.CloseQuoteRequest",
         });

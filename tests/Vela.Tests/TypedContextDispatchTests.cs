@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Client;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
@@ -13,10 +14,10 @@ namespace Vela.Tests
 {
     // Proves the runtime dispatch builds the right per-message context for every modelled message (each arm of
     // EntityPluginBase.BuildTypedContext), and that a permissive OnMessage<TMessage>() step binds and runs an untyped
-    // handler. One plugin registers a step for all 13 modelled messages plus a custom message, each bound to a
-    // single ILocalPluginContext handler (assignable to every typed context by contravariance); the test runs it
-    // once per message and asserts the matching step fired. WinQuote shares the Win sdkmessage with
-    // WinOpportunity, so it has its own test below.
+    // handler. One plugin registers a step for every modelled message any table accepts plus a custom message, and
+    // one plugin per table covers the messages Dataverse accepts on a single table (OnSendEmail() on email, ...).
+    // Each step is bound to a single ILocalPluginContext handler (assignable to every typed context by
+    // contravariance); the test runs the plugin once per message and asserts the matching step fired.
     public sealed class TypedContextDispatchTests
     {
         private sealed class AllMessagesProbe : EntityPluginBase<TestAccount>
@@ -49,28 +50,6 @@ namespace Vela.Tests
                 RegisterStep().OnRevokeAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnMessage<CustomMarker>().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnWinOpportunity().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnLoseOpportunity().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnConvertSalesOrderToInvoice().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnGenerateQuoteFromOpportunity().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnAddToQueue().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnRemoveFromQueue().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnPickFromQueue().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnRouteTo().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnReleaseToQueue().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnSendEmail().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnSendEmailFromTemplate().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnDeliverIncomingEmail().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnDeliverPromoteEmail().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnAddMembersTeam().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnRemoveMembersTeam().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnAddListMembersList().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnAddMemberList().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnRemoveMemberList().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnCloseIncident().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnCancelContract().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnCloneContract().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrievePrincipalAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Handle(OnAny);
             }
@@ -95,28 +74,6 @@ namespace Vela.Tests
         [InlineData(PluginMessages.ModifyAccess)]
         [InlineData(PluginMessages.RevokeAccess)]
         [InlineData(PluginMessages.Assign)]
-        [InlineData(PluginMessages.QualifyLead)]
-        [InlineData(PluginMessages.WinOpportunity)]
-        [InlineData(PluginMessages.LoseOpportunity)]
-        [InlineData(PluginMessages.ConvertSalesOrderToInvoice)]
-        [InlineData(PluginMessages.GenerateQuoteFromOpportunity)]
-        [InlineData(PluginMessages.AddToQueue)]
-        [InlineData(PluginMessages.RemoveFromQueue)]
-        [InlineData(PluginMessages.PickFromQueue)]
-        [InlineData(PluginMessages.RouteTo)]
-        [InlineData(PluginMessages.ReleaseToQueue)]
-        [InlineData(PluginMessages.SendEmail)]
-        [InlineData(PluginMessages.SendEmailFromTemplate)]
-        [InlineData(PluginMessages.DeliverIncomingEmail)]
-        [InlineData(PluginMessages.DeliverPromoteEmail)]
-        [InlineData(PluginMessages.AddMembersTeam)]
-        [InlineData(PluginMessages.RemoveMembersTeam)]
-        [InlineData(PluginMessages.AddListMembersList)]
-        [InlineData(PluginMessages.AddMemberList)]
-        [InlineData(PluginMessages.RemoveMemberList)]
-        [InlineData(PluginMessages.CloseIncident)]
-        [InlineData(PluginMessages.CancelContract)]
-        [InlineData(PluginMessages.CloneContract)]
         [InlineData(PluginMessages.RetrievePrincipalAccess)]
         [InlineData(PluginMessages.RetrieveSharedPrincipalsAndAccess)]
         [InlineData(AllMessagesProbe.CustomMessage)]
@@ -136,50 +93,67 @@ namespace Vela.Tests
             Assert.Equal(SdkMessageNames.ToSdkMessage(message), probe.Seen);
         }
 
-        // WinOpportunity and WinQuote share the Win sdkmessage; the step keeps its request name, so each handler gets
-        // its own typed context. A wrong context would fail to bind the typed handler.
-        private sealed class WinOpportunityProbe : EntityPluginBase<TestAccount>
+        // A table-bound message: one plugin on its table, whose step must be the one that runs and must hand its
+        // handler the typed context of the trigger (OnWinQuote() gets a WinQuote context, not a WinOpportunity one,
+        // although both register on "Win").
+        [Theory]
+        [MemberData(nameof(TableBoundTriggers))]
+        public void Each_table_bound_message_dispatches_to_its_typed_handler(string trigger, string message, string table)
         {
-            public string? Seen { get; private set; }
+            ITableProbe probe = TableProbe.Create(trigger, table);
 
-            public WinOpportunityProbe() : base(string.Empty, string.Empty) { }
+            probe.Execute(message);
 
-            protected override void RegisterPluginSteps()
-                => RegisterStep().OnWinOpportunity().PostOperation().Sync().Handle(OnWon);
-
-            private void OnWon(IWinOpportunityPostContext<TestAccount> ctx) => Seen = ctx.GetType().Name;
+            Assert.Equal(message, probe.SeenMessage);
+            Assert.Equal(trigger, probe.SeenContext);
         }
 
-        private sealed class WinQuoteProbe : EntityPluginBase<TestAccount>
+        public static TheoryData<string, string, string> TableBoundTriggers() => new TheoryData<string, string, string>
         {
-            public string? Seen { get; private set; }
-
-            public WinQuoteProbe() : base(string.Empty, string.Empty) { }
-
-            protected override void RegisterPluginSteps()
-                => RegisterStep().OnWinQuote().PostOperation().Sync().Handle(OnWon);
-
-            private void OnWon(IWinQuotePostContext<TestAccount> ctx) => Seen = ctx.GetType().Name;
-        }
+            { "QualifyLead", "QualifyLead", "lead" },
+            { "WinOpportunity", "Win", "opportunity" },
+            { "LoseOpportunity", "Lose", "opportunity" },
+            { "ConvertSalesOrderToInvoice", "ConvertSalesOrderToInvoice", "salesorder" },
+            { "GenerateQuoteFromOpportunity", "GenerateQuoteFromOpportunity", "quote" },
+            { "AddToQueue", "AddToQueue", "queueitem" },
+            { "RemoveFromQueue", "RemoveFromQueue", "queueitem" },
+            { "PickFromQueue", "PickFromQueue", "queueitem" },
+            { "RouteTo", "RouteTo", "queueitem" },
+            { "ReleaseToQueue", "ReleaseToQueue", "queueitem" },
+            { "SendEmail", "Send", "email" },
+            { "SendEmailFromTemplate", "SendFromTemplate", "email" },
+            { "DeliverIncomingEmail", "DeliverIncoming", "email" },
+            { "DeliverPromoteEmail", "DeliverPromote", "email" },
+            { "AddMembersTeam", "AddMembers", "team" },
+            { "RemoveMembersTeam", "RemoveMembers", "team" },
+            { "AddListMembersList", "AddListMembers", "list" },
+            { "AddMemberList", "AddMember", "list" },
+            { "RemoveMemberList", "RemoveMember", "list" },
+            { "CloseIncident", "Close", "incident" },
+            { "CancelContract", "Cancel", "contract" },
+            { "CloneContract", "Clone", "contract" },
+            { "WinQuote", "Win", "quote" },
+        };
 
         [Fact]
-        public void Win_builds_the_context_of_the_request_the_step_was_declared_with()
+        public void Table_bound_trigger_on_another_table_is_rejected()
         {
-            WinOpportunityProbe opportunity = new WinOpportunityProbe();
-            WinQuoteProbe quote = new WinQuoteProbe();
+            WrongTableProbe probe = new WrongTableProbe();
 
-            foreach (IPlugin plugin in new IPlugin[] { opportunity, quote })
-            {
-                PluginContext.For<TestAccount>()
-                    .OnMessage("Win")
-                    .Stage(PluginStages.PostOperation)
-                    .Mode(ExecutionMode.Synchronous)
-                    .WithPrimaryEntity(TestAccount.EntityLogicalNameValue, Guid.NewGuid())
-                    .Execute(plugin);
-            }
+            InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => probe.GetStepDefinitions());
 
-            Assert.StartsWith("WinOpportunityPostContext", opportunity.Seen);
-            Assert.StartsWith("WinQuotePostContext", quote.Seen);
+            Assert.Contains("OnWinQuote() registers on the 'Win' message of table 'quote'", error.Message);
+            Assert.Contains("'opportunity'", error.Message);
+        }
+
+        private sealed class WrongTableProbe : EntityPluginBase<TableEntity.Opportunity>
+        {
+            public WrongTableProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnWinQuote().PostOperation().Sync().Handle(OnWin);
+
+            private void OnWin(IWinQuotePostContext<TableEntity.Opportunity> ctx) { }
         }
 
         // Regression: on a real org an (Dis)Associate execution context carries no primary entity matching the
@@ -267,6 +241,107 @@ namespace Vela.Tests
                 .Execute(probe);
 
             Assert.Equal(PluginMessages.Merge, probe.Seen);
+        }
+
+        private interface ITableProbe
+        {
+            string? SeenMessage { get; }
+
+            string? SeenContext { get; }
+
+            void Execute(string message);
+        }
+
+        // One early-bound class per table a modelled message is bound to, so a probe can be an EntityPluginBase<T>
+        // on that table.
+        private static class TableEntity
+        {
+            [EntityLogicalName("lead")] public sealed class Lead() : Entity("lead");
+            [EntityLogicalName("opportunity")] public sealed class Opportunity() : Entity("opportunity");
+            [EntityLogicalName("salesorder")] public sealed class SalesOrder() : Entity("salesorder");
+            [EntityLogicalName("quote")] public sealed class Quote() : Entity("quote");
+            [EntityLogicalName("queueitem")] public sealed class QueueItem() : Entity("queueitem");
+            [EntityLogicalName("email")] public sealed class Email() : Entity("email");
+            [EntityLogicalName("team")] public sealed class Team() : Entity("team");
+            [EntityLogicalName("list")] public sealed class List() : Entity("list");
+            [EntityLogicalName("incident")] public sealed class Incident() : Entity("incident");
+            [EntityLogicalName("contract")] public sealed class Contract() : Entity("contract");
+        }
+
+        private static class TableProbe
+        {
+            public static ITableProbe Create(string trigger, string table) => table switch
+            {
+                "lead" => new TableProbe<TableEntity.Lead>(trigger),
+                "opportunity" => new TableProbe<TableEntity.Opportunity>(trigger),
+                "salesorder" => new TableProbe<TableEntity.SalesOrder>(trigger),
+                "quote" => new TableProbe<TableEntity.Quote>(trigger),
+                "queueitem" => new TableProbe<TableEntity.QueueItem>(trigger),
+                "email" => new TableProbe<TableEntity.Email>(trigger),
+                "team" => new TableProbe<TableEntity.Team>(trigger),
+                "list" => new TableProbe<TableEntity.List>(trigger),
+                "incident" => new TableProbe<TableEntity.Incident>(trigger),
+                "contract" => new TableProbe<TableEntity.Contract>(trigger),
+                _ => throw new ArgumentOutOfRangeException(nameof(table), table, null),
+            };
+        }
+
+        // Registers the one typed trigger named by `trigger` on TEntity's table, and records the message the step
+        // ran on and the modelled message of the typed context its handler received (WinQuotePostContext ->
+        // "WinQuote").
+        private sealed class TableProbe<TEntity>(string trigger) : EntityPluginBase<TEntity>(string.Empty, string.Empty), ITableProbe
+            where TEntity : Entity, new()
+        {
+            public string? SeenMessage { get; private set; }
+
+            public string? SeenContext { get; private set; }
+
+            public void Execute(string message)
+                => PluginContext.For<TEntity>()
+                    .OnMessage(message)
+                    .Stage(PluginStages.PostOperation)
+                    .Mode(ExecutionMode.Synchronous)
+                    .WithPrimaryEntity(new TEntity().LogicalName, Guid.NewGuid())
+                    .Execute(this);
+
+            protected override void RegisterPluginSteps()
+            {
+                IStepTrigger<TEntity> step = RegisterStep();
+                switch (trigger)
+                {
+                    case "QualifyLead": step.OnQualifyLead().PostOperation().Sync().Handle(OnAny); break;
+                    case "WinOpportunity": step.OnWinOpportunity().PostOperation().Sync().Handle(OnAny); break;
+                    case "LoseOpportunity": step.OnLoseOpportunity().PostOperation().Sync().Handle(OnAny); break;
+                    case "ConvertSalesOrderToInvoice": step.OnConvertSalesOrderToInvoice().PostOperation().Sync().Handle(OnAny); break;
+                    case "GenerateQuoteFromOpportunity": step.OnGenerateQuoteFromOpportunity().PostOperation().Sync().Handle(OnAny); break;
+                    case "AddToQueue": step.OnAddToQueue().PostOperation().Sync().Handle(OnAny); break;
+                    case "RemoveFromQueue": step.OnRemoveFromQueue().PostOperation().Sync().Handle(OnAny); break;
+                    case "PickFromQueue": step.OnPickFromQueue().PostOperation().Sync().Handle(OnAny); break;
+                    case "RouteTo": step.OnRouteTo().PostOperation().Sync().Handle(OnAny); break;
+                    case "ReleaseToQueue": step.OnReleaseToQueue().PostOperation().Sync().Handle(OnAny); break;
+                    case "SendEmail": step.OnSendEmail().PostOperation().Sync().Handle(OnAny); break;
+                    case "SendEmailFromTemplate": step.OnSendEmailFromTemplate().PostOperation().Sync().Handle(OnAny); break;
+                    case "DeliverIncomingEmail": step.OnDeliverIncomingEmail().PostOperation().Sync().Handle(OnAny); break;
+                    case "DeliverPromoteEmail": step.OnDeliverPromoteEmail().PostOperation().Sync().Handle(OnAny); break;
+                    case "AddMembersTeam": step.OnAddMembersTeam().PostOperation().Sync().Handle(OnAny); break;
+                    case "RemoveMembersTeam": step.OnRemoveMembersTeam().PostOperation().Sync().Handle(OnAny); break;
+                    case "AddListMembersList": step.OnAddListMembersList().PostOperation().Sync().Handle(OnAny); break;
+                    case "AddMemberList": step.OnAddMemberList().PostOperation().Sync().Handle(OnAny); break;
+                    case "RemoveMemberList": step.OnRemoveMemberList().PostOperation().Sync().Handle(OnAny); break;
+                    case "CloseIncident": step.OnCloseIncident().PostOperation().Sync().Handle(OnAny); break;
+                    case "CancelContract": step.OnCancelContract().PostOperation().Sync().Handle(OnAny); break;
+                    case "CloneContract": step.OnCloneContract().PostOperation().Sync().Handle(OnAny); break;
+                    case "WinQuote": step.OnWinQuote().PostOperation().Sync().Handle(OnAny); break;
+                    default: throw new ArgumentOutOfRangeException(nameof(trigger), trigger, null);
+                }
+            }
+
+            private void OnAny(ILocalPluginContext ctx)
+            {
+                SeenMessage = ctx.MessageName;
+                string context = ctx.GetType().Name;
+                SeenContext = context.Substring(0, context.IndexOf("PostContext", StringComparison.Ordinal));
+            }
         }
     }
 }

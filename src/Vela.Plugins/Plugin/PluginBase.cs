@@ -299,9 +299,15 @@ namespace Vela.Plugin
             }
         }
 
+        /// <summary>
+        /// Whether the step this execution belongs to sets its own depth limit (<c>.SkipWhenDepthAbove(n)</c>), which
+        /// then replaces the plugin-level guard for it.
+        /// </summary>
+        private protected virtual bool HasStepDepthLimit(ILocalPluginContext context) => false;
+
         private void EnforceDepth(ILocalPluginContext context)
         {
-            if (context.Depth <= MaxDepth)
+            if (context.Depth <= MaxDepth || HasStepDepthLimit(context))
             {
                 return;
             }
