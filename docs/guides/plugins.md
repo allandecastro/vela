@@ -429,13 +429,19 @@ The modelled messages with a typed context are:
 - **CRUD & bulk:** `Create`, `Update`, `Delete`, `CreateMultiple`, `UpdateMultiple`, `Retrieve`, `RetrieveMultiple`.
 - **Relationships & sharing:** `Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`, `RevokeAccess`,
   `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`.
-- **Sales lifecycle:** `QualifyLead`, `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`,
-  `GenerateQuoteFromOpportunity` (registered on `quote`, the only entity Dataverse filters it on).
-- **Queues:** `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
-- **Email:** `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
-- **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam`, `AddListMembersList`,
-  `AddMemberList`, `RemoveMemberList`.
-- **Case / contract:** `CloseIncident`, `CancelContract`, `CloneContract`.
+- **Sales lifecycle:** `QualifyLead` (lead), `WinOpportunity` / `LoseOpportunity` (opportunity), `WinQuote` and
+  `GenerateQuoteFromOpportunity` (quote), `ConvertSalesOrderToInvoice` (salesorder).
+- **Queues** (queueitem): `AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`.
+- **Email** (email): `SendEmail`, `SendEmailFromTemplate`, `DeliverIncomingEmail`, `DeliverPromoteEmail`.
+- **Team / marketing-list membership:** `AddMembersTeam`, `RemoveMembersTeam` (team), `AddListMembersList`,
+  `AddMemberList`, `RemoveMemberList` (list).
+- **Case / contract:** `CloseIncident` (incident), `CancelContract`, `CloneContract` (contract).
+
+A message in parentheses above runs on that table only, so its trigger must be registered from an
+`EntityPluginBase<T>` on that table, and the builder rejects it on any other. This is what tells `OnWinQuote()`
+(quote) from `OnWinOpportunity()` (opportunity), which share `Win`. The queue messages run on `queueitem` whatever
+their `Target`. On all of these Dataverse leaves `ctx.PrimaryEntityId` empty: read the record from `ctx.Request`
+(`ctx.Request.EmailId`, `ctx.Request.TeamId`, ...).
 
 **A trigger is named after the SDK request, the step registers on the sdkmessage.** For some business messages the
 two differ, and Dataverse only knows the sdkmessage: `OnSendEmail()` registers on `Send`, and the handler sees
@@ -445,7 +451,8 @@ two differ, and Dataverse only knows the sdkmessage: `OnSendEmail()` registers o
 `Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
 `AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`.
 `OnMessage(...)`, the test harness and `PluginContext.For<T>().OnMessage(...)` apply the same translation, so
-`OnMessage(PluginMessages.SendEmail)` also registers on `Send`.
+`OnMessage(PluginMessages.SendEmail)` also registers on `Send`. The translation covers every SDK request whose
+name is not an sdkmessage (read from `sdkmessagerequest`), so `On<CloseQuoteRequest>()` registers on `Close` too.
 
 Some request messages accept no custom step at all, so they have no trigger: `ReviseQuote`, `FulfillSalesOrder`,
 `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity` and the three
@@ -588,7 +595,8 @@ The rules the chain encodes:
 
 `vela plan`/`apply` check the same rules at scan time, before anything is written, so an image Dataverse would
 refuse fails with a clear error rather than a platform error code mid-apply. They also cover the messages Vela
-does not model: a `PostImage` before `PostOperation` and any image on `RouteTo` are rejected. Each image is
+does not model: a `PostImage` before `PostOperation` and any image on `RouteTo` or `SendFromTemplate` are
+rejected. Each image is
 registered against the request property the message expects (`Id` for Create, `Ids` for CreateMultiple, `Targets`
 for UpdateMultiple, `EmailId` for Send/DeliverIncoming/DeliverPromote, `EntityMoniker` for SetState, `Target`
 otherwise).
