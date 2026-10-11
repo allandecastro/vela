@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using static Vela.Cli.CliExitCodes;
 using static Vela.Cli.CommandLineOptions;
 using static Vela.Cli.OutputWriter;
@@ -62,9 +64,15 @@ internal static class SignCommand
 
         string? fingerprint = TryReadOption(args, "--fingerprint");
         string? pfxPath = TryReadOption(args, "--pfx");
-        string? pfxBase64 = TryReadOption(args, "--pfx-base64");
-        string? pfxPassword = TryReadOption(args, "--pfx-password");
         string? pfxCredential = TryReadOption(args, "--pfx-credential");
+
+        // The two secrets can come from a named environment variable instead of the command line, where other users
+        // of a shared host can read them (ps / /proc). The literal options stay for compatibility, with a warning.
+        if (!TryReadSecret(args, "--pfx-base64", out string? pfxBase64, out bool base64OnCommandLine, out exitCode)
+            || !TryReadSecret(args, "--pfx-password", out string? pfxPassword, out bool passwordOnCommandLine, out exitCode))
+        {
+            return false;
+        }
 
         bool hasFingerprint = !string.IsNullOrWhiteSpace(fingerprint);
         bool hasPfx = !string.IsNullOrWhiteSpace(pfxPath);
@@ -75,7 +83,7 @@ internal static class SignCommand
         int sources = (hasFingerprint ? 1 : 0) + (hasPfx ? 1 : 0) + (hasPfxBase64 ? 1 : 0);
         if (sources == 0)
         {
-            exitCode = Fail("Provide one certificate source: --fingerprint <hex>, --pfx <path>, or --pfx-base64 <content>.", ExitInvalidArguments, includeUsage: false);
+            exitCode = Fail("Provide one certificate source: --fingerprint <hex>, --pfx <path>, or --pfx-base64-env <VAR> (or --pfx-base64 <content>).", ExitInvalidArguments, includeUsage: false);
             return false;
         }
 
@@ -87,7 +95,7 @@ internal static class SignCommand
 
         if ((hasPfx || hasPfxBase64) && string.IsNullOrWhiteSpace(pfxPassword) && string.IsNullOrWhiteSpace(pfxCredential))
         {
-            exitCode = Fail("When signing with a .pfx, provide --pfx-password or --pfx-credential.", ExitInvalidArguments, includeUsage: false);
+            exitCode = Fail("When signing with a .pfx, provide --pfx-password-env <VAR>, --pfx-password or --pfx-credential.", ExitInvalidArguments, includeUsage: false);
             return false;
         }
 
@@ -101,7 +109,38 @@ internal static class SignCommand
             PfxPassword: pfxPassword,
             PfxCredentialTarget: pfxCredential,
             TimestampUrl: timestamp,
-            Json: HasFlag(args, "--json"));
+            Json: HasFlag(args, "--json"),
+            SecretsOnCommandLine: base64OnCommandLine || passwordOnCommandLine);
+        return true;
+    }
+
+    // Reads a secret from `<option> <value>` or from the environment variable named by `<option>-env <NAME>`. Both at
+    // once is ambiguous; a named variable that is unset or empty is an error rather than a silent "no secret".
+    private static bool TryReadSecret(string[] args, string option, out string? value, out bool onCommandLine, out int exitCode)
+    {
+        exitCode = ExitSuccess;
+        string? literal = TryReadOption(args, option);
+        string? variable = TryReadOption(args, option + "-env");
+        onCommandLine = !string.IsNullOrWhiteSpace(literal);
+        value = literal;
+        if (string.IsNullOrWhiteSpace(variable))
+        {
+            return true;
+        }
+
+        if (onCommandLine)
+        {
+            exitCode = Fail($"Use either {option} or {option}-env, not both.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
+        value = Environment.GetEnvironmentVariable(variable!.Trim());
+        if (string.IsNullOrEmpty(value))
+        {
+            exitCode = Fail($"{option}-env: the environment variable '{variable}' is not set or is empty.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
         return true;
     }
 
@@ -112,9 +151,10 @@ internal static class SignCommand
             return Fail($"Package to sign not found: {options.PackagePath}", ExitFileNotFound, includeUsage: false);
         }
 
-        // A base64 certificate (pipeline case) is decoded to a temp .pfx, used, then deleted in the finally
-        // so the secret never lingers on disk.
+        // A PFX (file or base64) is re-exported without its password to an owner-only temp .pfx, used, then deleted
+        // in the finally so the key never lingers on disk.
         string? tempPfx = null;
+        string? tempDirectory = null;
         try
         {
             ProcessStartInfo psi = new()
@@ -138,32 +178,17 @@ internal static class SignCommand
             }
             else
             {
-                string pfxFile;
+                byte[] pfxBytes;
                 if (!string.IsNullOrWhiteSpace(options.PfxBase64))
                 {
                     try
                     {
-                        byte[] bytes = Convert.FromBase64String(options.PfxBase64!.Trim());
-                        tempPfx = Path.Combine(Path.GetTempPath(), $"vela-sign-{Guid.NewGuid():N}.pfx");
-                        File.WriteAllBytes(tempPfx, bytes);
-                        // The decoded PFX carries the private key. On Unix the temp file is world-readable by
-                        // default; restrict it to the owner so it isn't exposed during the signing window.
-                        // Best-effort: a chmod failure must not abort signing.
-                        if (!OperatingSystem.IsWindows())
-                        {
-                            try { File.SetUnixFileMode(tempPfx, UnixFileMode.UserRead | UnixFileMode.UserWrite); }
-                            catch { /* best-effort hardening; proceed even if the mode can't be set */ }
-                        }
-                        // Wipe the decoded certificate from the managed heap once it's on disk — it's no longer
-                        // needed in memory and shouldn't linger until GC.
-                        Array.Clear(bytes, 0, bytes.Length);
+                        pfxBytes = Convert.FromBase64String(options.PfxBase64!.Trim());
                     }
                     catch (FormatException)
                     {
                         return Fail("--pfx-base64 is not valid base64.", ExitInvalidArguments, includeUsage: false);
                     }
-
-                    pfxFile = tempPfx;
                 }
                 else
                 {
@@ -172,17 +197,16 @@ internal static class SignCommand
                         return Fail($"PFX file not found: {options.PfxPath}", ExitFileNotFound, includeUsage: false);
                     }
 
-                    pfxFile = options.PfxPath!;
+                    pfxBytes = File.ReadAllBytes(options.PfxPath!);
                 }
 
                 string? password = options.PfxPassword;
-                if (!string.IsNullOrWhiteSpace(password))
+                if (options.SecretsOnCommandLine)
                 {
-                    // The PFX password is handed to 'dotnet nuget sign' as an argv argument (the tool has no env-var or
-                    // stdin alternative), so on a shared/multi-user host it is visible to other users via 'ps'/proc for
-                    // the child process lifetime. Warn and steer to safer sources, mirroring the --client-secret warning. (#307)
+                    // A literal --pfx-password / --pfx-base64 sits in this process's argv, readable by other users on a
+                    // shared host (ps / /proc). Steer to the -env variants, mirroring the --client-secret warning. (#307)
                     Console.Error.WriteLine(
-                        "Warning: --pfx-password is passed on the command line to the signing tool and can be read by other users on a shared host (ps/proc). Prefer --fingerprint (a certificate installed in the machine/user store) or --pfx-credential (Windows Credential Manager).");
+                        "Warning: --pfx-password / --pfx-base64 on the command line can be read by other users on a shared host (ps/proc). Pass them through an environment variable with --pfx-password-env <VAR> / --pfx-base64-env <VAR>, or prefer --fingerprint (an installed certificate).");
                 }
 
                 if (string.IsNullOrWhiteSpace(password) && !string.IsNullOrWhiteSpace(options.PfxCredentialTarget))
@@ -201,19 +225,44 @@ internal static class SignCommand
 
                 if (string.IsNullOrWhiteSpace(password))
                 {
-                    return Fail("When signing with a .pfx, provide --pfx-password or --pfx-credential.", ExitInvalidArguments, includeUsage: false);
+                    return Fail("When signing with a .pfx, provide --pfx-password-env <VAR>, --pfx-password or --pfx-credential.", ExitInvalidArguments, includeUsage: false);
                 }
 
-                string source = tempPfx is null ? $"'{pfxFile}'" : "--pfx-base64";
+                // 'dotnet nuget sign' only takes a PFX password as a command-line argument, which other users of a
+                // shared host can read (ps / /proc). So vela opens the PFX itself and hands the tool a passwordless
+                // copy in an owner-only temp file, deleted in the finally: no password ever reaches its argv.
+                byte[] unprotected;
+                try
+                {
+                    unprotected = ToPasswordlessPfx(pfxBytes, password!);
+                }
+                catch (CryptographicException ex)
+                {
+                    return Fail($"Could not open the PFX (wrong password, or not a PKCS#12 file): {ex.Message}", ExitInvalidArguments, includeUsage: false);
+                }
+                finally
+                {
+                    Array.Clear(pfxBytes, 0, pfxBytes.Length);
+                }
+
+                // A private directory first: on Windows a file inherits its folder's ACL, and the shared temp folder's
+                // may grant other principals access; on Unix it keeps the file out of a world-listable folder.
+                tempDirectory = CreatePrivateTempDirectory();
+                tempPfx = Path.Combine(tempDirectory, "signing.pfx");
+                try
+                {
+                    WriteOwnerOnlyFile(tempPfx, unprotected);
+                }
+                finally
+                {
+                    // Wipe the decoded key material from the managed heap once it's on disk.
+                    Array.Clear(unprotected, 0, unprotected.Length);
+                }
+
+                string source = string.IsNullOrWhiteSpace(options.PfxBase64) ? $"'{options.PfxPath}'" : "--pfx-base64";
                 if (!options.Json) { Console.WriteLine($"Signing '{options.PackagePath}' with PFX {source} ..."); }
                 psi.ArgumentList.Add("--certificate-path");
-                psi.ArgumentList.Add(pfxFile);
-                // 'dotnet nuget sign' accepts the PFX password ONLY as this argv argument — there is no env-var or
-                // stdin alternative. On a multi-user host the value is visible to other users via 'ps'/proc for the
-                // duration of the child process. This cannot be remediated without replacing the signing mechanism;
-                // callers sharing a host should prefer --certificate-fingerprint (an installed cert) over --pfx-password.
-                psi.ArgumentList.Add("--certificate-password");
-                psi.ArgumentList.Add(password!);
+                psi.ArgumentList.Add(tempPfx);
             }
 
             // RFC-3161 timestamp so the signature stays valid after the certificate expires; --overwrite lets
@@ -259,18 +308,107 @@ internal static class SignCommand
         }
         finally
         {
-            if (tempPfx is not null)
+            DeletePrivateTempDirectory(tempDirectory);
+        }
+    }
+
+    /// <summary>
+    /// Opens a password-protected PKCS#12 and re-exports the same certificates and keys without a password, so the
+    /// signing tool can load it with no password argument. The caller keeps the result off disk except in an
+    /// owner-only temp file. Throws <see cref="CryptographicException"/> on a wrong password or invalid content.
+    /// </summary>
+    internal static byte[] ToPasswordlessPfx(byte[] pfx, string password)
+    {
+        X509Certificate2Collection certificates = X509CertificateLoader.LoadPkcs12Collection(pfx, password, X509KeyStorageFlags.Exportable);
+        try
+        {
+            return certificates.Export(X509ContentType.Pkcs12)
+                ?? throw new CryptographicException("The PFX contains no certificate to export.");
+        }
+        finally
+        {
+            foreach (X509Certificate2 certificate in certificates)
             {
-                try
-                {
-                    File.Delete(tempPfx);
-                }
-                catch
-                {
-                    // Best-effort cleanup of the decoded certificate; a leaked temp file is non-fatal.
-                }
+                certificate.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Creates a new, uniquely named directory under the temp folder that only the current user can access: mode 0700
+    /// on Unix (set at creation), and on Windows an ACL granting the current user full control with inheritance from
+    /// the parent disabled, so nothing written inside inherits the shared temp folder's permissions.
+    /// </summary>
+    internal static string CreatePrivateTempDirectory()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"vela-sign-{Guid.NewGuid():N}");
+        if (OperatingSystem.IsWindows())
+        {
+            CreateWindowsPrivateDirectory(path);
+        }
+        else
+        {
+            Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        return path;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void CreateWindowsPrivateDirectory(string path)
+    {
+        System.Security.Principal.SecurityIdentifier user = System.Security.Principal.WindowsIdentity.GetCurrent().User
+            ?? throw new InvalidOperationException("Cannot resolve the current Windows user to secure the temporary certificate folder.");
+        System.Security.AccessControl.DirectorySecurity security = new();
+        security.SetOwner(user);
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+            user,
+            System.Security.AccessControl.FileSystemRights.FullControl,
+            System.Security.AccessControl.InheritanceFlags.ContainerInherit | System.Security.AccessControl.InheritanceFlags.ObjectInherit,
+            System.Security.AccessControl.PropagationFlags.None,
+            System.Security.AccessControl.AccessControlType.Allow));
+        new DirectoryInfo(path).Create(security);
+    }
+
+    // Best-effort removal of the private directory and the decoded certificate inside it; a leak is non-fatal.
+    internal static void DeletePrivateTempDirectory(string? path)
+    {
+        if (path is null || !Directory.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Leave it: the folder is private to the user and the temp folder is cleaned eventually.
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="bytes"/> to a NEW file readable only by its owner. On Unix the mode is set at creation
+    /// (no window where the decoded private key is world-readable, unlike write-then-chmod); on Windows the file
+    /// takes the ACL of its folder, so write it inside <see cref="CreatePrivateTempDirectory"/>. Fails if the file exists.
+    /// </summary>
+    internal static void WriteOwnerOnlyFile(string path, byte[] bytes)
+    {
+        FileStreamOptions streamOptions = new()
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.None,
+        };
+        if (!OperatingSystem.IsWindows())
+        {
+            streamOptions.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        using FileStream stream = new(path, streamOptions);
+        stream.Write(bytes, 0, bytes.Length);
     }
 
     /// <summary>
@@ -356,7 +494,8 @@ internal sealed record SignOptions(
     string? PfxPassword,
     string? PfxCredentialTarget,
     string TimestampUrl,
-    bool Json = false)
+    bool Json = false,
+    bool SecretsOnCommandLine = false)
 {
     public const string DefaultTimestampUrl = "http://timestamp.digicert.com";
 }

@@ -549,8 +549,8 @@ and filter on `ctx.Request.Relationship`. Do not branch on `ctx.PrimaryEntityNam
 steps they are always `"none"` and `Guid.Empty`, at every stage and mode. Use `ctx.Request.Target` to tell which end
 of the link the call came from.
 
-The scaffold generates an `AccountMessageReference.cs` cheat-sheet with one dormant (`Disabled()`) handler per
-row, so you can copy the exact shape for the message you need. `OnAssign()` is entity-bound (unlike
+`vela init --samples` generates an `AccountMessageReference.cs` cheat-sheet with one handler per row, so you can copy
+the exact shape for the message you need. It is an `abstract` class, so it compiles but is never deployed. `OnAssign()` is entity-bound (unlike
 Associate / Disassociate): it keeps its primary entity and fires on reassignment, with `ctx.Request.Assignee`
 holding the new owner. The deprecated `SetState` / `SetStateDynamicEntity` messages are intentionally not
 modelled: update `statecode` / `statuscode` with `OnUpdate()` instead.

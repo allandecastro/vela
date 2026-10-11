@@ -579,6 +579,33 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   compiles a `WithSecureConfig` literal no longer has that value deployed: the environment keeps its current value.
 - **`vela models --custom-apis` keeps a parameter's table.** A parameter with a `logicalentityname` gets
   `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
+- **`vela init --samples`** opts in to the demo code (sample models, services, plugins and Custom APIs, and the
+  Integrations and ConsoleApp projects). See "Changed (CLI)" for the new minimal default.
+- **`vela init --publisher-prefix <prefix>`** sets the Dataverse publisher prefix of the Custom API unique names,
+  separately from the .NET `--prefix`. It is validated (2-8 characters, letter first, alphanumeric) and recorded in
+  the generated projects as `VelaPublisherPrefix`, which `vela add customapi` and `vela add test --kind customapi`
+  then use when `--prefix` is not passed.
+- **`vela sign --pfx-base64-env <VAR>` / `--pfx-password-env <VAR>`** read the certificate and its password from a
+  named environment variable, so neither appears on the command line where other users of the host can read it.
+  The generated signing target passes the password this way.
+
+### Changed (CLI)
+
+- **`vela init` is minimal by default (breaking).** It now writes the `Shared` and `Plugins` projects and an empty
+  `Plugins.Tests` project (unless `--no-tests`), with no sample code, so a new solution deploys nothing until you
+  add your own plugin. It builds, tests and plans unedited. The previous rich scaffold is `vela init --samples`;
+  `--minimal`/`--no-demos` are kept as aliases of the default. The interactive wizard asks for samples first
+  (default: no). Even with `--samples`, the `AccountMessageReference` cheat-sheet (one step per typed message) is
+  now an `abstract` class: it compiles but is never registered, so its 16 disabled steps are no longer deployed.
+- **`vela init --force` keeps your code.** It used to delete every managed project folder, user plugins included.
+  `init` now records the files it writes, with a content hash, in `.vela/scaffold-manifest.json` (commit it). A
+  `--force` regeneration overwrites or removes only listed files you have not edited since; your own files, edited
+  samples and files from a scaffold without a manifest are kept and reported (`kept`/`removed` in `--json`).
+- **`vela add step` allows several steps on one trigger.** Following the step-identity rule (steps told apart by
+  `FilterOn`, images, `WithStepKey` or `ForRelationship`), it refuses only an exact duplicate: the same message,
+  stage and mode with the same filtering columns. Otherwise it adds the step and suggests `WithStepKey` for clarity.
+- **`vela add` rejects an option the kind does not use** (for example `add service --message`) instead of ignoring
+  it, and `add step` no longer accepts `--force`, which it never used.
 
 ### Fixed (CLI)
 
@@ -718,6 +745,34 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   (completed / failed / not applied), and a step is named with its step key. `--verbose` progress lines
   (`[step] create ...`) were printed before the batch ran; they are now printed after it, and a failed one ends with
   `(not applied)`.
+
+- **`vela init --core-version=X` is honoured.** The latest-version lookup checked the raw arguments for
+  `--core-version`, so the inline form was overwritten with the latest nuget.org version. `init` also accepts
+  `--verbose`, which it rejected as unknown.
+- **`vela add plugin --message Assign` emits `OnAssign()`.** It used `OnMessage("Assign")`, which analyzer VELA006
+  flags; the list of typed triggers is now pinned to the step API.
+- **`vela add step` refuses an exact duplicate step.** With its defaults it could add a second step with the trigger
+  and filtering columns `vela add plugin` already registered, which no registration can tell apart. It now names the
+  existing step and writes nothing.
+- **`vela add customapi` no longer emits an unregistrable unique name.** A project prefix that is not a valid
+  publisher prefix (more than 8 characters, for example) was used as is; the command now asks for `--prefix`.
+- **Generated tests assert something.** `vela add test` produced tests whose assertions were commented out. A
+  plugin test now checks that its handler ran; a Custom API test checks the unique name and that every declared
+  output is set (supplying inputs with `WithInputParameter`). A bound Custom API function sets its placeholder
+  `Result`.
+- **`vela sign` no longer exposes the certificate or its password.** The temporary `.pfx` from `--pfx-base64` was
+  written and then restricted, leaving a window where it was world-readable on Unix; it is now created owner-only.
+  The PFX password was passed to `dotnet nuget sign` on its command line; `vela sign` now opens the PFX itself and
+  hands the tool a passwordless copy in that owner-only temp file, deleted after signing. The generated signing
+  target quotes every MSBuild property.
+- **`vela models` no longer collides a global choice with a table class.** A global option set named like a
+  generated table (even only by case) produced a duplicate type and a file that overwrote the class on a
+  case-insensitive file system; the enum is now suffixed.
+- **The `vela init --samples` docs match the code**: the related-contacts sample runs a `QueryExpression`, not
+  FetchXML, and steps end with `Handle(...)`, not `Handler(...)`. The sample tests request explicit columns
+  (VELA013). The offline fallback framework version is now 0.31.0 (it was 0.28.0), pinned to the CHANGELOG by a test.
+- **`vela add test` and the step injector handle more source.** The injector skips raw (`"""`) and `@$` verbatim
+  strings when matching braces and ignores commented-out registrations.
 
 ## [0.31.0] - 2026-10-06 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

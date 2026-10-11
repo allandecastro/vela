@@ -28,6 +28,14 @@ namespace Vela.Cli;
 /// <param name="WebResourceNamespace">The dotted JS global name (esbuild <c>globalName</c>) the bundle exposes; the consumer's publisher prefix, never "Vela".</param>
 /// <param name="WebResourcesFolder">The build output folder (tsup <c>outDir</c>) and default <c>vela apply --webresources</c> target.</param>
 /// <param name="Json">Whether to emit machine-readable JSON output instead of the human-readable summary.</param>
+/// <param name="IncludeSamples">When true (<c>--samples</c>), emit the demo models, services, plugins, Custom APIs and the
+/// demo-only Integrations/ConsoleApp projects. Off by default: <c>vela init</c> scaffolds a minimal solution.</param>
+/// <param name="PublisherPrefix">The Dataverse publisher customization prefix passed with <c>--publisher-prefix</c>, or
+/// null to derive it from <paramref name="Prefix"/>. When set it is written to the generated projects as
+/// <c>VelaPublisherPrefix</c>, which <c>vela add customapi</c> reads.</param>
+/// <param name="CoreVersionPinned">True when <c>--core-version</c> was passed (in either form), so the caller does not
+/// replace it with the latest version on nuget.org.</param>
+/// <param name="Verbose">When true (<c>--verbose</c>), a failure prints the full exception.</param>
 internal sealed record ScaffoldOptions(
     string SolutionName,
     string Prefix,
@@ -43,8 +51,27 @@ internal sealed record ScaffoldOptions(
     string WebResourceNamespace = "",
     string WebResourcesFolder = "dist",
     bool Json = false,
-    bool IncludeDemos = true)
+    bool IncludeSamples = false,
+    string? PublisherPrefix = null,
+    bool CoreVersionPinned = false,
+    bool Verbose = false)
 {
+    /// <summary>
+    /// The publisher prefix the generated Custom API unique names use: <see cref="PublisherPrefix"/> when given,
+    /// else the one derived from <see cref="Prefix"/>.
+    /// </summary>
+    public string EffectivePublisherPrefix => PublisherPrefix ?? ScaffoldTemplates.ApiPrefix(Prefix);
+
+    // A Dataverse publisher customization prefix: 2-8 characters, starts with a letter, alphanumeric, and not the
+    // reserved "mscrm" (Dataverse rejects it).
+    private static readonly Regex PublisherPrefixPattern = new("^[a-z][a-z0-9]{1,7}$", RegexOptions.Compiled);
+
+    /// <summary>True when the value is a valid Dataverse publisher customization prefix (already lower-cased).</summary>
+    public static bool IsValidPublisherPrefix(string value) =>
+        !string.IsNullOrEmpty(value)
+        && PublisherPrefixPattern.IsMatch(value)
+        && !value.StartsWith("mscrm", StringComparison.Ordinal);
+
     // Solution name doubles as a folder + file name, so keep it to filename-safe characters. The first character
     // must be alphanumeric so the name can never be a path-traversal segment (".", "..", ".hidden"): the solution
     // name is combined into the output path and a --force regeneration deletes managed sub-folders under it, so a
@@ -79,7 +106,7 @@ internal sealed record ScaffoldOptions(
     // whose API the scaffolded code needs (the typed message contexts landed in 0.3.0; the typed-requests
     // surface - Vela.Messages.TypedRequest - landed in 0.8.0; the async-only Custom API step surface the
     // generated On<Message>() extensions can emit - OnAsyncOnly / IAsyncOnlyModeSelector - landed in 0.9.0).
-    public const string DefaultCoreVersion = "0.28.0";
+    public const string DefaultCoreVersion = "0.31.0";
 
     // Windows reserved device names: unusable as a folder / file name on Windows even with a valid character set.
     private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
@@ -181,32 +208,33 @@ internal sealed record ScaffoldOptions(
             output = ".";
         }
 
-        // --minimal (alias --no-demos) scaffolds a bare, demo-free solution: the Shared + Plugins projects with no
-        // sample models/services/plugins/Custom APIs, and none of the demo-only Integrations/Tests/Console projects.
-        // The structural files (.sln, csproj, Directory.*.props, README, .gitignore) are still written, so the empty
-        // solution builds and packs unedited - the clean starting point a developer (or an agent driving the CLI)
-        // fills in with `vela add`. The rich default is unchanged; this is the explicit opt-out.
-        bool includeDemos = !HasFlag(args, "--minimal") && !HasFlag(args, "--no-demos");
-
-        bool includeConsole = includeDemos && !HasFlag(args, "--no-console");
-        bool includeIntegrations = includeDemos && !HasFlag(args, "--no-integrations");
-        bool includeTests = includeDemos && !HasFlag(args, "--no-tests");
-
-        if (interactive && !HasFlag(args, "--minimal") && !HasFlag(args, "--no-demos"))
+        // `vela init` is minimal by default: the Shared + Plugins projects (and an empty Plugins.Tests project unless
+        // --no-tests) with no sample code, so nothing is deployed until you add your own plugin. The structural files
+        // (.sln, csproj, Directory.*.props, README, .gitignore) are written, so the solution builds, tests and plans
+        // unedited. --samples opts in to the demo models/services/plugins/Custom APIs and the demo-only Integrations
+        // and ConsoleApp projects. --minimal / --no-demos are kept as accepted aliases of the default.
+        bool samplesFlag = HasFlag(args, "--samples");
+        bool minimalFlag = HasFlag(args, "--minimal") || HasFlag(args, "--no-demos");
+        if (samplesFlag && minimalFlag)
         {
-            includeDemos = PromptYesNo("Include the demo examples (models, services, sample plugins and Custom APIs)? [Y/n]:", defaultYes: true);
-            // Applying the demo answer must still respect an explicit --no-console/-integrations/-tests exclusion:
-            // enabling demos never resurrects a project the user turned off on the command line.
-            includeConsole = includeDemos && !HasFlag(args, "--no-console");
-            includeIntegrations = includeDemos && !HasFlag(args, "--no-integrations");
-            includeTests = includeDemos && !HasFlag(args, "--no-tests");
+            exitCode = Fail("Use either --samples or --minimal, not both (minimal is the default).", ExitInvalidArguments, includeUsage: false);
+            return false;
         }
 
-        // The demo-only project prompts only make sense when demos are kept (a bare scaffold has no use for an empty
-        // Integrations/Tests/Console project), so they are skipped entirely in a minimal/no-demos run.
-        if (interactive && includeDemos)
+        bool includeSamples = samplesFlag;
+        if (interactive && !samplesFlag && !minimalFlag)
         {
-            if (!HasFlag(args, "--no-integrations"))
+            includeSamples = PromptYesNo("Include the sample code (demo models, services, plugins, Custom APIs, Integrations and ConsoleApp projects)? [y/N]:", defaultYes: false);
+        }
+
+        // An explicit --no-console/--no-integrations/--no-tests always wins; the demo-only projects need --samples.
+        bool includeConsole = includeSamples && !HasFlag(args, "--no-console");
+        bool includeIntegrations = includeSamples && !HasFlag(args, "--no-integrations");
+        bool includeTests = !HasFlag(args, "--no-tests");
+
+        if (interactive)
+        {
+            if (includeSamples && !HasFlag(args, "--no-integrations"))
             {
                 includeIntegrations = PromptYesNo("Generate an Integrations project? [Y/n]:", defaultYes: true);
             }
@@ -216,16 +244,49 @@ internal sealed record ScaffoldOptions(
                 includeTests = PromptYesNo("Generate a unit-test project (Vela.Testing)? [Y/n]:", defaultYes: true);
             }
 
-            if (!HasFlag(args, "--no-console"))
+            if (includeSamples && !HasFlag(args, "--no-console"))
             {
                 includeConsole = PromptYesNo("Generate a ConsoleApp project? [Y/n]:", defaultYes: true);
             }
         }
 
-        string coreVersion = TryReadOption(args, "--core-version") ?? DefaultCoreVersion;
+        // The tokenizer has already expanded `--core-version=X` to `--core-version X`, so this sees both forms.
+        string? pinnedCoreVersion = TryReadOption(args, "--core-version");
+        string coreVersion = pinnedCoreVersion ?? DefaultCoreVersion;
         if (!CoreVersionPattern.IsMatch(coreVersion))
         {
             exitCode = Fail($"Invalid --core-version '{coreVersion}'. Use a NuGet version such as '0.8.0' or '1.2.3-preview'.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
+        // The publisher customization prefix of the target solution is distinct from the .NET namespace prefix. It
+        // names the Custom APIs, so an explicit value is validated (2-8 chars, letter first, alphanumeric) and recorded
+        // in the generated projects for `vela add customapi`. Without it the prefix is derived from --prefix; that
+        // guess is only needed for the sample Custom APIs, and is refused when it is not a valid publisher prefix.
+        string? publisherPrefix = TryReadOption(args, "--publisher-prefix")?.Trim().ToLowerInvariant();
+        if (publisherPrefix is not null && !IsValidPublisherPrefix(publisherPrefix))
+        {
+            exitCode = Fail($"Invalid --publisher-prefix '{publisherPrefix}'. A Dataverse publisher prefix is 2-8 characters, starts with a letter, is alphanumeric and does not start with 'mscrm' (e.g. 'zava').", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
+        if (publisherPrefix is null && includeSamples && interactive && !IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix)))
+        {
+            publisherPrefix = Prompt($"Publisher prefix of your solution ('{ScaffoldTemplates.ApiPrefix(prefix)}' is not valid; 2-8 characters, letter first):", allowEmpty: true)?.Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(publisherPrefix))
+            {
+                publisherPrefix = null;
+            }
+            else if (!IsValidPublisherPrefix(publisherPrefix))
+            {
+                exitCode = Fail($"Invalid publisher prefix '{publisherPrefix}'. Use 2-8 characters: a letter, then letters or digits (e.g. 'zava').", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+        }
+
+        if (publisherPrefix is null && includeSamples && !IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix)))
+        {
+            exitCode = Fail($"The sample Custom APIs need a publisher prefix, and '{ScaffoldTemplates.ApiPrefix(prefix)}' (derived from --prefix '{prefix}') is not a valid one (2-8 characters, letter first, alphanumeric). Pass --publisher-prefix <prefix> with your solution publisher's prefix.", ExitInvalidArguments, includeUsage: false);
             return false;
         }
 
@@ -280,6 +341,15 @@ internal sealed record ScaffoldOptions(
                 return false;
             }
         }
+        else
+        {
+            // Say so rather than silently ignore an option that only shapes the (excluded) web-resources project.
+            // stderr, so it never pollutes the --json report on stdout.
+            foreach (string ignored in new[] { "--web-resources-namespace", "--web-resources-folder" }.Where(o => HasFlag(args, o)))
+            {
+                Console.Error.WriteLine($"Warning: {ignored} applies to the web resources project, which is not scaffolded (pass --web-resources); ignoring it.");
+            }
+        }
 
         options = new ScaffoldOptions(
             SolutionName: name,
@@ -296,7 +366,10 @@ internal sealed record ScaffoldOptions(
             WebResourceNamespace: webResourceNamespace,
             WebResourcesFolder: webResourcesFolder,
             Json: HasFlag(args, "--json"),
-            IncludeDemos: includeDemos);
+            IncludeSamples: includeSamples,
+            PublisherPrefix: publisherPrefix,
+            CoreVersionPinned: pinnedCoreVersion is not null,
+            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
         return true;
     }
 
@@ -347,12 +420,12 @@ internal sealed record ScaffoldOptions(
     // Value options (consume the next token) and boolean flags for `vela init`. Used both to skip value-option
     // values when reading the positional name and as the unknown-option allowlist. Keep in sync with TryParse.
     private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
-        { "--name", "--prefix", "--output", "-o", "--core-version", "--web-resources-namespace", "--web-resources-folder" };
+        { "--name", "--prefix", "--output", "-o", "--core-version", "--publisher-prefix", "--web-resources-namespace", "--web-resources-folder" };
 
     private static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "--force", "--json", "--managed-identity", "--mi", "--no-console", "--no-integrations", "--no-tests",
-        "--web-resources", "--webresources", "--interactive", "-i", "--help", "-h", "--minimal", "--no-demos",
+        "--web-resources", "--webresources", "--interactive", "-i", "--help", "-h", "--minimal", "--no-demos", "--samples", "--verbose", "-v",
     };
 
     private static bool PromptYesNo(string label, bool defaultYes)

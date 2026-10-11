@@ -1,3 +1,4 @@
+using System.Linq;
 using Vela.Cli;
 using Xunit;
 
@@ -14,7 +15,8 @@ public class ScaffoldTemplatesTests
         IncludeTests: true,
         CoreVersion: "1.0.0",
         Force: false,
-        Interactive: false);
+        Interactive: false,
+        IncludeSamples: true);
 
     [Fact]
     public void ApiPrefix_IsLowerCasedAndDotless()
@@ -127,9 +129,13 @@ public class ScaffoldTemplatesTests
         Assert.Contains("'$(GITHUB_ACTIONS)' != 'true'", signed);
         Assert.Contains("'$(TF_BUILD)' != 'True'", signed);
         // Both certificate sources are wired: fingerprint (store) and a .pfx file (credential or password).
-        Assert.Contains("--fingerprint $(PluginSigningFingerprint)", signed);
-        Assert.Contains("--pfx-credential $(PluginSigningCredential)", signed);
-        Assert.Contains("--pfx-password $(PluginSigningPassword)", signed);
+        // A-65: every MSBuild property is quoted, and the password reaches vela through an environment variable,
+        // never its command line.
+        Assert.Contains("--fingerprint &quot;$(PluginSigningFingerprint)&quot;", signed);
+        Assert.Contains("--pfx-credential &quot;$(PluginSigningCredential)&quot;", signed);
+        Assert.Contains("EnvironmentVariables=\"VELA_SIGN_PFX_PASSWORD=$([MSBuild]::Escape('$(PluginSigningPassword)'))\"", signed);
+        Assert.Contains("--pfx-password-env VELA_SIGN_PFX_PASSWORD", signed);
+        Assert.DoesNotContain("--pfx-password $(", signed);
 
         // Both must be well-formed XML — guards against, e.g., a '--' sequence inside an XML comment.
         System.Xml.Linq.XDocument.Parse(plain);
@@ -156,6 +162,9 @@ public class ScaffoldTemplatesTests
     public void MessageReference_ShowcasesEveryTypedMessage_AsDisabledSteps()
     {
         string code = ScaffoldTemplates.AccountMessageReference("Zava");
+
+        // Abstract: it compiles but neither vela nor Dataverse registers it, so its steps are never deployed.
+        Assert.Contains("public abstract partial class AccountMessageReference(", code);
 
         // One typed handler per modelled message shown on account (CRUD/bulk, relationships, merge, sharing,
         // and the account-valid sharing reads).
@@ -432,6 +441,50 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
+    public void RootReadme_Samples_TellsTheTruthAboutTheSamples()   // A-50, A-78
+    {
+        string readme = ScaffoldTemplates.RootReadme(Options());
+
+        // Replacing the stub models needs --overwrite (vela models refuses to overwrite otherwise).
+        Assert.Contains("  --namespace Zava.Shared.Models.Generated `\n  --overwrite\n", readme.Replace("\r\n", "\n"));
+        // The related-contacts sample runs an aggregate FetchXML query from the typed builder.
+        Assert.DoesNotContain("typed FetchXML builder", readme);
+        Assert.Contains("`Query.For<Contact>().Count(...).ToFetchXml()`", readme);
+        // The pipeline example passes secrets by variable name, not on the command line.
+        string signed = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = true });
+        Assert.Contains("--pfx-base64-env CODE_SIGN_PFX_BASE64 --pfx-password-env CODE_SIGN_PFX_PASSWORD", signed);
+        Assert.DoesNotContain("--pfx-password $env:", signed);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RootReadme_EveryPlanAndApplyExample_PassesSolution(bool samples)   // plan exits 4 on an unprefixed package
+    {
+        string readme = ScaffoldTemplates.RootReadme(Options() with { IncludeSamples = samples });
+
+        string[] commands = System.Text.RegularExpressions.Regex.Matches(readme, @"vela (?:plan|apply) --package[^`\n]*")
+            .Select(m => m.Value)
+            .ToArray();
+        Assert.NotEmpty(commands);
+        Assert.All(commands, command => Assert.Contains("--solution ZavaSales", command));
+    }
+
+    [Fact]
+    public void AccountPostCreatePlugin_DescribesTheCurrentUserService()
+    {
+        string code = ScaffoldTemplates.AccountPostCreatePlugin("Zava");
+        Assert.DoesNotContain("initiating", code);
+        Assert.Contains("acts as the current user", code);
+    }
+
+    [Fact]
+    public void Samples_DescribeHandle_NotHandler()   // A-78
+    {
+        Assert.DoesNotContain("Handler(", ScaffoldTemplates.ContactRouterPlugin("Zava"));
+    }
+
+    [Fact]
     public void RootReadme_SigningSection_ReflectsManagedIdentityFlag()
     {
         string signed = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = true });
@@ -441,7 +494,7 @@ public class ScaffoldTemplatesTests
 
         string unsigned = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = false });
         Assert.Contains("## Signing the plugin package", unsigned);
-        Assert.Contains("vela init <name> --managed-identity", unsigned);
+        Assert.Contains("vela init <name> --samples --managed-identity --force", unsigned);
         Assert.DoesNotContain("SignPluginPackage", unsigned);
     }
 
