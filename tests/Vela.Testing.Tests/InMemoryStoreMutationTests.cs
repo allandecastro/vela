@@ -253,7 +253,8 @@ namespace Vela.Testing.Tests
             Assert.Equal("1", svc.Retrieve("account", existing, new ColumnSet("accountnumber")).GetAttributeValue<string>("accountnumber"));
         }
 
-        // With neither an id nor a key nothing can match, so the upsert creates (it never picks an arbitrary row).
+        // With neither an id nor a key nothing can match, so the upsert creates (it never picks an arbitrary row). This
+        // pins the store's behaviour; the platform's answer to such an Upsert is not verified live.
         [Fact]
         public void Upsert_with_no_id_and_no_key_creates_a_new_row()
         {
@@ -403,7 +404,8 @@ namespace Vela.Testing.Tests
 
         // ---- ExecuteMultiple -------------------------------------------------------------------------------
 
-        // Without Settings the batch stops at the first fault (ContinueOnError defaults to false).
+        // Without Settings the batch stops at the first fault (ContinueOnError defaults to false). This pins the store's
+        // default; Dataverse may instead reject an ExecuteMultipleRequest without Settings (not verified live).
         [Fact]
         public void ExecuteMultiple_without_settings_stops_at_the_first_fault()
         {
