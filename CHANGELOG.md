@@ -687,6 +687,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **An unchanged plugin package is no longer republished on every `apply` (#492).** `plan` and `apply` compared
+  the local package with the stored `pluginpackage.content`, which Dataverse empties once it has processed the
+  upload (verified live), so every `plan` after an `apply` proposed `update package` (exit 8 with
+  `--detailed-exitcode`) and every `apply` re-imported the package. They now compare the version and the stored
+  package file (the `package` column, byte-identical to the upload): its size first, then its content, downloaded in
+  4 MB blocks only when the sizes match. Verified end to end through `vela plan` / `vela apply`.
 - **`apply` convergence and reporting gaps (#445).**
   - A step declared `.Disabled()` no longer runs enabled while `apply` writes the other components, and the step
     state is written with `Update` instead of the deprecated `SetStateRequest`. An existing step gets its state in the

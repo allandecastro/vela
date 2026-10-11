@@ -374,11 +374,11 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var existingId = Guid.NewGuid();
         var existing = new Entity("pluginpackage", existingId);
         existing["version"] = "9.9.9";
-        existing["content"] = Convert.ToBase64String(bytes);
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
         };
+        svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
 
         var payload = new PluginPackagePayload("acme_Pkg", "9.9.9", path);
         Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
@@ -398,11 +398,11 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var existingId = Guid.NewGuid();
         var existing = new Entity("pluginpackage", existingId);
         existing["version"] = "9.9.9";
-        existing["content"] = Convert.ToBase64String(oldBytes);
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing),
         };
+        svc.PackageFiles.Store(existing.Id, oldBytes); // the stored .nupkg (content reads back empty)
 
         var payload = new PluginPackagePayload("acme_Pkg", "9.9.9", path);
         DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
@@ -426,8 +426,8 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     {
         string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-new"));
         var existing = new Entity("pluginpackage", Guid.NewGuid());
-        existing["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes("pkg-old"));
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, Encoding.UTF8.GetBytes("pkg-old")); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
         Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
@@ -440,8 +440,8 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string path = NewTempFile(bytes);
         var existing = new Entity("pluginpackage", Guid.NewGuid());
         existing["version"] = "1.0.0";
-        existing["content"] = Convert.ToBase64String(bytes);
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
         Assert.False(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
@@ -456,8 +456,8 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string path = NewTempFile(bytes);
         var existing = new Entity("pluginpackage", Guid.NewGuid());
         existing["version"] = "1.0.0";
-        existing["content"] = Convert.ToBase64String(bytes);
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.1", path);
 
         Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
@@ -516,8 +516,8 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     {
         string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-new"));
         var existing = new Entity("pluginpackage", Guid.NewGuid());
-        existing["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes("pkg-old"));
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, Encoding.UTF8.GetBytes("pkg-old")); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
         PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
@@ -530,8 +530,9 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // Same bytes, new version: UpsertPluginPackage updates, so plan must report it too.
         byte[] bytes = Encoding.UTF8.GetBytes("pkg-same");
         string path = NewTempFile(bytes);
-        var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0", ["content"] = Convert.ToBase64String(bytes) };
+        var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0" };
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
 
         PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.1", path) }, solutionUniqueName: null, new List<string>()));
         Assert.False(action.IsCreate);
@@ -559,11 +560,60 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string path = NewTempFile(bytes);
         var existing = new Entity("pluginpackage", Guid.NewGuid());
         existing["version"] = "1.0.0";
-        existing["content"] = Convert.ToBase64String(bytes);
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
         Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+    }
+
+    [Fact]   // #492
+    public void ComputePackagePublishActions_update_when_the_stored_package_has_no_file()
+    {
+        // No stored file ("No FileAttachment records found"): nothing to compare, so the package is published.
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-same"));
+        var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0" };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null, new List<string>()));
+        Assert.False(action.IsCreate);
+    }
+
+    [Fact]   // #492
+    public void ComputePackagePublishActions_tells_a_resized_package_apart_without_downloading_it()
+    {
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-longer"));
+        var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0" };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, Encoding.UTF8.GetBytes("pkg-old"));
+
+        Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null, new List<string>()));
+        Assert.Empty(svc.PackageFiles.BlockDownloads);
+    }
+
+    [Theory]   // #492
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ComputePackagePublishActions_compares_a_large_stored_package_block_by_block(bool lastByteDiffers)
+    {
+        // A package larger than one 4 MB block is downloaded in blocks; a difference in the last block is still seen.
+        byte[] local = new byte[(9 * 1024 * 1024) + 123];
+        new Random(445).NextBytes(local);
+        byte[] stored = (byte[])local.Clone();
+        if (lastByteDiffers)
+        {
+            stored[^1] ^= 0xFF;
+        }
+
+        string path = NewTempFile(local);
+        var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0" };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, stored);
+
+        IReadOnlyList<PackagePublishAction> actions = DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null, new List<string>());
+
+        Assert.Equal(lastByteDiffers, actions.Count == 1);
+        Assert.Equal(new long[] { 0, 4L * 1024 * 1024, 8L * 1024 * 1024 }, svc.PackageFiles.BlockDownloads.Select(b => b.Offset));
     }
 
     [Fact]
