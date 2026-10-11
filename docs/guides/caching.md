@@ -35,6 +35,16 @@ name. A `new PluginCacheService()` you create yourself is not scoped.
 The cache surface is synchronous only: the plugin pipeline runs synchronously, and the cache locks
 with `Monitor` (the `lock` statement), the most clearly sandbox-supported synchronization primitive.
 
+## What to cache
+
+Cache only data that is the same for every user and changes rarely: configuration rows, reference tables,
+metadata. A value read through `ctx.Service` is not one of them. `ctx.Service` acts as the current user, so a
+`RetrieveMultiple` returns only the rows that user may read. Cache that result under a key such as
+`account:related-contacts:{id}` and the next user in the organization gets the first user's privilege-filtered
+answer, whatever their own access. To read shared data, use `ctx.SystemService` (SYSTEM sees every row) and make
+sure the cached value never ends up in front of a user who could not read it. If the value really depends on the
+user, add `ctx.UserId` to the key, and keep in mind that the entry stays stale for its whole TTL.
+
 Recommended cache usage patterns:
 
 1. **Read-through with TTL**: use `GetOrCreate(...)` for values read frequently and updated occasionally.
