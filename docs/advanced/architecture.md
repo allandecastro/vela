@@ -16,13 +16,17 @@ src/
   Vela.Testing/    # In-memory test harness package
   Vela.Analyzers/  # Roslyn analyzers + source generators (shipped inside Vela.Plugins)
   Vela.CodeFixes/  # Roslyn code fixes (shipped inside Vela.Plugins)
+tools/
+  codegen/Vela.StepApiGen/  # Generates Steps/StepApi.cs and StepBuilder.Impl.cs from MessageModel.cs
+docs/
+  samples/Vela.DocSamples/  # Compiled, tested snippets included by the docs site
 tests/
   Vela.Tests/            # Runtime/framework unit tests
   Vela.Testing.Tests/    # In-memory harness/pipeline tests
   Vela.Cli.Tests/        # CLI unit tests
   Vela.Analyzers.Tests/  # Analyzer + source-generator tests
   Vela.CodeFixes.Tests/  # Code-fix tests
-.github/workflows/ci.yml
+.github/workflows/     # ci.yml, mutation.yml, docs.yml, release.yml
 ```
 
 ## Architecture rules
@@ -55,7 +59,7 @@ deployed into Dataverse, and matched at runtime to route the call to your handle
 %%{init: {"flowchart": {"subGraphTitleMargin": {"top": 6, "bottom": 18}, "nodeSpacing": 45, "rankSpacing": 50, "padding": 12}}}%%
 flowchart TB
     A["RegisterPluginSteps()"]
-    B["type-state fluent builder<br/>OnUpdate().PostOperation().Sync().FilterOn(..).Handle(OnX)<br/><i>message → stage → mode → filtering → images</i>"]
+    B["type-state fluent builder<br/>OnUpdate().PostOperation().Sync().FilterOn(..).Handle(OnX)<br/><i>message → stage → mode → modifiers → Handle</i>"]
     C["StepBuilder&lt;TEntity&gt;"]
     SD[["StepDefinition<br/><i>message, stage, mode, filtering, images, keys, config</i>"]]
     A --> B --> C
@@ -87,18 +91,21 @@ flowchart TB
 
 1. **`PluginBase` (the pipeline entry).** Implements `IPlugin.Execute(IServiceProvider)`. It builds the
    `ILocalPluginContext` - the depth guard, the per-execution dependency-injection container, the org services
-   wrapped with automatic Dataverse-operation tracing, and the start/success/exception execution snapshots - then
+   wrapped with automatic Dataverse-operation tracing, and the start and failure execution snapshots (metadata only
+   unless `AutoSnapshotDetail` is `Full`) - then
    calls the single abstract method `ExecuteDataversePlugin(ILocalPluginContext)`. Everything below sees only the
    typed context, never the raw `IServiceProvider`.
 2. **`EntityPluginBase<TEntity>` (the router).** Ties the plugin to one early-bound entity. On first use it runs
    `RegisterPluginSteps()` once, collects the `StepDefinition`s, and caches them (thread-safe, because the sandbox
    reuses one instance concurrently). At runtime it matches the current pipeline execution (message + stage + mode
-   + entity) to exactly one step, then invokes that step's typed handler. Ambiguous or missing handlers fail fast
-   with a clear message.
+   + entity) to its steps. When several steps share that trigger, the executing step (`OwningExtension`, the step's
+   name or, for an async step, its id) selects one by step key (`StepIdentity.Select`), then the base invokes that
+   step's typed handler. Ambiguous or missing handlers fail fast with a clear message.
 3. **`StepBuilder<TEntity>` (the type-state builder).** `RegisterStep()` returns a fluent chain whose *type* at
-   each position only exposes the calls that are legal next: message → stage → mode → (filtering, where required)
-   → images. The (message, stage) pair you pick only offers the images that combination actually supports, so an
-   invalid image is a compile error, not a runtime surprise. `Build()` produces the immutable `StepDefinition`
+   each position only exposes the calls that are legal next: message → stage → mode, then order-free modifiers
+   (`FilterOn`, images, `WithStepKey`, ...) and `Handle(...)` last. The (message, stage) pair you pick only offers the
+   images that combination supports, and the analyzers catch what the types cannot (a missing `FilterOn` on
+   Create/Update is VELA020, an image the message refuses is VELA007), so a bad registration fails the build. `Build()` produces the immutable `StepDefinition`
    and re-checks the invariants as a backstop for reflection/out-of-order assembly.
 4. **Typed message contexts (the socle).** For a modelled message the router wraps the runtime context in an
    `I<Message>Context<TEntity>` (for example `IUpdatePostContext<Account>`). That context is a thin, allocation-cheap
@@ -109,9 +116,10 @@ flowchart TB
    `OutputParameters` `ParameterCollection`s, and every message reads its primary record off the typed
    `ctx.Request.Target` / `ctx.Request.Targets` (an early-bound `TEntity` on `Create` / `Update`; the SDK's `Entity` /
    `EntityReference` / `EntityCollection` otherwise). The
-   handler is bound by **method group**, so the message and the handler's context type are checked by the compiler:
-   an `OnUpdate()` step bound to an `ICreateContext` handler does not build. A non-modelled `OnMessage("...")` step
-   receives the plain `ILocalPluginContext`.
+   handler is bound by **method group**, so the message and the handler's context type are checked at build time:
+   an `OnUpdate()` step bound to an `ICreatePostContext<T>` handler is a VELA015 error. A non-modelled `On<TRequest>()` step
+   receives the request-typed `IMessagePre/PostContext<TRequest>`, and an `OnMessage<TMarker>()` step the plain
+   `ILocalPluginContext`.
 
 ### Why this shape
 

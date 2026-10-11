@@ -11,7 +11,7 @@ namespace Vela
         public const string DuplicateModifier = "VELA003";
         public const string StaticHandler = "VELA004";
         public const string DuplicateColumn = "VELA005";
-        public const string PreferTypedMessage = "VELA006";
+        // VELA006 (PreferTypedMessage) was removed with OnMessage(string); the id stays retired.
         public const string ImageStage = "VELA007";
         public const string DuplicateStepTrigger = "VELA008";
         public const string HasChangedPreImage = "VELA009";
@@ -28,5 +28,6 @@ namespace Vela
         public const string MissingFilter = "VELA020";
         public const string ImageProjectionNotGenerated = "VELA021";
         public const string SetStateNeverFires = "VELA022";
+        public const string TypedTriggerRequired = "VELA023";
     }
 }

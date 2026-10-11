@@ -13,7 +13,7 @@ using Xunit;
 namespace Vela.Tests
 {
     // Proves the runtime dispatch builds the right per-message context for every modelled message (each arm of
-    // EntityPluginBase.BuildTypedContext), and that a permissive OnMessage(...) step binds and runs an untyped
+    // EntityPluginBase.BuildTypedContext), and that a permissive OnMessage<TMessage>() step binds and runs an untyped
     // handler. One plugin registers a step for every modelled message any table accepts plus a custom message, and
     // one plugin per table covers the messages Dataverse accepts on a single table (OnSendEmail() on email, ...).
     // Each step is bound to a single ILocalPluginContext handler (assignable to every typed context by
@@ -23,6 +23,11 @@ namespace Vela.Tests
         private sealed class AllMessagesProbe : EntityPluginBase<TestAccount>
         {
             public const string CustomMessage = "vela_custom";
+
+            [CustomMessage(CustomMessage)]
+            private sealed class CustomMarker
+            {
+            }
 
             public string? Seen { get; private set; }
 
@@ -44,7 +49,7 @@ namespace Vela.Tests
                 RegisterStep().OnModifyAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRevokeAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnMessage(CustomMessage).PostOperation().Sync().Handle(OnAny);
+                RegisterStep().OnMessage<CustomMarker>().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrievePrincipalAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Handle(OnAny);
             }
@@ -173,10 +178,8 @@ namespace Vela.Tests
             Assert.Equal(message, probe.Seen);
         }
 
-        // Regression: On<TRequest>() where the request's RequestName collides with a modelled message (MergeRequest
-        // -> "Merge"). The handler's parameter is IMessagePreContext<MergeRequest>, which the modelled
-        // MergePreContext<TEntity> does NOT implement, so dispatch must build the generic MessagePreContext<TRequest>
-        // (from the handler's parameter type), not the modelled per-message context, or the handler never matches.
+        // One way per message: a request whose message has a typed trigger (MergeRequest -> OnMerge()) cannot be
+        // registered through On<TRequest>().
         private sealed class TypedRequestProbe : EntityPluginBase<TestAccount>
         {
             public string? Seen { get; private set; }
@@ -224,18 +227,12 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void Typed_request_colliding_with_a_modelled_message_dispatches_to_its_generic_handler()
+        public void A_typed_request_whose_message_has_a_typed_trigger_is_rejected()
         {
-            TypedRequestProbe probe = new TypedRequestProbe();
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => new TypedRequestProbe().GetStepDefinitions());
 
-            PluginContext.For<TestAccount>()
-                .OnMessage(PluginMessages.Merge)
-                .Stage(PluginStages.PreOperation)
-                .Mode(ExecutionMode.Synchronous)
-                .WithPrimaryEntity(TestAccount.EntityLogicalNameValue, Guid.NewGuid())
-                .Execute(probe);
-
-            Assert.Equal(PluginMessages.Merge, probe.Seen);
+            Assert.Contains("OnMerge()", ex.Message);
+            Assert.Contains("On<MergeRequest>()", ex.Message);
         }
 
         private interface ITableProbe

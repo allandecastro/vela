@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Vela.Cli;
 using Xunit;
 using static Vela.Cli.CliExitCodes;
@@ -89,15 +90,19 @@ public class AddCommandTests
         => Assert.Null(AddCommand.ResolveKnownMessage(message, entity));
 
     [Fact]
-    public void Add_Plugin_CustomMessage_RendersOnMessageCall()
+    public void Add_Plugin_CustomMessage_RendersRequestTypedTrigger()
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
             int exit = AddCommand.Run(["plugin", "AccountCustom", "--entity", "Account", "--message", "acme_DoThing", "--project", project]);
             Assert.Equal(ExitSuccess, exit);
 
+            // No magic string: the step registers through the request `vela models --custom-apis/--messages`
+            // generates, and the handler gets its request-typed context.
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountCustom.cs"));
-            Assert.Contains("RegisterStep().OnMessage(\"acme_DoThing\")", content);
+            Assert.Contains("RegisterStep().On<acme_DoThingRequest>()", content);
+            Assert.Contains("private void OnExecute(IMessagePostContext<acme_DoThingRequest> ctx)", content);
+            Assert.DoesNotContain("OnMessage(", content);
         });
     }
 
@@ -327,12 +332,14 @@ public class AddCommandTests
     }
 
     // SetState/SetStateDynamicEntity are deprecated by the platform (use an Update of statecode/statuscode),
-    // so the builder no longer exposes a typed On...() method for them. `vela add` treats them as any other
-    // custom message and renders the permissive OnMessage("...") escape hatch.
+    // so the builder exposes no curated On...() method for them. `vela add` registers them like any other
+    // message, through the request type: the SDK class, fully qualified, when one ships (SetStateRequest), else
+    // the request `vela models --messages` generates.
     [Theory]
-    [InlineData("SetState")]
-    [InlineData("SetStateDynamicEntity")]
-    public void Add_Plugin_SetState_RendersOnMessageCall(string message)
+    [InlineData("SetState", "Microsoft.Crm.Sdk.Messages.SetStateRequest")]
+    [InlineData("setstate", "Microsoft.Crm.Sdk.Messages.SetStateRequest")]
+    [InlineData("SetStateDynamicEntity", "SetStateDynamicEntityRequest")]
+    public void Add_Plugin_UnmodelledMessage_RendersRequestTypedTrigger(string message, string requestType)
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
@@ -340,13 +347,15 @@ public class AddCommandTests
             Assert.Equal(ExitSuccess, exit);
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
-            Assert.Contains($"RegisterStep().OnMessage(\"{message}\")", content);
+            Assert.Contains($"RegisterStep().On<{requestType}>()", content);
+            Assert.Contains($"IMessagePostContext<{requestType}> ctx", content);
         });
     }
 
     // Every message with a typed builder method (including the Tier-2 Merge / sharing messages) renders the
-    // strongly-typed On...() call rather than the permissive OnMessage("...") escape hatch.
+    // strongly-typed On...() call rather than the generic request-typed On<TRequest>().
     [Theory]
+    [InlineData("Assign")]
     [InlineData("Merge")]
     [InlineData("GrantAccess")]
     [InlineData("ModifyAccess")]
@@ -361,7 +370,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
             Assert.Contains($"RegisterStep().On{message}()", content);
-            Assert.DoesNotContain("OnMessage(", content);
+            Assert.DoesNotContain("On<", content);
         });
     }
 
@@ -463,7 +472,7 @@ public class AddCommandTests
 
             // A *Multiple plugin reads ctx.Request.Targets, so the generated test must seed Targets.
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountBulkPluginTests.cs"));
-            Assert.Contains(".WithTargets(target)", content);
+            Assert.Contains(".WithTargets(targets)", content);
         });
     }
 
@@ -546,7 +555,11 @@ public class AddCommandTests
             string content = File.ReadAllText(Path.Combine(dir, "Contact", "CustomApis", "ExportContactTests.cs"));
             Assert.Contains("namespace Acme.Plugins.Tests.Contact.CustomApis", content);
             Assert.Contains("using Acme.Plugins.Contact.CustomApis;", content);
-            Assert.Contains("PluginContext.ForMessage(\"acme_ExportContact\")", content);
+
+            // A bound Custom API is typed (vela add customapi generates ExportContactRequest): the test states no
+            // message name or parameter key.
+            Assert.Contains("PluginContext.ForRequest(new ExportContactRequest", content);
+            Assert.DoesNotContain("ForMessage(", content);
         });
     }
 
@@ -744,6 +757,158 @@ namespace Acme.Plugins.Account.Plugins
 
     // Creates a temp directory containing a minimal .csproj with the given RootNamespace, then invokes the action
     // with the project file path and its directory.
+    [Fact]
+    public void Add_Plugin_Assign_UsesTheTypedTrigger()   // gap: OnMessage("Assign") tripped VELA006
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountAssign", "--entity", "Account", "--message", "assign", "--project", project]));
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountAssign.cs"));
+            Assert.Contains("RegisterStep().OnAssign()", content);
+            Assert.Contains("private void OnExecute(IAssignPostContext<Account> ctx)", content);
+            Assert.DoesNotContain("OnMessage(", content);
+        });
+    }
+
+    [Fact]
+    public void KnownMessages_CoverEveryTypedTriggerInStepApi()
+    {
+        // Every parameterless On<Message>() trigger the step builder exposes must be in KnownMessages; otherwise
+        // `vela add` falls back to OnMessage("<Message>"), which VELA006 flags.
+        string? dir = AppContext.BaseDirectory;
+        string? stepApi = null;
+        for (int i = 0; i < 12 && dir is not null && stepApi is null; i++)
+        {
+            string candidate = Path.Combine(dir, "src", "Vela.Plugins", "Steps", "StepApi.cs");
+            stepApi = File.Exists(candidate) ? candidate : null;
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        Assert.NotNull(stepApi);
+        string[] typed = System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(stepApi!), @"\bOn(?<m>[A-Z][A-Za-z]*)\(\)")
+            .Select(m => m.Groups["m"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(m => m, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(typed);
+        Assert.Equal(typed, AddCommand.KnownMessages.OrderBy(m => m, StringComparer.Ordinal).ToArray());
+    }
+
+    [Theory]
+    [InlineData("service", "--message", "Update")]
+    [InlineData("service", "--prefix", "acme")]
+    [InlineData("plugin", "--prefix", "acme")]
+    [InlineData("plugin", "--function", null)]
+    [InlineData("customapi", "--message", "Update")]
+    [InlineData("customapi", "--filtering-attributes", "Name")]
+    [InlineData("step", "--force", null)]
+    [InlineData("step", "--kind", "plugin")]
+    [InlineData("test", "--stage", "PreOperation")]
+    public void Add_RejectsAnOptionTheKindDoesNotUse(string kind, string option, string? value)   // A-78
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            string[] args = value is null
+                ? [kind, "Thing", "--entity", "Account", option, "--project", project]
+                : [kind, "Thing", "--entity", "Account", option, value, "--project", project];
+
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(args));
+            Assert.Empty(Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories));
+        });
+    }
+
+    [Fact]
+    public void Add_CustomApi_UsesThePublisherPrefixRecordedInTheProject()   // A-50
+    {
+        RunInProject("Zava.Sales.Plugins", (project, dir) =>
+        {
+            File.WriteAllText(project,
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><RootNamespace>Zava.Sales.Plugins</RootNamespace><VelaPublisherPrefix>zs</VelaPublisherPrefix></PropertyGroup></Project>");
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--project", project]));
+
+            Assert.Contains("RegisterCustomApi(\"zs_Recalc\", Handle)", File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "Recalc.cs")));
+        });
+    }
+
+    [Fact]
+    public void Add_CustomApi_ExplicitPrefix_WinsOverTheRecordedOne()
+    {
+        RunInProject("Zava.Plugins", (project, dir) =>
+        {
+            File.WriteAllText(project,
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><RootNamespace>Zava.Plugins</RootNamespace><VelaPublisherPrefix>zs</VelaPublisherPrefix></PropertyGroup></Project>");
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--prefix", "ACME", "--project", project]));
+
+            Assert.Contains("RegisterCustomApi(\"acme_Recalc\", Handle)", File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "Recalc.cs")));
+        });
+    }
+
+    [Fact]
+    public void Add_CustomApi_RefusesADerivedPrefixThatIsNotAPublisherPrefix()   // A-50
+    {
+        // "ZavaSales" derives "zavasales" (9 characters): not a valid publisher prefix, so no unregistrable name is emitted.
+        RunInProject("ZavaSales.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["customapi", "Recalc", "--global", "--project", project]));
+            Assert.False(File.Exists(Path.Combine(dir, "GlobalCustomApis", "Recalc.cs")));
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--prefix", "zava", "--project", project]));
+        });
+    }
+
+    [Fact]
+    public void Add_CustomApiTest_UsesThePublisherPrefix_AndAssertsTheOutputs()   // A-50, A-51
+    {
+        RunInProject("Zava.Plugins.Tests", (project, dir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "Recalc", "--kind", "customapi", "--prefix", "zs", "--project", project]));
+
+            string content = File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "RecalcTests.cs"));
+            Assert.Contains("PluginContext.ForMessage(\"zs_Recalc\")", content);
+            Assert.Contains("Assert.Equal(\"zs_Recalc\", definition.UniqueName);", content);
+            Assert.Contains("Assert.True(builder.Context.OutputParameters.Contains(output.Name)", content);
+            Assert.Contains(".WithInputParameter(", content);
+        });
+    }
+
+    [Fact]
+    public void Add_PluginTest_AssertsThatTheHandlerRan()   // A-51: the generated test used to assert nothing
+    {
+        RunInProject("Acme.Plugins.Tests", (project, dir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountValidator", "--entity", "Account", "--project", project]));
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountValidatorTests.cs"));
+            Assert.Contains("builder.Execute(new AccountValidator(string.Empty, string.Empty));", content);
+            Assert.Contains("Assert.Contains(\"AccountValidator executed\", builder.TraceCapture.Output);", content);
+            Assert.DoesNotContain("// Assert.", content);
+        });
+    }
+
+    [Fact]
+    public void Add_Step_RefusesOnlyAnExactDuplicateOfAnExistingStep()   // A-50, A-25 rule
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountRouter", "--entity", "Account", "--filtering-attributes", "Name", "--project", project]));
+            string file = Path.Combine(dir, "Account", "Plugins", "AccountRouter.cs");
+            string before = File.ReadAllText(file);
+
+            // Same defaults (Create / PostOperation / Sync) and the same filter column as `add plugin`: refused.
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--filtering-attributes", "Name", "--project", project]));
+            Assert.Equal(before, File.ReadAllText(file));
+
+            // Same trigger, other filter column: allowed (several steps per trigger, told apart by their filters).
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--handler", "OnPhone", "--filtering-attributes", "Telephone1", "--project", project]));
+            // A different stage is a different trigger.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--stage", "PreOperation", "--filtering-attributes", "Name", "--project", project]));
+        });
+    }
+
     private static void RunInProject(string rootNamespace, Action<string, string> action)
     {
         string dir = Path.Combine(Path.GetTempPath(), "vela-add-" + Guid.NewGuid().ToString("N"));

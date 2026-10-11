@@ -89,8 +89,7 @@ when the runtime provides it). The built-in resolver and `AddPluginRuntime` regi
 ## System vs user calls in a service
 
 The built-in `IOrganizationService` is the **current user's** service (`ctx.Service`: the step's impersonated user
-when it has one, otherwise the caller): calls run with that user's privileges (so a service that reads or writes on the user's behalf respects their security role). When a
-service needs **elevated / system** access instead, do not reach for a second `IOrganizationService`
+when it has one, otherwise the caller): calls run with that user's privileges. When a service needs **elevated / system** access instead, do not reach for a second `IOrganizationService`
 registration - there is only one `IOrganizationService` token and it is the user. Inject
 **`ILocalPluginContext`** and pick the scope you need from it:
 
@@ -104,7 +103,10 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
 public sealed class QuotaEnforcer(ILocalPluginContext ctx) : IQuotaEnforcer
 {
     public void Enforce(EntityReference account)
-        => ctx.SystemService.Update(/* runs as SYSTEM, ignores the caller's role */ ...);
+    {
+        var update = new Entity(account.LogicalName, account.Id) { ["creditonhold"] = true };
+        ctx.SystemService.Update(update);   // runs as SYSTEM, whatever the caller's role
+    }
 }
 ```
 
@@ -112,8 +114,7 @@ public sealed class QuotaEnforcer(ILocalPluginContext ctx) : IQuotaEnforcer
 (a specific user; `ctx.AsUser(ctx.InitiatingUserId)` for the user who started the operation).
 
 The rule of thumb: inject a bare `IOrganizationService` for ordinary user-scoped work; inject
-`ILocalPluginContext` when the service needs a scope other than the current user. Injecting the context keeps the choice explicit at the call site instead of hiding an elevated
-service behind the same `IOrganizationService` type.
+`ILocalPluginContext` when the service needs another scope, so the elevation stays explicit at the call site.
 
 ## Why
 

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
+using Vela.Constants;
 using Vela.DI;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.PluginTelemetry;
@@ -94,12 +95,18 @@ namespace Vela.Context
         /// <inheritdoc />
         /// <remarks>Created on first use: an execution that never calls Dataverse creates no service.</remarks>
         public IOrganizationService Service =>
-            _service ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.UserId), this, "User");
+            _service ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.UserId), this, "User", TraceServiceCalls);
 
         /// <inheritdoc />
         /// <remarks>Created on first use.</remarks>
         public IOrganizationService SystemService =>
-            _systemService ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(null), this, "System");
+            _systemService ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(null), this, "System", TraceServiceCalls);
+
+        /// <summary>
+        /// Whether the wrapped organization services trace every call, or only a failed one (set by
+        /// <c>PluginBase.AutoTraceServiceCalls</c>). Read when a service is first created.
+        /// </summary>
+        internal bool TraceServiceCalls { get; set; } = true;
 
         /// <inheritdoc />
         public ILogger Logger { get; }
@@ -221,7 +228,7 @@ namespace Vela.Context
                 throw new ArgumentException("User id cannot be empty.", nameof(userId));
             }
 
-            return new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(userId), this, "AsUser");
+            return new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(userId), this, "AsUser", TraceServiceCalls);
         }
 
         /// <inheritdoc />
@@ -487,15 +494,22 @@ namespace Vela.Context
             return value is bool flag && flag;
         }
 
+        // Only the bulk table messages carry their rows in Targets. Any other message (a Custom API, a custom
+        // action) can have an EntityCollection input that happens to be named Targets: that is not a bulk operation.
         private static EntityCollection? ResolveBulkTargets(IPluginExecutionContext context)
         {
-            if (!context.InputParameters.Contains("Targets"))
+            if (!IsBulkMessage(context.MessageName) || !context.InputParameters.Contains("Targets"))
             {
                 return null;
             }
 
             return context.InputParameters["Targets"] as EntityCollection;
         }
+
+        private static bool IsBulkMessage(string? messageName) =>
+            string.Equals(messageName, PluginMessages.CreateMultiple, StringComparison.Ordinal)
+            || string.Equals(messageName, PluginMessages.UpdateMultiple, StringComparison.Ordinal)
+            || string.Equals(messageName, "UpsertMultiple", StringComparison.Ordinal);
 
         private static IReadOnlyList<EntityImageCollection> ResolveBulkEntityImages(IPluginExecutionContext context, string propertyName)
         {

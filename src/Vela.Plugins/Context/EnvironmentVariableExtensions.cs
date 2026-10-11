@@ -87,7 +87,7 @@ namespace Vela.Context
             }
         }
 
-        // Resolves via the per-execution service and rejects Secret-type variables (their value resolves through
+        // Resolves via the per-execution service, which rejects Secret-type variables (their value resolves through
         // Azure Key Vault, which this service does not read).
         private static EnvironmentVariable Resolve(ILocalPluginContext context, string schemaName, TimeSpan? cacheFor)
         {
@@ -96,14 +96,7 @@ namespace Vela.Context
                 throw new ArgumentNullException(nameof(context));
             }
 
-            EnvironmentVariable variable = context.GetRequiredService<IEnvironmentVariableReader>().Resolve(schemaName, cacheFor);
-            if (variable.Exists && variable.Type == EnvironmentVariableType.Secret)
-            {
-                throw new InvalidPluginExecutionException(
-                    $"Environment variable '{schemaName}' is a Secret; reading secret values is not supported (they resolve through Azure Key Vault).");
-            }
-
-            return variable;
+            return context.GetRequiredService<IEnvironmentVariableReader>().Resolve(schemaName, cacheFor);
         }
 
         private static InvalidPluginExecutionException Missing(EnvironmentVariable variable, string schemaName) =>

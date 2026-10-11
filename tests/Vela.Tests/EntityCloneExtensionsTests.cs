@@ -164,4 +164,49 @@ public sealed class EntityCloneExtensionsTests
         TestAccount? source = null;
         Assert.Throws<ArgumentNullException>(() => source!.Clone());
     }
+
+    [Fact]
+    public void Clone_keeps_a_guid_column_that_only_happens_to_equal_the_id()
+    {
+        // A self-reference is business data, not the primary key: only the key column itself is dropped.
+        Guid id = Guid.NewGuid();
+        Entity source = new Entity("account", id);
+        source["accountid"] = id;
+        source["new_originalrecordid"] = id;
+
+        Entity clone = source.Clone();
+
+        Assert.False(clone.Contains("accountid"));
+        Assert.Equal(id, clone["new_originalrecordid"]);
+    }
+
+    [Fact]
+    public void Clone_drops_the_primary_key_a_model_names_on_its_Id_property()
+    {
+        Guid id = Guid.NewGuid();
+        OddKeyRecord source = new OddKeyRecord { Id = id };
+        source["new_oddkey"] = id;
+        source["new_name"] = "A";
+
+        OddKeyRecord clone = source.Clone();
+
+        Assert.False(clone.Contains("new_oddkey"));
+        Assert.Equal("A", clone["new_name"]);
+    }
+
+    [Microsoft.Xrm.Sdk.Client.EntityLogicalName("new_record")]
+    public sealed class OddKeyRecord : Entity
+    {
+        public OddKeyRecord()
+            : base("new_record")
+        {
+        }
+
+        [AttributeLogicalName("new_oddkey")]
+        public override Guid Id
+        {
+            get => base.Id;
+            set => base.Id = value;
+        }
+    }
 }

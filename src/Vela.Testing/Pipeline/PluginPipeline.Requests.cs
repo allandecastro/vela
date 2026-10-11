@@ -256,7 +256,7 @@ namespace Vela.Testing
         {
             // Steps register on the sdkmessage, which differs from the request name for some business messages
             // (SendEmailRequest runs the Send steps, WinQuoteRequest the Win steps), and plugins see that name.
-            string message = SdkMessageNames.ToSdkMessage(request.RequestName);
+            string message = SdkMessageNames.ToSdkMessage(request);
             bool hasSteps = _registrations.Any(registration => registration.Step.Enabled
                 && string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
             if (!hasSteps)

@@ -189,6 +189,106 @@ public sealed class DataverseRegistrationReadShapeTests
     }
 
     [Fact]
+    public void GetStepItems_does_not_read_custom_apis_when_no_step_is_at_main_operation()
+    {
+        // Only a stage-30 step can be a Custom API's internal step, so without one the customapi table is never read
+        // (it used to be read in full, once per assembly).
+        var handlerId = Guid.NewGuid();
+        var pluginTypes = new Dictionary<Guid, string> { [handlerId] = "Zava.Plugins.AccountPlugin" };
+        var step = new Entity("sdkmessageprocessingstep", Guid.NewGuid())
+        {
+            ["eventhandler"] = new EntityReference("plugintype", handlerId),
+            ["msg.name"] = new AliasedValue("sdkmessage", "name", "Update"),
+            ["stage"] = new OptionSetValue(40),
+            ["mode"] = new OptionSetValue(0),
+            ["statecode"] = new OptionSetValue(0),
+        };
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessageprocessingstep" ? TestSupport.FakeOrgService.Collection(step) : new EntityCollection(),
+        };
+
+        Assert.Single(DataverseRegistration.GetStepItems(svc, pluginTypes, Json));
+        Assert.DoesNotContain(svc.Queries, q => q.EntityName == "customapi");
+    }
+
+    [Fact]
+    public void GetStepItems_reads_only_the_custom_apis_named_by_main_operation_steps()
+    {
+        // A user step at MainOperation on a standard message is kept; the internal step of a Custom API is skipped.
+        // The customapi read is scoped to the stage-30 messages instead of scanning the whole environment.
+        var handlerId = Guid.NewGuid();
+        var pluginTypes = new Dictionary<Guid, string> { [handlerId] = "Zava.Plugins.MyApi" };
+        Entity MainOp(string? message)
+        {
+            var step = new Entity("sdkmessageprocessingstep", Guid.NewGuid())
+            {
+                ["eventhandler"] = new EntityReference("plugintype", handlerId),
+                ["stage"] = new OptionSetValue(SdkConstants.PipelineStage.MainOperation),
+                ["mode"] = new OptionSetValue(0),
+                ["statecode"] = new OptionSetValue(0),
+            };
+            if (message != null)
+            {
+                step["msg.name"] = new AliasedValue("sdkmessage", "name", message);
+            }
+
+            return step;
+        }
+        var postOp = new Entity("sdkmessageprocessingstep", Guid.NewGuid())
+        {
+            ["eventhandler"] = new EntityReference("plugintype", handlerId),
+            ["msg.name"] = new AliasedValue("sdkmessage", "name", "Create"),
+            ["stage"] = new OptionSetValue(40),
+            ["mode"] = new OptionSetValue(0),
+            ["statecode"] = new OptionSetValue(0),
+        };
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(MainOp("zava_DoThing"), MainOp("Update"), MainOp(null), postOp),
+                // The platform compares case-insensitively; the row's casing differs from the step's message.
+                "customapi" => TestSupport.FakeOrgService.Collection(new Entity("customapi", Guid.NewGuid()) { ["uniquename"] = "ZAVA_DoThing" }),
+                _ => new EntityCollection(),
+            },
+        };
+
+        List<RegistrationItem> items = DataverseRegistration.GetStepItems(svc, pluginTypes, Json);
+
+        // A step without a message name is not a candidate (no empty value goes into the In list).
+        Assert.Equal(new[] { "Update", "", "Create" }, items.Select(i => i.Definition.GetProperty("message").GetString()).ToArray());
+        QueryExpression apiQuery = Assert.Single(svc.Queries, q => q.EntityName == "customapi");
+        Assert.Equal(new[] { "uniquename" }, apiQuery.ColumnSet.Columns);
+        ConditionExpression c = Assert.Single(apiQuery.Criteria.Conditions);
+        Assert.Equal("uniquename", c.AttributeName);
+        Assert.Equal(ConditionOperator.In, c.Operator);
+        Assert.Equal(new object[] { "zava_DoThing", "Update" }, c.Values.ToArray());
+    }
+
+    [Fact]
+    public void GetStepImages_chunks_a_long_step_id_list_and_merges_the_images()
+    {
+        // 1001 steps would put 1001 parameters in one In condition; the read splits it and loses no image.
+        Guid[] stepIds = Enumerable.Range(0, 1001).Select(_ => Guid.NewGuid()).ToArray();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => TestSupport.FakeOrgService.Collection(
+                Assert.Single(q.Criteria.Conditions).Values
+                    .Select(v => new Entity("sdkmessageprocessingstepimage", Guid.NewGuid())
+                    {
+                        ["sdkmessageprocessingstepid"] = new EntityReference("sdkmessageprocessingstep", (Guid)v),
+                    })
+                    .ToArray()),
+        };
+
+        Dictionary<Guid, Entity[]> images = DataverseRegistration.GetStepImages(svc, stepIds);
+
+        Assert.Equal(new[] { 500, 500, 1 }, svc.Queries.Select(q => q.Criteria.Conditions[0].Values.Count).ToArray());
+        Assert.Equal(stepIds.OrderBy(x => x), images.Keys.OrderBy(x => x));
+    }
+
+    [Fact]
     public void GetStepItems_returns_empty_without_querying_when_no_plugin_types()
     {
         var svc = new TestSupport.FakeOrgService();

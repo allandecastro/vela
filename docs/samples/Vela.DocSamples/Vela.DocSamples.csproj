@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Compiled documentation samples. The canonical snippets of the docs site (docs/index.md, the quickstart) are
+    included from these files with docfx's [!code-csharp[](...#region)] syntax, and the AGENTS.md that `vela init`
+    scaffolds mirrors AgentsGuideSamples.cs. The project builds with the Vela analyzers and source generator, and
+    its tests run, so a snippet that no longer compiles or no longer behaves as documented fails CI. Never packed.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Vela.DocSamples</RootNamespace>
+    <AssemblyName>Vela.DocSamples</AssemblyName>
+    <!-- Samples read like user code: no XML doc comments, no nullable annotations. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Vela.Plugins\Vela.Plugins.csproj" />
+    <ProjectReference Include="..\..\..\src\Vela.Testing\Vela.Testing.csproj" />
+    <!-- The analyzers and the image projection generator, as the Vela.Plugins package ships them. -->
+    <ProjectReference Include="..\..\..\src\Vela.Analyzers\Vela.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

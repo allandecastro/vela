@@ -36,7 +36,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void AssociateRelated_skips_members_without_an_id()
+        public void AssociateRelated_rejects_members_without_an_id_before_associating_any()
         {
             InMemoryOrganizationService service = NewService();
             Guid accountId = service.Create(new Entity("account"));
@@ -44,14 +44,16 @@ namespace Vela.Testing.Tests
 
             DeepAccount account = new DeepAccount { Id = accountId };
             account.RelatedContacts.Add(new DeepContact { Id = ada });
-            account.RelatedContacts.Add(new DeepContact());   // no id -> skipped, not associated
-            service.AssociateRelated(account);
+            account.RelatedContacts.Add(new DeepContact());   // no id -> the whole call is rejected
 
+            ArgumentException ex = Assert.Throws<ArgumentException>(() => service.AssociateRelated(account));
+            Assert.Contains("RelatedContacts[1]", ex.Message);
+
+            // Nothing was associated, not even the member that had an id.
             DeepAccount got = service.RetrieveWithRelated<DeepAccount>(
                 new EntityReference("account", accountId),
                 q => q.Include(a => a.RelatedContacts));
-            Assert.Single(got.RelatedContacts);
-            Assert.Equal(ada, got.RelatedContacts[0].Id);
+            Assert.Empty(got.RelatedContacts);
         }
 
         [Fact]

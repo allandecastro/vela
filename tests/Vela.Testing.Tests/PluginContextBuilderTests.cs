@@ -45,6 +45,47 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Execute_ExplicitCreatePostTrigger_AlsoSurfacesTheCreatedId()
+        {
+            // A multi-step router needs its trigger stated explicitly; ctx.Response.id must still resolve, otherwise a
+            // post-create handler sees Guid.Empty (e.g. a duplicate check that excludes the new record would not).
+            Guid accountId = Guid.NewGuid();
+
+            LocalPluginContext context = PluginContext.For<FakeAccount>()
+                .OnCreate().Stage(PluginStages.PostOperation).Sync()
+                .WithTarget(new FakeAccount { Id = accountId, Name = "Zava" })
+                .Build();
+
+            Assert.Equal(accountId, context.PluginExecutionContext.OutputParameters["id"]);
+        }
+
+        [Fact]
+        public void Build_CreatePostTrigger_KeepsAnIdTheCallerSet()
+        {
+            Guid stated = Guid.NewGuid();
+
+            LocalPluginContext context = PluginContext.For<FakeAccount>()
+                .OnCreate().Stage(PluginStages.PostOperation).Sync()
+                .WithTarget(new FakeAccount { Id = Guid.NewGuid(), Name = "Zava" })
+                .WithOutputParameter("id", stated)
+                .Build();
+
+            Assert.Equal(stated, context.PluginExecutionContext.OutputParameters["id"]);
+        }
+
+        [Fact]
+        public void Build_CreatePreOperationTrigger_HasNoCreatedId()
+        {
+            // The id is an output of the main operation: a PreOperation step runs before it exists.
+            LocalPluginContext context = PluginContext.For<FakeAccount>()
+                .OnCreate().Stage(PluginStages.PreOperation).Sync()
+                .WithTarget(new FakeAccount { Id = Guid.NewGuid(), Name = "Zava" })
+                .Build();
+
+            Assert.False(context.PluginExecutionContext.OutputParameters.Contains("id"));
+        }
+
+        [Fact]
         public void Execute_Generic_InstantiatesPrimaryConstructorPlugin()
         {
             // TagCapturingPlugin has only a (unsecureConfig, secureConfig) primary constructor - the shape of a
@@ -147,6 +188,46 @@ namespace Vela.Testing.Tests
             Assert.Equal(50, ctx.PluginExecutionContext.OutputParameters["Score"]);
         }
 
+        // A typed request carries both the message and the input parameters, so the test names neither.
+        private sealed class ScoreRequest : Vela.Messages.TypedRequest
+        {
+            public ScoreRequest()
+            {
+                RequestName = "vela_Score";
+            }
+
+            public int AccountId { get => Get<int>(); set => Set(value); }
+        }
+
+        [Fact]
+        public void ForRequest_SetsMessageAndInputParameters_FromTheTypedRequest()
+        {
+            LocalPluginContext ctx = PluginContext.ForRequest(new ScoreRequest { AccountId = 5 }).Build();
+
+            Assert.Equal("vela_Score", ctx.MessageName);
+            Assert.Equal(5, ctx.PluginExecutionContext.InputParameters["AccountId"]);
+
+            new ScoringApi().Execute(ctx.ServiceProvider);
+
+            Assert.Equal(50, ctx.PluginExecutionContext.OutputParameters["Score"]);
+        }
+
+        [Fact]
+        public void WithRequest_TranslatesTheRequestNameToTheSdkMessage()
+        {
+            OrganizationRequest closeQuote = new OrganizationRequest("CloseQuote");
+            closeQuote.Parameters["Status"] = new OptionSetValue(4);
+
+            LocalPluginContext ctx = PluginContext.For<FakeAccount>().WithRequest(closeQuote).Build();
+
+            Assert.Equal("Close", ctx.MessageName);
+            Assert.Equal(4, ((OptionSetValue)ctx.PluginExecutionContext.InputParameters["Status"]).Value);
+        }
+
+        [Fact]
+        public void ForRequest_RejectsNull()
+            => Assert.Throws<ArgumentNullException>(() => PluginContext.ForRequest(null!));
+
         [Fact]
         public void WithPreImage_PopulatesImageCollection()
         {
@@ -220,6 +301,7 @@ namespace Vela.Testing.Tests
         public void WithTargets_MarksBulkOperation_AndExposesTargets()
         {
             LocalPluginContext ctx = PluginContext.For<FakeAccount>()
+                .OnMessage(PluginMessages.UpdateMultiple)
                 .WithTargets(new FakeAccount { Name = "A" }, new FakeAccount { Name = "B" })
                 .Build();
 

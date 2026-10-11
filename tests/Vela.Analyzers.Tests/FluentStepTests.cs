@@ -33,7 +33,7 @@ public sealed class FluentStepTests
     [Fact]
     public void Exposes_a_generic_trigger_name_and_its_arguments()
     {
-        ChainCall call = FluentStep.Spine(SyntaxFactory.ParseExpression("RegisterStep().On<DeleteRequest>().OnMessage(\"x\")")).Skip(1).First();
+        ChainCall call = FluentStep.Spine(SyntaxFactory.ParseExpression("RegisterStep().On<DeleteRequest>().PostOperation()")).Skip(1).First();
         Assert.Equal("On", call.MethodName);
         Assert.IsType<GenericNameSyntax>(call.Name);
         Assert.Empty(call.Arguments);

@@ -91,6 +91,58 @@ namespace Vela.Analyzers
             }
         }
 
+        /// <summary>
+        /// The typed trigger of <paramref name="message"/> on the step trigger type: its <c>On{Message}()</c> member
+        /// (parameterless, not generic, matched case-insensitively), or null when the message has none. The trigger
+        /// interface is generated from the message model, so this reads the model without a second list.
+        /// </summary>
+        public static string? FindTypedTrigger(ITypeSymbol triggerType, string message)
+        {
+            string wanted = "On" + message.Trim();
+            foreach (ITypeSymbol type in SelfAndInterfaces(triggerType))
+            {
+                foreach (ISymbol member in type.GetMembers())
+                {
+                    if (member is IMethodSymbol { Parameters.Length: 0, TypeParameters.Length: 0, IsStatic: false } candidate
+                        && candidate.Name != "OnMessage"
+                        && string.Equals(candidate.Name, wanted, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        return candidate.Name;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<ITypeSymbol> SelfAndInterfaces(ITypeSymbol type)
+        {
+            yield return type;
+            foreach (INamedTypeSymbol iface in type.AllInterfaces)
+            {
+                yield return iface;
+            }
+        }
+
+        /// <summary>
+        /// The message an SDK or Vela request type stands for (<c>Microsoft.Xrm.Sdk.Messages.UpdateRequest</c> -> Update,
+        /// <c>Vela.Messages.CreateRequest&lt;T&gt;</c> -> Create), or null for any other type (a custom API request).
+        /// </summary>
+        public static string? SdkRequestMessage(ITypeSymbol request)
+        {
+            string ns = request.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+            if (ns != "Microsoft.Xrm.Sdk.Messages" && ns != "Microsoft.Crm.Sdk.Messages" && ns != "Vela.Messages")
+            {
+                return null;
+            }
+
+            const string suffix = "Request";
+            string name = request.Name;
+            return name.Length > suffix.Length && name.EndsWith(suffix, System.StringComparison.Ordinal)
+                ? name.Substring(0, name.Length - suffix.Length)
+                : null;
+        }
+
         /// <summary>True when a call named <paramref name="methodName"/> sits on the receiver spine.</summary>
         public static bool SpineHasCall(ExpressionSyntax? receiver, string methodName)
         {
@@ -168,6 +220,46 @@ namespace Vela.Analyzers
 
                 return body;
             }
+        }
+
+        /// <summary>
+        /// The message a type-stated trigger (<c>On&lt;TRequest&gt;()</c>, <c>OnAsyncOnly&lt;TRequest&gt;()</c>,
+        /// <c>OnMessage&lt;TMessage&gt;()</c>) names, when it is known statically: a <c>[SdkMessage("...")]</c> or
+        /// <c>[CustomMessage("...")]</c> on the type, else an SDK request type's name without its <c>Request</c> suffix
+        /// (<c>Microsoft.Xrm.Sdk.Messages.CreateRequest</c> is <c>Create</c>). Null for anything else, including a
+        /// generated request, which sets its <c>RequestName</c> in a constructor the analyzer does not run.
+        /// </summary>
+        public static string? TypeStatedMessage(ChainCall call, SemanticModel model, System.Threading.CancellationToken cancellationToken)
+        {
+            if (call.MethodName is not ("On" or "OnAsyncOnly" or "OnMessage")
+                || call.Name is not GenericNameSyntax generic
+                || generic.TypeArgumentList.Arguments.Count != 1
+                || model.GetTypeInfo(generic.TypeArgumentList.Arguments[0], cancellationToken).Type is not INamedTypeSymbol type)
+            {
+                return null;
+            }
+
+            foreach (AttributeData attribute in type.GetAttributes())
+            {
+                string? attributeName = attribute.AttributeClass?.ToDisplayString();
+                if ((attributeName == "Vela.Messages.SdkMessageAttribute" || attributeName == "Vela.Constants.CustomMessageAttribute")
+                    && attribute.ConstructorArguments.Length == 1
+                    && attribute.ConstructorArguments[0].Value is string declared)
+                {
+                    return declared;
+                }
+            }
+
+            string ns = type.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+            const string suffix = "Request";
+            if ((ns == "Microsoft.Xrm.Sdk.Messages" || ns == "Microsoft.Crm.Sdk.Messages")
+                && type.Name.Length > suffix.Length
+                && type.Name.EndsWith(suffix, System.StringComparison.Ordinal))
+            {
+                return type.Name.Substring(0, type.Name.Length - suffix.Length);
+            }
+
+            return null;
         }
 
         /// <summary>

@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   pack-and-publish:
-    # GitHub-hosted Windows runner: net462 (the harness) only builds on Windows, so packing must run there.
+    # Self-hosted Windows runner (as ci.yml): net462 (the harness) only builds on Windows, so packing must run there.
     runs-on: [self-hosted, Windows]
     timeout-minutes: 30 # cap a hung restore/build/publish
     env:

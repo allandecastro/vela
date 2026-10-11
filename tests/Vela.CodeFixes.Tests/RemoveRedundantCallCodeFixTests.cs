@@ -37,7 +37,7 @@ namespace Demo
 namespace Vela.Steps
 {
     public interface IFluentStep { }
-    public interface ITrigger : IFluentStep { IStages OnMessage(string message); }
+    public interface ITrigger : IFluentStep { IStages On<TRequest>(); }
     public interface IStages : IFluentStep { IMode PostOperation(); }
     public interface IMode : IFluentStep { IConfig Sync(); }
     public interface IConfig : IFluentStep
@@ -46,6 +46,7 @@ namespace Vela.Steps
         void Handle();
     }
 }
+namespace Microsoft.Xrm.Sdk.Messages { public class CreateRequest { } }
 namespace Demo
 {
     using Vela.Steps;
@@ -80,8 +81,8 @@ namespace Demo
     [Fact]
     public async Task Removes_an_invalid_image_VELA007()
     {
-        string before = ImageHarness.Replace("BODY", "RegisterStep().OnMessage(\"create\").PostOperation().Sync().{|#0:WithPreImage|}(\"name\").Handle();");
-        string after = ImageHarness.Replace("BODY", "RegisterStep().OnMessage(\"create\").PostOperation().Sync().Handle();");
+        string before = ImageHarness.Replace("BODY", "RegisterStep().On<Microsoft.Xrm.Sdk.Messages.CreateRequest>().PostOperation().Sync().{|#0:WithPreImage|}(\"name\").Handle();");
+        string after = ImageHarness.Replace("BODY", "RegisterStep().On<Microsoft.Xrm.Sdk.Messages.CreateRequest>().PostOperation().Sync().Handle();");
         DiagnosticResult expected = new DiagnosticResult(Vela.Analyzers.ImageStageAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
             .WithLocation(0).WithArguments("A pre-image", "Create", "there is no prior row state before a create");
         await VerifyImage.VerifyCodeFixAsync(before, expected, after);

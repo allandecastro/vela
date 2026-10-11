@@ -2,22 +2,35 @@
 
 `Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command.
 
+## Prerequisites
+
+- **.NET 10 SDK.** The CLI is a `net10.0` tool, and the SDK also builds the `net462` plugin projects on any OS
+  (it brings the .NET Framework reference assemblies).
+- **Mono, to run plugin tests outside Windows.** Plugins and their `Vela.Testing` tests target `net462`, and
+  `dotnet test` runs a `net462` test project on Windows only. On macOS and Linux, install Mono (`brew install mono`,
+  or your distribution's `mono-complete`) and run the built test assembly with the xUnit console runner:
+  `mono ~/.nuget/packages/xunit.runner.console/<version>/tools/net462/xunit.console.exe <tests>.dll`
+  (add the `xunit.runner.console` package to the test project to get it). Building needs no Mono.
+- **A Dataverse solution and its publisher.** `vela apply --solution <uniqueName>` deploys into an existing
+  solution and takes the package's required publisher prefix from it; create the solution first (in
+  the maker portal or with `pac solution`). `vela solution show <uniqueName>` prints its prefix.
+
 ## From nuget.org
 
-```powershell
+```bash
 dotnet tool install --global Vela.Cli
 ```
 
 ## From a locally built package
 
-```powershell
-dotnet pack .\src\Vela.Cli -c Release -o .\artifacts\cli
-dotnet tool install --global --add-source .\artifacts\cli Vela.Cli
+```bash
+dotnet pack ./src/Vela.Cli -c Release -o ./artifacts/cli
+dotnet tool install --global --add-source ./artifacts/cli Vela.Cli
 ```
 
 Verify the install (update later with `dotnet tool update --global Vela.Cli`):
 
-```powershell
+```bash
 vela version
 ```
 

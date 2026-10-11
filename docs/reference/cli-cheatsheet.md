@@ -7,16 +7,16 @@ exit codes. For the full narrative, see [The vela CLI](../guides/cli-overview.md
 
 | Command | Purpose | Key options |
 | --- | --- | --- |
-| `vela init` (alias `new`) | Scaffold a build-ready solution | `--name`, `--prefix`, `--minimal`/`--no-demos`, `--output`, `--no-tests`/`--no-console`/`--no-integrations`, `--managed-identity`, `--web-resources`, `--core-version`, `--force` |
-| `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; `--entity`, `--message`, `--stage`, `--mode`, `--filtering-attributes` (required for Create/Update steps), `--handler` (step), `--function`/`--action`, `--bound`/`--global`, `--prefix` (customapi publisher prefix), `--project`, `--force` |
+| `vela init` (alias `new`) | Scaffold a build-ready solution (minimal by default) | `--name`, `--prefix`, `--publisher-prefix`, `--samples` (demo code + Integrations/ConsoleApp), `--output`, `--no-tests` (with `--samples`: `--no-console`/`--no-integrations`, `--managed-identity`), `--web-resources`, `--core-version`, `--force` (keeps your and edited files), `--verbose`, `--json` |
+| `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; `--entity`, `--message`, `--stage`, `--mode`, `--filtering-attributes` (required for Create/Update steps), `--handler` (step), `--function`/`--action`, `--bound`/`--global`, `--prefix` (customapi/test publisher prefix; default: the project's `VelaPublisherPrefix`), `--project`, `--force` (not step), `--json`; an option a kind does not use is rejected |
 | `vela models <scope>` | Generate early-bound / typed models | see [scopes](#models-scopes) + connection flags |
 | `vela plan` | Preview registrations (read-only) | package inputs + connection flags, `--solution`, `--secure-config NAME=VALUE\|NAME=@file`, `--strict`, `--detailed-exitcode`, `--verbose`, `--json`, `--out` |
 | `vela apply` | Apply registrations (writes) | package inputs + connection flags, `--solution`, `--secure-config`, `--auto-approve` (alias `--yes`), `--batch-size`, `--strict`, `--webresources`, `--json`, `--out` |
-| `vela inspect` | Compare local packages with the live environment | package inputs + connection flags, `--secure-config`, `--json`, `--out` |
+| `vela inspect` | Compare local packages with the live environment | package inputs + connection flags, `--solution`, `--secure-config`, `--json`, `--out` |
 | `vela solution show <uniquename>` | Print a solution's publisher prefix | connection flags, `--json` |
 | `vela logs` (alias `trace`) | Read the plug-in trace log, or failed system jobs (read-only) | `--jobs` (`--all-statuses`), `--errors`, `--top`, `--since`, `--type`, `--message`, `--entity`, `--correlation`, `--full`, `--json` + connection flags |
 | `vela help [<command>]` | Help for one command; `vela help --json` for the whole command table | |
-| `vela sign` | Sign a plugin package | `--package`, `--fingerprint` \| (`--pfx`/`--pfx-base64` + `--pfx-password`/`--pfx-credential`), `--timestamp` |
+| `vela sign` | Sign a plugin package | `--package`, `--fingerprint` \| (`--pfx`/`--pfx-base64-env <VAR>` + `--pfx-password-env <VAR>`/`--pfx-credential`; literal `--pfx-base64`/`--pfx-password` warn), `--timestamp` |
 | `vela logout` | Clear the cached interactive token and remembered URL | |
 | `vela update` | Update the global tool (`dotnet tool update --global Vela.Cli`) | `--version <x.y.z>` (Windows: run from a fresh shell, the running exe is locked) |
 | `vela menu` (or bare `vela`) | Interactive menu | |
@@ -39,6 +39,18 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `--auth-client-id` / `--authority` | Override the MSAL client / authority (sovereign clouds) |
 | `--timeout <minutes>` | Dataverse request timeout (default 10, range 1 to 60); raise for a large org or slow cold start |
 | `--environment <label>` | Display label for the run (falls back to `--url`) |
+
+## Environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `DATAVERSE_CLIENT_SECRET` | Client secret for app-registration auth (instead of `--client-secret`) |
+| `DATAVERSE_CONNECTION_STRING` | Connection string (instead of `--connection-string`) |
+| `VELA_SECURE_CONFIG_<NAME>` | Value of the step secure configuration `<NAME>` (instead of `--secure-config`) |
+| `VELA_CONFIG_DIR` | Location of the token cache and remembered URL (default `~/.vela`) |
+| `NO_COLOR` / `VELA_NO_COLOR` | Disable colors |
+| `VELA_NO_UPDATE_CHECK` | Disable the daily update notice |
+| `VELA_SCAN_IN_PROCESS=1` | Scan packages in the `vela` process instead of a child process (debugging only) |
 
 ## Models scopes
 

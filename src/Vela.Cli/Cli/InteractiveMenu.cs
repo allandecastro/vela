@@ -210,20 +210,50 @@ internal static class InteractiveMenu
         string output = AnsiConsole.Prompt(
             new TextPrompt<string>("Output directory:").DefaultValue("."));
 
-        bool integrations = AnsiConsole.Confirm("Generate an Integrations project?", true);
+        // `vela init` is minimal by default; the demo-only Integrations/ConsoleApp projects come with --samples.
+        bool samples = AnsiConsole.Confirm("Include the sample code (demo plugins, Custom APIs, Integrations and ConsoleApp projects)?", false);
+        bool integrations = samples && AnsiConsole.Confirm("Generate an Integrations project?", true);
         bool tests = AnsiConsole.Confirm("Generate a unit-test project (Vela.Testing)?", true);
-        bool console = AnsiConsole.Confirm("Generate a ConsoleApp project?", true);
+        bool console = samples && AnsiConsole.Confirm("Generate a ConsoleApp project?", true);
 
-        return ComposeInitArgs(name, prefix, output, integrations, tests, console);
+        // The sample Custom APIs need a valid publisher prefix; `init --samples` refuses a derived one that is not
+        // (e.g. 'zavasales', 9 characters), so ask for it rather than composing a command that fails.
+        string? publisherPrefix = NeedsPublisherPrefix(prefix, samples)
+            ? AnsiConsole.Prompt(
+                new TextPrompt<string>($"Publisher prefix of your solution ('{ScaffoldTemplates.ApiPrefix(prefix)}' is not a valid one; 2-8 characters, letter first, alphanumeric):")
+                    .Validate(v => ScaffoldOptions.IsValidPublisherPrefix(v.Trim().ToLowerInvariant())
+                        ? ValidationResult.Success()
+                        : ValidationResult.Error("[red]Use 2-8 characters: a letter, then letters or digits (e.g. 'zava').[/]")))
+                .Trim()
+                .ToLowerInvariant()
+            : null;
+
+        return ComposeInitArgs(name, prefix, output, integrations, tests, console, samples, publisherPrefix);
     }
 
-    /// <summary>Builds the <c>init</c> argument array from collected inputs. Pure, for testability.</summary>
-    public static string[] ComposeInitArgs(string name, string prefix, string output, bool integrations, bool tests, bool console)
+    /// <summary>True when the wizard must ask for a publisher prefix: with samples, whose Custom APIs need one, when
+    /// the prefix derived from <paramref name="prefix"/> is not a valid publisher prefix. Pure, for testability.</summary>
+    public static bool NeedsPublisherPrefix(string prefix, bool samples) =>
+        samples && !ScaffoldOptions.IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix));
+
+    /// <summary>Builds the <c>init</c> argument array from collected inputs. Pure, for testability. The Integrations
+    /// and ConsoleApp choices only apply with <paramref name="samples"/> (they are demo-only projects).</summary>
+    public static string[] ComposeInitArgs(string name, string prefix, string output, bool integrations, bool tests, bool console, bool samples = false, string? publisherPrefix = null)
     {
         List<string> args = ["init", "--name", name, "--prefix", prefix, "--output", output];
-        if (!integrations)
+        if (!string.IsNullOrWhiteSpace(publisherPrefix))
         {
-            args.Add("--no-integrations");
+            args.Add("--publisher-prefix");
+            args.Add(publisherPrefix!);
+        }
+
+        if (samples)
+        {
+            args.Add("--samples");
+            if (!integrations)
+            {
+                args.Add("--no-integrations");
+            }
         }
 
         if (!tests)
@@ -231,7 +261,7 @@ internal static class InteractiveMenu
             args.Add("--no-tests");
         }
 
-        if (!console)
+        if (samples && !console)
         {
             args.Add("--no-console");
         }

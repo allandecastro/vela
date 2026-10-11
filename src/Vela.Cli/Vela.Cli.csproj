@@ -38,6 +38,8 @@
     <Compile Include="..\Vela.Plugins\Steps\StepImageRules.cs" Link="Shared\StepImageRules.cs" />
     <!-- SDK request name to sdkmessage map (SendEmail runs as Send): shared with the runtime and the harness. -->
     <Compile Include="..\Vela.Plugins\Steps\SdkMessageNames.cs" Link="Shared\SdkMessageNames.cs" />
+    <!-- The messages with a typed On{Message}() trigger (generated from the message model). -->
+    <Compile Include="..\Vela.Plugins\Steps\TypedTriggers.cs" Link="Shared\TypedTriggers.cs" />
   </ItemGroup>
 
   <ItemGroup>

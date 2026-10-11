@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using static Vela.Cli.CliExitCodes;
 using static Vela.Cli.OutputWriter;
@@ -10,17 +12,32 @@ using static Vela.Cli.ScaffoldTemplates;
 namespace Vela.Cli;
 
 /// <summary>
-/// Orchestrates <c>vela init</c>: resolves the target layout, writes the generated files, and reports a
-/// summary. All file-system side effects live here; content comes from <see cref="ScaffoldTemplates"/>.
+/// Orchestrates <c>vela init</c>: plans the generated files, writes them, and reports a summary. All file-system
+/// side effects live here; content comes from <see cref="ScaffoldTemplates"/>.
 /// </summary>
+/// <remarks>
+/// Every run records what it wrote, with a content hash, in <see cref="ManifestPath"/>. A <c>--force</c> regeneration
+/// uses that manifest to touch only files Vela generated and the user has not edited since: it overwrites or removes
+/// those, and keeps every other file (user code, edited samples, files from a scaffold that predates the manifest).
+/// </remarks>
 internal static class ProjectScaffolder
 {
+    /// <summary>The scaffold manifest, relative to the solution root. Commit it so a later <c>--force</c> can use it.</summary>
+    internal static readonly string ManifestPath = Path.Combine(".vela", "scaffold-manifest.json");
+
+    /// <summary>A generated file: its path relative to the solution root and its content.</summary>
+    internal sealed record PlannedFile(string RelativePath, string Content);
+
+    /// <summary>What a write pass did: files now matching the templates, files kept because the user edited them,
+    /// and stale generated files removed.</summary>
+    internal sealed record WriteOutcome(int Files, IReadOnlyList<string> Kept, IReadOnlyList<string> Removed);
+
     public static int Generate(ScaffoldOptions options)
     {
         string root = Path.GetFullPath(Path.Combine(options.OutputDirectory, options.SolutionName));
 
         // Defense in depth (see SolutionNamePattern): the resolved target must stay strictly under the output
-        // directory. A traversal solution name would otherwise let --force delete managed folders outside the tree.
+        // directory. A traversal solution name would otherwise let --force touch files outside the tree.
         string outputRoot = Path.GetFullPath(options.OutputDirectory);
         string outputRootWithSep = outputRoot.EndsWith(Path.DirectorySeparatorChar) ? outputRoot : outputRoot + Path.DirectorySeparatorChar;
         if (!root.StartsWith(outputRootWithSep, StringComparison.Ordinal))
@@ -30,232 +47,76 @@ internal static class ProjectScaffolder
 
         if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any() && !options.Force)
         {
-            return Fail($"Target directory already exists and is not empty: {root}. Use --force to overwrite.", ExitInvalidArguments, includeUsage: false);
-        }
-
-        string prefix = options.Prefix;
-
-        string sharedName = $"{prefix}.Shared";
-        string pluginsName = $"{prefix}.Plugins";
-        string integrationsName = $"{prefix}.Integrations";
-        string consoleName = $"{prefix}.ConsoleApp";
-        string testsName = $"{prefix}.Plugins.Tests";
-        string integrationsTestsName = $"{prefix}.Integrations.Tests";
-
-        // On --force, remove the project directories we manage so a regeneration that drops a project
-        // (e.g. --no-integrations) does not leave a stale one behind. Scoped to our own folders so any
-        // user-added files at the solution root are preserved.
-        if (options.Force && Directory.Exists(root))
-        {
-            (string folder, string project)[] managed =
-            [
-                ("src", sharedName), ("src", pluginsName), ("src", integrationsName), ("src", consoleName),
-                ("tests", testsName), ("tests", integrationsTestsName),
-            ];
-            foreach ((string folder, string project) in managed)
-            {
-                string projectDir = Path.Combine(root, folder, project);
-                if (Directory.Exists(projectDir))
-                {
-                    Directory.Delete(projectDir, recursive: true);
-                }
-            }
+            return Fail($"Target directory already exists and is not empty: {root}. Use --force to regenerate (your own and edited files are kept).", ExitInvalidArguments, includeUsage: false);
         }
 
         if (options.ManagedIdentity && !options.IncludeIntegrations)
         {
             // stderr so it never pollutes the --json report on stdout.
-            Console.Error.WriteLine("Warning: --managed-identity applies to the Integrations project, which is excluded; ignoring it.");
+            Console.Error.WriteLine("Warning: --managed-identity applies to the Integrations project (vela init --samples), which is excluded; ignoring it.");
         }
 
-        List<ProjectEntry> projects = [];
-        int fileCount = 0;
-
-        void Write(string relativeToRoot, string content)
-        {
-            string fullPath = Path.Combine(root, relativeToRoot);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-            File.WriteAllText(fullPath, OutputWriter.NormalizeNewlines(content));
-            fileCount++;
-        }
-
-        // For user-editable root files (README, .gitignore, Directory.Build.props): write only when absent, so a
-        // --force regeneration preserves the user's customizations rather than clobbering them (the managed .sln and
-        // project files are always (re)written via Write).
-        void WriteIfAbsent(string relativeToRoot, string content)
-        {
-            string fullPath = Path.Combine(root, relativeToRoot);
-            if (File.Exists(fullPath))
-            {
-                return;
-            }
-
-            Write(relativeToRoot, content);
-        }
-
-        // Solution files canonically use backslash separators; dotnet accepts them on every platform.
-        // The .sln lives at the solution root, so paths are prefixed with the project's folder (src/ or tests/).
-        void AddProject(string name, string folder) =>
-            projects.Add(new ProjectEntry(name, $"{folder}\\{name}\\{name}.csproj", StableGuid(name)));
-
-        // ---- Shared ----
-        // The csproj is always written (structural); the sample models + GreetingService are demo content, omitted
-        // under --minimal/--no-demos so the project is a clean, empty library the user fills with `vela models`.
-        AddProject(sharedName, "src");
-        Write(Path.Combine("src", sharedName, $"{sharedName}.csproj"), SharedCsproj(options));
-        if (options.IncludeDemos)
-        {
-            Write(Path.Combine("src", sharedName, "Models", "Generated", "Account.cs"), AccountModel(prefix));
-            Write(Path.Combine("src", sharedName, "Models", "Generated", "Contact.cs"), ContactModel(prefix));
-            Write(Path.Combine("src", sharedName, "Services", "IGreetingService.cs"), GreetingServiceInterface(prefix));
-            Write(Path.Combine("src", sharedName, "Services", "GreetingService.cs"), GreetingService(prefix));
-        }
-
-        // ---- Plugins ----
-        // Code is organised by table (Account/, Contact/) with Plugins/ and CustomApis/ subfolders;
-        // unbound (global) Custom APIs live under GlobalCustomApis/. The csproj is structural (always written); the
-        // sample plugins/services/Custom APIs are demo content, omitted under --minimal/--no-demos - the empty
-        // package still builds and packs, ready for `vela add`.
-        AddProject(pluginsName, "src");
-        Write(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion));
-        if (options.IncludeDemos)
-        {
-            Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountPostCreatePlugin.cs"), AccountPostCreatePlugin(prefix));
-            Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountRelatedContactsPlugin.cs"), AccountRelatedContactsPlugin(prefix));
-            Write(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountMessageReference.cs"), AccountMessageReference(prefix));
-            Write(Path.Combine("src", pluginsName, "Account", "Services", "AccountFollowUpService.cs"), AccountFollowUpService(prefix));
-            Write(Path.Combine("src", pluginsName, "Account", "CustomApis", "AccountEstimateValueCustomApi.cs"), AccountEstimateValueCustomApi(prefix));
-            Write(Path.Combine("src", pluginsName, "Contact", "Plugins", "ContactRouterPlugin.cs"), ContactRouterPlugin(prefix));
-            Write(Path.Combine("src", pluginsName, "Contact", "Services", "ContactDuplicateService.cs"), ContactDuplicateService(prefix));
-            Write(Path.Combine("src", pluginsName, "Contact", "CustomApis", "ContactValidateCustomApi.cs"), ContactValidateCustomApi(prefix));
-            Write(Path.Combine("src", pluginsName, "GlobalCustomApis", "PingCustomApi.cs"), PingCustomApi(prefix));
-        }
-
-        // ---- Integrations (optional) ----
-        if (options.IncludeIntegrations)
-        {
-            AddProject(integrationsName, "src");
-            Write(Path.Combine("src", integrationsName, $"{integrationsName}.csproj"), PluginCsproj(integrationsName, sharedName, options.CoreVersion, withSigningTarget: options.ManagedIdentity));
-            Write(Path.Combine("src", integrationsName, "Account", "Plugins", "AccountSyncRouterPlugin.cs"), AccountSyncRouterPlugin(prefix));
-            Write(Path.Combine("src", integrationsName, "Account", "CustomApis", "AccountReconcileCustomApi.cs"), AccountReconcileCustomApi(prefix));
-            Write(Path.Combine("src", integrationsName, "Contact", "Plugins", "ContactSyncPlugin.cs"), ContactSyncPlugin(prefix));
-            Write(Path.Combine("src", integrationsName, "Contact", "CustomApis", "ContactExportCustomApi.cs"), ContactExportCustomApi(prefix));
-            Write(Path.Combine("src", integrationsName, "GlobalCustomApis", "IntegrationHeartbeatCustomApi.cs"), IntegrationHeartbeatCustomApi(prefix));
-        }
-
-        // ---- Plugins.Tests (optional) ----
-        // A unit-test project that runs the example plugins/Custom APIs with Vela.Testing — no Dataverse
-        // connection. Mirrors the by-table layout of the Plugins project it tests.
-        if (options.IncludeTests)
-        {
-            AddProject(testsName, "tests");
-            Write(Path.Combine("tests", testsName, $"{testsName}.csproj"), TestsCsproj(testsName, pluginsName, sharedName, options.CoreVersion));
-            Write(Path.Combine("tests", testsName, "Security", "SecurityExampleTests.cs"), SecurityExampleTests(prefix));
-            Write(Path.Combine("tests", testsName, "Account", "Plugins", "AccountPostCreatePluginTests.cs"), AccountPostCreatePluginTests(prefix));
-            Write(Path.Combine("tests", testsName, "Account", "Plugins", "AccountRelatedContactsPluginTests.cs"), AccountRelatedContactsPluginTests(prefix));
-            Write(Path.Combine("tests", testsName, "Account", "CustomApis", "AccountEstimateValueCustomApiTests.cs"), AccountEstimateValueCustomApiTests(prefix));
-            Write(Path.Combine("tests", testsName, "Contact", "Plugins", "ContactRouterPluginTests.cs"), ContactRouterPluginTests(prefix));
-            Write(Path.Combine("tests", testsName, "Contact", "CustomApis", "ContactValidateCustomApiTests.cs"), ContactValidateCustomApiTests(prefix));
-            Write(Path.Combine("tests", testsName, "GlobalCustomApis", "PingCustomApiTests.cs"), PingCustomApiTests(prefix));
-        }
-
-        // ---- Integrations.Tests (optional) ----
-        // Unit tests for the Integrations sample package, mirroring its by-table layout. Only generated when
-        // both the Integrations project and tests are included.
-        if (options.IncludeIntegrations && options.IncludeTests)
-        {
-            AddProject(integrationsTestsName, "tests");
-            Write(Path.Combine("tests", integrationsTestsName, $"{integrationsTestsName}.csproj"), TestsCsproj(integrationsTestsName, integrationsName, sharedName, options.CoreVersion));
-            Write(Path.Combine("tests", integrationsTestsName, "Account", "CustomApis", "AccountReconcileCustomApiTests.cs"), AccountReconcileCustomApiTests(prefix));
-            Write(Path.Combine("tests", integrationsTestsName, "Contact", "CustomApis", "ContactExportCustomApiTests.cs"), ContactExportCustomApiTests(prefix));
-            Write(Path.Combine("tests", integrationsTestsName, "GlobalCustomApis", "IntegrationHeartbeatCustomApiTests.cs"), IntegrationHeartbeatCustomApiTests(prefix));
-        }
-
-        // ---- ConsoleApp (optional) ----
-        if (options.IncludeConsole)
-        {
-            AddProject(consoleName, "src");
-            Write(Path.Combine("src", consoleName, $"{consoleName}.csproj"), ConsoleCsproj(options));
-            Write(Path.Combine("src", consoleName, "Program.cs"), ConsoleProgram(prefix));
-        }
-
-        // ---- WebResources (optional, TypeScript) ----
-        // An opt-in JS/TS SDK project (.esproj) so Visual Studio "Build" runs npm. Its src/generated holds the
-        // regenerated form models (vela models --forms); src/ is hand-written form/ribbon/shared code.
-        string webResourcesName = $"{prefix}.WebResources";
-        if (options.IncludeWebResources)
-        {
-            projects.Add(new ProjectEntry(
-                webResourcesName,
-                $"src\\{webResourcesName}\\{webResourcesName}.esproj",
-                StableGuid(webResourcesName),
-                JavaScriptProjectTypeGuid));
-
-            // The JS global name (esbuild wrapper root) and the form/ribbon namespaces are lower-cased so the
-            // deployed globals are consistent regardless of the prefix casing.
-            string globalName = options.WebResourceNamespace.ToLowerInvariant();
-            Write(Path.Combine("src", webResourcesName, $"{webResourcesName}.esproj"), WebResourcesEsproj());
-            Write(Path.Combine("src", webResourcesName, "README.md"), WebResourcesReadme(prefix, globalName, options.WebResourcesFolder));
-            Write(Path.Combine("src", webResourcesName, "package.json"), WebResourcesPackageJson(prefix));
-            Write(Path.Combine("src", webResourcesName, "tsconfig.json"), WebResourcesTsconfig());
-            Write(Path.Combine("src", webResourcesName, "tsup.config.ts"), WebResourcesTsupConfig(globalName, options.WebResourcesFolder));
-            Write(Path.Combine("src", webResourcesName, "web-resources.entries.ts"), WebResourcesEntries(globalName));
-            Write(Path.Combine("src", webResourcesName, "vitest.config.ts"), WebResourcesVitestConfig());
-            Write(Path.Combine("src", webResourcesName, ".gitignore"), WebResourcesGitignore(options.WebResourcesFolder));
-            Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.ts"), WebResourcesExampleForm(prefix));
-            Write(Path.Combine("src", webResourcesName, "src", "account", "Forms", "main.test.ts"), WebResourcesExampleFormTest());
-            // A ready-made example model set so the example form compiles and its test passes out of the box;
-            // `vela models` overwrites src/generated with real models from your environment.
-            Write(Path.Combine("src", webResourcesName, "src", "generated", "forms", "account", "main.form.ts"), WebResourcesExampleGeneratedForm());
-            Write(Path.Combine("src", webResourcesName, "src", "generated", "option-sets", "account.ts"), WebResourcesExampleGeneratedOptionSets());
-            Write(Path.Combine("src", webResourcesName, "src", "generated", "tables", "contact.ts"), WebResourcesExampleGeneratedTable());
-            Write(Path.Combine("src", webResourcesName, "src", "generated", "index.ts"), WebResourcesExampleGeneratedBarrel());
-            Write(Path.Combine("src", webResourcesName, "test", "entries.test.ts"), WebResourcesEntriesTest());
-        }
-
-        // ---- Solution-wide files ----
-        WriteIfAbsent("Directory.Build.props", DirectoryBuildProps());
-        // The scaffolded projects pin package versions inline. A parent Directory.Packages.props with
-        // ManagePackageVersionsCentrally=true (Central Package Management) inherited from an enclosing repo would turn
-        // those inline versions into NU1008 errors. Emit a solution-root Directory.Packages.props that disables CPM so
-        // the nearest file (this one) shadows any inherited parent and the solution builds standalone. (#315)
-        WriteIfAbsent("Directory.Packages.props", DirectoryPackagesProps());
-        Write($"{options.SolutionName}.sln", Solution(projects));
-        WriteIfAbsent(".gitignore", Gitignore());
-        // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
-        // nuget.org, the default source. Add your own nuget.config only if you use a private feed.
-        WriteIfAbsent("README.md", RootReadme(options));
+        List<PlannedFile> plan = Plan(options, out List<ProjectEntry> projects);
+        WriteOutcome outcome = WritePlan(root, plan);
 
         if (options.Json)
         {
-            Console.WriteLine(BuildScaffoldReport(options.SolutionName, root, fileCount, projects));
+            Console.WriteLine(BuildScaffoldReport(options.SolutionName, root, outcome.Files, projects, outcome.Kept, outcome.Removed));
             return ExitSuccess;
         }
 
-        ConsoleTheme.WriteSuccessLine($"Created {options.SolutionName} ({fileCount} files) at {root}");
+        ConsoleTheme.WriteSuccessLine($"Created {options.SolutionName} ({outcome.Files} files) at {root}");
         Console.WriteLine("Projects:");
         foreach (ProjectEntry project in projects)
         {
             Console.WriteLine($"  - {project.Name}");
         }
 
+        if (outcome.Kept.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Kept (edited since generated, or not generated by Vela); delete a file to regenerate it:");
+            foreach (string kept in outcome.Kept)
+            {
+                Console.WriteLine($"  - {kept}");
+            }
+        }
+
+        if (outcome.Removed.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Removed (generated earlier, no longer part of the scaffold, unedited):");
+            foreach (string removed in outcome.Removed)
+            {
+                Console.WriteLine($"  - {removed}");
+            }
+        }
+
+        string prefix = options.Prefix;
         Console.WriteLine();
         Console.WriteLine("Next steps:");
+        if (!options.IncludeSamples)
+        {
+            Console.WriteLine($"  vela models --entities account --out src/{prefix}.Shared/Models/Generated --namespace {prefix}.Shared.Models.Generated");
+            Console.WriteLine($"  vela add plugin MyPlugin --entity Account --filtering-attributes Name --project src/{prefix}.Plugins");
+        }
+
         Console.WriteLine($"  dotnet build {options.SolutionName}.sln -c Release");
         if (options.IncludeTests)
         {
-            Console.WriteLine($"  dotnet test tests/{testsName} -c Release");
+            Console.WriteLine($"  dotnet test tests/{prefix}.Plugins.Tests -c Release");
             if (options.IncludeIntegrations)
             {
-                Console.WriteLine($"  dotnet test tests/{integrationsTestsName} -c Release");
+                Console.WriteLine($"  dotnet test tests/{prefix}.Integrations.Tests -c Release");
             }
         }
 
         // `dotnet build -c Release` packages the plugin project(s) into artifacts/ (GeneratePackageOnBuild +
         // PackageOutputPath). `dotnet pack` is intentionally not used: run cold it emits an assembly-less package.
-        Console.WriteLine($"  vela plan --packages-dir artifacts --interactive --verbose");
+        Console.WriteLine($"  vela plan --packages-dir artifacts --solution {options.SolutionName} --interactive --verbose   # your solution's unique name");
         if (options.IncludeWebResources)
         {
+            string webResourcesName = $"{prefix}.WebResources";
             Console.WriteLine($"  cd src/{webResourcesName} && npm install && npm run build   # bundle the form web resources");
             Console.WriteLine("  vela add ribbon-script <entity>   # add a typed ribbon command (wire the button in the Command Designer)");
             Console.WriteLine($"  vela apply --webresources src/{webResourcesName}/{options.WebResourcesFolder} --solution <name> --interactive   # deploy them");
@@ -264,8 +125,329 @@ internal static class ProjectScaffolder
         return ExitSuccess;
     }
 
-    // The --json success report: the solution, its root, the file count and the generated project names.
-    internal static string BuildScaffoldReport(string solution, string root, int fileCount, IReadOnlyList<ProjectEntry> projects) =>
+    /// <summary>
+    /// Plans every file the options generate (pure: no I/O), in write order, and the projects the solution lists.
+    /// </summary>
+    internal static List<PlannedFile> Plan(ScaffoldOptions options, out List<ProjectEntry> projects)
+    {
+        string prefix = options.Prefix;
+        string apiPrefix = options.EffectivePublisherPrefix;
+        string? recordedPublisherPrefix = options.PublisherPrefix;
+
+        string sharedName = $"{prefix}.Shared";
+        string pluginsName = $"{prefix}.Plugins";
+        string integrationsName = $"{prefix}.Integrations";
+        string consoleName = $"{prefix}.ConsoleApp";
+        string testsName = $"{prefix}.Plugins.Tests";
+        string integrationsTestsName = $"{prefix}.Integrations.Tests";
+
+        List<PlannedFile> plan = [];
+        List<ProjectEntry> entries = [];
+        void Add(string relativePath, string content) => plan.Add(new PlannedFile(relativePath, content));
+
+        // Solution files canonically use backslash separators; dotnet accepts them on every platform.
+        // The .sln lives at the solution root, so paths are prefixed with the project's folder (src/ or tests/).
+        void AddProject(string name, string folder) =>
+            entries.Add(new ProjectEntry(name, $"{folder}\\{name}\\{name}.csproj", StableGuid(name)));
+
+        // ---- Shared ----
+        // The csproj is structural; the sample models + GreetingService are --samples content. A minimal Shared
+        // project is an empty library that `vela models` fills.
+        AddProject(sharedName, "src");
+        Add(Path.Combine("src", sharedName, $"{sharedName}.csproj"), SharedCsproj(options));
+        if (options.IncludeSamples)
+        {
+            Add(Path.Combine("src", sharedName, "Models", "Generated", "Account.cs"), AccountModel(prefix));
+            Add(Path.Combine("src", sharedName, "Models", "Generated", "Contact.cs"), ContactModel(prefix));
+            Add(Path.Combine("src", sharedName, "Services", "IGreetingService.cs"), GreetingServiceInterface(prefix));
+            Add(Path.Combine("src", sharedName, "Services", "GreetingService.cs"), GreetingService(prefix));
+        }
+
+        // ---- Plugins ----
+        // Code is organised by table (Account/, Contact/) with Plugins/ and CustomApis/ subfolders; unbound (global)
+        // Custom APIs live under GlobalCustomApis/. A minimal package has no plugin types, so it registers nothing.
+        AddProject(pluginsName, "src");
+        Add(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion, publisherPrefix: recordedPublisherPrefix));
+        if (options.IncludeSamples)
+        {
+            Add(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountPostCreatePlugin.cs"), AccountPostCreatePlugin(prefix));
+            Add(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountRelatedContactsPlugin.cs"), AccountRelatedContactsPlugin(prefix));
+            Add(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountMessageReference.cs"), AccountMessageReference(prefix));
+            Add(Path.Combine("src", pluginsName, "Account", "Services", "AccountFollowUpService.cs"), AccountFollowUpService(prefix));
+            Add(Path.Combine("src", pluginsName, "Account", "CustomApis", "AccountEstimateValueCustomApi.cs"), AccountEstimateValueCustomApi(prefix, apiPrefix));
+            Add(Path.Combine("src", pluginsName, "Contact", "Plugins", "ContactRouterPlugin.cs"), ContactRouterPlugin(prefix));
+            Add(Path.Combine("src", pluginsName, "Contact", "Services", "ContactDuplicateService.cs"), ContactDuplicateService(prefix));
+            Add(Path.Combine("src", pluginsName, "Contact", "CustomApis", "ContactValidateCustomApi.cs"), ContactValidateCustomApi(prefix, apiPrefix));
+            Add(Path.Combine("src", pluginsName, "GlobalCustomApis", "PingCustomApi.cs"), PingCustomApi(prefix, apiPrefix));
+        }
+
+        // ---- Integrations (--samples) ----
+        if (options.IncludeIntegrations)
+        {
+            AddProject(integrationsName, "src");
+            Add(Path.Combine("src", integrationsName, $"{integrationsName}.csproj"), PluginCsproj(integrationsName, sharedName, options.CoreVersion, withSigningTarget: options.ManagedIdentity, publisherPrefix: recordedPublisherPrefix));
+            Add(Path.Combine("src", integrationsName, "Account", "Plugins", "AccountSyncRouterPlugin.cs"), AccountSyncRouterPlugin(prefix));
+            Add(Path.Combine("src", integrationsName, "Account", "CustomApis", "AccountReconcileCustomApi.cs"), AccountReconcileCustomApi(prefix, apiPrefix));
+            Add(Path.Combine("src", integrationsName, "Contact", "Plugins", "ContactSyncPlugin.cs"), ContactSyncPlugin(prefix));
+            Add(Path.Combine("src", integrationsName, "Contact", "CustomApis", "ContactExportCustomApi.cs"), ContactExportCustomApi(prefix, apiPrefix));
+            Add(Path.Combine("src", integrationsName, "GlobalCustomApis", "IntegrationHeartbeatCustomApi.cs"), IntegrationHeartbeatCustomApi(prefix, apiPrefix));
+        }
+
+        // ---- Plugins.Tests (unless --no-tests) ----
+        // A unit-test project run with Vela.Testing (no Dataverse connection), mirroring the Plugins layout. Minimal:
+        // an empty project, ready for `vela add test`; --samples: tests for every sample.
+        if (options.IncludeTests)
+        {
+            AddProject(testsName, "tests");
+            Add(Path.Combine("tests", testsName, $"{testsName}.csproj"), TestsCsproj(testsName, pluginsName, sharedName, options.CoreVersion, recordedPublisherPrefix));
+            if (options.IncludeSamples)
+            {
+                Add(Path.Combine("tests", testsName, "Security", "SecurityExampleTests.cs"), SecurityExampleTests(prefix));
+                Add(Path.Combine("tests", testsName, "Account", "Plugins", "AccountPostCreatePluginTests.cs"), AccountPostCreatePluginTests(prefix));
+                Add(Path.Combine("tests", testsName, "Account", "Plugins", "AccountRelatedContactsPluginTests.cs"), AccountRelatedContactsPluginTests(prefix));
+                Add(Path.Combine("tests", testsName, "Account", "CustomApis", "AccountEstimateValueCustomApiTests.cs"), AccountEstimateValueCustomApiTests(prefix, apiPrefix));
+                Add(Path.Combine("tests", testsName, "Contact", "Plugins", "ContactRouterPluginTests.cs"), ContactRouterPluginTests(prefix));
+                Add(Path.Combine("tests", testsName, "Contact", "CustomApis", "ContactValidateCustomApiTests.cs"), ContactValidateCustomApiTests(prefix, apiPrefix));
+                Add(Path.Combine("tests", testsName, "GlobalCustomApis", "PingCustomApiTests.cs"), PingCustomApiTests(prefix, apiPrefix));
+            }
+        }
+
+        // ---- Integrations.Tests (--samples, with tests) ----
+        if (options.IncludeIntegrations && options.IncludeTests)
+        {
+            AddProject(integrationsTestsName, "tests");
+            Add(Path.Combine("tests", integrationsTestsName, $"{integrationsTestsName}.csproj"), TestsCsproj(integrationsTestsName, integrationsName, sharedName, options.CoreVersion, recordedPublisherPrefix));
+            Add(Path.Combine("tests", integrationsTestsName, "Account", "CustomApis", "AccountReconcileCustomApiTests.cs"), AccountReconcileCustomApiTests(prefix, apiPrefix));
+            Add(Path.Combine("tests", integrationsTestsName, "Contact", "CustomApis", "ContactExportCustomApiTests.cs"), ContactExportCustomApiTests(prefix, apiPrefix));
+            Add(Path.Combine("tests", integrationsTestsName, "GlobalCustomApis", "IntegrationHeartbeatCustomApiTests.cs"), IntegrationHeartbeatCustomApiTests(prefix, apiPrefix));
+        }
+
+        // ---- ConsoleApp (--samples) ----
+        if (options.IncludeConsole)
+        {
+            AddProject(consoleName, "src");
+            Add(Path.Combine("src", consoleName, $"{consoleName}.csproj"), ConsoleCsproj(options));
+            Add(Path.Combine("src", consoleName, "Program.cs"), ConsoleProgram(prefix));
+        }
+
+        // ---- WebResources (optional, TypeScript preview) ----
+        // An opt-in JS/TS SDK project (.esproj) so Visual Studio "Build" runs npm. Its src/generated holds the
+        // regenerated form models (vela models --forms); src/ is hand-written form/ribbon/shared code.
+        string webResourcesName = $"{prefix}.WebResources";
+        if (options.IncludeWebResources)
+        {
+            entries.Add(new ProjectEntry(
+                webResourcesName,
+                $"src\\{webResourcesName}\\{webResourcesName}.esproj",
+                StableGuid(webResourcesName),
+                JavaScriptProjectTypeGuid));
+
+            // The JS global name (esbuild wrapper root) and the form/ribbon namespaces are lower-cased so the
+            // deployed globals are consistent regardless of the prefix casing.
+            string globalName = options.WebResourceNamespace.ToLowerInvariant();
+            string wr = Path.Combine("src", webResourcesName);
+            Add(Path.Combine(wr, $"{webResourcesName}.esproj"), WebResourcesEsproj());
+            Add(Path.Combine(wr, "README.md"), WebResourcesReadme(prefix, globalName, options.WebResourcesFolder));
+            Add(Path.Combine(wr, "package.json"), WebResourcesPackageJson(prefix));
+            Add(Path.Combine(wr, "tsconfig.json"), WebResourcesTsconfig());
+            Add(Path.Combine(wr, "tsup.config.ts"), WebResourcesTsupConfig(globalName, options.WebResourcesFolder));
+            Add(Path.Combine(wr, "web-resources.entries.ts"), WebResourcesEntries(globalName));
+            Add(Path.Combine(wr, "vitest.config.ts"), WebResourcesVitestConfig());
+            Add(Path.Combine(wr, ".gitignore"), WebResourcesGitignore(options.WebResourcesFolder));
+            Add(Path.Combine(wr, "src", "account", "Forms", "main.ts"), WebResourcesExampleForm(prefix));
+            Add(Path.Combine(wr, "src", "account", "Forms", "main.test.ts"), WebResourcesExampleFormTest());
+            // A ready-made example model set so the example form compiles and its test passes out of the box;
+            // `vela models` overwrites src/generated with real models from your environment.
+            Add(Path.Combine(wr, "src", "generated", "forms", "account", "main.form.ts"), WebResourcesExampleGeneratedForm());
+            Add(Path.Combine(wr, "src", "generated", "option-sets", "account.ts"), WebResourcesExampleGeneratedOptionSets());
+            Add(Path.Combine(wr, "src", "generated", "tables", "contact.ts"), WebResourcesExampleGeneratedTable());
+            Add(Path.Combine(wr, "src", "generated", "index.ts"), WebResourcesExampleGeneratedBarrel());
+            Add(Path.Combine(wr, "test", "entries.test.ts"), WebResourcesEntriesTest());
+        }
+
+        // ---- Solution-wide files ----
+        Add("Directory.Build.props", DirectoryBuildProps());
+        // The scaffolded projects pin package versions inline. A parent Directory.Packages.props with
+        // ManagePackageVersionsCentrally=true (Central Package Management) inherited from an enclosing repo would turn
+        // those inline versions into NU1008 errors. Emit a solution-root Directory.Packages.props that disables CPM so
+        // the nearest file (this one) shadows any inherited parent and the solution builds standalone. (#315)
+        Add("Directory.Packages.props", DirectoryPackagesProps());
+        Add($"{options.SolutionName}.sln", Solution(entries));
+        Add(".gitignore", Gitignore());
+        // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
+        // nuget.org, the default source. Add your own nuget.config only if you use a private feed.
+        Add("README.md", RootReadme(options));
+        // Instructions for AI coding agents: the step, Custom API and test patterns and the CLI loop.
+        Add("AGENTS.md", AgentsGuide(options));
+
+        projects = entries;
+        return plan;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="plan"/> under <paramref name="root"/> with the manifest rules (see the class remarks),
+    /// then records the new manifest. A file is overwritten or removed only when its current content still matches
+    /// what the previous manifest says Vela wrote; anything else is kept.
+    /// </summary>
+    internal static WriteOutcome WritePlan(string root, IReadOnlyList<PlannedFile> plan)
+    {
+        Dictionary<string, string> previous = ReadManifest(root);
+        SortedDictionary<string, string> next = new(StringComparer.Ordinal);
+        List<string> kept = [];
+        List<string> removed = [];
+        int files = 0;
+
+        foreach (PlannedFile file in plan)
+        {
+            string key = ManifestKey(file.RelativePath);
+            string fullPath = Path.Combine(root, file.RelativePath);
+            string content = NormalizeNewlines(file.Content);
+            string hash = Hash(content);
+
+            if (File.Exists(fullPath))
+            {
+                string currentHash = Hash(File.ReadAllText(fullPath));
+                bool unedited = previous.TryGetValue(key, out string? writtenHash) && writtenHash == currentHash;
+                if (currentHash != hash && !unedited)
+                {
+                    // Edited since Vela wrote it, or never written by Vela: the user's version wins. Keep tracking
+                    // the hash Vela last wrote, so the file stays "edited" on the next run.
+                    kept.Add(key);
+                    if (writtenHash is not null)
+                    {
+                        next[key] = writtenHash;
+                    }
+
+                    continue;
+                }
+
+                if (currentHash != hash)
+                {
+                    File.WriteAllText(fullPath, content);
+                }
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+                File.WriteAllText(fullPath, content);
+            }
+
+            next[key] = hash;
+            files++;
+        }
+
+        // Generated earlier but no longer planned (e.g. a project dropped by this run): remove it when unedited.
+        foreach ((string key, string writtenHash) in previous.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            if (next.ContainsKey(key) || kept.Contains(key))
+            {
+                continue;
+            }
+
+            string fullPath = Path.Combine(root, key.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(fullPath) || !IsUnder(root, fullPath))
+            {
+                continue;
+            }
+
+            if (Hash(File.ReadAllText(fullPath)) == writtenHash)
+            {
+                File.Delete(fullPath);
+                removed.Add(key);
+                PruneEmptyDirectories(root, Path.GetDirectoryName(fullPath)!);
+            }
+            else
+            {
+                kept.Add(key);
+            }
+        }
+
+        WriteManifest(root, next);
+        return new WriteOutcome(files, kept, removed);
+    }
+
+    // Manifest keys use '/' so the file is identical whichever OS generated it.
+    private static string ManifestKey(string relativePath) => relativePath.Replace('\\', '/');
+
+    // SHA-256 of the content with line endings normalised, so a git autocrlf checkout does not read as an edit.
+    internal static string Hash(string content) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content.Replace("\r\n", "\n")))).ToLowerInvariant();
+
+    private static bool IsUnder(string root, string fullPath)
+    {
+        string rootWithSep = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(fullPath).StartsWith(rootWithSep, StringComparison.Ordinal);
+    }
+
+    // Removes now-empty directories from `directory` up to (not including) the solution root.
+    private static void PruneEmptyDirectories(string root, string directory)
+    {
+        string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        string? current = Path.GetFullPath(directory);
+        while (current is not null
+            && !string.Equals(current.TrimEnd(Path.DirectorySeparatorChar), fullRoot, StringComparison.Ordinal)
+            && IsUnder(root, current)
+            && Directory.Exists(current)
+            && !Directory.EnumerateFileSystemEntries(current).Any())
+        {
+            Directory.Delete(current);
+            current = Path.GetDirectoryName(current);
+        }
+    }
+
+    private static Dictionary<string, string> ReadManifest(string root)
+    {
+        string path = Path.Combine(root, ManifestPath);
+        if (!File.Exists(path))
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+            Dictionary<string, string> files = new(StringComparer.Ordinal);
+            if (document.RootElement.TryGetProperty("files", out JsonElement entries) && entries.ValueKind == JsonValueKind.Object)
+            {
+                foreach (JsonProperty entry in entries.EnumerateObject())
+                {
+                    string? hash = entry.Value.GetString();
+                    // Ignore an entry that could point outside the solution root (a hand-edited manifest).
+                    if (hash is not null && !entry.Name.Contains("..", StringComparison.Ordinal) && !Path.IsPathRooted(entry.Name))
+                    {
+                        files[entry.Name] = hash;
+                    }
+                }
+            }
+
+            return files;
+        }
+        catch (JsonException)
+        {
+            // An unreadable manifest is treated as absent: nothing is overwritten or removed, the safe direction.
+            Console.Error.WriteLine($"Warning: could not read {ManifestPath}; treating every existing file as yours.");
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+    }
+
+    private static void WriteManifest(string root, SortedDictionary<string, string> files)
+    {
+        string path = Path.Combine(root, ManifestPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        string json = JsonSerializer.Serialize(
+            new
+            {
+                comment = "Written by `vela init`: the files it generated and their content hash. `vela init --force` only overwrites or removes a listed file whose content still matches; commit this file.",
+                tool = ToolInfo.Version,
+                files,
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(path, NormalizeNewlines(json + "\n"));
+    }
+
+    // The --json success report: the solution, its root, the file count, the generated project names, and the files
+    // a --force run kept (edited by the user) or removed (stale and unedited).
+    internal static string BuildScaffoldReport(string solution, string root, int fileCount, IReadOnlyList<ProjectEntry> projects, IReadOnlyList<string>? kept = null, IReadOnlyList<string>? removed = null) =>
         JsonSerializer.Serialize(
             new
             {
@@ -273,6 +455,8 @@ internal static class ProjectScaffolder
                 root,
                 files = fileCount,
                 projects = projects.Select(p => p.Name).ToArray(),
+                kept = kept ?? [],
+                removed = removed ?? [],
             },
             new JsonSerializerOptions { WriteIndented = true });
 }

@@ -1,5 +1,5 @@
 using System;
-using Microsoft.Xrm.Sdk.Messages;
+using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
 using Vela.Steps;
@@ -15,16 +15,16 @@ namespace Vela.Testing.Tests
         public TypedContextTypedDelete(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().On<DeleteRequest>().PreOperation().Sync()
+            => RegisterStep().On<RecalculateRequest>().PreOperation().Sync()
                 .WithPreImage(a => a.Name)
-                .Handle(OnDeleting);
+                .Handle(OnRecalculating);
 
-        private void OnDeleting(OnDeletingContext ctx)
-            => ctx.SystemService.Create(new FakeTask { Subject = ctx.PreImage?.Name ?? "(none)" });
+        private void OnRecalculating(OnRecalculatingContext ctx)
+            => ctx.Trace("pre:" + (ctx.PreImage?.Name ?? "(none)"));
 
-        public sealed class OnDeletingContext : MessagePreContext<DeleteRequest, FakeAccount>
+        public sealed class OnRecalculatingContext : MessagePreContext<RecalculateRequest, FakeAccount>
         {
-            public OnDeletingContext(ILocalPluginContext inner) : base(inner) { }
+            public OnRecalculatingContext(ILocalPluginContext inner) : base(inner) { }
             public new NameImage? PreImage => this.PreImageAs<NameImage>();
         }
     }
@@ -35,13 +35,14 @@ namespace Vela.Testing.Tests
         public void Typed_on_request_context_exposes_the_typed_pre_image()
         {
             Guid id = Guid.NewGuid();
-            PluginPipeline pipeline = PluginPipeline.Empty().Register<TypedContextTypedDelete>()
-                .Seed(new FakeAccount { Id = id, Name = "Zava" });
+            PluginContextBuilder<FakeAccount> builder = PluginContext.For<FakeAccount>()
+                .OnMessage(RecalculateRequest.Name).Stage(PluginStages.PreOperation).Sync()
+                .WithPrimaryEntity(FakeAccount.EntityLogicalNameValue, id)
+                .WithPreImage(new FakeAccount { Id = id, Name = "Zava" });
 
-            pipeline.Service.Delete("account", id);
+            builder.Execute(new TypedContextTypedDelete(null!, null!));
 
-            FakeTask task = Assert.Single(pipeline.GetAll("task")).ToEntity<FakeTask>();
-            Assert.Equal("Zava", task.Subject);
+            Assert.Contains("pre:Zava", builder.TraceCapture.Output);
         }
     }
 }

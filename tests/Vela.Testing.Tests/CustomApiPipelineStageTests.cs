@@ -10,6 +10,15 @@ using Xunit;
 
 namespace Vela.Testing.Tests
 {
+    [Vela.Constants.CustomMessage("vela_StagedGreet")]
+    public sealed class StagedGreetMessage { }
+
+    [Vela.Constants.CustomMessage("vela_ClosedGreet")]
+    public sealed class ClosedGreetMessage { }
+
+    [Vela.Constants.CustomMessage("vela_AsyncOnly")]
+    public sealed class AsyncOnlyMessage { }
+
     // A-60: a Custom API runs the whole pipeline in the harness. Steps registered on its message fire around the
     // main operation as far as AllowedCustomProcessingStepType allows, a bound API's context carries the bound table
     // and the Target id, and inputs are checked against their declared types.
@@ -177,14 +186,14 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
         {
-            RegisterStep().OnMessage("vela_StagedGreet").PreValidation().Sync().Handle(ctx => ApiProbe.Events.Add("prevalidation"));
-            RegisterStep().OnMessage("vela_StagedGreet").PreOperation().Sync().Handle(ctx =>
+            RegisterStep().OnMessage<StagedGreetMessage>().PreValidation().Sync().Handle(ctx => ApiProbe.Events.Add("prevalidation"));
+            RegisterStep().OnMessage<StagedGreetMessage>().PreOperation().Sync().Handle(ctx =>
             {
                 ApiProbe.Events.Add("preoperation");
                 ParameterCollection inputs = ctx.PluginExecutionContext.InputParameters;
                 inputs["Name"] = ((string)inputs["Name"]).ToUpperInvariant();
             });
-            RegisterStep().OnMessage("vela_StagedGreet").PostOperation().Sync().Handle(ctx =>
+            RegisterStep().OnMessage<StagedGreetMessage>().PostOperation().Sync().Handle(ctx =>
             {
                 ParameterCollection outputs = ctx.PluginExecutionContext.OutputParameters;
                 ApiProbe.Events.Add("postoperation:" + outputs["Greeting"]);
@@ -208,7 +217,7 @@ namespace Vela.Testing.Tests
         public ClosedGreetStep(string u, string s) : base(u, s) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage("vela_ClosedGreet").PostOperation().Sync().Handle(ctx => ApiProbe.Events.Add("post"));
+            => RegisterStep().OnMessage<ClosedGreetMessage>().PostOperation().Sync().Handle(ctx => ApiProbe.Events.Add("post"));
     }
 
     public sealed class AsyncOnlyApi : CustomApiBase
@@ -227,7 +236,7 @@ namespace Vela.Testing.Tests
         public AsyncOnlySyncStep(string u, string s) : base(u, s) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage("vela_AsyncOnly").PreOperation().Sync().Handle(ctx => ApiProbe.Events.Add("sync-pre"));
+            => RegisterStep().OnMessage<AsyncOnlyMessage>().PreOperation().Sync().Handle(ctx => ApiProbe.Events.Add("sync-pre"));
     }
 
     public sealed class AsyncOnlyAsyncStep : EntityPluginBase<FakeAccount>
@@ -235,7 +244,7 @@ namespace Vela.Testing.Tests
         public AsyncOnlyAsyncStep(string u, string s) : base(u, s) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage("vela_AsyncOnly").PostOperation().Async().Handle(ctx => ApiProbe.Events.Add("async-post"));
+            => RegisterStep().OnMessage<AsyncOnlyMessage>().PostOperation().Async().Handle(ctx => ApiProbe.Events.Add("async-post"));
     }
 
     public sealed class BoundProbeApi : CustomApiBase

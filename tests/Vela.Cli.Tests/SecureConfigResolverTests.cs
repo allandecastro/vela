@@ -94,6 +94,19 @@ public class SecureConfigResolverTests
     }
 
     [Fact]
+    public void ParseSpecs_warns_about_an_inline_value_but_not_a_file_reference()
+    {
+        List<string> warnings = [];
+        Dictionary<string, string> values = SecureConfigResolver.ParseSpecs(["ApiKey=hunter2", "Other=@secret.txt"], _ => "from-file", warnings.Add);
+
+        Assert.Equal("hunter2", values["ApiKey"]);
+        string warning = Assert.Single(warnings);
+        Assert.Contains("--secure-config ApiKey=@file", warning);
+        Assert.Contains("VELA_SECURE_CONFIG_ApiKey", warning);
+        Assert.DoesNotContain("hunter2", warning);
+    }
+
+    [Fact]
     public void Deleting_a_step_also_deletes_its_secure_config_row()
     {
         Guid stepId = Guid.NewGuid(), configId = Guid.NewGuid();

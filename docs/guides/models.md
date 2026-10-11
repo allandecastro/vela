@@ -54,8 +54,8 @@ vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models
   wrong types or arity fail at compile time. Use the reference to set a lookup
   (`contact.ParentCustomerId = Account.ByAccountNumberKey("A-001")`), to read the record with
   `ctx.Service.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name)`, or to create-or-update
-  by business key with `ctx.Service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` (returns whether
-  a record was created). The factory is a method (not a property), so it can never be used as a column in
+  by business key with `ctx.Service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` (returns
+  `(Created, Target)`). The factory is a method (not a property), so it can never be used as a column in
   `FilterOn`/`Select`.
 - **Typed relationship navigation properties** (see below).
 
@@ -128,6 +128,9 @@ string customer = order.Parent_Account?.Name;
 decimal total = order.Order_Details.Sum(l => l.LineTotal ?? 0);
 ```
 
+Each `Include` reads all the related columns by default; pass column selectors to read fewer, for example
+`q.Include(o => o.Order_Details, l => l.LineTotal)`. Including the same relationship twice throws.
+
 This is a **single-record** read: Dataverse nests related records on `Retrieve` (not `RetrieveMultiple`), **one
 level deep**, and each related query is subject to the **5000-row page cap**, so use it for bounded relationships.
 For a set of records, or deeper graphs, run a second query on the children and stitch by the parent lookup.
@@ -135,7 +138,8 @@ For a set of records, or deeper graphs, run a second query on the children and s
 
 **Associate (N:N).** An N:N link connects records that already exist, so you associate rather than create: populate
 the N:N collection with existing records (each with its id) and call `ctx.Service.AssociateRelated(account)`,
-which associates every populated N:N collection. (`CreateWithRelated` deliberately ignores N:N collections - it only
+which associates every populated N:N collection. A related record without an id throws, naming each one, before
+anything is associated. (`CreateWithRelated` deliberately ignores N:N collections - it only
 deep-inserts 1:N children.)
 
 ## Verify drift against the live schema (`--verify`)
@@ -190,6 +194,27 @@ rather than fail:
 Offline output is C# only (`--forms` / `--tables` and `--verify` need live metadata). When the org is reachable,
 prefer the connected path - it carries the full metadata (typed lookup targets, relationships).
 
+## Where the message files go
+
+`--custom-apis` and `--messages` write two files per message into `Messages/`: the request/response contract
+(`Messages/<Name>.cs`), compiled by the Shared project, and its `On<Message>()` step extension
+(`Messages/<Name>.Steps.cs`, an `internal` class), compiled by each plugin project. The extension extends the
+`Vela.Plugins` step builder, which the Shared project does not reference, so a scaffold made by `vela init` excludes
+`*.Steps.cs` from Shared and links it into the plugin projects. A project scaffolded before this change needs the
+two lines by hand:
+
+```xml
+<!-- Shared .csproj -->
+<ItemGroup>
+  <Compile Remove="Models\Generated\Messages\*.Steps.cs" />
+</ItemGroup>
+
+<!-- each plugin .csproj -->
+<ItemGroup>
+  <Compile Include="..\Acme.Shared\Models\Generated\Messages\*.Steps.cs" Link="Models\Generated\Messages\%(Filename)%(Extension)" />
+</ItemGroup>
+```
+
 ## Custom API message classes (`--custom-apis`)
 
 `--custom-apis` generates typed `OrganizationRequest`/`OrganizationResponse` classes into a `Messages/` subfolder:
@@ -219,9 +244,25 @@ excluded.
 generates `SendEmailRequest` / `SendEmailResponse`), into `Messages/`. With **no value** it generates one class per
 request of every *registerable* message (Microsoft's "available events":
 non-private messages with a visible, custom-step-allowed `sdkmessagefilter`), skipping messages backed by a
-Custom API and messages that already ship an SDK request class - the core `Microsoft.Xrm.Sdk.Messages.*` types
-and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (matched against a curated, non-exhaustive supplement;
-an unlisted one just makes a harmless duplicate).
+Custom API (owned by `--custom-apis`).
+
+**A request the SDK already ships keeps its SDK class.** For a request with a class in `Microsoft.Xrm.Sdk.Messages`
+or `Microsoft.Crm.Sdk.Messages` (found by reflection, so `CloseQuote`, `SetState`, `Recalculate`, ... are all
+recognised), `--messages` generates no duplicate request/response, only its entity-constrained `On<Message>()`
+extension over the SDK type (`OnCloseQuote()` → `On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>()`, compiling on
+`Quote` only). A request with a curated trigger (`Create`, `QualifyLead`, `WinOpportunity`, ...) generates nothing:
+the builder already has it. The Shared project needs no new reference: it compiles the SDK message types from
+`Microsoft.CrmSdk.CoreAssemblies` (net462) and the Dataverse client (net10.0) it already uses.
+
+**One class per request, not per sdkmessage.** Several requests can share one sdkmessage, each for its own entity
+and with its own fields: `Close` serves `CloseIncident` (incident, `IncidentResolution`) and `CloseQuote` (quote,
+`QuoteClose`); `Cancel` serves `CancelContract` and `CancelSalesOrder`; `Send` serves `SendEmail`, `SendFax` and
+`SendTemplate`. `--messages` takes the **request name** you execute (`--messages CloseQuote`) and generates exactly
+that class, typed with that request's own fields and entity. An sdkmessage name that is not itself a request
+(`--messages Close`) is rejected with the request names it serves; the bare `--messages` generates them all. The
+framework already knows on which sdkmessage each platform request registers (`On<CloseQuoteRequest>()` lands on
+`Close`); a request it does not know is marked `[SdkMessage("...")]` (from `Vela.Messages`) so the step and the
+test harness still use the right sdkmessage.
 
 The names are **SDK request names**, the names Dataverse executes: `--messages SendEmail` generates
 `SendEmailRequest`. A request name is not always the name of the `sdkmessage` a step registers on (`SendEmail`
@@ -234,8 +275,9 @@ extension** per applicable entity (from the message's `sdkmessagefilter` `primar
 **compile-time entity applicability**: a generated `OnMyMessage()` only compiles inside the `EntityPluginBase<T>`
 for the table its `sdkmessagefilter` targets, exactly like the curated `On<Message>()` methods (below). A global
 message (`primaryobjecttypecode` `none`) or one applying to more than eight entities emits a single generic
-`On<Message><TEntity>()` instead. The requests also pair with the permissive `OnMessage(...).Handle<TRequest>()`
-and with `On<TRequest>()` directly.
+`On<Message><TEntity>()` instead. A request that serves one entity of a shared sdkmessage gets that entity only
+(`OnCloseQuote()` compiles on `Quote`). The requests also work with `On<TRequest>()` directly, and with
+`PluginContext.ForRequest(...)` in tests.
 
 ### Using a standard message (`QualifyLead`)
 
@@ -244,7 +286,8 @@ context already exist with **no `vela models` run needed**. `QualifyLead` is one
 and the handler receives the typed `QualifyLeadRequest`/`QualifyLeadResponse`.
 
 ```csharp
-public sealed partial class RouteQualifiedLead(string unsecure, string secure) : EntityPluginBase<Lead>(unsecure, secure)
+public sealed partial class RouteQualifiedLead(string unsecureConfig, string secureConfig)
+    : EntityPluginBase<Lead>(unsecureConfig, secureConfig)
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnQualified);
@@ -278,9 +321,9 @@ and the entity-constrained `On<Message>()` extension for it. (The full curated l
 
 ## Connection flags
 
-Same as `plan`/`apply`: `--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or
-`--interactive`. Early-bound entity types are assumed to be generated into the same namespace
-(`vela models --tables`).
+Same as `plan`/`apply` (see [Authentication](../configuration/authentication.md)): `--connection-string`, or
+`--url` + `--tenant-id` + `--client-id` with the secret in `DATAVERSE_CLIENT_SECRET` (or `--client-secret-stdin`),
+or `--interactive`.
 
 ## TypeScript form models (`--forms`)
 
@@ -428,5 +471,5 @@ var svc = new InMemoryOrganizationService()
 > grant data in tests via the `Role(name, id, grants)` overload. Its `Id` values are the real role ids, so a
 > plugin that resolves a user's roles at runtime and the test that seeds them line up on the same GUIDs.
 
-> Out of scope for now (use `pac modelbuilder` if you need them): relationship navigation properties and an
-> `OrganizationServiceContext`/LINQ provider. See [Limitations reference](../reference/limitations.md).
+> Out of scope for now (use `pac modelbuilder` if you need it): an `OrganizationServiceContext`/LINQ provider. See
+> [Limitations reference](../reference/limitations.md).

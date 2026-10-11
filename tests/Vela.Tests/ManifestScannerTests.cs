@@ -356,4 +356,36 @@ public sealed class ManifestScannerTests
             throw new InvalidOperationException("Intentional test failure.");
         }
     }
+
+    [Fact]
+    public void FrameworkManifestScanner_reports_the_inner_cause_of_a_reflection_failure()
+    {
+        FrameworkManifest manifest = FrameworkManifestScanner.Scan(typeof(ManifestScannerTests).Assembly);
+
+        FrameworkManifestDiagnostic broken = Assert.Single(manifest.Diagnostics, d => d.TypeName == typeof(BrokenPlugin).FullName);
+        Assert.Contains("Intentional test failure.", broken.Message);
+        Assert.DoesNotContain("TargetInvocationException", broken.Message);
+    }
+
+    [Fact]
+    public void StepDefinitionReader_collects_unreadable_plugins_as_diagnostics()
+    {
+        List<FrameworkManifestDiagnostic> diagnostics = new List<FrameworkManifestDiagnostic>();
+
+        StepDefinitionReader.GetStepDefinitions(typeof(ManifestScannerTests).Assembly, diagnostics);
+
+        FrameworkManifestDiagnostic broken = Assert.Single(diagnostics, d => d.TypeName == typeof(BrokenPlugin).FullName);
+        Assert.Equal(FrameworkManifestDiagnosticSeverity.Error, broken.Severity);
+        Assert.Contains("Intentional test failure.", broken.Message);
+    }
+
+    [Fact]
+    public void StepDefinitionReader_without_diagnostics_fails_instead_of_dropping_a_plugin()
+    {
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => StepDefinitionReader.GetStepDefinitions(typeof(ManifestScannerTests).Assembly));
+
+        Assert.Contains(typeof(BrokenPlugin).FullName!, ex.Message);
+        Assert.Contains("Intentional test failure.", ex.Message);
+    }
 }

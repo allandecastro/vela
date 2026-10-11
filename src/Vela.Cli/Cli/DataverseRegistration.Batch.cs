@@ -202,7 +202,7 @@ internal static partial class DataverseRegistration
         }
         catch (Exception ex) when (owner.IgnorableWarning != null && IsIgnorableCustomApiStageException(ex))
         {
-            Console.Error.WriteLine($"Warning: {owner.IgnorableWarning}: {ex.Message}");
+            Console.Error.WriteLine($"Warning: {owner.IgnorableWarning}: {OutputWriter.RedactSecrets(ex.Message)}");
         }
         catch
         {
@@ -402,7 +402,7 @@ internal static partial class DataverseRegistration
             || (fault.Message ?? string.Empty).Contains("Invalid plug-in registration stage", StringComparison.OrdinalIgnoreCase);
         if (ignorable && op.Owner.IgnorableWarning != null)
         {
-            Console.Error.WriteLine($"Warning: {op.Owner.IgnorableWarning}: {fault.Message}");
+            Console.Error.WriteLine($"Warning: {op.Owner.IgnorableWarning}: {OutputWriter.RedactSecrets(fault.Message)}");
             report.RecordIgnored(op);
             skipOwners.Add(op.Owner.Id);
             return;
@@ -480,7 +480,7 @@ internal static partial class DataverseRegistration
 
         foreach ((CapturedOperation op, OrganizationServiceFault fault) in report.Failures)
         {
-            Console.Error.WriteLine($"  - {op.Owner.ReportGroup} {op.Category}: {fault.Message} (code {fault.ErrorCode})");
+            Console.Error.WriteLine($"  - {op.Owner.ReportGroup} {op.Category}: {OutputWriter.RedactSecrets(fault.Message)} (code {fault.ErrorCode})");
         }
     }
 

@@ -64,7 +64,7 @@ public sealed class TracingSnapshotTests
                 traceOutput = args == null || args.Length == 0 ? format : string.Format(format, args);
             });
 
-        context.Object.TraceExecutionSnapshot("start");
+        context.Object.TraceExecutionSnapshot("start", TraceSnapshotDetail.Full);
 
         Assert.NotNull(traceOutput);
         Assert.Contains("ExecutionSnapshot", traceOutput);

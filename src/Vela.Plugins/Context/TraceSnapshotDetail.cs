@@ -8,5 +8,11 @@ namespace Vela.Context
 
         /// <summary>Everything in <see cref="Metadata"/> plus every parameter and attribute value.</summary>
         Full = 1,
+
+        /// <summary>
+        /// No snapshot at all, to save the plug-in trace log budget (about 10 KB per execution) for the plugin's own
+        /// traces. The one-line "Executing ..." trace still records the message, stage, mode and depth.
+        /// </summary>
+        None = 2,
     }
 }

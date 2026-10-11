@@ -113,7 +113,7 @@ public static class FrameworkManifestScanner
             {
                 Severity = FrameworkManifestDiagnosticSeverity.Error,
                 TypeName = type.FullName ?? type.Name,
-                Message = $"Plugin step discovery failed ({ex.GetType().Name}): {ex.Message}"
+                Message = DiscoveryFailure("Plugin step", ex)
             });
         }
 
@@ -146,10 +146,23 @@ public static class FrameworkManifestScanner
             {
                 Severity = FrameworkManifestDiagnosticSeverity.Error,
                 TypeName = type.FullName ?? type.Name,
-                Message = $"Custom API discovery failed ({ex.GetType().Name}): {ex.Message}"
+                Message = DiscoveryFailure("Custom API", ex)
             });
         }
 
         return false;
+    }
+
+    // A constructor or GetStepDefinition invoked through reflection wraps the real failure in a
+    // TargetInvocationException whose own message ("Exception has been thrown by the target of an invocation") says
+    // nothing; report the innermost cause.
+    private static string DiscoveryFailure(string subject, Exception ex)
+    {
+        while (ex is TargetInvocationException { InnerException: not null } wrapper)
+        {
+            ex = wrapper.InnerException;
+        }
+
+        return $"{subject} discovery failed ({ex.GetType().Name}): {ex.Message}";
     }
 }

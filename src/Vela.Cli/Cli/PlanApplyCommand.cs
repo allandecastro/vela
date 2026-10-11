@@ -123,7 +123,7 @@ internal static class PlanApplyCommand
         SecureConfigResolver.Resolve(
             local,
             current,
-            SecureConfigResolver.ParseSpecs(options.SecureConfigs ?? [], File.ReadAllText),
+            SecureConfigResolver.ParseSpecs(options.SecureConfigs ?? [], File.ReadAllText, Console.Error.WriteLine),
             Environment.GetEnvironmentVariable,
             jsonOptions);
 
@@ -292,7 +292,7 @@ internal static class PlanApplyCommand
             PlanPreview failure = preview with
             {
                 Mode = "apply-failed",
-                Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", applyEx.Message],
+                Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", RedactSecrets(applyEx.Message)],
             };
             if (!WantsHumanOutput(options, host) || !string.IsNullOrWhiteSpace(options.OutPath))
             {

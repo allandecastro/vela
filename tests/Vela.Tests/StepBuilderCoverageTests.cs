@@ -44,11 +44,18 @@ public sealed class StepBuilderCoverageTests
         Assert.Equal("nonameentity", definition.EntityLogicalName);
     }
 
-    [Fact]
-    public void OnMessage_rejects_blank_names()
+    // A marker type with neither a RequestName nor [CustomMessage] names no message: the trigger throws instead
+    // of registering the step on a message named after the type.
+    private sealed class UnmarkedMessage
     {
-        Assert.Throws<ArgumentNullException>(() => Trigger(New()).OnMessage(null!));
-        Assert.Throws<ArgumentNullException>(() => Trigger(New()).OnMessage("   "));
+    }
+
+    [Fact]
+    public void OnMessage_rejects_a_type_that_names_no_message()
+    {
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Trigger(New()).OnMessage<UnmarkedMessage>());
+        Assert.Contains(nameof(UnmarkedMessage), ex.Message);
+        Assert.Contains("[CustomMessage", ex.Message);
     }
 
     [Fact]
@@ -96,22 +103,14 @@ public sealed class StepBuilderCoverageTests
         Assert.Empty(withAttrs.PostImages[0].Attributes);
     }
 
-    // Build() image backstop. The typed chain already prevents an invalid image at compile time for the
-    // modelled messages; the backstop catches the same rules when the modelled message reaches the builder
-    // through the permissive OnMessage(...) escape hatch (or reflection). Delete carries no attribute payload,
-    // so no filtering requirement masks the image check.
+    // A modelled message never reaches the permissive path: the typed chain prevents an invalid image at compile
+    // time, and OnMessage<TMessage>() on a modelled message is rejected with the typed trigger to use (one way per
+    // message), so the Build() image backstop only serves reflection-built steps.
     [Fact]
-    public void Build_backstop_rejects_an_unsupported_image_on_a_modelled_message()
+    public void A_modelled_message_cannot_take_the_permissive_path()
     {
-        // Delete has a pre-image but no post-image.
-        StepBuilder<TestAccount> bad = New();
-        Trigger(bad).OnMessage(PluginMessages.Delete).PostOperation().Sync().WithPostImage();
-        Assert.Throws<InvalidOperationException>(() => bad.Build());
-
-        StepBuilder<TestAccount> good = New();
-        Trigger(good).OnMessage(PluginMessages.Delete).PostOperation().Sync().WithPreImage();
-        StepDefinition ok = good.Build();
-        Assert.Single(ok.PreImages);
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Trigger(New()).OnMessage<Microsoft.Xrm.Sdk.Messages.DeleteRequest>());
+        Assert.Contains("OnDelete()", ex.Message);
     }
 
     [Fact]
@@ -120,7 +119,7 @@ public sealed class StepBuilderCoverageTests
         // Vela does not model this message's image rules, so the builder does not reject it (the platform
         // arbitrates at deploy time).
         StepBuilder<TestAccount> builder = New();
-        Trigger(builder).OnMessage("acme_DoThing").PostOperation().Sync()
+        Trigger(builder).OnMessage<AcmeDoThing>().PostOperation().Sync()
             .WithPreImage(a => a.Name)
             .WithPostImage(a => a.AccountId);
 

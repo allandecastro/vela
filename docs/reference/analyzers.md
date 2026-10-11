@@ -1,13 +1,10 @@
 # Analyzers and generators
 
-Vela ships a small set of Roslyn **analyzers** and one **source generator** inside the `Vela.Plugins` package
-(they live in the bundled `Vela.Analyzers` assembly). There is **no separate analyzer package or project to
-reference** - they come with `Vela.Plugins` automatically and run in the editor and at build with no extra
-configuration. Rules that catch a build-breaking mistake in the fluent step builder are reported as **errors** so
-they fail fast instead of surfacing as a silent runtime surprise; advisory and best-practice rules (VELA006 usage,
-VELA011 reliability, VELA012 usage, VELA013 performance, VELA018 and VELA019 reliability) are **warnings** and never break a build. Together they
-let the compiler enforce the framework's rules, so both a human developer and an AI author get told what is valid up
-front. Several rules also ship an IDE **code fix** (see below).
+Vela ships 23 Roslyn **analyzers** (VELA001 to VELA023), one **source generator** and a set of IDE **code fixes**
+inside the `Vela.Plugins` package (assemblies `Vela.Analyzers` and `Vela.CodeFixes`). There is nothing else to
+reference: they run in the editor and at build with no configuration. A mistake that would fail at registration
+or silently do nothing is an **error**; advisory rules (VELA011, VELA012, VELA013, VELA018, VELA019,
+VELA021 and VELA022) are **warnings**.
 
 | Rule | Category | Severity | What it catches |
 | --- | --- | --- | --- |
@@ -16,8 +13,7 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA003](#vela003) | Vela.Usage | Error | A single-value step modifier is set more than once |
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
 | [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
-| [VELA006](#vela006) | Vela.Usage | Warning | Prefer the typed trigger (`OnCreate()`) over `OnMessage("create")` for a modelled message |
-| [VELA007](#vela007) | Vela.Usage | Error | A pre-image on Create, or a post-image on Delete (the message can never provide it) |
+| [VELA007](#vela007) | Vela.Usage | Error | An image the message can never provide (pre-image on Create/CreateMultiple, post-image on Delete, any image on RouteTo) |
 | [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share a trigger and nothing tells them apart (same filters and images, no step key) |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
 | [VELA010](#vela010) | Vela.Usage | Error | A generated relationship navigation property used in a column selector |
@@ -33,12 +29,10 @@ front. Several rules also ship an IDE **code fix** (see below).
 | [VELA020](#vela020) | Vela.Usage | Error | A Create/Update (or bulk) step reaches `Handle(...)` without `FilterOn(...)` |
 | [VELA021](#vela021) | Vela.Usage | Warning | An image capture lists columns but no typed projection can be generated for it |
 | [VELA022](#vela022) | Vela.Reliability | Warning | A step on the `SetState` message never fires |
+| [VELA023](#vela023) | Vela.Usage | Error | A message with a typed trigger is registered through it, not `On<UpdateRequest>()` |
 
-Several rules ship an IDE **code fix** (the editor lightbulb applies the correction): VELA003, VELA004, VELA005,
-VELA006, VELA007, VELA012, VELA014 and VELA015. The code fixes are in `Vela.CodeFixes`, bundled in `Vela.Plugins`
-alongside the analyzers.
-
-Plus the [typed image projection generator](#typed-image-projection-generator) that ships in the same assembly.
+Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA007, VELA012, VELA014, VELA015 and VELA023. The
+[typed image projection generator](#typed-image-projection-generator) ships in the same assembly as the analyzers.
 
 ## VELA001
 
@@ -95,24 +89,22 @@ selectors are compared, so a leading image alias string is ignored, and the same
 
 ## VELA006
 
-**Prefer the typed step trigger over the permissive `OnMessage(string)` for a message Vela models.** For a modelled
-message there is a typed trigger - `OnCreate()`, `OnUpdate()`, `OnDelete()`, the `*Multiple` variants,
-`OnRetrieve()` / `OnRetrieveMultiple()`, `OnAssociate()` / `OnDisassociate()`, `OnMerge()` - that gives a typed
-handler context and compile-time entity applicability, so `OnMessage("create")` is flagged. Unlike the other
-rules this is a **warning**, not an error: `OnMessage("...")` stays valid and is the right tool for a message Vela
-does not model (only a literal message string with a modelled name is flagged).
-
-**Fix:** switch to the typed trigger, for example `OnCreate()` instead of `OnMessage("create")`.
+**Retired.** VELA006 flagged `OnMessage("create")` for a message with a typed trigger. The string trigger no longer
+exists: every message is named by a type, and [VELA023](#vela023) covers a request or marker type whose message has a
+typed trigger. The id is not reused.
 
 ## VELA007
 
-**Do not register an image the message can never provide.** A **pre-image on a Create** step (there is no prior row
-state before a create) and a **post-image on a Delete** step (the row no longer exists afterwards) are impossible,
-and the runtime rejects them. The typed triggers already prevent this through the builder's type-state, so this
-targets the permissive `OnMessage("create"|"delete")` path where `WithPreImage(...)` / `WithPostImage(...)` are
-exposed unconditionally. The message is read from the chain; a message Vela does not model is left alone.
+**Do not register an image the message can never provide.** A **pre-image on Create or CreateMultiple** (there is
+no prior row state), a **post-image on Delete** (the row is gone) and **any image on RouteTo** (Dataverse supports
+none) are rejected by Dataverse, the runtime and `vela plan`. The rule reads the message from the chain (a typed
+trigger, or the type of `On<TRequest>()` / `OnMessage<TMarker>()`: a `[SdkMessage]` / `[CustomMessage]` on it or an
+SDK request type) and uses the same image table as the runtime and the CLI. A message it
+cannot read statically is left alone; the stage rules (no post-image before PostOperation) are enforced by the
+builder's type-state and at runtime.
 
-**Fix:** use the image the message supports - a post-image for Create, a pre-image for Delete - or drop the image.
+**Fix:** use the image the message supports (a post-image for Create, a pre-image for Delete), or drop the image.
+The code fix removes the call.
 
 ## VELA008
 
@@ -182,13 +174,15 @@ between unrelated operations and races. Only writable fields are flagged; `const
 ## VELA012
 
 **Throw `InvalidPluginExecutionException`.** Only `InvalidPluginExecutionException` surfaces its message to the
-caller (and the UI); any other exception thrown from a plugin is reported as a generic, unhelpful error. Rethrows
+caller (and the UI). Any other exception thrown from a plugin on a Vela base reaches the caller as the generic
+`An unexpected error occurred. Correlation id: ...` (see [Errors](../guides/plugins.md#errors)). Rethrows
 (`throw;` / `throw ex;`) are left alone. A code fix changes the thrown type, keeping the arguments.
 
 `PluginBusinessException` is **not** flagged inside a plugin that derives from a Vela base (`PluginBase` /
 `EntityPluginBase` / `CustomApiBase`): that base catches it and surfaces its message to the caller as a clean
 `InvalidPluginExecutionException` (with a dedicated `business-exception` trace snapshot). It cannot derive from
-`InvalidPluginExecutionException` because the SDK seals that type, so the analyzer recognizes it by name. Use it
+`InvalidPluginExecutionException` because the SDK seals that type, so the analyzer recognizes it by its full name
+(`Vela.Plugin.PluginBusinessException`). Use it
 when you want business semantics (and a localizable message); use `InvalidPluginExecutionException` directly for a
 plain user-facing failure. Both are clean. In a type that implements `IPlugin` **directly** there is no Vela base
 frame to perform that mapping, so `PluginBusinessException` is still flagged there - throw
@@ -283,9 +277,9 @@ out of the sandbox. See [Respect the sandbox](../guides/plugins.md#respect-the-s
 A `Create`, `Update`, `CreateMultiple` or `UpdateMultiple` step must declare at least one filtering attribute, or
 building the step fails at runtime (the step would otherwise fire on every create/update). VELA020 reports a
 `RegisterStep()` chain that reaches `.Handle(...)` without `.FilterOn(...)`, so the mistake fails in the editor and
-at build instead. Add `.FilterOn(e => e.Column)` before `.Handle(...)`. It also reports `OnMessage("Create")` (and the other three
-messages) reaching `.Handle(...)`: the permissive `OnMessage` path offers no `FilterOn`, so use the typed
-`OnCreate()` / `OnUpdate()` / ... trigger instead. A chain split across a local variable is not analyzed (it may
+at build instead. Add `.FilterOn(e => e.Column)` before `.Handle(...)`. It also reports a request or marker type naming one of the four
+messages (`OnMessage<UpdateMarker>()`) reaching `.Handle(...)`: the type-stated paths offer no `FilterOn`, so use the
+typed `OnCreate()` / `OnUpdate()` / ... trigger instead. A chain split across a local variable is not analyzed (it may
 have been filtered before the split).
 
 ## VELA021
@@ -302,13 +296,25 @@ already errors of VELA001 / VELA010 and are not reported again; a chain split ac
 
 ## VELA022
 
-**A step on `SetState` never fires.** Reported on `OnMessage("SetState")` / `OnMessage(PluginMessages.SetState)`.
-Dataverse accepts the registration, but never runs the step: a `SetStateRequest` fires the `SetStateDynamicEntity`
+**A step on `SetState` never fires.** Reported on `On<T>()` / `OnMessage<T>()` when `T` pins the message with
+`[SdkMessage("SetState")]`; `On<SetStateRequest>()` and a `[CustomMessage("SetState")]` marker register on
+`SetStateDynamicEntity` and are not reported. Dataverse accepts a `SetState` registration, but never runs the step: a `SetStateRequest` fires the `SetStateDynamicEntity`
 steps, and an Update of `statecode` fires the Update steps plus nested `SetStateDynamicEntity` steps (verified live
 on every stage). The step's logic would silently never execute.
 
 **Fix:** register on `OnUpdate().FilterOn(x => x.StateCode)` (fires for both a SetState and an Update of the state),
-or on `OnMessage(PluginMessages.SetStateDynamicEntity)` (inputs `EntityMoniker`, `State`, `Status`).
+or drop the `[SdkMessage("SetState")]` and use `On<SetStateRequest>()`, which registers on `SetStateDynamicEntity`
+(inputs `EntityMoniker`, `State`, `Status`).
+
+## VELA023
+
+**A message with a typed trigger is registered through it, not `On<TRequest>()`.** `On<TRequest>()` and
+`OnAsyncOnly<TRequest>()` are for messages without a typed trigger (Custom APIs, messages Vela does not model). A
+request whose message has one (`On<UpdateRequest>()`, `On<AssignRequest>()`, `On<CreateMultipleRequest>()`, ...) is an
+**error**, and the runtime rejects the same registration, so the rule holds without the analyzers.
+
+**Fix:** use the typed trigger; the code fix rewrites `On<UpdateRequest>()` to `OnUpdate()`. Then give the handler the
+trigger's context (`IUpdatePostContext<Account>` instead of `IMessagePostContext<UpdateRequest>`).
 
 ## Typed image projection generator
 
@@ -333,8 +339,7 @@ Key points:
   (`ctx.PostImageAs<OnUpdated_PostImage>()`). This is why a plugin that captures a typed image must be declared
   `partial` ([VELA014](#vela014)). A lambda handler (no name) falls back to `{Message}{Stage}_{Pre|Post}Image`,
   where the message comes from the trigger: the guided `OnCreate()`..., the typed `On<TRequest>()`, or the
-  permissive `OnMessage("...")` / `OnMessage<TMarker>()` (a literal message is capitalized into the segment; a
-  non-literal message is not statically known, so the step is skipped).
+  permissive `OnMessage<TMarker>()` (the request or marker type name, minus a `Request` suffix).
 - **Opt-in and additive.** A capture with no explicit columns (`WithPreImage()`) keeps the full early-bound
   entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it, you
   keep the untyped image, and [VELA021](#vela021) says why. A column property without `[AttributeLogicalName]` is
@@ -348,8 +353,12 @@ Key points:
   casts to `null`. It is deliberately not an implicit conversion: leaving the captured-columns view is a visible
   step, so the compile-safety does not disappear silently. See
   [Need the whole entity](../guides/plugins.md#need-the-whole-entity-for-a-service).
-- **Typed step context.** For a named handler on a Create/Update/Delete step that captures an image, the generator
-  also emits a `{Handler}Context` (a subclass of the step's message context) exposing `ctx.PreImage` / `ctx.PostImage`
-  typed to the captured columns, so the handler can read them as members instead of `ctx.PreImageAs<T>()`. See
+- **Typed step context.** For every named handler (`.Handle(OnX)`) on a modelled, entity-bound message, the
+  generator also emits a `{Handler}Context` (a subclass of the step's message context). When the step captures an
+  image, the context exposes `ctx.PreImage` / `ctx.PostImage` typed to the captured columns (plus
+  `ctx.SubordinatePreImage` / `ctx.SubordinatePostImage` on Merge, and per-target `ctx.PreImages` / `ctx.PostImages`
+  on CreateMultiple / UpdateMultiple), so the handler reads them as members instead of `ctx.PreImageAs<T>()`. An
+  imageless handler gets a bare subclass, so adding a capture later does not change its signature. `OnMessage(...)`
+  and Custom API handlers get none. See
   [Typed step context](../guides/plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage) and the
   VELA015 / VELA016 guard rails.

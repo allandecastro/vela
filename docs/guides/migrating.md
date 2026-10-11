@@ -175,10 +175,11 @@ collides with the generated entity type of the same name.
 
 - **N:N intersect traversal** is not expressible in the typed query today. Keep it as FetchXML through the
   [escape hatch](escape-hatches.md). (Aggregates are: see [Typed queries](queries.md).)
-- **Two steps on the same message, stage, and mode** cannot live in one plugin class even when their
-  filtering attributes differ. Put each in its own plugin class; both still register as distinct steps.
-- **Pre-validation has no image.** Dataverse supplies images only at pre-operation and post-operation, so
-  a pre-validation step filters and re-reads instead of capturing an image.
+- **Several steps on one trigger** (same message, stage, mode and table) can live in one plugin class when their
+  filtering attributes, images or relationship scope tell them apart; otherwise give each a `WithStepKey(...)`
+  (VELA008 flags the ones that collide). See [Write a plugin](plugins.md).
+- **Images at PreValidation.** A pre-image is available at PreValidation (Update, Delete, UpdateMultiple), but a
+  post-image only at PostOperation, and Create never has a pre-image.
 - **Unmodelled or advanced tables** (system tables, some intersect tables) may not have generated models
   yet; those reads stay late-bound until the model exists.
 
@@ -188,8 +189,8 @@ Build the solution against the published package, then deploy from code:
 
 ```bash
 dotnet build -c Release
-vela plan
-vela apply
+vela plan  --packages-dir ./artifacts --solution <YourSolution> --interactive
+vela apply --packages-dir ./artifacts --solution <YourSolution> --interactive
 ```
 
 A clean build against `Vela.Plugins` from NuGet, with the plugin package produced, means the conversion is

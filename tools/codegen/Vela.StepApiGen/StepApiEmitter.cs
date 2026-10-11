@@ -30,9 +30,9 @@ internal static class StepApiEmitter
                 stage => StepConfig.ConfigType(message.Name, stage));
         }
 
-        // The permissive OnMessage(...) surface: universal image rules, untyped or request-typed handlers.
+        // The permissive OnMessage<TMessage>() surface: universal image rules, untyped or request-typed handlers.
         WriteStages(w,
-            "Stage choice for OnMessage(...): a custom / non-modelled message. Universal image rules only.",
+            "Stage choice for OnMessage<TMessage>(): a custom / non-modelled message. Universal image rules only.",
             "IPermissiveStages<TEntity>",
             " where TEntity : Entity",
             stage => $"IPermissive{stage}Config<TEntity>");
@@ -165,9 +165,7 @@ internal static class StepApiEmitter
         """;
 
     private const string StepTriggerTail = """
-                /// <summary>Trigger on a custom / non-modelled message stated by name. Image validity is enforced at runtime.</summary>
-                IPermissiveStages<TEntity> OnMessage(string messageName);
-                /// <summary>Trigger on a custom / non-modelled message stated by marker type.</summary>
+                /// <summary>Trigger on a custom / non-modelled message stated by a marker type ([CustomMessage("...")]) or a request type. Image validity is enforced at runtime.</summary>
                 IPermissiveStages<TEntity> OnMessage<TMessage>() where TMessage : class;
                 /// <summary>Trigger on the message named by TRequest (its RequestName); the handler is pre-typed to TRequest.</summary>
                 ITypedStages<TEntity, TRequest> On<TRequest>() where TRequest : OrganizationRequest, new();

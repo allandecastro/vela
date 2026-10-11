@@ -1,10 +1,9 @@
 # Localized messages (i18n)
 
-Surface messages, in particular business error messages, in the current user's language from a plugin handler.
-The message service resolves a template by key in the user's UI language (`usersettings.uilanguageid`), falls back
-to the organization's base language and then a default language when there is no translation, formats it with `string.Format`, and caches labels so a run
-does not query per message. It is a standard `IMessageService` resolved from the context, consistent with the rest
-of the framework (services + DI + caching).
+Surface messages, in particular business errors, in the user's language from a plugin handler. The built-in
+`IMessageService` resolves a template by key in the user's UI language, falls back to the organization's base
+language and then `DefaultLanguageCode`, formats it with `string.Format`, and caches labels so a run does not query
+per message.
 
 ```csharp
 using Vela.Context;
@@ -18,9 +17,9 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
             .Add(1036, "ERR_REQUIRED", "Le champ {0} est obligatoire."));
 
 // In the handler, throw a localized business error:
-throw context.BusinessError("ERR_REQUIRED", "name");
+throw ctx.BusinessError("ERR_REQUIRED", "name");
 // or just resolve the text:
-string text = context.GetMessage("ERR_REQUIRED", "name");
+string text = ctx.GetMessage("ERR_REQUIRED", "name");
 ```
 
 ## Message sources
@@ -80,8 +79,8 @@ context.GetRequiredService<IMessageService>()
 Pass the **base name without the language suffix**. For the resolved user language the matching web resource row is
 read once through the elevated system service, its base64 content decoded and the resx XML parsed (plain `<data>`
 string entries only; typed/binary resources such as images are skipped). When a language's resource is absent the
-source returns nothing and language resolution falls back to `DefaultLanguageCode` (so you only need the base-language
-`.resx` plus the languages you translate). Neither case breaks resolution: a missing resource falls back silently,
+source returns nothing and resolution moves on to the organization's base language, then `DefaultLanguageCode` (so
+you only need the base-language `.resx` plus the languages you translate). Neither case breaks resolution: a missing resource falls back silently,
 while a resource that is present but malformed (bad base64 or invalid resx XML) is written to the plug-in trace log
 and treated as empty.
 
@@ -97,10 +96,15 @@ execution), then to `DefaultLanguageCode` (1033 by default; set it to change the
 
 ```csharp
 // 1) Required: throws InvalidPluginExecutionException when no template exists (user, organization or default language).
-string text = context.GetMessage("ERR_REQUIRED", "name");
+string text = ctx.GetMessage("ERR_REQUIRED", "name");
 
+<<<<<<< HEAD
 // 2) Try: branch on presence.
+if (ctx.TryGetMessage("ERR_REQUIRED", out string? text, "name"))
+=======
+// 2) Try: branch on presence. A template whose placeholders do not match the arguments still throws.
 if (context.TryGetMessage("ERR_REQUIRED", out string? text, "name"))
+>>>>>>> origin/main
 {
     // text is set
 }

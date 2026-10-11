@@ -8,7 +8,7 @@ namespace Vela.Cli.Tests;
 public class CustomApiMessageGeneratorTests
 {
     private static string Generate(CustomApiMessage message) =>
-        CustomApiMessageGenerator.Generate(new[] { message }, "Acme.Shared.Models.Generated").Single().Code;
+        CustomApiMessageGenerator.Generate(new[] { message }, "Acme.Shared.Models.Generated").Code();
 
     [Fact]
     public void Bound_RequestParameterNamedTarget_DoesNotDuplicateTheAutoTargetMember()   // #308 M3
@@ -124,7 +124,7 @@ public class CustomApiMessageGeneratorTests
     {
         GeneratedModel model = CustomApiMessageGenerator
             .Generate(new[] { new CustomApiMessage("zava_X", false, Array.Empty<CustomApiParameter>(), Array.Empty<CustomApiParameter>()) }, "N")
-            .Single();
+            .First();
 
         Assert.Equal("Messages/zava_X.cs", model.FileName);
     }
@@ -142,7 +142,7 @@ public class CustomApiMessageGeneratorTests
             AllowedStepType: 2,
             BoundEntityLogicalName: "account"));
 
-        Assert.Contains("public static class zava_AccountEstimateValueStepExtensions", code);
+        Assert.Contains("internal static class zava_AccountEstimateValueStepExtensions", code);
         // Method name strips the publisher prefix; constrained to IStepTrigger<Account>; normal (Sync+Async) stage.
         Assert.Contains(
             "public static Vela.Steps.ITypedStages<Account, zava_AccountEstimateValueRequest> OnAccountEstimateValue(this Vela.Steps.IStepTrigger<Account> builder) => builder.On<zava_AccountEstimateValueRequest>();",
@@ -226,7 +226,7 @@ public class CustomApiMessageGeneratorTests
                     AllowedStepType: 2, BoundEntityLogicalName: "new_customentity"),
             },
             "N",
-            map).Single().Code;
+            map).Code();
 
         Assert.Contains("IStepTrigger<new_CustomEntity>", code);   // exact generated model type
         Assert.DoesNotContain("NewCustomentity", code);            // not the naive PascalCase
@@ -245,7 +245,7 @@ public class CustomApiMessageGeneratorTests
             },
             "N",
             entityTypeNames: null,
-            generatedEntityLogicalNames: new[] { "account" }).Single().Code;
+            generatedEntityLogicalNames: new[] { "account" }).Code();
 
         Assert.Contains("OnRecalc<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder)", code);
         Assert.Contains("where TEntity : Microsoft.Xrm.Sdk.Entity", code);
@@ -264,7 +264,7 @@ public class CustomApiMessageGeneratorTests
             },
             "N",
             entityTypeNames: null,
-            generatedEntityLogicalNames: new[] { "account" }).Single().Code;
+            generatedEntityLogicalNames: new[] { "account" }).Code();
 
         Assert.Contains("IStepTrigger<Account>", code);
         Assert.DoesNotContain("OnRecalc<TEntity>", code);

@@ -14,10 +14,15 @@ namespace Vela.Tests
     // Typed-requests design: a Vela-owned generic request
     // (Vela.Messages.CreateRequest<TEntity>) exposes an early-bound ctx.Request.Target end-to-end through the
     // in-memory pipeline - the single typed accessor for the primary record. It rides the existing
-    // OnMessage(...).Handler<TRequest>() path.
+    // OnMessage<TMessage>().Handler<TRequest>() path.
     public sealed class TypedRequestsPocTests
     {
         private const string Message = "vela_TypedReqPoc";
+
+        [CustomMessage(Message)]
+        private sealed class TypedReqPocMessage
+        {
+        }
 
         private sealed class Probe : EntityPluginBase<TestAccount>
         {
@@ -26,7 +31,7 @@ namespace Vela.Tests
             public Probe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnMessage(Message).PostOperation().Sync().Handle<CreateRequest<TestAccount>>(OnMessageReceived);
+                => RegisterStep().OnMessage<TypedReqPocMessage>().PostOperation().Sync().Handle<CreateRequest<TestAccount>>(OnMessageReceived);
 
             private void OnMessageReceived(IMessagePostContext<CreateRequest<TestAccount>> ctx)
                 => TargetName = ctx.Request.Target.Name;   // typed Request.Target
