@@ -19,6 +19,12 @@ defaults:
   run:
     shell: powershell
 
+env:
+  # Stryker is pinned: 5.0.0 (picked up on 2026-09-14 by an unpinned `tool update`) fails to compile the net462
+  # projects (CS0234 "Xrm does not exist in the namespace Microsoft" on Vela.Testing), so every harness job scored
+  # 0% from then on. Bump deliberately, after a green workflow_dispatch run on a branch.
+  STRYKER_VERSION: 4.16.0
+
 jobs:
   diff-engine:
     runs-on: windows-latest
@@ -40,7 +46,7 @@ jobs:
           & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # net10-only project: no --solution, so Stryker builds just the CLI test project (+ its referenced Vela.Cli)
       # and never drags the net462 projects into the build. --project disambiguates the mutation target: the CLI test
       # project also references the compiled plugin fixtures (Sample/BrokenPluginFixture), so Stryker can't auto-pick.
@@ -80,7 +86,7 @@ jobs:
       - name: Install Stryker
         # Idempotent: the self-hosted runner persists the global tool between runs, so a plain
         # `tool install` would fail on the second run once it is already present.
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # The harness query core (operators, value comparison, FetchXML parsing). --solution lets Stryker build the
       # net462 projects through the solution. Measured at ~91.6% after killing the behavioural survivors (NotBetween
       # upper-bound inclusivity, FetchXML named-attribute projection, …); --break-at is ratcheted to 89 (~2pts below).
@@ -140,7 +146,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # The opt-in security model's decision logic (roles/privileges/depth/sharing/access-teams/hierarchy/FLS,
       # 1:N cascade config). Measured at ~86.2% after killing the real survivors; --break-at is ratcheted to 84
       # (~2pts below), the remaining survivors being equivalents (exception-message strings, comparer internals,
@@ -207,7 +213,7 @@ jobs:
           & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # Role generation (net10, CLI): the pure metadata->code generator and the privilege mapper. A full-output
       # snapshot test pins the generator's emitted strings; --break-at is ratcheted to 80 (the remaining survivors
       # are equivalent whitespace/statement mutations of the generated text).
@@ -264,7 +270,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # The security ENFORCEMENT wiring (DemandAccess/CanAccess, cascade delete/assign/share, FLS masking + write
       # rejection, inherited access, share clamping, owner-BU realign, the read filter and the membership tables) is
       # isolated in the InMemoryOrganizationService.Security.cs partial, so the gate measures only that surface - not
@@ -334,7 +340,7 @@ jobs:
           & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # The apply reconciliation core (DataverseRegistration.Apply): package/assembly/type sync, the resume report,
       # the stale-assembly-version guard, and the ApplyDiff step/Custom-API orchestration (create/update/delete +
       # the ignorable-stage-fault skip), all driven through the IOrganizationService seam. net10-only, so no
@@ -404,7 +410,7 @@ jobs:
           & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # The Custom API reconciliation core (DataverseRegistration.CustomApi): the customapi entity build, request/
       # response parameter reconciliation (create/update/delete-orphan), the uniquename lookup, and the parameter
       # type-code resolver - all driven through the IOrganizationService seam. Measured at ~82.7%; --break-at is
@@ -471,7 +477,7 @@ jobs:
           & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # The plan reader (DataverseRegistration.cs): reads plugin assemblies/types, steps (+ message/filter links,
       # images, secure config) and Custom APIs (+ request/response parameters) out of Dataverse and maps them to the
       # diff shape. Driven through the IOrganizationService seam. Measured at ~85.3%; --break-at is ratcheted to 83.
@@ -538,7 +544,7 @@ jobs:
           & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # The step reconciliation core (DataverseRegistration.Steps): the step entity build, step lookup by key or
       # (message, entity, stage, mode) signature, message/filter id resolution, secure-config + state reconcile,
       # image reconcile (create/update/delete + Create-message property), and the stage/rank/name normalizers.
@@ -606,7 +612,7 @@ jobs:
           & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
           "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install Stryker
-        run: dotnet tool update -g dotnet-stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
       # The package scanner (PackageScanner.cs): extracts plugin .nupkg packages (lib/*.dll selection, primary
       # pick, registrable filtering), reads nuspec id/version, and reflects over plugin/Custom-API types to read
       # their definitions. Driven with crafted .nupkg fixtures + stub plugin types, plus PackageScannerBuildStateTests
@@ -653,4 +659,94 @@ jobs:
         with:
           name: mutation-report-cli-scanner
           path: tests/Vela.Cli.Tests/StrykerOutput/**/reports/mutation-report.html
+          if-no-files-found: ignore
+
+  # The runtime (Vela.Plugins, mutated through the Vela.Tests suite) and the harness store and pipeline (Vela.Testing,
+  # mutated through Vela.Testing.Tests), #448. Before these jobs, the runtime had no mutation gate at all, so a
+  # behaviour every test merely executed could change unnoticed. One matrix entry per core; the gates start at the
+  # 80% policy floor and are ratcheted to ~2pts under the measured score, like the jobs above.
+  runtime:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: runtime-plugin
+            tests: tests/Vela.Tests
+            project: Vela.Plugins.csproj
+            mutate: '--mutate "**/Plugin/PluginBase.cs" --mutate "**/Plugin/PluginBaseOfTEntity.cs" --mutate "**/Plugin/HandlerInvoker.cs"'
+            break: 80
+          - name: runtime-context
+            tests: tests/Vela.Tests
+            project: Vela.Plugins.csproj
+            mutate: '--mutate "**/Context/LocalPluginContext.cs" --mutate "**/Context/TracingOrganizationService.cs"'
+            break: 80
+          - name: runtime-services
+            tests: tests/Vela.Tests
+            project: Vela.Plugins.csproj
+            mutate: '--mutate "**/Retry/RetryPolicy.cs" --mutate "**/Caching/PluginCacheService.cs"'
+            break: 80
+          - name: harness-store
+            tests: tests/Vela.Testing.Tests
+            project: Vela.Testing.csproj
+            mutate: '--mutate "**/Fakes/InMemoryOrganizationService.cs"'
+            break: 80
+          - name: harness-pipeline
+            tests: tests/Vela.Testing.Tests
+            project: Vela.Testing.csproj
+            mutate: '--mutate "**/Pipeline/PluginPipeline.cs" --mutate "**/Pipeline/PluginPipeline.Stages.cs" --mutate "**/Pipeline/PluginPipeline.Execution.cs"'
+            break: 80
+    name: ${{ matrix.name }}
+    env:
+      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Stryker
+        run: dotnet tool update -g dotnet-stryker --version $env:STRYKER_VERSION --allow-downgrade
+      # --solution builds the net462 projects through the solution; --project names the mutated assembly, since each
+      # test project references more than one of ours.
+      - name: Mutation test - ${{ matrix.name }}
+        working-directory: ${{ matrix.tests }}
+        run: >
+          dotnet-stryker
+          --solution ../../Vela.sln
+          --project ${{ matrix.project }}
+          ${{ matrix.mutate }}
+          --reporter cleartext --reporter markdown --reporter html --reporter json
+          --break-at ${{ matrix.break }} --threshold-low ${{ matrix.break }} --threshold-high 90
+      - name: List surviving mutants
+        if: always()
+        run: |
+          $f = Get-ChildItem ${{ matrix.tests }}/StrykerOutput/*/reports/mutation-report.json -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $f) { Write-Host 'no json report'; exit 0 }
+          $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
+          $n = 0
+          foreach ($p in $j.files.PSObject.Properties) {
+            $short = Split-Path $p.Name -Leaf
+            foreach ($m in $p.Value.mutants) {
+              if ($m.status -eq 'Survived' -or $m.status -eq 'NoCoverage') {
+                $n++
+                $repl = ($m.replacement -replace '\s+', ' ')
+                if ($repl.Length -gt 70) { $repl = $repl.Substring(0, 70) }
+                'SURV|{0}|{1}|L{2}|{3}|{4}' -f $short, $m.status, $m.location.start.line, $m.mutatorName, $repl
+              }
+            }
+          }
+          Write-Host "TOTAL survivors/no-coverage: $n"
+      - name: Publish report to job summary
+        if: always()
+        run: >
+          Get-ChildItem ${{ matrix.tests }}/StrykerOutput/*/reports/mutation-report.md -ErrorAction SilentlyContinue
+          | Get-Content | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+      - name: Upload HTML report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-${{ matrix.name }}
+          path: ${{ matrix.tests }}/StrykerOutput/**/reports/mutation-report.html
           if-no-files-found: ignore
