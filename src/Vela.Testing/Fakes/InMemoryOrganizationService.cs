@@ -335,15 +335,17 @@ namespace Vela.Testing
             });
 
         /// <summary>
-        /// Declares a <b>referential</b> 1:N relationship: nothing cascades except Delete, which removes the child's
-        /// link. Set <paramref name="restrictDelete"/> to block deleting the parent while children exist.
+        /// Declares a <b>referential</b> 1:N relationship: Delete removes the child's link and Merge moves the child to
+        /// the merged-into record; nothing else cascades. Set <paramref name="restrictDelete"/> to block deleting the parent while children exist.
         /// </summary>
         public InMemoryOrganizationService WithReferentialRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, bool restrictDelete = false) =>
             WithRelationship(referencedEntity, referencingEntity, referencingAttribute, new CascadeConfiguration
             {
                 Assign = CascadeType.NoCascade,
                 Delete = restrictDelete ? CascadeType.Restrict : CascadeType.RemoveLink,
-                Merge = CascadeType.NoCascade,
+                // Like the platform's referential relationships (contact_customer_accounts, account_parent_account):
+                // Merge reparents the children to the master.
+                Merge = CascadeType.Cascade,
                 Reparent = CascadeType.NoCascade,
                 Share = CascadeType.NoCascade,
                 Unshare = CascadeType.NoCascade,
@@ -493,6 +495,7 @@ namespace Vela.Testing
 
             EnsureWritable(entity.LogicalName);
             DemandCreate(entity);
+            DemandLookupTargetsExist(entity, onCreate: true);
             DemandLookupAppends(entity, null);
             DemandSecuredColumnWrites(entity);
 
@@ -601,6 +604,9 @@ namespace Vela.Testing
         // 0x80040237 DuplicateRecord — the platform's fault for inserting a row whose primary key already exists.
         private const int DuplicateRecord = unchecked((int)0x80040237);
 
+        private Entity StoredOrThrow(EntityReference record)
+            => StoredOrNull(record.LogicalName, record.Id) ?? throw RecordDoesNotExist(record.LogicalName, record.Id);
+
         private static FaultException<OrganizationServiceFault> RecordAlreadyExists(string entityName, Guid id)
         {
             string message = $"A {entityName} record with Id = {id:D} already exists.";
@@ -650,10 +656,12 @@ namespace Vela.Testing
                 return id;
             }
 
+            // 0x80060891 RecordNotFoundByEntityKey, the fault the platform raises for a declared key that matches
+            // nothing (verified live), not the by-id 0x80040217.
             string keys = string.Join(", ", reference.KeyAttributes.Select(k => $"{k.Key}={k.Value}"));
-            string message = $"{reference.LogicalName} with alternate key ({keys}) Does Not Exist";
+            string message = $"A record with the specified key values does not exist in {reference.LogicalName} entity ({keys})";
             throw new FaultException<OrganizationServiceFault>(
-                new OrganizationServiceFault { ErrorCode = ObjectDoesNotExist, Message = message },
+                new OrganizationServiceFault { ErrorCode = unchecked((int)0x80060891), Message = message },
                 new FaultReason(message));
         }
 
@@ -677,6 +685,9 @@ namespace Vela.Testing
             {
                 return false;
             }
+
+            // Only a declared key addresses a record; any other set of columns is rejected, not matched.
+            _alternateKeys.DemandDeclared(reference.LogicalName, reference.KeyAttributes.Keys);
 
             foreach (Entity candidate in Table(reference.LogicalName).Values)
             {
@@ -894,6 +905,12 @@ namespace Vela.Testing
             }
 
             bool changesOwner = entity.Contains(SystemFieldApplier.OwnerId);
+            if (changesOwner && entity[SystemFieldApplier.OwnerId] == null)
+            {
+                // Verified live: the platform rejects clearing the owner; it does not reassign the record.
+                throw PlatformFault.Create(PlatformFault.InvalidArgument, $"Attribute: {SystemFieldApplier.OwnerId} cannot be set to NULL");
+            }
+
             // Captured before the merge: needed for the UserOwned cascade scope (children owned by the same user).
             EntityReference? previousOwner = changesOwner ? stored.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) : null;
             if (entity.Attributes.Keys.Any(key => !string.Equals(key, SystemFieldApplier.OwnerId, StringComparison.OrdinalIgnoreCase)))
@@ -906,23 +923,18 @@ namespace Vela.Testing
                 DemandAccess(entity.LogicalName, Privilege.Assign, stored);
             }
 
+            DemandLookupTargetsExist(entity, onCreate: false);
             DemandLookupAppends(entity, stored);
             DemandSecuredColumnWrites(entity);
 
-            // Validate the would-be merged record before committing so a duplicate-key throw leaves the store intact.
+            // Dataverse Update merges the supplied attributes onto the existing record. The merge is built on a copy
+            // (deep-copying the incoming values, so the caller's entity does not stay aliased with the store) and
+            // validated there: a lookup key that matches nothing or a duplicate alternate key throws before the
+            // stored row changes.
             Entity candidate = EntityValues.Clone(stored);
             foreach (KeyValuePair<string, object> attribute in entity.Attributes)
             {
                 candidate[attribute.Key] = EntityValues.CloneValue(attribute.Value);
-            }
-
-            _alternateKeys.Enforce(candidate, Table(entity.LogicalName).Values);
-
-            // Dataverse Update merges the supplied attributes onto the existing record. Deep-copy the incoming
-            // values so the caller's entity does not stay aliased with the store after the call returns.
-            foreach (KeyValuePair<string, object> attribute in entity.Attributes)
-            {
-                stored[attribute.Key] = EntityValues.CloneValue(attribute.Value);
             }
 
             // A state change without a status lands on the state's default status (the platform sets it on the
@@ -930,10 +942,17 @@ namespace Vela.Testing
             if (entity.GetAttributeValue<OptionSetValue>(SystemFieldApplier.StateCode) is OptionSetValue state
                 && !entity.Contains(SystemFieldApplier.StatusCode))
             {
-                stored[SystemFieldApplier.StatusCode] = new OptionSetValue(DefaultStatus(entity.LogicalName, state.Value));
+                candidate[SystemFieldApplier.StatusCode] = new OptionSetValue(DefaultStatus(entity.LogicalName, state.Value));
             }
 
-            ResolveLookupKeyReferences(stored);
+            ResolveLookupKeyReferences(candidate);
+            _alternateKeys.Enforce(candidate, Table(entity.LogicalName).Values);
+
+            foreach (KeyValuePair<string, object> attribute in candidate.Attributes)
+            {
+                stored[attribute.Key] = attribute.Value;
+            }
+
             _systemFields.ApplyOnUpdate(entity, stored, Actor(), _clock(), NextVersion());
             if (changesOwner)
             {
@@ -1199,9 +1218,11 @@ namespace Vela.Testing
                     return response;
                 }
 
+                // Sharing and record-team requests fault on a record that does not exist (verified live for Grant,
+                // Modify and Revoke: 0x80040217), whether or not security is on.
                 case GrantAccessRequest grant:
                 {
-                    DemandAccess(grant.Target.LogicalName, Privilege.Share, StoredOrNull(grant.Target.LogicalName, grant.Target.Id));
+                    DemandAccess(grant.Target.LogicalName, Privilege.Share, StoredOrThrow(grant.Target));
                     PrincipalAccess granted = ClampToSharerRights(grant.Target, grant.PrincipalAccess);
                     _sharing.Grant(grant.Target, granted);
                     CascadeShare(grant.Target.LogicalName, grant.Target.Id, granted, new HashSet<Guid>());
@@ -1210,7 +1231,7 @@ namespace Vela.Testing
 
                 case ModifyAccessRequest modify:
                 {
-                    DemandAccess(modify.Target.LogicalName, Privilege.Share, StoredOrNull(modify.Target.LogicalName, modify.Target.Id));
+                    DemandAccess(modify.Target.LogicalName, Privilege.Share, StoredOrThrow(modify.Target));
                     PrincipalAccess modified = ClampToSharerRights(modify.Target, modify.PrincipalAccess);
                     _sharing.Modify(modify.Target, modified);
                     CascadeShare(modify.Target.LogicalName, modify.Target.Id, modified, new HashSet<Guid>());
@@ -1219,7 +1240,7 @@ namespace Vela.Testing
 
                 case RevokeAccessRequest revoke:
                 {
-                    DemandAccess(revoke.Target.LogicalName, Privilege.Share, StoredOrNull(revoke.Target.LogicalName, revoke.Target.Id));
+                    DemandAccess(revoke.Target.LogicalName, Privilege.Share, StoredOrThrow(revoke.Target));
                     _sharing.Revoke(revoke.Target, revoke.Revokee);
                     CascadeUnshare(revoke.Target.LogicalName, revoke.Target.Id, revoke.Revokee, new HashSet<Guid>());
                     return new RevokeAccessResponse();
@@ -1248,7 +1269,7 @@ namespace Vela.Testing
                     }
 
                     // Managing a record's access team needs AppendTo on the record, like relating to it.
-                    DemandAccess(addToTeam.Record.LogicalName, Privilege.AppendTo, StoredOrNull(addToTeam.Record.LogicalName, addToTeam.Record.Id));
+                    DemandAccess(addToTeam.Record.LogicalName, Privilege.AppendTo, StoredOrThrow(addToTeam.Record));
                     _accessTeams.Add(addToTeam.Record, addToTeam.SystemUserId, addToTeam.TeamTemplateId, rights);
                     AddUserToRecordTeamResponse addResponse = new AddUserToRecordTeamResponse();
                     addResponse.Results["AccessTeamId"] = DeterministicGuid.From("accessteam", addToTeam.Record.Id, addToTeam.TeamTemplateId);
@@ -1257,7 +1278,7 @@ namespace Vela.Testing
 
                 case RemoveUserFromRecordTeamRequest removeFromTeam:
                 {
-                    DemandAccess(removeFromTeam.Record.LogicalName, Privilege.AppendTo, StoredOrNull(removeFromTeam.Record.LogicalName, removeFromTeam.Record.Id));
+                    DemandAccess(removeFromTeam.Record.LogicalName, Privilege.AppendTo, StoredOrThrow(removeFromTeam.Record));
                     _accessTeams.Remove(removeFromTeam.Record, removeFromTeam.SystemUserId, removeFromTeam.TeamTemplateId);
                     return new RemoveUserFromRecordTeamResponse();
                 }
@@ -1536,7 +1557,7 @@ namespace Vela.Testing
                 if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
                 {
                     DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
-                    SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: true);
+                    RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: true); return null; });
                     return;
                 }
 
@@ -1548,9 +1569,12 @@ namespace Vela.Testing
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
             EntityReference caller = new EntityReference(entityName, entityId);
 
+            // Every pair is checked before any row is written, so a rejected pair (one already associated, or the
+            // same record listed twice) leaves no partial association behind.
+            HashSet<Guid> pending = new HashSet<Guid>();
             foreach (EntityReference related in relatedEntities)
             {
-                bool exists = intersect.Values.Any(row =>
+                bool exists = !pending.Add(related.Id) || intersect.Values.Any(row =>
                     EntityValues.AreEqual(EntityValues.GetValue(row, callerAttribute), entityId) &&
                     EntityValues.AreEqual(EntityValues.GetValue(row, relatedAttribute), related.Id));
                 if (exists)
@@ -1559,7 +1583,10 @@ namespace Vela.Testing
                     // fault here rather than silently no-op'ing - the latter would let an access/dup test pass green.
                     throw AssociationAlreadyExists(entityName, entityId, related);
                 }
+            }
 
+            foreach (EntityReference related in relatedEntities)
+            {
                 Entity row = new Entity(rel.IntersectEntity, _idSequence())
                 {
                     [callerAttribute] = caller,
@@ -1601,7 +1628,7 @@ namespace Vela.Testing
                 if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
                 {
                     DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
-                    SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: false);
+                    RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: false); return null; });
                     return;
                 }
 
@@ -1632,7 +1659,8 @@ namespace Vela.Testing
 
         // Merge (account/contact/lead/incident): moves the subordinate's non-conflicting data onto the target without
         // overwriting the target's own values, applies UpdateContent to the target (ignored for incident), reparents
-        // the subordinate's 1:N children to the target, then deactivates the subordinate. All-or-nothing.
+        // the subordinate's 1:N children (Merge = Cascade) and moves its N:N associations to the target, then
+        // deactivates the subordinate. All-or-nothing.
         private void Merge(MergeRequest request)
         {
             EntityReference target = request.Target ?? throw new ArgumentNullException(nameof(request), "Merge Target is required.");
@@ -1690,8 +1718,11 @@ namespace Vela.Testing
                     Update(merged);
                 }
 
-                // 3. Reparent the subordinate's 1:N children to the target.
-                foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entity).ToList())
+                // 3. Reparent the subordinate's 1:N children to the target, except over a relationship whose Merge
+                //    behaviour is NoCascade (unset counts as Cascade, the platform's referential default), and move
+                //    its N:N associations (verified live).
+                foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entity)
+                             .Where(relationship => relationship.Cascade.Merge != CascadeType.NoCascade).ToList())
                 {
                     foreach (Entity child in Children(relationship, subordinateId).ToList())
                     {
@@ -1701,6 +1732,8 @@ namespace Vela.Testing
                         });
                     }
                 }
+
+                MoveIntersectRows(entity, subordinateId, target.Id);
 
                 // 4. Deactivate the subordinate (Inactive = statecode 1 / statuscode 2) and point its masterid at the
                 //    target (verified live: the subordinate's post-image carries both).
@@ -1735,7 +1768,10 @@ namespace Vela.Testing
 
         // Captures ALL mutable stores so a transaction/operation rollback is complete: the record store, the sharing
         // (PoA) table, the access-team grants, the file blobs, and the row-version counter. A partial snapshot would
-        // leave a rolled-back batch with, say, a share or a file that its failed write had created.
+        // leave a rolled-back batch with, say, a share or a file that its failed write had created. Auto-number
+        // counters and open upload/download sessions are left out on purpose: the platform does not roll an
+        // auto-number back either (a failed create still consumes its number), and a block upload is not part of
+        // the transaction.
         internal StoreSnapshot Snapshot()
         {
             StoreSnapshot copy = new StoreSnapshot
@@ -1795,6 +1831,9 @@ namespace Vela.Testing
             Content = (byte[])blob.Content.Clone(),
             FileName = blob.FileName,
             MimeType = blob.MimeType,
+            EntityLogicalName = blob.EntityLogicalName,
+            RecordId = blob.RecordId,
+            AttributeName = blob.AttributeName,
         };
 
         // A point-in-time deep copy of every mutable store, taken by Snapshot() and re-applied by RestoreTo() so an
@@ -1871,7 +1910,10 @@ namespace Vela.Testing
             {
                 Content = bytes,
                 FileName = TryGetParam<string>(request, "FileName") ?? session.FileName,
-                MimeType = TryGetParam<string>(request, "MimeType") ?? "application/octet-stream"
+                MimeType = TryGetParam<string>(request, "MimeType") ?? "application/octet-stream",
+                EntityLogicalName = session.EntityLogicalName,
+                RecordId = session.RecordId,
+                AttributeName = session.AttributeName,
             };
 
             // The File column stores its fileid; the content is fetched via the download messages.
@@ -1891,8 +1933,7 @@ namespace Vela.Testing
 
             if (!Table(target.LogicalName).TryGetValue(target.Id, out Entity? record))
             {
-                throw new InvalidOperationException(
-                    $"No file/image is set on '{target.LogicalName}.{attribute}' for record {target.Id}.");
+                throw RecordDoesNotExist(target.LogicalName, target.Id);
             }
 
             // A file download must respect the same access control as Retrieve: a record-level Read demand and
@@ -1908,8 +1949,10 @@ namespace Vela.Testing
 
             if (!record.Contains(attribute) || record[attribute] == null)
             {
-                throw new InvalidOperationException(
-                    $"No file/image is set on '{target.LogicalName}.{attribute}' for record {target.Id}.");
+                // The platform's "nothing to download" fault (seen live on an Image column with no full image; not
+                // probed on an empty File column).
+                throw PlatformFault.Create(ObjectDoesNotExist,
+                    $"No FileAttachment records found for '{target.LogicalName}.{attribute}' on record {target.Id}.");
             }
 
             (byte[] content, string fileName) = ResolveFileContent(record[attribute], $"{target.LogicalName}.{attribute}");
@@ -1971,23 +2014,25 @@ namespace Vela.Testing
         private OrganizationResponse DeleteFile(OrganizationRequest request)
         {
             Guid fileId = GetParam<Guid>(request, "FileId");
-            _files.Remove(fileId);
-
-            // Clear any File column that referenced the deleted file, like the platform.
-            foreach (Dictionary<Guid, Entity> table in _store.Values)
+            if (!_files.TryGetValue(fileId, out FileBlob? blob))
             {
-                foreach (Entity record in table.Values)
+                throw PlatformFault.Create(ObjectDoesNotExist, $"File with Id = {fileId:D} Does Not Exist");
+            }
+
+            // Deleting a file clears its File column: it needs Write on that record (and on the column when it is
+            // secured), and touches no other column or table, even one holding the same Guid.
+            Entity? record = StoredOrNull(blob.EntityLogicalName, blob.RecordId);
+            if (record != null)
+            {
+                DemandAccess(blob.EntityLogicalName, Privilege.Write, record);
+                DemandSecuredColumnWrites(new Entity(blob.EntityLogicalName, blob.RecordId) { [blob.AttributeName] = null });
+                if (record.GetAttributeValue<Guid?>(blob.AttributeName) == fileId)
                 {
-                    foreach (string attribute in record.Attributes.Keys.ToArray())
-                    {
-                        if (record[attribute] is Guid value && value == fileId)
-                        {
-                            record.Attributes.Remove(attribute);
-                        }
-                    }
+                    record.Attributes.Remove(blob.AttributeName);
                 }
             }
 
+            _files.Remove(fileId);
             return new OrganizationResponse { ResponseName = "DeleteFile" };
         }
 
@@ -2036,6 +2081,11 @@ namespace Vela.Testing
             public byte[] Content = Array.Empty<byte>();
             public string FileName = string.Empty;
             public string MimeType = string.Empty;
+
+            // The File column the blob was uploaded to: DeleteFile clears that column only.
+            public string EntityLogicalName = string.Empty;
+            public Guid RecordId;
+            public string AttributeName = string.Empty;
         }
 
         private sealed class UploadSession

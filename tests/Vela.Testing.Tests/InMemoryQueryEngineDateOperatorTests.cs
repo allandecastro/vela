@@ -101,7 +101,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void NotEqualUserId_keeps_null_and_other_owners_but_excludes_the_current_user()
+        public void NotEqualUserId_keeps_other_owners_but_excludes_the_current_user_and_null()
         {
             Guid me = Guid.NewGuid();
             Guid other = Guid.NewGuid();
@@ -110,7 +110,8 @@ namespace Vela.Testing.Tests
                 new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "theirs", ["ownerid"] = new EntityReference("systemuser", other) },
                 new Entity("task") { Id = Guid.NewGuid(), ["subject"] = "unowned" });
 
-            Assert.Equal(new[] { "theirs", "unowned" }, Run(crm, new ConditionExpression("ownerid", ConditionOperator.NotEqualUserId)));
+            // #451, verified live: ne-userid does not match an empty lookup.
+            Assert.Equal(new[] { "theirs" }, Run(crm, new ConditionExpression("ownerid", ConditionOperator.NotEqualUserId)));
         }
 
         [Fact]

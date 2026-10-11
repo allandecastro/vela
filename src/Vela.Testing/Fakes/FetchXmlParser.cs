@@ -73,11 +73,17 @@ namespace Vela.Testing
             int? count = Int(fetch, "count");
             int? page = Int(fetch, "page");
             bool totalCount = Bool(fetch, "returntotalrecordcount");
+            if (totalCount && query.TopCount.HasValue)
+            {
+                // Verified live: 0x80040203.
+                throw PlatformFault.Create(PlatformFault.InvalidArgument,
+                    "The top attribute can't be specified with paging attribute returntotalrecordcount");
+            }
             if (count.HasValue || page.HasValue || totalCount)
             {
                 query.PageInfo = new PagingInfo
                 {
-                    Count = count ?? 5000,
+                    Count = count ?? InMemoryQueryEngine.MaxPageSize,
                     PageNumber = page ?? 1,
                     ReturnTotalRecordCount = totalCount
                 };

@@ -88,12 +88,18 @@ namespace Vela.Testing
         }
         public EntityCollection ExecuteQueryByAttribute(QueryByAttribute query)
         {
+            // Verified live: one value per attribute, or 0x8004110F. A missing value is not compared as null.
+            if (query.Values.Count != query.Attributes.Count)
+            {
+                throw PlatformFault.Create(unchecked((int)0x8004110F),
+                    "QueryByAttribute must specify a non-empty value array with the same number of elements as in the attributes array.");
+            }
+
             IEnumerable<Entity> matches = ReadableRows(query.EntityName).Where(entity =>
             {
                 for (int i = 0; i < query.Attributes.Count; i++)
                 {
-                    object? expected = i < query.Values.Count ? query.Values[i] : null;
-                    if (!EntityValues.ConditionEquals(EntityValues.GetValue(entity, query.Attributes[i]), expected))
+                    if (!EntityValues.ConditionEquals(EntityValues.GetValue(entity, query.Attributes[i]), query.Values[i]))
                     {
                         return false;
                     }
@@ -552,33 +558,34 @@ namespace Vela.Testing
         {
             if (pageInfo != null && pageInfo.ReturnTotalRecordCount)
             {
-                const int limit = 5000;
-                result.TotalRecordCount = Math.Min(projected.Count, limit);
-                // Stryker disable once all : the 5000-row limit boundary is impractical to exercise in a unit test.
-                result.TotalRecordCountLimitExceeded = projected.Count > limit;
+                result.TotalRecordCount = Math.Min(projected.Count, MaxPageSize);
+                result.TotalRecordCountLimitExceeded = projected.Count > MaxPageSize;
             }
 
             if (topCount.HasValue)
             {
                 result.Entities.AddRange(projected.Take(topCount.Value));
+                return;
             }
-            else if (pageInfo != null && pageInfo.Count > 0)
+
+            // A query with no page size gets the platform's 5,000-row page, and no page is larger: the rest is
+            // reached with MoreRecords and the next page, as on Dataverse.
+            int count = pageInfo != null && pageInfo.Count > 0 ? Math.Min(pageInfo.Count, MaxPageSize) : MaxPageSize;
+            int page = pageInfo == null || pageInfo.PageNumber <= 0 ? 1 : pageInfo.PageNumber;
+            int skip = (page - 1) * count;
+            result.Entities.AddRange(projected.Skip(skip).Take(count));
+            result.MoreRecords = projected.Count > skip + count;
+            if (result.MoreRecords)
             {
-                int page = pageInfo.PageNumber <= 0 ? 1 : pageInfo.PageNumber;
-                int skip = (page - 1) * pageInfo.Count;
-                result.Entities.AddRange(projected.Skip(skip).Take(pageInfo.Count));
-                result.MoreRecords = projected.Count > skip + pageInfo.Count;
-                if (result.MoreRecords)
-                {
-                    // Informational only (the engine pages by PageNumber, not the cookie): name the NEXT page.
-                    result.PagingCookie = (page + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                }
-            }
-            else
-            {
-                result.Entities.AddRange(projected);
+                // The engine pages by PageNumber, not by the cookie: the cookie names the NEXT page. Dataverse also
+                // returns the same page again for the same page number, cookie or not (verified live), so a caller
+                // must increment the page number either way.
+                result.PagingCookie = (page + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
         }
+
+        // The largest page Dataverse returns, and the page size of a query that sets none.
+        internal const int MaxPageSize = 5000;
 
         private static List<Entity> DistinctRows(List<Entity> rows)
         {
@@ -593,7 +600,11 @@ namespace Vela.Testing
                     .Select(attribute =>
                     {
                         object? value = attribute.Value is AliasedValue aliased ? aliased.Value : attribute.Value;
-                        return attribute.Key + "=" + (EntityValues.Normalize(value)?.ToString() ?? string.Empty);
+                        // Text compares case-insensitively, like the Dataverse collation (verified live: "Abc",
+                        // "ABC" and "abc" are one distinct row, the first).
+                        object? normalized = EntityValues.Normalize(value);
+                        string text = normalized is string str ? str.ToUpperInvariant() : normalized?.ToString() ?? string.Empty;
+                        return attribute.Key + "=" + text;
                     }));
                 if (seen.Add(key))
                 {
@@ -907,9 +918,13 @@ namespace Vela.Testing
                 return index >= values.Count ? null : values[index];
             }
 
-            // Dataverse uses SQL three-valued logic: a NULL attribute never satisfies a comparison, so the
-            // "negative" operators (ne, not-in, not-like, ...) EXCLUDE rows where the attribute is null rather
-            // than matching them. Without this, in-memory queries return rows that real Dataverse would omit.
+            // A null attribute: the negative value operators match it, the comparisons and patterns do not (both
+            // verified live, see the two lists below).
+            if (actual == null && IsNullMatchingOperator(condition.Operator))
+            {
+                return true;
+            }
+
             if (actual == null && IsNullExcludingOperator(condition.Operator))
             {
                 return false;
@@ -980,7 +995,7 @@ namespace Vela.Testing
                 case ConditionOperator.EqualUserId:
                     return actual != null && EntityValues.AreEqual(actual, _currentUserId);
                 case ConditionOperator.NotEqualUserId:
-                    return actual == null || !EntityValues.AreEqual(actual, _currentUserId);
+                    return !EntityValues.AreEqual(actual, _currentUserId);
                 case ConditionOperator.On:
                     return DatePart(actual) is DateTime on && on == DatePart(Operand(0));
                 case ConditionOperator.OnOrBefore:
@@ -1009,23 +1024,34 @@ namespace Vela.Testing
             }
         }
 
-        // Operators that, like real Dataverse, must NOT match a row whose attribute is null.
-        private static bool IsNullExcludingOperator(ConditionOperator op)
+        // Operators that match a row whose attribute is null. Verified live (2026-10-11, string, whole number,
+        // money, choice, lookup and date columns): Dataverse translates them as "column <> value OR column IS NULL",
+        // so `ne 'x'` returns the rows with no value too.
+        private static bool IsNullMatchingOperator(ConditionOperator op)
         {
-            // A NULL attribute never satisfies a value comparison (SQL three-valued logic). The negative
-            // operators exclude null rather than matching it, and the positive ordered comparisons are
-            // "unknown" -> excluded too (and would otherwise throw on Compare(null, ...)).
             return op is ConditionOperator.NotEqual
                 or ConditionOperator.NotIn
-                or ConditionOperator.NotBetween
-                or ConditionOperator.DoesNotBeginWith
-                or ConditionOperator.DoesNotEndWith
                 or ConditionOperator.NotLike
+                or ConditionOperator.DoesNotBeginWith
+                or ConditionOperator.DoesNotEndWith;
+        }
+
+        // Operators that never match a row whose attribute is null (verified live, 2026-10-11): the ordered
+        // comparisons (which would also throw on Compare(null, ...)), not-between, the patterns (`like '%'` does not
+        // match null) and the current-user operators (`ne-userid` does not match an empty lookup).
+        private static bool IsNullExcludingOperator(ConditionOperator op)
+        {
+            return op is ConditionOperator.NotBetween
                 or ConditionOperator.GreaterThan
                 or ConditionOperator.GreaterEqual
                 or ConditionOperator.LessThan
                 or ConditionOperator.LessEqual
-                or ConditionOperator.Between;
+                or ConditionOperator.Between
+                or ConditionOperator.Like
+                or ConditionOperator.BeginsWith
+                or ConditionOperator.EndsWith
+                or ConditionOperator.EqualUserId
+                or ConditionOperator.NotEqualUserId;
         }
 
         private static object? GetConditionValue(Entity entity, ConditionExpression condition)

@@ -64,7 +64,7 @@ namespace Vela.Testing
     /// </summary>
     public sealed class RecordingLogger : ILogger
     {
-        private readonly List<object?> _scopes = new List<object?>();
+        private readonly List<ScopePop> _scopes = new List<ScopePop>();
         private readonly List<LogEntry> _entries = new List<LogEntry>();
         private readonly List<MetricEntry> _metrics = new List<MetricEntry>();
         private readonly Dictionary<string, string> _customProperties = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -89,8 +89,9 @@ namespace Vela.Testing
         /// <inheritdoc />
         public IDisposable BeginScope<TState>(TState state)
         {
-            _scopes.Add(state);
-            return new ScopePop(_scopes);
+            var scope = new ScopePop(_scopes, state);
+            _scopes.Add(scope);
+            return scope;
         }
 
         /// <inheritdoc />
@@ -212,9 +213,9 @@ namespace Vela.Testing
         private void Record(LogLevel level, Exception? exception, string message)
         {
             var dimensions = new Dictionary<string, object?>(StringComparer.Ordinal);
-            foreach (object? scope in _scopes)
+            foreach (ScopePop scope in _scopes)
             {
-                if (scope is IEnumerable<KeyValuePair<string, object?>> pairs)
+                if (scope.State is IEnumerable<KeyValuePair<string, object?>> pairs)
                 {
                     foreach (KeyValuePair<string, object?> pair in pairs)
                     {
@@ -250,26 +251,21 @@ namespace Vela.Testing
             }
         }
 
+        // Disposing a scope removes that scope, not the innermost one, so scopes disposed out of order keep the
+        // others' dimensions.
         private sealed class ScopePop : IDisposable
         {
-            private readonly List<object?> _scopes;
-            private bool _disposed;
+            private readonly List<ScopePop> _scopes;
 
-            public ScopePop(List<object?> scopes) => _scopes = scopes;
-
-            public void Dispose()
+            public ScopePop(List<ScopePop> scopes, object? state)
             {
-                if (_disposed)
-                {
-                    return;
-                }
-
-                _disposed = true;
-                if (_scopes.Count > 0)
-                {
-                    _scopes.RemoveAt(_scopes.Count - 1);
-                }
+                _scopes = scopes;
+                State = state;
             }
+
+            public object? State { get; }
+
+            public void Dispose() => _scopes.Remove(this);
         }
     }
 }

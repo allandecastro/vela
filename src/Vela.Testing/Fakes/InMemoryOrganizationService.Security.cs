@@ -362,6 +362,40 @@ namespace Vela.Testing
             SystemFieldApplier.OrganizationId,
         };
 
+        // 0x80040502 ObjectDoesNotExistInRelationship-style fault an Update raises for a lookup to a missing record.
+        private const int UpdateLookupTargetDoesNotExist = unchecked((int)0x80040502);
+
+        // With security on, a lookup set by id must point at an existing record (verified live: Create faults
+        // 0x80040217 "Entity 'X' With Id = ... Does Not Exist", Update faults 0x80040502 "X does not exist."), so the
+        // AppendTo check below never runs against a missing record. Security off keeps dangling lookups: a
+        // single-plugin PluginContext commonly writes a lookup to a Target it never seeded. The system columns the
+        // store fills or re-derives (owner, created/modified by, organization) are not checked, and a lookup set by
+        // key is resolved, and checked, separately.
+        private void DemandLookupTargetsExist(Entity entity, bool onCreate)
+        {
+            // Configured security, not the acting identity: SYSTEM cannot point a lookup at a missing record either.
+            if (_security == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, object> attribute in entity.Attributes)
+            {
+                if (attribute.Value is not EntityReference target
+                    || target.Id == Guid.Empty
+                    || SystemReferenceColumns.Contains(attribute.Key)
+                    || (onCreate && target.Id == entity.Id && string.Equals(target.LogicalName, entity.LogicalName, StringComparison.OrdinalIgnoreCase))
+                    || StoredOrNull(target.LogicalName, target.Id) != null)
+                {
+                    continue;
+                }
+
+                throw onCreate
+                    ? PlatformFault.Create(ObjectDoesNotExist, $"Entity '{target.LogicalName}' With Id = {target.Id:D} Does Not Exist")
+                    : PlatformFault.Create(UpdateLookupTargetDoesNotExist, $"{target.LogicalName} does not exist.");
+            }
+        }
+
         // Setting a lookup relates two records, which needs Append on the record carrying the lookup and AppendTo on
         // the lookup's target record (Dataverse). No-op when security is off. <paramref name="self"/> is the record
         // carrying the lookup (the stored row on Update; null on Create, where it does not exist yet).
@@ -436,8 +470,10 @@ namespace Vela.Testing
             {
                 if (relationship.Cascade.Delete == CascadeType.Restrict && Children(relationship, id).Any())
                 {
-                    throw new InvalidOperationException(
-                        $"Cannot delete {entityName} {id}: related {relationship.ReferencingEntity} records exist and the relationship's Delete behaviour is Restrict.");
+                    // 0x80040227, the platform's fault for a delete a Restrict relationship blocks (verified live).
+                    throw PlatformFault.Create(unchecked((int)0x80040227),
+                        $"The object you tried to delete is associated with another object and cannot be deleted. Deleting {entityName} {id}: "
+                        + $"related {relationship.ReferencingEntity} records exist and the relationship's Delete behaviour is Restrict.");
                 }
             }
 
@@ -489,6 +525,41 @@ namespace Vela.Testing
                 foreach (Guid rowId in toRemove)
                 {
                     intersect.Remove(rowId);
+                }
+            }
+        }
+
+        // Merge moves the subordinate's N:N associations to the master (verified live): each intersect row naming
+        // the subordinate names the master instead, unless the master already has that association, in which case
+        // the subordinate's row is dropped.
+        private void MoveIntersectRows(string entityName, Guid fromId, Guid toId)
+        {
+            foreach (RelationshipRegistry.ManyToMany m2m in AllManyToManyRelationships())
+            {
+                Dictionary<Guid, Entity> intersect = Table(m2m.IntersectEntity);
+                foreach ((string attribute, string otherAttribute) in new[] { (m2m.FirstAttribute, m2m.SecondAttribute), (m2m.SecondAttribute, m2m.FirstAttribute) })
+                {
+                    string side = attribute == m2m.FirstAttribute ? m2m.FirstEntity : m2m.SecondEntity;
+                    if (!string.Equals(side, entityName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    foreach (Entity row in intersect.Values.Where(row => EntityValues.AreEqual(EntityValues.GetValue(row, attribute), fromId)).ToList())
+                    {
+                        object? other = EntityValues.GetValue(row, otherAttribute);
+                        bool masterHasIt = intersect.Values.Any(existing =>
+                            EntityValues.AreEqual(EntityValues.GetValue(existing, attribute), toId)
+                            && EntityValues.AreEqual(EntityValues.GetValue(existing, otherAttribute), other));
+                        if (masterHasIt)
+                        {
+                            intersect.Remove(row.Id);
+                        }
+                        else
+                        {
+                            row[attribute] = new EntityReference(entityName, toId);
+                        }
+                    }
                 }
             }
         }
