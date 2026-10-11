@@ -1953,6 +1953,12 @@ $$"""
     <RootNamespace>{{testProjectName}}</RootNamespace>
     <AssemblyName>{{testProjectName}}</AssemblyName>
     <IsPackable>false</IsPackable>
+    <!-- In a solution build, a ProjectReference that MSBuild cannot match to the solution configuration (its path
+         differs in form, e.g. through a symlink) is otherwise built WITHOUT Configuration/Platform, i.e. a second,
+         Debug build of the plugin project running in parallel with the solution's Release one. Both pack into the
+         same artifacts/<Plugin>.1.0.0.nupkg and fail with "being used by another process". Inheriting this
+         project's Configuration/Platform makes it the same build, run once. -->
+    <ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>
   </PropertyGroup>
 
   <ItemGroup>
