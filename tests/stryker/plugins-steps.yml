@@ -13,6 +13,9 @@ stryker-config:
     - "**/Vela.Plugins/Steps/**/*.cs"
     - "!**/Vela.Plugins/Steps/StepApi.cs"
     - "!**/Vela.Plugins/Steps/StepBuilder.Impl.cs"
+    # A data table (request name -> real sdkmessage and primary entity, ~170 rows verified live in 9c0b528): its
+    # mutants are string literals of the table itself, which a test could only pin by restating the table.
+    - "!**/Vela.Plugins/Steps/SdkMessageNames.cs"
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90
