@@ -25,18 +25,27 @@ public sealed class TypedQuery<TEntity>
     /// <summary>The underlying <see cref="QueryExpression"/>.</summary>
     public QueryExpression Expression { get; }
 
-    /// <summary>Selects the given typed columns.</summary>
+    /// <summary>
+    /// Selects the given typed columns, replacing any earlier selection. Group-by and aggregate columns added by
+    /// <see cref="GroupBy"/>, <see cref="Count"/>, <see cref="Sum"/> and the like are kept, whatever the call order.
+    /// </summary>
     public TypedQuery<TEntity> Select(params Expression<Func<TEntity, object?>>[] columns)
     {
-        Expression.ColumnSet = TypedQueryNames.BuildColumnSet(columns);
+        Expression.ColumnSet = KeepAggregates(TypedQueryNames.BuildColumnSet(columns));
         return this;
     }
 
-    /// <summary>Selects all columns.</summary>
+    /// <summary>Selects all columns. Group-by and aggregate columns added earlier are kept.</summary>
     public TypedQuery<TEntity> SelectAll()
     {
-        Expression.ColumnSet = new ColumnSet(true);
+        Expression.ColumnSet = KeepAggregates(new ColumnSet(true));
         return this;
+    }
+
+    private ColumnSet KeepAggregates(ColumnSet columns)
+    {
+        columns.AttributeExpressions.AddRange(Expression.ColumnSet.AttributeExpressions);
+        return columns;
     }
 
     /// <summary>Adds a condition to the root criteria.</summary>

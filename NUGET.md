@@ -1,63 +1,51 @@
 # Vela
 
-**Build Dataverse with confidence** - modern Microsoft Dataverse development.
+**Build Dataverse with confidence.** Vela is a framework, a CLI and a test harness for Microsoft Dataverse plugins
+and Custom APIs, with a preview-first `plan` → `apply` workflow.
 
-Vela is a framework (`Vela.Plugins`) + CLI (`Vela.Cli`, command `vela`) for building Microsoft
-Dataverse plugins and Custom APIs, with a safe, preview-first `plan` → `apply` workflow.
-
-`Vela.Plugins` also bundles Roslyn analyzers (VELA001-VELA022, which catch invalid step/column usage and plugin
-pitfalls at build time, several with an IDE code fix) and source generators (typed image projections) - no extra
-reference or setup.
+| Package | What it is |
+| --- | --- |
+| `Vela.Plugins` | The plugin runtime (.NET Framework 4.6.2): fluent step and Custom API registration, typed handler contexts, DI, caching. Bundles the Roslyn analyzers (VELA001-VELA023, several with a code fix) and the source generator for typed images and step contexts. |
+| `Vela.Messages` | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`, ...), a dependency of `Vela.Plugins` that client code can use alone. |
+| `Vela.Testing` | The no-connection test harness: an in-memory Dataverse and the plugin pipeline. |
+| `Vela.Cli` | The `vela` .NET tool: `plan` / `apply` registrations, `init` / `add` scaffolding, `models` generation, `sign`. |
 
 ## Install
 
-```powershell
-# Framework (reference from your plugin project)
-dotnet add package Vela.Plugins
-
-# CLI (.NET global tool - exposes the `vela` command)
-dotnet tool install --global Vela.Cli
+```bash
+dotnet add package Vela.Plugins                 # in your plugin project
+dotnet add package Vela.Testing                 # in its test project
+dotnet tool install --global Vela.Cli           # the vela command
 ```
 
-## Quick example
+## Example
 
 ```csharp
 using Vela.Context;
 using Vela.Plugin;
-using Vela.Steps;
 
-public partial class AccountPostUpdate : EntityPluginBase<Account>
+public sealed partial class AccountPostUpdate(string unsecureConfig, string secureConfig)
+    : EntityPluginBase<Account>(unsecureConfig, secureConfig)
 {
-    public AccountPostUpdate(string unsecure, string secure) : base(unsecure, secure) { }
+    protected override void RegisterPluginSteps() =>
+        RegisterStep().OnUpdate().PostOperation().Sync()
+            .FilterOn(a => a.Name)
+            .Handle(OnUpdated);
 
-    protected override void RegisterPluginSteps()
-        => RegisterStep().OnUpdate()
-               .PostOperation()
-               .Sync()
-               .FilterOn(a => a.Name)
-               .Handle(OnUpdated);
-
-    private void OnUpdated(IUpdatePostContext<Account> ctx)
-        => ctx.Trace($"Account renamed to '{ctx.GetTarget<Account>().Name}'");
+    private void OnUpdated(IUpdatePostContext<Account> ctx) =>
+        ctx.Trace("Account renamed to '{0}'", ctx.Request.Target.Name);
 }
 ```
 
-Then preview and apply against your environment:
+Build the plugin package, then preview and apply it into your solution (`--solution` gives the package the
+publisher prefix Dataverse requires; `apply` asks for confirmation on a terminal):
 
-```powershell
-vela plan  --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
-# apply writes by default (prompts on a terminal); add --auto-approve for CI / unattended runs.
-vela apply --package .\artifacts\Zava.Plugins.1.0.0.nupkg --interactive
+```bash
+vela plan  --packages-dir artifacts --solution ZavaSales --interactive
+vela apply --packages-dir artifacts --solution ZavaSales --interactive
 ```
-
-The `vela` CLI does more than deploy:
-
-- `vela init` scaffolds a complete, build-ready plugin solution.
-- `vela models` generates early-bound classes, security roles, and typed Custom API request/response messages from your environment.
-- `vela add` generates a plugin, service, Custom API, test, or step into an existing project.
-- `vela sign` signs a plugin package for managed-identity registration.
 
 ## Documentation
 
-Full docs, scaffolding (`vela init`), Custom APIs, DI, caching, and tracing:
-**https://github.com/allandecastro/vela**
+Guides and reference: **https://allandecastro.github.io/vela/** · Source and changelog:
+https://github.com/allandecastro/vela

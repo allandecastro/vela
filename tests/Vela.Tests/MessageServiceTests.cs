@@ -636,4 +636,20 @@ public sealed class MessageServiceTests
         Assert.Equal("short", shortText);
         Assert.Equal("long", longText);
     }
+
+    [Fact]
+    public void A_template_that_does_not_match_its_arguments_names_the_key_and_language()
+    {
+        ILocalPluginContext ctx = Context(UserSettings(1033));
+        MessageService svc = Service(ctx);
+        svc.AddSource(new DictionaryMessageSource().Add(1033, "ERR_RANGE", "{0} must be below {1}."));
+
+        InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => svc.GetMessage("ERR_RANGE", "Amount"));
+        Assert.Contains("'ERR_RANGE'", ex.Message);
+        Assert.Contains("1033", ex.Message);
+        Assert.IsType<FormatException>(ex.InnerException);
+
+        // Not a missing message: TryGetMessage reports the defect too instead of returning false.
+        Assert.Throws<InvalidPluginExecutionException>(() => svc.TryGetMessage("ERR_RANGE", out _, "Amount"));
+    }
 }

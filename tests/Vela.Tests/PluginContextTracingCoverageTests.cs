@@ -79,7 +79,7 @@ public sealed class PluginContextTracingCoverageTests
         Entity pre = new Entity("account", target.Id) { ["text"] = "old" };
         ctx.PluginExecutionContext.PreEntityImages["PreImage"] = pre;
 
-        ctx.TraceExecutionSnapshot("PostOperation");
+        ctx.TraceExecutionSnapshot("PostOperation", TraceSnapshotDetail.Full);
 
         string output = Assert.Single(recorder.Traces);
         Assert.Contains("(OptionSetValue)", output);
@@ -103,6 +103,7 @@ public sealed class PluginContextTracingCoverageTests
 
         LocalPluginContext ctx = new PluginContextBuilder()
             .WithTracingService(recorder)
+            .OnMessage("UpdateMultiple")
             .WithTargets(new EntityCollection(new List<Entity> { new Entity("account", Guid.NewGuid()) }))
             .WithBulkPreImages(preImages)
             .Build();

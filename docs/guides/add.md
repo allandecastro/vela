@@ -39,17 +39,16 @@ vela add --interactive
   `RevokeAccess`, `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`), sales lifecycle (`QualifyLead`,
   `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`),
   queues (`AddToQueue`, `RouteTo`, …), email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and
-  case/contract messages (see the full list in [Write a plugin](plugins.md), `Assign` included). The sdkmessage name
-  works too: `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or
-  `OnWinOpportunity()` from `--entity`. Any other name is registered through its request type, `On<XxxRequest>()`,
-  with a handler taking `IMessagePostContext<XxxRequest>` (`IMessagePreContext` at a pre-stage). When the SDK ships
-  the request class it is used fully qualified (`--message SetState` renders
-  `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a
-  state change fires); otherwise `add` references the request
-  [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`) generates and prints a note to generate it.
-  The deprecated `SetState` / `SetStateDynamicEntity` messages have no curated method (update
-  `statecode`/`statuscode` with `Update` instead). `--project <csproj>` (default: the single `.csproj` in the
-  current directory), `--force` (overwrite an existing file), `--json` (machine-readable report).
+  case/contract messages (see the full list in [Write a plugin](plugins.md)). The sdkmessage name works too:
+  `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or `OnWinOpportunity()`
+  from `--entity`. `Assign` gets the typed `OnAssign()` too. Any other name is registered through its request type,
+  `On<XxxRequest>()`, with a handler taking `IMessagePostContext<XxxRequest>` (`IMessagePreContext` at a pre-stage):
+  the SDK class, fully qualified, when one ships (`--message SetState` renders
+  `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a state
+  change fires), otherwise the request [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`)
+  generates, with a note to generate it. `--project <csproj>` (default:
+  the single `.csproj` in the current directory), `--force` (overwrite an existing file), `--json` (machine-readable
+  report).
 - **Each kind takes only its own options.** An option the kind does not use (for example `add service --message`
   or `add step --force`) is rejected with a message rather than silently ignored. `vela add --help` lists each
   kind's options.

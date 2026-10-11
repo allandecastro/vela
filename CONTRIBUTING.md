@@ -11,15 +11,20 @@ Looking for something to work on? See the [open issues](https://github.com/allan
 ```text
 Vela.sln
 src/
-  Vela.Plugins/   # Framework runtime, contracts, primitives, and shared definitions
-  Vela.Cli/       # CLI (command `vela`) for manifests and Dataverse sync
-  Vela.Testing/   # Test harness package
-tests/
-  Vela.Tests/     # Unit tests
+  Vela.Plugins/     # Plugin runtime (net462): base types, step builder, contexts, DI, caching, Custom APIs
+  Vela.Messages/    # Typed request/response base classes (net462 + net10.0), referenced by Vela.Plugins
+  Vela.Analyzers/   # Roslyn analyzers VELA001-VELA022 and the image/step-context source generator (netstandard2.0)
+  Vela.CodeFixes/   # IDE code fixes, packed inside Vela.Plugins with the analyzers
+  Vela.Testing/     # Test harness (net462): in-memory Dataverse, PluginContext, PluginPipeline
+  Vela.Cli/         # The vela tool (net10.0): plan/apply, init/add, models, sign, logs
+tests/              # One test project per src project, plus package fixtures for the CLI scanner
+docs/               # The docfx site; docs/samples holds the compiled snippets it includes
 tools/
   codegen/Vela.StepApiGen/  # Generator for the step builder surface (maintainer tooling, never packed)
-.github/workflows/ci.yml
+.github/workflows/  # ci.yml, mutation.yml, docs.yml, release.yml
 ```
+
+AI coding agents: [`AGENTS.md`](AGENTS.md) summarises this guide.
 
 ### Generated code
 
@@ -47,10 +52,23 @@ Keep these rules in mind when adding new code:
 
 ## Build and test
 
-```powershell
+```bash
 dotnet build Vela.sln -c Release
-dotnet test Vela.sln -c Release
+dotnet test Vela.sln -c Release      # Windows
 ```
+
+The runtime, harness and their tests target `net462`. `dotnet build` works on every OS, but `dotnet test` runs a
+`net462` test project only on Windows. On macOS and Linux, run the `net10.0` projects (`Vela.Cli.Tests`,
+`Vela.Analyzers.Tests`, `Vela.CodeFixes.Tests`) with `dotnet test`, and the `net462` ones (`Vela.Tests`,
+`Vela.Testing.Tests`, `docs/samples/Vela.DocSamples`) with Mono and the xUnit console runner:
+
+```bash
+mono ~/.nuget/packages/xunit.runner.console/2.9.2/tools/net462/xunit.console.exe \
+  tests/Vela.Tests/bin/Release/net462/Vela.Tests.dll
+```
+
+The console runner is not a dependency of any project: fetch the `xunit.runner.console` package once (for
+example `nuget install xunit.runner.console -Version 2.9.2`) and adjust the path to where it lands.
 
 ### Test stack and coverage
 

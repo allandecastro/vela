@@ -54,8 +54,8 @@ vela models --solution ZavaSales --solution-roles --namespace Zava.Shared.Models
   wrong types or arity fail at compile time. Use the reference to set a lookup
   (`contact.ParentCustomerId = Account.ByAccountNumberKey("A-001")`), to read the record with
   `ctx.Service.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name)`, or to create-or-update
-  by business key with `ctx.Service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` (returns whether
-  a record was created). The factory is a method (not a property), so it can never be used as a column in
+  by business key with `ctx.Service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` (returns
+  `(Created, Target)`). The factory is a method (not a property), so it can never be used as a column in
   `FilterOn`/`Select`.
 - **Typed relationship navigation properties** (see below).
 
@@ -128,6 +128,9 @@ string customer = order.Parent_Account?.Name;
 decimal total = order.Order_Details.Sum(l => l.LineTotal ?? 0);
 ```
 
+Each `Include` reads all the related columns by default; pass column selectors to read fewer, for example
+`q.Include(o => o.Order_Details, l => l.LineTotal)`. Including the same relationship twice throws.
+
 This is a **single-record** read: Dataverse nests related records on `Retrieve` (not `RetrieveMultiple`), **one
 level deep**, and each related query is subject to the **5000-row page cap**, so use it for bounded relationships.
 For a set of records, or deeper graphs, run a second query on the children and stitch by the parent lookup.
@@ -135,7 +138,8 @@ For a set of records, or deeper graphs, run a second query on the children and s
 
 **Associate (N:N).** An N:N link connects records that already exist, so you associate rather than create: populate
 the N:N collection with existing records (each with its id) and call `ctx.Service.AssociateRelated(account)`,
-which associates every populated N:N collection. (`CreateWithRelated` deliberately ignores N:N collections - it only
+which associates every populated N:N collection. A related record without an id throws, naming each one, before
+anything is associated. (`CreateWithRelated` deliberately ignores N:N collections - it only
 deep-inserts 1:N children.)
 
 ## Verify drift against the live schema (`--verify`)
@@ -282,7 +286,8 @@ context already exist with **no `vela models` run needed**. `QualifyLead` is one
 and the handler receives the typed `QualifyLeadRequest`/`QualifyLeadResponse`.
 
 ```csharp
-public sealed partial class RouteQualifiedLead(string unsecure, string secure) : EntityPluginBase<Lead>(unsecure, secure)
+public sealed partial class RouteQualifiedLead(string unsecureConfig, string secureConfig)
+    : EntityPluginBase<Lead>(unsecureConfig, secureConfig)
 {
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnQualified);
@@ -316,9 +321,9 @@ and the entity-constrained `On<Message>()` extension for it. (The full curated l
 
 ## Connection flags
 
-Same as `plan`/`apply`: `--connection-string`, or `--url` + `--tenant-id` + `--client-id` + `--client-secret`, or
-`--interactive`. Early-bound entity types are assumed to be generated into the same namespace
-(`vela models --tables`).
+Same as `plan`/`apply` (see [Authentication](../configuration/authentication.md)): `--connection-string`, or
+`--url` + `--tenant-id` + `--client-id` with the secret in `DATAVERSE_CLIENT_SECRET` (or `--client-secret-stdin`),
+or `--interactive`.
 
 ## TypeScript form models (`--forms`)
 
@@ -466,5 +471,5 @@ var svc = new InMemoryOrganizationService()
 > grant data in tests via the `Role(name, id, grants)` overload. Its `Id` values are the real role ids, so a
 > plugin that resolves a user's roles at runtime and the test that seeds them line up on the same GUIDs.
 
-> Out of scope for now (use `pac modelbuilder` if you need them): relationship navigation properties and an
-> `OrganizationServiceContext`/LINQ provider. See [Limitations reference](../reference/limitations.md).
+> Out of scope for now (use `pac modelbuilder` if you need it): an `OrganizationServiceContext`/LINQ provider. See
+> [Limitations reference](../reference/limitations.md).

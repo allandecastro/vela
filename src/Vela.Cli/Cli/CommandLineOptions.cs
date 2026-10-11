@@ -463,12 +463,31 @@ internal static class CommandLineOptions
         string? clientId = TryReadOption(args, "--client-id");
         string? clientSecret = ResolveClientSecret(args);
 
+        // Every auth path sends a credential (client secret, password or bearer token) to the Dataverse URL, so the
+        // https check applies to all of them, not only the client-secret one. (#446)
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            string? connectionStringError = ValidateConnectionStringUrl(connectionString);
+            if (connectionStringError != null)
+            {
+                exitCode = Fail(connectionStringError, ExitInvalidArguments);
+                return false;
+            }
+        }
+
         if (interactive && string.IsNullOrWhiteSpace(connectionString))
         {
             // Default the prompt to the last URL used interactively, so a repeat run just presses Enter.
             url = string.IsNullOrWhiteSpace(url)
                 ? Prompt("Dataverse URL (https://org.crm.dynamics.com):", defaultValue: UserConfig.GetLastDataverseUrl())
                 : url;
+
+            string? urlError = ValidateDataverseUrl(url);
+            if (urlError != null)
+            {
+                exitCode = Fail(urlError, ExitInvalidArguments);
+                return false;
+            }
 
             // Remember it for next time (best-effort; the URL is not a secret).
             UserConfig.SetLastDataverseUrl(url);
@@ -535,6 +554,13 @@ internal static class CommandLineOptions
                 // Azure credential (environment, managed identity / workload identity in CI, and 'az login'
                 // locally) via DefaultAzureCredential. No browser and no flag - a bare `vela apply --url ...`
                 // just works when the user is already `az login`-ed or running under a managed identity.
+                string? urlError = ValidateDataverseUrl(url);
+                if (urlError != null)
+                {
+                    exitCode = Fail(urlError, ExitInvalidArguments);
+                    return false;
+                }
+
                 string? token = TryAcquireAmbientToken(url, out string? ambientError);
                 if (token == null)
                 {
@@ -584,9 +610,10 @@ internal static class CommandLineOptions
     // null when the inputs are safe. The message never echoes a secret value. (#307)
     public static string? ValidateClientSecretConnectionInputs(string? url, string? tenantId, string? clientId, string? clientSecret)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps)
+        string? urlError = ValidateDataverseUrl(url);
+        if (urlError != null)
         {
-            return $"--url must be an absolute https URL (for example https://org.crm.dynamics.com); got '{url}'.";
+            return urlError;
         }
 
         foreach ((string name, string? value) in new[] { ("--url", url), ("--tenant-id", tenantId), ("--client-id", clientId), ("--client-secret", clientSecret) })
@@ -599,6 +626,42 @@ internal static class CommandLineOptions
 
         return null;
     }
+
+    // The Dataverse URL must be an absolute https endpoint: every auth path sends a credential to it. Returns an
+    // error message, or null when the URL is safe.
+    public static string? ValidateDataverseUrl(string? url) =>
+        IsAbsoluteHttpsUrl(url)
+            ? null
+            : $"--url must be an absolute https URL (for example https://org.crm.dynamics.com); got '{url}'.";
+
+    // Applies the https rule to the endpoint a --connection-string / DATAVERSE_CONNECTION_STRING names (the keys the
+    // Dataverse ServiceClient reads it from). A string that names none, or does not parse, is left to the SDK to
+    // reject. The message never echoes the connection string: it may embed a ClientSecret or Password.
+    public static string? ValidateConnectionStringUrl(string connectionString)
+    {
+        System.Data.Common.DbConnectionStringBuilder builder = new();
+        try
+        {
+            builder.ConnectionString = connectionString;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+
+        foreach (string key in new[] { "Url", "ServiceUri", "Service Uri", "Server" })
+        {
+            if (builder.TryGetValue(key, out object? value) && !IsAbsoluteHttpsUrl(value as string))
+            {
+                return $"The connection string's {key} must be an absolute https URL (for example https://org.crm.dynamics.com).";
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsAbsoluteHttpsUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) && uri.Scheme == Uri.UriSchemeHttps;
 
     // The Microsoft-provided sample public client for Dataverse interactive OAuth flows, documented for
     // development use. It has http://localhost registered as a loopback redirect (MSAL's system-browser flow

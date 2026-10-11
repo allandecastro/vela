@@ -25,8 +25,8 @@ local-dev default.
 
 1. Move the relevant entries from `## [Unreleased]` to a new `## [X.Y.Z] - YYYY-MM-DD` section in
    [`CHANGELOG.md`](CHANGELOG.md) (open a PR, merge to `main`).
-2. The release runs on a GitHub-hosted `windows-latest` runner (the net462 harness only packs on Windows), so
-   there is no self-hosted runner to keep online.
+2. Make sure the self-hosted Windows runner is online: `release.yml` runs on `[self-hosted, Windows]` (the net462
+   harness only packs on Windows), like `ci.yml`.
 3. Tag and push:
    ```bash
    git tag framework-v0.1.0 && git push origin framework-v0.1.0   # Vela.Messages + Vela.Plugins + Vela.Testing

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Microsoft.Xrm.Sdk;
 
 namespace Vela.Querying;
@@ -55,10 +56,10 @@ public static class EntityCloneExtensions
     // (a freshly constructed entity, so empty).
     private static void CopyCreateReady(Entity source, Entity target)
     {
-        string primaryKeyAttribute = source.LogicalName + "id";
+        string? modelPrimaryKey = ModelPrimaryKeyAttribute(source.GetType());
         foreach (KeyValuePair<string, object> attribute in source.Attributes)
         {
-            if (IsPrimaryKey(source, primaryKeyAttribute, attribute) || NonCreatableAttributes.Contains(attribute.Key))
+            if (IsPrimaryKey(source.LogicalName, modelPrimaryKey, attribute.Key) || NonCreatableAttributes.Contains(attribute.Key))
             {
                 continue;
             }
@@ -67,21 +68,20 @@ public static class EntityCloneExtensions
         }
     }
 
-    // The primary key is the conventional "{logicalname}id" column, but activity tables break the convention
-    // (e.g. email uses "activityid"). A retrieved record carries its primary key in the attribute bag with the
-    // same value as Entity.Id, so match on that too - this drops the real primary key without needing metadata.
-    private static bool IsPrimaryKey(Entity source, string primaryKeyAttribute, KeyValuePair<string, object> attribute)
-    {
-        if (string.Equals(attribute.Key, primaryKeyAttribute, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
+    // The primary key is the conventional "{logicalname}id" column, except on activity tables, which all use
+    // "activityid" (an email's key is activityid, not emailid). An early-bound model names its key on the Id
+    // property's [AttributeLogicalName], which covers any other exception. Only the key column itself is dropped:
+    // another Guid column that happens to hold the same value as Id (a self-reference) is business data and stays.
+    private static bool IsPrimaryKey(string logicalName, string? modelPrimaryKey, string attributeName) =>
+        string.Equals(attributeName, logicalName + "id", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(attributeName, "activityid", StringComparison.OrdinalIgnoreCase)
+        || (modelPrimaryKey != null && string.Equals(attributeName, modelPrimaryKey, StringComparison.OrdinalIgnoreCase));
 
-        return source.Id != Guid.Empty
-            && attribute.Value is Guid value
-            && value == source.Id
-            && attribute.Key.EndsWith("id", StringComparison.OrdinalIgnoreCase);
-    }
+    private static string? ModelPrimaryKeyAttribute(Type entityType) =>
+        entityType == typeof(Entity)
+            ? null
+            : entityType.GetProperty(nameof(Entity.Id), BindingFlags.Public | BindingFlags.Instance, null, typeof(Guid), Type.EmptyTypes, null)
+                ?.GetCustomAttribute<AttributeLogicalNameAttribute>()?.LogicalName;
 
     // Deep-copies a single attribute value. Mutable Dataverse wrappers (EntityReference, Money, option sets,
     // byte[], aliased values, nested entities and collections) are rebuilt; immutable scalars are passed through.

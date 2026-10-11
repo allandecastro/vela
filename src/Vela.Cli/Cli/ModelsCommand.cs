@@ -265,7 +265,7 @@ internal static class ModelsCommand
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine($"Warning: skipping entity '{name}' (could not read its metadata): {ex.Message}");
+                        Console.Error.WriteLine($"Warning: skipping entity '{name}' (could not read its metadata): {RedactSecrets(ex.Message)}");
                     }
                 }
 
@@ -345,7 +345,7 @@ internal static class ModelsCommand
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine($"Warning: skipping message '{name}' (could not read its contract): {ex.Message}");
+                        Console.Error.WriteLine($"Warning: skipping message '{name}' (could not read its contract): {RedactSecrets(ex.Message)}");
                     }
                 }
 
@@ -677,7 +677,7 @@ internal static class ModelsCommand
                 catch (Exception ex)
                 {
                     unreadable.Add(logicalName);
-                    Console.Error.WriteLine($"Warning: skipping table '{logicalName}' (metadata read failed): {ex.Message}");
+                    Console.Error.WriteLine($"Warning: skipping table '{logicalName}' (metadata read failed): {RedactSecrets(ex.Message)}");
                     return null;
                 }
             }

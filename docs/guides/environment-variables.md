@@ -24,10 +24,10 @@ string url = ctx.GetEnvironmentVariable("adc_ApiBaseUrl");
 // 2) Fallback: return your own default instead of throwing.
 int retries = ctx.GetEnvironmentVariableAs<int>("adc_MaxRetries", fallback: 3);
 
-// 3) Try: branch on presence. Also returns false when the value cannot be converted to T.
-if (ctx.TryGetEnvironmentVariable("adc_FeatureFlag", out string? flag))
+// 3) Try: branch on presence. TryGetEnvironmentVariableAs<T> also returns false when the value cannot be converted.
+if (ctx.TryGetEnvironmentVariableAs<bool>("adc_FeatureFlag", out bool enabled) && enabled)
 {
-    // flag is set
+    // the flag is set and true
 }
 ```
 

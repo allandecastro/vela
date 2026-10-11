@@ -62,4 +62,10 @@ var crm = new InMemoryOrganizationService()
   Dataverse. Generate a `Roles` class with the **real** role privileges + ids from your environment with
   [`vela models --roles`](models.md) (dependency-light, generated into the shared models project), then
   `Role(Roles.XName, Roles.XId, Roles.X)`.
-- **Off by default** - any test that never calls `WithSecurity(...)` behaves exactly as before (full access).
+- **Off by default** - a test that never calls `WithSecurity(...)` gets full access. `WithStrictSecurity()` turns
+  that into a failure: a security-relevant operation (Create, Retrieve, RetrieveMultiple, Update, Delete, ...) run
+  without a configured security model throws, so an access test that forgot `WithSecurity(...)` cannot pass green.
+- **Pipeline tests** - `PluginPipeline` has the same `WithCurrentUser`, `WithSecurity`, `WithStrictSecurity`,
+  `WithSharedRecord`, `WithAccessTeamTemplate` and relationship methods. Under `WithSecurity`, `ctx.SystemService`
+  is SYSTEM and bypasses the model, while `ctx.Service` is checked as the step's user (the impersonated user when
+  the step has one).

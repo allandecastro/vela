@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Vela.Manifest;
 using Vela.Plugin;
@@ -12,36 +13,69 @@ namespace Vela.Steps
     public static class StepDefinitionReader
     {
         /// <summary>
-        /// Gets all step definitions from plugins in the specified assembly.
+        /// Gets all step definitions from plugins in the specified assembly. A plugin whose step definitions cannot be
+        /// read, or a type that fails to load, fails the call with every such error listed; use
+        /// <see cref="GetStepDefinitions(Assembly, ICollection{FrameworkManifestDiagnostic})"/> to collect them instead.
         /// </summary>
         /// <param name="assembly">The assembly to scan for plugins.</param>
         /// <returns>Collection of step definitions.</returns>
+        /// <exception cref="InvalidOperationException">A plugin or a type in the assembly could not be read.</exception>
         public static IEnumerable<StepDefinition> GetStepDefinitions(Assembly assembly)
+        {
+            List<FrameworkManifestDiagnostic> diagnostics = new List<FrameworkManifestDiagnostic>();
+            IReadOnlyList<StepDefinition> definitions = GetStepDefinitions(assembly, diagnostics);
+            if (diagnostics.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to read the step definitions of '{assembly.GetName().Name}':" + Environment.NewLine +
+                    string.Join(Environment.NewLine, diagnostics.Select(d => $"- {d.TypeName}: {d.Message}")));
+            }
+
+            return definitions;
+        }
+
+        /// <summary>
+        /// Gets all step definitions from plugins in the specified assembly, best-effort: a plugin whose step
+        /// definitions cannot be read (its constructor or step build throws), or a type that fails to load, is
+        /// skipped and reported in <paramref name="diagnostics"/> as an error, like <see cref="FrameworkManifestScanner"/>.
+        /// </summary>
+        /// <param name="assembly">The assembly to scan for plugins.</param>
+        /// <param name="diagnostics">Receives one error per plugin or type that could not be read.</param>
+        /// <returns>The step definitions of every plugin that could be read.</returns>
+        public static IReadOnlyList<StepDefinition> GetStepDefinitions(Assembly assembly, ICollection<FrameworkManifestDiagnostic> diagnostics)
         {
             if (assembly == null)
             {
                 throw new ArgumentNullException(nameof(assembly));
             }
 
+            if (diagnostics == null)
+            {
+                throw new ArgumentNullException(nameof(diagnostics));
+            }
+
             var definitions = new List<StepDefinition>();
 
-            foreach (var type in assembly.GetTypes())
+            foreach (var type in GetLoadableTypes(assembly, diagnostics))
             {
                 if (!PluginTypeDetector.IsEntityPlugin(type))
                 {
                     continue;
                 }
 
-                // Assembly-wide scan is best-effort: a single plugin whose step build throws (e.g. one that
-                // registers nothing) is skipped rather than failing the whole scan. A direct caller of
-                // GetStepDefinitionFromType still gets the exception surfaced.
                 StepDefinition[]? definition;
                 try
                 {
                     definition = GetStepDefinitionFromType(type);
                 }
-                catch (InvalidOperationException)
+                catch (Exception ex)
                 {
+                    diagnostics.Add(new FrameworkManifestDiagnostic
+                    {
+                        Severity = FrameworkManifestDiagnosticSeverity.Error,
+                        TypeName = type.FullName ?? type.Name,
+                        Message = $"Plugin step discovery failed ({(ex.InnerException ?? ex).GetType().Name}): {(ex.InnerException ?? ex).Message}",
+                    });
                     continue;
                 }
 
@@ -52,6 +86,30 @@ namespace Vela.Steps
             }
 
             return definitions;
+        }
+
+        // A type that fails to load (a missing dependency) cannot be inspected; the others still are, and the failure
+        // is reported instead of escaping as a ReflectionTypeLoadException.
+        private static IEnumerable<Type> GetLoadableTypes(Assembly assembly, ICollection<FrameworkManifestDiagnostic> diagnostics)
+        {
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                foreach (string message in ex.LoaderExceptions.Where(e => e != null).Select(e => e!.Message).Distinct())
+                {
+                    diagnostics.Add(new FrameworkManifestDiagnostic
+                    {
+                        Severity = FrameworkManifestDiagnosticSeverity.Error,
+                        TypeName = assembly.GetName().Name ?? string.Empty,
+                        Message = $"A type could not be loaded: {message}",
+                    });
+                }
+
+                return ex.Types.Where(t => t != null).Select(t => t!).ToArray();
+            }
         }
 
         /// <summary>

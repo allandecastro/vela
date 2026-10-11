@@ -20,3 +20,30 @@ VELA010 | Vela.Usage | Error | RelationshipColumnSelectorAnalyzer
 VELA011 | Vela.Reliability | Warning | MutablePluginStateAnalyzer
 VELA012 | Vela.Usage | Warning | PluginExceptionTypeAnalyzer
 VELA013 | Vela.Performance | Warning | RetrieveAllColumnsAnalyzer
+
+## Release 0.27.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA014 | Vela.Usage | Error | PartialPluginForTypedImageAnalyzer
+VELA015 | Vela.Usage | Error | HandlerContextMatchAnalyzer
+VELA016 | Vela.Usage | Error | SingleStepPerTypedContextHandlerAnalyzer
+
+## Release 0.30.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA017 | Vela.Usage | Error | UncapturedImageAnalyzer
+
+## Release 0.31.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA018 | Vela.Reliability | Warning | AsyncTargetWriteAnalyzer
+VELA019 | Vela.Reliability | Warning | FilesystemAccessAnalyzer

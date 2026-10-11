@@ -283,6 +283,54 @@ public class CommandLineOptionsTests
         Assert.Contains("AuthType=OAuth", cs);
     }
 
+    [Theory]
+    [InlineData("AuthType=ClientSecret;Url=http://x.crm.dynamics.com;ClientId=c;ClientSecret=s3cr3t", "Url")]
+    [InlineData("AuthType=OAuth;ServiceUri=http://x.crm.dynamics.com", "ServiceUri")]
+    [InlineData("AuthType=OAuth;Server=x.crm.dynamics.com", "Server")]
+    public void ValidateConnectionStringUrl_RejectsANonHttpsEndpointWithoutEchoingTheString(string connectionString, string key)
+    {
+        string? error = CommandLineOptions.ValidateConnectionStringUrl(connectionString);
+
+        Assert.NotNull(error);
+        Assert.Contains(key, error);
+        Assert.DoesNotContain("s3cr3t", error);
+    }
+
+    [Theory]
+    [InlineData("AuthType=OAuth;Url=https://x.crm.dynamics.com")]
+    [InlineData("AuthType=OAuth;url=https://x.crm.dynamics.com")]  // keys are case-insensitive
+    [InlineData("irrelevant")]                                      // no endpoint key: left to the SDK
+    public void ValidateConnectionStringUrl_AcceptsHttpsOrNoEndpoint(string connectionString)
+    {
+        Assert.Null(CommandLineOptions.ValidateConnectionStringUrl(connectionString));
+    }
+
+    [Fact]
+    public void TryResolveConnection_HttpConnectionString_FailsWithInvalidArguments()
+    {
+        string[] args = ["--connection-string", "AuthType=OAuth;Url=http://x.crm.dynamics.com"];
+
+        bool ok = CommandLineOptions.TryResolveConnection(
+            args, interactive: false, out _, out _, out _, out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
+    public void TryResolveConnection_AmbientCredentialWithHttpUrl_FailsBeforeAcquiringAToken()
+    {
+        // Only --url selects the ambient Azure credential; a bearer token must never be sent over plain http.
+        string[] args = ["--url", "http://zava.crm.dynamics.com"];
+
+        bool ok = CommandLineOptions.TryResolveConnection(
+            args, interactive: false, out _, out _, out string? token, out _, out int exitCode);
+
+        Assert.False(ok);
+        Assert.Null(token);
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
     [Fact]
     public void TryResolveConnection_PartialClientSecretCreds_FailsWithInvalidArguments()
     {

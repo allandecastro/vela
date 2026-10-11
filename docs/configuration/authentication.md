@@ -1,7 +1,7 @@
 # Authentication
 
-The `vela` CLI talks to a live Dataverse environment for the commands that read or
-write registration state - `plan`, `apply` and [`vela models`](../guides/models.md).
+The `vela` CLI talks to a live Dataverse environment for `plan`, `apply`, `inspect`,
+[`vela models`](../guides/models.md), `vela logs` and `vela solution show`.
 All of these share the **same connection flags**, so once you know how to authenticate
 one, you know how to authenticate them all.
 
@@ -44,14 +44,14 @@ provided.
 For unattended runs, authenticate with an app registration by passing the environment
 URL, tenant, application (client) id and a client secret:
 
-```powershell
-# Compare local package(s) with live Dataverse state (client id / client secret)
-vela plan `
-  --package .\artifacts\Zava.Plugins.1.0.0.nupkg `
-  --url https://zava.crm.dynamics.com `
-  --tenant-id <tenant-id> `
-  --client-id <app-id> `
-  --client-secret <client-secret>
+```bash
+export DATAVERSE_CLIENT_SECRET=...   # from your secret store
+vela plan --package ./artifacts/Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
+  --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id>
+
+# or pipe it in
+get-secret | vela plan --package ./artifacts/Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
+  --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id> --client-secret-stdin
 ```
 
 The secret can be supplied three ways:
@@ -72,8 +72,8 @@ The secret can be supplied three ways:
 For local work, run any of the connected commands with `--interactive` to sign in
 through the browser with a wizard - no flags or secrets required:
 
-```powershell
-vela plan --interactive
+```bash
+vela plan --packages-dir ./artifacts --solution ZavaSales --interactive
 ```
 
 The first `--interactive` run opens the browser; the token is then **cached across runs**, so later runs sign in
@@ -106,7 +106,7 @@ longer than the default; raise it with `--timeout <minutes>`:
 | `--timeout <minutes>` | Dataverse request timeout in minutes (default 10, range 1 to 60). Raise it for a large org or a slow cold start. |
 
 ```bash
-vela apply --package ./artifacts/Zava.Plugins.1.0.0.nupkg `
+vela apply --package ./artifacts/Zava.Plugins.1.0.0.nupkg \
   --url https://zava.crm.dynamics.com --solution Zava --auto-approve --timeout 20
 ```
 

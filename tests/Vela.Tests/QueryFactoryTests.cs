@@ -144,5 +144,27 @@ namespace Vela.Tests
             Assert.Equal(JoinOperator.Any, query.Criteria.Filters[0].AnyAllFilterLinkEntity.JoinOperator);
             Assert.Single(query.Criteria.Filters[0].AnyAllFilterLinkEntity.LinkCriteria.Conditions);
         }
+
+        [Fact]
+        public void Select_after_aggregates_keeps_them()
+        {
+            QueryExpression query = Query.For<TestAccount>()
+                .GroupBy(a => a.Name, "n")
+                .Count(a => a.AccountId, "c")
+                .Select(a => a.Name);
+
+            Assert.Equal(2, query.ColumnSet.AttributeExpressions.Count);
+            Assert.Equal("c", query.ColumnSet.AttributeExpressions[1].Alias);
+            Assert.Contains("name", query.ColumnSet.Columns);
+        }
+
+        [Fact]
+        public void SelectAll_after_aggregates_keeps_them()
+        {
+            QueryExpression query = Query.For<TestAccount>().GroupBy(a => a.Name, "n").SelectAll();
+
+            Assert.Single(query.ColumnSet.AttributeExpressions);
+            Assert.True(query.ColumnSet.AllColumns);
+        }
     }
 }

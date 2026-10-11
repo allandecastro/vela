@@ -21,6 +21,7 @@ ZavaSales/
   tests/
     Zava.Plugins.Tests/     # xunit + Vela.Testing, no connection (omit with --no-tests); empty until `vela add test`
   .vela/scaffold-manifest.json  # what init wrote, so `--force` never touches your code (commit it)
+  AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
   Directory.Build.props        # shared build settings for src/ and tests/
 ```
 
