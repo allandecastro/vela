@@ -26,6 +26,18 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **A typed trigger bound to one table is rejected on any other (#461).** `OnWinQuote()` and `OnWinOpportunity()`
+  both register on `Win`, on quote and opportunity, so on the wrong table a step would run with the wrong typed
+  request. The step builder now rejects a typed trigger on a table its message does not run on: `OnQualifyLead()`
+  (lead), `OnWinOpportunity()` / `OnLoseOpportunity()` (opportunity), `OnWinQuote()` /
+  `OnGenerateQuoteFromOpportunity()` (quote), `OnConvertSalesOrderToInvoice()` (salesorder), the queue triggers
+  (queueitem), the email triggers (email), the team triggers (team), the list triggers (list), `OnCloseIncident()`
+  (incident) and the contract triggers (contract). Apply already failed on most of these (no message filter for the
+  table). Verified live through `vela plan` and `vela apply`.
+- **Every SDK request is translated to its sdkmessage, not only the modelled ones (#461).** The request-name table
+  now holds the 118 public requests whose name is not an sdkmessage, read from `sdkmessagerequest` (for example
+  `CloseQuote` → `Close`, `CancelSalesOrder` → `Cancel`, `SendFax` → `Send`), so `On<CloseQuoteRequest>()` and
+  `OnMessage("CloseQuote")` register on `Close` too.
 - **Several steps may share a trigger, and the rank is no longer part of a step's identity.** Two steps on the same
   message, stage, mode and entity were rejected; they are now allowed when their filtering attributes, images,
   relationship scope or step key tell them apart, and the executing step (`OwningExtension`, resolved by id for an
@@ -260,6 +272,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **The harness runs a table-bound request on its table, with an empty `PrimaryEntityId` (#461, verified live).**
+  The queue messages (`AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`) run on
+  `queueitem` whatever their `Target`, the email requests on email, the team and list requests on team and list,
+  `CloseIncident` on incident and `WinQuote` on quote, so a step on the wrong table does not fire in a test either.
+  The platform leaves `PrimaryEntityId` empty on all of these, at PreValidation and PostOperation, and so does the
+  harness now (it used to take the id of the closing activity's lookup or of the `Target`).
 - **The in-memory pipeline fills a bulk step's image collections as Dataverse does** (verified live): each target's
   collection also holds the images of the plugin type's other steps on the message and the platform's
   `PreBusinessEntity` / `PostBusinessEntity`, so a test of access by alias is real. It also seeds the
@@ -568,6 +586,23 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (CLI)
 
+- **`vela add` and `vela models` use the real message names (#461).** `vela add --message Send` (or `Win`,
+  `Close`, ...) now renders the typed trigger (`OnSendEmail()`, and `OnWinQuote()` or `OnWinOpportunity()` from the
+  table). `vela models --messages` takes SDK request names, the names Dataverse executes: `--messages SendEmail`
+  generates `SendEmailRequest`. It used to take sdkmessage names and emit, for `Send`, a `SendRequest` with
+  `RequestName = "Send"`, which Dataverse refuses ("Request not supported", verified live); `--messages Send` now
+  fails and names the requests to generate (`SendEmail`, `SendFax`, `SendTemplate`). Without a value, one class is
+  generated per request, bound to the request's table, and the requests the SDK already ships are skipped
+  (`SendRequest`, `WinRequest`... duplicates are gone). `plan` / `apply` also reject any image on
+  `SendFromTemplate`, which Dataverse does not support (verified live).
+- **A scaffolded solution's parallel build no longer packs a plugin twice.** When MSBuild could not match a test
+  project's reference to the solution configuration (the path reaches it in a different form, e.g. through a
+  symlink), it built the referenced plugin project a second time, without Configuration/Platform (Debug), in
+  parallel with the solution's Release build. Both packed into the same `artifacts/<Plugin>.1.0.0.nupkg`, so the
+  build failed with "being used by another process", or the Debug package could overwrite the Release one. `vela
+  init` now sets `ShouldUnsetParentConfigurationAndPlatform=false` in the test projects, so such a reference
+  inherits their configuration and is the same build, run once. Existing solutions can add the property to their
+  test projects (#406).
 - **An added step no longer takes over another step registered on the same trigger.** `apply` adopted any single
   live step on the trigger for a step whose key it did not find; it now adopts only the step the diff paired.
 

@@ -1,4 +1,6 @@
 using System;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Client;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Messages;
@@ -14,9 +16,21 @@ namespace Vela.Tests
     // (+ typed request properties), and Upsert has a Vela-owned typed request reachable via On<UpsertRequest<T>>().
     public sealed class SendEmailFromTemplateAndUpsertTests
     {
-        private sealed class SefProbe : EntityPluginBase<TestAccount>
+        // SendEmailFromTemplate is accepted on the email table only, so its step needs an early-bound email.
+        [EntityLogicalName("email")]
+        private sealed class TestEmail() : Entity("email")
         {
-            public string? TargetName;
+            [AttributeLogicalName("subject")]
+            public string? Subject
+            {
+                get => GetAttributeValue<string?>("subject");
+                set => SetAttributeValue("subject", value);
+            }
+        }
+
+        private sealed class SefProbe : EntityPluginBase<TestEmail>
+        {
+            public string? TargetSubject;
             public Guid TemplateId;
 
             public SefProbe() : base(string.Empty, string.Empty) { }
@@ -24,9 +38,9 @@ namespace Vela.Tests
             protected override void RegisterPluginSteps()
                 => RegisterStep().OnSendEmailFromTemplate().PostOperation().Sync().Handle(OnSent);
 
-            private void OnSent(ISendEmailFromTemplatePostContext<TestAccount> ctx)
+            private void OnSent(ISendEmailFromTemplatePostContext<TestEmail> ctx)
             {
-                TargetName = ctx.Request.Target?.Name;      // early-bound TEntity
+                TargetSubject = ctx.Request.Target?.Subject;    // early-bound TEntity
                 TemplateId = ctx.Request.TemplateId;        // typed request property
             }
         }
@@ -50,15 +64,15 @@ namespace Vela.Tests
             SefProbe probe = new SefProbe();
             Guid template = Guid.NewGuid();
 
-            PluginContext.For<TestAccount>()
-                .OnMessage("SendEmailFromTemplate")
+            PluginContext.For<TestEmail>()
+                .OnMessage(PluginMessages.SendEmailFromTemplate)
                 .Stage(PluginStages.PostOperation)
                 .Mode(ExecutionMode.Synchronous)
-                .WithTarget(new TestAccount { Name = "Acme" })
+                .WithTarget(new TestEmail { Subject = "Welcome" })
                 .WithInputParameter("TemplateId", template)
                 .Execute(probe);
 
-            Assert.Equal("Acme", probe.TargetName);
+            Assert.Equal("Welcome", probe.TargetSubject);
             Assert.Equal(template, probe.TemplateId);
         }
 

@@ -651,10 +651,18 @@ public class ProjectScaffolderTests
         string sln = Path.Combine(root, "ZavaSales.sln");
         Assert.Equal(0, RunDotnet($"restore \"{sln}\" --disable-parallel", temp).ExitCode);
 
-        // Single-process build (-m:1): two plugin projects run GeneratePackageOnBuild into the shared artifacts/
-        // folder, and a parallel build can race on the pack output ("used by another process").
-        (int build, string buildOutput) = RunDotnet($"build \"{sln}\" -c Release --no-restore -m:1", temp);
-        Assert.True(build == 0, buildOutput);
+        // Default parallel build, as users run it. It also guards #406: the temp path reaches MSBuild in two forms
+        // on macOS (/var vs /private/var), so the test projects' references miss the solution configuration and,
+        // without ShouldUnsetParentConfigurationAndPlatform=false, a second (Debug) build of each plugin project
+        // packs into the same .nupkg ("being used by another process"). A failed build keeps its binlog.
+        string binlog = Path.Combine(temp, "build.binlog");
+        (int build, string buildOutput) = RunDotnet($"build \"{sln}\" -c Release --no-restore -bl:\"{binlog}\"", temp);
+        if (build != 0)
+        {
+            string kept = KeepBinlog(binlog);
+            Assert.Fail($"dotnet build exited with {build}; binlog kept at {kept}\n{buildOutput}");
+        }
+
         // Match the diagnostic id, not the word "warning", which MSBuild localizes ("avertissement" on a French host).
         string[] velaWarnings = buildOutput.Split('\n')
             .Where(line => System.Text.RegularExpressions.Regex.IsMatch(line, @"\bVELA\d{3}\s*:"))
@@ -769,6 +777,24 @@ public class ProjectScaffolderTests
         }
 
         return null;
+    }
+
+    // Copies a failed build's binlog out of the temp dir (deleted after the test) to VELA_SMOKE_LOG_DIR (CI uploads
+    // it) or, unset, the system temp folder.
+    private static string KeepBinlog(string binlog)
+    {
+        string dir = Environment.GetEnvironmentVariable("VELA_SMOKE_LOG_DIR") is { Length: > 0 } configured
+            ? configured
+            : Path.GetTempPath();
+        Directory.CreateDirectory(dir);
+        string kept = Path.Combine(dir, $"vela-smoke-build-{DateTime.UtcNow:yyyyMMddHHmmss}.binlog");
+        if (File.Exists(binlog))
+        {
+            File.Copy(binlog, kept, overwrite: true);
+            return kept;
+        }
+
+        return "(none: the build wrote no binlog)";
     }
 
     // MSBuild commands run without node reuse or build servers (see RunProcess).

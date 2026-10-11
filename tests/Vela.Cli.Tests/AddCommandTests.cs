@@ -70,6 +70,25 @@ public class AddCommandTests
         });
     }
 
+    // --message accepts the sdkmessage a step registers on as well as the request name: Send is OnSendEmail(), and
+    // Win, shared by two requests, resolves through the table (WinQuote on quote, WinOpportunity on opportunity).
+    [Theory]
+    [InlineData("SendEmail", "Email", "SendEmail")]
+    [InlineData("Send", "Email", "SendEmail")]
+    [InlineData("deliverincoming", "Email", "DeliverIncomingEmail")]
+    [InlineData("Win", "Quote", "WinQuote")]
+    [InlineData("Win", "Opportunity", "WinOpportunity")]
+    [InlineData("Close", "Incident", "CloseIncident")]
+    public void ResolveKnownMessage_maps_an_sdkmessage_to_its_typed_trigger(string message, string entity, string expected)
+        => Assert.Equal(expected, AddCommand.ResolveKnownMessage(message, entity));
+
+    [Theory]
+    [InlineData("Win", "Account")]          // Win runs on opportunity or quote only
+    [InlineData("acme_DoThing", "Account")] // a custom message
+    [InlineData("Revise", "Quote")]         // no custom step is possible on Revise, so it has no typed trigger
+    public void ResolveKnownMessage_returns_null_without_a_typed_trigger(string message, string entity)
+        => Assert.Null(AddCommand.ResolveKnownMessage(message, entity));
+
     [Fact]
     public void Add_Plugin_CustomMessage_RendersOnMessageCall()
     {

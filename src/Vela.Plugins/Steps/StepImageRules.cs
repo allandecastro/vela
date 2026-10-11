@@ -19,7 +19,8 @@ namespace Vela.Steps
     /// <c>SubordinateId</c> post-image is the deactivated subordinate). <c>SubordinateId</c> on any other message fails
     /// with 0x8004416B. SetState / SetStateDynamicEntity:
     /// <c>EntityMoniker</c>, pre- and post-image (an SDK <c>SetStateRequest</c> on account fires only the
-    /// SetStateDynamicEntity step). RouteTo: no image at all (0x80044189).</item>
+    /// SetStateDynamicEntity step). RouteTo: no image at all (0x80044189). SendFromTemplate: no image at all
+    /// ("does not support image registration").</item>
     /// <item>Assign: <c>Target</c>, pre- and post-image (the pre-image holds the old owner, the post-image the new).</item>
     /// <item>A post-image before PostOperation fails with 0x8004416E; a pre-image is fine at PreValidation.</item>
     /// </list>
@@ -57,6 +58,7 @@ namespace Vela.Steps
                 case "deliverpromote":
                     return "EmailId";
                 case "routeto":
+                case "sendfromtemplate":
                     return null;
                 default:
                     return "Target";

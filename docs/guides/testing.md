@@ -475,6 +475,9 @@ is modelled by `Update`-ing the lookup column. For anything else, inject your ow
 The harness does **not** simulate the server-side **data effect** of non-CRUD "modelled" messages
 (`QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident`, and the like): it fires the steps registered on
 those messages so you can test your own logic, but the record changes the platform would make are not produced.
+Like the platform, it fires the steps of the sdkmessage the request runs as (`Send` for a `SendEmailRequest`), on
+the table the message runs on (queueitem for `AddToQueue`, whatever its `Target`), with an empty
+`ctx.PrimaryEntityId`, so a step registered on the wrong message or table does not fire in a test either.
 Only `PrincipalPrivilegeDenied` (security) and `ObjectDoesNotExist` (not-found) faults carry a real Dataverse
 `ErrorCode`; other faults (for example an `ExecuteMultiple`/`ExecuteTransaction` child failure) surface an
 `OrganizationServiceFault` with no `ErrorCode`. There is no formula/rollup/calculated-column, business-rule, or

@@ -142,7 +142,7 @@ namespace Vela.Testing.Tests
         [Fact]
         public void A_message_the_store_does_not_model_still_fires_its_steps_around_a_no_op()
         {
-            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnAccountAddedToQueue>();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnQueueItemAdded>();
 
             pipeline.Service.Execute(new AddToQueueRequest
             {

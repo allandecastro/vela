@@ -43,4 +43,19 @@ public class SdkMessageClassResolverTests
     {
         Assert.False(SdkMessageClassResolver.HasSdkRequestClass(messageName!));
     }
+
+    // `vela models --messages` lists sdkmessage names, which are not always request names: Send is run by
+    // SendEmailRequest, Win by WinOpportunityRequest/WinQuoteRequest. They already ship a request class, so ALL mode
+    // must skip them instead of emitting a SendRequest/WinRequest duplicate.
+    [Theory]
+    [InlineData("Send", "SendEmail")]
+    [InlineData("Win", "WinOpportunity")]
+    [InlineData("Close", "CloseIncident")]
+    [InlineData("AddMembers", "AddMembersTeam")]
+    [InlineData("QualifyLead", "QualifyLead")]
+    public void SdkRequestName_maps_an_sdkmessage_to_the_request_that_runs_it(string sdkMessage, string expected)
+    {
+        Assert.Equal(expected, SdkMessageClassResolver.SdkRequestName(sdkMessage));
+        Assert.True(SdkMessageClassResolver.HasSdkRequestClass(sdkMessage));
+    }
 }

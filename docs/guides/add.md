@@ -37,13 +37,15 @@ vela add --interactive
   call - the CRUD/bulk set (`Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`,
   `RetrieveMultiple`), relationships/sharing (`Associate`, `Disassociate`, `Merge`, `GrantAccess`, `ModifyAccess`,
   `RevokeAccess`, `RetrievePrincipalAccess`, `RetrieveSharedPrincipalsAndAccess`), sales lifecycle (`QualifyLead`,
-  `WinOpportunity`, `LoseOpportunity`, the `Convert*`/`Generate*` messages), queues (`AddToQueue`, `RouteTo`, …),
-  email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and case/contract messages (see the full
-  list in [Write a plugin](plugins.md)); any other name is
-  registered as a custom SDK message via `OnMessage("...")`. `Assign` gets the typed `OnAssign()` too. The
-  deprecated `SetState` / `SetStateDynamicEntity` messages have no typed method (update `statecode`/`statuscode`
-  with `Update` instead), so they render `OnMessage("...")`. `--project <csproj>` (default: the single `.csproj` in
-  the current directory), `--force` (overwrite an existing file), `--json` (machine-readable report).
+  `WinOpportunity`, `LoseOpportunity`, `WinQuote`, `ConvertSalesOrderToInvoice`, `GenerateQuoteFromOpportunity`),
+  queues (`AddToQueue`, `RouteTo`, …), email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and
+  case/contract messages (see the full list in [Write a plugin](plugins.md)). The sdkmessage name works too:
+  `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or `OnWinOpportunity()`
+  from `--entity`. Any other name is registered as a custom SDK message via `OnMessage("...")`. `Assign` gets the
+  typed `OnAssign()` too. The deprecated `SetState` / `SetStateDynamicEntity` messages have no typed method (update
+  `statecode`/`statuscode` with `Update` instead), so they render `OnMessage("...")`. `--project <csproj>` (default:
+  the single `.csproj` in the current directory), `--force` (overwrite an existing file), `--json` (machine-readable
+  report).
 - **Each kind takes only its own options.** An option the kind does not use (for example `add service --message`
   or `add step --force`) is rejected with a message rather than silently ignored. `vela add --help` lists each
   kind's options.

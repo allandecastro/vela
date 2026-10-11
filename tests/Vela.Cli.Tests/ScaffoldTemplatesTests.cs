@@ -25,6 +25,16 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
+    public void TestsCsproj_KeepsTheSolutionConfigurationOnItsReferences()
+    {
+        string csproj = ScaffoldTemplates.TestsCsproj("Zava.Plugins.Tests", "Zava.Plugins", "Zava.Shared", "1.0.0");
+
+        // An unmatched reference would otherwise build the plugin project a second time (Debug) in parallel, and
+        // both builds pack into the same artifacts/<Plugin>.1.0.0.nupkg (#406).
+        Assert.Contains("<ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>", csproj);
+    }
+
+    [Fact]
     public void PluginCsproj_ReferencesPluginSdkCoreAndShared()
     {
         string csproj = ScaffoldTemplates.PluginCsproj("Zava.Plugins", "Zava.Shared", "1.0.0");

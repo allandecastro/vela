@@ -197,7 +197,7 @@ internal static class CliCommands
                     new("--solution", CliOptionKind.Value, "Tables taken from the solution's components.", "uniquename"),
                     new("--entities", CliOptionKind.Value, "Table logical names.", "a,b,c"),
                     new("--custom-apis", CliOptionKind.OptionalValue, "Custom API unique names (bare: every Custom API, with a warning).", "a,b,c"),
-                    new("--messages", CliOptionKind.OptionalValue, "SDK message names (bare: all consumable messages).", "a,b,c"),
+                    new("--messages", CliOptionKind.OptionalValue, "SDK request names, e.g. SendEmail (bare: one class per request of every consumable message).", "a,b,c"),
                     new("--roles", CliOptionKind.Value, "Security role names: a dependency-light Roles class.", "a,b,c"),
                     new("--solution-roles", CliOptionKind.Flag, "Every security role in --solution."),
                     new("--intersect", CliOptionKind.Flag, "Also the N:N intersect tables of the scoped tables."),

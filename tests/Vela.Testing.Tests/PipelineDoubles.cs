@@ -359,29 +359,67 @@ namespace Vela.Testing.Tests
         }
     }
 
+    // The tables the email and queue messages run on: Dataverse accepts a SendEmail step on email only, and the
+    // queue messages run on queueitem whatever their Target.
+    [EntityLogicalName("email")]
+    public sealed class FakeEmail() : Entity("email");
+
+    [EntityLogicalName("queueitem")]
+    public sealed class FakeQueueItem() : Entity("queueitem");
+
     // Fires on the SendEmail message (a modelled message with no data simulation): proves the pipeline fires
-    // registered steps for these messages like any other plugin, and that ctx.Request is the typed SendEmailRequest.
-    public sealed class OnAccountEmailSent : EntityPluginBase<FakeAccount>
+    // registered steps for these messages like any other plugin, on the sdkmessage the request runs as ("Send"), and
+    // that ctx.Request is the typed SendEmailRequest.
+    public sealed class OnEmailSent : EntityPluginBase<FakeEmail>
     {
-        public OnAccountEmailSent(string unsecure, string secure) : base(unsecure, secure) { }
+        public OnEmailSent(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnSendEmail().PostOperation().Sync().Handle(OnSent);
 
-        private void OnSent(ISendEmailPostContext<FakeAccount> ctx)
-            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"sent:{ctx.Request.EmailId}" });
+        private void OnSent(ISendEmailPostContext<FakeEmail> ctx)
+            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"sent:{ctx.Request.EmailId}:{ctx.MessageName}:{ctx.PrimaryEntityName}:{ctx.PrimaryEntityId}" });
     }
 
-    // Fires on AddToQueue, whose request carries a Target EntityReference (so the primary entity is derived from it).
-    public sealed class OnAccountAddedToQueue : EntityPluginBase<FakeAccount>
+    // Fires on AddToQueue, which runs on queueitem although its request carries a Target of another table.
+    public sealed class OnQueueItemAdded : EntityPluginBase<FakeQueueItem>
     {
-        public OnAccountAddedToQueue(string unsecure, string secure) : base(unsecure, secure) { }
+        public OnQueueItemAdded(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnAddToQueue().PostOperation().Sync().Handle(OnQueued);
 
-        private void OnQueued(IAddToQueuePostContext<FakeAccount> ctx)
-            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"queue:{ctx.Request.Target.Id}:{ctx.Request.DestinationQueueId}" });
+        private void OnQueued(IAddToQueuePostContext<FakeQueueItem> ctx)
+            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"queue:{ctx.Request.Target.Id}:{ctx.Request.DestinationQueueId}:{ctx.PrimaryEntityName}" });
+    }
+
+    [EntityLogicalName("quote")]
+    public sealed class FakeQuote() : Entity("quote");
+
+    [EntityLogicalName("opportunity")]
+    public sealed class FakeOpportunity() : Entity("opportunity");
+
+    // OnWinQuote() and OnWinOpportunity() both register on the "Win" sdkmessage, on their own table.
+    public sealed class OnQuoteWon : EntityPluginBase<FakeQuote>
+    {
+        public OnQuoteWon(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnWinQuote().PostOperation().Sync().Handle(OnWon);
+
+        private void OnWon(IWinQuotePostContext<FakeQuote> ctx)
+            => ctx.SystemService.Create(new Entity("task") { ["subject"] = $"win:{ctx.Request.QuoteClose.GetAttributeValue<EntityReference>("quoteid").LogicalName}:{ctx.MessageName}" });
+    }
+
+    public sealed class OnOpportunityWon : EntityPluginBase<FakeOpportunity>
+    {
+        public OnOpportunityWon(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnWinOpportunity().PostOperation().Sync().Handle(OnWon);
+
+        private void OnWon(IWinOpportunityPostContext<FakeOpportunity> ctx)
+            => ctx.SystemService.Create(new Entity("task") { ["subject"] = "win:opportunity" });
     }
 
     // Lightweight Custom API for the Execute() path.

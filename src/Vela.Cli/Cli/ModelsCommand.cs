@@ -336,7 +336,15 @@ internal static class ModelsCommand
 
                     try
                     {
-                        sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));
+                        // The classes are generated per request, under the name Dataverse executes: the Send
+                        // sdkmessage is executed as SendEmail, SendFax and SendTemplate.
+                        foreach (string requestName in SdkMessageReader.ListRequestNames(service, name))
+                        {
+                            if (!SdkMessageClassResolver.HasSdkRequestClass(requestName))
+                            {
+                                sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, requestName));
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -351,14 +359,17 @@ internal static class ModelsCommand
                 // Targeted: the user asked for these by name, so generate exactly them — never silently skipped. If
                 // one already has an SDK request class, warn (suggest the SDK type) but still generate the wrapper.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
+                // The names are SDK request names (SendEmail), the ones Dataverse executes; an sdkmessage name whose
+                // requests are named otherwise (Send) is rejected by the reader with the names to use.
                 foreach (string name in scope.Messages)
                 {
-                    if (SdkMessageClassResolver.HasSdkRequestClass(name))
+                    SdkMessage request = SdkMessageReader.ReadSdkMessage(service, name);
+                    if (SdkMessageClassResolver.HasSdkRequestClass(request.Name))
                     {
-                        Console.Error.WriteLine($"Warning: '{name}' already has an SDK request class (Microsoft.Xrm.Sdk.Messages.{name}Request); generating a duplicate. Prefer the SDK type via OnMessage<{name}Request>().");
+                        Console.Error.WriteLine($"Warning: '{request.Name}' already has an SDK request class ({request.Name}Request); generating a duplicate. Prefer the SDK type via On<{request.Name}Request>().");
                     }
 
-                    sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, name));
+                    sdkMessages.Add(request);
                 }
 
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames(), logicalNames));

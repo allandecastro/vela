@@ -307,31 +307,31 @@ namespace Vela.Steps
         IGrantAccessStages<TEntity> IStepTrigger<TEntity>.OnGrantAccess() { SetMessage(PluginMessages.GrantAccess); return this; }
         IAssignStages<TEntity> IStepTrigger<TEntity>.OnAssign() { SetMessage(PluginMessages.Assign); return this; }
         IRevokeAccessStages<TEntity> IStepTrigger<TEntity>.OnRevokeAccess() { SetMessage(PluginMessages.RevokeAccess); return this; }
-        IQualifyLeadStages<TEntity> IStepTrigger<TEntity>.OnQualifyLead() { SetMessage(PluginMessages.QualifyLead); return this; }
-        IWinOpportunityStages<TEntity> IStepTrigger<TEntity>.OnWinOpportunity() { SetMessage(PluginMessages.WinOpportunity); return this; }
-        ILoseOpportunityStages<TEntity> IStepTrigger<TEntity>.OnLoseOpportunity() { SetMessage(PluginMessages.LoseOpportunity); return this; }
-        IConvertSalesOrderToInvoiceStages<TEntity> IStepTrigger<TEntity>.OnConvertSalesOrderToInvoice() { SetMessage(PluginMessages.ConvertSalesOrderToInvoice); return this; }
-        IGenerateQuoteFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateQuoteFromOpportunity() { SetMessage(PluginMessages.GenerateQuoteFromOpportunity); return this; }
-        IAddToQueueStages<TEntity> IStepTrigger<TEntity>.OnAddToQueue() { SetMessage(PluginMessages.AddToQueue); return this; }
-        IRemoveFromQueueStages<TEntity> IStepTrigger<TEntity>.OnRemoveFromQueue() { SetMessage(PluginMessages.RemoveFromQueue); return this; }
-        IPickFromQueueStages<TEntity> IStepTrigger<TEntity>.OnPickFromQueue() { SetMessage(PluginMessages.PickFromQueue); return this; }
-        IRouteToStages<TEntity> IStepTrigger<TEntity>.OnRouteTo() { SetMessage(PluginMessages.RouteTo); return this; }
-        IReleaseToQueueStages<TEntity> IStepTrigger<TEntity>.OnReleaseToQueue() { SetMessage(PluginMessages.ReleaseToQueue); return this; }
-        ISendEmailStages<TEntity> IStepTrigger<TEntity>.OnSendEmail() { SetMessage(PluginMessages.SendEmail); return this; }
-        ISendEmailFromTemplateStages<TEntity> IStepTrigger<TEntity>.OnSendEmailFromTemplate() { SetMessage(PluginMessages.SendEmailFromTemplate); return this; }
-        IDeliverIncomingEmailStages<TEntity> IStepTrigger<TEntity>.OnDeliverIncomingEmail() { SetMessage(PluginMessages.DeliverIncomingEmail); return this; }
-        IDeliverPromoteEmailStages<TEntity> IStepTrigger<TEntity>.OnDeliverPromoteEmail() { SetMessage(PluginMessages.DeliverPromoteEmail); return this; }
-        IAddMembersTeamStages<TEntity> IStepTrigger<TEntity>.OnAddMembersTeam() { SetMessage(PluginMessages.AddMembersTeam); return this; }
-        IRemoveMembersTeamStages<TEntity> IStepTrigger<TEntity>.OnRemoveMembersTeam() { SetMessage(PluginMessages.RemoveMembersTeam); return this; }
-        IAddListMembersListStages<TEntity> IStepTrigger<TEntity>.OnAddListMembersList() { SetMessage(PluginMessages.AddListMembersList); return this; }
-        IAddMemberListStages<TEntity> IStepTrigger<TEntity>.OnAddMemberList() { SetMessage(PluginMessages.AddMemberList); return this; }
-        IRemoveMemberListStages<TEntity> IStepTrigger<TEntity>.OnRemoveMemberList() { SetMessage(PluginMessages.RemoveMemberList); return this; }
-        ICloseIncidentStages<TEntity> IStepTrigger<TEntity>.OnCloseIncident() { SetMessage(PluginMessages.CloseIncident); return this; }
-        ICancelContractStages<TEntity> IStepTrigger<TEntity>.OnCancelContract() { SetMessage(PluginMessages.CancelContract); return this; }
-        ICloneContractStages<TEntity> IStepTrigger<TEntity>.OnCloneContract() { SetMessage(PluginMessages.CloneContract); return this; }
+        IQualifyLeadStages<TEntity> IStepTrigger<TEntity>.OnQualifyLead() { SetMessage(PluginMessages.QualifyLead, "lead"); return this; }
+        IWinOpportunityStages<TEntity> IStepTrigger<TEntity>.OnWinOpportunity() { SetMessage(PluginMessages.WinOpportunity, "opportunity"); return this; }
+        ILoseOpportunityStages<TEntity> IStepTrigger<TEntity>.OnLoseOpportunity() { SetMessage(PluginMessages.LoseOpportunity, "opportunity"); return this; }
+        IConvertSalesOrderToInvoiceStages<TEntity> IStepTrigger<TEntity>.OnConvertSalesOrderToInvoice() { SetMessage(PluginMessages.ConvertSalesOrderToInvoice, "salesorder"); return this; }
+        IGenerateQuoteFromOpportunityStages<TEntity> IStepTrigger<TEntity>.OnGenerateQuoteFromOpportunity() { SetMessage(PluginMessages.GenerateQuoteFromOpportunity, "quote"); return this; }
+        IAddToQueueStages<TEntity> IStepTrigger<TEntity>.OnAddToQueue() { SetMessage(PluginMessages.AddToQueue, "queueitem"); return this; }
+        IRemoveFromQueueStages<TEntity> IStepTrigger<TEntity>.OnRemoveFromQueue() { SetMessage(PluginMessages.RemoveFromQueue, "queueitem"); return this; }
+        IPickFromQueueStages<TEntity> IStepTrigger<TEntity>.OnPickFromQueue() { SetMessage(PluginMessages.PickFromQueue, "queueitem"); return this; }
+        IRouteToStages<TEntity> IStepTrigger<TEntity>.OnRouteTo() { SetMessage(PluginMessages.RouteTo, "queueitem"); return this; }
+        IReleaseToQueueStages<TEntity> IStepTrigger<TEntity>.OnReleaseToQueue() { SetMessage(PluginMessages.ReleaseToQueue, "queueitem"); return this; }
+        ISendEmailStages<TEntity> IStepTrigger<TEntity>.OnSendEmail() { SetMessage(PluginMessages.SendEmail, "email"); return this; }
+        ISendEmailFromTemplateStages<TEntity> IStepTrigger<TEntity>.OnSendEmailFromTemplate() { SetMessage(PluginMessages.SendEmailFromTemplate, "email"); return this; }
+        IDeliverIncomingEmailStages<TEntity> IStepTrigger<TEntity>.OnDeliverIncomingEmail() { SetMessage(PluginMessages.DeliverIncomingEmail, "email"); return this; }
+        IDeliverPromoteEmailStages<TEntity> IStepTrigger<TEntity>.OnDeliverPromoteEmail() { SetMessage(PluginMessages.DeliverPromoteEmail, "email"); return this; }
+        IAddMembersTeamStages<TEntity> IStepTrigger<TEntity>.OnAddMembersTeam() { SetMessage(PluginMessages.AddMembersTeam, "team"); return this; }
+        IRemoveMembersTeamStages<TEntity> IStepTrigger<TEntity>.OnRemoveMembersTeam() { SetMessage(PluginMessages.RemoveMembersTeam, "team"); return this; }
+        IAddListMembersListStages<TEntity> IStepTrigger<TEntity>.OnAddListMembersList() { SetMessage(PluginMessages.AddListMembersList, "list"); return this; }
+        IAddMemberListStages<TEntity> IStepTrigger<TEntity>.OnAddMemberList() { SetMessage(PluginMessages.AddMemberList, "list"); return this; }
+        IRemoveMemberListStages<TEntity> IStepTrigger<TEntity>.OnRemoveMemberList() { SetMessage(PluginMessages.RemoveMemberList, "list"); return this; }
+        ICloseIncidentStages<TEntity> IStepTrigger<TEntity>.OnCloseIncident() { SetMessage(PluginMessages.CloseIncident, "incident"); return this; }
+        ICancelContractStages<TEntity> IStepTrigger<TEntity>.OnCancelContract() { SetMessage(PluginMessages.CancelContract, "contract"); return this; }
+        ICloneContractStages<TEntity> IStepTrigger<TEntity>.OnCloneContract() { SetMessage(PluginMessages.CloneContract, "contract"); return this; }
         IRetrievePrincipalAccessStages<TEntity> IStepTrigger<TEntity>.OnRetrievePrincipalAccess() { SetMessage(PluginMessages.RetrievePrincipalAccess); return this; }
         IRetrieveSharedPrincipalsAndAccessStages<TEntity> IStepTrigger<TEntity>.OnRetrieveSharedPrincipalsAndAccess() { SetMessage(PluginMessages.RetrieveSharedPrincipalsAndAccess); return this; }
-        IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() { SetMessage(PluginMessages.WinQuote); return this; }
+        IWinQuoteStages<TEntity> IStepTrigger<TEntity>.OnWinQuote() { SetMessage(PluginMessages.WinQuote, "quote"); return this; }
         IModifyAccessStages<TEntity> IStepTrigger<TEntity>.OnModifyAccess() { SetMessage(PluginMessages.ModifyAccess); return this; }
         IMergeStages<TEntity> IStepTrigger<TEntity>.OnMerge() { SetMessage(PluginMessages.Merge); return this; }
         IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) { if (string.IsNullOrWhiteSpace(messageName)) throw new ArgumentNullException(nameof(messageName)); SetMessage(messageName); return this; }

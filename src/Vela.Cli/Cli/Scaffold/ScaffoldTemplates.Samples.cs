@@ -407,8 +407,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
             RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Disabled().Handle(OnRetrieveSharedPrincipalsAndAccess);
 
             // Many more messages are modelled but belong to other tables, so they are not shown here on account:
-            // e.g. QualifyLead (lead); WinOpportunity / LoseOpportunity / Generate*/Convert* (opportunity / quote /
-            // order); AddToQueue / RouteTo (queue items); SendEmail / SendEmailFromTemplate (email); AddMembersTeam /
+            // e.g. QualifyLead (lead); WinOpportunity / LoseOpportunity (opportunity); WinQuote (quote);
+            // ConvertSalesOrderToInvoice (order); AddToQueue / RouteTo (queue items); SendEmail / SendEmailFromTemplate (email); AddMembersTeam /
             // AddListMembersList (team / marketing list); CloseIncident (case); CancelContract / CloneContract
             // (contract). Register them the same way from the matching EntityPluginBase<T> with RegisterStep().On<Message>().
         }
