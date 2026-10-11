@@ -744,7 +744,7 @@ Handler entry is traced automatically too: alongside the plugin-level `Executing
 
 Trace messages also go to the platform's Application Insights logger (`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`) at Information level, a no-op when the environment exports no telemetry. See [Telemetry](telemetry.md).
 
-Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment setting (`Off` / `Exception` / `All`) - not anything in code. There is no framework-level verbosity switch: server-side plugins run in Microsoft's sandbox where OS environment variables cannot be set, so a runtime verbosity flag would have no effect online. What you control in code is *what extra detail* you trace, at the call site.
+Whether a trace is *persisted* is the Dataverse **Plugin Trace Log** environment setting (`Off` / `Exception` / `All`) - not anything in code. There is no environment-wide or runtime verbosity switch: server-side plugins run in Microsoft's sandbox where OS environment variables cannot be set, so a runtime verbosity flag would have no effect online. What you control in code is the automatic traces of each plugin class (the `AutoTrace*` and `AutoSnapshotDetail` overrides, see *Keep the trace budget for your own lines* below) and *what extra detail* you trace yourself, at the call site.
 
 **You get an automatic snapshot on every execution, without record data.** `PluginBase` wraps your handler and
 writes a `start` snapshot before your code runs, then one for the failure if it throws
